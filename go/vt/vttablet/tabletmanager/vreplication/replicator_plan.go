@@ -579,6 +579,80 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	return sqltypes.ValueBindVariable(*val), nil
 }
 
+func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value) {
+	if rowChange.JsonPartialValues == nil || rowChange.DataColumns == nil {
+		return
+	}
+
+	jsonIndex := 0
+	for i, field := range tp.Fields {
+		if field.Type != querypb.Type_JSON {
+			continue
+		}
+		if i >= len(afterVals) {
+			break
+		}
+		if !afterVals[i].IsNull() &&
+			isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
+			!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes) &&
+			len(afterVals[i].Raw()) == 0 {
+			// If the JSON column was NOT updated then the JSON column is marked as
+			// partial and the diff is empty as a way to exclude it from the AFTER image.
+			// It still has the data bit set, however, even though it's not really
+			// present. So we have to account for this by unsetting the data bit so
+			// that the column's current JSON value is not lost.
+			setBit(rowChange.DataColumns.Cols, i, false)
+		}
+		jsonIndex++
+	}
+}
+
+func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value, bindvars map[string]*querypb.BindVariable) error {
+	jsonIndex := 0
+	for i, field := range tp.Fields {
+		if field.Type != querypb.Type_JSON {
+			continue
+		}
+		if i >= len(afterVals) {
+			break
+		}
+
+		var (
+			bindVar *querypb.BindVariable
+			newVal  *sqltypes.Value
+			err     error
+		)
+		switch {
+		case afterVals[i].IsNull(): // An SQL NULL and not an actual JSON value
+			newVal = &sqltypes.NULL
+		case rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
+			!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes):
+			// An SQL expression that can be converted to a JSON value such as JSON_INSERT().
+			// This occurs when using partial JSON values as a result of mysqld using
+			// binlog-row-value-options=PARTIAL_JSON.
+			if len(afterVals[i].Raw()) == 0 {
+				tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
+				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
+			} else {
+				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+					fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
+			}
+		default: // A JSON value (which may be a JSON null literal value)
+			newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
+			if err != nil {
+				return err
+			}
+		}
+		bindVar, err = tp.bindFieldVal(field, newVal)
+		if err != nil {
+			return err
+		}
+		bindvars["a_"+field.Name] = bindVar
+		jsonIndex++
+	}
+	return nil
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var (
@@ -598,52 +672,16 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		}
 	}
 	if rowChange.After != nil {
-		jsonIndex := 0
 		after = true
 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			var (
-				bindVar *querypb.BindVariable
-				newVal  *sqltypes.Value
-				err     error
-			)
-			if field.Type == querypb.Type_JSON {
-				switch {
-				case afterVals[i].IsNull(): // An SQL NULL and not an actual JSON value
-					newVal = &sqltypes.NULL
-				case rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
-					!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes):
-					// An SQL expression that can be converted to a JSON value such as JSON_INSERT().
-					// This occurs when using partial JSON values as a result of mysqld using
-					// binlog-row-value-options=PARTIAL_JSON.
-					if len(afterVals[i].Raw()) == 0 {
-						// If the JSON column was NOT updated then the JSON column is marked as
-						// partial and the diff is empty as a way to exclude it from the AFTER image.
-						// It still has the data bit set, however, even though it's not really
-						// present. So we have to account for this by unsetting the data bit so
-						// that the column's current JSON value is not lost.
-						setBit(rowChange.DataColumns.Cols, i, false)
-						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
-					} else {
-						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
-							fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
-					}
-				default: // A JSON value (which may be a JSON null literal value)
-					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
-					if err != nil {
-						return nil, err
-					}
-				}
-				bindVar, err = tp.bindFieldVal(field, newVal)
-				jsonIndex++
-			} else {
-				bindVar, err = tp.bindFieldVal(field, &afterVals[i])
-			}
+			bindVar, err := tp.bindFieldVal(field, &afterVals[i])
 			if err != nil {
 				return nil, err
 			}
 			bindvars["a_"+field.Name] = bindVar
 		}
+		tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
 	}
 	limit := tp.maxRowJSONBytes()
 	switch {
@@ -656,6 +694,9 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			if err := tp.checkInsertJSONRowSize(rowChange.After, nil, nil, limit); err != nil {
 				return nil, err
 			}
+		}
+		if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
+			return nil, err
 		}
 		if tp.isPartial(rowChange) {
 			ins, err := tp.getPartialInsertQuery(rowChange.DataColumns)
@@ -679,6 +720,9 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 					return nil, err
 				}
 			}
+			if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
+				return nil, err
+			}
 			if tp.isPartial(rowChange) {
 				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
 				if err != nil {
@@ -693,6 +737,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		skipInsert := tp.isOutsidePKRange(bindvars, before, after, "insert")
 		if !skipInsert && limit > 0 {
 			if err := tp.checkInsertJSONRowSize(rowChange.After, rowChange.Before, rowChange.JsonPartialValues, limit); err != nil {
+				return nil, err
+			}
+		}
+		if !skipInsert {
+			if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
 				return nil, err
 			}
 		}

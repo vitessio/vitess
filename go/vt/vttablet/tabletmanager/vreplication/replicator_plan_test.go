@@ -1582,6 +1582,34 @@ func TestApplyChangeChecksPartialJSONDiffSizeForDeleteInsert(t *testing.T) {
 	require.Empty(t, executed)
 }
 
+func TestApplyChangeChecksJSONSizeBeforeMarshalling(t *testing.T) {
+	raw := []byte(`{"big":"` + strings.Repeat("x", 64))
+	tp := &TablePlan{
+		TargetName: "t",
+		Insert: sqlparser.BuildParsedQuery("insert into t(j) values (%a)",
+			":a_j",
+		),
+		Fields: []*querypb.Field{
+			{Name: "j", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip:   map[string]bool{},
+		WorkflowConfig: &vttablet.VReplicationConfig{MaxRowJSONBytes: 16},
+	}
+	rowChange := &binlogdatapb.RowChange{
+		After: &querypb.Row{
+			Lengths: []int64{int64(len(raw))},
+			Values:  raw,
+		},
+	}
+
+	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
+		require.Failf(t, "executor should not be called", "unexpected SQL: %s", sql)
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "vreplication: row JSON payload")
+	require.ErrorContains(t, err, "largest_json_column=j")
+}
+
 func TestApplyChangeFailsFastForLargeExistingJSONWithTinyPartialUpdate(t *testing.T) {
 	beforeJSON := []byte(`{"big":"` + strings.Repeat("x", 1<<20) + `"}`)
 	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.small', CAST(1 as JSON))`)
