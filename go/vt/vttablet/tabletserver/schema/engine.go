@@ -440,13 +440,20 @@ func (se *Engine) MakePrimary(serving bool) {
 // stability cooldown has elapsed, and that the per-tablet 24h throttle has
 // elapsed. Caller must hold se.mu.
 func (se *Engine) shouldAttemptGtidExecutedOptimizeLocked(now time.Time) bool {
+	if !se.isGtidExecutedOptimizeEligibleLocked(now) {
+		return false
+	}
+	if !se.gtidExecutedOptimizeLastAt.IsZero() && now.Sub(se.gtidExecutedOptimizeLastAt) < gtidExecutedOptimizeInterval {
+		return false
+	}
+	return true
+}
+
+func (se *Engine) isGtidExecutedOptimizeEligibleLocked(now time.Time) bool {
 	if se.isPrimaryTablet {
 		return false
 	}
 	if !se.tabletTypeLastChangedAt.IsZero() && now.Sub(se.tabletTypeLastChangedAt) < tabletTypeStabilityCooldown {
-		return false
-	}
-	if !se.gtidExecutedOptimizeLastAt.IsZero() && now.Sub(se.gtidExecutedOptimizeLastAt) < gtidExecutedOptimizeInterval {
 		return false
 	}
 	return true
@@ -805,13 +812,17 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 	ctx, cancel := se.backgroundTimeoutContext(gtidExecutedOptimizeTimeout)
 	defer cancel()
 
-	se.mu.Lock()
-	stillNonPrimary := !se.isPrimaryTablet
-	se.mu.Unlock()
-	if !stillNonPrimary {
+	checkEligibility := func() bool {
 		se.mu.Lock()
-		se.gtidExecutedOptimizeLastAt = time.Time{}
-		se.mu.Unlock()
+		defer se.mu.Unlock()
+		if !se.isGtidExecutedOptimizeEligibleLocked(time.Now()) {
+			se.gtidExecutedOptimizeLastAt = time.Time{}
+			return false
+		}
+		return true
+	}
+
+	if !checkEligibility() {
 		return
 	}
 
@@ -825,6 +836,10 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 	}
 	defer conn.Close()
 
+	if !checkEligibility() {
+		return
+	}
+
 	restoreSRO, err := se.disableSuperReadOnly(conn)
 	// Always defer restore before running OPTIMIZE: we re-enable
 	// super_read_only no matter how the body of this function exits.
@@ -835,6 +850,10 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 		se.mu.Lock()
 		se.gtidExecutedOptimizeLastAt = time.Time{}
 		se.mu.Unlock()
+		return
+	}
+
+	if !checkEligibility() {
 		return
 	}
 

@@ -288,6 +288,37 @@ func TestRunOptimizeGtidExecutedOptimizeFailureRestoresSRO(t *testing.T) {
 	se.mu.Unlock()
 }
 
+func TestRunOptimizeGtidExecutedSkipsIfPromotedAfterDisablingSuperReadOnly(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
+	offResult := db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed", &sqltypes.Result{})
+
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	se.mu.Lock()
+	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
+	se.gtidExecutedOptimizeLastAt = time.Now()
+	se.mu.Unlock()
+
+	offResult.BeforeFunc = func() {
+		se.MakePrimary(true)
+	}
+
+	se.runOptimizeGtidExecuted(200 * 1024 * 1024)
+
+	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
+	assert.Equal(t, 0, db.GetQueryCalledNum("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed"),
+		"OPTIMIZE must not run once the tablet has been promoted to PRIMARY")
+	assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+		"restore must not re-enable super_read_only on a promoted PRIMARY")
+	se.mu.Lock()
+	assert.True(t, se.gtidExecutedOptimizeLastAt.IsZero())
+	se.mu.Unlock()
+}
+
 func TestCloseCancelsInFlightOptimize(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
