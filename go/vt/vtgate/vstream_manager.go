@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 	"sync"
@@ -69,6 +71,19 @@ const tabletPickerContextTimeout = 90 * time.Second
 // stopOnReshardDelay is how long we wait, at a minimum, after sending a reshard journal event before
 // ending the stream from the tablet.
 const stopOnReshardDelay = 500 * time.Millisecond
+
+// streamAgeJitterRatio is the jitter (+/-) added to max stream age as a fraction,
+// to spread out reconnections.
+const streamAgeJitterRatio = 0.1
+
+// StreamAgeJitterRange returns the jitter range for a given max age duration.
+// Jitter is +/- streamAgeJitterRatio of the max age.
+func StreamAgeJitterRange(maxAge time.Duration) time.Duration {
+	if maxAge <= 0 {
+		return 0
+	}
+	return time.Duration(float64(maxAge) * streamAgeJitterRatio)
+}
 
 // livenessTimeout is the point at which we return an error to the client if the stream has received
 // no events, including heartbeats, from any of the shards.
@@ -207,8 +222,20 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
-	log.Info(fmt.Sprintf("VStream flags: minimize_skew=%v, heartbeat_interval=%v, stop_on_reshard=%v, cells=%v, cell_preference=%v, tablet_order=%v, stream_keyspace_heartbeats=%v, include_reshard_journal_events=%v, tables_to_copy=%v, exclude_keyspace_from_table_name=%v, transaction_chunk_size=%v", flags.GetMinimizeSkew(), flags.GetHeartbeatInterval(), flags.GetStopOnReshard(), flags.Cells, flags.CellPreference, flags.TabletOrder,
-		flags.GetStreamKeyspaceHeartbeats(), flags.GetIncludeReshardJournalEvents(), flags.TablesToCopy, flags.GetExcludeKeyspaceFromTableName(), flags.TransactionChunkSize))
+	log.Info("VStream flags",
+		slog.Bool("minimize_skew", flags.GetMinimizeSkew()),
+		slog.Uint64("heartbeat_interval", uint64(flags.GetHeartbeatInterval())),
+		slog.Bool("stop_on_reshard", flags.GetStopOnReshard()),
+		slog.String("cells", flags.Cells),
+		slog.String("cell_preference", flags.CellPreference),
+		slog.String("tablet_order", flags.TabletOrder),
+		slog.Bool("stream_keyspace_heartbeats", flags.GetStreamKeyspaceHeartbeats()),
+		slog.Bool("include_reshard_journal_events", flags.GetIncludeReshardJournalEvents()),
+		slog.Any("tables_to_copy", flags.TablesToCopy),
+		slog.Bool("exclude_keyspace_from_table_name", flags.GetExcludeKeyspaceFromTableName()),
+		slog.Int64("transaction_chunk_size", flags.TransactionChunkSize),
+		slog.Uint64("max_stream_age_seconds", uint64(flags.GetMaxStreamAgeSeconds())),
+	)
 	ts, err := vsm.toposerv.GetTopoServer()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get topology server")
@@ -357,6 +384,31 @@ func (vs *vstream) stream(ctx context.Context) error {
 	if vs.streamLivenessTimer == nil {
 		vs.streamLivenessTimer = time.NewTimer(livenessTimeout)
 		defer vs.streamLivenessTimer.Stop()
+	}
+
+	if vs.flags.GetMaxStreamAgeSeconds() > 0 {
+		maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
+		jitterHalfRange := int64(StreamAgeJitterRange(maxAge))
+		jitter := time.Duration(rand.Int64N(2*jitterHalfRange) - jitterHalfRange)
+
+		go func() {
+			ageTimer := time.NewTimer(maxAge + jitter)
+			defer ageTimer.Stop()
+
+			select {
+			case <-ageTimer.C:
+				log.Info("vstream exceeded maximum age",
+					slog.Duration("max_age", maxAge),
+					slog.Duration("jitter", jitter),
+				)
+				msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, jitter)
+				vs.once.Do(func() {
+					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
+				})
+				vs.cancel()
+			case <-ctx.Done():
+			}
+		}()
 	}
 
 	vs.wg.Go(func() {
