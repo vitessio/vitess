@@ -1548,8 +1548,8 @@ func TestApplyChangeChecksPartialJSONDiffSizeForDeleteInsert(t *testing.T) {
 	require.Empty(t, executed)
 }
 
-func TestApplyChangeChecksPartialJSONBaseSizeForUpdate(t *testing.T) {
-	beforeJSON := []byte(`{"big":"` + strings.Repeat("x", 64) + `"}`)
+func TestApplyChangeFailsFastForLargeExistingJSONWithTinyPartialUpdate(t *testing.T) {
+	beforeJSON := []byte(`{"big":"` + strings.Repeat("x", 1<<20) + `"}`)
 	diff := []byte(`JSON_INSERT(%s, _utf8mb4'$.small', CAST(1 as JSON))`)
 	idCol := &colExpr{
 		colName: sqlparser.NewIdentifierCI("id"),
@@ -1606,13 +1606,12 @@ func TestApplyChangeChecksPartialJSONBaseSizeForUpdate(t *testing.T) {
 		},
 	}
 
-	var executed []string
 	_, err := tp.applyChange(rowChange, func(sql string) (*sqltypes.Result, error) {
-		executed = append(executed, sql)
-		return &sqltypes.Result{RowsAffected: 1}, nil
+		require.Failf(t, "executor should not be called", "unexpected SQL: %s", sql)
+		return nil, nil
 	})
 	require.ErrorContains(t, err, "vreplication: row JSON payload")
-	require.Empty(t, executed)
+	require.ErrorContains(t, err, "largest_json_column=j")
 }
 
 func BenchmarkAppendFromRowLargeJSON(b *testing.B) {
