@@ -1170,6 +1170,40 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 		}, 0)
 		require.ErrorContains(t, err, "vreplication: row JSON payload")
 	})
+
+	t.Run("skips generated JSON columns before marshalling", func(t *testing.T) {
+		jsonTP := &TablePlan{
+			BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(j)"),
+			BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+				":a_j",
+			),
+			Fields: []*querypb.Field{
+				{Name: "j", Type: querypb.Type_JSON},
+				{Name: "j_generated", Type: querypb.Type_JSON},
+			},
+			FieldsToSkip: map[string]bool{
+				"j_generated": true,
+			},
+			TablePlanBuilder: &tablePlanBuilder{stats: binlogplayer.NewStats()},
+			WorkflowConfig:   &vttablet.VReplicationConfig{MaxRowJSONBytes: 32},
+		}
+		rowInserts := []*binlogdatapb.RowChange{{
+			After: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`{"ok":true}`)),
+				sqltypes.MakeTrusted(querypb.Type_JSON, []byte(`not-json`)),
+			}),
+		}}
+
+		var executed []string
+		_, err := jsonTP.applyBulkInsertChanges(rowInserts, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 0)
+		require.NoError(t, err)
+		require.Len(t, executed, 1)
+		assert.Contains(t, executed[0], "insert into t(j) values")
+		assert.NotContains(t, executed[0], "not-json")
+	})
 }
 
 func TestMarshalJSONForSQL(t *testing.T) {

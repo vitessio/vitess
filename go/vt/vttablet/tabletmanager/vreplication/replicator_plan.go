@@ -871,6 +871,9 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
 		for n, field := range tp.Fields {
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
 			if field.Type == querypb.Type_JSON {
 				var jsVal *sqltypes.Value
 				if vals[n].IsNull() { // An SQL NULL and not an actual JSON value
