@@ -756,13 +756,40 @@ func TestCloneFromDonor(t *testing.T) {
 			wantErrContains: "no my.cnf available for manual restart",
 		},
 		{
-			name:            "ERRestartServerFailed succeeds even if parent ctx is canceled on MySQL exit",
+			name:            "clone verification stops when root ctx is canceled after clone restart",
 			cloneFromTablet: "cell1-100",
 			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
 				cloneCmd := fmt.Sprintf("CLONE INSTANCE FROM 'clone_user'@'%s':%d IDENTIFIED BY 'password' REQUIRE NO SSL", env.donorHost, env.donorPort)
 				env.mysqld.ExpectedExecuteSuperQueryList = []string{
 					fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", env.donorHost, env.donorPort),
 				}
+				env.mysqld.FetchSuperQueryMap[cloneStatusQuery] = sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("STATE|ERROR_NO|ERROR_MESSAGE", "varchar|varchar|varchar"),
+					"In Progress|0|",
+				)
+				env.mysqld.ExecuteSuperQueryErrorMap = map[string]error{
+					cloneCmd: &execError{
+						msg:   fmt.Sprintf("ExecuteFetch(%v) failed: Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)", cloneCmd),
+						cause: sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
+					},
+				}
+			},
+			cancelCtxOnClone: true,
+			wantErr:          true,
+			wantErrContains:  "context canceled",
+			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				assert.Equal(t, 0, env.mysqld.StartAfterExitCalls)
+			},
+		},
+		{
+			name:            "manual restart stops when root ctx is canceled after clone restart",
+			cloneFromTablet: "cell1-100",
+			setup: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				cloneCmd := fmt.Sprintf("CLONE INSTANCE FROM 'clone_user'@'%s':%d IDENTIFIED BY 'password' REQUIRE NO SSL", env.donorHost, env.donorPort)
+				env.mysqld.ExpectedExecuteSuperQueryList = []string{
+					fmt.Sprintf("SET GLOBAL clone_valid_donor_list = '%s:%d'", env.donorHost, env.donorPort),
+				}
+				env.mysqld.StartAfterExitTime = time.Minute
 				env.mysqld.ExecuteSuperQueryErrorMap = map[string]error{
 					cloneCmd: &execError{
 						msg:   fmt.Sprintf("ExecuteFetch(%v) failed: Restart server failed (mysqld is not managed by supervisor process). (errno 3707) (sqlstate HY000)", cloneCmd),
@@ -772,7 +799,12 @@ func TestCloneFromDonor(t *testing.T) {
 			},
 			mycnf:            &Mycnf{},
 			cancelCtxOnClone: true,
-			wantErr:          false,
+			wantErr:          true,
+			wantErrContains:  "context canceled",
+			assertResult: func(t *testing.T, env *cloneFromDonorTestEnv) {
+				assert.Equal(t, 1, env.mysqld.StartAfterExitCalls)
+				assert.False(t, env.mysqld.Running)
+			},
 		},
 		{
 			name:            "ERRestartServerFailed with remote mysqlctld fails fast",
@@ -826,13 +858,14 @@ func TestCloneFromDonor(t *testing.T) {
 			}
 
 			ctx := env.ctx
+
+			var cancelCtx context.CancelFunc
 			if tc.cancelCtxOnClone {
-				// Simulate OnTerm canceling the context when MySQL exits during
-				// clone: cancel the context when the CLONE command executes.
-				// ExecuteSuperQuery delegates to ExecuteSuperQueryList with a
-				// single query, so the 2nd callback corresponds to CLONE.
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(env.ctx)
+				ctx, cancelCtx = context.WithCancel(env.ctx)
+				t.Cleanup(cancelCtx)
+			}
+
+			if tc.cancelCtxOnClone {
 				callCount := 0
 				oldCallback := env.mysqld.ExecuteSuperQueryListCallback
 				env.mysqld.ExecuteSuperQueryListCallback = func() {
@@ -844,7 +877,9 @@ func TestCloneFromDonor(t *testing.T) {
 						if tc.mycnf != nil {
 							env.mysqld.Running = false
 						}
-						cancel()
+						if cancelCtx != nil {
+							cancelCtx()
+						}
 					}
 				}
 			}
@@ -861,9 +896,10 @@ func TestCloneFromDonor(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.NotEmpty(t, pos)
-				if tc.assertResult != nil {
-					tc.assertResult(t, env)
-				}
+			}
+
+			if tc.assertResult != nil {
+				tc.assertResult(t, env)
 			}
 		})
 	}
