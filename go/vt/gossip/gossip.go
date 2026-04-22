@@ -208,6 +208,8 @@ func (g *Gossip) Start(ctx context.Context) error {
 		}
 	}()
 
+	go g.bootstrapSeeds(ctx)
+
 	return nil
 }
 
@@ -404,6 +406,40 @@ func (g *Gossip) Join(ctx context.Context, seedAddr string) (*JoinResponse, erro
 	ctx, cancel := g.withProbeTimeout(ctx)
 	defer cancel()
 	return g.transport.Join(ctx, seedAddr, &JoinRequest{Member: self, Seeds: g.cfg.Seeds})
+}
+
+func (g *Gossip) bootstrapSeeds(ctx context.Context) {
+	if g.transport == nil {
+		return
+	}
+
+	seeds := append([]Member(nil), g.cfg.Seeds...)
+	for _, seed := range seeds {
+		if seed.ID == "" || seed.ID == g.cfg.NodeID || seed.Addr == "" {
+			continue
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-g.stop:
+			return
+		default:
+		}
+
+		response, err := g.Join(ctx, seed.Addr)
+		if err != nil || response == nil {
+			continue
+		}
+
+		now := g.clock.Now()
+		g.mu.Lock()
+		for _, member := range response.Members {
+			g.addMemberLocked(member)
+		}
+		g.applyMessageLocked(now, &response.Initial)
+		g.mu.Unlock()
+	}
 }
 
 func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {

@@ -262,6 +262,43 @@ func TestGossipJoinUsesTransport(t *testing.T) {
 	assert.Equal(t, StatusAlive, state.Status)
 }
 
+func TestGossipStartBootstrapsSeedsImmediately(t *testing.T) {
+	transport := newLocalTransport()
+	clock := &testClock{now: time.Unix(0, 0)}
+
+	g1 := New(Config{
+		NodeID:       "node1",
+		BindAddr:     "node1",
+		Seeds:        []Member{{ID: "node2", Addr: "node2"}},
+		PhiThreshold: 4,
+		PingInterval: time.Hour,
+		ProbeTimeout: 10 * time.Millisecond,
+		MaxUpdateAge: time.Second,
+	}, NewGRPCTransport(transport), clock)
+	g2 := New(Config{
+		NodeID:       "node2",
+		BindAddr:     "node2",
+		Seeds:        []Member{{ID: "node1", Addr: "node1"}},
+		PhiThreshold: 4,
+		PingInterval: time.Hour,
+		ProbeTimeout: 10 * time.Millisecond,
+		MaxUpdateAge: time.Second,
+	}, NewGRPCTransport(transport), clock)
+
+	transport.Register("node1", g1)
+	transport.Register("node2", g2)
+
+	require.NoError(t, g1.Start(t.Context()))
+	require.NoError(t, g2.Start(t.Context()))
+	defer g1.Stop()
+	defer g2.Stop()
+
+	require.Eventually(t, func() bool {
+		return g1.Snapshot()["node2"].Status == StatusAlive &&
+			g2.Snapshot()["node1"].Status == StatusAlive
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestGossipOnceMergesState(t *testing.T) {
 	transport := newLocalTransport()
 	clock := &testClock{now: time.Unix(0, 0)}
