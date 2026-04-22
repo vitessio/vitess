@@ -723,7 +723,7 @@ func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnec
 		// ExecuteFetch even when KILL cannot be issued (permissions,
 		// server unresponsive, pool exhausted, etc.) and is the primary
 		// mechanism we rely on for the timeout to actually hold.
-		connID := conn.Conn.ID()
+		connID := conn.ID()
 		log.Warn("schema engine: OPTIMIZE timed out, interrupting in-flight query",
 			slog.Int64("connID", connID), slog.String("query", query))
 		conn.Close()
