@@ -195,7 +195,9 @@ func captureOutput(t *testing.T, f func(), captureStdout bool) string {
 		}
 	})
 
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { r.Close() })
 	if captureStdout {
 		os.Stdout = w
 	} else {
@@ -205,7 +207,8 @@ func captureOutput(t *testing.T, f func(), captureStdout bool) string {
 	f()
 
 	w.Close()
-	got, _ := io.ReadAll(r)
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
 
 	return string(got)
 }
