@@ -24,6 +24,7 @@ import (
 	"log/slog"
 	"maps"
 	"math"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,31 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// recoverParallelApply is a defer helper used by every goroutine the parallel
+// applier spawns. A panic in a worker, commitLoop, or scheduleLoop must not
+// crash the entire vttablet process; it must turn into a normal error that
+// propagates through the usual shutdown machinery. The callback receives the
+// converted error and is expected to (a) push the error onto the orchestrator's
+// error channel and (b) cancel the shared context so sibling goroutines
+// unwind promptly. Passing nil for cb is allowed when the caller already
+// returns an error it will examine itself.
+func recoverParallelApply(name string, cb func(err error)) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	stack := debug.Stack()
+	log.Error("parallel apply goroutine panicked",
+		slog.String("goroutine", name),
+		slog.Any("panic", r),
+		slog.String("stack", string(stack)),
+	)
+	err := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "parallel apply: %s panicked: %v", name, r)
+	if cb != nil {
+		cb(err)
+	}
+}
 
 var (
 	workerLoopTestHookAfterSend         func(*applyTxn)
@@ -790,14 +816,37 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	vp.fkRefs = fkRefs
 	vp.parentFKRefs = buildParentFKRefs(fkRefs)
 
+	// sendWorkerErr is a non-blocking send to workerErr. The channel is
+	// buffered to workerCount, so in normal operation this always succeeds;
+	// the non-blocking form is defensive against test hooks or double-send
+	// scenarios and mirrors the convention used elsewhere in this package.
+	sendWorkerErr := func(err error) {
+		select {
+		case workerErr <- err:
+		default:
+		}
+		cancel()
+	}
+	sendCommitLoopErr := func(err error) {
+		select {
+		case commitLoopErr <- err:
+		default:
+		}
+		cancel()
+	}
+
 	var wg sync.WaitGroup
 	for i := range workerCount {
 		worker := workers[i]
+		workerIdx := i
 		wg.Go(func() {
+			// Recover from panics so a buggy event or driver crash does not
+			// tear down the entire vttablet process. The recovered error is
+			// routed through the same path as a normal worker error.
+			defer recoverParallelApply(fmt.Sprintf("worker %d", workerIdx), sendWorkerErr)
 			err := vp.workerLoop(ctx, scheduler, commitCh, worker)
 			if err != nil && err != io.EOF {
-				workerErr <- err
-				cancel()
+				sendWorkerErr(err)
 			}
 		})
 	}
@@ -805,6 +854,10 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	commitDone := make(chan struct{})
 	go func() {
 		defer close(commitDone)
+		// Recover from panics so a buggy commit path does not tear down the
+		// entire vttablet process. The recovered error is routed through the
+		// same path as a normal commitLoop error.
+		defer recoverParallelApply("commitLoop", sendCommitLoopErr)
 		if err := vp.commitLoop(ctx, scheduler, commitCh); err != nil {
 			commitLoopErr <- err
 			// Always cancel context when commitLoop exits with an error,
@@ -815,7 +868,17 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 		}
 	}()
 
-	schedErr := vp.scheduleLoop(ctx, relay, scheduler)
+	// Recover from panics in scheduleLoop so they become a normal applyErr
+	// rather than crashing the process. Routed to applyErr via the closure.
+	var schedulePanicErr error
+	func() {
+		defer recoverParallelApply("scheduleLoop", func(err error) {
+			schedulePanicErr = err
+			cancel()
+		})
+		schedulePanicErr = vp.scheduleLoop(ctx, relay, scheduler)
+	}()
+	schedErr := schedulePanicErr
 	if schedErr != nil {
 		applyErr <- schedErr
 	}
@@ -1943,13 +2006,17 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 
 		updateLag(payload)
 
-		// Signal the worker that commit is done so it can reuse its
-		// DB connection for the next transaction.
-		txn.done <- struct{}{}
-
+		// Release scheduler inflight state BEFORE signaling the worker. If
+		// markCommitted errors (scheduler closed during teardown), we want
+		// the commitLoop to observe the error and unwind rather than letting
+		// the worker race ahead to its next txn.
 		if err := scheduler.markCommitted(txn); err != nil {
 			return err
 		}
+
+		// Signal the worker that commit is done so it can reuse its
+		// DB connection for the next transaction.
+		txn.done <- struct{}{}
 
 		if posReached {
 			return io.EOF

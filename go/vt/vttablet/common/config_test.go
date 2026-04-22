@@ -193,6 +193,19 @@ func TestVReplicationConfigSourceOverridesUseEffectiveValues(t *testing.T) {
 	}, config.SourceOverrides())
 }
 
+func TestVReplicationConfigRejectsInvalidParallelWorkers(t *testing.T) {
+	for _, bad := range []string{"0", "-1", "-5"} {
+		t.Run(bad, func(t *testing.T) {
+			_, err := NewVReplicationConfig(map[string]string{
+				"vreplication-parallel-replication-workers": bad,
+			})
+			require.Error(t, err, "expected error for invalid value %q", bad)
+			require.Contains(t, err.Error(), "vreplication-parallel-replication-workers")
+			require.Contains(t, err.Error(), "must be >= 1")
+		})
+	}
+}
+
 func TestVReplicationConfigSourceOverridesIncludeSourceConsumedWorkflowKeys(t *testing.T) {
 	config, err := NewVReplicationConfig(map[string]string{
 		"vreplication-experimental-flags":           "3",

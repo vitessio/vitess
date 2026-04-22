@@ -6688,3 +6688,52 @@ func TestScheduleItems_DDLFlushesAccumulatedEvents(t *testing.T) {
 	assert.True(t, got2.forceGlobal)
 	assert.Equal(t, binlogdatapb.VEventType_DDL, got2.payload.events[0].Type)
 }
+
+// TestRecoverParallelApplyCatchesPanic verifies that the panic-recovery
+// helper used by every parallel-applier goroutine turns a panic into a
+// normal error routed through the supplied callback (which in production
+// pushes onto the orchestrator's error channel and cancels ctx). Without
+// this helper a panic in any worker would crash the entire vttablet.
+func TestRecoverParallelApplyCatchesPanic(t *testing.T) {
+	t.Run("nil callback does not panic", func(t *testing.T) {
+		// Explicitly runs the helper with no callback supplied to ensure
+		// the nil-cb branch is safe.
+		func() {
+			defer recoverParallelApply("testGoroutine", nil)
+			panic("boom")
+		}()
+	})
+
+	t.Run("callback receives a wrapped error on panic", func(t *testing.T) {
+		var got error
+		func() {
+			defer recoverParallelApply("worker-1", func(err error) { got = err })
+			panic("ouch")
+		}()
+		require.Error(t, got)
+		require.ErrorContains(t, got, "worker-1")
+		require.ErrorContains(t, got, "panicked")
+	})
+
+	t.Run("no panic means no callback invocation", func(t *testing.T) {
+		invoked := false
+		func() {
+			defer recoverParallelApply("happy", func(err error) { invoked = true })
+		}()
+		require.False(t, invoked, "callback must not fire without a panic")
+	})
+
+	t.Run("runtime panic types are caught and surfaced", func(t *testing.T) {
+		var got error
+		func() {
+			defer recoverParallelApply("oob", func(err error) { got = err })
+			// Force a runtime-panic path (slice index OOB) rather than an
+			// explicit panic() call to exercise Go's typed-panic surface.
+			s := []int{1, 2, 3}
+			idx := len(s) + 1 // silence staticcheck's constant-OOB check
+			_ = s[idx]
+		}()
+		require.Error(t, got)
+		require.ErrorContains(t, got, "oob")
+	})
+}

@@ -198,6 +198,8 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
+			} else if value < 1 {
+				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be >= 1; use 1 for serial apply)", k, value))
 			} else {
 				c.ParallelReplicationWorkers = value
 			}
