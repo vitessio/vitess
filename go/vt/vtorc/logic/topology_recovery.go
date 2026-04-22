@@ -833,6 +833,27 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 	}
 }
 
+// shardWideRecoveryIgnoredTablets returns the list of tablet aliases to skip
+// during the pre-recovery refresh for shard-wide recoveries. Dead primaries
+// are skipped because they are unreachable; reachable-but-unhealthy primaries
+// (PrimarySemiSyncBlocked, PrimaryDiskStalled) are NOT skipped so that
+// checkIfAlreadyFixed evaluates fresh state.
+func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, analysisEntry *inst.DetectionAnalysis) []*topodatapb.TabletAlias {
+	var tabletsToIgnore []*topodatapb.TabletAlias
+	if recoveryFunctionCode == recoverDeadPrimaryFunc {
+		switch analysisEntry.Analysis {
+		case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled:
+			// Reachable primary — refresh it so checkIfAlreadyFixed
+			// evaluates current state. The problem may have been
+			// resolved by a prior dependency recovery.
+			// See https://github.com/vitessio/vitess/issues/19941
+		default:
+			tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
+		}
+	}
+	return tabletsToIgnore
+}
+
 // isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
 func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
@@ -950,20 +971,7 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility
 		// before we run a shard-wide operation of our own.
 		if isShardWideRecovery(checkAndRecoverFunctionCode) {
-			tabletsToIgnore := make([]*topodatapb.TabletAlias, 0)
-			if checkAndRecoverFunctionCode == recoverDeadPrimaryFunc {
-				switch analysisEntry.Analysis {
-				case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled:
-					// These analyses describe reachable primaries that are
-					// unhealthy, not dead. Refresh the primary so that
-					// checkIfAlreadyFixed evaluates current state — the
-					// problem may have been resolved by a prior dependency
-					// recovery (e.g., fixReplica unblocking semi-sync).
-					// See https://github.com/vitessio/vitess/issues/19941
-				default:
-					tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
-				}
-			}
+			tabletsToIgnore := shardWideRecoveryIgnoredTablets(checkAndRecoverFunctionCode, analysisEntry)
 			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
 			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
 			logger.Info("Force refreshing all shard tablets")

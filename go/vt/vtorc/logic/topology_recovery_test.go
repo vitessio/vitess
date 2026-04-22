@@ -31,6 +31,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -620,6 +622,52 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
+	primaryAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	tests := []struct {
+		name        string
+		analysis    inst.AnalysisCode
+		wantIgnored bool
+	}{
+		{
+			name:        "DeadPrimary skips primary refresh",
+			analysis:    inst.DeadPrimary,
+			wantIgnored: true,
+		},
+		{
+			name:        "DeadPrimaryAndSomeReplicas skips primary refresh",
+			analysis:    inst.DeadPrimaryAndSomeReplicas,
+			wantIgnored: true,
+		},
+		{
+			name:        "PrimarySemiSyncBlocked does NOT skip primary refresh",
+			analysis:    inst.PrimarySemiSyncBlocked,
+			wantIgnored: false,
+		},
+		{
+			name:        "PrimaryDiskStalled does NOT skip primary refresh",
+			analysis:    inst.PrimaryDiskStalled,
+			wantIgnored: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := &inst.DetectionAnalysis{
+				Analysis:              tt.analysis,
+				AnalyzedInstanceAlias: primaryAlias,
+			}
+			ignored := shardWideRecoveryIgnoredTablets(recoverDeadPrimaryFunc, entry)
+			if tt.wantIgnored {
+				require.Len(t, ignored, 1)
+				assert.True(t, topoproto.TabletAliasEqual(ignored[0], primaryAlias))
+			} else {
+				assert.Empty(t, ignored)
+			}
 		})
 	}
 }
