@@ -459,10 +459,12 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 			case <-cancel:
 			default:
 				mysqld.mutex.Lock()
-				for _, callback := range mysqld.onTermFuncs {
-					go callback()
-				}
+				callbacks := append([]func(){}, mysqld.onTermFuncs...)
 				mysqld.mutex.Unlock()
+
+				for _, callback := range callbacks {
+					callback()
+				}
 			}
 		}(mysqld.cancelWaitCmd)
 		mysqld.mutex.Unlock()
