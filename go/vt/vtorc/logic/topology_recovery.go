@@ -952,9 +952,19 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		if isShardWideRecovery(checkAndRecoverFunctionCode) {
 			tabletsToIgnore := make([]*topodatapb.TabletAlias, 0)
 			if checkAndRecoverFunctionCode == recoverDeadPrimaryFunc {
-				tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
+				switch analysisEntry.Analysis {
+				case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled:
+					// These analyses describe reachable primaries that are
+					// unhealthy, not dead. Refresh the primary so that
+					// checkIfAlreadyFixed evaluates current state — the
+					// problem may have been resolved by a prior dependency
+					// recovery (e.g., fixReplica unblocking semi-sync).
+					// See https://github.com/vitessio/vitess/issues/19941
+				default:
+					tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
+				}
 			}
-			// We ignore the dead primary tablet because it is going to be unreachable. If all the other tablets aren't able to reach this tablet either,
+			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
 			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
 			logger.Info("Force refreshing all shard tablets")
 			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
