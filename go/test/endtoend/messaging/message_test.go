@@ -513,7 +513,7 @@ func testMessaging(t *testing.T, name, ks string) {
 	validateField(t, res.Fields[1], "tenant_id", querypb.Type_INT64)
 	validateField(t, res.Fields[2], "message", querypb.Type_JSON)
 
-	// validate recieved msgs
+	// validate received msgs
 	resMap := make(map[string]string)
 	res, err = stream.Next()
 	require.Nil(t, err)
