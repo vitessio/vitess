@@ -583,12 +583,6 @@ const optimizeGtidExecutedStatement = `OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.g
 // itself is bounded by gtidExecutedOptimizeTimeout so we don't leave a
 // pathological invocation in flight.
 //
-// We trigger on DATA_FREE rather than total file size because a small but
-// heavily churned table can cause the outage we're preventing, while a
-// large but cleanly-packed table cannot — the InnoDB bloat scan that the
-// binlog-rotation path performs is only expensive in proportion to
-// delete-marked/free pages.
-//
 // The background goroutine intentionally re-checks isPrimaryTablet under
 // se.mu immediately before executing: we do NOT run OPTIMIZE if the tablet
 // has been promoted to PRIMARY, even if the state flipped after we spawned.
