@@ -193,15 +193,19 @@ func TestVReplicationConfigSourceOverridesUseEffectiveValues(t *testing.T) {
 	}, config.SourceOverrides())
 }
 
+// TestVReplicationConfigRejectsInvalidParallelWorkers verifies that
+// negative worker counts are rejected at config-parse time. 0 is allowed
+// (documented as "disable parallel apply"); see
+// TestVReplicationConfigAcceptsZeroParallelReplicationWorkers below.
 func TestVReplicationConfigRejectsInvalidParallelWorkers(t *testing.T) {
-	for _, bad := range []string{"0", "-1", "-5"} {
+	for _, bad := range []string{"-1", "-5"} {
 		t.Run(bad, func(t *testing.T) {
 			_, err := NewVReplicationConfig(map[string]string{
 				"vreplication-parallel-replication-workers": bad,
 			})
 			require.Error(t, err, "expected error for invalid value %q", bad)
 			require.Contains(t, err.Error(), "vreplication-parallel-replication-workers")
-			require.Contains(t, err.Error(), "must be >= 1")
+			require.Contains(t, err.Error(), "must be >= 0")
 		})
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -133,7 +134,21 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 	getError := func(k, v string) string {
 		return fmt.Sprintf("invalid value for %s: %s", k, v)
 	}
-	for k, v := range overrides {
+	// Iterate keys in sorted order so the resulting config is deterministic
+	// when the caller supplies both the hyphen and underscore variants of the
+	// same setting (e.g. `vstream-packet-size` and `vstream_packet_size`).
+	// Go map iteration is intentionally randomized; without sorting, last-
+	// write-wins would produce different results across runs of the same
+	// vttablet. ASCII '-' (0x2D) < '_' (0x5F), so hyphen variants are
+	// applied first and underscore variants override — matching the
+	// "UseEffectiveValues" behaviour exercised by the test suite.
+	keys := make([]string, 0, len(overrides))
+	for k := range overrides {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		v := overrides[k]
 		if v == "" {
 			continue
 		}
@@ -198,8 +213,11 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 			value, err := strconv.Atoi(v)
 			if err != nil {
 				errors = append(errors, getError(k, v))
-			} else if value < 1 {
-				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be >= 1; use 1 for serial apply)", k, value))
+			} else if value < 0 {
+				// Negative values are never meaningful; the flag help text
+				// documents "<= 1 to disable parallelism" so 0 and 1 both
+				// fall through to the serial applier path.
+				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be >= 0; 0 or 1 disables parallel apply)", k, value))
 			} else {
 				c.ParallelReplicationWorkers = value
 			}

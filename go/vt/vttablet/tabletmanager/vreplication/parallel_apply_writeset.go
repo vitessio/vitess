@@ -19,7 +19,6 @@ package vreplication
 import (
 	"encoding/binary"
 	"fmt"
-	"log/slog"
 	"maps"
 	"strings"
 	"sync"
@@ -31,7 +30,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vthash"
 
@@ -819,105 +817,5 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 		})
 	}
 
-	// Best-effort type-compatibility check across parent PK and child FK
-	// columns. Our writeset hash includes the field type discriminator and,
-	// for text types, collation-normalized value bytes. If the parent PK
-	// column and child FK column use different MySQL types or collations,
-	// the hashes produced for the same logical value will not match and the
-	// scheduler will miss the parent↔child conflict, risking an FK
-	// constraint violation on the target during parallel apply.
-	//
-	// MySQL rejects most incompatible FK types at DDL time, so in practice
-	// this is almost always a no-op. We still check so that the rare
-	// schema that drifts (e.g. a legacy FK across CHAR ↔ VARCHAR with
-	// different collations, or pre-8.0 signed/unsigned mismatches) produces
-	// a visible operator warning rather than a silent correctness gap.
-	warnOnIncompatibleFKTypes(dbClient, dbName, result)
 	return result, nil
-}
-
-// warnOnIncompatibleFKTypes reads column metadata for every FK constraint
-// in result and emits a log warning for any parent-PK / child-FK column
-// pair whose data_type or collation differs. This is purely advisory; the
-// applier does not refuse to run because the check may produce false
-// positives on schemas MySQL considers compatible. Operators who see this
-// warning should either align the types at the source/target or disable
-// parallel apply for that workflow.
-func warnOnIncompatibleFKTypes(dbClient *vdbClient, dbName string, refs map[string][]fkConstraintRef) {
-	if len(refs) == 0 {
-		return
-	}
-	// Collect (table, column) pairs we need metadata for.
-	type tableCol struct{ table, column string }
-	needed := make(map[tableCol]struct{})
-	for childTable, cs := range refs {
-		for _, c := range cs {
-			for _, col := range c.ChildColumnNames {
-				needed[tableCol{childTable, col}] = struct{}{}
-			}
-			for _, col := range c.ReferencedColumnNames {
-				needed[tableCol{c.ParentTable, col}] = struct{}{}
-			}
-		}
-	}
-	if len(needed) == 0 {
-		return
-	}
-	// One query per schema is cheap; fetch everything and filter client-side.
-	query := fmt.Sprintf(
-		"SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, "+
-			"COALESCE(CHARACTER_SET_NAME, ''), COALESCE(COLLATION_NAME, ''), "+
-			"COALESCE(COLUMN_TYPE, '') "+
-			"FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = %s",
-		encodeString(dbName),
-	)
-	qr, err := dbClient.ExecuteFetch(query, -1)
-	if err != nil {
-		log.Warn("parallel apply: could not verify FK type compatibility; skipping advisory check",
-			slog.String("db", dbName), slog.Any("error", err))
-		return
-	}
-	type colMeta struct{ dataType, charset, collation, columnType string }
-	meta := make(map[tableCol]colMeta, len(qr.Rows))
-	for _, row := range qr.Rows {
-		tc := tableCol{row[0].ToString(), row[1].ToString()}
-		if _, want := needed[tc]; !want {
-			continue
-		}
-		meta[tc] = colMeta{
-			dataType:   strings.ToLower(row[2].ToString()),
-			charset:    row[3].ToString(),
-			collation:  row[4].ToString(),
-			columnType: strings.ToLower(row[5].ToString()),
-		}
-	}
-	for childTable, cs := range refs {
-		for _, c := range cs {
-			for i := range c.ChildColumnNames {
-				parent := meta[tableCol{c.ParentTable, c.ReferencedColumnNames[i]}]
-				child := meta[tableCol{childTable, c.ChildColumnNames[i]}]
-				// If we didn't find metadata for either side, skip silently —
-				// we don't want to spam on schema-lookup gaps.
-				if parent.dataType == "" || child.dataType == "" {
-					continue
-				}
-				if parent.dataType == child.dataType &&
-					parent.charset == child.charset &&
-					parent.collation == child.collation &&
-					parent.columnType == child.columnType {
-					continue
-				}
-				log.Warn("parallel apply: foreign-key column types or collations differ between parent and child; writeset-based conflict detection may miss the edge, potentially allowing parallel apply to violate the FK constraint — align types or disable parallel apply for this workflow",
-					slog.String("childTable", childTable),
-					slog.String("childColumn", c.ChildColumnNames[i]),
-					slog.String("childType", child.columnType),
-					slog.String("childCollation", child.collation),
-					slog.String("parentTable", c.ParentTable),
-					slog.String("parentColumn", c.ReferencedColumnNames[i]),
-					slog.String("parentType", parent.columnType),
-					slog.String("parentCollation", parent.collation),
-				)
-			}
-		}
-	}
 }
