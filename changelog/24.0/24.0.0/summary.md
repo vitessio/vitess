@@ -30,6 +30,8 @@
         - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
         - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
         - [Connection Pool Waiter Cap](#vttablet-conn-pool-waiter-cap)
+        - [User Table Free Space Alerting](#vttablet-user-table-free-space-alerting)
+        - [Automatic `mysql.gtid_executed` Optimization](#vttablet-gtid-executed-optimize)
     - **[Tracing](#minor-changes-tracing)**
         - [OpenTelemetry tracing support](#tracing-opentelemetry)
         - [Deprecation of OpenTracing-based tracing backends](#tracing-opentracing-deprecation)
@@ -273,6 +275,48 @@ the query, stream and transaction connection pools. The limits are set with the 
 * `--queryserver-config-txpool-waiter-cap`.
 
 All of the above have a default value of `0`, meaning no limit, thus preserving the behavior of the previous version.
+
+#### <a id="vttablet-user-table-free-space-alerting"/>User Table Free Space Alerting</a>
+
+VTTablet now surfaces user tables with significant InnoDB bloat via a new metric and throttled log messages. This helps operators identify tables that may benefit from `OPTIMIZE TABLE` to reclaim disk space.
+
+**New Flag:**
+
+```
+--schema-user-tables-free-space-percent-threshold int (default 50)
+```
+
+This flag sets the minimum `DATA_FREE` percentage at which a table is surfaced. A table is flagged when its reclaimable free space (`DATA_FREE`) exceeds the specified percentage of the table's total allocated space (`DATA_LENGTH + INDEX_LENGTH + DATA_FREE`).
+
+- `0`: Disables the feature entirely—no extra query, no metric, no log.
+- `1-100`: Enables the feature. The default of `50` means tables where more than half of the allocated space is reclaimable will be surfaced.
+
+The flag is dynamically reloadable via the viper config file, so operators can adjust the threshold without restarting vttablet.
+
+**New Metric:**
+
+- `SchemaTableDataFreeBytes{Table="<name>"}`: Exposes the `DATA_FREE` bytes for each user table exceeding the threshold. Labels are automatically reset when a table drops below the threshold or is dropped.
+
+This feature runs on all tablet types (PRIMARY, REPLICA, RDONLY, etc.) during periodic schema reloads that query `information_schema`. It is purely observational—vttablet does not run `OPTIMIZE TABLE` on user tables.
+
+#### <a id="vttablet-gtid-executed-optimize"/>Automatic `mysql.gtid_executed` Optimization</a>
+
+VTTablet now automatically runs `OPTIMIZE TABLE` on `mysql.gtid_executed` on non-primary tablets to prevent InnoDB bloat from causing outages.
+
+The `mysql.gtid_executed` table can accumulate significant bloat from high-churn replication tracking. In extreme cases, multi-GiB bloat can cause binlog-rotation compaction scans to time out, leading to failing InnoDB assertions and unusable instances.
+
+**Behavior:**
+
+When vttablet detects that `mysql.gtid_executed` has more than 128 MiB of reclaimable free space (`DATA_FREE`) on a non-primary tablet, it runs `OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed` in the background.
+
+**Safety mechanisms:**
+
+- **Non-primary only**: OPTIMIZE never runs on PRIMARY tablets, including non-serving primaries during transitions.
+- **Role stability cooldown**: A 5-minute cooldown after tablet type changes (PRIMARY to non-PRIMARY or vice versa) prevents background admin work from interfering with PRS/ERS operations.
+- **Per-tablet throttle**: Each tablet runs OPTIMIZE at most once every 24 hours.
+- **Timeout**: A 60-second timeout ensures hung operations are aborted rather than left running indefinitely.
+
+This feature is automatic and has no user configuration. It addresses a concrete production failure mode where bloated `mysql.gtid_executed` tables caused MySQL instances to become unusable.
 
 ### <a id="minor-changes-tracing"/>Tracing</a>
 
