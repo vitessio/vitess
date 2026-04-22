@@ -60,7 +60,11 @@ var (
 
 // NewOptionalFlag returns a *OptionalFlagValue[T] with the given default value,
 // pflag type name, parse function, and stringer.
+// It panics if parse is nil, since a flag without a parse function cannot be set.
 func NewOptionalFlag[T any](defaultVal T, typeName string, parse func(string) (T, error), stringer func(T) string) *OptionalFlagValue[T] {
+	if parse == nil {
+		panic("flagutil: NewOptionalFlag requires a non-nil parse function")
+	}
 	return &OptionalFlagValue[T]{
 		val:      defaultVal,
 		typeName: typeName,
