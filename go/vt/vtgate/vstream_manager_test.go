@@ -25,6 +25,7 @@ import (
 	"runtime/pprof"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -1971,6 +1972,142 @@ func TestVStreamLivenessChecks(t *testing.T) {
 			}
 			require.EqualError(t, err, tcase.wantErr)
 		})
+	}
+}
+
+func TestVStreamMaxStreamAge(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: fakeTablet.Tablet().Keyspace,
+			Shard:    fakeTablet.Tablet().Shard,
+			Gtid:     "pos",
+		}},
+	}
+
+	type testcase struct {
+		name                string
+		maxStreamAgeSeconds uint32
+		streamDuration      time.Duration
+		wantErr             string
+		wantErrCode         vtrpcpb.Code
+	}
+	testcases := []testcase{
+		{
+			name:                "no max age - stream runs until context timeout",
+			maxStreamAgeSeconds: 0,
+			streamDuration:      200 * time.Millisecond,
+			wantErr:             "context deadline exceeded",
+			wantErrCode:         vtrpcpb.Code_DEADLINE_EXCEEDED,
+		},
+		{
+			name:                "max age exceeded - stream terminated with UNAVAILABLE",
+			maxStreamAgeSeconds: 1,
+			streamDuration:      3 * time.Second,
+			wantErr:             "vstream exceeded maximum age",
+			wantErrCode:         vtrpcpb.Code_UNAVAILABLE,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, tcase.streamDuration)
+			defer vstreamCancel()
+
+			flags := &vtgatepb.VStreamFlags{
+				MaxStreamAgeSeconds: tcase.maxStreamAgeSeconds,
+			}
+
+			err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+				return nil
+			})
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tcase.wantErr)
+			require.Equal(t, tcase.wantErrCode, vterrors.Code(err))
+		})
+	}
+}
+
+func TestVStreamMaxStreamAgeBlockedSend(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	cell := "aa"
+	ks := "TestVStream"
+	_ = createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	st := getSandboxTopo(ctx, cell, ks, []string{"-20"})
+	vsm := newTestVStreamManager(ctx, hc, st, cell)
+	fakeTablet := hc.AddTestTablet("aa", "1.1.1.1", 1001, ks, "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	addTabletToSandboxTopo(t, ctx, st, fakeTablet.Tablet().Keyspace, fakeTablet.Tablet().Shard, fakeTablet.Tablet())
+
+	fakeTablet.AddVStreamEvents([]*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}, nil)
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: fakeTablet.Tablet().Keyspace,
+			Shard:    fakeTablet.Tablet().Shard,
+			Gtid:     "pos",
+		}},
+	}
+
+	maxAge := 1 * time.Second
+	callbackDelay := 3 * time.Second
+	testTimeout := 10 * time.Second
+
+	t.Log("test parameters",
+		slog.Duration("max_age", maxAge),
+		slog.Duration("callback_delay", callbackDelay),
+		slog.Duration("test_timeout", testTimeout),
+	)
+
+	flags := &vtgatepb.VStreamFlags{
+		MaxStreamAgeSeconds: uint32(maxAge.Seconds()),
+	}
+
+	var callbackInFlight atomic.Bool
+
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		done <- vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, flags, func(events []*binlogdatapb.VEvent) error {
+			callbackInFlight.Store(true)
+			defer callbackInFlight.Store(false)
+			time.Sleep(callbackDelay)
+			return nil
+		})
+	}()
+
+	assert.Eventually(t, callbackInFlight.Load, 5*time.Second, 10*time.Millisecond,
+		"callback was never entered")
+
+	select {
+	case err := <-done:
+		elapsed := time.Since(start)
+		t.Log("VStream returned",
+			slog.Duration("elapsed", elapsed),
+			slog.Any("error", err),
+			slog.Any("code", vterrors.Code(err)),
+		)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "vstream exceeded maximum age")
+		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+		assert.Falsef(t, callbackInFlight.Load(),
+			"callback is still in-flight after VStream() returned; lifecycle violation")
+		assert.GreaterOrEqual(t, elapsed, callbackDelay,
+			"VStream should wait for blocked send to finish before returning (best-effort max-age)")
+	case <-time.After(testTimeout):
+		require.FailNowf(t, "VStream did not terminate in time", "timeout=%v max_age=%v", testTimeout, maxAge)
 	}
 }
 
