@@ -66,11 +66,6 @@ func recoverParallelApply(name string, cb func(err error)) {
 	}
 }
 
-var (
-	workerLoopTestHookAfterSend         func(*applyTxn)
-	workerLoopTestHookBeforeWaitPending func(chan struct{})
-)
-
 type applyTxnPayload struct {
 	// pos is the GTID position to record when committing this transaction.
 	pos replication.Position
@@ -1855,17 +1850,9 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 	// to block forever if we were still dereferencing through the txn.
 	var pendingDone chan struct{}
 
-	// Test hooks let the regression test freeze the worker at precise points in
-	// the handoff without relying on scheduler timing.
-	afterSendHook := workerLoopTestHookAfterSend
-	beforeWaitPendingHook := workerLoopTestHookBeforeWaitPending
-
 	waitPending := func() error {
 		if pendingDone == nil {
 			return nil
-		}
-		if beforeWaitPendingHook != nil {
-			beforeWaitPendingHook(pendingDone)
 		}
 		select {
 		case <-pendingDone:
@@ -1971,9 +1958,6 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		case <-ctx.Done():
 			worker.rollback()
 			return ctx.Err()
-		}
-		if afterSendHook != nil {
-			afterSendHook(txn)
 		}
 
 		// Capture the done channel BEFORE rotating. The commitLoop may

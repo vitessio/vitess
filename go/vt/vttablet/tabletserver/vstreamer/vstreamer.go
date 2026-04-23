@@ -72,8 +72,6 @@ var HeartbeatTime = 900 * time.Millisecond
 // us a natural backoff period.
 var fullyThrottledTimeout = 10 * time.Minute
 
-var testHookVStreamerBeforeCountBufferedSourceEvent func()
-
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
 	ctx    context.Context
@@ -462,9 +460,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			select {
 			case ev, ok := <-events:
 				if ok {
-					if testHookVStreamerBeforeCountBufferedSourceEvent != nil {
-						testHookVStreamerBeforeCountBufferedSourceEvent()
-					}
 					select {
 					case throttledEvents <- ev:
 					case <-ctx.Done():

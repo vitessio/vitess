@@ -279,25 +279,6 @@ func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []s
 	}
 }
 
-func TestExecConnStatements_UpdatesMockSchema(t *testing.T) {
-	conn, err := env.Mysqld.GetDbaConnection(context.Background())
-	require.NoError(t, err)
-
-	tableName := "schema_engine_conn_test"
-	execConnStatements(t, conn, []string{
-		fmt.Sprintf("create table %s (id int primary key)", tableName),
-	})
-	t.Cleanup(func() {
-		execConnStatements(t, conn, []string{"drop table if exists " + tableName})
-	})
-
-	require.NotNil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
-
-	execConnStatements(t, conn, []string{"drop table " + tableName})
-
-	require.Nil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
-}
-
 func TestShortModeHarnessInitialized(t *testing.T) {
 	if !testing.Short() {
 		t.Skip("short-mode only")
@@ -958,20 +939,6 @@ func applyDropTable(ddl *sqlparser.DropTable) {
 	}
 }
 
-func TestUpdateMockSchemaForQuery_DropRemovesSchemaEngineTable(t *testing.T) {
-	tableName := "schema_engine_drop_test"
-	execStatements(t, []string{fmt.Sprintf("create table %s (id int primary key)", tableName)})
-	t.Cleanup(func() {
-		execStatements(t, []string{"drop table if exists " + tableName})
-	})
-
-	require.NotNil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
-
-	updateMockSchemaForQuery("drop table " + tableName)
-
-	require.Nil(t, env.SchemaEngine.GetTable(sqlparser.NewIdentifierCS(tableName)))
-}
-
 func normalizeDDLTableName(table sqlparser.TableName) (string, string, bool) {
 	name := table.Name.String()
 	if name == "" {
@@ -1133,9 +1100,6 @@ func deleteMockTable(dbName, tableName string) {
 	mockSchemaMu.Lock()
 	delete(mockSchema, mockSchemaKey(dbName, tableName))
 	mockSchemaMu.Unlock()
-	if dbName == env.KeyspaceName {
-		env.SchemaEngine.DeleteTableForTests(tableName)
-	}
 }
 
 func getMockTable(dbName, tableName string) *mockTable {
