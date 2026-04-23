@@ -21,10 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,6 +35,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -40,7 +43,6 @@ import (
 const (
 	gtidExecutedOptimizeThresholdBytes = 128 * 1024 * 1024
 	gtidExecutedOptimizeSetupTarget    = gtidExecutedOptimizeThresholdBytes + 32*1024*1024
-	gtidExecutedOptimizeCooldown       = 5 * time.Minute
 	gtidExecutedOptimizeBatchRows      = 1000000
 	gtidExecutedOptimizeInsertBatches  = 8
 )
@@ -61,7 +63,7 @@ func TestSchemaEngineOptimizeGtidExecutedOnReplica(t *testing.T) {
 		setGlobalBoolVar(t, conn, "super_read_only", false)
 		setGlobalBoolVar(t, conn, "read_only", false)
 	})
-	switchedAt := time.Now()
+	stampSchemaEngineTabletTypeLastChangedAt(t, framework.Server.SchemaEngine(), time.Now().Add(-10*time.Minute))
 
 	createGtidExecutedDataFree(t, conn, gtidExecutedOptimizeSetupTarget)
 	dataFreeBefore := waitForGtidExecutedDataFreeAtLeast(t, conn, gtidExecutedOptimizeSetupTarget)
@@ -75,10 +77,6 @@ func TestSchemaEngineOptimizeGtidExecutedOnReplica(t *testing.T) {
 	t.Cleanup(func() {
 		log.SwapLogger(previousLogger)
 	})
-
-	assert.Eventually(t, func() bool {
-		return time.Since(switchedAt) >= gtidExecutedOptimizeCooldown
-	}, gtidExecutedOptimizeCooldown+time.Minute, time.Second)
 
 	require.NoError(t, framework.Server.SchemaEngine().ReloadAtEx(ctx, replication.Position{}, true))
 
@@ -100,6 +98,14 @@ func TestSchemaEngineOptimizeGtidExecutedOnReplica(t *testing.T) {
 
 	assert.True(t, getRequiredGlobalBoolVar(t, conn, "read_only"))
 	assert.True(t, getRequiredGlobalBoolVar(t, conn, "super_read_only"))
+}
+
+func stampSchemaEngineTabletTypeLastChangedAt(t *testing.T, se *schema.Engine, when time.Time) {
+	t.Helper()
+
+	field := reflect.ValueOf(se).Elem().FieldByName("tabletTypeLastChangedAt")
+	require.True(t, field.IsValid())
+	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(when))
 }
 
 func createGtidExecutedDataFree(t *testing.T, conn *mysql.Conn, minDataFree uint64) {

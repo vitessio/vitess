@@ -706,9 +706,27 @@ func (se *Engine) restoreSuperReadOnly() {
 		return
 	}
 	defer conn.Close()
+	se.mu.Lock()
+	promoted = se.isPrimaryTablet
+	se.mu.Unlock()
+	if promoted {
+		log.Warn("schema engine: skipping super_read_only restore; tablet was promoted to PRIMARY while reopening the DBA connection")
+		return
+	}
 	if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'ON'", 1, false); err != nil {
 		log.Warn("schema engine: CRITICAL: failed to re-enable super_read_only after OPTIMIZE; tablet may now accept writes — investigate immediately",
 			slog.Any("error", err))
+		return
+	}
+	se.mu.Lock()
+	promoted = se.isPrimaryTablet
+	se.mu.Unlock()
+	if promoted {
+		log.Warn("schema engine: tablet was promoted to PRIMARY during super_read_only restore; disabling it again")
+		if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
+			log.Warn("schema engine: CRITICAL: failed to disable super_read_only after promotion during restore; primary may remain read-only",
+				slog.Any("error", err))
+		}
 	}
 }
 

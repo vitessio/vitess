@@ -200,6 +200,32 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
 			"restore must skip SET GLOBAL super_read_only = 'ON' after promotion")
 	})
+
+	t.Run("restore disables super_read_only again if promotion races with restore", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddQuery(selectSuperReadOnlyQuery, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("super_read_only", "int64"),
+			"1",
+		))
+		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+		onResult := db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+		conn := newTestDBConnection(t, db)
+		defer conn.Close()
+
+		restore, err := se.disableSuperReadOnly(conn)
+		require.NoError(t, err)
+
+		onResult.BeforeFunc = func() {
+			se.MakePrimary(true)
+		}
+
+		restore()
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
+		assert.Equal(t, 2, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"),
+			"restore must turn super_read_only back OFF if the tablet is promoted during the restore SET")
+	})
 }
 
 // TestRunOptimizeGtidExecutedSuccess exercises the full goroutine body on
