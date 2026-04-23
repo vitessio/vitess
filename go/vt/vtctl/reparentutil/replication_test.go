@@ -1833,3 +1833,94 @@ func TestRelayLogPositions_IsZero(t *testing.T) {
 	rlp.Executed = replication.Position{GTIDSet: gtidSet}
 	assert.False(t, rlp.IsZero())
 }
+
+func TestFilterToMostAdvancedCombined(t *testing.T) {
+	gtidSetHigh, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10")
+	require.NoError(t, err)
+	gtidSetMid, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	gtidSetLow, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-2")
+	require.NoError(t, err)
+
+	// Executed positions (for sorting within the top group).
+	gtidSetExecHigh, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-8")
+	require.NoError(t, err)
+	gtidSetExecMid, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6")
+	require.NoError(t, err)
+	gtidSetExecLow, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-3")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		candidates  map[string]*RelayLogPositions
+		maxTablets  int64
+		wantAliases []string
+	}{
+		{
+			name:        "empty candidates",
+			candidates:  map[string]*RelayLogPositions{},
+			maxTablets:  0,
+			wantAliases: nil,
+		},
+		{
+			name: "filters to max Combined group",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecHigh}},
+				"zone1-101": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecMid}},
+				"zone1-102": {Combined: replication.Position{GTIDSet: gtidSetMid}, Executed: replication.Position{GTIDSet: gtidSetExecMid}},
+				"zone1-103": {Combined: replication.Position{GTIDSet: gtidSetLow}, Executed: replication.Position{GTIDSet: gtidSetExecLow}},
+			},
+			maxTablets:  0,
+			wantAliases: []string{"zone1-100", "zone1-101"},
+		},
+		{
+			name: "all at same Combined position",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecHigh}},
+				"zone1-101": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecMid}},
+				"zone1-102": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecLow}},
+			},
+			maxTablets:  0,
+			wantAliases: []string{"zone1-100", "zone1-101", "zone1-102"},
+		},
+		{
+			name: "maxTablets caps the group",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecHigh}},
+				"zone1-101": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecMid}},
+				"zone1-102": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecLow}},
+			},
+			maxTablets:  2,
+			wantAliases: []string{"zone1-100", "zone1-101"},
+		},
+		{
+			name: "maxTablets larger than group is a no-op",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecHigh}},
+				"zone1-101": {Combined: replication.Position{GTIDSet: gtidSetMid}, Executed: replication.Position{GTIDSet: gtidSetExecMid}},
+			},
+			maxTablets:  10,
+			wantAliases: []string{"zone1-100"},
+		},
+		{
+			name: "single candidate",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetHigh}, Executed: replication.Position{GTIDSet: gtidSetExecHigh}},
+			},
+			maxTablets:  3,
+			wantAliases: []string{"zone1-100"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := logutil.NewMemoryLogger()
+			result := filterToMostAdvancedCombined(tt.candidates, tt.maxTablets, "", logger)
+			var gotAliases []string
+			for alias := range result {
+				gotAliases = append(gotAliases, alias)
+			}
+			assert.ElementsMatch(t, tt.wantAliases, gotAliases)
+		})
+	}
+}

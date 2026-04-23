@@ -63,6 +63,11 @@ type EmergencyReparentOptions struct {
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
+	// WaitForRelayLogsMaxTablets caps how many tablets from the most-advanced
+	// Combined position group to wait for during relay log application.
+	// 0 means wait for all in the group (no cap).
+	WaitForRelayLogsMaxTablets int64
+
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
@@ -262,8 +267,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
-	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
-	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
+	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP,
+	// and filter to only the most-advanced candidates by Combined (relay log) position.
+	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap, opts, erp.logger)
 	if err != nil {
 		return err
 	} else if len(validCandidates) == 0 {
@@ -416,6 +422,12 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 	return nil
 }
 
+// relayLogResult is the result of waiting for a single tablet to apply relay logs.
+type relayLogResult struct {
+	alias string
+	err   error
+}
+
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
@@ -423,8 +435,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
 ) error {
-	errCh := make(chan concurrency.Error)
-	defer close(errCh)
+	resultCh := make(chan relayLogResult, len(validCandidates))
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
@@ -456,27 +467,26 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		}
 
 		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
-			var err error
-			defer func() {
-				errCh <- concurrency.Error{
-					Err: err,
-				}
-			}()
-			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
+			resultCh <- relayLogResult{
+				alias: alias,
+				err:   WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status),
+			}
 		}(candidate, status)
 
 		waiterCount++
 	}
 
-	errgroup := concurrency.ErrorGroup{
-		NumGoroutines:        waiterCount,
-		NumRequiredSuccesses: waiterCount,
-		NumAllowedErrors:     0,
+	// Collect results and remove failed tablets from validCandidates.
+	for range waiterCount {
+		result := <-resultCh
+		if result.err != nil {
+			erp.logger.Warningf("EmergencyReparent candidate %s failed to apply relay logs: %v; removing from valid candidates", result.alias, result.err)
+			delete(validCandidates, result.alias)
+		}
 	}
-	rec := errgroup.Wait(groupCancel, errCh)
 
-	if len(rec.Errors) != 0 {
-		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided waitReplicasTimeout (%s): %v", waitReplicasTimeout, rec.Error())
+	if len(validCandidates) == 0 {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
 	return nil
