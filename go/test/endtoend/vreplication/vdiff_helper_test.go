@@ -36,6 +36,7 @@ import (
 
 const (
 	vdiffTimeout             = 180 * time.Second // We can leverage auto retry on error with this longer-than-usual timeout
+	maxDiffDurationTimeout   = 5 * time.Minute
 	vdiffRetryTimeout        = 30 * time.Second
 	vdiffStatusCheckInterval = 5 * time.Second
 	vdiffRetryInterval       = 5 * time.Second
@@ -55,6 +56,10 @@ func doVDiff(t *testing.T, ksWorkflow, cells string) {
 }
 
 func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, completedAtMin time.Time) *vdiffInfo {
+	return waitForVDiff2ToCompleteWithTimeout(t, ksWorkflow, cells, uuid, completedAtMin, vdiffTimeout)
+}
+
+func waitForVDiff2ToCompleteWithTimeout(t *testing.T, ksWorkflow, cells, uuid string, completedAtMin time.Time, timeout time.Duration) *vdiffInfo {
 	var info *vdiffInfo
 	var jsonStr string
 	first := true
@@ -108,7 +113,7 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 	select {
 	case <-ch:
 		return info
-	case <-time.After(vdiffTimeout):
+	case <-time.After(timeout):
 		log.Error(fmt.Sprintf("VDiff never completed for UUID %s. Latest output: %s", uuid, jsonStr))
 		require.FailNow(t, "VDiff never completed for UUID "+uuid)
 		return nil
@@ -123,6 +128,10 @@ type expectedVDiff2Result struct {
 }
 
 func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result, extraFlags ...string) {
+	doVtctldclientVDiffWithTimeout(t, keyspace, workflow, cells, want, vdiffTimeout, extraFlags...)
+}
+
+func doVtctldclientVDiffWithTimeout(t *testing.T, keyspace, workflow, cells string, want *expectedVDiff2Result, timeout time.Duration, extraFlags ...string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run("vtctldclient vdiff "+ksWorkflow, func(t *testing.T) {
 		// update-table-stats is needed in order to test progress reports.
@@ -131,7 +140,7 @@ func doVtctldclientVDiff(t *testing.T, keyspace, workflow, cells string, want *e
 			flags = append(flags, extraFlags...)
 		}
 		uuid, _ := performVDiff2Action(t, ksWorkflow, cells, "create", "", false, flags...)
-		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, time.Time{})
+		info := waitForVDiff2ToCompleteWithTimeout(t, ksWorkflow, cells, uuid, time.Time{}, timeout)
 		require.NotNil(t, info)
 		require.Equal(t, workflow, info.Workflow)
 		require.Equal(t, keyspace, info.Keyspace)
