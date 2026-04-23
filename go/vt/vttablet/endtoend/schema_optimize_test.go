@@ -100,11 +100,21 @@ func TestSchemaEngineOptimizeGtidExecutedOnReplica(t *testing.T) {
 	assert.True(t, getRequiredGlobalBoolVar(t, conn, "super_read_only"))
 }
 
+// stampSchemaEngineTabletTypeLastChangedAt sets the Engine's
+// unexported tabletTypeLastChangedAt field to a past time so that
+// the OPTIMIZE stability cooldown does not delay the test.
+//
+// We deliberately reach into the field via reflect + unsafe.Pointer
+// rather than adding a SetTabletTypeLastChangedAtForTests method to
+// the production Engine: we do not want a test-only mutator on a
+// production API. The tradeoff is that a future rename of the
+// struct field breaks this test at runtime (require.True on
+// field.IsValid) rather than at compile time.
 func stampSchemaEngineTabletTypeLastChangedAt(t *testing.T, se *schema.Engine, when time.Time) {
 	t.Helper()
 
 	field := reflect.ValueOf(se).Elem().FieldByName("tabletTypeLastChangedAt")
-	require.True(t, field.IsValid())
+	require.True(t, field.IsValid(), "tabletTypeLastChangedAt no longer exists on schema.Engine; update this test")
 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(when))
 }
 

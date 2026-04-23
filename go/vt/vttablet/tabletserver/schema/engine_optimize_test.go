@@ -40,7 +40,8 @@ func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 	now := time.Now()
 
 	t.Run("serving primary tablet skips", func(t *testing.T) {
-		se := &Engine{isPrimaryTablet: true, isServingPrimary: true}
+		se := &Engine{isServingPrimary: true}
+		se.isPrimaryTablet.Store(true)
 		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
@@ -48,7 +49,8 @@ func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 		// Regression for the unservePrimary() path where isServingPrimary
 		// is false but the tablet is still of type PRIMARY: OPTIMIZE must
 		// not run on it.
-		se := &Engine{isPrimaryTablet: true, isServingPrimary: false}
+		se := &Engine{isServingPrimary: false}
+		se.isPrimaryTablet.Store(true)
 		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
@@ -199,6 +201,45 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		restore()
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
 			"restore must skip SET GLOBAL super_read_only = 'ON' after promotion")
+	})
+
+	t.Run("restore skips if promoted while reopening the DBA connection", func(t *testing.T) {
+		// Regression for the middle promotion re-check: a PRS/ERS can land
+		// between the initial check and the SET ... ON while we are still
+		// establishing the fresh DBA connection. SetConnDelay forces that
+		// connection open to take ~200ms; a goroutine flips the tablet to
+		// PRIMARY ~50ms in, so by the time the middle check runs after the
+		// handshake completes it observes the promotion and bails out
+		// before SET ... ON.
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddQuery(selectSuperReadOnlyQuery, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("super_read_only", "int64"),
+			"1",
+		))
+		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+		conn := newTestDBConnection(t, db)
+		defer conn.Close()
+
+		restore, err := se.disableSuperReadOnly(conn)
+		require.NoError(t, err)
+
+		db.SetConnDelay(200 * time.Millisecond)
+		promoted := make(chan struct{})
+		go func() {
+			defer close(promoted)
+			time.Sleep(50 * time.Millisecond)
+			se.MakePrimary(true)
+		}()
+
+		restore()
+		<-promoted
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+			"restore must skip SET ... ON when promotion lands during the fresh DBA conn open")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"),
+			"restore must not issue a compensating SET ... OFF since SET ... ON never ran")
 	})
 
 	t.Run("restore disables super_read_only again if promotion races with restore", func(t *testing.T) {

@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/exp/maps"
@@ -112,7 +113,9 @@ type Engine struct {
 	// serving and non-serving primary states. Used by the OPTIMIZE paths so
 	// we never run background admin work against a primary tablet — even a
 	// primary-not-serving one (e.g. during an orderly transition).
-	isPrimaryTablet bool
+	// Stored as an atomic so the OPTIMIZE goroutine's promotion
+	// re-checks can read it without grabbing se.mu.
+	isPrimaryTablet atomic.Bool
 	// tabletTypeLastChangedAt records the wall-clock time at which the
 	// tablet most recently transitioned between PRIMARY and non-PRIMARY.
 	// Used by the OPTIMIZE paths to avoid kicking off background admin
@@ -409,10 +412,10 @@ func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	if se.isPrimaryTablet {
+	if se.isPrimaryTablet.Load() {
 		se.tabletTypeLastChangedAt = time.Now()
 	}
-	se.isPrimaryTablet = false
+	se.isPrimaryTablet.Store(false)
 	se.isServingPrimary = false
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
@@ -426,10 +429,10 @@ func (se *Engine) MakeNonPrimary() {
 func (se *Engine) MakePrimary(serving bool) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	if !se.isPrimaryTablet {
+	if !se.isPrimaryTablet.Load() {
 		se.tabletTypeLastChangedAt = time.Now()
 	}
-	se.isPrimaryTablet = true
+	se.isPrimaryTablet.Store(true)
 	se.isServingPrimary = serving
 }
 
@@ -450,7 +453,7 @@ func (se *Engine) shouldAttemptGtidExecutedOptimizeLocked(now time.Time) bool {
 }
 
 func (se *Engine) isGtidExecutedOptimizeEligibleLocked(now time.Time) bool {
-	if se.isPrimaryTablet {
+	if se.isPrimaryTablet.Load() {
 		return false
 	}
 	if !se.tabletTypeLastChangedAt.IsZero() && now.Sub(se.tabletTypeLastChangedAt) < tabletTypeStabilityCooldown {
@@ -683,10 +686,7 @@ func (se *Engine) disableSuperReadOnly(conn *dbconnpool.DBConnection) (restore f
 // itself turns super_read_only OFF and we must not stomp that back ON and
 // leave a freshly-promoted primary read-only.
 func (se *Engine) restoreSuperReadOnly() {
-	se.mu.Lock()
-	promoted := se.isPrimaryTablet
-	se.mu.Unlock()
-	if promoted {
+	if se.isPrimaryTablet.Load() {
 		log.Warn("schema engine: skipping super_read_only restore; tablet has been promoted to PRIMARY since OPTIMIZE started")
 		return
 	}
@@ -701,27 +701,21 @@ func (se *Engine) restoreSuperReadOnly() {
 	defer cancel()
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
 	if err != nil {
-		log.Warn("schema engine: CRITICAL: failed to open connection to re-enable super_read_only after OPTIMIZE; tablet may now accept writes — investigate immediately",
+		log.Warn("schema engine: failed to open connection to re-enable super_read_only after OPTIMIZE. Expected during full-stack shutdown; if mysqld is still running the tablet may now accept writes — investigate immediately",
 			slog.Any("error", err))
 		return
 	}
 	defer conn.Close()
-	se.mu.Lock()
-	promoted = se.isPrimaryTablet
-	se.mu.Unlock()
-	if promoted {
+	if se.isPrimaryTablet.Load() {
 		log.Warn("schema engine: skipping super_read_only restore; tablet was promoted to PRIMARY while reopening the DBA connection")
 		return
 	}
 	if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'ON'", 1, false); err != nil {
-		log.Warn("schema engine: CRITICAL: failed to re-enable super_read_only after OPTIMIZE; tablet may now accept writes — investigate immediately",
+		log.Warn("schema engine: failed to re-enable super_read_only after OPTIMIZE. Expected during full-stack shutdown; if mysqld is still running the tablet may now accept writes — investigate immediately",
 			slog.Any("error", err))
 		return
 	}
-	se.mu.Lock()
-	promoted = se.isPrimaryTablet
-	se.mu.Unlock()
-	if promoted {
+	if se.isPrimaryTablet.Load() {
 		log.Warn("schema engine: tablet was promoted to PRIMARY during super_read_only restore; disabling it again")
 		if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
 			log.Warn("schema engine: CRITICAL: failed to disable super_read_only after promotion during restore; primary may remain read-only",
