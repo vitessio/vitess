@@ -83,6 +83,11 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 	return vdbc, nil
 }
 
+// newApplyWorker constructs a worker with two DB connections so its apply
+// phase can overlap with the commitLoop's commit phase: one connection
+// handles the current txn while the other is ready for the next. In batch
+// mode it also reads MySQL's max_allowed_packet to size the multi-statement
+// flush so a worker's batched INSERTs cannot exceed the wire limit.
 func newApplyWorker(ctx context.Context, vr *vreplicator) (*applyWorker, error) {
 	batchMode := vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0
 
@@ -175,6 +180,9 @@ func (w *applyWorker) flushWorkerBatch() error {
 	return err
 }
 
+// close releases both of the worker's DB connections, rolling back first if
+// either is mid-transaction so no half-applied worker state leaks back into
+// the pool.
 func (w *applyWorker) close() {
 	for _, c := range w.conns {
 		if c != nil {
@@ -186,12 +194,20 @@ func (w *applyWorker) close() {
 	}
 }
 
+// rollback discards in-progress work on the worker's active connection after
+// an apply error, so the next rotate() does not leave a stale partial txn
+// hanging on the connection we are about to park.
 func (w *applyWorker) rollback() {
 	if w.client != nil {
 		_ = w.client.Rollback()
 	}
 }
 
+// applyEvent dispatches through the shared vplayer.applyEvent code path while
+// temporarily rebinding vp.dbClient/query/commit to this worker's active
+// connection. Bindings are restored on return so the orchestrator's vplayer
+// (shared by the scheduler and commitLoop) never ends up pointing at
+// worker-owned state.
 func (w *applyWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool, vp *vplayer) error {
 	if w.client == nil {
 		return errors.New("apply worker has no active client")
@@ -210,6 +226,8 @@ func (w *applyWorker) applyEvent(ctx context.Context, event *binlogdatapb.VEvent
 	return vp.applyEvent(ctx, event, mustSave)
 }
 
+// stats exposes the underlying vreplication stats so helpers that only hold
+// an *applyWorker can record counters without reaching through w.vr.
 func (w *applyWorker) stats() *binlogplayer.Stats {
 	return w.vr.stats
 }

@@ -40,6 +40,10 @@ import (
 
 var writesetTextValueMarker = [2]byte{0xFF, 0x00}
 
+// fieldIndexForName resolves a column-name lookup in a field-index map by
+// trying the exact spelling first and falling back to lowercase. The maps are
+// populated with both variants to bridge the case-sensitivity gap between
+// sqlparser output and raw binlog field names.
 func fieldIndexForName(fieldIdx map[string]int, colName string) (int, bool) {
 	if idx, ok := fieldIdx[colName]; ok {
 		return idx, true
@@ -48,6 +52,10 @@ func fieldIndexForName(fieldIdx map[string]int, colName string) (int, bool) {
 	return idx, ok
 }
 
+// writesetDigestAddPayload writes a length-prefixed payload into the digest.
+// The length prefix keeps concatenated payloads unambiguous so two different
+// byte sequences cannot hash to the same digest by coincidental boundary
+// alignment.
 func writesetDigestAddPayload(d *xxhash.Digest, payload []byte) {
 	var scratch [8]byte
 	binary.LittleEndian.PutUint64(scratch[:], uint64(len(payload)))
@@ -76,6 +84,11 @@ func writesetDigestAddValue(d *xxhash.Digest, v sqltypes.Value) {
 	d.Write(raw)
 }
 
+// writesetDigestAddFieldValue folds a column value into the digest using
+// collation-aware hashing for text columns. Two rows that MySQL considers
+// equal (trailing spaces under PAD SPACE, equivalent forms under *_ci
+// collations) must hash to the same writeset key or conflict detection
+// would let truly-conflicting txns run in parallel.
 func writesetDigestAddFieldValue(d *xxhash.Digest, field *querypb.Field, v sqltypes.Value) error {
 	if field == nil || !sqltypes.IsText(field.Type) || field.Charset == 0 {
 		writesetDigestAddValue(d, v)
@@ -105,6 +118,10 @@ func writesetDigestAddFieldValue(d *xxhash.Digest, field *querypb.Field, v sqlty
 	return nil
 }
 
+// collationUsesPadSpace reports whether the given collation compares strings
+// as if right-padded with spaces. Values under such collations have trailing
+// pad codepoints stripped before hashing so that e.g. 'abc' and 'abc   '
+// hash to the same writeset key.
 func collationUsesPadSpace(collation colldata.Collation) bool {
 	switch collation.(type) {
 	case *colldata.Collation_utf8mb4_uca_0900, *colldata.Collation_utf8mb4_0900_bin:
@@ -114,6 +131,9 @@ func collationUsesPadSpace(collation colldata.Collation) bool {
 	}
 }
 
+// trimTrailingPadSpaceCodepoints strips trailing space codepoints from raw
+// bytes using the column's charset decoder. Used by PAD SPACE collations so
+// values that compare equal in MySQL also hash equal in the writeset digest.
 func trimTrailingPadSpaceCodepoints(cs charset.Charset, raw []byte) []byte {
 	trimmedEnd := 0
 	for i := 0; i < len(raw); {
@@ -166,6 +186,12 @@ func buildParentFKRefs(fkRefs map[string][]fkConstraintRef) map[string][]parentF
 	return result
 }
 
+// buildCanonicalTargetTableNames builds a lowercase→original-case map of
+// target table names so canonicalTargetTableName can line up FK-graph lookups
+// with the various case variants that arrive from DDL, binlog events, and
+// replicator plans. Entries with ambiguous casing (two different target
+// names sharing the same lowercase key) are dropped rather than silently
+// picking one.
 func buildCanonicalTargetTableNames(tablePlans map[string]*TablePlan) map[string]string {
 	if len(tablePlans) == 0 {
 		return nil
@@ -195,6 +221,10 @@ func buildCanonicalTargetTableNames(tablePlans map[string]*TablePlan) map[string
 	return canonical
 }
 
+// canonicalTargetTableName resolves a possibly case-varying name to the exact
+// target-table key used in tablePlans. Returns the input unchanged when no
+// canonical match exists so lookups miss cleanly rather than silently hitting
+// a sibling table.
 func canonicalTargetTableName(name string, canonical map[string]string) string {
 	if name == "" || len(canonical) == 0 {
 		return name
@@ -205,6 +235,11 @@ func canonicalTargetTableName(name string, canonical map[string]string) string {
 	return name
 }
 
+// resolveFKRefsForTable collects FK constraints whose child table matches the
+// given name (compared canonically). Returned refs have their ParentTable
+// canonicalized so the writeset digest for a child row hashes under the same
+// table-name key as the parent's writeset, which is what makes the two sides
+// conflict.
 func resolveFKRefsForTable(tableName string, refs map[string][]fkConstraintRef, canonical map[string]string) []fkConstraintRef {
 	if tableName == "" || len(refs) == 0 {
 		return nil
@@ -224,6 +259,10 @@ func resolveFKRefsForTable(tableName string, refs map[string][]fkConstraintRef, 
 	return resolved
 }
 
+// resolveParentFKRefsForTable is the parent-side counterpart to
+// resolveFKRefsForTable: when a parent row changes, we need FK-style writeset
+// keys keyed on the parent's referenced columns so the change conflicts with
+// the child-side FK keys.
 func resolveParentFKRefsForTable(tableName string, refs map[string][]parentFKRef, canonical map[string]string) []parentFKRef {
 	if tableName == "" || len(refs) == 0 {
 		return nil
@@ -243,6 +282,10 @@ func resolveParentFKRefsForTable(tableName string, refs map[string][]parentFKRef
 	return resolved
 }
 
+// buildResolvedFKRefTableSet returns the set of canonicalized table names
+// that participate in any FK edge, as either child or parent. The scheduler
+// uses this set to decide which tables' touched-row bookkeeping must follow
+// FK-induced conflicts across the txn graph.
 func buildResolvedFKRefTableSet(refs map[string][]fkConstraintRef, parentRefs map[string][]parentFKRef, canonical map[string]string) map[string]struct{} {
 	if len(refs) == 0 && len(parentRefs) == 0 {
 		return nil
@@ -372,6 +415,12 @@ func buildTxnWriteset(tablePlans map[string]*TablePlan, fkRefs map[string][]fkCo
 	return buildTxnWritesetWithCache(tablePlans, fkRefs, parentRefs, events, cache)
 }
 
+// buildTxnWritesetWithCache is the cache-aware core of buildTxnWriteset.
+// canonical-name, FK-resolution, and fieldIdx maps are shared across txns
+// on the same scheduler goroutine to avoid rebuilding them per txn. Fails
+// closed (returns an error) on partial row images or missing FK columns so
+// the caller can route the txn through the serial path instead of producing
+// a writeset that misses conflict-determining columns.
 func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[string][]fkConstraintRef, parentRefs map[string][]parentFKRef, events []*binlogdatapb.VEvent, cache *txnWritesetCache) ([]uint64, error) {
 	// Pre-estimate capacity to avoid map rehashing during key insertion.
 	// Each row change can produce ~2 keys (before + after).
@@ -515,6 +564,12 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 	return keys, nil
 }
 
+// beforeRowHasNegativeRelevantLengths returns true when a BEFORE image has
+// -1 (omitted) lengths for any column the writeset depends on (PK or
+// FK-joined column). vstreamer encodes omitted columns as -1 length without
+// publishing a DataColumns bitmap on BEFORE rows, so the sentinel is the
+// only signal we have. Treating those as partial images lets us fail closed
+// and serialize instead of hashing against wrong-slot values.
 func beforeRowHasNegativeRelevantLengths(row *querypb.Row, plan *TablePlan, fieldIdx map[string]int, refs []fkConstraintRef, pRefs []parentFKRef) bool {
 	if row == nil {
 		return false
@@ -568,6 +623,10 @@ func snapshotTablePlans(mu *sync.RWMutex, tablePlans map[string]*TablePlan, vers
 	return cp
 }
 
+// txnTouchesExtraUniqueSecondary reports whether the txn writes any table
+// whose plan carries an extra unique secondary index. Those tables have to
+// serialize: writeset keys built from PK alone can miss conflicts that the
+// secondary unique index would otherwise enforce.
 func txnTouchesExtraUniqueSecondary(events []*binlogdatapb.VEvent, tablePlans map[string]*TablePlan) bool {
 	for _, event := range events {
 		if event.Type != binlogdatapb.VEventType_ROW || event.RowEvent == nil {
@@ -581,6 +640,11 @@ func txnTouchesExtraUniqueSecondary(events []*binlogdatapb.VEvent, tablePlans ma
 	return false
 }
 
+// txnTouchesUnsupportedWritesetMapping reports whether any ROW event in the
+// txn targets a table whose plan uses a mapping the writeset builder can't
+// reason about (expressions, generated columns, lossy casts, etc). The
+// scheduler must force serialization so those txns do not slip past conflict
+// detection.
 func txnTouchesUnsupportedWritesetMapping(events []*binlogdatapb.VEvent, tablePlans map[string]*TablePlan) bool {
 	for _, event := range events {
 		if event.Type != binlogdatapb.VEventType_ROW || event.RowEvent == nil {
@@ -600,6 +664,11 @@ func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterV
 	return writesetKeysForChangeWithFieldIdx(plan, tableName, nil, beforeVals, afterVals, keySet)
 }
 
+// writesetIdentityFieldIndexes resolves a plan's declared identity column
+// names to positional indexes into the streamed fields. Multi-column
+// identities go through this path; single-column identity plans use a
+// simpler fast path elsewhere. Returns an error if any declared column is
+// missing from the streamed fields so the caller can serialize the txn.
 func writesetIdentityFieldIndexes(plan *TablePlan, tableName string, fieldIdx map[string]int) ([]int, error) {
 	if plan == nil || len(plan.IdentityColumns) <= 1 {
 		return nil, nil
@@ -625,6 +694,11 @@ func writesetIdentityFieldIndexes(plan *TablePlan, tableName string, fieldIdx ma
 	return indexes, nil
 }
 
+// writesetKeysForChangeWithFieldIdx is the indexed variant of
+// writesetKeysForChange: it takes a pre-built field-index map so multi-row
+// txns do not rebuild the lookup per change. The keys it inserts into
+// keySet are what the scheduler compares to decide which concurrent txns
+// conflict.
 func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
 	if plan == nil {
 		return nil

@@ -180,6 +180,9 @@ func clonePostDDLStalePlans(src map[string]postDDLStalePlan) map[string]postDDLS
 	return cloned
 }
 
+// cloneDroppedTables mirrors clonePostDDLStalePlans for the dropped-table set:
+// scheduler and commitLoop evolve independent copies so a resync between them
+// does not alias their inner maps.
 func cloneDroppedTables(src map[string]struct{}) map[string]struct{} {
 	if len(src) == 0 {
 		return nil
@@ -191,6 +194,11 @@ func cloneDroppedTables(src map[string]struct{}) map[string]struct{} {
 	return cloned
 }
 
+// canonicalPostDDLTableKey resolves the exact map key that corresponds to a
+// DDL-parsed table name. MySQL identifiers can arrive in inconsistent casing
+// between binlog events, the parser, and cached plans; without this
+// reconciliation, barrier bookkeeping would silently miss entries because of
+// a case mismatch.
 func canonicalPostDDLTableKey[T any](entries map[string]T, name string) string {
 	if name == "" {
 		return ""
@@ -206,6 +214,9 @@ func canonicalPostDDLTableKey[T any](entries map[string]T, name string) string {
 	return name
 }
 
+// postDDLTableKeyMatches compares two table names case-insensitively so that
+// binlog-event names and tracked barrier names line up regardless of the DDL's
+// original casing.
 func postDDLTableKeyMatches(a, b string) bool {
 	return a != "" && b != "" && strings.EqualFold(a, b)
 }
@@ -232,6 +243,11 @@ func snapshotPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables m
 	return tracked
 }
 
+// addPostDDLStalePlan registers a stale plan along with the refreshed table
+// names whose FIELD event will satisfy the barrier. Centralizes the
+// canonical-key, dropped-table, and missing-plan checks so
+// extractDDLAffectedTables can emit consistent entries across CREATE / RENAME /
+// ALTER / DROP without duplicating those rules per case.
 func addPostDDLStalePlan(tracked map[string]postDDLStalePlan, tablePlans map[string]*TablePlan, droppedTables map[string]struct{}, allowDroppedRefreshedNames bool, staleName string, refreshedNames ...string) {
 	staleName = canonicalPostDDLTableKey(tablePlans, staleName)
 	if _, dropped := droppedTables[canonicalPostDDLTableKey(droppedTables, staleName)]; dropped {
@@ -328,6 +344,10 @@ func extractDDLAffectedTables(sql string, parser *sqlparser.Parser, tablePlans m
 	return tracked, false
 }
 
+// extractDroppedTables pulls the set of DROP TABLE names out of a DDL. A stale
+// plan for a dropped table will never be satisfied by a future FIELD refresh,
+// so the barrier has to allow those plans to simply disappear rather than
+// stall the pipeline waiting for a refresh that will never arrive.
 func extractDroppedTables(sql string, parser *sqlparser.Parser) map[string]struct{} {
 	stmt, err := parser.ParseStrictDDL(sql)
 	if err != nil {
@@ -371,6 +391,10 @@ func retireResolvedPostDDLTablePlans(tablePlans map[string]*TablePlan, stalePlan
 	return retired
 }
 
+// resolvedPostDDLStalePlans returns the subset of barrier entries whose
+// refreshed plans have already arrived (or, for DROP entries, whose name now
+// appears in droppedTables). Callers use this to retire resolved entries from
+// shared state while still-unresolved ones remain active.
 func resolvedPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables map[string]struct{}, stalePlans map[string]postDDLStalePlan) map[string]postDDLStalePlan {
 	if len(stalePlans) == 0 {
 		return nil
@@ -401,6 +425,10 @@ func resolvedPostDDLStalePlans(tablePlans map[string]*TablePlan, droppedTables m
 	return resolved
 }
 
+// mergePostDDLStalePlans union-merges two barrier maps so a resync between
+// scheduler and commitLoop preserves every refreshed name that either side
+// observed. Losing an entry here would leave a rename or same-name recreate's
+// barrier unsatisfiable.
 func mergePostDDLStalePlans(dst, src map[string]postDDLStalePlan) map[string]postDDLStalePlan {
 	if len(src) == 0 {
 		return dst
@@ -435,6 +463,10 @@ func mergePostDDLStalePlans(dst, src map[string]postDDLStalePlan) map[string]pos
 	return dst
 }
 
+// extractDDLRenameTargets pulls the from→to pairs out of a RENAME TABLE or
+// ALTER TABLE ... RENAME so barrier entries can be retargeted: the FIELD event
+// that satisfies the stale plan will now arrive under the destination table
+// name, and the watched refreshed-name has to follow.
 func extractDDLRenameTargets(sql string, parser *sqlparser.Parser) map[string]string {
 	stmt, err := parser.ParseStrictDDL(sql)
 	if err != nil {
@@ -471,6 +503,12 @@ func extractDDLRenameTargets(sql string, parser *sqlparser.Parser) map[string]st
 	return renames
 }
 
+// shouldPublishExecIgnoreDDLBarrier decides whether an ALTER that adds or
+// drops a unique secondary index has actually flipped the cached plan's
+// HasExtraUniqueSecondary flag. When the flag changes, an ExecIgnore barrier
+// must be published so rows planned under the old flag do not leak into
+// execution under the new one. Returning false means the ALTER does not touch
+// correctness-relevant plan state and the barrier can be skipped.
 func shouldPublishExecIgnoreDDLBarrier(ctx context.Context, vp *vplayer, statement string) (bool, error) {
 	if vp == nil || vp.vr == nil || vp.vr.vre == nil || vp.vr.vre.env == nil {
 		return false, nil
@@ -516,6 +554,11 @@ func shouldPublishExecIgnoreDDLBarrier(ctx context.Context, vp *vplayer, stateme
 	return false, nil
 }
 
+// retargetPostDDLStalePlans rewrites in-flight barrier entries after a RENAME
+// has landed: the FIELD refresh that satisfies each stale plan will now
+// arrive under the destination name, so the watched refreshed-name must
+// follow. Only the entries originally watched are retargeted, so overlapping
+// rename sets do not cascade based on map iteration order.
 func retargetPostDDLStalePlans(stalePlans map[string]postDDLStalePlan, renameTargets map[string]string, tablePlans map[string]*TablePlan) {
 	if len(stalePlans) == 0 || len(renameTargets) == 0 {
 		return
@@ -619,6 +662,10 @@ func txnTouchesPostDDLBarrier(events []*binlogdatapb.VEvent, stalePlans map[stri
 	return false
 }
 
+// postDDLRefreshTargetMatchesCachedPlan reports whether the currently-cached
+// plan for refreshedName is still the stale one tracked by a barrier entry.
+// Callers use this to distinguish a genuine replacement (progress) from a
+// no-op refresh that would not advance the barrier.
 func postDDLRefreshTargetMatchesCachedPlan(stalePlans map[string]postDDLStalePlan, refreshedName string, cachedPlan *TablePlan) bool {
 	for _, stale := range stalePlans {
 		for trackedName, priorPlan := range stale.refreshedPlans {
@@ -633,6 +680,10 @@ func postDDLRefreshTargetMatchesCachedPlan(stalePlans map[string]postDDLStalePla
 	return false
 }
 
+// mergeDroppedTables is the dropped-table counterpart to
+// mergePostDDLStalePlans: a resync between scheduler and commitLoop has to
+// preserve the allow-disappear bookkeeping from both sides, or a DROP
+// observed by only one side could leave a barrier stuck.
 func mergeDroppedTables(dst, src map[string]struct{}) map[string]struct{} {
 	if len(src) == 0 {
 		return dst
@@ -647,6 +698,10 @@ func mergeDroppedTables(dst, src map[string]struct{}) map[string]struct{} {
 	return merged
 }
 
+// extractFieldRefreshTables collects the table names refreshed by FIELD
+// events in a txn. Used by txnNeedsFieldRefreshSerialization to detect the
+// same-txn FIELD+ROW case that cannot be parallelized (the row would apply
+// against a plan the same txn is replacing).
 func extractFieldRefreshTables(events []*binlogdatapb.VEvent) map[string]struct{} {
 	var refreshed map[string]struct{}
 	for _, event := range events {
@@ -680,6 +735,10 @@ func txnNeedsFieldRefreshSerialization(events []*binlogdatapb.VEvent) bool {
 	return false
 }
 
+// txnTouchesPendingFieldRefresh reports whether any ROW event in the txn
+// targets a table whose FIELD refresh is still queued ahead of it. Such txns
+// must serialize behind the pending refresh; otherwise the worker would apply
+// rows against a plan that is about to be replaced.
 func txnTouchesPendingFieldRefresh(events []*binlogdatapb.VEvent, pending map[string]int) bool {
 	if len(pending) == 0 {
 		return false
@@ -700,6 +759,10 @@ func txnTouchesPendingFieldRefresh(events []*binlogdatapb.VEvent, pending map[st
 	return false
 }
 
+// workerLocalVPlayer builds a worker-scoped shadow of the orchestrator's
+// vplayer that exposes only the fields workers are allowed to share
+// (tablePlans, replicatorPlan, serialMu, etc). Keeps worker code from
+// reaching into main-goroutine-owned vplayer state by accident.
 func workerLocalVPlayer(vp *vplayer) vplayer {
 	return vplayer{
 		vr:                  vp.vr,
@@ -715,6 +778,10 @@ func workerLocalVPlayer(vp *vplayer) vplayer {
 	}
 }
 
+// writesetErrorForcesSerialization flags the specific writeset-build errors
+// (partial row image, missing streamed fields) that mean we cannot prove
+// absence of conflict for the txn, so it must take the serial path. Other
+// writeset errors propagate as real failures.
 func writesetErrorForcesSerialization(err error) bool {
 	if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION {
 		return false
