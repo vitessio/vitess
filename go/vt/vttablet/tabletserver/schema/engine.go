@@ -686,11 +686,6 @@ func (se *Engine) disableSuperReadOnly(conn *dbconnpool.DBConnection) (restore f
 // itself turns super_read_only OFF and we must not stomp that back ON and
 // leave a freshly-promoted primary read-only.
 func (se *Engine) restoreSuperReadOnly() {
-	if se.isPrimaryTablet.Load() {
-		log.Warn("schema engine: skipping super_read_only restore; tablet has been promoted to PRIMARY since OPTIMIZE started")
-		return
-	}
-
 	// SRO restore is safety-critical cleanup: leaving a non-primary tablet
 	// with super_read_only=OFF can let stale or misrouted writes land on it
 	// after shutdown while MySQL is still up. Derive the timeout from
@@ -699,6 +694,15 @@ func (se *Engine) restoreSuperReadOnly() {
 	// restore.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	se.restoreSuperReadOnlyWithContext(ctx)
+}
+
+func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
+	if se.isPrimaryTablet.Load() {
+		log.Warn("schema engine: skipping super_read_only restore; tablet has been promoted to PRIMARY since OPTIMIZE started")
+		return
+	}
+
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
 	if err != nil {
 		log.Warn("schema engine: failed to open connection to re-enable super_read_only after OPTIMIZE. Expected during full-stack shutdown; if mysqld is still running the tablet may now accept writes — investigate immediately",
@@ -710,14 +714,16 @@ func (se *Engine) restoreSuperReadOnly() {
 		log.Warn("schema engine: skipping super_read_only restore; tablet was promoted to PRIMARY while reopening the DBA connection")
 		return
 	}
-	if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'ON'", 1, false); err != nil {
+	if _, err := se.executeFetchCtx(ctx, conn, "SET GLOBAL super_read_only = 'ON'", 1, false); err != nil {
 		log.Warn("schema engine: failed to re-enable super_read_only after OPTIMIZE. Expected during full-stack shutdown; if mysqld is still running the tablet may now accept writes — investigate immediately",
 			slog.Any("error", err))
 		return
 	}
 	if se.isPrimaryTablet.Load() {
 		log.Warn("schema engine: tablet was promoted to PRIMARY during super_read_only restore; disabling it again")
-		if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
+		undoCtx, undoCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer undoCancel()
+		if _, err := se.executeFetchCtx(undoCtx, conn, "SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
 			log.Warn("schema engine: CRITICAL: failed to disable super_read_only after promotion during restore; primary may remain read-only",
 				slog.Any("error", err))
 		}

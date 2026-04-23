@@ -269,6 +269,50 @@ func TestDisableSuperReadOnly(t *testing.T) {
 	})
 }
 
+// TestRestoreSuperReadOnlyHonorsContextTimeout verifies that the restore path
+// bounds the SET GLOBAL super_read_only = 'ON' itself, not just the fresh DBA
+// connection open. Without this, a hung MySQL query could leave a non-primary
+// tablet writeable indefinitely.
+func TestRestoreSuperReadOnlyHonorsContextTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	const restoreQuery = "SET GLOBAL super_read_only = 'ON'"
+	db.AddQuery(restoreQuery, &sqltypes.Result{})
+	release := make(chan struct{})
+	db.SetBeforeFunc(restoreQuery, func() {
+		<-release
+	})
+
+	var killSeen atomic.Int32
+	db.AddQueryPatternWithCallback(`(?i)^kill [0-9]+$`, &sqltypes.Result{}, func(string) {
+		killSeen.Add(1)
+	})
+
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		se.restoreSuperReadOnlyWithContext(ctx)
+		close(done)
+	}()
+
+	assert.Eventually(t, func() bool { return killSeen.Load() >= 1 },
+		5*time.Second, 10*time.Millisecond, "restore must issue KILL when SET GLOBAL super_read_only = 'ON' times out")
+	close(release)
+	assert.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond, "restore must unwind after timing out the SET GLOBAL super_read_only = 'ON'")
+}
+
 // TestRunOptimizeGtidExecutedSuccess exercises the full goroutine body on
 // the happy path: SRO is on, it is flipped to off, OPTIMIZE runs, SRO is
 // restored to on. Running the function synchronously from the test (instead
