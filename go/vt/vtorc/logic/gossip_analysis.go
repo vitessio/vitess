@@ -41,7 +41,7 @@ type (
 const minQuorumObservers = 2
 
 // AnalyzeGossipQuorum evaluates gossip state to detect primaries that a quorum of replicas consider unreachable.
-func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string, vtorcView map[string]bool) []*inst.DetectionAnalysis {
+func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string, currentMembers map[string]map[string]struct{}, vtorcView map[string]bool) []*inst.DetectionAnalysis {
 	if state == nil {
 		return nil
 	}
@@ -71,8 +71,9 @@ func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string,
 		}
 
 		vtorcSeesPrimaryDown := vtorcView[key]
+		shardMembers := currentMembers[key]
 
-		if da := analyzeShardQuorum(group, states, primaryAlias, vtorcSeesPrimaryDown); da != nil {
+		if da := analyzeShardQuorum(group, states, primaryAlias, shardMembers, vtorcSeesPrimaryDown); da != nil {
 			results = append(results, da)
 		}
 	}
@@ -80,11 +81,14 @@ func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string,
 	return results
 }
 
-func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State, primaryAlias string, vtorcSeesPrimaryDown bool) *inst.DetectionAnalysis {
+func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State, primaryAlias string, currentMembers map[string]struct{}, vtorcSeesPrimaryDown bool) *inst.DetectionAnalysis {
 	// Find the primary member.
 	var primaryID gossip.NodeID
 	found := false
 	for _, m := range group.members {
+		if !isCurrentShardMember(m, currentMembers) {
+			continue
+		}
 		if m.Meta[gossip.MetaKeyTabletAlias] == primaryAlias {
 			primaryID = m.ID
 			found = true
@@ -103,6 +107,9 @@ func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State
 	// Count alive and total non-primary replicas.
 	var aliveReplicas, totalReplicas int
 	for _, m := range group.members {
+		if !isCurrentShardMember(m, currentMembers) {
+			continue
+		}
 		if m.ID == primaryID {
 			continue
 		}
@@ -139,6 +146,14 @@ func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State
 	}
 }
 
+func isCurrentShardMember(member gossip.Member, currentMembers map[string]struct{}) bool {
+	if len(currentMembers) == 0 {
+		return true
+	}
+	_, ok := currentMembers[member.Meta[gossip.MetaKeyTabletAlias]]
+	return ok
+}
+
 // getGossipQuorumAnalyses queries the gossip agent and VTOrc's DB to produce
 // quorum-based analyses for each shard with a known primary.
 // It also enriches analyses with ERS-disabled flags from keyspace/shard metadata
@@ -149,7 +164,7 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 		return nil
 	}
 
-	primaries, ersDisabled, err := gossipShardPrimaries(agent)
+	primaries, currentMembers, ersDisabled, err := gossipShardPrimaries(agent)
 	if err != nil || len(primaries) == 0 {
 		return nil
 	}
@@ -171,7 +186,7 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 		vtorcView[key] = !instance.IsLastCheckValid
 	}
 
-	analyses := AnalyzeGossipQuorum(agent, primaries, vtorcView)
+	analyses := AnalyzeGossipQuorum(agent, primaries, currentMembers, vtorcView)
 
 	for _, a := range analyses {
 		key := a.AnalyzedKeyspace + "/" + a.AnalyzedShard
@@ -190,9 +205,13 @@ type ersDisabledFlags struct {
 }
 
 // gossipShardPrimaries returns a map of "keyspace/shard" -> primary tablet alias
-// and a map of ERS-disabled flags (both keyspace and shard level).
-func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[string]ersDisabledFlags, error) {
+// and the current shard tablet membership plus ERS-disabled flags.
+func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[string]map[string]struct{}, map[string]ersDisabledFlags, error) {
 	primaries := make(map[string]string)
+	currentMembers, err := inst.ReadTabletAliasesByShard()
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	disabled := make(map[string]ersDisabledFlags)
 	seen := make(map[string]bool)
 
@@ -203,7 +222,7 @@ func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[str
 	// analyses for this cycle rather than failing open.
 	shardStats, err := inst.ReadKeyspaceShardStats()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	ersMap := make(map[string]bool, len(shardStats))
 	for _, s := range shardStats {
@@ -235,5 +254,5 @@ func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[str
 			disabled[key] = ersDisabledFlags{keyspace: true, shard: true}
 		}
 	}
-	return primaries, disabled, nil
+	return primaries, currentMembers, disabled, nil
 }

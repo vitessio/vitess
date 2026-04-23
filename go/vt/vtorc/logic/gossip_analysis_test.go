@@ -48,6 +48,14 @@ func makeMember(id, keyspace, shard, alias string) gossip.Member {
 	}
 }
 
+func makeCurrentMembers(shard string, aliases ...string) map[string]map[string]struct{} {
+	members := make(map[string]struct{}, len(aliases))
+	for _, alias := range aliases {
+		members[alias] = struct{}{}
+	}
+	return map[string]map[string]struct{}{shard: members}
+}
+
 func TestQuorumAnalysis_PrimaryDownMajorityAlive(t *testing.T) {
 	state := &fakeGossipState{
 		members: []gossip.Member{
@@ -63,7 +71,7 @@ func TestQuorumAnalysis_PrimaryDownMajorityAlive(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
@@ -89,7 +97,7 @@ func TestQuorumAnalysis_PrimaryAlive(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	assert.Empty(t, results)
 }
@@ -111,7 +119,7 @@ func TestQuorumAnalysis_NoQuorum_MostReplicasDown(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	assert.Empty(t, results)
 }
@@ -129,7 +137,7 @@ func TestQuorumAnalysis_InsufficientObservers(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	assert.Empty(t, results)
 }
@@ -149,7 +157,7 @@ func TestQuorumAnalysis_MinimalValidQuorum(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
@@ -174,7 +182,7 @@ func TestQuorumAnalysis_MajorityNotMet_NoTiebreaker(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	assert.Empty(t, results)
 }
@@ -199,7 +207,7 @@ func TestQuorumAnalysis_TieBrokenByVTOrc(t *testing.T) {
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 	vtorcView := map[string]bool{"ks/0": true}
 
-	results := AnalyzeGossipQuorum(state, primaries, vtorcView)
+	results := AnalyzeGossipQuorum(state, primaries, nil, vtorcView)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
@@ -225,7 +233,7 @@ func TestQuorumAnalysis_TieNotBroken_VTOrcSeesPrimaryAlive(t *testing.T) {
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 	vtorcView := map[string]bool{"ks/0": false}
 
-	results := AnalyzeGossipQuorum(state, primaries, vtorcView)
+	results := AnalyzeGossipQuorum(state, primaries, nil, vtorcView)
 
 	assert.Empty(t, results)
 }
@@ -247,7 +255,7 @@ func TestQuorumAnalysis_ClearMajority_VTOrcViewIgnored(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
@@ -277,7 +285,7 @@ func TestQuorumAnalysis_MultipleShardsIndependent(t *testing.T) {
 		"ks/80-": "zone1-0000000400",
 	}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	require.Len(t, results, 1)
 	assert.Equal(t, "zone1-0000000100", topoproto.TabletAliasString(results[0].AnalyzedInstanceAlias))
@@ -299,13 +307,13 @@ func TestQuorumAnalysis_PrimarySuspect(t *testing.T) {
 	}
 	primaries := map[string]string{"ks/0": "zone1-0000000100"}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	assert.Empty(t, results)
 }
 
 func TestQuorumAnalysis_NilState(t *testing.T) {
-	results := AnalyzeGossipQuorum(nil, map[string]string{"ks/0": "zone1-0000000100"}, nil)
+	results := AnalyzeGossipQuorum(nil, map[string]string{"ks/0": "zone1-0000000100"}, nil, nil)
 
 	assert.Empty(t, results)
 }
@@ -325,7 +333,37 @@ func TestQuorumAnalysis_ShardNotInPrimariesMap(t *testing.T) {
 	}
 	primaries := map[string]string{}
 
-	results := AnalyzeGossipQuorum(state, primaries, nil)
+	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
 
 	assert.Empty(t, results)
+}
+
+func TestQuorumAnalysis_IgnoresStaleReplicaMembers(t *testing.T) {
+	state := &fakeGossipState{
+		members: []gossip.Member{
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+			makeMember("stale1", "ks", "0", "zone1-0000000400"),
+			makeMember("stale2", "ks", "0", "zone1-0000000500"),
+		},
+		states: map[gossip.NodeID]gossip.State{
+			"node1":  {Status: gossip.StatusDown, LastUpdate: time.Now()},
+			"node2":  {Status: gossip.StatusAlive, LastUpdate: time.Now()},
+			"node3":  {Status: gossip.StatusAlive, LastUpdate: time.Now()},
+			"stale1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
+			"stale2": {Status: gossip.StatusDown, LastUpdate: time.Now()},
+		},
+	}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
+	currentMembers := makeCurrentMembers("ks/0",
+		"zone1-0000000100",
+		"zone1-0000000200",
+		"zone1-0000000300",
+	)
+
+	results := AnalyzeGossipQuorum(state, primaries, currentMembers, nil)
+
+	require.Len(t, results, 1)
+	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
 }

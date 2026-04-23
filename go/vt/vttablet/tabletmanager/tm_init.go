@@ -424,26 +424,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
 	defer cancel()
-	if tm.currentGossipAgent() == nil {
-		gossipCfg := tm.getGossipConfig(tablet)
-		if agent, enabled := newGossipAgent(gossipCfg, tablet, tm.TopoServer); enabled {
-			tm.SetGossip(agent, enabled)
-		}
-	}
-	agent, enabled := tm.currentGossipState()
-	if agent != nil && enabled {
-		if err := agent.Start(tm.BatchCtx); err != nil {
-			return err
-		}
-		servenv.OnTerm(tm.stopGossipLifecycle)
-	}
-	// Always start the watcher so runtime config changes (including
-	// cold-enable) can create/start/stop the gossip agent.
-	var gossipCtx context.Context
-	var gossipCancel context.CancelFunc
-	gossipCtx, gossipCancel = context.WithCancel(tm.BatchCtx)
-	tm.setGossipCancel(gossipCancel)
-	go tm.watchGossipConfig(gossipCtx, tablet)
 	si, err := tm.createKeyspaceShard(ctx)
 	if err != nil {
 		return err
@@ -514,6 +494,10 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		return err
 	}
 	tm.tmState.Open()
+	if err := tm.startGossipLifecycle(tablet); err != nil {
+		tm.tmState.Close()
+		return err
+	}
 	return nil
 }
 
@@ -591,6 +575,28 @@ func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.
 		return nil
 	}
 	return srvKs.GossipConfig
+}
+
+func (tm *TabletManager) startGossipLifecycle(tablet *topodatapb.Tablet) error {
+	if tm.currentGossipAgent() == nil {
+		gossipCfg := tm.getGossipConfig(tablet)
+		if agent, enabled := newGossipAgent(gossipCfg, tablet, tm.TopoServer); enabled {
+			tm.SetGossip(agent, enabled)
+		}
+	}
+
+	agent, enabled := tm.currentGossipState()
+	if agent != nil && enabled {
+		if err := agent.Start(tm.BatchCtx); err != nil {
+			return err
+		}
+		servenv.OnTerm(tm.stopGossipLifecycle)
+	}
+
+	gossipCtx, gossipCancel := context.WithCancel(tm.BatchCtx)
+	tm.setGossipCancel(gossipCancel)
+	go tm.watchGossipConfig(gossipCtx, tablet)
+	return nil
 }
 
 // watchGossipConfig watches SrvKeyspace for gossip config changes and

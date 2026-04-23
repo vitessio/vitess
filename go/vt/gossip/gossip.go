@@ -22,6 +22,7 @@ import (
 	"maps"
 	"math"
 	"math/rand/v2"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -378,9 +379,10 @@ func (g *Gossip) HandleJoin(req *JoinRequest) *JoinResponse {
 	g.states[req.Member.ID] = State{Status: StatusAlive, LastUpdate: now}
 	g.observeLocked(req.Member.ID, now)
 	g.bumpEpochLocked()
+	scope := g.responseScopeForMemberLocked(req.Member)
 	response := &JoinResponse{
-		Members: g.membersSliceLocked(),
-		Initial: g.snapshotMessageLocked(),
+		Members: g.membersSliceLocked(scope),
+		Initial: g.snapshotMessageLocked(scope),
 	}
 	g.mu.Unlock()
 
@@ -392,7 +394,7 @@ func (g *Gossip) HandlePushPull(msg *Message) *Message {
 	now := g.clock.Now()
 	g.mu.Lock()
 	g.applyMessageLocked(now, msg)
-	response := g.snapshotMessageLocked()
+	response := g.snapshotMessageLocked(g.responseScopeForMessageLocked(msg))
 	g.mu.Unlock()
 	return &response
 }
@@ -443,7 +445,7 @@ func (g *Gossip) bootstrapSeeds(ctx context.Context) {
 }
 
 func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {
-	peer := g.pickPeer()
+	peer, scope := g.pickPeer()
 	if peer == nil || g.transport == nil {
 		return
 	}
@@ -459,7 +461,7 @@ func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {
 		g.states[g.cfg.NodeID] = state
 		g.observeLocked(g.cfg.NodeID, now)
 	}
-	msg := g.snapshotMessageLocked()
+	msg := g.snapshotMessageLocked(scope)
 	g.mu.Unlock()
 
 	ctx, cancel := g.withProbeTimeout(ctx)
@@ -474,24 +476,64 @@ func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {
 	g.mu.Unlock()
 }
 
-func (g *Gossip) pickPeer() *Member {
+func (g *Gossip) pickPeer() (*Member, string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
+	selfScope := g.localScopeLocked()
+	if selfScope != "" {
+		peers := make([]Member, 0, len(g.members))
+		for id, member := range g.members {
+			if id == g.cfg.NodeID {
+				continue
+			}
+			scope := memberScope(member.Meta)
+			if scope != "" && scope != selfScope {
+				continue
+			}
+			peers = append(peers, member)
+		}
+
+		if len(peers) == 0 {
+			return nil, ""
+		}
+
+		picked := peers[g.rng.IntN(len(peers))]
+		return &picked, selfScope
+	}
+
+	scopePeers := make(map[string][]Member)
 	peers := make([]Member, 0, len(g.members))
 	for id, member := range g.members {
 		if id == g.cfg.NodeID {
 			continue
 		}
-		peers = append(peers, member)
+		scope := memberScope(member.Meta)
+		if scope == "" {
+			peers = append(peers, member)
+			continue
+		}
+		scopePeers[scope] = append(scopePeers[scope], member)
+	}
+
+	if len(scopePeers) > 0 {
+		scopes := make([]string, 0, len(scopePeers))
+		for scope := range scopePeers {
+			scopes = append(scopes, scope)
+		}
+		sort.Strings(scopes)
+		scope := scopes[g.rng.IntN(len(scopes))]
+		scopeMembers := scopePeers[scope]
+		picked := scopeMembers[g.rng.IntN(len(scopeMembers))]
+		return &picked, scope
 	}
 
 	if len(peers) == 0 {
-		return nil
+		return nil, ""
 	}
 
 	picked := peers[g.rng.IntN(len(peers))]
-	return &picked
+	return &picked, ""
 }
 
 func (g *Gossip) updateSuspicion(now time.Time) {
@@ -603,10 +645,14 @@ func (g *Gossip) observeLocked(nodeID NodeID, now time.Time) {
 	detector.Observe(now)
 }
 
-func (g *Gossip) snapshotMessageLocked() Message {
-	members := g.membersSliceLocked()
+func (g *Gossip) snapshotMessageLocked(scope string) Message {
+	members := g.membersSliceLocked(scope)
 	states := make([]StateDigest, 0, len(g.states))
 	for id, state := range g.states {
+		member, ok := g.members[id]
+		if scope != "" && (!ok || memberScope(member.Meta) != scope) {
+			continue
+		}
 		states = append(states, StateDigest{
 			NodeID:     id,
 			Status:     state.Status,
@@ -622,12 +668,53 @@ func (g *Gossip) snapshotMessageLocked() Message {
 	}
 }
 
-func (g *Gossip) membersSliceLocked() []Member {
+func (g *Gossip) membersSliceLocked(scope string) []Member {
 	members := make([]Member, 0, len(g.members))
 	for _, member := range g.members {
+		if scope != "" && memberScope(member.Meta) != scope {
+			continue
+		}
 		members = append(members, member)
 	}
 	return members
+}
+
+func (g *Gossip) localScopeLocked() string {
+	return memberScope(g.cfg.Meta)
+}
+
+func (g *Gossip) responseScopeForMemberLocked(member Member) string {
+	if scope := memberScope(member.Meta); scope != "" {
+		return scope
+	}
+	return g.localScopeLocked()
+}
+
+func (g *Gossip) responseScopeForMessageLocked(msg *Message) string {
+	if scope := g.localScopeLocked(); scope != "" {
+		return scope
+	}
+	if msg == nil {
+		return ""
+	}
+	for _, member := range msg.Members {
+		if scope := memberScope(member.Meta); scope != "" {
+			return scope
+		}
+	}
+	return ""
+}
+
+func memberScope(meta map[string]string) string {
+	if meta == nil {
+		return ""
+	}
+	keyspace := meta[MetaKeyKeyspace]
+	shard := meta[MetaKeyShard]
+	if keyspace == "" || shard == "" {
+		return ""
+	}
+	return keyspace + "/" + shard
 }
 
 func (g *Gossip) bumpEpochLocked() {

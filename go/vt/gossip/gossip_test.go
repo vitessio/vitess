@@ -113,6 +113,17 @@ func newTestGossip(id string, seeds []Member, transport *localTransport, clock C
 	return g
 }
 
+func scopedMember(id, keyspace, shard string) Member {
+	return Member{
+		ID:   NodeID(id),
+		Addr: id,
+		Meta: map[string]string{
+			MetaKeyKeyspace: keyspace,
+			MetaKeyShard:    shard,
+		},
+	}
+}
+
 func TestGossipConvergesWithSeeds(t *testing.T) {
 	transport := newLocalTransport()
 	clock := &testClock{now: time.Now()}
@@ -136,6 +147,63 @@ func TestGossipConvergesWithSeeds(t *testing.T) {
 
 	assert.Equal(t, StatusAlive, g1.Snapshot()["node2"].Status)
 	assert.Equal(t, StatusAlive, g2.Snapshot()["node1"].Status)
+}
+
+func TestPickPeerSkipsDifferentShardMembersForScopedNode(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	g := New(Config{
+		NodeID:   "node1",
+		BindAddr: "node1",
+		Meta: map[string]string{
+			MetaKeyKeyspace: "ks",
+			MetaKeyShard:    "0",
+		},
+	}, nil, clock)
+
+	g.mu.Lock()
+	g.addMemberLocked(scopedMember("same-shard", "ks", "0"))
+	g.addMemberLocked(scopedMember("other-shard", "ks", "1"))
+	g.mu.Unlock()
+
+	for range 20 {
+		peer, _ := g.pickPeer()
+		require.NotNil(t, peer)
+		assert.Equal(t, "ks", peer.Meta[MetaKeyKeyspace])
+		assert.Equal(t, "0", peer.Meta[MetaKeyShard])
+	}
+}
+
+func TestSnapshotMessageLockedFiltersPeerScope(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	g := New(Config{NodeID: "vtorc", BindAddr: "vtorc"}, nil, clock)
+
+	g.mu.Lock()
+	g.addMemberLocked(scopedMember("a1", "ks", "0"))
+	g.addMemberLocked(scopedMember("a2", "ks", "0"))
+	g.addMemberLocked(scopedMember("b1", "ks", "1"))
+	g.states["a1"] = State{Status: StatusAlive, LastUpdate: clock.Now()}
+	g.states["a2"] = State{Status: StatusAlive, LastUpdate: clock.Now()}
+	g.states["b1"] = State{Status: StatusAlive, LastUpdate: clock.Now()}
+	msg := g.snapshotMessageLocked("ks/0")
+	g.mu.Unlock()
+
+	memberIDs := make(map[NodeID]struct{}, len(msg.Members))
+	for _, member := range msg.Members {
+		memberIDs[member.ID] = struct{}{}
+	}
+	assert.Contains(t, memberIDs, NodeID("a1"))
+	assert.Contains(t, memberIDs, NodeID("a2"))
+	assert.NotContains(t, memberIDs, NodeID("b1"))
+	assert.NotContains(t, memberIDs, NodeID("vtorc"))
+
+	stateIDs := make(map[NodeID]struct{}, len(msg.States))
+	for _, state := range msg.States {
+		stateIDs[state.NodeID] = struct{}{}
+	}
+	assert.Contains(t, stateIDs, NodeID("a1"))
+	assert.Contains(t, stateIDs, NodeID("a2"))
+	assert.NotContains(t, stateIDs, NodeID("b1"))
+	assert.NotContains(t, stateIDs, NodeID("vtorc"))
 }
 
 func TestGossipMarksDownWhenPeerUnreachable(t *testing.T) {

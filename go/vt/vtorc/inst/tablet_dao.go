@@ -93,6 +93,28 @@ func ReadTabletCountsByCell() (map[string]int64, error) {
 	return tabletCounts, err
 }
 
+// ReadTabletAliasesByShard returns the current VTOrc tablet membership grouped by keyspace/shard.
+func ReadTabletAliasesByShard() (map[string]map[string]struct{}, error) {
+	aliasesByShard := make(map[string]map[string]struct{})
+	query := `SELECT
+		alias,
+		keyspace,
+		shard
+	FROM
+		vitess_tablet`
+	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		key := row.GetString("keyspace") + "/" + row.GetString("shard")
+		aliases, ok := aliasesByShard[key]
+		if !ok {
+			aliases = make(map[string]struct{})
+			aliasesByShard[key] = aliases
+		}
+		aliases[row.GetString("alias")] = struct{}{}
+		return nil
+	})
+	return aliasesByShard, err
+}
+
 // SaveTablet saves the tablet record against the instanceKey.
 func SaveTablet(tablet *topodatapb.Tablet) error {
 	tabletp, err := prototext.Marshal(tablet)

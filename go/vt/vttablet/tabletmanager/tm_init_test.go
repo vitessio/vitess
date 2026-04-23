@@ -701,6 +701,27 @@ func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
 
 var exporter = servenv.NewExporter("TestTabletManager", "")
 
+type blockingGetMysqlPortDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	started chan struct{}
+	release chan int32
+}
+
+func (d *blockingGetMysqlPortDaemon) GetMysqlPort(ctx context.Context) (int32, error) {
+	select {
+	case d.started <- struct{}{}:
+	default:
+	}
+
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case port := <-d.release:
+		d.MysqlPort.Store(port)
+		return port, nil
+	}
+}
+
 func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, tags map[string]string) *TabletManager {
 	// reset stats
 	statsTabletTags.ResetAll()
@@ -745,6 +766,57 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, t
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+}
+
+func TestStartDoesNotStartGossipBeforeMysqlCheckCompletes(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tablet := newTestTablet(t, 1, "ks", "0", nil)
+	fakeDb := &blockingGetMysqlPortDaemon{
+		FakeMysqlDaemon: newTestMysqlDaemon(t, 0),
+		started:         make(chan struct{}, 1),
+		release:         make(chan int32, 1),
+	}
+	tm := &TabletManager{
+		BatchCtx:            ctx,
+		TopoServer:          ts,
+		MysqlDaemon:         fakeDb,
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace, &topodatapb.SrvKeyspace{
+		GossipConfig: &topodatapb.GossipConfig{
+			Enabled:      true,
+			PhiThreshold: 4,
+			PingInterval: "100ms",
+			MaxUpdateAge: "1s",
+		},
+	}))
+
+	startErr := make(chan error, 1)
+	go func() {
+		startErr <- tm.Start(tablet, nil)
+	}()
+
+	select {
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	case <-fakeDb.started:
+	}
+
+	assert.Nil(t, tm.currentGossipAgent())
+	assert.Nil(t, tm.gossipCancel)
+
+	fakeDb.release <- 1
+	require.NoError(t, <-startErr)
+	t.Cleanup(tm.Stop)
+
+	require.Eventually(t, func() bool {
+		return tm.currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
 }
 
 func newTestTablet(t *testing.T, uid int, keyspace, shard string, tags map[string]string) *topodatapb.Tablet {

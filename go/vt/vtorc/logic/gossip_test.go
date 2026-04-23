@@ -768,10 +768,11 @@ func TestGossipShardPrimaries(t *testing.T) {
 		},
 	}
 
-	primaries, ersFlags, err := gossipShardPrimaries(state)
+	primaries, currentMembers, ersFlags, err := gossipShardPrimaries(state)
 	require.NoError(t, err)
 	assert.Contains(t, primaries, "ks/0")
 	assert.Equal(t, "zone1-0000000100", primaries["ks/0"])
+	assert.Contains(t, currentMembers["ks/0"], "zone1-0000000100")
 	// ERS flags should not be set (no disable configured).
 	assert.False(t, ersFlags["ks/0"].keyspace)
 }
@@ -801,6 +802,22 @@ func TestGetGossipQuorumAnalyses(t *testing.T) {
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
 	require.NoError(t, inst.SaveTablet(primaryTablet))
+	require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Hostname: "host2",
+		PortMap:  map[string]int32{"grpc": 15200},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}))
+	require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 300},
+		Hostname: "host3",
+		PortMap:  map[string]int32{"grpc": 15300},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}))
 
 	// Create shard with primary alias.
 	err = ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{})
