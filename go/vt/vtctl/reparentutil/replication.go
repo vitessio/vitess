@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -82,6 +83,85 @@ func (rlp *RelayLogPositions) Equal(pos *RelayLogPositions) bool {
 // IsZero returns true if the RelayLogPositions is zero.
 func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
+}
+
+// filterToMostAdvancedCombined filters the given candidates to only those whose Combined
+// position equals the max Combined position across all candidates. Since replication is
+// stopped at this point, Combined positions are frozen — tablets behind the max can never
+// catch up and are safe to exclude.
+//
+// Within the most-advanced group, candidates are sorted by Executed position descending
+// (preferring tablets that have applied the most relay logs). If maxTablets > 0, only the
+// top maxTablets are returned.
+//
+// If mustInclude is non-empty, this specific candidate is always included in the result
+// regardless of its position. This is used when the user explicitly requests a specific
+// primary-elect via NewPrimaryAlias.
+func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, maxTablets int64, mustInclude string, logger logutil.Logger) map[string]*RelayLogPositions {
+	if len(candidates) == 0 {
+		return candidates
+	}
+
+	// Find the max Combined position.
+	var maxCombined replication.Position
+	for _, pos := range candidates {
+		if maxCombined.IsZero() || pos.Combined.AtLeast(maxCombined) {
+			maxCombined = pos.Combined
+		}
+	}
+
+	// Collect candidates whose Combined position is at least the max, or is incomparable
+	// (neither is AtLeast the other — e.g., disjoint GTID UUIDs). Incomparable positions
+	// cannot be proven to be behind, so they must be kept.
+	type candidateEntry struct {
+		alias    string
+		position *RelayLogPositions
+	}
+	var topGroup []candidateEntry
+	for alias, pos := range candidates {
+		isBehind := maxCombined.AtLeast(pos.Combined) && !pos.Combined.Equal(maxCombined)
+		if !isBehind {
+			topGroup = append(topGroup, candidateEntry{alias: alias, position: pos})
+		}
+	}
+
+	// Sort by Executed position descending (most applied first).
+	slices.SortFunc(topGroup, func(a, b candidateEntry) int {
+		if a.position.Executed.Equal(b.position.Executed) {
+			return 0
+		}
+		if a.position.Executed.AtLeast(b.position.Executed) {
+			return -1
+		}
+		return 1
+	})
+
+	// Cap to maxTablets if set.
+	if maxTablets > 0 && int64(len(topGroup)) > maxTablets {
+		topGroup = topGroup[:maxTablets]
+	}
+
+	excluded := len(candidates) - len(topGroup)
+	if excluded > 0 {
+		logger.Infof("filterToMostAdvancedCombined: filtered %d non-competitive candidate(s), keeping %d at max Combined position %s", excluded, len(topGroup), maxCombined)
+	}
+
+	result := make(map[string]*RelayLogPositions, len(topGroup))
+	for _, entry := range topGroup {
+		result[entry.alias] = entry.position
+	}
+
+	// Ensure the must-include candidate is present (e.g., user-requested primary-elect).
+	if mustInclude != "" {
+		if _, ok := result[mustInclude]; !ok {
+			if pos, ok := candidates[mustInclude]; ok {
+				logger.Infof("filterToMostAdvancedCombined: including explicitly requested candidate %s despite not being in the most-advanced group", mustInclude)
+				result[mustInclude] = pos
+			}
+		}
+	}
+
+	return result
 }
 
 // FindPositionsOfAllCandidates will find candidates for an emergency
