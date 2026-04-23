@@ -435,6 +435,11 @@ func (vp *vplayer) generateUpdatePosQuery(pos replication.Position, ts int64) st
 	return binlogplayer.GenerateUpdatePos(vp.vr.id, pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
 }
 
+// updatePosWithoutStop writes the position update through the supplied
+// query function without applying the stop-position state transition.
+// The parallel commitLoop uses this because the position update,
+// COMMIT, and workflow state update must all run on the worker's
+// connection — activeDBClient() would pick the wrong one here.
 func (vp *vplayer) updatePosWithoutStop(ctx context.Context, pos replication.Position, ts int64, query func(context.Context, string) (*sqltypes.Result, error)) (posReached bool, err error) {
 	if _, err := query(ctx, vp.generateUpdatePosQuery(pos, ts)); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
@@ -442,6 +447,11 @@ func (vp *vplayer) updatePosWithoutStop(ctx context.Context, pos replication.Pos
 	return !vp.stopPos.IsZero() && pos.AtLeast(vp.stopPos), nil
 }
 
+// recordPositionSave updates the in-memory bookkeeping that follows a
+// successful position write (clear unsaved-event state, refresh the
+// idle-flush timer, advance the lag gauge). Split out of updatePos so
+// the parallel commitLoop can record the save after committing the
+// worker's transaction instead of during apply.
 func (vp *vplayer) recordPositionSave(pos replication.Position, clearUnsavedEvent bool) {
 	vp.numAccumulatedHeartbeats = 0
 	refreshIdleTimer := clearUnsavedEvent || vp.unsavedEvent == nil || !vp.pos.AtLeast(pos) || vp.pos.Equal(pos)
@@ -454,6 +464,11 @@ func (vp *vplayer) recordPositionSave(pos replication.Position, clearUnsavedEven
 	vp.vr.stats.SetLastPosition(pos)
 }
 
+// journalEventPosition resolves a JOURNAL event's GTID string into a
+// full replication.Position, deriving the flavor from whatever base
+// position is available. JOURNAL events may carry a bare GTID with no
+// flavor/domain prefix when they reference the same server that produced
+// them, so the full position has to be reconstructed from context.
 func (vp *vplayer) journalEventPosition(eventGtid string) (replication.Position, error) {
 	if strings.Contains(eventGtid, "/") {
 		return binlogplayer.DecodePosition(eventGtid)
@@ -478,6 +493,10 @@ func (vp *vplayer) journalEventPosition(eventGtid string) (replication.Position,
 	return replication.AppendGTID(basePos, gtid), nil
 }
 
+// setStopPositionState marks the workflow as Stopped using the given
+// dbClient's batch mode (if any). Used from the serial applier path
+// where the stop-state write can ride along with the rest of the
+// batched flush.
 func (vp *vplayer) setStopPositionState(dbClient *vdbClient) error {
 	log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
 	if !vp.saveStop {
@@ -486,6 +505,11 @@ func (vp *vplayer) setStopPositionState(dbClient *vdbClient) error {
 	return vp.vr.setStateWithDBClient(dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos), false)
 }
 
+// setStopPositionStateImmediate marks the workflow as Stopped using a
+// direct (non-batched) write. The parallel commitLoop uses this after
+// the worker has flushed its batch and is about to COMMIT, so the
+// state row update has to stay inside the same transaction rather than
+// deferring to a later batch flush.
 func (vp *vplayer) setStopPositionStateImmediate(dbClient *vdbClient) error {
 	log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
 	if !vp.saveStop {
@@ -494,6 +518,12 @@ func (vp *vplayer) setStopPositionStateImmediate(dbClient *vdbClient) error {
 	return vp.vr.setStateWithDBClientImmediate(dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos))
 }
 
+// updatePos persists the current position, records the save, and —
+// if the stop position has been reached — transitions the workflow to
+// Stopped on the active DB client. The serial applier uses this
+// end-to-end; the parallel flow calls the constituent helpers
+// (updatePosWithoutStop, recordPositionSave,
+// setStopPositionStateImmediate) on the worker connection instead.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
 	posReached, err = vp.updatePosWithoutStop(ctx, vp.pos, ts, vp.query)
 	if err != nil {

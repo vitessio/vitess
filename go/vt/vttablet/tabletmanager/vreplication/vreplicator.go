@@ -538,6 +538,11 @@ func (vr *vreplicator) setStateWithDBClientImmediate(dbClient *vdbClient, state 
 	return vr.setStateWithDBClient(dbClient, state, message, true)
 }
 
+// setStateWithDBClient writes the workflow's state/message row to
+// _vt.vreplication using the supplied connection. The immediate flag
+// forces a direct ExecuteFetch even when the connection is mid-batch,
+// which the parallel commitLoop uses so the stop-state write lands in
+// the same transaction as the worker's row updates and position save.
 func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string, immediate bool) error {
 	if message != "" {
 		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
@@ -848,6 +853,10 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	return extractSecondaryKeys(tableSpec), nil
 }
 
+// extractSecondaryKeys returns the non-PK, non-FK-backed secondary
+// indexes on a parsed CreateTable. Indexes that exist only to satisfy
+// a foreign-key constraint are filtered out because dropping them
+// would break the constraint.
 func extractSecondaryKeys(tableSpec *sqlparser.TableSpec) []*sqlparser.IndexDefinition {
 	if tableSpec == nil {
 		return nil
@@ -879,6 +888,11 @@ func extractSecondaryKeys(tableSpec *sqlparser.TableSpec) []*sqlparser.IndexDefi
 	return secondaryKeys
 }
 
+// getTargetTableSpec fetches the target-side CREATE TABLE for the
+// named table and returns its parsed TableSpec. Used by helpers that
+// need to reason about target structure after the stream is running —
+// e.g. detecting extra unique secondary indexes that affect the
+// parallel applier's conflict detection.
 func (vr *vreplicator) getTargetTableSpec(ctx context.Context, tableName string) (*sqlparser.TableSpec, error) {
 	if vr.mysqld == nil || vr.vre == nil || vr.vre.env == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing schema lookup dependencies for %s", tableName)
@@ -907,6 +921,12 @@ func (vr *vreplicator) getTargetTableSpec(ctx context.Context, tableName string)
 	return createTable.GetTableSpec(), nil
 }
 
+// hasExtraUniqueSecondaryIndex reports whether the target table has a
+// unique secondary index whose column set is not already covered by
+// the plan's identity columns. The parallel applier needs this signal
+// because writeset keys derived from the PK alone would miss
+// conflicts enforced by such an index, which could otherwise let two
+// conflicting inserts schedule in parallel and deadlock at apply time.
 func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableName string, plan *TablePlan) (bool, error) {
 	if plan == nil {
 		return false, nil

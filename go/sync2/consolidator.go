@@ -124,6 +124,10 @@ func (rs *pendingResult) Wait() {
 	rs.executing.RLock()
 }
 
+// AddWaiterCounter atomically adjusts the consolidator's shared
+// waiter counter by c and returns a pointer to it. Callers that join
+// or leave a consolidation use this to keep the cross-query "queries
+// currently waiting for a leader" gauge accurate.
 func (rs *pendingResult) AddWaiterCounter(c int64) *int64 {
 	atomic.AddInt64(rs.consolidator.totalWaiterCount, c)
 	return rs.consolidator.totalWaiterCount

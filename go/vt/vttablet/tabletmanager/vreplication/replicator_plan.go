@@ -101,6 +101,12 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	return tplan, nil
 }
 
+// hasUnsupportedWritesetMapping reports whether the plan's source→target
+// column mapping is something the parallel applier's writeset hasher
+// cannot reason about safely. Plans that rewrite, project, or reorder
+// columns produce hash inputs that do not correspond 1:1 with the row
+// image bytes, so the scheduler falls back to serialization rather
+// than compute a misleading writeset that could miss conflicts.
 func hasUnsupportedWritesetMapping(plan *TablePlan, streamedFields []*querypb.Field) bool {
 	if plan == nil || len(streamedFields) == 0 || len(plan.PKIndices) == 0 {
 		return false

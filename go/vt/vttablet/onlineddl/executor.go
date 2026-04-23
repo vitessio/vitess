@@ -1232,6 +1232,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	// deferred function will re-enable writes now
 }
 
+// shouldPreBufferWaitForParallelApply reports whether the VReplication
+// stream backing this migration runs with parallel apply enabled (>1
+// worker), taking workflow-level config overrides into account. The
+// cut-over path consults this because parallel apply introduces a
+// reorder buffer that must drain cleanly before tables can be swapped;
+// the serial applier has no such buffer and does not need the extra
+// wait.
 func shouldPreBufferWaitForParallelApply(s *VReplStream) (bool, error) {
 	workers := vttablet.InitVReplicationConfigDefaults().ParallelReplicationWorkers
 	if s == nil || s.options == "" {
