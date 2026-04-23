@@ -47,9 +47,6 @@ Flags:
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
-      --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
-      --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
-      --datadog-trace-debug-mode                                         enable debug mode for datadog tracing
       --dbddl-plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl-strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
       --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
@@ -105,7 +102,6 @@ Flags:
       --healthcheck-retry-delay duration                                 health check retry delay (default 2ms)
       --healthcheck-timeout duration                                     the health check timeout period (default 1m0s)
   -h, --help                                                             help for vtgate
-      --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces-to-watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
@@ -240,8 +236,7 @@ Flags:
       --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate float                                      sampling parameter for traces; for jaeger this is passed as the sampler parameter (see --tracing-sampling-type), for opentelemetry/datadog it is a probability between 0.0 and 1.0 (default 0.1)
-      --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
+      --tracing-sampling-rate float                                      sampling rate for traces as a probability between 0.0 and 1.0 (default 0.1)
       --track-udfs                                                       Track UDFs in vtgate.
       --transaction-mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)
