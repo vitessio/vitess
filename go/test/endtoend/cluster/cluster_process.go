@@ -40,9 +40,9 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/osutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/syscallutil"
-	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -64,8 +64,8 @@ import (
 // DefaultCell : If no cell name is passed, then use following
 const (
 	DefaultCell      = "zone1"
-	DefaultStartPort = 6700
 	DefaultVttestEnv = "VTTEST=endtoend"
+	portFileName     = osutil.DefaultPortFileName
 )
 
 var (
@@ -121,6 +121,7 @@ type LocalProcessCluster struct {
 	VTOrcProcesses  []*VTOrcProcess
 
 	nextPortForProcess int
+	reservedPorts      *osutil.PortReservation
 
 	// Extra arguments for vtTablet
 	VtTabletExtraArgs []string
@@ -1136,6 +1137,12 @@ func (cluster *LocalProcessCluster) Teardown() {
 	// reset the VTDATAROOT path.
 	os.Setenv("VTDATAROOT", cluster.OriginalVTDATAROOT)
 
+	if cluster.reservedPorts != nil {
+		if err := osutil.UnreservePorts(cluster.reservedPorts); err != nil {
+			log.Error(fmt.Sprintf("Error unreserving ports: %v", err))
+		}
+	}
+
 	cluster.teardownCompleted = true
 }
 
@@ -1206,70 +1213,34 @@ func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initialB
 func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	if cluster.nextPortForProcess == 0 {
 		if *forcePortStart > 0 {
-			cluster.nextPortForProcess = *forcePortStart
+			cluster.nextPortForProcess = *forcePortStart - 1
 		} else {
-			cluster.nextPortForProcess = getPort()
+			osutil.SetPortFilePath(path.Join(os.TempDir(), portFileName))
+			pr, err := osutil.GetPortReservation(200)
+			if err != nil {
+				panic(fmt.Sprintf("GetAndReservePort: %v", err))
+			}
+			cluster.reservedPorts = pr
+			cluster.nextPortForProcess = cluster.reservedPorts.Start - 1
 		}
 	}
-	for {
-		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
-		log.Info(fmt.Sprintf("Attempting to reserve port: %v", cluster.nextPortForProcess))
-		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(cluster.nextPortForProcess)))
-		if err != nil {
-			log.Error(fmt.Sprintf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err))
-			continue
+	cluster.nextPortForProcess++
+	if cluster.reservedPorts != nil && cluster.nextPortForProcess > cluster.reservedPorts.End {
+		panic(fmt.Sprintf("GetAndReservePort: port %d exceeds reserved range %d-%d", cluster.nextPortForProcess, cluster.reservedPorts.Start, cluster.reservedPorts.End))
+	}
+	// When using --force-port-start, check that the port is actually available.
+	if *forcePortStart > 0 {
+		for {
+			ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", cluster.nextPortForProcess))
+			if err != nil {
+				cluster.nextPortForProcess++
+				continue
+			}
+			ln.Close()
+			break
 		}
-
-		log.Info(fmt.Sprintf("Port %v is available, reserving..", cluster.nextPortForProcess))
-		ln.Close()
-		break
 	}
 	return cluster.nextPortForProcess
-}
-
-// portFileTimeout determines when we see the content of a port file as
-// stale. After this time, we assume we can start with the default base
-// port again.
-const portFileTimeout = 1 * time.Hour
-
-// getPort checks if we have recent used port info in /tmp/todaytime.port
-// If no, then use a random port and save that port + 200 in the above file
-// If yes, then return that port, and save port + 200 in the same file
-// here, assumptions is 200 ports might be consumed for all tests in a package
-func getPort() int {
-	portFile, err := os.OpenFile(path.Join(os.TempDir(), "endtoend.port"), os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		panic(err)
-	}
-
-	filelock.Lock(portFile)
-	defer filelock.Unlock(portFile)
-
-	fileInfo, err := portFile.Stat()
-	if err != nil {
-		panic(err)
-	}
-
-	portBytes, err := io.ReadAll(portFile)
-	if err != nil {
-		panic(err)
-	}
-
-	var port int
-	if len(portBytes) == 0 || time.Now().After(fileInfo.ModTime().Add(portFileTimeout)) {
-		port = getVtStartPort()
-	} else {
-		port, err = strconv.Atoi(string(portBytes))
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	portFile.Truncate(0)
-	portFile.Seek(0, 0)
-	fmt.Fprintf(portFile, "%v", port+200)
-	portFile.Close()
-	return port
 }
 
 // GetAndReserveTabletUID gives tablet uid
@@ -1287,17 +1258,6 @@ func (cluster *LocalProcessCluster) GetAndReserveTabletUID() int {
 
 func getRandomNumber(maxNumber int32, baseNumber int) int {
 	return int(rand.Int32N(maxNumber)) + baseNumber
-}
-
-func getVtStartPort() int {
-	osVtPort := os.Getenv("VTPORTSTART")
-	if osVtPort != "" {
-		cport, err := strconv.Atoi(osVtPort)
-		if err == nil {
-			return cport
-		}
-	}
-	return DefaultStartPort
 }
 
 // NewVttabletInstance creates a new vttablet object

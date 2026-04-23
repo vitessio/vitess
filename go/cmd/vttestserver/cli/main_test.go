@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand/v2"
 	"os/exec"
 	"path"
 	"strconv"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/osutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
@@ -77,8 +77,9 @@ func TestPersistentMode(t *testing.T) {
 
 	dir := t.TempDir()
 
-	cluster, err := startPersistentCluster(dir)
+	cluster, pr, err := startPersistentCluster(dir)
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = osutil.UnreservePorts(pr) })
 
 	// Add a new "ad-hoc" vindex via vtgate once the cluster is up, to later make sure it is persisted across teardowns
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on persistence_test add vindex my_vdx(id)")
@@ -112,12 +113,13 @@ func TestPersistentMode(t *testing.T) {
 
 	// reboot the persistent cluster
 	cluster.TearDown()
-	cluster, err = startPersistentCluster(dir)
+	cluster, pr2, err := startPersistentCluster(dir)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = osutil.UnreservePorts(pr2) })
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
 		cluster.TearDown()
 	}()
-	require.NoError(t, err)
 
 	// rerun our sanity checks to make sure vschema is persisted correctly
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
@@ -374,14 +376,23 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
 }
 
-func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
+func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, *osutil.PortReservation, error) {
+	pr, err := osutil.GetPortReservation(6)
+	if err != nil {
+		return vttest.LocalCluster{}, nil, err
+	}
 	flags = append(flags, []string{
 		"--persistent-mode",
 		// FIXME: if port is not provided, data_dir is not respected
-		fmt.Sprintf("--port=%d", randomPort()),
+		fmt.Sprintf("--port=%d", pr.Start),
 		"--data-dir=" + dir,
 	}...)
-	return startCluster(flags...)
+	cluster, err := startCluster(flags...)
+	if err != nil {
+		pr.Unreserve()
+		return vttest.LocalCluster{}, nil, err
+	}
+	return cluster, pr, nil
 }
 
 var clusterKeyspaces = []string{
@@ -459,11 +470,6 @@ func resetConfig(conf vttest.Config) {
 	config = conf
 }
 
-func randomPort() int {
-	v := rand.Int32N(20000)
-	return int(v + 10000)
-}
-
 func assertGetKeyspaces(ctx context.Context, t *testing.T, cluster vttest.LocalCluster) {
 	client, err := vtctlclient.New(ctx, fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
 	assert.NoError(t, err)
@@ -508,13 +514,16 @@ func consumeEventStream(stream logutil.EventStream) (string, error) {
 // Returns the exec.Cmd forked, and the server address to RPC-connect to.
 func startConsul(t *testing.T) (*exec.Cmd, string) {
 	// pick a random port to make sure things work with non-default port
-	port := randomPort()
+	pr, err := osutil.GetPortReservation(1)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = osutil.UnreservePorts(pr) })
+	port := pr.Start
 
 	cmd := exec.Command("consul",
 		"agent",
 		"-dev",
 		"-http-port", strconv.Itoa(port))
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		t.Fatalf("failed to start consul: %v", err)
 	}
