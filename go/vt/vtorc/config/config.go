@@ -231,15 +231,6 @@ var (
 			Dynamic:  true,
 		},
 	)
-
-	waitForRelayLogsMaxTablets = viperutil.Configure(
-		"wait-for-relaylogs-max-tablets",
-		viperutil.Options[int64]{
-			FlagName: "wait-for-relaylogs-max-tablets",
-			Default:  3,
-			Dynamic:  true,
-		},
-	)
 )
 
 func init() {
@@ -269,8 +260,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("allow-recovery", allowRecovery.Default(), "Whether VTOrc should be allowed to run recovery actions")
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 	fs.Bool("enable-primary-disk-stalled-recovery", enablePrimaryDiskStalledRecovery.Default(), "Whether VTOrc should detect a stalled disk on the primary and failover")
-	fs.Int64("wait-for-relaylogs-max-tablets", waitForRelayLogsMaxTablets.Default(), "Caps how many tablets from the most-advanced relay log position group to wait for during the relay log application phase of ERS. 0 means wait for all tablets in the group (no cap)")
-
 	viperutil.BindFlags(fs,
 		cell,
 		instancePollTime,
@@ -293,7 +282,6 @@ func registerFlags(fs *pflag.FlagSet) {
 		allowRecovery,
 		convertTabletsWithErrantGTIDs,
 		enablePrimaryDiskStalledRecovery,
-		waitForRelayLogsMaxTablets,
 	)
 }
 
@@ -440,12 +428,6 @@ func SetConvertTabletWithErrantGTIDs(val bool) {
 // GetStalledDiskPrimaryRecovery reports whether VTOrc is allowed to check for and recovery stalled disk problems.
 func GetStalledDiskPrimaryRecovery() bool {
 	return enablePrimaryDiskStalledRecovery.Get()
-}
-
-// GetWaitForRelayLogsMaxTablets returns the max number of tablets to wait for during relay log application in ERS.
-// 0 means wait for all tablets in the most-advanced group (no cap).
-func GetWaitForRelayLogsMaxTablets() int64 {
-	return waitForRelayLogsMaxTablets.Get()
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.

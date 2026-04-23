@@ -316,9 +316,7 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]*RelayLogPo
 }
 
 // restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate.
-// After filtering by tablet type, it further filters to only the most-advanced candidates by Combined position
-// and optionally caps the group size via opts.WaitForRelayLogsMaxTablets.
-func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions, logger logutil.Logger) (map[string]*RelayLogPositions, error) {
+func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabletMap map[string]*topo.TabletInfo) (map[string]*RelayLogPositions, error) {
 	restrictedValidCandidates := make(map[string]*RelayLogPositions)
 	for candidate, position := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
@@ -331,12 +329,7 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 		}
 		restrictedValidCandidates[candidate] = position
 	}
-	// Filter to only the most-advanced candidates by Combined (relay log) position.
-	var mustInclude string
-	if opts.NewPrimaryAlias != nil {
-		mustInclude = topoproto.TabletAliasString(opts.NewPrimaryAlias)
-	}
-	return filterToMostAdvancedCombined(restrictedValidCandidates, opts.WaitForRelayLogsMaxTablets, mustInclude, logger), nil
+	return restrictedValidCandidates, nil
 }
 
 func findCandidate(

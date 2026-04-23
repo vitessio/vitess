@@ -60445,9 +60445,6 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest expected_primary */
         expected_primary?: (topodata.ITabletAlias|null);
-
-        /** EmergencyReparentShardRequest wait_for_relay_logs_max_tablets */
-        wait_for_relay_logs_max_tablets?: (number|Long|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -60482,9 +60479,6 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest expected_primary. */
         public expected_primary?: (topodata.ITabletAlias|null);
-
-        /** EmergencyReparentShardRequest wait_for_relay_logs_max_tablets. */
-        public wait_for_relay_logs_max_tablets: (number|Long);
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.

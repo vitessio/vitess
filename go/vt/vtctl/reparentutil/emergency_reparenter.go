@@ -63,11 +63,6 @@ type EmergencyReparentOptions struct {
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
-	// WaitForRelayLogsMaxTablets caps how many tablets from the most-advanced
-	// Combined position group to wait for during relay log application.
-	// 0 means wait for all in the group (no cap).
-	WaitForRelayLogsMaxTablets int64
-
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
@@ -75,8 +70,16 @@ type EmergencyReparentOptions struct {
 }
 
 // counters for Emergency Reparent Shard
-var ersCounter = stats.NewCountersWithMultiLabels("EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
-	[]string{"Keyspace", "Shard", "Result"},
+var (
+	ersCounter = stats.NewCountersWithMultiLabels("EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
+	ersFilteredCandidates = stats.NewCountersWithMultiLabels("EmergencyReparentFilteredCandidates", "Number of candidates filtered out during EmergencyReparentShard because their Combined position was not the most advanced",
+		[]string{"Keyspace", "Shard"},
+	)
+	ersRelayLogApplyFailedCandidates = stats.NewCountersWithMultiLabels("EmergencyReparentRelayLogFailedCandidates", "Number of candidates removed during EmergencyReparentShard because they failed to apply relay logs",
+		[]string{"Keyspace", "Shard"},
+	)
 )
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
@@ -267,18 +270,43 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
-	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP,
-	// and filter to only the most-advanced candidates by Combined (relay log) position.
-	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap, opts, erp.logger)
+	// Restrict the valid candidates list. We remove any tablet which is of the type DRAINED, RESTORE or BACKUP.
+	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
 	if err != nil {
 		return err
 	} else if len(validCandidates) == 0 {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	// Wait for all candidates to apply relay logs
-	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
+	// Filter to the most-advanced candidates by Combined (relay log) position for the relay log wait.
+	// Since replication is stopped, Combined positions are frozen — tablets behind the max can never
+	// catch up during relay log application. We only wait for the most-advanced group, but keep all
+	// valid candidates for later promotion steps (behind tablets can catch up via the intermediate source).
+	relayLogWaitCandidates := filterToMostAdvancedCombined(validCandidates, erp.logger)
+	if filtered := int64(len(validCandidates) - len(relayLogWaitCandidates)); filtered > 0 {
+		ersFilteredCandidates.Add([]string{keyspace, shard}, filtered)
+	}
+
+	// Wait for relay logs to apply on the most-advanced candidates. Proceeds as soon as one
+	// tablet succeeds (all have the same Combined position, so any success is equivalent).
+	// Tablets that genuinely fail (before a success is found) are removed from relayLogWaitCandidates.
+	relayLogWaitSet := make(map[string]struct{}, len(relayLogWaitCandidates))
+	for alias := range relayLogWaitCandidates {
+		relayLogWaitSet[alias] = struct{}{}
+	}
+	if err = erp.waitForAllRelayLogsToApply(ctx, relayLogWaitCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
 		return err
+	}
+	// Remove genuinely-failed tablets from validCandidates (so they can't be picked as a winner).
+	// Only check tablets that were in the relay log wait set — behind tablets that weren't in
+	// the wait set are still valid candidates (they can catch up via the intermediate source).
+	for alias := range relayLogWaitSet {
+		if _, survived := relayLogWaitCandidates[alias]; !survived {
+			delete(validCandidates, alias)
+		}
+	}
+	if failed := int64(len(relayLogWaitSet)) - int64(len(relayLogWaitCandidates)); failed > 0 {
+		ersRelayLogApplyFailedCandidates.Add([]string{keyspace, shard}, failed)
 	}
 
 	// For GTID based replication, we will run errant GTID detection.
@@ -476,16 +504,34 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		waiterCount++
 	}
 
-	// Collect results and remove failed tablets from validCandidates.
+	// If no candidates needed to apply relay logs (e.g., initialization with no replication),
+	// there's nothing to wait for.
+	if waiterCount == 0 {
+		return nil
+	}
+
+	// Collect results. As soon as one tablet succeeds, cancel the remaining
+	// goroutines — all tablets in this group have the same Combined position so
+	// any single success gives us a valid relay-log-applied candidate. The others
+	// will continue applying relay logs on their own after ERS completes.
+	succeeded := false
 	for range waiterCount {
 		result := <-resultCh
 		if result.err != nil {
-			erp.logger.Warningf("EmergencyReparent candidate %s failed to apply relay logs: %v; removing from valid candidates", result.alias, result.err)
-			delete(validCandidates, result.alias)
+			if !succeeded {
+				// Only count as a real failure if we haven't succeeded yet. After success,
+				// remaining goroutines are cancelled and their errors are expected.
+				erp.logger.Warningf("EmergencyReparent candidate %s failed to apply relay logs: %v; removing from valid candidates", result.alias, result.err)
+				delete(validCandidates, result.alias)
+			}
+		} else if !succeeded {
+			succeeded = true
+			// Cancel remaining goroutines — we have a winner.
+			groupCancel()
 		}
 	}
 
-	if len(validCandidates) == 0 {
+	if !succeeded {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 

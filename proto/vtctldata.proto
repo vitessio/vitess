@@ -756,10 +756,6 @@ message EmergencyReparentShardRequest {
   // ExpectedPrimary is the optional alias we expect to be the current primary in order for
   // the reparent operation to succeed.
   topodata.TabletAlias expected_primary = 8;
-  // WaitForRelayLogsMaxTablets caps how many tablets from the most-advanced
-  // relay log position group to wait for during the relay log application phase.
-  // 0 means wait for all tablets in the group (no cap).
-  int64 wait_for_relay_logs_max_tablets = 9;
 }
 
 message EmergencyReparentShardResponse {

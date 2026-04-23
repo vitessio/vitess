@@ -89,14 +89,13 @@ See the Reparenting guide for more information: https://vitess.io/docs/user-guid
 )
 
 var emergencyReparentShardOptions = struct {
-	Force                      bool
-	WaitReplicasTimeout        time.Duration
-	NewPrimaryAliasStr         string
-	ExpectedPrimaryAliasStr    string
-	IgnoreReplicaAliasStrList  []string
-	PreventCrossCellPromotion  bool
-	WaitForAllTablets          bool
-	WaitForRelayLogsMaxTablets int64
+	Force                     bool
+	WaitReplicasTimeout       time.Duration
+	NewPrimaryAliasStr        string
+	ExpectedPrimaryAliasStr   string
+	IgnoreReplicaAliasStrList []string
+	PreventCrossCellPromotion bool
+	WaitForAllTablets         bool
 }{}
 
 func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
@@ -137,15 +136,14 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.EmergencyReparentShard(commandCtx, &vtctldatapb.EmergencyReparentShardRequest{
-		Keyspace:                   keyspace,
-		Shard:                      shard,
-		NewPrimary:                 newPrimaryAlias,
-		ExpectedPrimary:            expectedPrimaryAlias,
-		IgnoreReplicas:             ignoreReplicaAliases,
-		WaitReplicasTimeout:        protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
-		PreventCrossCellPromotion:  emergencyReparentShardOptions.PreventCrossCellPromotion,
-		WaitForAllTablets:          emergencyReparentShardOptions.WaitForAllTablets,
-		WaitForRelayLogsMaxTablets: emergencyReparentShardOptions.WaitForRelayLogsMaxTablets,
+		Keyspace:                  keyspace,
+		Shard:                     shard,
+		NewPrimary:                newPrimaryAlias,
+		ExpectedPrimary:           expectedPrimaryAlias,
+		IgnoreReplicas:            ignoreReplicaAliases,
+		WaitReplicasTimeout:       protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
+		PreventCrossCellPromotion: emergencyReparentShardOptions.PreventCrossCellPromotion,
+		WaitForAllTablets:         emergencyReparentShardOptions.WaitForAllTablets,
 	})
 	if err != nil {
 		return err
@@ -312,7 +310,6 @@ func init() {
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
-	EmergencyReparentShard.Flags().Int64Var(&emergencyReparentShardOptions.WaitForRelayLogsMaxTablets, "wait-for-relay-logs-max-tablets", 3, "Caps how many tablets from the most-advanced relay log position group to wait for during the relay log application phase. 0 means wait for all tablets in the group (no cap).")
 	Root.AddCommand(EmergencyReparentShard)
 
 	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "Time to wait for replicas to catch up in reparenting.")
