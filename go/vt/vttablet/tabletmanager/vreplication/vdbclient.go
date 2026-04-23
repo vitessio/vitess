@@ -37,14 +37,17 @@ const beginStmtLen = int64(len("begin;"))
 // It allows us to retry a failed transactions on lock errors.
 type vdbClient struct {
 	binlogplayer.DBClient
-	stats            *binlogplayer.Stats
-	InTransaction    bool
-	startTime        time.Time
-	queries          []string
-	queriesPos       int64
-	batchSize        int64
-	maxBatchSize     int64
-	relayLogMaxItems int
+	stats                            *binlogplayer.Stats
+	vreplicationID                   int32
+	InTransaction                    bool
+	foreignKeyChecksEnabled          bool
+	foreignKeyChecksStateInitialized bool
+	startTime                        time.Time
+	queries                          []string
+	queriesPos                       int64
+	batchSize                        int64
+	maxBatchSize                     int64
+	relayLogMaxItems                 int
 }
 
 func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int) *vdbClient {
@@ -53,6 +56,15 @@ func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, rel
 		stats:            stats,
 		relayLogMaxItems: relayLogMaxItems,
 	}
+}
+
+// newVDBClientWithID creates a vdbClient with a pre-set vreplicationID.
+// Used by parallel apply workers so each worker's connection is associated
+// with the correct vreplication stream for relay log batching.
+func newVDBClientWithID(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int, vreplicationID int32) *vdbClient {
+	client := newVDBClient(dbclient, stats, relayLogMaxItems)
+	client.vreplicationID = vreplicationID
+	return client
 }
 
 func (vc *vdbClient) Begin() error {
@@ -78,6 +90,24 @@ func (vc *vdbClient) Begin() error {
 	return nil
 }
 
+// BeginImmediate starts a real transaction on the server even when batch mode
+// is enabled. This is needed for commit paths that must execute a couple of
+// statements immediately on one connection and still commit them atomically.
+func (vc *vdbClient) BeginImmediate() error {
+	if vc.InTransaction {
+		return nil
+	}
+	if err := vc.DBClient.Begin(); err != nil {
+		return err
+	}
+	vc.queries = []string{"begin"}
+	vc.queriesPos = 0
+	vc.batchSize = 0
+	vc.InTransaction = true
+	vc.startTime = time.Now()
+	return nil
+}
+
 func (vc *vdbClient) Commit() error {
 	if err := vc.DBClient.Commit(); err != nil {
 		return err
@@ -96,7 +126,7 @@ func (vc *vdbClient) Commit() error {
 func (vc *vdbClient) CommitTrxQueryBatch() error {
 	vc.queries = append(vc.queries, "commit")
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
-	for _, err := vc.ExecuteFetchMulti(queries, -1); err != nil; {
+	if _, err := vc.ExecuteFetchMulti(queries, -1); err != nil {
 		return err
 	}
 	vc.InTransaction = false
@@ -128,7 +158,8 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 	} else {
 		vc.queries = append(vc.queries, query)
 	}
-	return vc.DBClient.ExecuteFetch(query, maxrows)
+	qr, err := vc.DBClient.ExecuteFetch(query, maxrows)
+	return qr, err
 }
 
 // AddQueryToTrxBatch adds the query to the current transaction's query
@@ -157,7 +188,8 @@ func (vc *vdbClient) AddQueryToTrxBatch(query string) error {
 func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
 
-	qrs, err := vc.ExecuteFetchMulti(strings.Join(vc.queries[vc.queriesPos:], ";"), -1)
+	queries := strings.Join(vc.queries[vc.queriesPos:], ";")
+	qrs, err := vc.ExecuteFetchMulti(queries, -1)
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -35,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const failedToRecordHeartbeatMsg = "failed to record heartbeat"
@@ -57,13 +60,16 @@ type vplayer struct {
 	saveStop  bool
 	copyState map[string]*sqltypes.Result
 
-	replicatorPlan *ReplicatorPlan
-	tablePlans     map[string]*TablePlan
+	replicatorPlan    *ReplicatorPlan
+	tablePlansMu      *sync.RWMutex
+	tablePlans        map[string]*TablePlan
+	tablePlansVersion *atomic.Int64
 
 	// These are set when creating the VPlayer based on whether the VPlayer
 	// is in batch (stmt and trx) execution mode or not.
-	query  func(ctx context.Context, sql string) (*sqltypes.Result, error)
-	commit func() error
+	query    func(ctx context.Context, sql string) (*sqltypes.Result, error)
+	commit   func() error
+	dbClient *vdbClient
 	// If the VPlayer is in batch mode, we accumulate each transaction's statements
 	// that are then sent as a single multi-statement protocol request to the database.
 	batchMode bool
@@ -74,12 +80,13 @@ type vplayer struct {
 	// If nothing else happens for idleTimeout since timeLastSaved,
 	// the position of the unsavedEvent gets saved.
 	unsavedEvent *binlogdatapb.VEvent
-	// timeLastSaved is set every time a GTID is saved.
+	// timeLastSaved tracks when the latest pending position was durably saved.
+	// Older saves behind a later unsavedEvent must not refresh it.
 	timeLastSaved time.Time
 	// lastTimestampNs is the last timestamp seen so far.
-	lastTimestampNs int64
+	lastTimestampNs *atomic.Int64
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
-	timeOffsetNs int64
+	timeOffsetNs *atomic.Int64
 	// numAccumulatedHeartbeats keeps track of how many heartbeats have been received since we updated the time_updated column of _vt.vreplication
 	numAccumulatedHeartbeats int
 
@@ -90,15 +97,37 @@ type vplayer struct {
 
 	throttlerAppName string
 
-	// See updateFKCheck for more details on how the two fields below are used.
+	serialMu      *sync.Mutex
+	parallelOrder int64
 
-	// foreignKeyChecksEnabled is the current state of the foreign key checks for the current session.
-	// It reflects what we have set the @@session.foreign_key_checks session variable to.
-	foreignKeyChecksEnabled bool
+	// fkRefs maps child table name → FK constraints for that table.
+	// Used by the parallel applier to generate writeset keys that
+	// create conflicts between child and parent table transactions.
+	fkRefs map[string][]fkConstraintRef
+	// parentFKRefs is the reverse map: parent table name → FK constraints
+	// that reference it. Used to generate parent-side writeset keys that
+	// match child FK keys, ensuring correct conflict detection even when
+	// FKs reference non-PK unique keys.
+	parentFKRefs map[string][]parentFKRef
+	// postDDLDroppedTables records dropped table names from executed DDLs so the
+	// parallel scheduler can clear post-DDL barriers without mutating tablePlans.
+	postDDLDroppedTables map[string]struct{}
+	// postDDLStalePlans records the still-stale table plans left behind by the
+	// most recently executed EXEC* DDLs. scheduleLoop snapshots this under
+	// serialMu so commitLoop can publish real runtime DDL effects without
+	// racing the scheduler.
+	postDDLStalePlans map[string]postDDLStalePlan
+	// postDDLConservative keeps unknown DDL barriers fail-closed until every
+	// currently tracked plan refreshes.
+	postDDLConservative bool
+	// pendingFieldRefreshTables tracks tables whose FIELD refresh was scheduled
+	// but has not committed yet, so later row transactions do not hash against a
+	// still-cold table-plan cache.
+	pendingFieldRefreshTables map[string]int
 
-	// foreignKeyChecksStateInitialized is set to true once we have initialized the foreignKeyChecksEnabled.
-	// The initialization is done on the first row event that this vplayer sees.
-	foreignKeyChecksStateInitialized bool
+	// idStr is vp.idStr, cached to avoid repeated
+	// conversions on every lag gauge update.
+	idStr string
 }
 
 // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
@@ -151,20 +180,39 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 
 	return &vplayer{
-		vr:               vr,
-		startPos:         settings.StartPos,
-		pos:              settings.StartPos,
-		stopPos:          settings.StopPos,
-		saveStop:         saveStop,
-		copyState:        copyState,
-		timeLastSaved:    time.Now(),
-		tablePlans:       make(map[string]*TablePlan),
-		phase:            phase,
-		throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
-		query:            queryFunc,
-		commit:           commitFunc,
-		batchMode:        batchMode,
+		vr:                        vr,
+		startPos:                  settings.StartPos,
+		pos:                       settings.StartPos,
+		stopPos:                   settings.StopPos,
+		saveStop:                  saveStop,
+		copyState:                 copyState,
+		timeLastSaved:             time.Now(),
+		lastTimestampNs:           &atomic.Int64{},
+		timeOffsetNs:              &atomic.Int64{},
+		tablePlansMu:              &sync.RWMutex{},
+		tablePlans:                make(map[string]*TablePlan),
+		tablePlansVersion:         &atomic.Int64{},
+		serialMu:                  &sync.Mutex{},
+		phase:                     phase,
+		throttlerAppName:          throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
+		pendingFieldRefreshTables: make(map[string]int),
+		query:                     queryFunc,
+		commit:                    commitFunc,
+		batchMode:                 batchMode,
+		dbClient:                  vr.dbClient,
+		idStr:                     strconv.Itoa(int(vr.id)),
 	}
+}
+
+// activeDBClient returns the vplayer's current DB connection. In the parallel
+// applier, workers swap vp.dbClient to their own connection before applying
+// events, so this returns whichever connection is currently active. Falls back
+// to vr.dbClient (the main connection) when vp.dbClient is nil.
+func (vp *vplayer) activeDBClient() *vdbClient {
+	if vp.dbClient != nil {
+		return vp.dbClient
+	}
+	return vp.vr.dbClient
 }
 
 // play is the entry point for playing binlogs.
@@ -197,7 +245,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 }
 
 // updateFKCheck updates the @@session.foreign_key_checks variable based on the binlog row event flags.
-// The function only does it if it has changed to avoid redundant updates, using the cached vplayer.foreignKeyChecksEnabled
+// The function only does it if it has changed to avoid redundant updates, using the cached state on the active db session.
 // The foreign_key_checks value for a transaction is determined by the 2nd bit (least significant) of the flags:
 // - If set (1), foreign key checks are disabled.
 // - If unset (0), foreign key checks are enabled.
@@ -218,18 +266,19 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 	}
 	dbForeignKeyChecksEnabled := flags2&NoForeignKeyCheckFlagBitmask != NoForeignKeyCheckFlagBitmask
 
-	if vp.foreignKeyChecksStateInitialized /* already set earlier */ &&
-		dbForeignKeyChecksEnabled == vp.foreignKeyChecksEnabled /* no change in the state, no need to update */ {
+	activeClient := vp.activeDBClient()
+	if activeClient.foreignKeyChecksStateInitialized /* already set earlier */ &&
+		dbForeignKeyChecksEnabled == activeClient.foreignKeyChecksEnabled /* no change in the state, no need to update */ {
 		return nil
 	}
 	log.Info("Setting this session's foreign_key_checks to " + strconv.FormatBool(dbForeignKeyChecksEnabled))
 	if _, err := vp.query(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled)); err != nil {
 		return fmt.Errorf("failed to set session foreign_key_checks: %w", err)
 	}
-	vp.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
-	if !vp.foreignKeyChecksStateInitialized {
+	activeClient.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
+	if !activeClient.foreignKeyChecksStateInitialized {
 		log.Info("First foreign_key_checks update to: " + strconv.FormatBool(dbForeignKeyChecksEnabled))
-		vp.foreignKeyChecksStateInitialized = true
+		activeClient.foreignKeyChecksStateInitialized = true
 	}
 	return nil
 }
@@ -255,16 +304,21 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	streamErr := make(chan error, 1)
 	go func() {
 		vstreamOptions := &binlogdatapb.VStreamOptions{
-			ConfigOverrides: vp.vr.workflowConfig.Overrides,
+			ConfigOverrides: vp.vr.workflowConfig.SourceOverrides(),
 		}
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
+		err := vp.vr.sourceVStreamer.VStream(ctx, replication.EncodePosition(vp.startPos), nil,
 			vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 				return relay.Send(events)
 			}, vstreamOptions)
+		streamErr <- err
 	}()
 
 	applyErr := make(chan error, 1)
 	go func() {
+		if vp.vr.workflowConfig.ParallelReplicationWorkers > 1 && len(vp.copyState) == 0 {
+			applyErr <- vp.applyEventsParallel(ctx, relay)
+			return
+		}
 		applyErr <- vp.applyEvents(ctx, relay)
 	}()
 
@@ -296,6 +350,13 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 			return nil
 		default:
 		}
+		// If the vstream received a gRPC CANCELED error, it means the
+		// context was canceled but the Go context hasn't propagated yet.
+		// Treat this the same as ctx.Done() — return nil to avoid a
+		// spurious retry.
+		if vterrors.Code(err) == vtrpcpb.Code_CANCELED && ctx.Err() != nil {
+			return nil
+		}
 		// If the stream ends normally we have to return an error indicating
 		// that the controller has to retry a different vttablet.
 		if err == nil || err == io.EOF {
@@ -325,7 +386,9 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	if err := vp.updateFKCheck(ctx, rowEvent.Flags); err != nil {
 		return err
 	}
+	vp.tablePlansMu.RLock()
 	tplan := vp.tablePlans[rowEvent.TableName]
+	vp.tablePlansMu.RUnlock()
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
@@ -346,14 +409,14 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		// then we can perform a simple bulk DELETE using an IN clause.
 		if (rowEvent.RowChanges[0].Before != nil && rowEvent.RowChanges[0].After == nil) &&
 			tplan.MultiDelete != nil {
-			_, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
+			_, err := tplan.applyBulkDeleteChanges(rowEvent.RowChanges, applyFunc, vp.activeDBClient().maxBatchSize)
 			return err
 		}
 		// If we're done with the copy phase then we will be replicating all INSERTS
 		// regardless of the PK value and can use a single INSERT statment with
 		// multiple VALUES clauses.
 		if len(vp.copyState) == 0 && (rowEvent.RowChanges[0].Before == nil && rowEvent.RowChanges[0].After != nil) {
-			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.vr.dbClient.maxBatchSize)
+			_, err := tplan.applyBulkInsertChanges(rowEvent.RowChanges, applyFunc, vp.activeDBClient().maxBatchSize)
 			return err
 		}
 	}
@@ -368,22 +431,78 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 }
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
-func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
-	if _, err := vp.query(ctx, update); err != nil {
+func (vp *vplayer) generateUpdatePosQuery(pos replication.Position, ts int64) string {
+	return binlogplayer.GenerateUpdatePos(vp.vr.id, pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
+}
+
+func (vp *vplayer) updatePosWithoutStop(ctx context.Context, pos replication.Position, ts int64, query func(context.Context, string) (*sqltypes.Result, error)) (posReached bool, err error) {
+	if _, err := query(ctx, vp.generateUpdatePosQuery(pos, ts)); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
+	return !vp.stopPos.IsZero() && pos.AtLeast(vp.stopPos), nil
+}
+
+func (vp *vplayer) recordPositionSave(pos replication.Position, clearUnsavedEvent bool) {
 	vp.numAccumulatedHeartbeats = 0
-	vp.unsavedEvent = nil
-	vp.timeLastSaved = time.Now()
-	vp.vr.stats.SetLastPosition(vp.pos)
-	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
+	refreshIdleTimer := clearUnsavedEvent || vp.unsavedEvent == nil || !vp.pos.AtLeast(pos) || vp.pos.Equal(pos)
+	if clearUnsavedEvent {
+		vp.unsavedEvent = nil
+	}
+	if refreshIdleTimer {
+		vp.timeLastSaved = time.Now()
+	}
+	vp.vr.stats.SetLastPosition(pos)
+}
+
+func (vp *vplayer) journalEventPosition(eventGtid string) (replication.Position, error) {
+	if strings.Contains(eventGtid, "/") {
+		return binlogplayer.DecodePosition(eventGtid)
+	}
+
+	basePos := vp.pos
+	if basePos.GTIDSet == nil {
+		switch {
+		case vp.startPos.GTIDSet != nil:
+			basePos = vp.startPos
+		case vp.stopPos.GTIDSet != nil:
+			basePos = vp.stopPos
+		default:
+			return replication.Position{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot derive journal position from event gtid %q without a base position", eventGtid)
+		}
+	}
+
+	gtid, err := replication.ParseGTID(basePos.GTIDSet.Flavor(), eventGtid)
+	if err != nil {
+		return replication.Position{}, err
+	}
+	return replication.AppendGTID(basePos, gtid), nil
+}
+
+func (vp *vplayer) setStopPositionState(dbClient *vdbClient) error {
+	log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
+	if !vp.saveStop {
+		return nil
+	}
+	return vp.vr.setStateWithDBClient(dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos), false)
+}
+
+func (vp *vplayer) setStopPositionStateImmediate(dbClient *vdbClient) error {
+	log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
+	if !vp.saveStop {
+		return nil
+	}
+	return vp.vr.setStateWithDBClientImmediate(dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos))
+}
+
+func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
+	posReached, err = vp.updatePosWithoutStop(ctx, vp.pos, ts, vp.query)
+	if err != nil {
+		return false, err
+	}
+	vp.recordPositionSave(vp.pos, true)
 	if posReached {
-		log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
-		if vp.saveStop {
-			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
-				return false, err
-			}
+		if err := vp.setStopPositionState(vp.activeDBClient()); err != nil {
+			return false, err
 		}
 	}
 	return posReached, nil
@@ -464,17 +583,17 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
 	estimateLag := func() {
-		behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
+		behind := time.Now().UnixNano() - vp.lastTimestampNs.Load() - vp.timeOffsetNs.Load()
 		behindSecs := behind / 1e9
 		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
-		vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), behindSecs)
+		vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, behindSecs)
 	}
 
 	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
 	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
-	defer vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
+	defer vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, math.MaxInt64)
 	var lag int64
 	for {
 		if ctx.Err() != nil {
@@ -561,10 +680,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// determine the actual lag, as the vstreamer is fully throttled, and we
 					// will estimate it after processing the batch.
 					if event.Type != binlogdatapb.VEventType_HEARTBEAT || !event.Throttled {
-						vp.lastTimestampNs = event.Timestamp * 1e9
+						vp.lastTimestampNs.Store(event.Timestamp * 1e9)
 						now := time.Now().UnixNano()
-						vp.timeOffsetNs = now - event.CurrentTime
-						lag = now - vp.lastTimestampNs - vp.timeOffsetNs
+						vp.timeOffsetNs.Store(now - event.CurrentTime)
+						lag = now - vp.lastTimestampNs.Load() - vp.timeOffsetNs.Load()
 					}
 				}
 			}
@@ -573,7 +692,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		if lag >= 0 {
 			lagSecs := lag / 1e9
 			vp.vr.stats.ReplicationLagSeconds.Store(lagSecs)
-			vp.vr.stats.VReplicationLagGauges.Set(strconv.Itoa(int(vp.vr.id)), lagSecs)
+			vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, lagSecs)
 		} else { // We couldn't determine the lag, so we need to estimate it
 			estimateLag()
 		}
@@ -647,12 +766,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
 		if mustSave {
-			if err := vp.vr.dbClient.Begin(); err != nil {
+			if err := vp.activeDBClient().Begin(); err != nil {
 				return err
 			}
 		}
 
-		if !vp.vr.dbClient.InTransaction {
+		if !vp.activeDBClient().InTransaction {
 			// We're skipping an empty transaction. We may have to save the position on inactivity.
 			vp.unsavedEvent = event
 			return nil
@@ -668,14 +787,42 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return io.EOF
 		}
 	case binlogdatapb.VEventType_FIELD:
-		if err := vp.vr.dbClient.Begin(); err != nil {
+		if err := vp.activeDBClient().Begin(); err != nil {
 			return err
 		}
 		tplan, err := vp.replicatorPlan.buildExecutionPlan(event.FieldEvent)
 		if err != nil {
 			return err
 		}
-		vp.tablePlans[event.FieldEvent.TableName] = tplan
+		if vp.vr.workflowConfig.ParallelReplicationWorkers > 1 {
+			vp.tablePlansMu.RLock()
+			cachedPlan := vp.tablePlans[event.FieldEvent.TableName]
+			vp.tablePlansMu.RUnlock()
+			vp.serialMu.Lock()
+			staleEntry, hasStaleEntry := vp.postDDLStalePlans[event.FieldEvent.TableName]
+			cacheInvalidatedByRefreshTarget := !hasStaleEntry && postDDLRefreshTargetMatchesCachedPlan(vp.postDDLStalePlans, event.FieldEvent.TableName, cachedPlan)
+			vp.serialMu.Unlock()
+			cacheInvalidatedByDDL := (hasStaleEntry && staleEntry.stalePlan == cachedPlan) || cacheInvalidatedByRefreshTarget
+			if cachedPlan != nil && cachedPlan.TargetName == tplan.TargetName && !cacheInvalidatedByDDL {
+				tplan.HasExtraUniqueSecondary = cachedPlan.HasExtraUniqueSecondary
+			} else {
+				hasExtraUniqueSecondary, err := vp.vr.hasExtraUniqueSecondaryIndex(ctx, tplan.TargetName, tplan)
+				if err != nil {
+					return err
+				}
+				tplan.HasExtraUniqueSecondary = hasExtraUniqueSecondary
+			}
+		}
+		fieldTableName := event.FieldEvent.TableName
+		vp.tablePlansMu.Lock()
+		vp.tablePlans[fieldTableName] = tplan
+		vp.tablePlansVersion.Add(1)
+		vp.tablePlansMu.Unlock()
+		vp.serialMu.Lock()
+		// FIELD means this table name is live again, so later DDL barriers must
+		// treat it as tracked instead of as a previously dropped name.
+		delete(vp.postDDLDroppedTables, canonicalPostDDLTableKey(vp.postDDLDroppedTables, fieldTableName))
+		vp.serialMu.Unlock()
 		if stats != nil {
 			stats.Send(fmt.Sprintf("%v", event.FieldEvent))
 		}
@@ -690,7 +837,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		// If the event is for one of the AWS RDS "special" or pt-table-checksum tables, we skip
 		if !strings.Contains(sql, " mysql.rds_") && !strings.Contains(sql, " percona.checksums") {
 			// This is a player using statement based replication
-			if err := vp.vr.dbClient.Begin(); err != nil {
+			if err := vp.activeDBClient().Begin(); err != nil {
 				return err
 			}
 			if err := vp.applyStmtEvent(ctx, event); err != nil {
@@ -702,7 +849,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
-		if err := vp.vr.dbClient.Begin(); err != nil {
+		if err := vp.activeDBClient().Begin(); err != nil {
 			return err
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
@@ -715,7 +862,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			stats.Send(fmt.Sprintf("%v", event.RowEvent))
 		}
 	case binlogdatapb.VEventType_OTHER:
-		if vp.vr.dbClient.InTransaction {
+		if vp.activeDBClient().InTransaction {
 			// Unreachable
 			log.Error(fmt.Sprintf("internal error: vplayer is in a transaction on event: %v", event))
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
@@ -729,73 +876,20 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return io.EOF
 		}
 	case binlogdatapb.VEventType_DDL:
-		if vp.vr.dbClient.InTransaction {
+		if vp.activeDBClient().InTransaction {
 			// Unreachable
 			log.Error(fmt.Sprintf("internal error: vplayer is in a transaction on event: %v", event))
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
-		vp.vr.stats.DDLEventActions.Add(vp.vr.source.OnDdl.String(), 1) // Record the DDL handling
-		switch vp.vr.source.OnDdl {
-		case binlogdatapb.OnDDLAction_IGNORE:
-			// We still have to update the position.
-			posReached, err := vp.updatePos(ctx, event.Timestamp)
-			if err != nil {
-				return err
-			}
-			if posReached {
-				return io.EOF
-			}
-		case binlogdatapb.OnDDLAction_STOP:
-			if err := vp.vr.dbClient.Begin(); err != nil {
-				return err
-			}
-			if _, err := vp.updatePos(ctx, event.Timestamp); err != nil {
-				return err
-			}
-			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at DDL "+event.Statement); err != nil {
-				return err
-			}
-			if err := vp.commit(); err != nil {
-				return err
-			}
-			return io.EOF
-		case binlogdatapb.OnDDLAction_EXEC:
-			// It's impossible to save the position transactionally with the statement.
-			// So, we apply the DDL first, and then save the position.
-			// Manual intervention may be needed if there is a partial
-			// failure here.
-			if _, err := vp.query(ctx, event.Statement); err != nil {
-				return err
-			}
-			if stats != nil {
-				stats.Send(event.Statement)
-			}
-			posReached, err := vp.updatePos(ctx, event.Timestamp)
-			if err != nil {
-				return err
-			}
-			if posReached {
-				return io.EOF
-			}
-		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if _, err := vp.query(ctx, event.Statement); err != nil {
-				log.Info(fmt.Sprintf("Ignoring error: %v for DDL: %s", err, event.Statement))
-			}
-			if stats != nil {
-				stats.Send(event.Statement)
-			}
-			posReached, err := vp.updatePos(ctx, event.Timestamp)
-			if err != nil {
-				return err
-			}
-			if posReached {
-				return io.EOF
-			}
-		}
+		_, err := vp.applyDDLEvent(ctx, event, stats)
+		return err
 	case binlogdatapb.VEventType_ROWS_QUERY:
 		// The original SQL query is informational only; VReplication applies row changes directly.
+	case binlogdatapb.VEventType_VERSION:
+		// VERSION only tells downstream consumers that schema_version changed.
+		// vplayer does not apply any data for it.
 	case binlogdatapb.VEventType_JOURNAL:
-		if vp.vr.dbClient.InTransaction {
+		if vp.activeDBClient().InTransaction {
 			// Unreachable
 			log.Error(fmt.Sprintf("internal error: vplayer is in a transaction on event: %v", event))
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
@@ -832,6 +926,17 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			// All were found. We must register journal.
 		}
+		if event.EventGtid != "" {
+			journalPos, err := vp.journalEventPosition(event.EventGtid)
+			if err != nil {
+				return err
+			}
+			vp.pos = journalPos
+			if _, err := vp.updatePosWithoutStop(ctx, journalPos, event.Timestamp, vp.query); err != nil {
+				return err
+			}
+			vp.recordPositionSave(journalPos, false)
+		}
 		log.Info(fmt.Sprintf("Binlog event registering journal event %+v", event.Journal))
 		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
 			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
@@ -849,13 +954,83 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 		}
-		if !vp.vr.dbClient.InTransaction {
+		if !vp.activeDBClient().InTransaction {
 			vp.numAccumulatedHeartbeats++
 			if err := vp.recordHeartbeat(); err != nil {
 				return err
 			}
 		}
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported vevent type: %v", event.Type)
 	}
 
 	return nil
+}
+
+// applyDDLEvent executes the DDL handling policy and reports whether the target
+// schema was actually changed, so commitLoop can publish only real EXEC* side effects.
+func (vp *vplayer) applyDDLEvent(ctx context.Context, event *binlogdatapb.VEvent, stats *VrLogStats) (bool, error) {
+	vp.vr.stats.DDLEventActions.Add(vp.vr.source.OnDdl.String(), 1)
+	sendStats := func() {
+		if stats != nil {
+			stats.Send(event.Statement)
+		}
+	}
+	switch vp.vr.source.OnDdl {
+	case binlogdatapb.OnDDLAction_IGNORE:
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
+		if err != nil {
+			return false, err
+		}
+		if posReached {
+			return false, io.EOF
+		}
+		return false, nil
+	case binlogdatapb.OnDDLAction_STOP:
+		if err := vp.activeDBClient().Begin(); err != nil {
+			return false, err
+		}
+		if _, err := vp.updatePos(ctx, event.Timestamp); err != nil {
+			return false, err
+		}
+		if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at DDL "+event.Statement); err != nil {
+			return false, err
+		}
+		if err := vp.commit(); err != nil {
+			return false, err
+		}
+		return false, io.EOF
+	case binlogdatapb.OnDDLAction_EXEC:
+		// DDL and position save cannot be committed atomically, so we only
+		// publish the post-DDL barrier after the statement itself succeeds.
+		if _, err := vp.query(ctx, event.Statement); err != nil {
+			return false, err
+		}
+		sendStats()
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
+		if err != nil {
+			return false, err
+		}
+		if posReached {
+			return true, io.EOF
+		}
+		return true, nil
+	case binlogdatapb.OnDDLAction_EXEC_IGNORE:
+		executed := true
+		if _, err := vp.query(ctx, event.Statement); err != nil {
+			executed = false
+			log.Info(fmt.Sprintf("Ignoring error: %v for DDL: %s", err, event.Statement))
+		}
+		sendStats()
+		posReached, err := vp.updatePos(ctx, event.Timestamp)
+		if err != nil {
+			return executed, err
+		}
+		if posReached {
+			return executed, io.EOF
+		}
+		return executed, nil
+	default:
+		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "unsupported ddl action: %v", vp.vr.source.OnDdl)
+	}
 }

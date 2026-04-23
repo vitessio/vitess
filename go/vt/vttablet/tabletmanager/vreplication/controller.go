@@ -273,6 +273,10 @@ func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttable
 		maxRows); err != nil {
 		return err
 	}
+	if _, err := dbClient.ExecuteFetch("set @@session.sql_mode = REPLACE(REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''), 'NO_BACKSLASH_ESCAPES', '')",
+		maxRows); err != nil {
+		return err
+	}
 	return nil
 }
 

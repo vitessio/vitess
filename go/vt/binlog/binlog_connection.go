@@ -141,8 +141,11 @@ func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, bin
 // streamEvents returns a channel on which events are streamed and a channel on
 // which errors are propagated.
 func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.BinlogEvent, chan error) {
-	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
-	eventChan := make(chan mysql.BinlogEvent)
+	// Buffer the event channel so the binlog reader goroutine can make
+	// progress without blocking on the consumer for every single event.
+	// An unbuffered channel here forces a context switch per event, which
+	// becomes a throughput bottleneck at high event rates.
+	eventChan := make(chan mysql.BinlogEvent, 10)
 	errChan := make(chan error)
 
 	// Start reading events.

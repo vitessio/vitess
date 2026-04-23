@@ -70,6 +70,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				HeartbeatUpdateInterval:                2,
 				StoreCompressedGTID:                    true,
 				ParallelInsertWorkers:                  4,
+				ParallelReplicationWorkers:             1, // flag default
 				VStreamPacketSize:                      1024,
 				VStreamDynamicPacketSize:               false,
 				VStreamBinlogRotationThreshold:         2048,
@@ -124,6 +125,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				HeartbeatUpdateInterval:          DefaultVReplicationConfig.HeartbeatUpdateInterval,
 				StoreCompressedGTID:              !DefaultVReplicationConfig.StoreCompressedGTID,
 				ParallelInsertWorkers:            DefaultVReplicationConfig.ParallelInsertWorkers,
+				ParallelReplicationWorkers:       DefaultVReplicationConfig.ParallelReplicationWorkers,
 				VStreamPacketSize:                DefaultVReplicationConfig.VStreamPacketSize,
 				VStreamDynamicPacketSize:         !DefaultVReplicationConfig.VStreamDynamicPacketSize,
 				VStreamBinlogRotationThreshold:   DefaultVReplicationConfig.VStreamBinlogRotationThreshold,
@@ -160,4 +162,83 @@ func TestNewVReplicationConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVReplicationConfigSourceOverrides(t *testing.T) {
+	config, err := NewVReplicationConfig(map[string]string{
+		"vreplication-parallel-replication-workers": "4",
+		"vreplication-parallel-insert-workers":      "8",
+		"vstream-packet-size":                       "1024",
+		"vstream_dynamic_packet_size":               "false",
+		"vstream_binlog_rotation_threshold":         "2048",
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{
+		"vstream-packet-size":               "1024",
+		"vstream-dynamic-packet-size":       "false",
+		"vstream_binlog_rotation_threshold": "2048",
+	}, config.SourceOverrides())
+}
+
+func TestVReplicationConfigSourceOverridesUseEffectiveValues(t *testing.T) {
+	config, err := NewVReplicationConfig(map[string]string{
+		"vstream-packet-size": "1024",
+		"vstream_packet_size": "2048",
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{
+		"vstream-packet-size": "2048",
+	}, config.SourceOverrides())
+}
+
+// TestVReplicationConfigRejectsInvalidParallelWorkers verifies that
+// negative worker counts are rejected at config-parse time. 0 is allowed
+// (documented as "disable parallel apply"); see
+// TestVReplicationConfigAcceptsZeroParallelReplicationWorkers below.
+func TestVReplicationConfigRejectsInvalidParallelWorkers(t *testing.T) {
+	for _, bad := range []string{"-1", "-5"} {
+		t.Run(bad, func(t *testing.T) {
+			_, err := NewVReplicationConfig(map[string]string{
+				"vreplication-parallel-replication-workers": bad,
+			})
+			require.Error(t, err, "expected error for invalid value %q", bad)
+			require.Contains(t, err.Error(), "vreplication-parallel-replication-workers")
+			require.Contains(t, err.Error(), "must be >= 0")
+		})
+	}
+}
+
+func TestVReplicationConfigAcceptsZeroParallelReplicationWorkers(t *testing.T) {
+	config, err := NewVReplicationConfig(map[string]string{
+		"vreplication-parallel-replication-workers": "0",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, config.ParallelReplicationWorkers)
+}
+
+func TestVReplicationConfigSourceOverridesIncludeSourceConsumedWorkflowKeys(t *testing.T) {
+	config, err := NewVReplicationConfig(map[string]string{
+		"vreplication-experimental-flags":           "3",
+		"vreplication-net-read-timeout":             "123",
+		"vreplication-net-write-timeout":            "456",
+		"vreplication-copy-phase-duration":          "2h",
+		"vreplication-parallel-replication-workers": "4",
+		"vreplication-parallel-insert-workers":      "8",
+		"vstream-packet-size":                       "1024",
+		"vstream_dynamic_packet_size":               "false",
+		"vstream_binlog_rotation_threshold":         "2048",
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{
+		"vreplication-experimental-flags":   "3",
+		"vreplication-net-read-timeout":     "123",
+		"vreplication-net-write-timeout":    "456",
+		"vreplication-copy-phase-duration":  "2h",
+		"vstream-packet-size":               "1024",
+		"vstream-dynamic-packet-size":       "false",
+		"vstream_binlog_rotation_threshold": "2048",
+	}, config.SourceOverrides())
 }

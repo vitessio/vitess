@@ -17,6 +17,7 @@ limitations under the License.
 package vitessdriver
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -208,11 +209,11 @@ func TestBuildBindVariable(t *testing.T) {
 	}{
 		{
 			name: "json bytes become varchar",
-			in:   []byte("[]"),
+			in:   json.RawMessage("[]"),
 			out:  sqltypes.StringBindVariable("[]"),
 		},
 		{
-			name: "binary bytes become varchar",
+			name: "binary bytes stay varbinary",
 			in:   []byte{0x00, 0xff},
 			out: &querypb.BindVariable{
 				Type:  querypb.Type_VARCHAR,
@@ -244,4 +245,14 @@ func TestBuildBindVariable(t *testing.T) {
 			require.Equal(t, tcase.out, bv)
 		})
 	}
+}
+
+func TestBuildBindVariable_JSONMarshalBytesBecomeVarchar(t *testing.T) {
+	payload, err := json.Marshal([]string{})
+	require.NoError(t, err)
+
+	convert := &converter{location: time.UTC}
+	bv, err := convert.BuildBindVariable(payload)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.StringBindVariable("[]"), bv)
 }

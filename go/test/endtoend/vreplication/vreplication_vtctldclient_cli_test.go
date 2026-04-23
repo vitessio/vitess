@@ -226,6 +226,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	tables := "customer,customer2"
 	overrides := map[string]string{
 		"vreplication-net-read-timeout":                     "6000",
+		"vreplication-parallel-replication-workers":         "3",
 		utils.GetFlagVariantForTests("relay-log-max-items"): "10000",
 		"vreplication-parallel-insert-workers":              "10",
 	}
@@ -497,8 +498,9 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 		{
 			name: "two values",
 			config: map[string]string{
-				"vreplication-heartbeat-update-interval": "100",
-				"vreplication-store-compressed-gtid":     "true",
+				"vreplication-heartbeat-update-interval":    "100",
+				"vreplication-store-compressed-gtid":        "true",
+				"vreplication-parallel-replication-workers": "5",
 			},
 		},
 		{

@@ -22,6 +22,9 @@ package onlineddl
 
 import (
 	"context"
+	"fmt"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,13 +37,20 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestShouldCutOverAccordingToBackoff(t *testing.T) {
@@ -338,6 +348,511 @@ func TestExecuteDirectlySetsLockWaitTimeout(t *testing.T) {
 	assert.Contains(t, queryLog, "set @lock_wait_timeout=@@session.lock_wait_timeout")
 	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=5")
 	assert.Contains(t, queryLog, "set @@session.lock_wait_timeout=@lock_wait_timeout")
+}
+
+func TestShouldPreBufferWaitForParallelApply(t *testing.T) {
+	config := vttablet.InitVReplicationConfigDefaults()
+	savedParallelWorkers := config.ParallelReplicationWorkers
+	t.Cleanup(func() {
+		config.ParallelReplicationWorkers = savedParallelWorkers
+	})
+
+	config.ParallelReplicationWorkers = 1
+	shouldWait, err := shouldPreBufferWaitForParallelApply(nil)
+	require.NoError(t, err)
+	require.False(t, shouldWait)
+
+	config.ParallelReplicationWorkers = 2
+	shouldWait, err = shouldPreBufferWaitForParallelApply(nil)
+	require.NoError(t, err)
+	require.True(t, shouldWait)
+}
+
+func TestShouldPreBufferWaitForParallelApplyPrefersWorkflowOverride(t *testing.T) {
+	config := vttablet.InitVReplicationConfigDefaults()
+	savedParallelWorkers := config.ParallelReplicationWorkers
+	t.Cleanup(func() {
+		config.ParallelReplicationWorkers = savedParallelWorkers
+	})
+
+	config.ParallelReplicationWorkers = 1
+
+	stream := &VReplStream{}
+	stream.bls = &binlogdatapb.BinlogSource{}
+	stream.options = `{"config":{"vreplication-parallel-replication-workers":"2"}}`
+
+	shouldWait, err := shouldPreBufferWaitForParallelApply(stream)
+	require.NoError(t, err)
+	require.True(t, shouldWait)
+}
+
+func TestShouldPreBufferWaitForParallelApplyRejectsInvalidWorkflowOverride(t *testing.T) {
+	config := vttablet.InitVReplicationConfigDefaults()
+	savedParallelWorkers := config.ParallelReplicationWorkers
+	t.Cleanup(func() {
+		config.ParallelReplicationWorkers = savedParallelWorkers
+	})
+
+	config.ParallelReplicationWorkers = 2
+
+	stream := &VReplStream{}
+	stream.bls = &binlogdatapb.BinlogSource{}
+	stream.options = `{"config":{"vreplication-parallel-replication-workers":"not-an-int"}}`
+
+	_, err := shouldPreBufferWaitForParallelApply(stream)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "invalid value for vreplication-parallel-replication-workers")
+}
+
+func TestShouldPreBufferWaitForParallelApplyIgnoresUnknownWorkflowOverrideKeys(t *testing.T) {
+	config := vttablet.InitVReplicationConfigDefaults()
+	savedParallelWorkers := config.ParallelReplicationWorkers
+	t.Cleanup(func() {
+		config.ParallelReplicationWorkers = savedParallelWorkers
+	})
+
+	config.ParallelReplicationWorkers = 2
+
+	stream := &VReplStream{}
+	stream.bls = &binlogdatapb.BinlogSource{}
+	stream.options = `{"config":{"user":"admin","password":"secret"}}`
+
+	shouldWait, err := shouldPreBufferWaitForParallelApply(stream)
+	require.NoError(t, err)
+	require.True(t, shouldWait)
+}
+
+type recordingTabletManagerClient struct {
+	tmclient.TabletManagerClient
+
+	mu                 sync.Mutex
+	waitCalls          []string
+	waitErr            error
+	waitErrs           []error
+	refreshStateCalled int
+}
+
+func (c *recordingTabletManagerClient) Close() {}
+
+func (c *recordingTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
+	return nil
+}
+
+func (c *recordingTabletManagerClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.refreshStateCalled++
+	return nil
+}
+
+func (c *recordingTabletManagerClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.waitCalls = append(c.waitCalls, pos)
+	if len(c.waitErrs) > 0 {
+		err := c.waitErrs[0]
+		c.waitErrs = c.waitErrs[1:]
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	if c.waitErr != nil {
+		return c.waitErr
+	}
+	return nil
+}
+
+func (c *recordingTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	return &querypb.QueryResult{}, nil
+}
+
+func (c *recordingTabletManagerClient) WaitCalls() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.waitCalls...)
+}
+
+func (c *recordingTabletManagerClient) RefreshStateCalled() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.refreshStateCalled
+}
+
+func newCutoverTestExecutor(t *testing.T, db *fakesqldb.DB, ts *topo.Server, alias *topodatapb.TabletAlias) *Executor {
+	t.Helper()
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), db.ConnParams().DbName)
+	venv := vtenv.NewTestEnv()
+
+	executor := &Executor{
+		env:         tabletenv.NewEnv(venv, cfg, "ExecutorTest"),
+		ts:          ts,
+		tabletAlias: alias,
+		ticks:       timer.NewTimer(migrationCheckInterval),
+		isPreparedPoolEmpty: func(tableName string) bool {
+			return false
+		},
+	}
+	executor.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
+		loweredQuery := strings.ToLower(query)
+		switch {
+		case strings.Contains(loweredQuery, "from _vt.schema_migrations"):
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|keyspace|mysql_table|mysql_schema|migration_statement|strategy|options|migration_status|retries|ready_to_complete|was_ready_to_complete|tablet|migration_context|cutover_threshold_seconds|shadow_analyzed_timestamp", "varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|int64|int64|int64|varchar|varchar|int64|varchar"),
+				strings.Join([]string{
+					t.Name(),
+					"ks",
+					"t1",
+					db.ConnParams().DbName,
+					"alter table t1 add column i int",
+					"vitess",
+					"-vreplication-test-suite",
+					"running",
+					"0",
+					"1",
+					"1",
+					"cell-0000000001",
+					"",
+					"5",
+					"null",
+				}, "|"),
+			), nil
+		case strings.Contains(loweredQuery, "from _vt.vreplication_log"):
+			return &sqltypes.Result{Fields: sqltypes.MakeTestFields("state|message", "varchar|varchar")}, nil
+		case strings.Contains(loweredQuery, "from _vt.vreplication"):
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("id|workflow|source|options|pos|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|reason_throttled|state|message|rows_copied", "int64|varchar|varchar|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar|varchar|int64"),
+				"1|"+t.Name()+"|keyspace:\"ks\" shard:\"0\" filter:{rules:{match:\"_vt_HOLD_"+t.Name()+"\"}}|{\"config\":{\"vreplication-parallel-replication-workers\":\"2\"}}|MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-4|1|1|1|0|||Running||10",
+			), nil
+		default:
+			return &sqltypes.Result{}, nil
+		}
+	}
+	executor.pool = connpool.NewPool(executor.env, "OnlineDDLExecutorPoolTest", tabletenv.ConnPoolConfig{
+		Size:        databasePoolSize,
+		IdleTimeout: executor.env.Config().OltpReadPool.IdleTimeout,
+	})
+	executor.pool.Open(executor.env.Config().DB.AppWithDB(), executor.env.Config().DB.DbaWithDB(), executor.env.Config().DB.AppDebugWithDB())
+	t.Cleanup(executor.pool.Close)
+
+	return executor
+}
+
+func TestCutOverVReplMigrationBuffersBeforeParallelApplyCatchUpWait(t *testing.T) {
+	ctx := t.Context()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+
+	waitErr := vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "vreplication still catching up")
+	tmClient := &recordingTabletManagerClient{waitErr: waitErr}
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		return tmClient
+	})
+
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	ts := memorytopo.NewServer(ctx, "cell")
+	err := ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	})
+	require.NoError(t, err)
+
+	addSessionTimeoutQueries := func(lockWaitSeconds int64) {
+		db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("set @@session.lock_wait_timeout=%d", lockWaitSeconds), &sqltypes.Result{})
+		db.AddQuery("set @wait_timeout=@@session.wait_timeout", &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("set @@session.wait_timeout=%d", int64(waitTimeoutDuringCutOver.Seconds())), &sqltypes.Result{})
+		db.AddQuery("set @@session.wait_timeout=@wait_timeout", &sqltypes.Result{})
+		db.AddQuery("set @@session.lock_wait_timeout=@lock_wait_timeout", &sqltypes.Result{})
+	}
+	addSessionTimeoutQueries(15)
+	addSessionTimeoutQueries(10)
+
+	db.AddQuery("show global variables like 'rename_table_preserve_foreign_key'", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.gtid_executed", "varchar"),
+		"3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+	))
+	db.AddQueryPattern(`(?is)^drop table if exists .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^unlock tables$`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^kill \d+$`, &sqltypes.Result{})
+
+	executor := newCutoverTestExecutor(t, db, ts, alias)
+
+	bufferEvents := []bool{}
+	var bufferMu sync.Mutex
+	executor.toggleBufferTableFunc = func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
+		bufferMu.Lock()
+		defer bufferMu.Unlock()
+		bufferEvents = append(bufferEvents, bufferQueries)
+	}
+
+	stream := &VReplStream{
+		id:       1,
+		workflow: t.Name(),
+		options:  `{"config":{"vreplication-parallel-replication-workers":"2"}}`,
+		bls: &binlogdatapb.BinlogSource{
+			Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "_vt_HOLD_" + t.Name()}}},
+		},
+	}
+
+	err = executor.cutOverVReplMigration(ctx, stream, true)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "checking prepared pool for table")
+
+	bufferMu.Lock()
+	bufferEventsCopy := append([]bool(nil), bufferEvents...)
+	bufferMu.Unlock()
+	assert.Equal(t, []bool{true, false}, bufferEventsCopy)
+	assert.Equal(t, 1, tmClient.RefreshStateCalled())
+	assert.Len(t, tmClient.WaitCalls(), 0)
+}
+
+func TestCutOverVReplMigrationWaitsForParallelApplyAfterLocking(t *testing.T) {
+	ctx := t.Context()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+
+	waitErr := vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "vreplication still catching up")
+	tmClient := &recordingTabletManagerClient{waitErrs: []error{nil, waitErr}}
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		return tmClient
+	})
+
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	ts := memorytopo.NewServer(ctx, "cell")
+	err := ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	})
+	require.NoError(t, err)
+
+	addSessionTimeoutQueries := func(lockWaitSeconds int64) {
+		db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("set @@session.lock_wait_timeout=%d", lockWaitSeconds), &sqltypes.Result{})
+		db.AddQuery("set @wait_timeout=@@session.wait_timeout", &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("set @@session.wait_timeout=%d", int64(waitTimeoutDuringCutOver.Seconds())), &sqltypes.Result{})
+		db.AddQuery("set @@session.wait_timeout=@wait_timeout", &sqltypes.Result{})
+		db.AddQuery("set @@session.lock_wait_timeout=@lock_wait_timeout", &sqltypes.Result{})
+	}
+	addSessionTimeoutQueries(15)
+	addSessionTimeoutQueries(10)
+
+	db.AddQuery("show global variables like 'rename_table_preserve_foreign_key'", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.gtid_executed", "varchar"),
+		"3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+	))
+	db.AddQueryPattern(`(?is)^update _vt\.schema_migrations set artifacts=.*$`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^drop table if exists .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^create table if not exists .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^lock tables .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^unlock tables$`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^kill \d+$`, &sqltypes.Result{})
+
+	executor := newCutoverTestExecutor(t, db, ts, alias)
+	executor.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
+		loweredQuery := strings.ToLower(query)
+		switch {
+		case strings.Contains(loweredQuery, "from _vt.schema_migrations"):
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|keyspace|mysql_table|mysql_schema|migration_statement|strategy|options|migration_status|retries|ready_to_complete|was_ready_to_complete|tablet|migration_context|cutover_threshold_seconds|shadow_analyzed_timestamp", "varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|int64|int64|int64|varchar|varchar|int64|varchar"),
+				strings.Join([]string{
+					t.Name(),
+					"ks",
+					"t1",
+					params.DbName,
+					"alter table t1 add column i int",
+					"vitess",
+					"",
+					"running",
+					"0",
+					"1",
+					"1",
+					"cell-0000000001",
+					"",
+					"5",
+					"done",
+				}, "|"),
+			), nil
+		case strings.Contains(loweredQuery, "select id, info as info from information_schema.processlist"):
+			return &sqltypes.Result{Fields: sqltypes.MakeTestFields("id|info", "int64|varchar")}, nil
+		case strings.Contains(loweredQuery, "from _vt.vreplication_log"):
+			return &sqltypes.Result{Fields: sqltypes.MakeTestFields("state|message", "varchar|varchar")}, nil
+		case strings.Contains(loweredQuery, "from _vt.vreplication"):
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("id|workflow|source|options|pos|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|reason_throttled|state|message|rows_copied", "int64|varchar|varchar|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar|varchar|int64"),
+				"1|"+t.Name()+"|keyspace:\"ks\" shard:\"0\" filter:{rules:{match:\"_vt_HOLD_"+t.Name()+"\"}}|{\"config\":{\"vreplication-parallel-replication-workers\":\"2\"}}|MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-4|1|1|1|0|||Running||10",
+			), nil
+		default:
+			return &sqltypes.Result{}, nil
+		}
+	}
+
+	bufferEvents := []bool{}
+	var bufferMu sync.Mutex
+	executor.toggleBufferTableFunc = func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
+		bufferMu.Lock()
+		defer bufferMu.Unlock()
+		bufferEvents = append(bufferEvents, bufferQueries)
+	}
+
+	stream := &VReplStream{
+		id:       1,
+		workflow: t.Name(),
+		options:  `{"config":{"vreplication-parallel-replication-workers":"2"}}`,
+		bls: &binlogdatapb.BinlogSource{
+			Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "_vt_HOLD_" + t.Name()}}},
+		},
+	}
+
+	err = executor.cutOverVReplMigration(ctx, stream, false)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "failed waiting for vreplication to catch up before renaming")
+
+	bufferMu.Lock()
+	bufferEventsCopy := append([]bool(nil), bufferEvents...)
+	bufferMu.Unlock()
+	assert.Equal(t, []bool{true, false}, bufferEventsCopy)
+	assert.Equal(t, 1, tmClient.RefreshStateCalled())
+	assert.Len(t, tmClient.WaitCalls(), 2)
+	assert.NotContains(t, db.QueryLog(), "rename table")
+}
+
+func TestCutOverVReplMigrationSkipsSecondPostLockWaitAfterParallelApplyCatchUp(t *testing.T) {
+	ctx := t.Context()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+
+	protocolName := t.Name()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocolName)
+	defer resetProtocol()
+
+	waitErr := vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "unexpected extra wait after parallel apply catch up")
+	tmClient := &recordingTabletManagerClient{waitErrs: []error{nil, nil, waitErr}}
+	tmclient.RegisterTabletManagerClientFactory(protocolName, func() tmclient.TabletManagerClient {
+		return tmClient
+	})
+
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	ts := memorytopo.NewServer(ctx, "cell")
+	err := ts.CreateTablet(ctx, &topodatapb.Tablet{
+		Alias:    alias,
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	})
+	require.NoError(t, err)
+
+	addSessionTimeoutQueries := func(lockWaitSeconds int64) {
+		db.AddQuery("set @lock_wait_timeout=@@session.lock_wait_timeout", &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("set @@session.lock_wait_timeout=%d", lockWaitSeconds), &sqltypes.Result{})
+		db.AddQuery("set @wait_timeout=@@session.wait_timeout", &sqltypes.Result{})
+		db.AddQuery(fmt.Sprintf("set @@session.wait_timeout=%d", int64(waitTimeoutDuringCutOver.Seconds())), &sqltypes.Result{})
+		db.AddQuery("set @@session.wait_timeout=@wait_timeout", &sqltypes.Result{})
+		db.AddQuery("set @@session.lock_wait_timeout=@lock_wait_timeout", &sqltypes.Result{})
+	}
+	addSessionTimeoutQueries(15)
+	addSessionTimeoutQueries(10)
+
+	db.AddQuery("show global variables like 'rename_table_preserve_foreign_key'", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.gtid_executed", "varchar"),
+		"3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+	))
+	db.AddQueryPattern(`(?is)^update _vt\.schema_migrations set artifacts=.*$`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^drop table if exists .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^create table if not exists .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^lock tables .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^rename table .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^drop table .*`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^unlock tables$`, &sqltypes.Result{})
+	db.AddQueryPattern(`(?is)^kill \d+$`, &sqltypes.Result{})
+
+	executor := newCutoverTestExecutor(t, db, ts, alias)
+	executor.execQuery = func(ctx context.Context, query string) (*sqltypes.Result, error) {
+		loweredQuery := strings.ToLower(query)
+		switch {
+		case strings.Contains(loweredQuery, "from _vt.schema_migrations"):
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("migration_uuid|keyspace|mysql_table|mysql_schema|migration_statement|strategy|options|migration_status|retries|ready_to_complete|was_ready_to_complete|tablet|migration_context|cutover_threshold_seconds|shadow_analyzed_timestamp", "varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|int64|int64|int64|varchar|varchar|int64|varchar"),
+				strings.Join([]string{
+					t.Name(),
+					"ks",
+					"t1",
+					params.DbName,
+					"alter table t1 add column i int",
+					"vitess",
+					"",
+					"running",
+					"0",
+					"1",
+					"1",
+					"cell-0000000001",
+					"",
+					"5",
+					"done",
+				}, "|"),
+			), nil
+		case strings.Contains(loweredQuery, "select id, info as info from information_schema.processlist"):
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("id|info", "int64|varchar"),
+				"3|rename table `t1` to `_vt_hld_dummy`",
+			), nil
+		case strings.Contains(loweredQuery, "from _vt.vreplication_log"):
+			return &sqltypes.Result{Fields: sqltypes.MakeTestFields("state|message", "varchar|varchar")}, nil
+		case strings.Contains(loweredQuery, "from _vt.vreplication"):
+			return sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("id|workflow|source|options|pos|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|reason_throttled|state|message|rows_copied", "int64|varchar|varchar|varchar|varchar|int64|int64|int64|int64|varchar|varchar|varchar|varchar|int64"),
+				"1|"+t.Name()+"|keyspace:\"ks\" shard:\"0\" filter:{rules:{match:\"_vt_HOLD_"+t.Name()+"\"}}|{\"config\":{\"vreplication-parallel-replication-workers\":\"2\"}}|MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-4|1|1|1|0|||Running||10",
+			), nil
+		default:
+			return &sqltypes.Result{}, nil
+		}
+	}
+
+	bufferEvents := []bool{}
+	var bufferMu sync.Mutex
+	executor.toggleBufferTableFunc = func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool) {
+		bufferMu.Lock()
+		defer bufferMu.Unlock()
+		bufferEvents = append(bufferEvents, bufferQueries)
+	}
+
+	stream := &VReplStream{
+		id:       1,
+		workflow: t.Name(),
+		options:  `{"config":{"vreplication-parallel-replication-workers":"2"}}`,
+		bls: &binlogdatapb.BinlogSource{
+			Filter: &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "_vt_HOLD_" + t.Name()}}},
+		},
+	}
+
+	err = executor.cutOverVReplMigration(ctx, stream, false)
+	require.NoError(t, err)
+
+	bufferMu.Lock()
+	bufferEventsCopy := append([]bool(nil), bufferEvents...)
+	bufferMu.Unlock()
+	assert.Equal(t, []bool{true, false}, bufferEventsCopy)
+	assert.Equal(t, 1, tmClient.RefreshStateCalled())
+	assert.Len(t, tmClient.WaitCalls(), 2)
+	assert.Contains(t, strings.ToLower(db.QueryLog()), "rename table")
 }
 
 type fakeTabletManagerClient struct {

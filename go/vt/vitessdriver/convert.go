@@ -18,6 +18,7 @@ package vitessdriver
 
 import (
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -63,6 +64,11 @@ func (cv *converter) BuildBindVariable(v any) (*querypb.BindVariable, error) {
 		}
 		// sending through string values matches the behavior in go-sql-driver and
 		// is necessary for json values to be handled without erroring in vttablet.
+		return sqltypes.StringBindVariable(string(t)), nil
+	case json.RawMessage:
+		if t == nil {
+			return sqltypes.NullBindVariable, nil
+		}
 		return sqltypes.StringBindVariable(string(t)), nil
 	default:
 		return sqltypes.BuildBindVariable(v)

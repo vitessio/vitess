@@ -158,7 +158,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		source:          source,
 		sourceVStreamer: sourceVStreamer,
 		stats:           stats,
-		dbClient:        newVDBClient(dbClient, stats, workflowConfig.RelayLogMaxItems),
+		dbClient:        newVDBClientWithID(dbClient, stats, workflowConfig.RelayLogMaxItems, id),
 		mysqld:          mysqld,
 		workflowConfig:  workflowConfig,
 	}
@@ -526,6 +526,19 @@ func (vr *vreplicator) insertLog(typ, message string) {
 }
 
 func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, message string) error {
+	return vr.setStateWithDBClient(vr.dbClient, state, message, false)
+}
+
+// setStateWithDBClientImmediate updates the stream state using the supplied
+// connection immediately, even when the connection is in batch mode. The
+// commitLoop uses this after a worker has already flushed its batch but before
+// COMMIT so the stop-state write stays in the same transaction as the row
+// changes and position update.
+func (vr *vreplicator) setStateWithDBClientImmediate(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string) error {
+	return vr.setStateWithDBClient(dbClient, state, message, true)
+}
+
+func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string, immediate bool) error {
 	if message != "" {
 		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
@@ -534,19 +547,19 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
-	// If we're batching a transaction, then include the state update
-	// in the current transaction batch.
-	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
-		vr.dbClient.AddQueryToTrxBatch(query)
-	} else { // Otherwise, send it down the wire
-		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+	if !immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0 {
+		if err := dbClient.AddQueryToTrxBatch(query); err != nil {
+			return fmt.Errorf("could not set state: %v: %v", query, err)
+		}
+	} else {
+		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 			return fmt.Errorf("could not set state: %v: %v", query, err)
 		}
 	}
 	if state == vr.state {
 		return nil
 	}
-	insertLog(vr.dbClient, LogStateChange, vr.id, state.String(), message)
+	insertLog(dbClient, LogStateChange, vr.id, state.String(), message)
 	vr.state = state
 
 	return nil
@@ -828,30 +841,18 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 }
 
 func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName string) ([]*sqlparser.IndexDefinition, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
-	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
-	// schema should never be nil, but check to be extra safe.
-	if schema == nil || len(schema.TableDefinitions) != 1 {
-		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
-			tableName, len(schema.TableDefinitions))
-	}
-	tableSchema := schema.TableDefinitions[0].Schema
-	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
-	if err != nil {
-		return secondaryKeys, err
-	}
-	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
-	// createTable or createTable.TableSpec should never be nil
-	// if it was a valid cast, but check to be extra safe.
-	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
-		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
-	}
+	return extractSecondaryKeys(tableSpec), nil
+}
 
-	tableSpec := createTable.GetTableSpec()
+func extractSecondaryKeys(tableSpec *sqlparser.TableSpec) []*sqlparser.IndexDefinition {
+	if tableSpec == nil {
+		return nil
+	}
+	var secondaryKeys []*sqlparser.IndexDefinition
 	fkIndexCols := make(map[string]bool)
 	for _, constraint := range tableSpec.Constraints {
 		if fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
@@ -875,7 +876,132 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}
-	return secondaryKeys, err
+	return secondaryKeys
+}
+
+func (vr *vreplicator) getTargetTableSpec(ctx context.Context, tableName string) (*sqlparser.TableSpec, error) {
+	if vr.mysqld == nil || vr.vre == nil || vr.vre.env == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing schema lookup dependencies for %s", tableName)
+	}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	if err != nil {
+		return nil, err
+	}
+	// schema should never be nil, but check to be extra safe.
+	if schema == nil || len(schema.TableDefinitions) != 1 {
+		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
+			tableName, len(schema.TableDefinitions))
+	}
+	tableSchema := schema.TableDefinitions[0].Schema
+	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
+	if err != nil {
+		return nil, err
+	}
+	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+	// createTable or createTable.TableSpec should never be nil
+	// if it was a valid cast, but check to be extra safe.
+	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
+		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
+	}
+	return createTable.GetTableSpec(), nil
+}
+
+func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableName string, plan *TablePlan) (bool, error) {
+	if plan == nil {
+		return false, nil
+	}
+	identityColSet := make(map[string]struct{}, len(plan.IdentityColumns))
+	for _, col := range plan.IdentityColumns {
+		identityColSet[col] = struct{}{}
+	}
+	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
+	if err != nil {
+		return false, err
+	}
+	if tableSpec == nil {
+		return false, nil
+	}
+	secondaryKeys := extractSecondaryKeys(tableSpec)
+	if len(secondaryKeys) == 0 {
+		return false, nil
+	}
+
+	identityCols := plan.IdentityColumns
+	if len(identityCols) == 0 {
+		return false, nil
+	}
+
+	primaryKeyMatchesIdentity := true
+	primaryKeyMatchesIdentitySet := len(identityColSet) == len(identityCols)
+	primaryKeyColumnCount := 0
+	for _, index := range tableSpec.Indexes {
+		if index == nil || index.Info == nil || index.Info.Type != sqlparser.IndexTypePrimary {
+			continue
+		}
+		primaryKeyColumnCount = len(index.Columns)
+		if primaryKeyColumnCount != len(identityCols) {
+			return true, nil
+		}
+		for i, idxCol := range index.Columns {
+			if idxCol.Expression != nil {
+				primaryKeyMatchesIdentity = false
+				primaryKeyMatchesIdentitySet = false
+				break
+			}
+			if idxCol.Length != nil {
+				primaryKeyMatchesIdentity = false
+				primaryKeyMatchesIdentitySet = false
+				break
+			}
+			colName := idxCol.Column.Lowered()
+			if colName != identityCols[i] {
+				primaryKeyMatchesIdentity = false
+			}
+			if _, ok := identityColSet[colName]; !ok {
+				primaryKeyMatchesIdentitySet = false
+			}
+		}
+		break
+	}
+	if primaryKeyColumnCount > 0 && !primaryKeyMatchesIdentity && !primaryKeyMatchesIdentitySet {
+		return true, nil
+	}
+
+	for _, secondaryKey := range secondaryKeys {
+		if secondaryKey == nil || secondaryKey.Info == nil || !secondaryKey.Info.IsUnique() {
+			continue
+		}
+		if len(secondaryKey.Columns) != len(identityCols) {
+			return true, nil
+		}
+		matchesIdentity := true
+		matchesIdentitySet := len(identityColSet) == len(identityCols)
+		for i, idxCol := range secondaryKey.Columns {
+			if idxCol.Expression != nil {
+				matchesIdentity = false
+				matchesIdentitySet = false
+				break
+			}
+			if idxCol.Length != nil {
+				matchesIdentity = false
+				matchesIdentitySet = false
+				break
+			}
+			colName := idxCol.Column.Lowered()
+			if colName != identityCols[i] {
+				matchesIdentity = false
+			}
+			if _, ok := identityColSet[colName]; !ok {
+				matchesIdentitySet = false
+			}
+		}
+		if matchesIdentity || matchesIdentitySet {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {
@@ -1144,7 +1270,7 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 	if err := dbc.Connect(); err != nil {
 		return nil, vterrors.Wrap(err, "can't connect to database")
 	}
-	dbClient := newVDBClient(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems)
+	dbClient := newVDBClientWithID(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems, vr.id)
 	if _, err := vr.setSQLMode(ctx, dbClient); err != nil {
 		return nil, vterrors.Wrap(err, "failed to set sql_mode")
 	}
