@@ -31,9 +31,7 @@ import (
 	"github.com/gorilla/mux"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	otgrpc "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
@@ -41,6 +39,7 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/reflection"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -64,7 +63,7 @@ type Options struct {
 	// AllowReflection specifies whether to register the gRPC server for
 	// reflection. This is required to use with tools like grpc_cli.
 	AllowReflection bool
-	// EnableTracing specifies whether to install opentracing interceptors on
+	// EnableTracing specifies whether to install tracing interceptors on
 	// the gRPC server.
 	EnableTracing bool
 	// EnableChannelz specifies whether to register the channelz service on the
@@ -107,16 +106,17 @@ type Server struct {
 // The full list of interceptors is as follows:
 // - (optional) interceptors defined on the Options struct
 // - prometheus
-// - (optional) opentracing, if opts.EnableTracing is set
+// - (optional) tracing, if opts.EnableTracing is set
 // - recovery
 func New(name string, opts Options) *Server {
 	streamInterceptors := append(opts.StreamInterceptors, grpc_prometheus.StreamServerInterceptor)
 	unaryInterceptors := append(opts.UnaryInterceptors, grpc_prometheus.UnaryServerInterceptor)
 
 	if opts.EnableTracing {
-		tracer := opentracing.GlobalTracer()
-		streamInterceptors = append(streamInterceptors, otgrpc.StreamServerInterceptor(otgrpc.WithTracer(tracer)))
-		unaryInterceptors = append(unaryInterceptors, otgrpc.UnaryServerInterceptor(otgrpc.WithTracer(tracer)))
+		trace.AddGrpcServerOptions(func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor) {
+			streamInterceptors = append(streamInterceptors, s)
+			unaryInterceptors = append(unaryInterceptors, u)
+		})
 	}
 
 	streamInterceptors = append(streamInterceptors, func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
