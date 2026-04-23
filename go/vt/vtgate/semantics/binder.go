@@ -299,6 +299,16 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		if !thisDeps.empty() {
 			return thisDeps.get(colName)
 		}
+		// For parent scopes only (not the original scope), check if a
+		// SELECT alias satisfies the column reference. Table columns from
+		// resolveColumnInScope above take precedence over aliases.
+		// Same-scope alias references (e.g. SELECT 1 AS x, x) are not
+		// valid in MySQL, so this is gated on !first.
+		if !first && colName.Qualifier.IsEmpty() {
+			if sel, ok := current.stmt.(*sqlparser.Select); ok && hasMatchingAlias(sel, colName.Name.String()) {
+				return dependency{}, nil
+			}
+		}
 		if current.parent == nil &&
 			len(current.tables) == 1 &&
 			first &&
@@ -461,6 +471,20 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 		return nil, NotSingleRouteErr{Inner: newAmbiguousColumnError(expr)}
 	}
 	return deps, nil
+}
+
+func hasMatchingAlias(sel *sqlparser.Select, name string) bool {
+	lowered := strings.ToLower(name)
+	for _, selExpr := range sel.SelectExprs.Exprs {
+		ae, ok := selExpr.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		if ae.As.Lowered() == lowered {
+			return true
+		}
+	}
+	return false
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery

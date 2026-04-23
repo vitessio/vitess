@@ -1114,7 +1114,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
