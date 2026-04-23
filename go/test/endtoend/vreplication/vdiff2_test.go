@@ -272,7 +272,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		waitForShardsToCatchup()
 
 		// This flag is only implemented in vtctldclient.
-		doVtctldclientVDiff(t, tc.targetKs, tc.workflow, allCellNames, nil, "--max-diff-duration", diffDuration)
+		doVtctldclientVDiffWithTimeout(t, tc.targetKs, tc.workflow, allCellNames, nil, maxDiffDurationTimeout, "--max-diff-duration", diffDuration)
 
 		// Confirm that the customer table diff was restarted but not others.
 		tablet := vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0])
