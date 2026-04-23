@@ -42952,8 +42952,8 @@ export namespace query {
         HEXVAL = 4129,
         BITNUM = 4130,
         VECTOR = 2083,
-        RAW = 2084,
-        ROW_TUPLE = 2085
+        RAW = 36,
+        ROW_TUPLE = 37
     }
 
     /** Properties of a Value. */
