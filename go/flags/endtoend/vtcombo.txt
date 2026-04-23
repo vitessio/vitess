@@ -429,6 +429,7 @@ Flags:
       --vreplication-enable-http-log                                     Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.
       --vreplication-experimental-flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
       --vreplication-heartbeat-update-interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
+      --vreplication-max-row-json-bytes int                              Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.
       --vreplication-max-time-to-retry-on-error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
       --vreplication-net-read-timeout int                                Session value of net_read_timeout for vreplication, in seconds (default 300)
       --vreplication-net-write-timeout int                               Session value of net_write_timeout for vreplication, in seconds (default 600)
