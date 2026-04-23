@@ -489,7 +489,7 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "1 as 1"
+                  "1 as `1`"
                 ],
                 "Inputs": [
                   {
@@ -1319,7 +1319,7 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "1 as 1"
+                  "1 as `1`"
                 ],
                 "Inputs": [
                   {
@@ -1398,7 +1398,7 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "1 as 1"
+                  "1 as `1`"
                 ],
                 "Inputs": [
                   {

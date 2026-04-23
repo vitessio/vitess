@@ -9,12 +9,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(*) as count(*)"
+              "count(*) * count(*) as `count(*)`"
             ],
             "Inputs": [
               {
@@ -67,12 +67,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(`user`.col)",
+        "Aggregates": "sum(0) AS `sum(``user``.col)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "sum(`user`.col) * count(*) as sum(`user`.col)"
+              "sum(`user`.col) * count(*) as `sum(``user``.col)`"
             ],
             "Inputs": [
               {
@@ -125,12 +125,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(`user`.col)",
+        "Aggregates": "sum_count(0) AS `count(``user``.col)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(`user`.col) * count(*) as count(`user`.col)"
+              "count(`user`.col) * count(*) as `count(``user``.col)`"
             ],
             "Inputs": [
               {
@@ -183,7 +183,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0) AS max(`user`.col)",
+        "Aggregates": "max(0) AS `max(``user``.col)`",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -233,7 +233,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "min(0) AS min(user_extra.col)",
+        "Aggregates": "min(0) AS `min(user_extra.col)`",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -334,7 +334,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
+        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -445,7 +445,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_distinct(1) AS count(distinct id), sum_sum_distinct(2) AS sum(distinct id)",
+        "Aggregates": "sum_count_distinct(1) AS `count(distinct id)`, sum_sum_distinct(2) AS `sum(distinct id)`",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -476,7 +476,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_distinct(1|3) AS count(distinct col2)",
+        "Aggregates": "count_distinct(1|3) AS `count(distinct col2)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -508,7 +508,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count_distinct(0|1) AS count(distinct col2)",
+        "Aggregates": "count_distinct(0|1) AS `count(distinct col2)`",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -644,7 +644,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_distinct(1|3) AS sum(distinct col2)",
+        "Aggregates": "sum_distinct(1|3) AS `sum(distinct col2)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -676,7 +676,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1|3) AS min(distinct col2)",
+        "Aggregates": "min(1|3) AS `min(distinct col2)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -757,7 +757,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(2) AS count(*)",
+        "Aggregates": "sum_count_star(2) AS `count(*)`",
         "GroupBy": "(0|3), (1|4)",
         "ResultColumns": 3,
         "Inputs": [
@@ -839,7 +839,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(2) AS count(*)",
+        "Aggregates": "sum_count_star(2) AS `count(*)`",
         "GroupBy": "(1|3), (0|4)",
         "ResultColumns": 3,
         "Inputs": [
@@ -871,7 +871,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(2) AS count(*)",
+        "Aggregates": "sum_count_star(2) AS `count(*)`",
         "GroupBy": "(1|3), (0|4)",
         "ResultColumns": 3,
         "Inputs": [
@@ -903,7 +903,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "group_concat(0) AS Group Name",
+        "Aggregates": "group_concat(0) AS `Group Name`",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
@@ -1020,7 +1020,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1049,7 +1049,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "any_value(3) AS d, sum_count_star(4) AS count(*)",
+        "Aggregates": "any_value(3) AS d, sum_count_star(4) AS `count(*)`",
         "GroupBy": "(0|5), (1|6), (2|7)",
         "ResultColumns": 5,
         "Inputs": [
@@ -1081,7 +1081,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "any_value(3) AS d, sum_count_star(4) AS count(*)",
+        "Aggregates": "any_value(3) AS d, sum_count_star(4) AS `count(*)`",
         "GroupBy": "(0|5), (1|6), (2|7)",
         "ResultColumns": 5,
         "Inputs": [
@@ -1113,7 +1113,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(4) AS count(*)",
+        "Aggregates": "sum_count_star(4) AS `count(*)`",
         "GroupBy": "(3|5), (1|6), (0|7), (2|8)",
         "ResultColumns": 5,
         "Inputs": [
@@ -1145,7 +1145,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(4) AS count(*)",
+        "Aggregates": "sum_count_star(4) AS `count(*)`",
         "GroupBy": "(3|5), (1|6), (0|7), (2|8)",
         "ResultColumns": 5,
         "Inputs": [
@@ -1177,7 +1177,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(3) AS count(*)",
+        "Aggregates": "sum_count_star(3) AS `count(*)`",
         "GroupBy": "(0|4), (2|5), (1|6)",
         "ResultColumns": 4,
         "Inputs": [
@@ -1218,7 +1218,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*)",
+            "Aggregates": "sum_count_star(1) AS `count(*)`",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -1295,7 +1295,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "any_value(0) AS a, sum_count_star(1) AS count(*)",
+        "Aggregates": "any_value(0) AS a, sum_count_star(1) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1324,7 +1324,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS `count(*)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -1393,7 +1393,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1446,7 +1446,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS `count(*)`",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -1510,7 +1510,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1588,7 +1588,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_distinct(1|4) AS count(distinct col2), sum_distinct(2|4) AS sum(distinct col2)",
+        "Aggregates": "count_distinct(1|4) AS `count(distinct col2)`, sum_distinct(2|4) AS `sum(distinct col2)`",
         "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
@@ -1712,7 +1712,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1764,7 +1764,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS `count(*)`",
         "GroupBy": "0 COLLATE latin1_swedish_ci",
         "Inputs": [
           {
@@ -1795,7 +1795,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS `count(*)`",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2309,7 +2309,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_distinct(1 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+        "Aggregates": "count_distinct(1 COLLATE latin1_swedish_ci) AS `count(distinct textcol1)`",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -2345,7 +2345,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "constant_aggr(1) AS 1, sum_count(1) AS count(id)",
+            "Aggregates": "constant_aggr(1) AS `1`, sum_count(1) AS `count(id)`",
             "Inputs": [
               {
                 "OperatorType": "VindexLookup",
@@ -2404,12 +2404,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(*) as count(*)"
+              "count(*) * count(*) as `count(*)`"
             ],
             "Inputs": [
               {
@@ -2464,7 +2464,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "constant_aggr(1) AS 1, sum_count(1) AS count(id)",
+            "Aggregates": "constant_aggr(1) AS `1`, sum_count(1) AS `count(id)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2495,7 +2495,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS `count(*)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -2503,8 +2503,8 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":2 as a",
-              "count(*) * count(*) as count(*)",
-              ":3 as weight_string(`user`.a)"
+              "count(*) * count(*) as `count(*)`",
+              ":3 as `weight_string(``user``.a)`"
             ],
             "Inputs": [
               {
@@ -2555,7 +2555,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(1) AS count(user_extra.a)",
+        "Aggregates": "sum_count(1) AS `count(user_extra.a)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -2563,8 +2563,8 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":2 as a",
-              "count(*) * count(user_extra.a) as count(user_extra.a)",
-              ":3 as weight_string(`user`.a)"
+              "count(*) * count(user_extra.a) as `count(user_extra.a)`",
+              ":3 as `weight_string(``user``.a)`"
             ],
             "Inputs": [
               {
@@ -2615,17 +2615,17 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count(0) AS count(u.textcol1), sum_count(1) AS count(ue.foo)",
+        "Aggregates": "sum_count(0) AS `count(u.textcol1)`, sum_count(1) AS `count(ue.foo)`",
         "GroupBy": "(2|3)",
         "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(u.textcol1) * count(*) as count(u.textcol1)",
-              "count(*) * count(ue.foo) as count(ue.foo)",
+              "count(u.textcol1) * count(*) as `count(u.textcol1)`",
+              "count(*) * count(ue.foo) as `count(ue.foo)`",
               ":4 as bar",
-              ":5 as weight_string(us.bar)"
+              ":5 as `weight_string(us.bar)`"
             ],
             "Inputs": [
               {
@@ -2654,10 +2654,10 @@
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
-                          "count(*) * count(*) as count(*)",
-                          "count(ue.foo) * count(*) as count(ue.foo)",
+                          "count(*) * count(*) as `count(*)`",
+                          "count(ue.foo) * count(*) as `count(ue.foo)`",
                           ":3 as bar",
-                          ":4 as weight_string(us.bar)"
+                          ":4 as `weight_string(us.bar)`"
                         ],
                         "Inputs": [
                           {
@@ -2717,7 +2717,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1|4) AS min(distinct id), sum_distinct(2|5) AS sum(distinct col3)",
+        "Aggregates": "min(1|4) AS `min(distinct id)`, sum_distinct(2|5) AS `sum(distinct col3)`",
         "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
@@ -2749,7 +2749,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -2806,7 +2806,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_distinct(1|4) AS count(distinct val1), sum_count_star(2) AS count(*)",
+        "Aggregates": "count_distinct(1|4) AS `count(distinct val1)`, sum_count_star(2) AS `count(*)`",
         "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
@@ -2838,7 +2838,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS `count(*)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -2870,7 +2870,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_distinct(1|4) AS count(distinct tcol2), sum_distinct(2|4) AS sum(distinct tcol2)",
+        "Aggregates": "count_distinct(1|4) AS `count(distinct tcol2)`, sum_distinct(2|4) AS `sum(distinct tcol2)`",
         "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
@@ -2902,7 +2902,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_distinct(0|5) AS count(distinct tcol2), sum_count_star(2) AS count(*), sum_distinct(3|5) AS sum(distinct tcol2)",
+        "Aggregates": "count_distinct(0|5) AS `count(distinct tcol2)`, sum_count_star(2) AS `count(*)`, sum_distinct(3|5) AS `sum(distinct tcol2)`",
         "GroupBy": "(1|4)",
         "ResultColumns": 4,
         "Inputs": [
@@ -2934,7 +2934,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_distinct(1|2) AS count(distinct u.val2)",
+        "Aggregates": "count_distinct(1|2) AS `count(distinct u.val2)`",
         "GroupBy": "0 COLLATE latin1_swedish_ci",
         "ResultColumns": 2,
         "Inputs": [
@@ -3083,12 +3083,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(col)",
+        "Aggregates": "sum(0) AS `sum(col)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "sum(col) * count(*) as sum(col)"
+              "sum(col) * count(*) as `sum(col)`"
             ],
             "Inputs": [
               {
@@ -3143,7 +3143,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*)",
+            "Aggregates": "sum_count_star(1) AS `count(*)`",
             "GroupBy": "(0|2)",
             "Inputs": [
               {
@@ -3181,7 +3181,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum(1) AS sum(foo), sum(2) AS sum(bar)",
+            "Aggregates": "sum(1) AS `sum(foo)`, sum(2) AS `sum(bar)`",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
@@ -3257,7 +3257,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*)",
+            "Aggregates": "sum_count_star(1) AS `count(*)`",
             "GroupBy": "(0|2)",
             "Inputs": [
               {
@@ -3295,15 +3295,15 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count(1) AS count(u.`name`)",
+            "Aggregates": "sum_count(1) AS `count(u.``name``)`",
             "GroupBy": "(0|2)",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
                   ":2 as id",
-                  "count(*) * count(u.`name`) as count(u.`name`)",
-                  ":3 as weight_string(u.id)"
+                  "count(*) * count(u.`name`) as `count(u.``name``)`",
+                  ":3 as `weight_string(u.id)`"
                 ],
                 "Inputs": [
                   {
@@ -3397,15 +3397,15 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*)",
+            "Aggregates": "sum_count_star(1) AS `count(*)`",
             "GroupBy": "(0|2)",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
                   ":2 as id",
-                  "count(*) * count(*) as count(*)",
-                  ":3 as weight_string(u.id)"
+                  "count(*) * count(*) as `count(*)`",
+                  ":3 as `weight_string(u.id)`"
                 ],
                 "Inputs": [
                   {
@@ -3529,7 +3529,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*)",
+        "Aggregates": "any_value(0) AS id, sum_count_star(1) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3607,7 +3607,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS count(city)",
+        "Aggregates": "count(0) AS `count(city)`",
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
@@ -3648,12 +3648,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count_star(0) AS count(*)",
+        "Aggregates": "count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "1 as 1"
+              "1 as `1`"
             ],
             "Inputs": [
               {
@@ -3691,7 +3691,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS count(col)",
+        "Aggregates": "count(0) AS `count(col)`",
         "Inputs": [
           {
             "OperatorType": "Limit",
@@ -3759,7 +3759,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_star(1) AS count(*)",
+        "Aggregates": "count_star(1) AS `count(*)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -3767,8 +3767,8 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":1 as val1",
-              "1 as 1",
-              ":2 as weight_string(val1)"
+              "1 as `1`",
+              ":2 as `weight_string(val1)`"
             ],
             "Inputs": [
               {
@@ -3815,7 +3815,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":0 as id",
-              "count(*) = 1 as count(*) = 1"
+              "count(*) = 1 as `count(*) = 1`"
             ],
             "Inputs": [
               {
@@ -3825,7 +3825,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), constant_aggr(1) AS 1",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS `count(*)`, constant_aggr(1) AS `1`",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -3866,7 +3866,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count(1) AS count(`user`.intcol)",
+            "Aggregates": "sum_count(1) AS `count(``user``.intcol)`",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -3899,7 +3899,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "any_value(1) AS name, sum_count(2) AS count(m.predef1)",
+        "Aggregates": "any_value(1) AS `name`, sum_count(2) AS `count(m.predef1)`",
         "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
@@ -3907,9 +3907,9 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":3 as id",
-              ":0 as name",
-              "count(m.predef1) * count(*) as count(m.predef1)",
-              ":4 as weight_string(u.id)"
+              ":0 as `name`",
+              "count(m.predef1) * count(*) as `count(m.predef1)`",
+              ":4 as `weight_string(u.id)`"
             ],
             "Inputs": [
               {
@@ -3973,12 +3973,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(u.id)",
+        "Aggregates": "sum_count(0) AS `count(u.id)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(u.id) * coalesce(count(*), 1) as count(u.id)"
+              "count(u.id) * coalesce(count(*), 1) as `count(u.id)`"
             ],
             "Inputs": [
               {
@@ -4031,12 +4031,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(ue.id)",
+        "Aggregates": "sum_count(0) AS `count(ue.id)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(ue.id) as count(ue.id)"
+              "count(*) * count(ue.id) as `count(ue.id)`"
             ],
             "Inputs": [
               {
@@ -4232,7 +4232,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(1) AS count(*), any_value(2) AS col + 1",
+            "Aggregates": "sum_count_star(1) AS `count(*)`, any_value(2) AS `col + 1`",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -4321,12 +4321,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(*) as count(*)"
+              "count(*) * count(*) as `count(*)`"
             ],
             "Inputs": [
               {
@@ -4379,12 +4379,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * coalesce(count(*), 1) as count(*)"
+              "count(*) * coalesce(count(*), 1) as `count(*)`"
             ],
             "Inputs": [
               {
@@ -4437,14 +4437,14 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "GroupBy": "1",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * coalesce(count(*), 1) as count(*)",
+              "count(*) * coalesce(count(*), 1) as `count(*)`",
               ":2 as col"
             ],
             "Inputs": [
@@ -4499,16 +4499,16 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * coalesce(count(*), 1) as count(*)",
+              "count(*) * coalesce(count(*), 1) as `count(*)`",
               ":2 as col",
-              ":3 as weight_string(music.col)"
+              ":3 as `weight_string(music.col)`"
             ],
             "Inputs": [
               {
@@ -4568,14 +4568,14 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "GroupBy": "1",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * coalesce(count(*), 1) as count(*)",
+              "count(*) * coalesce(count(*), 1) as `count(*)`",
               ":2 as col"
             ],
             "Inputs": [
@@ -4630,16 +4630,16 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * coalesce(count(*), 1) as count(*)",
+              "count(*) * coalesce(count(*), 1) as `count(*)`",
               ":2 as col",
-              ":3 as weight_string(music.col)"
+              ":3 as `weight_string(music.col)`"
             ],
             "Inputs": [
               {
@@ -4699,12 +4699,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(*) as count(*)"
+              "count(*) * count(*) as `count(*)`"
             ],
             "Inputs": [
               {
@@ -4728,7 +4728,7 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "count(*) * count(*) as count(*)"
+                      "count(*) * count(*) as `count(*)`"
                     ],
                     "Inputs": [
                       {
@@ -4786,12 +4786,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(*) as count(*)"
+              "count(*) * count(*) as `count(*)`"
             ],
             "Inputs": [
               {
@@ -4805,7 +4805,7 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "count(*) * coalesce(count(*), 1) as count(*)",
+                      "count(*) * coalesce(count(*), 1) as `count(*)`",
                       ":2 as foo"
                     ],
                     "Inputs": [
@@ -4874,7 +4874,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(2) AS count(*)",
+        "Aggregates": "sum_count_star(2) AS `count(*)`",
         "GroupBy": "1, 0",
         "Inputs": [
           {
@@ -4882,7 +4882,7 @@
             "Expressions": [
               ":2 as col",
               ":3 as intcol",
-              "count(*) * count(*) as count(*)"
+              "count(*) * count(*) as `count(*)`"
             ],
             "Inputs": [
               {
@@ -5025,7 +5025,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Aggregates": "sum_count_star(0) AS `count(*)`",
             "GroupBy": "1",
             "Inputs": [
               {
@@ -5058,7 +5058,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "min(0 COLLATE latin1_swedish_ci) AS min(textcol1), max(1|4) AS max(textcol2), sum_distinct(2 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(3 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+        "Aggregates": "min(0 COLLATE latin1_swedish_ci) AS `min(textcol1)`, max(1|4) AS `max(textcol2)`, sum_distinct(2 COLLATE latin1_swedish_ci) AS `sum(distinct textcol1)`, count_distinct(3 COLLATE latin1_swedish_ci) AS `count(distinct textcol1)`",
         "ResultColumns": 4,
         "Inputs": [
           {
@@ -5089,7 +5089,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1 COLLATE latin1_swedish_ci) AS min(textcol1), max(2|5) AS max(textcol2), sum_distinct(3 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(4 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+        "Aggregates": "min(1 COLLATE latin1_swedish_ci) AS `min(textcol1)`, max(2|5) AS `max(textcol2)`, sum_distinct(3 COLLATE latin1_swedish_ci) AS `sum(distinct textcol1)`, count_distinct(4 COLLATE latin1_swedish_ci) AS `count(distinct textcol1)`",
         "GroupBy": "0",
         "ResultColumns": 5,
         "Inputs": [
@@ -5121,7 +5121,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(2) AS count(*)",
+        "Aggregates": "sum_count_star(2) AS `count(*)`",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -5152,14 +5152,14 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*), sum_count_star(1) AS count(*), sum_count(2) AS count(u.col)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`, sum_count_star(1) AS `count(*)`, sum_count(2) AS `count(u.col)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(*) as count(*)",
-              "count(*) * count(*) as count(*)",
-              "count(*) * count(u.col) as count(u.col)"
+              "count(*) * count(*) as `count(*)`",
+              "count(*) * count(*) as `count(*)`",
+              "count(*) * count(u.col) as `count(u.col)`"
             ],
             "Inputs": [
               {
@@ -5180,8 +5180,8 @@
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "count(*) * count(*) as count(*)",
-                      "count(u.col) * count(*) as count(u.col)"
+                      "count(*) * count(*) as `count(*)`",
+                      "count(u.col) * count(*) as `count(u.col)`"
                     ],
                     "Inputs": [
                       {
@@ -5235,7 +5235,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1|5) AS min(user_extra.foo), max(3|6) AS max(user_extra.bar)",
+        "Aggregates": "min(1|5) AS `min(user_extra.foo)`, max(3|6) AS `max(user_extra.bar)`",
         "GroupBy": "0, (2|4)",
         "ResultColumns": 4,
         "Inputs": [
@@ -5288,7 +5288,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max(u.foo * ue.bar)",
+        "Aggregates": "max(0|1) AS `max(u.foo * ue.bar)`",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -5339,7 +5339,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(`user`.foo + user_extra.bar)",
+        "Aggregates": "sum(0) AS `sum(``user``.foo + user_extra.bar)`",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5389,7 +5389,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
@@ -5401,9 +5401,9 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "count(*) * count(*) as count(*)",
-                  ":2 as `user`.id + user_extra.id",
-                  ":3 as weight_string(`user`.id + user_extra.id)"
+                  "count(*) * count(*) as `count(*)`",
+                  ":2 as ```user``.id + user_extra.id`",
+                  ":3 as `weight_string(``user``.id + user_extra.id)`"
                 ],
                 "Inputs": [
                   {
@@ -5458,13 +5458,13 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "1 + count(*) as 1 + count(*)"
+          "1 + count(*) as `1 + count(*)`"
         ],
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "constant_aggr(1) AS 1, sum_count_star(1) AS count(*)",
+            "Aggregates": "constant_aggr(1) AS `1`, sum_count_star(1) AS `count(*)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5495,19 +5495,19 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "greatest(sum(`user`.foo), sum(user_extra.bar)) as greatest(sum(`user`.foo), sum(user_extra.bar))"
+          "greatest(sum(`user`.foo), sum(user_extra.bar)) as `greatest(sum(``user``.foo), sum(user_extra.bar))`"
         ],
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum(0) AS sum(`user`.foo), sum(1) AS sum(user_extra.bar)",
+            "Aggregates": "sum(0) AS `sum(``user``.foo)`, sum(1) AS `sum(user_extra.bar)`",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "sum(`user`.foo) * count(*) as sum(`user`.foo)",
-                  "count(*) * sum(user_extra.bar) as sum(user_extra.bar)"
+                  "sum(`user`.foo) * count(*) as `sum(``user``.foo)`",
+                  "count(*) * sum(user_extra.bar) as `sum(user_extra.bar)`"
                 ],
                 "Inputs": [
                   {
@@ -5562,7 +5562,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "group_concat(0) AS group_concat(`user`.a)",
+        "Aggregates": "group_concat(0) AS `group_concat(``user``.a)`",
         "Inputs": [
           {
             "OperatorType": "Join",
@@ -5609,14 +5609,14 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*), any_value(1) AS any_value(u.`name`), any_value(2) AS any_value(ue.title)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`, any_value(1) AS `any_value(u.``name``)`, any_value(2) AS `any_value(ue.title)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(*) as count(*)",
-              ":2 as any_value(u.`name`)",
-              ":3 as any_value(ue.title)"
+              "count(*) * count(*) as `count(*)`",
+              ":2 as `any_value(u.``name``)`",
+              ":3 as `any_value(ue.title)`"
             ],
             "Inputs": [
               {
@@ -5744,7 +5744,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "group_concat(0) AS group_concat(`user`.id)",
+        "Aggregates": "group_concat(0) AS `group_concat(``user``.id)`",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
@@ -5807,7 +5807,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "group_concat(1) AS group_concat(foo)",
+        "Aggregates": "group_concat(1) AS `group_concat(foo)`",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -5844,7 +5844,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "group_concat(1) AS group_concat(u.bar), any_value(2|4) AS baz",
+            "Aggregates": "group_concat(1) AS `group_concat(u.bar)`, any_value(2|4) AS baz",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
@@ -5898,7 +5898,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_distinct(1) AS count(distinct m.user_id), sum_sum_distinct(2) AS sum(distinct m.user_id)",
+        "Aggregates": "sum_count_distinct(1) AS `count(distinct m.user_id)`, sum_sum_distinct(2) AS `sum(distinct m.user_id)`",
         "GroupBy": "(0|3)",
         "ResultColumns": 3,
         "Inputs": [
@@ -5948,7 +5948,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1|6) AS min(distinct bar), count_distinct(2|7) AS count(distinct baz), sum_distinct(3|7) AS sum(distinct baz), max(4|8) AS max(distinct toto)",
+        "Aggregates": "min(1|6) AS `min(distinct bar)`, count_distinct(2|7) AS `count(distinct baz)`, sum_distinct(3|7) AS `sum(distinct baz)`, max(4|8) AS `max(distinct toto)`",
         "GroupBy": "(0|5)",
         "ResultColumns": 5,
         "Inputs": [
@@ -5980,7 +5980,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(col)",
+        "Aggregates": "sum(0) AS `sum(col)`",
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -6025,7 +6025,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS count(val2), sum(1) AS sum(val2)",
+        "Aggregates": "count(0) AS `count(val2)`, sum(1) AS `sum(val2)`",
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
@@ -6066,13 +6066,13 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "last_insert_id(count(*)) as last_insert_id(count(*))"
+          "last_insert_id(count(*)) as `last_insert_id(count(*))`"
         ],
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Aggregates": "sum_count_star(0) AS `count(*)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6104,12 +6104,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * count(*) as count(*)"
+              "count(*) * count(*) as `count(*)`"
             ],
             "Inputs": [
               {
@@ -6136,14 +6136,14 @@
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
-                          "1 as 1",
-                          "0 as .0"
+                          "1 as `1`",
+                          "0 as `.0`"
                         ],
                         "Inputs": [
                           {
                             "OperatorType": "Aggregate",
                             "Variant": "Ordered",
-                            "Aggregates": "sum_count_star(0) AS count(*)",
+                            "Aggregates": "sum_count_star(0) AS `count(*)`",
                             "GroupBy": "1",
                             "Inputs": [
                               {
@@ -6191,7 +6191,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Aggregates": "sum_count_star(0) AS `count(*)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6217,7 +6217,7 @@
                 "InputName": "SubQuery",
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "sum_count_star(0) AS count(*)",
+                "Aggregates": "sum_count_star(0) AS `count(*)`",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -6263,13 +6263,13 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "sum(id) / count(id) as avg(id)"
+          "sum(id) / count(id) as `avg(id)`"
         ],
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum(0) AS avg(id), sum_count(1) AS count(id)",
+            "Aggregates": "sum(0) AS `avg(id)`, sum_count(1) AS `count(id)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6300,21 +6300,21 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+          "avg(id) + count(foo) + bar as `avg(id) + count(foo) + bar`"
         ],
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               ":0 as bar",
-              "sum(id) / count(id) as avg(id)",
-              ":2 as count(foo)"
+              "sum(id) / count(id) as `avg(id)`",
+              ":2 as `count(foo)`"
             ],
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
-                "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
+                "Aggregates": "sum(1) AS `avg(id)`, sum_count(2) AS `count(foo)`, sum_count(3) AS `count(id)`",
                 "GroupBy": "(0|4)",
                 "Inputs": [
                   {
@@ -6349,21 +6349,21 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "avg(id) + count(foo) + bar as avg(id) + count(foo) + bar"
+          "avg(id) + count(foo) + bar as `avg(id) + count(foo) + bar`"
         ],
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
               ":0 as bar",
-              "sum(id) / count(id) as avg(id)",
-              ":2 as count(foo)"
+              "sum(id) / count(id) as `avg(id)`",
+              ":2 as `count(foo)`"
             ],
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
-                "Aggregates": "sum(1) AS avg(id), sum_count(2) AS count(foo), sum_count(3) AS count(id)",
+                "Aggregates": "sum(1) AS `avg(id)`, sum_count(2) AS `count(foo)`, sum_count(3) AS `count(id)`",
                 "GroupBy": "(0|4)",
                 "Inputs": [
                   {
@@ -6398,14 +6398,14 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "sum(foo) / count(foo) as avg(foo)",
-          "sum(bar) / count(bar) as avg(bar)"
+          "sum(foo) / count(foo) as `avg(foo)`",
+          "sum(bar) / count(bar) as `avg(bar)`"
         ],
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum(0) AS avg(foo), sum(1) AS avg(bar), sum_count(2) AS count(foo), sum_count(3) AS count(bar)",
+            "Aggregates": "sum(0) AS `avg(foo)`, sum(1) AS `avg(bar)`, sum_count(2) AS `count(foo)`, sum_count(3) AS `count(bar)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6436,14 +6436,14 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "sum(foo) / count(foo) as avg(foo)",
-          ":1 as count(foo)"
+          "sum(foo) / count(foo) as `avg(foo)`",
+          ":1 as `count(foo)`"
         ],
         "Inputs": [
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum(0) AS avg(foo), sum_count(1) AS count(foo), sum_count(2) AS count(foo)",
+            "Aggregates": "sum(0) AS `avg(foo)`, sum_count(1) AS `count(foo)`, sum_count(2) AS `count(foo)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -6593,7 +6593,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "GroupBy": "(1|3), (2|4)",
         "ResultColumns": 3,
         "Inputs": [
@@ -6605,11 +6605,11 @@
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "count(*) * count(*) as count(*)",
+                  "count(*) * count(*) as `count(*)`",
                   ":2 as f1",
                   ":3 as f2",
-                  ":4 as weight_string(cast(`user`.foo as datetime))",
-                  ":5 as weight_string(cast(music.foo as datetime))"
+                  ":4 as `weight_string(cast(``user``.foo as datetime))`",
+                  ":5 as `weight_string(cast(music.foo as datetime))`"
                 ],
                 "Inputs": [
                   {
@@ -6661,18 +6661,18 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "GroupBy": "(1|2), (3|4)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "count(*) * coalesce(count(*), 1) as count(*)",
+              "count(*) * coalesce(count(*), 1) as `count(*)`",
               ":4 as foo",
-              ":6 as weight_string(`user`.foo)",
+              ":6 as `weight_string(``user``.foo)`",
               ":5 as bar",
-              ":7 as weight_string(ue.bar)"
+              ":7 as `weight_string(ue.bar)`"
             ],
             "Inputs": [
               {
@@ -6707,10 +6707,10 @@
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "1 as 1",
+                              "1 as `1`",
                               ":0 as col",
                               ":1 as bar",
-                              ":2 as weight_string(ue.bar)"
+                              ":2 as `weight_string(ue.bar)`"
                             ],
                             "Inputs": [
                               {
@@ -6791,7 +6791,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select min(col) from unsharded))",
+        "Aggregates": "max(0|1) AS `max((select min(col) from unsharded))`",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -6847,7 +6847,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select min(col) from `user` where id = 1))",
+        "Aggregates": "max(0|1) AS `max((select min(col) from ``user`` where id = 1))`",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -6959,7 +6959,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select group_concat(col1, col2) from `user` where id = 1))",
+        "Aggregates": "max(0|1) AS `max((select group_concat(col1, col2) from ``user`` where id = 1))`",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -7014,7 +7014,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select max(col2) from `user` as u1 where u1.id = u2.id))",
+        "Aggregates": "max(0|1) AS `max((select max(col2) from ``user`` as u1 where u1.id = u2.id))`",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -7044,7 +7044,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count(0) AS count(a, b)",
+        "Aggregates": "sum_count(0) AS `count(a, b)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -7073,7 +7073,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "group_concat(0) AS group_concat(col1, col2)",
+        "Aggregates": "group_concat(0) AS `group_concat(col1, col2)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -7102,7 +7102,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_distinct(0) AS count(distinct `name`, id)",
+        "Aggregates": "sum_count_distinct(0) AS `count(distinct ``name``, id)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -7270,12 +7270,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count_star(0) AS count(*)",
+        "Aggregates": "count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "1 as 1"
+              "1 as `1`"
             ],
             "Inputs": [
               {
@@ -7315,16 +7315,16 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum(0) AS sum(`user`.type)",
+        "Aggregates": "sum(0) AS `sum(``user``.type)`",
         "GroupBy": "(1|2)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "sum(`user`.type) * count(*) as sum(`user`.type)",
+              "sum(`user`.type) * count(*) as `sum(``user``.type)`",
               ":2 as id",
-              ":3 as weight_string(user_extra.id)"
+              ":3 as `weight_string(user_extra.id)`"
             ],
             "Inputs": [
               {

@@ -128,7 +128,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -234,7 +234,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -264,7 +264,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -617,7 +617,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          ":__vtdbname as database()"
+          ":__vtdbname as `database()`"
         ],
         "Inputs": [
           {
@@ -2064,7 +2064,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "42 as 42"
+          "42 as `42`"
         ],
         "Inputs": [
           {
@@ -2102,7 +2102,7 @@
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
-                "Aggregates": "sum(0) AS avg_col, sum_count(3) AS count(intcol)",
+                "Aggregates": "sum(0) AS avg_col, sum_count(3) AS `count(intcol)`",
                 "GroupBy": "1 COLLATE latin1_swedish_ci, (2|4) COLLATE ",
                 "Inputs": [
                   {
@@ -2159,7 +2159,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
@@ -2212,7 +2212,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
@@ -2265,7 +2265,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "44 as 42 + 2"
+          "44 as `42 + 2`"
         ],
         "Inputs": [
           {
@@ -2333,7 +2333,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Aggregates": "sum_count_star(0) AS `count(*)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2430,7 +2430,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Aggregates": "sum_count_star(0) AS `count(*)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2828,7 +2828,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "1 as 1"
+          "1 as `1`"
         ],
         "Inputs": [
           {
@@ -3011,7 +3011,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "'string' as N'string'"
+          "'string' as `N'string'`"
         ],
         "Inputs": [
           {
@@ -3122,7 +3122,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          ":__lastInsertId as last_insert_id()"
+          ":__lastInsertId as `last_insert_id()`"
         ],
         "Inputs": [
           {
@@ -3153,7 +3153,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum(0) AS sum(col)",
+            "Aggregates": "sum(0) AS `sum(col)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -4068,7 +4068,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "'QuWhattic' as insert('Quadratic', 3, 4, 'What')"
+          "'QuWhattic' as `insert('Quadratic', 3, 4, 'What')`"
         ],
         "Inputs": [
           {
@@ -4259,7 +4259,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Aggregates": "sum_count_star(0) AS `count(*)`",
             "Inputs": [
               {
                 "OperatorType": "VindexLookup",
@@ -4862,7 +4862,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "max(0|1) AS max(music.id)",
+            "Aggregates": "max(0|1) AS `max(music.id)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -5576,7 +5576,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Aggregates": "sum_count_star(0) AS `count(*)`",
             "Inputs": [
               {
                 "OperatorType": "Route",

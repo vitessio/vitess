@@ -15,7 +15,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "any_value(1|4) AS b, sum_count_star(2) AS count(*)",
+            "Aggregates": "any_value(1|4) AS b, sum_count_star(2) AS `count(*)`",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
