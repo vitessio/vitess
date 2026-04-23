@@ -111,5 +111,4 @@ Flags:
       --topo-zk-tls-cert string                                     the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                      the key to use to connect to the zk topo server, enables TLS
   -v, --version                                                     print binary version
-      --wait-for-relaylogs-max-tablets int                          Caps how many tablets from the most-advanced relay log position group to wait for during the relay log application phase of ERS. 0 means wait for all tablets in the group (no cap) (default 3)
       --wait-replicas-timeout duration                              Duration for which to wait for replica's to respond when issuing RPCs (default 30s)

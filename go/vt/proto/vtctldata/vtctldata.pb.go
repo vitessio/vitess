@@ -4340,12 +4340,8 @@ type EmergencyReparentShardRequest struct {
 	// ExpectedPrimary is the optional alias we expect to be the current primary in order for
 	// the reparent operation to succeed.
 	ExpectedPrimary *topodata.TabletAlias `protobuf:"bytes,8,opt,name=expected_primary,json=expectedPrimary,proto3" json:"expected_primary,omitempty"`
-	// WaitForRelayLogsMaxTablets caps how many tablets from the most-advanced
-	// relay log position group to wait for during the relay log application phase.
-	// 0 means wait for all tablets in the group (no cap).
-	WaitForRelayLogsMaxTablets int64 `protobuf:"varint,9,opt,name=wait_for_relay_logs_max_tablets,json=waitForRelayLogsMaxTablets,proto3" json:"wait_for_relay_logs_max_tablets,omitempty"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *EmergencyReparentShardRequest) Reset() {
@@ -4432,13 +4428,6 @@ func (x *EmergencyReparentShardRequest) GetExpectedPrimary() *topodata.TabletAli
 		return x.ExpectedPrimary
 	}
 	return nil
-}
-
-func (x *EmergencyReparentShardRequest) GetWaitForRelayLogsMaxTablets() int64 {
-	if x != nil {
-		return x.WaitForRelayLogsMaxTablets
-	}
-	return 0
 }
 
 type EmergencyReparentShardResponse struct {
@@ -17838,7 +17827,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14DeleteTabletsRequest\x12<\n" +
 	"\x0etablet_aliases\x18\x01 \x03(\v2\x15.topodata.TabletAliasR\rtabletAliases\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\"\x17\n" +
-	"\x15DeleteTabletsResponse\"\x88\x04\n" +
+	"\x15DeleteTabletsResponse\"\xc3\x03\n" +
 	"\x1dEmergencyReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -17848,8 +17837,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x15wait_replicas_timeout\x18\x05 \x01(\v2\x10.vttime.DurationR\x13waitReplicasTimeout\x12?\n" +
 	"\x1cprevent_cross_cell_promotion\x18\x06 \x01(\bR\x19preventCrossCellPromotion\x12/\n" +
 	"\x14wait_for_all_tablets\x18\a \x01(\bR\x11waitForAllTablets\x12@\n" +
-	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12C\n" +
-	"\x1fwait_for_relay_logs_max_tablets\x18\t \x01(\x03R\x1awaitForRelayLogsMaxTablets\"\xbc\x01\n" +
+	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\"\xbc\x01\n" +
 	"\x1eEmergencyReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +
