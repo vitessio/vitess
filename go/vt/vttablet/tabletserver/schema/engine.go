@@ -621,8 +621,10 @@ func (se *Engine) maybeOptimizeGtidExecutedLocked(ctx context.Context, conn *con
 	}
 
 	// Stamp the start time before spawning so we won't launch again until
-	// the 24h throttle expires. The stamp is reset on failure below so a
-	// real error path retries on the next reload instead of waiting 24h.
+	// the 24h throttle expires. The goroutine below also refreshes this
+	// stamp on its own failure paths, so a persistently-failing OPTIMIZE
+	// does not retry on every schema reload (which would flip
+	// super_read_only briefly on each attempt).
 	se.gtidExecutedOptimizeLastAt = time.Now()
 
 	go se.runOptimizeGtidExecuted(dataFree)
@@ -689,7 +691,13 @@ func (se *Engine) restoreSuperReadOnly() {
 		return
 	}
 
-	ctx, cancel := se.backgroundTimeoutContext(10 * time.Second)
+	// SRO restore is safety-critical cleanup: leaving a non-primary tablet
+	// with super_read_only=OFF can let stale or misrouted writes land on it
+	// after shutdown while MySQL is still up. Derive the timeout from
+	// context.Background() rather than se.backgroundCtx so that
+	// Engine.Close() — which cancels backgroundCtx — cannot suppress the
+	// restore.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
 	if err != nil {
@@ -830,7 +838,7 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 	if err != nil {
 		log.Warn("schema engine: failed to open connection for mysql.gtid_executed OPTIMIZE", slog.Any("error", err))
 		se.mu.Lock()
-		se.gtidExecutedOptimizeLastAt = time.Time{}
+		se.gtidExecutedOptimizeLastAt = time.Now()
 		se.mu.Unlock()
 		return
 	}
@@ -848,7 +856,7 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 		log.Warn("schema engine: skipping mysql.gtid_executed OPTIMIZE; could not disable super_read_only",
 			slog.Any("error", err))
 		se.mu.Lock()
-		se.gtidExecutedOptimizeLastAt = time.Time{}
+		se.gtidExecutedOptimizeLastAt = time.Now()
 		se.mu.Unlock()
 		return
 	}
@@ -866,7 +874,7 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 			slog.Uint64("dataFreeAtSpawn", dataFreeAtSpawn),
 		)
 		se.mu.Lock()
-		se.gtidExecutedOptimizeLastAt = time.Time{}
+		se.gtidExecutedOptimizeLastAt = time.Now()
 		se.mu.Unlock()
 		return
 	}

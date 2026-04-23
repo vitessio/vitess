@@ -282,9 +282,12 @@ func TestRunOptimizeGtidExecutedOptimizeFailureRestoresSRO(t *testing.T) {
 
 	// SRO must be restored even on failure.
 	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
-	// The failure path resets the stamp so the next reload retries.
+	// The failure path stamps the last-run time to ~now so a
+	// persistently-failing OPTIMIZE respects the 24h throttle rather than
+	// retrying on every schema reload (each retry would flip super_read_only
+	// briefly).
 	se.mu.Lock()
-	assert.True(t, se.gtidExecutedOptimizeLastAt.IsZero())
+	assert.False(t, se.gtidExecutedOptimizeLastAt.IsZero())
 	se.mu.Unlock()
 }
 
@@ -370,8 +373,8 @@ func TestCloseCancelsInFlightOptimize(t *testing.T) {
 	}, 30*time.Second, 10*time.Millisecond)
 
 	releaseQuery()
-	assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
-		"engine shutdown must cancel the restore path instead of re-enabling super_read_only after close")
+	assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+		"SRO restore must run even when Engine.Close() has cancelled backgroundCtx; leaving a non-primary tablet with super_read_only=OFF is a correctness hazard")
 }
 
 // TestUpdateUserTableFreeSpaceDisabled verifies that when the threshold is
