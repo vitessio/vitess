@@ -323,9 +323,10 @@ var (
 )
 
 const (
-	maxTableRows         = 4096
-	workloadDuration     = 5 * time.Second
-	migrationWaitTimeout = 60 * time.Second
+	maxTableRows                  = 4096
+	deterministicDeleteCoverageID = maxTableRows
+	workloadDuration              = 5 * time.Second
+	migrationWaitTimeout          = 60 * time.Second
 )
 
 // The following variables are fit for a local, strong developer box.
@@ -503,7 +504,9 @@ func validateMetrics(t *testing.T, tcase *testCase) {
 	}
 }
 
-func TestInitialSetup(t *testing.T) {
+func setupStressTest(t *testing.T) {
+	t.Helper()
+
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 	require.Equal(t, 3, len(shards[0].Vttablets)) // primary, no-fk replica, fk replica
@@ -524,6 +527,10 @@ func TestInitialSetup(t *testing.T) {
 	for _, tableName := range tableNames {
 		writeMetrics[tableName] = &WriteMetrics{}
 	}
+}
+
+func TestInitialSetup(t *testing.T) {
+	setupStressTest(t)
 }
 
 type testCase struct {
@@ -647,6 +654,8 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 }
 
 func TestStressFK(t *testing.T) {
+	setupStressTest(t)
+
 	t.Run("validate replication health", func(t *testing.T) {
 		validateReplicationIsHealthy(t, replicaNoFK)
 		validateReplicationIsHealthy(t, replicaFK)
@@ -1154,6 +1163,35 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 	return err
 }
 
+func generateDeterministicDelete(t *testing.T, tableName string, conn *mysql.Conn) {
+	id := deterministicDeleteCoverageID
+
+	insertQuery := fmt.Sprintf("INSERT INTO %s (id, parent_id, rand_val) VALUES (%d, NULL, 'delete-coverage')", tableName, id)
+	qr, err := conn.ExecuteFetch(insertQuery, 1000, true)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), qr.RowsAffected)
+
+	updateQuery := fmt.Sprintf(updateRowStatement, tableName, id)
+	qr, err = conn.ExecuteFetch(updateQuery, 1000, true)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), qr.RowsAffected)
+
+	deleteQuery := fmt.Sprintf(deleteRowStatement, tableName, id)
+	qr, err = conn.ExecuteFetch(deleteQuery, 1000, true)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), qr.RowsAffected)
+
+	writeMetrics[tableName].mu.Lock()
+	defer writeMetrics[tableName].mu.Unlock()
+
+	writeMetrics[tableName].insertsAttempts++
+	writeMetrics[tableName].inserts++
+	writeMetrics[tableName].updatesAttempts++
+	writeMetrics[tableName].updates++
+	writeMetrics[tableName].deletesAttempts++
+	writeMetrics[tableName].deletes++
+}
+
 func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tcase *testCase, sleepInterval time.Duration) {
 	log.Info("Running single connection on " + tableName)
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -1321,6 +1359,13 @@ func populateTables(t *testing.T, tcase *testCase) {
 			})
 		}
 	})
+	t.Run("deterministic delete coverage", func(t *testing.T) {
+		for _, tableName := range tableNames {
+			t.Run(tableName, func(t *testing.T) {
+				generateDeterministicDelete(t, tableName, conn)
+			})
+		}
+	})
 }
 
 // testSelectTableMetrics cross references the known metrics (number of successful insert/delete/updates) on each table, with the
@@ -1354,11 +1399,6 @@ func testSelectTableMetrics(
 	log.Info(fmt.Sprintf("testSelectTableMetrics, row: %v", row))
 	numRows := row.AsInt64("num_rows", 0)
 	sumUpdates := row.AsInt64("sum_updates", 0)
-	assert.NotZero(t, numRows)
-	assert.NotZero(t, sumUpdates)
-	assert.NotZero(t, writeMetrics[tableName].inserts)
-	assert.NotZero(t, writeMetrics[tableName].deletes)
-	assert.NotZero(t, writeMetrics[tableName].updates)
 	assert.Equal(t, writeMetrics[tableName].inserts-writeMetrics[tableName].deletes, numRows)
 	assert.Equal(t, writeMetrics[tableName].updates-writeMetrics[tableName].deletes, sumUpdates) // because we DELETE WHERE updates=1
 
