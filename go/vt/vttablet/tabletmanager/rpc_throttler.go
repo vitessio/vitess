@@ -48,7 +48,7 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OKIfNotExists:         req.OkIfNotExists,
 	}
-	checkResult := tm.QueryServiceControl.CheckThrottler(ctx, req.AppName, flags)
+	checkResult := tm.QueryServiceControl.CheckThrottler(ctx, req.AppName, flags, req.ThrottlerType)
 	if checkResult == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "nil checkResult")
 	}
@@ -91,7 +91,7 @@ func (tm *TabletManager) CheckThrottler(ctx context.Context, req *tabletmanagerd
 // GetThrottlerStatus returns a detailed breakdown of the throttler status
 func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
 	statsThrottlerStatusRequests.Add(1)
-	status := tm.QueryServiceControl.GetThrottlerStatus(ctx)
+	status := tm.QueryServiceControl.GetThrottlerStatus(ctx, req.ThrottlerType)
 	if status == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "nil status")
 	}

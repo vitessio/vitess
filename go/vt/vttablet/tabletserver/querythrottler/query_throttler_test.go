@@ -65,7 +65,7 @@ func TestSelectThrottlingStrategy(t *testing.T) {
 				QueryThrottlerConfigRefreshInterval: 10 * time.Millisecond,
 			}
 
-			strategy := selectThrottlingStrategy(&querythrottlerpb.Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config)
+			strategy := selectThrottlingStrategy(&querythrottlerpb.Config{Enabled: true, Strategy: tt.giveThrottlingStrategy}, mockClient, config, nil, "", "", nil)
 
 			require.IsType(t, tt.expectedType, strategy)
 		})
@@ -235,18 +235,12 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 					Enabled: tt.enabled,
 					DryRun:  tt.dryRun,
 				},
-				env: env,
-				stats: Stats{
-					requestsTotal:     env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "TestThrottler requests", []string{"Strategy", "Workload", "Priority"}),
-					requestsThrottled: env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "TestThrottler throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "MetricValue", "DryRun"}),
-					totalLatency:      env.Exporter().NewMultiTimings(queryThrottlerAppName+"TotalLatencyMs", "Total latency of QueryThrottler.Throttle in milliseconds", []string{"Strategy", "Workload", "Priority"}),
-					evaluateLatency:   env.Exporter().NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyMs", "Latency from Throttle entry to completion of Evaluate in milliseconds", []string{"Strategy", "Workload", "Priority"}),
-				},
+				env:                     env,
 				strategyHandlerInstance: mockStrategy,
 			}
 
-			iqt.stats.requestsTotal.ResetAll()
-			iqt.stats.requestsThrottled.ResetAll()
+			requestsTotal.ResetAll()
+			requestsThrottled.ResetAll()
 
 			// Capture log output.
 			logCapture := &testLogCapture{}
@@ -285,10 +279,10 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			}
 
 			// Verify stats expectation
-			totalRequests := stats.CounterForDimension(iqt.stats.requestsTotal, "Strategy")
-			throttledRequests := stats.CounterForDimension(iqt.stats.requestsThrottled, "Strategy")
-			require.Equal(t, tt.expectedTotalRequests, totalRequests.Counts()["MockStrategy"], "Total requests should match expected")
-			require.Equal(t, tt.expectedThrottledRequests, throttledRequests.Counts()["MockStrategy"], "Throttled requests should match expected")
+			totalReqs := stats.CounterForDimension(requestsTotal, "Strategy")
+			throttledReqs := stats.CounterForDimension(requestsThrottled, "Strategy")
+			require.Equal(t, tt.expectedTotalRequests, totalReqs.Counts()["MockStrategy"], "Total requests should match expected")
+			require.Equal(t, tt.expectedThrottledRequests, throttledReqs.Counts()["MockStrategy"], "Throttled requests should match expected")
 		})
 	}
 }
@@ -423,8 +417,8 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 		{
 			name:           "ContextCanceledError",
 			inputErr:       context.Canceled,
-			expectedResult: false,
-			description:    "callback should return false to stop watching on context cancellation",
+			expectedResult: true,
+			description:    "callback should return true to keep watching on context cancellation",
 		},
 		{
 			name:           "TransientTopoError",
@@ -435,14 +429,14 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 		{
 			name:           "NoNodeError",
 			inputErr:       topo.NewError(topo.NoNode, "keyspace/test_keyspace"),
-			expectedResult: false,
-			description:    "callback should return false to stop watching when keyspace is deleted (NoNode)",
+			expectedResult: true,
+			description:    "callback should return true to keep watching when keyspace is not found (NoNode)",
 		},
 		{
 			name:           "InterruptedError",
 			inputErr:       topo.NewError(topo.Interrupted, "watch interrupted"),
-			expectedResult: false,
-			description:    "callback should return false to stop watching on Interrupted error",
+			expectedResult: true,
+			description:    "callback should return true to keep watching on Interrupted error",
 		},
 	}
 
@@ -480,7 +474,7 @@ func TestQueryThrottler_HandleConfigUpdate__ConfigExtraction(t *testing.T) {
 		cfg:                     oldCfg,
 		strategyHandlerInstance: oldStrategy,
 		tabletConfig:            &tabletenv.TabletConfig{},
-		throttleClient:          &throttle.Client{},
+		throttlerClient:         &throttle.Client{},
 	}
 
 	// Create SrvKeyspace with different config values
@@ -542,7 +536,7 @@ func TestQueryThrottler_HandleConfigUpdate__StrategySwitch(t *testing.T) {
 		cfg:                     &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
 		strategyHandlerInstance: oldStrategy,
 		tabletConfig:            &tabletenv.TabletConfig{},
-		throttleClient:          &throttle.Client{},
+		throttlerClient:         &throttle.Client{},
 	}
 
 	srvks := createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_UNKNOWN, false)

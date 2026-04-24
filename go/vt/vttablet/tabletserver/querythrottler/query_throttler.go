@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -42,6 +41,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
+
+	// Import strategy packages for side-effect registration via init()
+	_ "vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/strategy/tablethrottler"
 )
 
 const (
@@ -50,19 +52,19 @@ const (
 	defaultPriority = 100 // sqlparser.MaxPriorityValue
 )
 
-type Stats struct {
-	requestsTotal     *stats.CountersWithMultiLabels
-	requestsThrottled *stats.CountersWithMultiLabels
-	totalLatency      *servenv.MultiTimingsWrapper
-	evaluateLatency   *servenv.MultiTimingsWrapper
-}
+var (
+	requestsTotal     = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "query throttler requests", []string{"Strategy", "Workload", "Priority"})
+	requestsThrottled = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "query throttler requests throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "DryRun"})
+	totalLatency      = stats.NewMultiTimings(queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", []string{"Strategy", "Workload", "Priority"})
+	evaluateLatency   = stats.NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", []string{"Strategy", "Workload", "Priority"})
+)
 
 type QueryThrottler struct {
 	ctx                context.Context
 	cancelWatchContext context.CancelFunc
 
-	throttleClient *throttle.Client
-	tabletConfig   *tabletenv.TabletConfig
+	throttlerClient *throttle.Client
+	tabletConfig    *tabletenv.TabletConfig
 
 	keyspace      string
 	cell          string
@@ -76,7 +78,6 @@ type QueryThrottler struct {
 	// strategyHandlerInstance is the current throttling strategy handler instance
 	strategyHandlerInstance registry.ThrottlingStrategyHandler
 	env                     tabletenv.Env
-	stats                   Stats
 }
 
 // NewQueryThrottler creates a new  query throttler.
@@ -85,19 +86,13 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 
 	qt := &QueryThrottler{
 		ctx:                     ctx,
-		throttleClient:          client,
+		throttlerClient:         client,
 		tabletConfig:            env.Config(),
 		cell:                    alias.GetCell(),
 		srvTopoServer:           srvTopoServer,
 		cfg:                     &querythrottlerpb.Config{},
 		strategyHandlerInstance: &registry.NoOpStrategy{}, // default strategy until config is loaded
 		env:                     env,
-		stats: Stats{
-			requestsTotal:     env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "query throttler requests", []string{"Strategy", "Workload", "Priority"}),
-			requestsThrottled: env.Exporter().NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "query throttler requests throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "MetricValue", "DryRun"}),
-			totalLatency:      env.Exporter().NewMultiTimings(queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", []string{"Strategy", "Workload", "Priority"}),
-			evaluateLatency:   env.Exporter().NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", []string{"Strategy", "Workload", "Priority"}),
-		},
 	}
 
 	// Start the initial strategy
@@ -179,16 +174,16 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 
 	// Defer total latency recording to ensure it's always emitted regardless of return path.
 	defer func() {
-		qt.stats.totalLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+		totalLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
 	}()
 
 	// Evaluate the throttling decision
 	decision := qt.strategyHandlerInstance.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
 
 	// Record evaluate-window latency immediately after Evaluate returns
-	qt.stats.evaluateLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+	evaluateLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
 
-	qt.stats.requestsTotal.Add([]string{strategyName, workload, priorityStr}, 1)
+	requestsTotal.Add([]string{strategyName, workload, priorityStr}, 1)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
@@ -196,7 +191,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}
 
 	// Emit metric of query being throttled.
-	qt.stats.requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatFloat(decision.MetricValue, 'f', -1, 64), strconv.FormatBool(tCfg.GetDryRun())}, 1)
+	requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatBool(tCfg.GetDryRun())}, 1)
 
 	// If dry-run mode is enabled, log the decision but don't throttle
 	if tCfg.GetDryRun() {
@@ -307,30 +302,22 @@ func extractPriority(options *querypb.ExecuteOptions) int {
 // not be called directly from other contexts.
 //
 // Return value contract (required by WatchSrvKeyspace):
-//   - true: Continue watching (resilient watcher will auto-retry on transient errors)
-//   - false: Stop watching permanently (for fatal errors like NoNode, context canceled, or Interrupted)
+//   - Always returns true to keep the watch alive. Errors are logged but never stop the watch,
+//     matching the pattern used by throttle.Throttler.WatchSrvKeyspaceCallback.
 //
 // **NOTE: this method is written with the assumption that this is the only piece of code which will be changing the config of QueryThrottler**
 func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err error) bool {
-	// Handle topology errors using a hybrid approach:
-	// - Permanent errors (NoNode, context canceled): stop watching (return false)
-	// - Transient errors (network issues, etc.): keep watching (return true, auto-retry will reconnect)
+	// Log errors by type for observability, but always keep watching.
+	// The resilient watcher will automatically retry on transient errors.
 	if err != nil {
-		// Keyspace deleted from topology - stop watching
-		if topo.IsErrType(err, topo.NoNode) {
-			log.Warn(fmt.Sprintf("HandleConfigUpdate: keyspace %s deleted or not found, stopping watch", qt.keyspace))
-			return false
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			log.Warn(fmt.Sprintf("HandleConfigUpdate: keyspace %s not found in topology (may not be created yet): %v", qt.keyspace, err))
+		case errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted):
+			log.Info(fmt.Sprintf("HandleConfigUpdate: watch interrupted for keyspace %s: %v", qt.keyspace, err))
+		default:
+			log.Error(fmt.Sprintf("HandleConfigUpdate: SrvKeyspace watch error for keyspace %s: %v", qt.keyspace, err))
 		}
-
-		// Context canceled or interrupted - graceful shutdown, stop watching
-		if errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted) {
-			log.Info("HandleConfigUpdate: watch stopped (context canceled or interrupted)")
-			return false
-		}
-
-		// Transient error (network, temporary topo server issue) - keep watching
-		// The resilient watcher will automatically retry as defined in go/vt/srvtopo/resilient_server.go:46
-		log.Warn(fmt.Sprintf("HandleConfigUpdate: transient topo watch error (will retry): %v", err))
 		return true
 	}
 
@@ -354,7 +341,7 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	var newStrategy registry.ThrottlingStrategyHandler
 	if needsStrategyChange {
 		// Create the new strategy (doesn't need lock)
-		newStrategy = selectThrottlingStrategy(newCfg, qt.throttleClient, qt.tabletConfig)
+		newStrategy = selectThrottlingStrategy(newCfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
 	}
 
 	// Acquire write lock only for the actual swap operation.
@@ -384,10 +371,14 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 }
 
 // selectThrottlingStrategy returns the appropriate strategy implementation based on the config.
-func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig) registry.ThrottlingStrategyHandler {
+func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Client, tabletConfig *tabletenv.TabletConfig, env tabletenv.Env, keyspace string, cell string, srvTopoServer srvtopo.Server) registry.ThrottlingStrategyHandler {
 	deps := registry.Deps{
 		ThrottleClient: client,
 		TabletConfig:   tabletConfig,
+		Env:            env,
+		Keyspace:       keyspace,
+		Cell:           cell,
+		SrvTopoServer:  srvTopoServer,
 	}
 	return registry.CreateStrategy(cfg, deps)
 }

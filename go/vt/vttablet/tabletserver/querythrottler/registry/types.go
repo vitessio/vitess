@@ -18,6 +18,7 @@ package registry
 
 import (
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
@@ -55,21 +56,17 @@ type ThrottleDecision struct {
 	ThrottlePercentage float64
 }
 
-// StrategyConfig defines the configuration interface that strategy implementations
-// must satisfy. This matches the proto querythrottlerpb.Config interface.
-type StrategyConfig interface {
-	GetEnabled() bool
-	GetDryRun() bool
-	GetStrategy() querythrottlerpb.ThrottlingStrategy
-}
-
 // Deps holds the dependencies required by strategy factories.
 type Deps struct {
 	ThrottleClient *throttle.Client
 	TabletConfig   *tabletenv.TabletConfig
+	Env            tabletenv.Env
+	Keyspace       string
+	Cell           string
+	SrvTopoServer  srvtopo.Server
 }
 
 // StrategyFactory creates a new strategy instance with the given dependencies and configuration.
 type StrategyFactory interface {
-	New(deps Deps, cfg StrategyConfig) (ThrottlingStrategyHandler, error)
+	New(deps Deps, cfg *querythrottlerpb.Config) (ThrottlingStrategyHandler, error)
 }
