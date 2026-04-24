@@ -387,12 +387,64 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 	a.lateInit()
 
-	return a.lateAnalyze(statement)
+	if err := a.lateAnalyze(statement); err != nil {
+		return err
+	}
+
+	a.applyAliasRewrites(statement)
+	return nil
 }
 
 func (a *analyzer) lateAnalyze(statement sqlparser.SQLNode) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
+}
+
+// applyAliasRewrites replaces column references that resolved to a parent
+// SELECT alias (whose expression has no table dependencies) with a clone of
+// the alias expression. Before rewriting, any unaliased AliasedExpr whose
+// Expr would change is given an explicit As so its column name in the result
+// set matches the original SQL text.
+func (a *analyzer) applyAliasRewrites(statement sqlparser.SQLNode) {
+	if len(a.binder.aliasRewrites) == 0 {
+		return
+	}
+	sqlparser.Rewrite(statement, func(cursor *sqlparser.Cursor) bool {
+		ae, ok := cursor.Node().(*sqlparser.AliasedExpr)
+		if !ok || ae.As.NotEmpty() {
+			return true
+		}
+		if !a.exprContainsRewrite(ae.Expr) {
+			return true
+		}
+		ae.As = sqlparser.NewIdentifierCI(sqlparser.String(ae.Expr))
+		return true
+	}, func(cursor *sqlparser.Cursor) bool {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
+		}
+		if expr, found := a.binder.aliasRewrites[col]; found {
+			cursor.Replace(sqlparser.Clone(expr))
+		}
+		return true
+	})
+}
+
+// exprContainsRewrite reports whether expr contains a ColName that is
+// scheduled to be replaced by applyAliasRewrites.
+func (a *analyzer) exprContainsRewrite(expr sqlparser.Expr) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if col, ok := node.(*sqlparser.ColName); ok {
+			if _, ok := a.binder.aliasRewrites[col]; ok {
+				found = true
+				return false, nil
+			}
+		}
+		return true, nil
+	}, expr)
+	return found
 }
 
 func (a *analyzer) reAnalyze(statement sqlparser.SQLNode) error {
