@@ -840,9 +840,12 @@ func TestSemiJoin(t *testing.T) {
 
 // TestTabletTypeRouting tests that the tablet type routing works as intended.
 func TestTabletTypeRouting(t *testing.T) {
-	// We are gonna configure the routing rules to send the
-	// query for a replica tablet in ks_misc.t1 to go to a table that doesn't exist.
-	// I know this doesn't make much practical sense, but makes testing really easy.
+	// We are gonna configure the routing rules to send the query for a replica
+	// tablet in ks_misc.t1 to a table in a different keyspace (uks). Since uks
+	// is started with 0 replica tablets (see TestMain), the replica-side query
+	// will fail with "no healthy tablet available" for the uks keyspace —
+	// which is the signal that the @replica routing rule fired and rewrote the
+	// target keyspace correctly. The primary-side query still reaches ks_misc.t1.
 	routingRules := `{"rules": [
 	{
 	"from_table": "ks_misc.t1@replica",
@@ -868,9 +871,11 @@ func TestTabletTypeRouting(t *testing.T) {
 	utils.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
 	// Now we change the connection's target
 	utils.Exec(t, vtConn, "use ks_misc@replica")
-	// We verify that querying the replica tablet creates an unknown table error.
+	// We verify that the replica-side query is redirected to uks by the routing rule.
 	_, err = utils.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
-	require.ErrorContains(t, err, "table unknown not found")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "uks")
+	require.ErrorContains(t, err, "replica")
 }
 
 // TestJoinMixedCaseExpr tests that join condition with expression from both table having in clause is handled correctly.
