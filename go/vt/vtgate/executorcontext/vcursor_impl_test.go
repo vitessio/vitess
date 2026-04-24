@@ -435,3 +435,130 @@ func (f fakeObserver) Observe(*sqltypes.Result) {
 }
 
 var _ ResultsObserver = (*fakeObserver)(nil)
+
+func TestSetPriority(t *testing.T) {
+	tests := []struct {
+		name         string
+		priority     string
+		wantPriority string
+	}{
+		{
+			name:         "empty priority",
+			priority:     "",
+			wantPriority: "",
+		},
+		{
+			name:         "priority 0",
+			priority:     "0",
+			wantPriority: "0",
+		},
+		{
+			name:         "priority 50",
+			priority:     "50",
+			wantPriority: "50",
+		},
+		{
+			name:         "priority 100",
+			priority:     "100",
+			wantPriority: "100",
+		},
+		{
+			name:         "negative priority clamped to 0",
+			priority:     "-10",
+			wantPriority: "0",
+		},
+		{
+			name:         "priority above max clamped to 100",
+			priority:     "999",
+			wantPriority: "100",
+		},
+		{
+			name:         "invalid priority ignored",
+			priority:     "not_a_number",
+			wantPriority: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			vc := &VCursorImpl{
+				SafeSession: NewSafeSession(&vtgatepb.Session{}),
+			}
+			vc.SetPriority(tc.priority)
+			if tc.wantPriority == "" {
+				if vc.SafeSession.Options != nil {
+					require.Empty(t, vc.SafeSession.Options.Priority)
+				}
+			} else {
+				require.Equal(t, tc.wantPriority, vc.SafeSession.Options.Priority)
+			}
+		})
+	}
+}
+
+func TestGetQueryPriority(t *testing.T) {
+	tests := []struct {
+		name       string
+		options    *querypb.ExecuteOptions
+		wantResult int
+		wantErr    string
+	}{
+		{
+			name:       "nil options",
+			options:    nil,
+			wantResult: 0,
+		},
+		{
+			name:       "empty priority",
+			options:    &querypb.ExecuteOptions{},
+			wantResult: 0,
+		},
+		{
+			name:       "priority 0",
+			options:    &querypb.ExecuteOptions{Priority: "0"},
+			wantResult: 0,
+		},
+		{
+			name:       "priority 50",
+			options:    &querypb.ExecuteOptions{Priority: "50"},
+			wantResult: 50,
+		},
+		{
+			name:       "priority 100",
+			options:    &querypb.ExecuteOptions{Priority: "100"},
+			wantResult: 100,
+		},
+		{
+			name:       "negative priority clamped to 0",
+			options:    &querypb.ExecuteOptions{Priority: "-10"},
+			wantResult: 0,
+		},
+		{
+			name:       "above max priority clamped to 100",
+			options:    &querypb.ExecuteOptions{Priority: "200"},
+			wantResult: 100,
+		},
+		{
+			name:    "invalid priority",
+			options: &querypb.ExecuteOptions{Priority: "not_a_number"},
+			wantErr: "invalid query priority",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			vc := &VCursorImpl{
+				SafeSession: NewSafeSession(&vtgatepb.Session{
+					Options: tc.options,
+				}),
+			}
+			result, err := vc.GetQueryPriority()
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantResult, result)
+			}
+		})
+	}
+}
