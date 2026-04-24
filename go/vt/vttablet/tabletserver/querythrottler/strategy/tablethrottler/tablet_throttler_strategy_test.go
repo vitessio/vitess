@@ -581,10 +581,10 @@ func TestFakeThrottleClientWrapper_ThreadSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				if j%2 == 0 {
 					_, _ = client.ThrottleCheckOK(context.Background(), throttlerapp.QueryThrottlerName)
 					_, _ = client.GetCheckResult()
