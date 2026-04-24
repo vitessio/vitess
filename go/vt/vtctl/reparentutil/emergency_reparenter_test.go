@@ -820,9 +820,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "no valid candidates for emergency reparent",
 		},
 		{
-			name:       "error waiting for relay logs to apply",
+			name:       "partial relay log failures - ERS continues with surviving candidates",
 			durability: policy.DurabilityNone,
-			// one replica is going to take a minute to apply relay logs
+			// one replica is slow, one fails - but zone1-0000000100 succeeds
 			emergencyReparentOps: EmergencyReparentOptions{
 				WaitReplicasTimeout: time.Millisecond * 50,
 			},
@@ -912,7 +912,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			keyspace:         "testkeyspace",
 			shard:            "-",
 			cells:            []string{"zone1"},
-			errShouldContain: "could not apply all relay logs within the provided waitReplicasTimeout",
+			errShouldContain: "failed to promote", // ERS now tolerates partial relay log failures and continues to promotion (which isn't fully mocked)
 		},
 		{
 			name:       "requested primary-elect is not in tablet map",
@@ -2174,11 +2174,11 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), replicationdatapb.StopReplicationMode_IOTHREADONLY).
 			Return(alreadyStoppedIOStatus, nil)
 
-		// Now simulate a replica that takes too long while applying relay logs.
+		// Simulate both replicas timing out during relay log application so that
+		// all candidates fail and ERS aborts, triggering the IO thread restart cleanup.
 		tmc.EXPECT().
 			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), relayLogPosition).
 			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
-				// Block until the context expires so ERS aborts before it starts repointing replicas.
 				<-ctx.Done()
 				return ctx.Err()
 			}).
@@ -2186,7 +2186,10 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 
 		tmc.EXPECT().
 			WaitForPosition(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), relayLogPosition).
-			Return(nil).
+			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}).
 			Times(1)
 
 		// We expect the replica whose IO thread was stopped as part of the ERS (and only that replica,
@@ -2248,7 +2251,7 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			WaitReplicasTimeout: 50 * time.Millisecond,
 		})
 
-		require.ErrorContains(t, err, "could not apply all relay logs within the provided waitReplicasTimeout")
+		require.ErrorContains(t, err, "all candidates failed to apply relay logs within the provided waitReplicasTimeout")
 	})
 }
 
@@ -2801,7 +2804,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "one tablet fails",
+			name: "one tablet fails, one succeeds",
 			tmc: &testutil.TabletManagerClient{
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
@@ -2842,14 +2845,14 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					After: &replicationdatapb.Status{
-						RelayLogPosition: "position2", // cannot wait for the desired "position1", so we fail
+						RelayLogPosition: "position2", // cannot wait for the desired "position1", so this tablet fails
 					},
 				},
 			},
-			shouldErr: true,
+			shouldErr: false, // zone1-0000000100 succeeds, so ERS continues
 		},
 		{
-			name: "multiple tablets fail",
+			name: "some tablets fail but at least one succeeds",
 			tmc: &testutil.TabletManagerClient{
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
@@ -2902,19 +2905,67 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					After: &replicationdatapb.Status{
-						RelayLogPosition: "position1",
+						RelayLogPosition: "position1", // TMC only knows "position2" for this tablet, so it fails
 					},
 				},
 				"zone1-0000000102": {
 					After: &replicationdatapb.Status{
-						RelayLogPosition: "position1",
+						RelayLogPosition: "position1", // TMC only knows "position3" for this tablet, so it fails
+					},
+				},
+			},
+			shouldErr: false, // zone1-0000000100 succeeds, so ERS continues
+		},
+		{
+			name: "all tablets fail",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position2": nil,
+					},
+					"zone1-0000000101": {
+						"position3": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1", // TMC only knows "position2", so it fails
+					},
+				},
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1", // TMC only knows "position3", so it fails
 					},
 				},
 			},
 			shouldErr: true,
 		},
 		{
-			name: "one slow tablet",
+			name: "one slow tablet times out, other succeeds",
 			tmc: &testutil.TabletManagerClient{
 				WaitForPositionDelays: map[string]time.Duration{
 					"zone1-0000000101": time.Minute,
@@ -2962,7 +3013,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: true,
+			shouldErr: false, // zone1-0000000100 succeeds, slow tablet is removed from candidates
 		},
 	}
 
