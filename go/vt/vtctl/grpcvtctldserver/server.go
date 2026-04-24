@@ -6022,17 +6022,8 @@ func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtct
 		return nil, err
 	}
 
-	update := func(throttlerConfig *querythrottler.Config) *querythrottler.Config {
-		if throttlerConfig == nil {
-			throttlerConfig = &querythrottler.Config{}
-		}
-
-		throttlerConfig.Enabled = req.GetQueryThrottlerConfig().GetEnabled()
-		throttlerConfig.Strategy = req.GetQueryThrottlerConfig().GetStrategy()
-		throttlerConfig.TabletStrategyConfig = req.GetQueryThrottlerConfig().GetTabletStrategyConfig()
-		throttlerConfig.DryRun = req.GetQueryThrottlerConfig().GetDryRun()
-
-		return throttlerConfig
+	update := func(_ *querythrottler.Config) *querythrottler.Config {
+		return req.GetQueryThrottlerConfig()
 	}
 
 	ki.QueryThrottlerConfig = update(ki.QueryThrottlerConfig)
