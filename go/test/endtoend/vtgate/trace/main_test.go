@@ -227,7 +227,7 @@ func TestVTSpanContextComQuery(t *testing.T) {
 //
 // Reproduces https://github.com/vitessio/vitess/issues/19942
 func TestVTSpanContextPreparedStatement(t *testing.T) {
-	connStr := fmt.Sprintf("@tcp(%s:%d)/%s", hostname, clusterInstance.VtgateMySQLPort, keyspaceName)
+	connStr := fmt.Sprintf("@tcp(%s:%d)/%s?interpolateParams=false", hostname, clusterInstance.VtgateMySQLPort, keyspaceName)
 	db, err := sql.Open("mysql", connStr)
 	require.NoError(t, err)
 	defer db.Close()
