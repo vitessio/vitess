@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"sort"
 	"strings"
@@ -546,7 +547,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 
 	priority, err := vcursor.GetQueryPriority()
 	if err != nil {
-		log.Warn(fmt.Sprintf("Failed to get query priority for warming replica read: %v", err))
+		log.Warn("failed to get query priority for warming replica read", slog.Any("error", err))
 		replicaWarmingReadsDropped.Add([]string{route.Keyspace.Name}, 1)
 		return
 	}
@@ -566,7 +567,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 		defer cancel()
 		rss, _, err := route.findRoute(warmingCtx, replicaVCursor, bindVars)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to find route for warming replica read: %v", err))
+			log.Warn("failed to find route for warming replica read", slog.Any("error", err))
 			replicaWarmingReadsErrors.Add([]string{route.Keyspace.Name, vterrors.Code(err).String()}, 1)
 			return
 		}
@@ -580,7 +581,7 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 			}
 		}
 		if firstErr != nil {
-			log.Warn(fmt.Sprintf("Failed to execute warming replica read: %v", errs))
+			log.Warn("failed to execute warming replica read", slog.Any("errors", errs))
 			replicaWarmingReadsErrors.Add([]string{route.Keyspace.Name, vterrors.Code(firstErr).String()}, 1)
 		} else {
 			replicaWarmingReadsMirrored.Add([]string{route.Keyspace.Name}, 1)
