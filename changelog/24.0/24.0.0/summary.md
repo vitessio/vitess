@@ -213,7 +213,7 @@ For gRPC clients, specify the keyspace, shard, and optionally the tablet type or
 
 VTGate now extracts the `VT_SPAN_CONTEXT` query directive from prepared statements, enabling distributed tracing for queries that use the MySQL prepared statement protocol (`COM_STMT_PREPARE` / `COM_STMT_EXECUTE`).
 
-**Limitation**: The span context is extracted once at prepare time and reused for all subsequent executions. `COM_STMT_EXECUTE` does not carry SQL text, so there is no way to inject a fresh span context per-execute without re-preparing. In practice, Go's `database/sql` does implicit prepare+execute for `db.Query(..., args)`, so each call gets a fresh context.
+**Limitation**: The span context is extracted on first execution and cached for all subsequent executions of the same prepared statement. `COM_STMT_EXECUTE` does not carry SQL text, so there is no way to inject a fresh span context per-execute without re-preparing. In practice, Go's `database/sql` does implicit prepare+execute for `db.Query(..., args)`, so each call gets a fresh context.
 
 See [#19958](https://github.com/vitessio/vitess/pull/19958) for details.
 
