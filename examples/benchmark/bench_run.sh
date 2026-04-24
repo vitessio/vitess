@@ -180,9 +180,21 @@ add_target_indexes() {
 }
 
 # Step 1: Seed source tables with initial data
+# Retry the seed step: vtgate's connection pool to the primary tablet can be
+# briefly unavailable right after cluster startup, surfacing as
+# "connection pool is closed" when the seed script runs too soon.
 echo ""
 echo "Seeding source tables ($SEED_ROWS rows per table = $TOTAL_SEED total)..."
-LOAD_TYPE=seed ROW_COUNT=$TOTAL_SEED ./bench_generate_load.sh || fail "Failed to seed data"
+seed_attempts=0
+seed_max_attempts=3
+until LOAD_TYPE=seed ROW_COUNT=$TOTAL_SEED ./bench_generate_load.sh; do
+	seed_attempts=$((seed_attempts+1))
+	if [[ $seed_attempts -ge $seed_max_attempts ]]; then
+		fail "Failed to seed data after $seed_max_attempts attempts"
+	fi
+	echo "Seed failed (attempt $seed_attempts); retrying in 10s..."
+	sleep 10
+done
 
 # Step 2: Create MoveTables workflow (auto-start, copies seed data)
 echo ""

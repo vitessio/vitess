@@ -98,7 +98,7 @@ type vplayer struct {
 	throttlerAppName string
 
 	serialMu      *sync.Mutex
-	parallelOrder int64
+	parallelOrder *atomic.Int64
 
 	// fkRefs maps child table name → FK constraints for that table.
 	// Used by the parallel applier to generate writeset keys that
@@ -193,6 +193,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		tablePlans:                make(map[string]*TablePlan),
 		tablePlansVersion:         &atomic.Int64{},
 		serialMu:                  &sync.Mutex{},
+		parallelOrder:             &atomic.Int64{},
 		phase:                     phase,
 		throttlerAppName:          throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName()),
 		pendingFieldRefreshTables: make(map[string]int),

@@ -480,6 +480,7 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 		tablePlans:        make(map[string]*TablePlan),
 		tablePlansVersion: &atomic.Int64{},
 		serialMu:          &sync.Mutex{},
+		parallelOrder:     &atomic.Int64{},
 		lastTimestampNs:   &atomic.Int64{},
 		timeOffsetNs:      &atomic.Int64{},
 		timeLastSaved:     time.Now(),
@@ -1857,6 +1858,7 @@ func TestScheduleItems_PostDDLDroppedTablesSnapshotDoesNotAliasVPlayer(t *testin
 	scheduler := newApplyScheduler(ctx)
 	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
 
+	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
 	vp.postDDLDroppedTables = map[string]struct{}{"t1": {}}
 
 	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, nil))

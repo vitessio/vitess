@@ -27,6 +27,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -1164,6 +1165,19 @@ type parallelScheduleState struct {
 	// when tablePlansVersion changes (new FIELD events arrive).
 	fieldIdxCache        map[string]map[string]int
 	fieldIdxCacheVersion int64
+	// planFlagsVersion, planHasExtraUniqueSecondary, and
+	// planHasUnsupportedWritesetMapping cache aggregate flags for the
+	// cached plan snapshot. Avoids a per-txn scan of every plan when the
+	// workflow's tables carry none of these properties (the common case).
+	// Recomputed lazily when the plan version changes.
+	planFlagsVersion                  int64
+	planHasExtraUniqueSecondary       bool
+	planHasUnsupportedWritesetMapping bool
+	// curHasFieldEvent is true when the current transaction has
+	// accumulated at least one FIELD event. Lets the flush path skip
+	// txnNeedsFieldRefreshSerialization entirely for the common
+	// rowOnly-with-no-FIELDs case.
+	curHasFieldEvent bool
 	// batchedCommitCount tracks how many source transactions have been
 	// merged into the current mega-transaction via commit batching. When
 	// this exceeds maxBatchedCommits, the mega-transaction is flushed even
@@ -1253,20 +1267,28 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 
 	// Snapshot FK refs under serialMu so we have a consistent view for this
 	// relay fetch. The commitLoop may update these after DDL events.
+	// pendingFieldRefreshTables is needed for FIELD events during normal
+	// replication (initial table plan setup), so we always clone it.
+	// postDDLDroppedTables and postDDLStalePlans can only be populated when
+	// OnDdl is EXEC or EXEC_IGNORE, so we skip that work otherwise.
+	ddlExecEnabled := vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC ||
+		vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE
 	vp.serialMu.Lock()
 	fkRefs := vp.fkRefs
 	parentFKRefs := vp.parentFKRefs
 	pendingFieldRefreshTables := maps.Clone(vp.pendingFieldRefreshTables)
-	state.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
-	if len(vp.postDDLStalePlans) != 0 {
-		if state.postDDLStalePlans == nil {
-			state.postDDLStalePlans = make(map[string]postDDLStalePlan, len(vp.postDDLStalePlans))
+	if ddlExecEnabled {
+		state.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
+		if len(vp.postDDLStalePlans) != 0 {
+			if state.postDDLStalePlans == nil {
+				state.postDDLStalePlans = make(map[string]postDDLStalePlan, len(vp.postDDLStalePlans))
+			}
+			for name, stale := range vp.postDDLStalePlans {
+				state.postDDLStalePlans[name] = clonePostDDLStalePlan(stale)
+			}
 		}
-		for name, stale := range vp.postDDLStalePlans {
-			state.postDDLStalePlans[name] = clonePostDDLStalePlan(stale)
-		}
+		state.postDDLConservative = state.postDDLConservative || vp.postDDLConservative
 	}
-	state.postDDLConservative = state.postDDLConservative || vp.postDDLConservative
 	vp.serialMu.Unlock()
 
 	// After DDL events that may change schema or FK topology, force all
@@ -1320,10 +1342,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		if len(state.curEvents) == 0 && !commitOnly {
 			return nil
 		}
-		vp.serialMu.Lock()
-		vp.parallelOrder++
-		order := vp.parallelOrder
-		vp.serialMu.Unlock()
+		order := vp.parallelOrder.Add(1)
 		lastTs, lastCT := computeLastEventTimestamp(state.curEvents)
 		payload := acquireApplyTxnPayload()
 		payload.pos = state.curPos
@@ -1354,14 +1373,32 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 			txn.forceGlobal = true
 		} else if len(vp.copyState) != 0 {
 			txn.forceGlobal = true
-		} else if txnNeedsFieldRefreshSerialization(state.curEvents) {
+		} else if state.curHasFieldEvent && txnNeedsFieldRefreshSerialization(state.curEvents) {
 			txn.forceGlobal = true
 		} else if txnTouchesPendingFieldRefresh(state.curEvents, pendingFieldRefreshTables) {
 			txn.forceGlobal = true
 		} else {
 			planSnapshot := snapshotTablePlans(vp.tablePlansMu, vp.tablePlans, vp.tablePlansVersion, &state.cachedPlanVersion, state.cachedPlanSnapshot)
 			state.cachedPlanSnapshot = planSnapshot
-			if txnTouchesExtraUniqueSecondary(state.curEvents, planSnapshot) || txnTouchesUnsupportedWritesetMapping(state.curEvents, planSnapshot) {
+			if state.planFlagsVersion != state.cachedPlanVersion {
+				state.planHasExtraUniqueSecondary = false
+				state.planHasUnsupportedWritesetMapping = false
+				for _, plan := range planSnapshot {
+					if plan == nil {
+						continue
+					}
+					if plan.HasExtraUniqueSecondary {
+						state.planHasExtraUniqueSecondary = true
+					}
+					if plan.HasUnsupportedWritesetMapping {
+						state.planHasUnsupportedWritesetMapping = true
+					}
+				}
+				state.planFlagsVersion = state.cachedPlanVersion
+			}
+			extraUniqueTouched := state.planHasExtraUniqueSecondary && txnTouchesExtraUniqueSecondary(state.curEvents, planSnapshot)
+			unsupportedTouched := state.planHasUnsupportedWritesetMapping && txnTouchesUnsupportedWritesetMapping(state.curEvents, planSnapshot)
+			if extraUniqueTouched || unsupportedTouched {
 				txn.forceGlobal = true
 			} else {
 				// Invalidate fieldIdxCache when table plans change (new FIELD events).
@@ -1426,6 +1463,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		state.curCommitParent = 0
 		state.curSequence = 0
 		state.curHasCommitMeta = false
+		state.curHasFieldEvent = false
 		state.batchMissingCommitMeta = false
 		state.batchedCommitCount = 0
 		state.lastFlushTime = time.Now()
@@ -1527,6 +1565,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					state.curEvents = make([]*binlogdatapb.VEvent, 0, 16)
 					state.curRowOnly = false
 					state.curRowOnlySet = false
+					state.curHasFieldEvent = false
 					state.curMustSave = false
 					state.curTimestamp = 0
 					state.curCommitParent = 0
@@ -1626,6 +1665,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// already sets forceSerialize. Accumulate FIELD events like
 				// ROW events so they stay in the same applyTxn.
 				state.curEvents = append(state.curEvents, event)
+				state.curHasFieldEvent = true
 			case binlogdatapb.VEventType_INSERT,
 				binlogdatapb.VEventType_DELETE,
 				binlogdatapb.VEventType_UPDATE,
@@ -1643,9 +1683,8 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					return err
 				}
 				posReached := stopPosReached(state.curPos)
+				order := vp.parallelOrder.Add(1)
 				vp.serialMu.Lock()
-				vp.parallelOrder++
-				order := vp.parallelOrder
 				query := vp.query
 				commit := vp.commit
 				client := vp.dbClient
@@ -1796,9 +1835,8 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 	var query func(ctx context.Context, sql string) (*sqltypes.Result, error)
 	var commit func() error
 	var client *vdbClient
+	order = vp.parallelOrder.Add(1)
 	vp.serialMu.Lock()
-	vp.parallelOrder++
-	order = vp.parallelOrder
 	pos = vp.pos
 	query = vp.query
 	commit = vp.commit
@@ -1863,6 +1901,27 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 	}
 
+	// Register a single ctx.AfterFunc for the lifetime of this worker.
+	// On ctx cancellation, close whichever client is currently executing
+	// MySQL calls — published via activeApplyClient. Registering per-txn
+	// allocates a new closure + runtime bookkeeping on every transaction;
+	// this hoists both to once per worker.
+	var activeApplyClient atomic.Pointer[vdbClient]
+	stopInterrupt := context.AfterFunc(ctx, func() {
+		if c := activeApplyClient.Load(); c != nil {
+			c.Close()
+		}
+	})
+	defer stopInterrupt()
+
+	// Hoist the OnDdl check: the source's OnDdl action is fixed for the
+	// lifetime of the workflow, so we compute once rather than per-txn.
+	// When DDL execution is disabled, the worker can skip the per-txn
+	// serialMu acquisition that clones postDDL bookkeeping (since those
+	// maps stay empty in that mode).
+	ddlExecEnabled := vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC ||
+		vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE
+
 	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -1890,19 +1949,24 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// Apply events on the current active connection. This runs
 		// concurrently with the commitLoop committing the previous
 		// transaction on the other connection (double-buffering).
-		activeApplyClient := worker.client
-		stopInterrupt := context.AfterFunc(ctx, func() {
-			if activeApplyClient != nil {
-				activeApplyClient.Close()
-			}
-		})
-		vp.serialMu.Lock()
-		workerVP.postDDLStalePlans = clonePostDDLStalePlans(vp.postDDLStalePlans)
-		workerVP.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
-		vp.serialMu.Unlock()
+		// Publish the current worker client so the worker-scoped
+		// context.AfterFunc can close it if ctx is cancelled.
+		activeApplyClient.Store(worker.client)
+		// DDL bookkeeping (postDDLStalePlans, postDDLDroppedTables) is only
+		// populated when OnDdl is EXEC or EXEC_IGNORE. In the default IGNORE
+		// mode, these maps stay empty for the workflow's lifetime, so we can
+		// skip the serialMu acquisition and per-txn clone entirely. Taking
+		// serialMu here on every worker txn was the dominant contention point
+		// under parallel apply on OnDdl=IGNORE workflows.
+		if ddlExecEnabled {
+			vp.serialMu.Lock()
+			workerVP.postDDLStalePlans = clonePostDDLStalePlans(vp.postDDLStalePlans)
+			workerVP.postDDLDroppedTables = cloneDroppedTables(vp.postDDLDroppedTables)
+			vp.serialMu.Unlock()
+		}
 		for _, event := range payload.events {
 			if err := worker.applyEvent(ctx, event, payload.mustSave, &workerVP); err != nil {
-				stopInterrupt()
+				activeApplyClient.Store(nil)
 				worker.rollback()
 				if ctx.Err() != nil {
 					return ctx.Err()
@@ -1915,14 +1979,14 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// all workers execute their batches concurrently here, while the
 		// commitLoop only needs to do a cheap COMMIT + position update.
 		if err := worker.flushWorkerBatch(); err != nil {
-			stopInterrupt()
+			activeApplyClient.Store(nil)
 			worker.rollback()
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 			return err
 		}
-		stopInterrupt()
+		activeApplyClient.Store(nil)
 
 		// Wait for the previous transaction's commit to complete. Because
 		// we waited AFTER applying the current transaction, the apply and
@@ -1941,16 +2005,18 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// Capture the current connection for the payload before rotating.
 		// The commitLoop will use these to commit this transaction while
 		// the worker moves on to the next transaction on the spare connection.
-		activeClient := worker.client
-		if worker.batchMode {
-			payload.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-				return activeClient.Execute(sql)
-			}
-		} else {
-			payload.query = worker.query
-		}
-		payload.commit = worker.commit
+		//
+		// In batch mode we leave payload.query/commit nil and let commitLoop
+		// dispatch directly off payload.client via AddQueryToTrxBatch +
+		// CommitTrxQueryBatch. The commit still sends "UPDATE …;commit" in
+		// one multi-statement round-trip (the combine-commit win), but we
+		// avoid allocating two closures per mega-txn just to hold a reference
+		// to the worker's active connection.
 		payload.client = worker.client
+		if !worker.batchMode {
+			payload.query = worker.query
+			payload.commit = worker.commit
+		}
 
 		done := txn.done
 		select {
@@ -2010,30 +2076,53 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			return ctx.Err()
 		}
 		payload := txn.payload
-		queryFn := payload.query
-		if queryFn == nil {
-			queryFn = vp.query
-		}
-		commitFn := payload.commit
-		if commitFn == nil {
-			commitFn = vp.commit
-		}
 		dbClient := payload.client
 		if dbClient == nil {
 			dbClient = vp.activeDBClient()
 		}
 
-		posReached, err := vp.updatePosWithoutStop(ctx, payload.pos, payload.timestamp, queryFn)
-		if err != nil {
-			return err
-		}
-		if posReached {
-			if err := vp.setStopPositionStateImmediate(dbClient); err != nil {
+		// Worker batch-mode fast path: the worker set payload.client but left
+		// payload.query/commit nil so we wouldn't allocate a closure per
+		// mega-txn just to hold a reference to its connection. Use the client
+		// directly here. The AddQueryToTrxBatch + CommitTrxQueryBatch pair
+		// still sends "UPDATE _vt.vreplication …;commit" in a single
+		// multi-statement round-trip.
+		var posReached bool
+		if payload.client != nil && payload.query == nil && payload.commit == nil {
+			if err := payload.client.AddQueryToTrxBatch(vp.generateUpdatePosQuery(payload.pos, payload.timestamp)); err != nil {
 				return err
 			}
-		}
-		if err := commitFn(); err != nil {
-			return err
+			posReached = !vp.stopPos.IsZero() && payload.pos.AtLeast(vp.stopPos)
+			if posReached {
+				if err := vp.setStopPositionStateImmediate(dbClient); err != nil {
+					return err
+				}
+			}
+			if err := payload.client.CommitTrxQueryBatch(); err != nil {
+				return err
+			}
+		} else {
+			queryFn := payload.query
+			if queryFn == nil {
+				queryFn = vp.query
+			}
+			commitFn := payload.commit
+			if commitFn == nil {
+				commitFn = vp.commit
+			}
+			var err error
+			posReached, err = vp.updatePosWithoutStop(ctx, payload.pos, payload.timestamp, queryFn)
+			if err != nil {
+				return err
+			}
+			if posReached {
+				if err := vp.setStopPositionStateImmediate(dbClient); err != nil {
+					return err
+				}
+			}
+			if err := commitFn(); err != nil {
+				return err
+			}
 		}
 
 		// Briefly lock to update vp state that scheduleLoop reads.
@@ -2042,16 +2131,22 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		// The idle-timeout saver at the top of scheduleLoop will handle it.
 		vp.serialMu.Lock()
 		vp.recordPositionSave(payload.pos, false)
-		for refreshedName := range extractFieldRefreshTables(payload.events) {
-			if vp.pendingFieldRefreshTables != nil {
-				key := canonicalPostDDLTableKey(vp.pendingFieldRefreshTables, refreshedName)
-				if remaining := vp.pendingFieldRefreshTables[key] - 1; remaining > 0 {
-					vp.pendingFieldRefreshTables[key] = remaining
-				} else {
-					delete(vp.pendingFieldRefreshTables, key)
+		// Skip the per-commit FIELD refresh scan when neither map has entries.
+		// The common ROW-only steady state has no FIELD events to process,
+		// and extractFieldRefreshTables otherwise does a full payload scan
+		// that returns nil on every call.
+		if len(vp.pendingFieldRefreshTables) != 0 || len(vp.postDDLDroppedTables) != 0 {
+			for refreshedName := range extractFieldRefreshTables(payload.events) {
+				if vp.pendingFieldRefreshTables != nil {
+					key := canonicalPostDDLTableKey(vp.pendingFieldRefreshTables, refreshedName)
+					if remaining := vp.pendingFieldRefreshTables[key] - 1; remaining > 0 {
+						vp.pendingFieldRefreshTables[key] = remaining
+					} else {
+						delete(vp.pendingFieldRefreshTables, key)
+					}
 				}
+				delete(vp.postDDLDroppedTables, canonicalPostDDLTableKey(vp.postDDLDroppedTables, refreshedName))
 			}
-			delete(vp.postDDLDroppedTables, canonicalPostDDLTableKey(vp.postDDLDroppedTables, refreshedName))
 		}
 		vp.serialMu.Unlock()
 
