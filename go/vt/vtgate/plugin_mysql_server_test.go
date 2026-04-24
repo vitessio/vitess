@@ -274,6 +274,12 @@ func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSpanContextWithMultipleLeadingComments(t *testing.T) {
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*//*vt+ SCATTER_ERRORS_AS_WARNINGS */ SELECT col1 FROM TABLE", "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "123"))
+	assert.NoError(t, err)
+}
+
 func TestSpanContextNotParsable(t *testing.T) {
 	hasRun := false
 	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
