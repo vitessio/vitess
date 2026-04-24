@@ -242,8 +242,7 @@ func TestVTSpanContextPreparedStatement(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return vtgateWarningCount(t) > before
 	}, 30*time.Second, 500*time.Millisecond,
-		"expected VT_SPAN_CONTEXT warning in vtgate stderr for prepared statement path — "+
-			"this fails because ComPrepare/ComStmtExecute do not call startSpan()")
+		"expected VT_SPAN_CONTEXT warning in vtgate stderr for prepared statement path")
 }
 
 // TestVTSpanContextValidTraceComQuery sends a valid VT_SPAN_CONTEXT via
@@ -287,7 +286,7 @@ func TestVTSpanContextValidTracePreparedStatement(t *testing.T) {
 	traceparent := fmt.Sprintf("00-%s-%s-01", traceID, spanID)
 	carrier := buildCarrier(traceparent)
 
-	connStr := fmt.Sprintf("@tcp(%s:%d)/%s", hostname, clusterInstance.VtgateMySQLPort, keyspaceName)
+	connStr := fmt.Sprintf("@tcp(%s:%d)/%s?interpolateParams=false", hostname, clusterInstance.VtgateMySQLPort, keyspaceName)
 	db, err := sql.Open("mysql", connStr)
 	require.NoError(t, err)
 	defer db.Close()
