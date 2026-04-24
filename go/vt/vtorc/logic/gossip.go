@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -32,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/log"
@@ -523,7 +523,9 @@ func discoverGossipSeeds() []gossip.Member {
 		if alias == "" {
 			return nil
 		}
-		addr := fmt.Sprintf("%s:%d", tablet.Hostname, grpcPort)
+		// netutil.JoinHostPort handles IPv6 literal bracketing so we
+		// don't produce targets like "::1:16100".
+		addr := netutil.JoinHostPort(tablet.Hostname, grpcPort)
 		seeds = append(seeds, gossip.Member{
 			// Vttablets publish their tablet alias as the gossip node ID, so VTOrc
 			// must seed them with that same identity. Using the address here can

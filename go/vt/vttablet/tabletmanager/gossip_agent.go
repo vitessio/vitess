@@ -18,12 +18,11 @@ package tabletmanager
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 	"time"
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -51,7 +50,9 @@ func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts 
 	}
 
 	nodeID := topoproto.TabletAliasString(tablet.Alias)
-	grpcAddr := tablet.Hostname + ":" + strconv.Itoa(int(port))
+	// Use netutil.JoinHostPort so IPv6 literals get bracketed correctly
+	// (e.g. "[::1]:16100" instead of the invalid "::1:16100").
+	grpcAddr := netutil.JoinHostPort(tablet.Hostname, port)
 
 	meta := map[string]string{
 		gossip.MetaKeyKeyspace:    tablet.Keyspace,
@@ -118,7 +119,7 @@ func discoverSeeds(self *topodatapb.Tablet, ts *topo.Server) []gossip.Member {
 		if !ok || grpcPort == 0 {
 			continue
 		}
-		addr := fmt.Sprintf("%s:%d", t.Hostname, grpcPort)
+		addr := netutil.JoinHostPort(t.Hostname, grpcPort)
 		seeds = append(seeds, gossip.Member{
 			ID:   gossip.NodeID(alias),
 			Addr: addr,
