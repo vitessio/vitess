@@ -15019,6 +15019,23 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 					Enabled:  true,
 					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
 					DryRun:   false,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
@@ -15036,6 +15053,23 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 					Enabled:  true,
 					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
 					DryRun:   true,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
@@ -15050,7 +15084,25 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
 				Keyspace: "nonexistent",
 				QueryThrottlerConfig: &querythrottler.Config{
-					Enabled: true,
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 			shouldErr: true,

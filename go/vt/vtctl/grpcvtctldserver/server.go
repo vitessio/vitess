@@ -5906,11 +5906,107 @@ func (s *VtctldServer) GetKeyspaceRoutingRules(ctx context.Context, req *vtctlda
 	}, nil
 }
 
+func validateQueryThrottlerConfigRequest(req *vtctldatapb.UpdateQueryThrottlerConfigRequest) error {
+	if req.GetKeyspace() == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace is required")
+	}
+
+	if req.GetQueryThrottlerConfig() == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query_throttler_config is required")
+	}
+
+	return validateQueryThrottlerConfig(req.GetQueryThrottlerConfig())
+}
+
+func validateQueryThrottlerConfig(cfg *querythrottler.Config) error {
+	if !cfg.GetEnabled() {
+		return nil
+	}
+
+	switch cfg.GetStrategy() {
+	case querythrottler.ThrottlingStrategy_TABLET_THROTTLER:
+		return validateTabletThrottlerStrategyConfig(cfg)
+
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "strategy must be TABLET_THROTTLER when enabled is true")
+	}
+}
+
+func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_strategy_config is required when strategy is TABLET_THROTTLER")
+	}
+
+	if len(tsc.GetTabletRules()) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
+	}
+
+	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
+		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for metricName, rule := range metricRuleSet.GetMetricRules() {
+				for i, t := range rule.GetThresholds() {
+					if t.GetAbove() < 0 {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+
+					if t.GetThrottle() < 0 || t.GetThrottle() > 100 {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'throttle' must be between 0 and 100, got %d (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetThrottle(), tabletType, stmtType, metricName)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// sanitizeQueryThrottlerConfig normalizes a Config in-place. For the
+// TABLET_THROTTLER strategy it sorts every threshold slice ascending by Above
+// so that the binary search in GetThrottleDecision works correctly.
+func sanitizeQueryThrottlerConfig(cfg *querythrottler.Config) {
+	if cfg == nil {
+		return
+	}
+
+	if cfg.GetStrategy() != querythrottler.ThrottlingStrategy_TABLET_THROTTLER {
+		return
+	}
+
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return
+	}
+
+	for _, stmtRuleSet := range tsc.GetTabletRules() {
+		for _, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for _, rule := range metricRuleSet.GetMetricRules() {
+				ts := rule.GetThresholds()
+				if len(ts) > 1 {
+					sort.Slice(ts, func(i, j int) bool {
+						return ts[i].GetAbove() < ts[j].GetAbove()
+					})
+				}
+			}
+		}
+	}
+}
+
 func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtctldatapb.UpdateQueryThrottlerConfigRequest) (resp *vtctldatapb.UpdateQueryThrottlerConfigResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateQueryThrottlerConfig")
 	defer span.Finish()
 
 	defer panicHandler(&err)
+
+	if err := validateQueryThrottlerConfigRequest(req); err != nil {
+		return nil, err
+	}
+
+	sanitizeQueryThrottlerConfig(req.GetQueryThrottlerConfig())
 
 	span.Annotate("keyspace", req.GetKeyspace())
 	span.Annotate("strategy", req.GetQueryThrottlerConfig().GetStrategy())
