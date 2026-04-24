@@ -385,5 +385,5 @@ func (result *Result) IsInTransaction() bool {
 }
 
 func (result *Result) InsertIDUpdated() bool {
-	return result.InsertIDChanged || result.InsertID > 0
+	return result.InsertIDChanged
 }

@@ -273,6 +273,18 @@
           "name": "hash"
         }
       ]
+    },
+    "lid_tbl": {
+      "auto_increment": {
+        "column": "id",
+        "sequence": "uks.lid_seq"
+      },
+      "column_vindexes": [
+        {
+          "column": "email",
+          "name": "hash_varchar"
+        }
+      ]
     }
   }
 }

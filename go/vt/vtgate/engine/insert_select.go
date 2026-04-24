@@ -132,6 +132,9 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 		if output.InsertID == 0 || output.InsertID > qr.InsertID {
 			output.InsertID = qr.InsertID
 		}
+		if qr.InsertIDChanged {
+			output.InsertIDChanged = true
+		}
 		return nil
 	})
 	if err != nil {
@@ -185,7 +188,10 @@ func (ins *InsertSelect) insertIntoShardedTable(
 	if err != nil {
 		return nil, err
 	}
-	qr.InsertID = uint64(irr.insertID)
+	if irr.insertID != 0 {
+		qr.InsertID = uint64(irr.insertID)
+		qr.InsertIDChanged = true
+	}
 	return qr, nil
 }
 
@@ -208,6 +214,7 @@ func (ins *InsertSelect) executeInsertQueries(
 
 	if insertID != 0 {
 		result.InsertID = insertID
+		result.InsertIDChanged = true
 	}
 	return result, nil
 }

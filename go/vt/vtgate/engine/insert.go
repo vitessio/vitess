@@ -163,14 +163,47 @@ func (ins *Insert) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
+	// Save the session's LastInsertId before ExecuteMultiShard, which may
+	// overwrite it with the shard's LAST_INSERT_ID value. We need this to
+	// restore stickiness for the SQL function LAST_INSERT_ID() in the
+	// ON DUP KEY UPDATE case.
+	var savedLastInsertID uint64
+	if ins.HasOnDupLastInsertID {
+		savedLastInsertID = vcursor.GetLastInsertID()
+	}
+
 	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /*rollbackOnError*/, autocommit, ins.FetchLastInsertID)
 	if errs != nil {
 		return nil, vterrors.Aggregate(errs)
 	}
 
 	if insertID != 0 {
-		result.InsertID = insertID
-		result.InsertIDChanged = true
+		if ins.HasOnDupLastInsertID {
+			// ON DUPLICATE KEY UPDATE with LAST_INSERT_ID trick.
+			// The shard MySQL returns the existing row's id via LAST_INSERT_ID
+			// for updates, or 0 for new inserts.
+			if result.RowsAffected == 0 {
+				// No change (duplicate with identical values). InsertID = 0.
+				// Restore the session value that ExecuteMultiShard may have overwritten.
+				result.InsertID = 0
+				result.InsertIDChanged = false
+				vcursor.SetLastInsertID(savedLastInsertID)
+			} else if result.InsertID != 0 {
+				// Shard returned existing row's id from LAST_INSERT_ID.
+				// Wire protocol should show this id, but the SQL function
+				// LAST_INSERT_ID() should stay sticky at whatever it was before.
+				result.InsertIDChanged = false
+				vcursor.SetLastInsertID(savedLastInsertID)
+			} else {
+				// Normal insert(s). Use the sequence-generated value.
+				result.InsertID = insertID
+				result.InsertIDChanged = true
+				vcursor.SetLastInsertID(insertID)
+			}
+		} else {
+			result.InsertID = insertID
+			result.InsertIDChanged = true
+		}
 	}
 	return result, nil
 }

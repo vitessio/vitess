@@ -79,6 +79,11 @@ type (
 
 		FetchLastInsertID bool
 
+		// HasOnDupLastInsertID indicates that the ON DUPLICATE KEY UPDATE clause
+		// was augmented with LAST_INSERT_ID(<auto_inc_col>) at plan time to capture
+		// the existing row's auto-increment value during updates.
+		HasOnDupLastInsertID bool
+
 		// Prefix, Suffix are for sharded insert plans.
 		Prefix string
 		Suffix sqlparser.OnDup
@@ -146,6 +151,14 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	if err != nil {
 		return nil, err
 	}
+	// Save the session's LastInsertId before executing, which may overwrite
+	// it with the shard's LAST_INSERT_ID value. We need this to restore
+	// stickiness for the SQL function LAST_INSERT_ID() in the ON DUP KEY UPDATE case.
+	var savedLastInsertID uint64
+	if ins.HasOnDupLastInsertID {
+		savedLastInsertID = vcursor.GetLastInsertID()
+	}
+
 	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */, ins.FetchLastInsertID)
 	if err != nil {
 		return nil, err
@@ -156,8 +169,30 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	// values, we don't return an error because this behavior
 	// is required to support migration.
 	if insertID != 0 {
-		qr.InsertIDChanged = true
-		qr.InsertID = insertID
+		if ins.HasOnDupLastInsertID {
+			// ON DUPLICATE KEY UPDATE with LAST_INSERT_ID trick.
+			if qr.RowsAffected == 0 {
+				// No change (duplicate with identical values). InsertID = 0.
+				// Restore the session value that execShard may have overwritten.
+				qr.InsertID = 0
+				qr.InsertIDChanged = false
+				vcursor.SetLastInsertID(savedLastInsertID)
+			} else if qr.InsertID != 0 {
+				// Shard returned existing row's id from LAST_INSERT_ID.
+				// Wire protocol should show this id, but the SQL function
+				// LAST_INSERT_ID() should stay sticky at whatever it was before.
+				qr.InsertIDChanged = false
+				vcursor.SetLastInsertID(savedLastInsertID)
+			} else {
+				// Normal insert(s). Use the sequence-generated value.
+				qr.InsertID = insertID
+				qr.InsertIDChanged = true
+				vcursor.SetLastInsertID(insertID)
+			}
+		} else {
+			qr.InsertIDChanged = true
+			qr.InsertID = insertID
+		}
 	}
 	return qr, nil
 }
