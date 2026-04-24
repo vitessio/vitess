@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -126,8 +128,11 @@ type (
 		// GetWarmingReadsPercent gets the percentage of queries to clone to replicas for bufferpool warming
 		GetWarmingReadsPercent() int
 
-		// GetWarmingReadsChannel returns the channel for executing warming reads against replicas
-		GetWarmingReadsChannel() chan bool
+		// GetWarmingReadsSemaphore returns the semaphore for limiting concurrent warming reads
+		GetWarmingReadsSemaphore() *semaphore.Weighted
+
+		// GetQueryPriority returns the current session's query priority as an int, defaulting to 0 if unset
+		GetQueryPriority() (int, error)
 
 		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas.
 		// The clone must be created before launching the warming goroutine to avoid
