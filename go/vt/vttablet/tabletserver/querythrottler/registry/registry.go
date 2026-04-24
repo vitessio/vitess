@@ -40,7 +40,6 @@ func Register(name querythrottlerpb.ThrottlingStrategy, factory StrategyFactory)
 	}
 
 	factories[name] = factory
-	log.Info(fmt.Sprintf("Registered throttling strategy: %s", name))
 }
 
 // Get retrieves a strategy factory by name.
