@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -94,9 +96,9 @@ type (
 		// denylist entirely, preserving the historical behavior.
 		DeniedSystemVariables map[string]struct{}
 
-		WarmingReadsPercent int
-		WarmingReadsTimeout time.Duration
-		WarmingReadsChannel chan bool
+		WarmingReadsPercent   int
+		WarmingReadsTimeout   time.Duration
+		WarmingReadsSemaphore *semaphore.Weighted
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -684,6 +686,11 @@ func (vc *VCursorImpl) IsSystemVariableDenied(name string) bool {
 	return denied
 }
 
+// HasDeniedSystemVariables implements the plancontext.VSchema interface.
+func (vc *VCursorImpl) HasDeniedSystemVariables() bool {
+	return len(vc.config.DeniedSystemVariables) > 0
+}
+
 // KeyspaceExists provides whether the keyspace exists or not.
 func (vc *VCursorImpl) KeyspaceExists(ks string) bool {
 	return vc.vschema.Keyspaces[ks] != nil
@@ -1232,7 +1239,17 @@ func (vc *VCursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 
 func (vc *VCursorImpl) SetPriority(priority string) {
 	if priority != "" {
-		vc.SafeSession.GetOrCreateOptions().Priority = priority
+		intPriority, err := strconv.Atoi(priority)
+		if err != nil {
+			// On invalid priority input, clear any existing priority to avoid
+			// unintentionally reusing a previous valid priority.
+			if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
+				vc.SafeSession.Options.Priority = ""
+			}
+			return
+		}
+		intPriority = max(0, min(intPriority, sqlparser.MaxPriorityValue))
+		vc.SafeSession.GetOrCreateOptions().Priority = strconv.Itoa(intPriority)
 	} else if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
 		vc.SafeSession.Options.Priority = ""
 	}
@@ -1667,8 +1684,19 @@ func (vc *VCursorImpl) GetWarmingReadsPercent() int {
 	return vc.config.WarmingReadsPercent
 }
 
-func (vc *VCursorImpl) GetWarmingReadsChannel() chan bool {
-	return vc.config.WarmingReadsChannel
+func (vc *VCursorImpl) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	return vc.config.WarmingReadsSemaphore
+}
+
+func (vc *VCursorImpl) GetQueryPriority() (int, error) {
+	if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
+		priority, err := strconv.Atoi(vc.SafeSession.Options.Priority)
+		if err != nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", vc.SafeSession.Options.Priority, err)
+		}
+		return max(0, min(priority, sqlparser.MaxPriorityValue)), nil
+	}
+	return 0, nil
 }
 
 // SetForeignKeyCheckState updates the foreign key checks state of the vcursor.

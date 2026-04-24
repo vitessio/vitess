@@ -232,6 +232,10 @@ func (vw *VSchemaWrapper) IsSystemVariableDenied(name string) bool {
 	return denied
 }
 
+func (vw *VSchemaWrapper) HasDeniedSystemVariables() bool {
+	return len(vw.DeniedSysVars) > 0
+}
+
 func (vw *VSchemaWrapper) TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
 	return vw.Vcursor.TargetDestination(qualifier)
 }

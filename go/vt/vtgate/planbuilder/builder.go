@@ -123,6 +123,9 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 }
 
 func checkDeniedSetVarHints(stmt sqlparser.Statement, vschema plancontext.VSchema) error {
+	if !vschema.HasDeniedSystemVariables() {
+		return nil
+	}
 	commented, ok := stmt.(sqlparser.Commented)
 	if !ok {
 		return nil

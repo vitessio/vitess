@@ -251,6 +251,10 @@ func (v *vschema) IsSystemVariableDenied(string) bool {
 	return false
 }
 
+func (v *vschema) HasDeniedSystemVariables() bool {
+	return false
+}
+
 func (v *vschema) KeyspaceExists(keyspace string) bool {
 	// TODO implement me
 	panic("implement me")

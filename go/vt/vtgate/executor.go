@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
@@ -143,7 +144,7 @@ type (
 		// queryLogger is passed in for logging from this vtgate executor.
 		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
-		warmingReadsChannel chan bool
+		warmingReadsSemaphore *semaphore.Weighted
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
@@ -197,10 +198,10 @@ func NewExecutor(
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
 
-		schemaTracker:       schemaTracker,
-		plans:               plans,
-		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
-		ddlConfig:           ddlConfig,
+		schemaTracker:         schemaTracker,
+		plans:                 plans,
+		warmingReadsSemaphore: newWarmingReadsSemaphore(warmingReadsConcurrency),
+		ddlConfig:             ddlConfig,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -1565,9 +1566,9 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent: e.config.WarmingReadsPercent,
-		WarmingReadsTimeout: warmingReadsQueryTimeout,
-		WarmingReadsChannel: e.warmingReadsChannel,
+		WarmingReadsPercent:   e.config.WarmingReadsPercent,
+		WarmingReadsTimeout:   warmingReadsQueryTimeout,
+		WarmingReadsSemaphore: e.warmingReadsSemaphore,
 	}
 }
 
@@ -1590,6 +1591,13 @@ func buildDeniedSystemVariables(names []string) map[string]struct{} {
 		return nil
 	}
 	return denied
+}
+
+func newWarmingReadsSemaphore(concurrency int) *semaphore.Weighted {
+	if concurrency <= 0 {
+		return semaphore.NewWeighted(0)
+	}
+	return semaphore.NewWeighted(int64(concurrency) * engine.WarmingReadsBaseWeight)
 }
 
 func countArguments(statement sqlparser.Statement) (paramsCount uint16) {

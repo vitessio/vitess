@@ -4515,6 +4515,50 @@ func TestSelectView(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc.Queries)
 }
 
+func TestNewWarmingReadsSemaphore(t *testing.T) {
+	tests := []struct {
+		name        string
+		concurrency int
+		wantFit     int64 // weight that should fit via TryAcquire
+		wantReject  int64 // weight that should be rejected via TryAcquire
+	}{
+		{
+			name:        "zero concurrency blocks all",
+			concurrency: 0,
+			wantReject:  1,
+		},
+		{
+			name:        "negative concurrency blocks all",
+			concurrency: -1,
+			wantReject:  1,
+		},
+		{
+			name:        "concurrency 1 fits priority 0",
+			concurrency: 1,
+			wantFit:     engine.WarmingReadsBaseWeight, // 100
+			wantReject:  1,                             // no room left
+		},
+		{
+			name:        "concurrency 500 fits 500 priority-0 reads",
+			concurrency: 500,
+			wantFit:     500 * engine.WarmingReadsBaseWeight,
+			wantReject:  1,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := newWarmingReadsSemaphore(tc.concurrency)
+			require.NotNil(t, sem)
+			if tc.wantFit > 0 {
+				require.True(t, sem.TryAcquire(tc.wantFit), "expected TryAcquire(%d) to succeed", tc.wantFit)
+			}
+			if tc.wantReject > 0 {
+				require.False(t, sem.TryAcquire(tc.wantReject), "expected TryAcquire(%d) to fail", tc.wantReject)
+			}
+		})
+	}
+}
+
 func TestWarmingReads(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	executor, primary, replica := createExecutorEnvWithPrimaryReplicaConn(t, ctx, 100)
