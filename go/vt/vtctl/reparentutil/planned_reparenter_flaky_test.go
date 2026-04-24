@@ -4216,6 +4216,65 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 				},
 			},
 			wantErr: "context deadline exceeded",
+		}, {
+			name: "Restore tablet skipped before RPC",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsDelays: map[string]time.Duration{
+					"zone1-0000000300": 20 * time.Second,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000300": {
+						Error: errors.New("should never be called"),
+					},
+				},
+			},
+			remoteOpTime: 100 * time.Millisecond,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000300": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  300,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+			},
+			wantBufferPoolsData: map[string]int{
+				"zone1-0000000100": 1231,
+				"zone1-0000000200": 123,
+			},
 		},
 	}
 	for _, tt := range tests {
