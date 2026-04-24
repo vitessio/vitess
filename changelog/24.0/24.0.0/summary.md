@@ -21,6 +21,7 @@
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
         - [New "session" mode for `--vtgate-balancer-mode` flag](#vtgate-session-balancer-mode)
+        - [`VT_SPAN_CONTEXT` extraction for prepared statements](#vtgate-vt-span-context-prepared-stmts)
     - **[Query Serving](#minor-changes-query-serving)**
         - [JSON_EXTRACT now supports dynamic path arguments](#query-serving-json-extract-dynamic-args)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -202,6 +203,14 @@ To enable session mode, set the flag when starting VTGate:
 ```
 --vtgate-balancer-mode=session
 ```
+
+#### <a id="vtgate-vt-span-context-prepared-stmts"/>`VT_SPAN_CONTEXT` extraction for prepared statements</a>
+
+VTGate now extracts the `VT_SPAN_CONTEXT` query directive from prepared statements, enabling distributed tracing for queries that use the MySQL prepared statement protocol (`COM_STMT_PREPARE` / `COM_STMT_EXECUTE`).
+
+**Limitation**: The span context is extracted once at prepare time and reused for all subsequent executions. `COM_STMT_EXECUTE` does not carry SQL text, so there is no way to inject a fresh span context per-execute without re-preparing. In practice, Go's `database/sql` does implicit prepare+execute for `db.Query(..., args)`, so each call gets a fresh context.
+
+See [#19958](https://github.com/vitessio/vitess/pull/19958) for details.
 
 ### <a id="minor-changes-query-serving"/>Query Serving</a>
 

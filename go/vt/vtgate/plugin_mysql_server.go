@@ -429,6 +429,12 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		defer cancel()
 	}
 
+	span, ctx, err := startSpan(ctx, prepare.PrepareStmt, "vtgateHandler.ComStmtExecute")
+	if err != nil {
+		return vterrors.Wrap(err, "failed to extract span")
+	}
+	defer span.Finish()
+
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
 	// Fill in the ImmediateCallerID with the UserData returned by
