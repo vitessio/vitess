@@ -270,6 +270,7 @@ Flags:
       --port int                                                         port for the server
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
+      --prevent-cross-keyspace-reads                                     when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs
       --proto-topo vttest.TopoData                                       vttest proto definition of the topology, encoded in compact text format. See vttest.proto for more information.
       --proxy-protocol                                                   Enable HAProxy PROXY protocol on MySQL listener socket
       --proxy-tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them

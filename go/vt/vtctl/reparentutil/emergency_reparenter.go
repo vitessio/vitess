@@ -191,7 +191,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
-		err = vterrors.Wrapf(err, "restart replication cleanup failed: %v", cleanupErr)
+		err = fmt.Errorf("%w, and restart replication cleanup failed: %v", err, cleanupErr)
 	}()
 
 	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
@@ -915,7 +915,6 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	for _, candidate := range maxLenCandidates {
 		candidatePositions := validCandidates[candidate]
 		if candidatePositions == nil || candidatePositions.IsZero() {
-			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
 			continue
 		}
 

@@ -88,9 +88,10 @@ type (
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
 
-		WarmingReadsPercent int
-		WarmingReadsTimeout time.Duration
-		WarmingReadsChannel chan bool
+		PreventCrossKeyspaceReads bool
+		WarmingReadsPercent       int
+		WarmingReadsTimeout       time.Duration
+		WarmingReadsChannel       chan bool
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -1440,6 +1441,22 @@ func (vc *VCursorImpl) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Forei
 		return 0, vterrors.VT14004(keyspace)
 	}
 	return ks.ForeignKeyMode, nil
+}
+
+// AllowCrossKeyspaceReads returns true if cross-keyspace reads are allowed for the given keyspace.
+// Returns false if denied by the vtgate flag or the keyspace-level vschema setting.
+func (vc *VCursorImpl) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	if vc.config.PreventCrossKeyspaceReads {
+		return false, nil
+	}
+	if keyspace == "" {
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AllowCrossKeyspaceReads called with empty keyspace")
+	}
+	ks := vc.vschema.Keyspaces[keyspace]
+	if ks == nil {
+		return false, vterrors.VT14004(keyspace)
+	}
+	return !ks.PreventCrossKeyspaceReads, nil
 }
 
 func (vc *VCursorImpl) KeyspaceError(keyspace string) error {
