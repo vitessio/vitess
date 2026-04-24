@@ -47,13 +47,11 @@ Flags:
       --config-path strings                                              Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
+      --consolidator-cache-proto3-rows                                   If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.
       --consolidator-query-waiter-cap int                                Configure the maximum number of clients allowed to wait on the consolidator.
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
-      --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
-      --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
-      --datadog-trace-debug-mode                                         enable debug mode for datadog tracing
       --db-allprivs-password string                                      db allprivs password
       --db-allprivs-use-ssl                                              Set this flag to false to make the allprivs connection to not use ssl (default true)
       --db-allprivs-user string                                          db allprivs user userKey (default "vt_allprivs")
@@ -186,7 +184,6 @@ Flags:
       --init-tablet-type-lookup                                          (Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.
       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
-      --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --json-topo vttest.TopoData                                        vttest proto definition of the topology, encoded in json format. See vttest.proto for more information.
       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
@@ -400,8 +397,7 @@ Flags:
       --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate float                                      sampling parameter for traces; for jaeger this is passed as the sampler parameter (see --tracing-sampling-type), for opentelemetry/datadog it is a probability between 0.0 and 1.0 (default 0.1)
-      --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
+      --tracing-sampling-rate float                                      sampling rate for traces as a probability between 0.0 and 1.0 (default 0.1)
       --track-schema-versions                                            When enabled, vttablet will store versions of schemas at each position that a DDL is applied and allow retrieval of the schema corresponding to a position
       --track-udfs                                                       Track UDFs in vtgate.
       --transaction-limit-by-component                                   Include CallerID.component when considering who the user is for the purpose of transaction limit.
@@ -428,6 +424,7 @@ Flags:
       --vreplication-enable-http-log                                     Enable the /debug/vrlog HTTP endpoint, which will produce a log of the events replicated on primary tablets in the target keyspace by all VReplication workflows that are in the running/replicating phase.
       --vreplication-experimental-flags int                              (Bitmask) of experimental features in vreplication to enable (default 7)
       --vreplication-heartbeat-update-interval int                       Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling (default 1)
+      --vreplication-max-row-json-bytes int                              Maximum combined byte size of JSON columns in a single row during VReplication copy and replay phases. 0 means unlimited.
       --vreplication-max-time-to-retry-on-error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
       --vreplication-net-read-timeout int                                Session value of net_read_timeout for vreplication, in seconds (default 300)
       --vreplication-net-write-timeout int                               Session value of net_write_timeout for vreplication, in seconds (default 600)
