@@ -148,8 +148,10 @@ func TestGossipConvergesWithSeeds(t *testing.T) {
 	g1.UpdateLocal(HealthSnapshot{NodeID: "node1", Timestamp: clock.Now()})
 	g2.UpdateLocal(HealthSnapshot{NodeID: "node2", Timestamp: clock.Now()})
 
-	g1.HandleJoin(&JoinRequest{Member: Member{ID: "node2", Addr: "node2"}})
-	g2.HandleJoin(&JoinRequest{Member: Member{ID: "node1", Addr: "node1"}})
+	_, err := g1.HandleJoin(&JoinRequest{Member: Member{ID: "node2", Addr: "node2"}})
+	require.NoError(t, err)
+	_, err = g2.HandleJoin(&JoinRequest{Member: Member{ID: "node1", Addr: "node1"}})
+	require.NoError(t, err)
 	g1.HandlePushPull(&Message{Members: []Member{{ID: "node2", Addr: "node2"}}, States: []StateDigest{{NodeID: "node2", Status: StatusAlive, LastUpdate: clock.Now()}}})
 	g2.HandlePushPull(&Message{Members: []Member{{ID: "node1", Addr: "node1"}}, States: []StateDigest{{NodeID: "node1", Status: StatusAlive, LastUpdate: clock.Now()}}})
 
@@ -230,8 +232,10 @@ func TestGossipMarksDownWhenPeerUnreachable(t *testing.T) {
 	g1.UpdateLocal(HealthSnapshot{NodeID: "node1", Timestamp: clock.Now()})
 	g2.UpdateLocal(HealthSnapshot{NodeID: "node2", Timestamp: clock.Now()})
 
-	g1.HandleJoin(&JoinRequest{Member: Member{ID: "node2", Addr: "node2"}})
-	g2.HandleJoin(&JoinRequest{Member: Member{ID: "node1", Addr: "node1"}})
+	_, err := g1.HandleJoin(&JoinRequest{Member: Member{ID: "node2", Addr: "node2"}})
+	require.NoError(t, err)
+	_, err = g2.HandleJoin(&JoinRequest{Member: Member{ID: "node1", Addr: "node1"}})
+	require.NoError(t, err)
 	g1.HandlePushPull(&Message{Members: []Member{{ID: "node2", Addr: "node2"}}, States: []StateDigest{{NodeID: "node2", Status: StatusAlive, LastUpdate: clock.Now()}}})
 
 	assert.Equal(t, StatusAlive, g1.Snapshot()["node2"].Status)
@@ -628,8 +632,10 @@ func TestSingleObserverDownDoesNotPropagate(t *testing.T) {
 	r1.UpdateLocal(HealthSnapshot{NodeID: "r1", Timestamp: clock.Now()})
 	r2.UpdateLocal(HealthSnapshot{NodeID: "r2", Timestamp: clock.Now()})
 
-	primary.HandleJoin(&JoinRequest{Member: Member{ID: "r1", Addr: "r1"}})
-	primary.HandleJoin(&JoinRequest{Member: Member{ID: "r2", Addr: "r2"}})
+	_, err := primary.HandleJoin(&JoinRequest{Member: Member{ID: "r1", Addr: "r1"}})
+	require.NoError(t, err)
+	_, err = primary.HandleJoin(&JoinRequest{Member: Member{ID: "r2", Addr: "r2"}})
+	require.NoError(t, err)
 	r1.HandlePushPull(&Message{Members: []Member{{ID: "primary", Addr: "primary"}}, States: []StateDigest{{NodeID: "primary", Status: StatusAlive, LastUpdate: clock.Now()}}})
 	r2.HandlePushPull(&Message{Members: []Member{{ID: "primary", Addr: "primary"}}, States: []StateDigest{{NodeID: "primary", Status: StatusAlive, LastUpdate: clock.Now()}}})
 

@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 
 	"vitess.io/vitess/go/vt/gossip"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
@@ -71,6 +72,7 @@ func (tm *TabletManager) stopGossipAgent() {
 	tm.GossipEnabled = false
 	tm.gossipMu.Unlock()
 	if agent != nil {
+		log.Info("gossip: stopping agent (config disabled)")
 		agent.Stop()
 	}
 }
@@ -90,6 +92,7 @@ func (tm *TabletManager) stopGossipLifecycle() {
 		cancel()
 	}
 	if agent != nil {
+		log.Info("gossip: stopping agent (lifecycle shutdown)")
 		agent.Stop()
 	}
 }
@@ -142,6 +145,7 @@ func registerGossipService(tm *TabletManager) {
 	}
 
 	gossipGRPCServiceOnce.Do(func() {
+		log.Info("gossip: registering gRPC service on shared vttablet gRPC server")
 		gossippb.RegisterGossipServer(servenv.GRPCServer, &gossip.Service{
 			GetAgent: currentProcessGossipAgent,
 		})

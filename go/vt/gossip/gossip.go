@@ -123,12 +123,17 @@ type (
 		pendingConfig Config
 		reconfigCh    chan struct{}
 
-		// stop is created in New and closed exactly once in Stop. Start
+		// stop is created in New and closed exactly once by Stop(). Start
 		// captures it locally so the gossip loop is insulated from any
 		// future reassignments. started enforces one-shot Start semantics.
-		stop    chan struct{}
-		started atomic.Bool
-		stopped atomic.Bool
+		// stopInvoked gates the external Stop() path (and cleanup of
+		// transport resources) independently of loopExited, so Stop()
+		// can always clean up even if the gossip loop already exited
+		// because the caller-supplied ctx was cancelled.
+		stop        chan struct{}
+		started     atomic.Bool
+		stopInvoked atomic.Bool
+		loopExited  atomic.Bool
 	}
 )
 
@@ -217,7 +222,7 @@ func (g *Gossip) Start(ctx context.Context) error {
 
 	ticker := time.NewTicker(g.cfg.PingInterval)
 	go func() {
-		defer g.stopped.Store(true)
+		defer g.loopExited.Store(true)
 		defer ticker.Stop()
 		for {
 			select {
@@ -242,11 +247,15 @@ func (g *Gossip) Start(ctx context.Context) error {
 
 // Stop halts the gossip loop and releases any resources held by the
 // transport (e.g., cached gRPC connections). Safe to call multiple
-// times.
+// times and safe to call after the loop has already exited due to
+// context cancellation.
 func (g *Gossip) Stop() {
-	if !g.stopped.CompareAndSwap(false, true) {
+	if !g.stopInvoked.CompareAndSwap(false, true) {
 		return
 	}
+	// If Start was never called (PingInterval<=0), g.started is false —
+	// the channel was never observed by any goroutine, but close is
+	// still safe because it's created unconditionally in New.
 	close(g.stop)
 	if g.transport != nil {
 		g.transport.Close()

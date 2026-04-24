@@ -22,12 +22,22 @@ import (
 	"strconv"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/gossip"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+// GossipSecureDialOption allows a caller (typically the vttablet main
+// entry point) to supply a TLS-aware gRPC dial option so that gossip
+// traffic inherits the same transport security as other tablet-to-tablet
+// RPCs. It is a function to avoid an import cycle with grpctmclient
+// (whose test files import tabletmanager). Leave nil to fall back to
+// insecure, which is only appropriate for local testing.
+var GossipSecureDialOption func() (grpc.DialOption, error)
 
 // newGossipAgent creates a gossip agent from the keyspace-level config and tablet identity.
 func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts *topo.Server) (*gossip.Gossip, bool) {
@@ -60,7 +70,14 @@ func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts 
 		phiThreshold = 4
 	}
 
-	transport := gossip.NewGRPCTransport(&gossip.GRPCDialer{})
+	// Reuse the tablet manager gRPC client's TLS configuration so
+	// gossip inherits the same certs/CA/peer-name as every other
+	// tablet-to-tablet RPC. GossipSecureDialOption is wired from the
+	// vttablet main entry point (see plugin_grpctmclient.go) to avoid
+	// an import cycle with grpctmclient's tests.
+	transport := gossip.NewGRPCTransport(&gossip.GRPCDialer{
+		SecureDialOption: GossipSecureDialOption,
+	})
 	agent := gossip.New(gossip.Config{
 		NodeID:       gossip.NodeID(nodeID),
 		BindAddr:     bindAddr,

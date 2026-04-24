@@ -147,6 +147,7 @@ func startGossipRPCServer() {
 	gossipRPCServer = server
 	gossipRPCListener = listener
 
+	log.Info("gossip: starting gRPC server", slog.String("addr", listenAddr))
 	go func() {
 		if err := server.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			log.Error("gossip gRPC server exited",
@@ -165,6 +166,7 @@ func stopGossipRPCServer() {
 	gossipRPCMu.Unlock()
 
 	if server != nil {
+		log.Info("gossip: stopping gRPC server")
 		server.Stop()
 	}
 	if listener != nil {
@@ -201,6 +203,13 @@ func startGossipAgent(cfg *topodatapb.GossipConfig) {
 		log.Error("failed to start gossip", slog.Any("error", err))
 		return
 	}
+	log.Info("gossip: agent started",
+		slog.String("node_id", config.GossipNodeID()),
+		slog.String("bind_addr", config.GossipListenAddr()),
+		slog.Int("seeds", len(seeds)),
+		slog.Float64("phi_threshold", tuning.PhiThreshold),
+		slog.Duration("ping_interval", tuning.PingInterval),
+		slog.Duration("max_update_age", tuning.MaxUpdateAge))
 	gossipAgent = agent
 }
 
@@ -341,16 +350,18 @@ func reconcileGossipConfig(localCfg *topodatapb.GossipConfig) {
 	})
 }
 
+// watchExistingGossipKeyspaces picks a single keyspace with gossip
+// enabled (if any) and starts watching its SrvKeyspace for config
+// changes. Only one watcher runs at a time — watching every enabled
+// keyspace would create O(N) long-lived watches in large installs,
+// and VTOrc only needs one driver keyspace because the gossip agent
+// is process-global.
 func watchExistingGossipKeyspaces(ctx context.Context) bool {
-	_, keyspaces, _ := findGossipConfigState()
-	if len(keyspaces) == 0 {
+	_, selected, _ := findGossipConfig()
+	if selected == "" {
 		return false
 	}
-
-	for _, ksName := range keyspaces {
-		go watchGossipConfig(ctx, ksName)
-	}
-
+	go watchGossipConfig(ctx, selected)
 	return true
 }
 
@@ -432,10 +443,20 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 				cfg := change.Value.GossipConfig
 				reconcileGossipConfig(cfg)
 				if cfg == nil || !cfg.Enabled {
-					if _, fallbackKeyspace, conflict := findGossipConfig(); !conflict && fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
+					_, fallbackKeyspace, conflict := findGossipConfig()
+					if !conflict && fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
 						keyspace = fallbackKeyspace
 						restart = true
 						break
+					}
+					// No enabled fallback keyspace. Re-reconcile with
+					// nil to guarantee the agent is cleared even when
+					// reconcileGossipConfig above reconfigured it
+					// based on a keyspace that was disabled after we
+					// read its state (i.e., racing disables in
+					// multiple keyspaces).
+					if conflict || fallbackKeyspace == "" {
+						reconcileGossipConfig(nil)
 					}
 				}
 			}

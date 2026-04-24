@@ -7024,12 +7024,18 @@ type UpdateGossipConfigRequest struct {
 	Enable bool `protobuf:"varint,2,opt,name=enable,proto3" json:"enable,omitempty"`
 	// disable turns gossip off for the keyspace.
 	Disable bool `protobuf:"varint,3,opt,name=disable,proto3" json:"disable,omitempty"`
-	// phi_threshold is the phi-accrual suspicion threshold. If unset when creating
-	// a config, the default is 4. 0 means no change.
+	// phi_threshold is the phi-accrual suspicion threshold. Must be > 0
+	// when set; explicit 0 or negative values are rejected. Leave unset
+	// (nil) to use the default (4) on create or preserve the existing
+	// value on update.
 	PhiThreshold *float64 `protobuf:"fixed64,4,opt,name=phi_threshold,json=phiThreshold,proto3,oneof" json:"phi_threshold,omitempty"`
-	// ping_interval is the gossip exchange interval. Empty means no change.
+	// ping_interval is the gossip exchange interval. Must be a positive
+	// duration when set; empty preserves the existing value on update or
+	// uses the default (1s) on create.
 	PingInterval string `protobuf:"bytes,5,opt,name=ping_interval,json=pingInterval,proto3" json:"ping_interval,omitempty"`
-	// max_update_age is how long before marking a peer down. Empty means no change.
+	// max_update_age is how long before marking a peer down. Must be a
+	// positive duration when set; empty preserves the existing value on
+	// update or uses the default (5s) on create.
 	MaxUpdateAge  string `protobuf:"bytes,6,opt,name=max_update_age,json=maxUpdateAge,proto3" json:"max_update_age,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

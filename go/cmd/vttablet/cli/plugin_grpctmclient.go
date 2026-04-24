@@ -16,8 +16,15 @@ limitations under the License.
 
 package cli
 
-// Imports and register the gRPC tabletmanager client
+// Imports and register the gRPC tabletmanager client. Also wires gossip
+// TLS so the gossip dialer reuses the tablet-manager gRPC client's
+// transport security configuration.
 
 import (
-	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 )
+
+func init() {
+	tabletmanager.GossipSecureDialOption = grpctmclient.SecureDialOption
+}
