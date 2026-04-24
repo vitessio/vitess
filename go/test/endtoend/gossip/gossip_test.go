@@ -75,8 +75,11 @@ func (t *localTransport) Join(ctx context.Context, addr string, req *gossip.Join
 	if offline || peer == nil {
 		return nil, errors.New("peer unavailable")
 	}
-	return peer.HandleJoin(req), nil
+	return peer.HandleJoin(req)
 }
+
+// Close is a no-op for the in-process test transport.
+func (t *localTransport) Close() {}
 
 func newAgent(id string, seeds []gossip.Member, transport *localTransport, meta map[string]string) *gossip.Gossip {
 	agent := gossip.New(gossip.Config{
@@ -153,7 +156,11 @@ func (p *agentStateProvider) Members() []gossip.Member                 { return 
 func (p *agentStateProvider) Snapshot() map[gossip.NodeID]gossip.State { return p.agent.Snapshot() }
 
 func quorumAnalysis(agent *gossip.Gossip, primaries map[string]string, vtorcView map[string]bool) []*inst.DetectionAnalysis {
-	return logic.AnalyzeGossipQuorum(&agentStateProvider{agent: agent}, primaries, vtorcView)
+	var view *logic.VTOrcView
+	if vtorcView != nil {
+		view = &logic.VTOrcView{HealthCheckFailed: vtorcView}
+	}
+	return logic.AnalyzeGossipQuorum(&agentStateProvider{agent: agent}, primaries, nil, view)
 }
 
 // TestGossipPrimaryTabletUnreachableByQuorum is the single top-level e2e test for the gossip protocol.
@@ -338,11 +345,14 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 	t.Run("MultiShardIndependence", func(t *testing.T) {
 		transport := newLocalTransport()
 
-		// Cross-shard seeds: each primary seeds to the other primary for connectivity.
-		s1P := newAgent("s1-p", seedsFor("s1-r1", "s1-r2", "s2-p"), transport, metaFor("ks", "-80", "zone1-0000000100"))
+		// Two shards, each with 1 primary + 2 replicas. By design,
+		// gossip traffic is scoped to a single keyspace/shard — a
+		// vttablet only exchanges members within its shard. Peers
+		// without shard metadata (e.g., VTOrc) are unrestricted.
+		s1P := newAgent("s1-p", seedsFor("s1-r1", "s1-r2"), transport, metaFor("ks", "-80", "zone1-0000000100"))
 		s1R1 := newAgent("s1-r1", seedsFor("s1-p"), transport, metaFor("ks", "-80", "zone1-0000000101"))
 		s1R2 := newAgent("s1-r2", seedsFor("s1-p"), transport, metaFor("ks", "-80", "zone1-0000000102"))
-		s2P := newAgent("s2-p", seedsFor("s2-r1", "s2-r2", "s1-p"), transport, metaFor("ks", "80-", "zone1-0000000200"))
+		s2P := newAgent("s2-p", seedsFor("s2-r1", "s2-r2"), transport, metaFor("ks", "80-", "zone1-0000000200"))
 		s2R1 := newAgent("s2-r1", seedsFor("s2-p"), transport, metaFor("ks", "80-", "zone1-0000000201"))
 		s2R2 := newAgent("s2-r2", seedsFor("s2-p"), transport, metaFor("ks", "80-", "zone1-0000000202"))
 
@@ -358,10 +368,11 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 			}
 		}()
 
-		// Wait for full metadata convergence across all 6 nodes.
-		waitFullConvergence(t, s1R1, 6, 10*time.Second)
+		// Each shard converges independently (3 members per shard).
+		waitFullConvergence(t, s1R1, 3, 10*time.Second)
+		waitFullConvergence(t, s2R1, 3, 10*time.Second)
 
-		// Verify metadata propagation via debug endpoint.
+		// Verify metadata propagated within a shard.
 		debug := s1R1.Debug()
 		found := false
 		for _, m := range debug.Members {
@@ -372,6 +383,12 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 		}
 		assert.True(t, found)
 
+		// Shard-scope isolation: s1-r1 should NOT see any members from
+		// shard 80-. Cross-shard observers are the VTOrc's job.
+		for _, m := range s1R1.Debug().Members {
+			assert.NotEqual(t, "80-", m.Meta[gossip.MetaKeyShard], "shard -80 peer saw shard 80- member %s", m.ID)
+		}
+
 		// Kill shard -80 primary.
 		s1P.Stop()
 		transport.SetOffline("s1-p", true)
@@ -380,9 +397,11 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 		// Shard 80- primary unaffected.
 		assertDebugStatus(t, s2R1, "s2-p", "alive")
 
-		// Quorum analysis detects only shard -80.
+		// Quorum analysis detects only shard -80. Small shards (1
+		// primary + 2 replicas each) require VTOrc corroboration.
 		primaries := map[string]string{"ks/-80": "zone1-0000000100", "ks/80-": "zone1-0000000200"}
-		analyses := quorumAnalysis(s1R1, primaries, nil)
+		vtorcView := map[string]bool{"ks/-80": true}
+		analyses := quorumAnalysis(s1R1, primaries, vtorcView)
 		require.Len(t, analyses, 1)
 		assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, analyses[0].Analysis)
 		assert.Equal(t, "-80", analyses[0].AnalyzedShard)

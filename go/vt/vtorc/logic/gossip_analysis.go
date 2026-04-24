@@ -38,10 +38,50 @@ type (
 	}
 )
 
-const minQuorumObservers = 2
+const (
+	// minQuorumObservers is the minimum number of Alive replicas required
+	// to form a quorum. Fewer than two observers makes a shared hallucination
+	// too easy.
+	minQuorumObservers = 2
 
-// AnalyzeGossipQuorum evaluates gossip state to detect primaries that a quorum of replicas consider unreachable.
-func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string, currentMembers map[string]map[string]struct{}, vtorcView map[string]bool) []*inst.DetectionAnalysis {
+	// smallShardThreshold is the total-replica count at which strict
+	// majority equals unanimous. For shards at or below this threshold we
+	// require an additional corroborating signal (VTOrc's own health
+	// check) before triggering ERS, since the two remaining replicas
+	// can fail correlatedly (for example, under a cross-cell partition).
+	smallShardThreshold = 2
+)
+
+// VTOrcView captures VTOrc's own evidence about each shard's primary.
+// It is intentionally separate from the gossip quorum: gossip is a
+// peer-to-peer consensus, whereas VTOrc's health check is a single probe
+// from a single vantage point.
+type VTOrcView struct {
+	// HealthCheckFailed is true when VTOrc's most recent probe to the
+	// primary failed (the primary was unreachable from VTOrc's own
+	// vantage point). This is CORROBORATING evidence only — it does
+	// not independently prove the primary is down, because VTOrc and
+	// the primary could be on opposite sides of a partition.
+	HealthCheckFailed map[string]bool
+	// SelfLikelyPartitioned is true when VTOrc cannot reach most
+	// primaries in its view. In that case the HealthCheckFailed signal
+	// is probably about VTOrc's own network, not about the primaries,
+	// and callers should ignore it.
+	SelfLikelyPartitioned bool
+}
+
+// confirmsPrimaryDown reports whether VTOrc's own view corroborates
+// that the given shard's primary is down.
+func (v *VTOrcView) confirmsPrimaryDown(key string) bool {
+	if v == nil || v.SelfLikelyPartitioned {
+		return false
+	}
+	return v.HealthCheckFailed[key]
+}
+
+// AnalyzeGossipQuorum evaluates gossip state to detect primaries that a
+// quorum of replicas consider unreachable.
+func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string, currentMembers map[string]map[string]struct{}, view *VTOrcView) []*inst.DetectionAnalysis {
 	if state == nil {
 		return nil
 	}
@@ -70,10 +110,9 @@ func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string,
 			continue
 		}
 
-		vtorcSeesPrimaryDown := vtorcView[key]
 		shardMembers := currentMembers[key]
 
-		if da := analyzeShardQuorum(group, states, primaryAlias, shardMembers, vtorcSeesPrimaryDown); da != nil {
+		if da := analyzeShardQuorum(group, states, primaryAlias, shardMembers, view.confirmsPrimaryDown(key)); da != nil {
 			results = append(results, da)
 		}
 	}
@@ -81,7 +120,7 @@ func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string,
 	return results
 }
 
-func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State, primaryAlias string, currentMembers map[string]struct{}, vtorcSeesPrimaryDown bool) *inst.DetectionAnalysis {
+func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State, primaryAlias string, currentMembers map[string]struct{}, vtorcCorroboratesDown bool) *inst.DetectionAnalysis {
 	// Find the primary member.
 	var primaryID gossip.NodeID
 	found := false
@@ -126,7 +165,17 @@ func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State
 	hasMajority := aliveReplicas*2 > totalReplicas
 	isTied := aliveReplicas*2 == totalReplicas
 
-	if !hasMajority && !(isTied && vtorcSeesPrimaryDown) {
+	// Small shards (<=2 replicas) have thin quorums — strict majority
+	// equals unanimous, so a single correlated failure (partition,
+	// cross-cell outage) can trigger a false ERS. Require VTOrc's own
+	// check to also report trouble before acting. Note: the caller is
+	// responsible for zeroing out this signal when VTOrc appears to be
+	// partitioned itself.
+	if totalReplicas <= smallShardThreshold && !vtorcCorroboratesDown {
+		return nil
+	}
+
+	if !hasMajority && !(isTied && vtorcCorroboratesDown) {
 		return nil
 	}
 
@@ -157,7 +206,7 @@ func isCurrentShardMember(member gossip.Member, currentMembers map[string]struct
 // getGossipQuorumAnalyses queries the gossip agent and VTOrc's DB to produce
 // quorum-based analyses for each shard with a known primary.
 // It also enriches analyses with ERS-disabled flags from keyspace/shard metadata
-// and builds the VTOrc tiebreaker view from instance health data.
+// and builds the VTOrc corroborating view from instance health data.
 func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 	agent := currentGossipAgent()
 	if agent == nil {
@@ -169,24 +218,9 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 		return nil
 	}
 
-	vtorcView := make(map[string]bool, len(primaries))
-	for key, primaryAlias := range primaries {
-		alias, parseErr := topoproto.ParseTabletAlias(primaryAlias)
-		if parseErr != nil {
-			// Can't parse alias — abstain from tiebreaker rather than
-			// treating unknown state as confirmation of failure.
-			continue
-		}
-		instance, found, err := inst.ReadInstance(alias)
-		if err != nil || !found || instance == nil {
-			// Can't read instance — abstain. Only break a tie when we
-			// have positive evidence the health check failed.
-			continue
-		}
-		vtorcView[key] = !instance.IsLastCheckValid
-	}
+	view := buildVTOrcView(primaries)
 
-	analyses := AnalyzeGossipQuorum(agent, primaries, currentMembers, vtorcView)
+	analyses := AnalyzeGossipQuorum(agent, primaries, currentMembers, view)
 
 	for _, a := range analyses {
 		key := a.AnalyzedKeyspace + "/" + a.AnalyzedShard
@@ -197,6 +231,45 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 	}
 
 	return analyses
+}
+
+// buildVTOrcView collects VTOrc's own evidence about each primary's
+// reachability. It then applies a partition heuristic: if VTOrc cannot
+// reach most of the primaries it knows about, its view is probably about
+// VTOrc itself (overloaded, network-partitioned) and must not be trusted
+// as corroborating evidence of a primary failure.
+func buildVTOrcView(primaries map[string]string) *VTOrcView {
+	view := &VTOrcView{HealthCheckFailed: make(map[string]bool, len(primaries))}
+
+	var probed, failed int
+	for key, primaryAlias := range primaries {
+		alias, parseErr := topoproto.ParseTabletAlias(primaryAlias)
+		if parseErr != nil {
+			// Can't parse alias — abstain for this shard.
+			continue
+		}
+		instance, found, err := inst.ReadInstance(alias)
+		if err != nil || !found || instance == nil {
+			// No instance record — abstain. Silently missing data
+			// must not be interpreted as confirmation.
+			continue
+		}
+		probed++
+		if !instance.IsLastCheckValid {
+			failed++
+			view.HealthCheckFailed[key] = true
+		}
+	}
+
+	// If >50% of probed primaries look unreachable from VTOrc's side,
+	// the most likely cause is VTOrc itself — not a simultaneous
+	// failure of many unrelated primaries. Suppress the corroborating
+	// signal. We require at least 2 probes before applying the
+	// heuristic to avoid surprising behavior on single-keyspace setups.
+	if probed >= 2 && failed*2 > probed {
+		view.SelfLikelyPartitioned = true
+	}
+	return view
 }
 
 type ersDisabledFlags struct {

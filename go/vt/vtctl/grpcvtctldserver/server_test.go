@@ -15135,7 +15135,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 		assert.Equal(t, "5s", ki.GossipConfig.MaxUpdateAge)
 	})
 
-	t.Run("enable with explicit zero phi threshold stores the default", func(t *testing.T) {
+	t.Run("explicit zero phi threshold is rejected", func(t *testing.T) {
 		ts := memorytopo.NewServer(ctx, "zone1")
 		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
 		require.NoError(t, err)
@@ -15149,16 +15149,11 @@ func TestUpdateGossipConfig(t *testing.T) {
 			Enable:       true,
 			PhiThreshold: float64Ptr(0),
 		})
-		require.NoError(t, err)
-
-		ki, err := ts.GetKeyspace(ctx, "ks")
-		require.NoError(t, err)
-		require.NotNil(t, ki.GossipConfig)
-		assert.True(t, ki.GossipConfig.Enabled)
-		assert.Equal(t, float64(4), ki.GossipConfig.PhiThreshold)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid phi-threshold")
 	})
 
-	t.Run("zero and empty values do not overwrite existing config", func(t *testing.T) {
+	t.Run("empty tuning values do not overwrite existing config", func(t *testing.T) {
 		ts := memorytopo.NewServer(ctx, "zone1")
 		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
 		require.NoError(t, err)
@@ -15177,10 +15172,9 @@ func TestUpdateGossipConfig(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// Send an update with all zero/empty tuning values — nothing should change.
+		// Send an update omitting all tuning values — nothing should change.
 		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace:     "ks",
-			PhiThreshold: float64Ptr(0),
 			PingInterval: "",
 			MaxUpdateAge: "",
 		})

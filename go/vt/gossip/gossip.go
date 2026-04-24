@@ -19,6 +19,7 @@ package gossip
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"math"
 	"math/rand/v2"
@@ -39,12 +40,14 @@ type (
 		Meta map[string]string
 	}
 
+	// HealthSnapshot refreshes the local node's entry in the gossip
+	// network. Today gossip tracks process liveness only — a running
+	// agent is Alive; peers detect process death through the absence of
+	// new timestamps. There is no separate MySQL or tablet-health bit;
+	// if you need those, feed them into a higher-level analysis layer.
 	HealthSnapshot struct {
-		NodeID      NodeID
-		TabletAlias string
-		MysqlAlive  bool
-		TabletAlive bool
-		Timestamp   time.Time
+		NodeID    NodeID
+		Timestamp time.Time
 	}
 
 	State struct {
@@ -79,6 +82,10 @@ type (
 	Transport interface {
 		PushPull(ctx context.Context, addr string, msg *Message) (*Message, error)
 		Join(ctx context.Context, addr string, req *JoinRequest) (*JoinResponse, error)
+		// Close releases any resources held by the transport. It is
+		// called from Gossip.Stop so implementations can tear down
+		// cached connections on shutdown.
+		Close()
 	}
 
 	Clock interface {
@@ -102,14 +109,25 @@ type (
 		clock     Clock
 		rng       *rand.Rand
 
-		mu         sync.Mutex
-		members    map[NodeID]Member
-		states     map[NodeID]State
-		detectors  map[NodeID]*phiAccrual
-		epoch      uint64
-		reconfigCh chan Config
+		mu        sync.Mutex
+		members   map[NodeID]Member
+		states    map[NodeID]State
+		detectors map[NodeID]*phiAccrual
+		epoch     uint64
 
+		// reconfig state: reconfigMu guards pendingConfig. reconfigCh is a
+		// size-1 signal channel that wakes the gossip loop when a new
+		// pending config is set. Multiple concurrent Reconfigure calls are
+		// safe because the latest write to pendingConfig always wins.
+		reconfigMu    sync.Mutex
+		pendingConfig Config
+		reconfigCh    chan struct{}
+
+		// stop is created in New and closed exactly once in Stop. Start
+		// captures it locally so the gossip loop is insulated from any
+		// future reassignments. started enforces one-shot Start semantics.
 		stop    chan struct{}
+		started atomic.Bool
 		stopped atomic.Bool
 	}
 )
@@ -155,9 +173,8 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 		members:    make(map[NodeID]Member),
 		states:     make(map[NodeID]State),
 		detectors:  make(map[NodeID]*phiAccrual),
-		reconfigCh: make(chan Config, 1),
+		reconfigCh: make(chan struct{}, 1),
 		stop:       make(chan struct{}),
-		stopped:    atomic.Bool{},
 	}
 
 	if cfg.NodeID != "" {
@@ -178,16 +195,25 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	return g
 }
 
-// Start begins the periodic gossip loop in a background goroutine.
+// ErrAlreadyStarted is returned by Start when the agent has already been
+// started. Gossip agents are single-shot: create a new one to restart.
+var ErrAlreadyStarted = errors.New("gossip: agent already started")
+
+// Start begins the periodic gossip loop in a background goroutine. Start
+// is one-shot per agent instance — a stopped agent cannot be restarted;
+// create a new one instead.
 func (g *Gossip) Start(ctx context.Context) error {
 	if g.cfg.PingInterval <= 0 {
 		return nil
 	}
+	if !g.started.CompareAndSwap(false, true) {
+		return ErrAlreadyStarted
+	}
 
-	g.mu.Lock()
-	g.stop = make(chan struct{})
-	g.stopped.Store(false)
-	g.mu.Unlock()
+	// Capture stop locally so the goroutine never reads g.stop directly —
+	// this is a defense-in-depth measure to keep the stop channel read
+	// out of any future field-level race analysis.
+	stopCh := g.stop
 
 	ticker := time.NewTicker(g.cfg.PingInterval)
 	go func() {
@@ -197,10 +223,10 @@ func (g *Gossip) Start(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
 				return
-			case <-g.stop:
+			case <-stopCh:
 				return
-			case newCfg := <-g.reconfigCh:
-				g.applyConfig(newCfg, ticker)
+			case <-g.reconfigCh:
+				g.applyPendingConfigLocked(ticker)
 			case <-ticker.C:
 				now := g.clock.Now()
 				g.gossipOnce(ctx, now)
@@ -214,31 +240,42 @@ func (g *Gossip) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop halts the gossip loop. Safe to call multiple times.
+// Stop halts the gossip loop and releases any resources held by the
+// transport (e.g., cached gRPC connections). Safe to call multiple
+// times.
 func (g *Gossip) Stop() {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if g.stopped.Load() {
+	if !g.stopped.CompareAndSwap(false, true) {
 		return
 	}
 	close(g.stop)
-	g.stopped.Store(true)
+	if g.transport != nil {
+		g.transport.Close()
+	}
 }
 
-// Reconfigure sends updated tuning parameters to the running gossip loop.
-// Changes to PhiThreshold, PingInterval, and MaxUpdateAge take effect on
-// the next gossip tick. If a previous config update is pending, it is
-// replaced by the latest one. This is safe to call concurrently.
+// Reconfigure records updated tuning parameters. The latest values always
+// win: concurrent callers do not race or drop values. Changes to
+// PhiThreshold, PingInterval, and MaxUpdateAge take effect on the next
+// gossip tick. Safe to call concurrently.
 func (g *Gossip) Reconfigure(cfg Config) {
-	// Drain any pending config to make room for the latest.
+	g.reconfigMu.Lock()
+	g.pendingConfig = cfg
+	g.reconfigMu.Unlock()
+	// Non-blocking wake — if a previous signal is already pending, the
+	// loop will see the latest pendingConfig when it wakes.
 	select {
-	case <-g.reconfigCh:
+	case g.reconfigCh <- struct{}{}:
 	default:
 	}
-	select {
-	case g.reconfigCh <- cfg:
-	default:
-	}
+}
+
+// applyPendingConfigLocked reads the latest pendingConfig and applies it.
+// Called from the gossip loop goroutine.
+func (g *Gossip) applyPendingConfigLocked(ticker *time.Ticker) {
+	g.reconfigMu.Lock()
+	cfg := g.pendingConfig
+	g.reconfigMu.Unlock()
+	g.applyConfig(cfg, ticker)
 }
 
 // applyConfig updates the gossip agent's tuning parameters from the
@@ -367,10 +404,18 @@ func (g *Gossip) Members() []Member {
 	return result
 }
 
-// HandleJoin processes an incoming join request and returns the current cluster state.
-func (g *Gossip) HandleJoin(req *JoinRequest) *JoinResponse {
-	if req == nil || req.Member.ID == "" {
-		return nil
+// HandleJoin processes an incoming join request and returns the current
+// cluster state. Returns an error when the request is malformed so
+// operators can see the reason in server logs.
+func (g *Gossip) HandleJoin(req *JoinRequest) (*JoinResponse, error) {
+	if req == nil {
+		return nil, errors.New("gossip: join request is nil")
+	}
+	if req.Member.ID == "" {
+		return nil, errors.New("gossip: join request missing member id")
+	}
+	if req.Member.Addr == "" {
+		return nil, errors.New("gossip: join request missing member addr")
 	}
 
 	now := g.clock.Now()
@@ -386,7 +431,7 @@ func (g *Gossip) HandleJoin(req *JoinRequest) *JoinResponse {
 	}
 	g.mu.Unlock()
 
-	return response
+	return response, nil
 }
 
 // HandlePushPull processes an incoming push-pull exchange and returns the local state.
@@ -579,9 +624,21 @@ func (g *Gossip) addMemberLocked(member Member) {
 			existing.Addr = member.Addr
 			updated = true
 		}
-		if len(member.Meta) > 0 {
-			existing.Meta = member.Meta
-			updated = true
+		// Merge metadata keys so partial updates cannot overwrite
+		// previously-known keys. A sender with only {keyspace:X} must
+		// not erase shard/tablet_alias that a richer peer already
+		// propagated.
+		for key, value := range member.Meta {
+			if value == "" {
+				continue
+			}
+			if existing.Meta == nil {
+				existing.Meta = make(map[string]string, len(member.Meta))
+			}
+			if existing.Meta[key] != value {
+				existing.Meta[key] = value
+				updated = true
+			}
 		}
 		if updated {
 			g.members[member.ID] = existing
@@ -605,6 +662,12 @@ func (g *Gossip) applyMessageLocked(now time.Time, msg *Message) {
 
 	for _, digest := range msg.States {
 		if digest.NodeID == "" {
+			continue
+		}
+		// Never let peers overwrite our own state — the local node is
+		// the authoritative source for its own liveness. The self
+		// refresh in gossipOnce is the only thing that can update it.
+		if digest.NodeID == g.cfg.NodeID {
 			continue
 		}
 		// Clamp future timestamps to local time to prevent clock-skewed

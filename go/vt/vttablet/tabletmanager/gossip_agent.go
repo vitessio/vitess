@@ -60,7 +60,7 @@ func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts 
 		phiThreshold = 4
 	}
 
-	transport := gossip.NewGRPCTransport(gossip.GRPCDialer{})
+	transport := gossip.NewGRPCTransport(&gossip.GRPCDialer{})
 	agent := gossip.New(gossip.Config{
 		NodeID:       gossip.NodeID(nodeID),
 		BindAddr:     bindAddr,

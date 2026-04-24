@@ -2193,8 +2193,11 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 	if req.Enable && req.Disable {
 		return nil, errors.New("--enable and --disable are mutually exclusive")
 	}
-	if req.PhiThreshold != nil && *req.PhiThreshold < 0 {
-		return nil, fmt.Errorf("invalid phi-threshold: must be non-negative, got %v", *req.PhiThreshold)
+	// phi-threshold must be strictly positive when specified. Omit the
+	// flag (nil pointer) to fall back to the default on create or leave
+	// the existing value unchanged on update.
+	if req.PhiThreshold != nil && *req.PhiThreshold <= 0 {
+		return nil, fmt.Errorf("invalid phi-threshold: must be positive, got %v", *req.PhiThreshold)
 	}
 	if req.PingInterval != "" {
 		if d, err := time.ParseDuration(req.PingInterval); err != nil || d <= 0 {
@@ -2219,11 +2222,8 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 			gossipConfig.Enabled = false
 		}
 		if req.PhiThreshold != nil {
-			if *req.PhiThreshold > 0 {
-				gossipConfig.PhiThreshold = *req.PhiThreshold
-			} else if creatingConfig {
-				gossipConfig.PhiThreshold = 4
-			}
+			// Validator has already ensured *req.PhiThreshold > 0.
+			gossipConfig.PhiThreshold = *req.PhiThreshold
 		} else if creatingConfig {
 			gossipConfig.PhiThreshold = 4
 		}

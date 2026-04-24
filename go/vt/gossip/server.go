@@ -18,7 +18,6 @@ package gossip
 
 import (
 	"context"
-	"errors"
 
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
 )
@@ -37,9 +36,9 @@ func (s *Service) Join(ctx context.Context, req *gossippb.GossipJoinRequest) (*g
 	if agent == nil {
 		return &gossippb.GossipJoinResponse{}, nil
 	}
-	resp := agent.HandleJoin(fromProtoJoinRequest(req))
-	if resp == nil {
-		return nil, errors.New("invalid join request")
+	resp, err := agent.HandleJoin(fromProtoJoinRequest(req))
+	if err != nil {
+		return nil, err
 	}
 	return toProtoJoinResponse(resp), nil
 }

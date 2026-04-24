@@ -81,6 +81,10 @@ func (t *localTransport) Dial(ctx context.Context, addr string) (gossippb.Gossip
 	return localClient{peer: peer}, nil
 }
 
+// Close is a no-op for the in-process test transport; there are no
+// network resources to release.
+func (t *localTransport) Close() {}
+
 type localClient struct {
 	peer *Gossip
 }
@@ -94,7 +98,11 @@ func (c localClient) PushPull(ctx context.Context, in *gossippb.GossipMessage, o
 }
 
 func (c localClient) Join(ctx context.Context, in *gossippb.GossipJoinRequest, opts ...grpc.CallOption) (*gossippb.GossipJoinResponse, error) {
-	return toProtoJoinResponse(c.peer.HandleJoin(fromProtoJoinRequest(in))), nil
+	resp, err := c.peer.HandleJoin(fromProtoJoinRequest(in))
+	if err != nil {
+		return nil, err
+	}
+	return toProtoJoinResponse(resp), nil
 }
 
 func newTestGossip(id string, seeds []Member, transport *localTransport, clock Clock, maxUpdateAge time.Duration) *Gossip {
@@ -259,7 +267,8 @@ func TestGossipHandleJoinReturnsSnapshot(t *testing.T) {
 		PhiThreshold: 4,
 	}, nil, clock)
 
-	resp := g.HandleJoin(&JoinRequest{Member: Member{ID: "node2", Addr: "node2"}})
+	resp, err := g.HandleJoin(&JoinRequest{Member: Member{ID: "node2", Addr: "node2"}})
+	require.NoError(t, err)
 	require.NotNil(t, resp)
 
 	ids := make(map[NodeID]bool)
@@ -565,7 +574,9 @@ func TestGRPCDialerUsesInsecureTransport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 
-	client, err := GRPCDialer{}.Dial(ctx, lis.Addr().String())
+	dialer := &GRPCDialer{}
+	t.Cleanup(dialer.Close)
+	client, err := dialer.Dial(ctx, lis.Addr().String())
 	require.NoError(t, err)
 
 	resp, err := client.Join(ctx, toProtoJoinRequest(&JoinRequest{
@@ -578,11 +589,13 @@ func TestGRPCDialerUsesInsecureTransport(t *testing.T) {
 func TestGRPCDialerUsesConfiguredSecureDialOption(t *testing.T) {
 	expectedErr := errors.New("boom")
 
-	_, err := (GRPCDialer{
+	dialer := &GRPCDialer{
 		SecureDialOption: func() (grpc.DialOption, error) {
 			return nil, expectedErr
 		},
-	}).Dial(t.Context(), "127.0.0.1:1")
+	}
+	t.Cleanup(dialer.Close)
+	_, err := dialer.Dial(t.Context(), "127.0.0.1:1")
 	require.ErrorIs(t, err, expectedErr)
 }
 
@@ -661,8 +674,9 @@ func TestHandleJoinRejectsEmptyMember(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
 	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
 
-	resp := g.HandleJoin(&JoinRequest{Member: Member{ID: "", Addr: ""}})
-	assert.Nil(t, resp, "HandleJoin should reject empty member ID")
+	resp, err := g.HandleJoin(&JoinRequest{Member: Member{ID: "", Addr: ""}})
+	require.Error(t, err, "HandleJoin should reject empty member ID")
+	assert.Nil(t, resp)
 
 	// Verify no empty-string key was added to state.
 	_, exists := g.Snapshot()[""]
@@ -906,8 +920,12 @@ func (failingDialer) Dial(ctx context.Context, target string) (gossippb.GossipCl
 	return nil, errors.New("dial failed")
 }
 
+func (failingDialer) Close() {}
+
 type nilClientDialer struct{}
 
 func (nilClientDialer) Dial(ctx context.Context, target string) (gossippb.GossipClient, error) {
 	return nil, nil
 }
+
+func (nilClientDialer) Close() {}

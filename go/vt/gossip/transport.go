@@ -29,14 +29,24 @@ type grpcTransport struct {
 	dialer Dialer
 }
 
-// Dialer provides a gossip client for a target address.
+// Dialer provides a gossip client for a target address. Implementations
+// SHOULD cache per-target connections so the gossip hot path does not
+// pay a full TCP/TLS handshake on every RPC; Close releases them.
 type Dialer interface {
 	Dial(ctx context.Context, target string) (gossippb.GossipClient, error)
+	Close()
 }
 
 // NewGRPCTransport creates a gossip transport backed by gRPC using the given dialer.
 func NewGRPCTransport(dialer Dialer) Transport {
 	return &grpcTransport{dialer: dialer}
+}
+
+// Close releases any per-target connections held by the transport.
+func (t *grpcTransport) Close() {
+	if t.dialer != nil {
+		t.dialer.Close()
+	}
 }
 
 func (t *grpcTransport) PushPull(ctx context.Context, addr string, msg *Message) (*Message, error) {

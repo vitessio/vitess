@@ -24,6 +24,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -174,7 +175,7 @@ func stopGossipRPCServer() {
 // startGossipAgent creates and starts the gossip agent from the given config.
 func startGossipAgent(cfg *topodatapb.GossipConfig) {
 	seeds := discoverGossipSeeds()
-	transport := gossip.NewGRPCTransport(gossip.GRPCDialer{SecureDialOption: grpctmclient.SecureDialOption})
+	transport := gossip.NewGRPCTransport(&gossip.GRPCDialer{SecureDialOption: grpctmclient.SecureDialOption})
 	tuning := effectiveGossipTuning(cfg)
 
 	agent := gossip.New(gossip.Config{
@@ -215,7 +216,16 @@ func findGossipConfig() (*topodatapb.GossipConfig, string, bool) {
 	if len(enabledKeyspaces) == 0 {
 		return cfg, "", false
 	}
-	return cfg, enabledKeyspaces[0], false
+	// Sort so the pick is deterministic across calls and log the
+	// selection so operators can correlate with the watcher they see.
+	sort.Strings(enabledKeyspaces)
+	selected := enabledKeyspaces[0]
+	if len(enabledKeyspaces) > 1 {
+		log.Info("multiple keyspaces have gossip enabled; selecting deterministic watch target",
+			slog.String("selected", selected),
+			slog.Int("total_enabled", len(enabledKeyspaces)))
+	}
+	return cfg, selected, false
 }
 
 func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool) {
@@ -307,6 +317,11 @@ func reconcileGossipConfig(localCfg *topodatapb.GossipConfig) {
 	}
 	if conflict || cfg == nil || !cfg.Enabled {
 		if agent := clearGossipAgent(); agent != nil {
+			if conflict {
+				log.Warn("stopping gossip agent due to conflicting keyspace configs (fail-closed)")
+			} else {
+				log.Info("stopping gossip agent: no keyspace has gossip enabled")
+			}
 			agent.Stop()
 		}
 		return

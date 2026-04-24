@@ -85,9 +85,9 @@ func commandUpdateGossipConfig(cmd *cobra.Command, args []string) error {
 func init() {
 	UpdateGossipConfig.Flags().Bool("enable", false, "Enable gossip for this keyspace")
 	UpdateGossipConfig.Flags().Bool("disable", false, "Disable gossip for this keyspace")
-	UpdateGossipConfig.Flags().Float64("phi-threshold", 0, "Phi-accrual suspicion threshold (default 4 when omitted, 0 = no change)")
-	UpdateGossipConfig.Flags().String("ping-interval", "", "Gossip exchange interval (default 1s)")
-	UpdateGossipConfig.Flags().String("max-update-age", "", "Max staleness before marking peer down (default 5s)")
+	UpdateGossipConfig.Flags().Float64("phi-threshold", 0, "Phi-accrual suspicion threshold. Must be > 0 when specified; omit to use the default (4) on create or preserve the existing value on update")
+	UpdateGossipConfig.Flags().String("ping-interval", "", "Gossip exchange interval. Must be a positive duration when specified; omit to use the default (1s) on create or preserve the existing value on update")
+	UpdateGossipConfig.Flags().String("max-update-age", "", "Max staleness before marking peer down. Must be a positive duration when specified; omit to use the default (5s) on create or preserve the existing value on update")
 
 	Root.AddCommand(UpdateGossipConfig)
 }

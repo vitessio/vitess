@@ -234,8 +234,6 @@ type TabletManager struct {
 	_isBackupRunning bool
 }
 
-// SetGossip sets the gossip agent used by the tablet manager.
-
 // BuildTabletFromInput builds a tablet record from input parameters.
 func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs, collationEnv *collations.Environment) (*topodatapb.Tablet, error) {
 	hostname := tabletHostname
