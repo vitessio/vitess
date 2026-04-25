@@ -397,6 +397,7 @@ func (e *Executor) StreamExecute(
 
 		// 5: Log and add statistics
 		logStats.TablesUsed = plan.TablesUsed
+		logStats.RoutingIndexesUsed = plan.RoutingIndexesUsed
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
 		logStats.ActiveKeyspace = vc.GetKeyspace()

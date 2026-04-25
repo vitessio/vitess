@@ -40,16 +40,17 @@ type (
 	// Primitive may form a subtree, combining results from its children to
 	// achieve the overall query result.
 	Plan struct {
-		Type         PlanType                // Type of plan (Passthrough, Scatter, JoinOp, Complex, etc.)
-		QueryType    sqlparser.StatementType // QueryType indicates the SQL statement type (SELECT, UPDATE, etc.)
-		Original     string                  // Original holds the raw query text
-		Instructions Primitive               // Instructions define how the query is executed.
-		BindVarNeeds *sqlparser.BindVarNeeds // BindVarNeeds lists required bind vars discovered during planning.
-		Warnings     []*query.QueryWarning   // Warnings accumulates any warnings generated for this plan.
-		TablesUsed   []string                // TablesUsed enumerates the tables this query accesses.
-		QueryHints   sqlparser.QueryHints    // QueryHints stores any SET_VAR hints that influenced plan generation.
-		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
-		Optimized    atomic.Bool             // Prepared queries need to be optimized before the first execution
+		Type               PlanType                // Type of plan (Passthrough, Scatter, JoinOp, Complex, etc.)
+		QueryType          sqlparser.StatementType // QueryType indicates the SQL statement type (SELECT, UPDATE, etc.)
+		Original           string                  // Original holds the raw query text
+		Instructions       Primitive               // Instructions define how the query is executed.
+		BindVarNeeds       *sqlparser.BindVarNeeds // BindVarNeeds lists required bind vars discovered during planning.
+		Warnings           []*query.QueryWarning   // Warnings accumulates any warnings generated for this plan.
+		TablesUsed         []string                // TablesUsed enumerates the tables this query accesses.
+		RoutingIndexesUsed [][2]string             // RoutingIndexesUsed lists the vindexes used for routing: [keyspace, vindex_name].
+		QueryHints         sqlparser.QueryHints    // QueryHints stores any SET_VAR hints that influenced plan generation.
+		ParamsCount        uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
+		Optimized          atomic.Bool             // Prepared queries need to be optimized before the first execution
 
 		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
 		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.
@@ -274,13 +275,51 @@ func (pk PlanKey) Hash() theine.HashKey256 {
 
 func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
 	return &Plan{
-		Type:         getPlanType(primitive),
-		QueryType:    sqlparser.ASTToStatementType(stmt),
-		Original:     query,
-		Instructions: primitive,
-		BindVarNeeds: bindVarNeeds,
-		TablesUsed:   tablesUsed,
+		Type:               getPlanType(primitive),
+		QueryType:          sqlparser.ASTToStatementType(stmt),
+		Original:           query,
+		Instructions:       primitive,
+		BindVarNeeds:       bindVarNeeds,
+		TablesUsed:         tablesUsed,
+		RoutingIndexesUsed: getRoutingIndexes(primitive),
 	}
+}
+
+// getRoutingIndexes walks the primitive tree and collects vindex routing information
+// from any Route or DML primitives that use a vindex for shard routing.
+// For inserts, ColVindexes[0] is the primary vindex that determines shard placement;
+// the remaining ColVindexes are secondary/owned vindexes populated as a side effect.
+func getRoutingIndexes(p Primitive) [][2]string {
+	if p == nil {
+		return nil
+	}
+	var result [][2]string
+	Visit(p, func(node Primitive) {
+		var rp *RoutingParameters
+		switch n := node.(type) {
+		case *Route:
+			rp = n.RoutingParameters
+		case *Update:
+			rp = n.RoutingParameters
+		case *Delete:
+			rp = n.RoutingParameters
+		case *Insert:
+			if n.Keyspace != nil && len(n.ColVindexes) > 0 {
+				result = append(result, [2]string{n.Keyspace.Name, n.ColVindexes[0].Name})
+			}
+			return
+		case *InsertSelect:
+			if n.Keyspace != nil && len(n.ColVindexes) > 0 {
+				result = append(result, [2]string{n.Keyspace.Name, n.ColVindexes[0].Name})
+			}
+			return
+		}
+		if rp == nil || rp.Vindex == nil || rp.Keyspace == nil {
+			return
+		}
+		result = append(result, [2]string{rp.Keyspace.Name, rp.Vindex.String()})
+	})
+	return result
 }
 
 // MarshalJSON serializes the plan into a JSON representation.
