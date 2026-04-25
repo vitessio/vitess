@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -1585,7 +1586,11 @@ func buildDeniedSystemVariables(names []string) map[string]struct{} {
 		if n == "" {
 			continue
 		}
-		denied[strings.ToLower(n)] = struct{}{}
+		n = strings.ToLower(n)
+		if _, ok := sysvars.AllSystemVariables[n]; !ok {
+			log.Warn("unknown system variable in --denied-system-variables", slog.String("name", n))
+		}
+		denied[n] = struct{}{}
 	}
 	if len(denied) == 0 {
 		return nil

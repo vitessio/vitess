@@ -18,9 +18,11 @@ package vtgate
 
 import (
 	"fmt"
+	"log/slog"
 	"testing"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -303,6 +305,31 @@ func TestExecutorInitVConfigUsesSetVarFlag(t *testing.T) {
 	setVarEnabled = true
 	executor.initVConfig(false, querypb.ExecuteOptions_Gen4)
 	assert.True(t, executor.vConfig.SetVarEnabled)
+}
+
+func TestBuildDeniedSystemVariablesWarnsForUnknownNames(t *testing.T) {
+	oldWarn := log.Warn
+	t.Cleanup(func() {
+		log.Warn = oldWarn
+	})
+
+	var gotMessage string
+	var gotAttrs []slog.Attr
+	log.Warn = func(msg string, attrs ...slog.Attr) {
+		gotMessage = msg
+		gotAttrs = append([]slog.Attr(nil), attrs...)
+	}
+
+	denied := buildDeniedSystemVariables([]string{"unique_checks", "not_a_real_sysvar", " "})
+
+	assert.Equal(t, map[string]struct{}{
+		"unique_checks":     {},
+		"not_a_real_sysvar": {},
+	}, denied)
+	assert.Equal(t, "unknown system variable in --denied-system-variables", gotMessage)
+	require.Len(t, gotAttrs, 1)
+	assert.Equal(t, "name", gotAttrs[0].Key)
+	assert.Equal(t, "not_a_real_sysvar", gotAttrs[0].Value.String())
 }
 
 func TestExecutorSetOp(t *testing.T) {
