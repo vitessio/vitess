@@ -414,6 +414,18 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 
 // replaceSubqueryNode replaces the current cursor node with the appropriate
 // argument placeholder for the given bind var name and opcode.
+//
+// Non-DML places use *ColName, not *Argument. This is intentional: a ColName
+// flows through SemTable column-resolution and acquires a type annotation
+// (rendered as `/* INT16 */` etc. in the emitted SQL) that the planner uses
+// for downstream type-aware decisions. An *Argument doesn't get that
+// annotation, so 18 plantest goldens regress if we use NewArgument here
+// (audited 2026-04-25 — the regressions are visible diffs against the
+// /* type */ comment on the bind variable). Until there's a way to attach
+// the resolved type to an Argument placeholder at this stage of planning
+// (the subquery hasn't been semantically analysed yet when this code
+// runs), the ColName placeholder is load-bearing — and therefore the
+// matching *ColName branch in replaceArgByExpr is also load-bearing.
 func (sqb *SubQueryBuilder) replaceSubqueryNode(cursor *sqlparser.Cursor, argName string, filterType opcode.PulloutOpcode, isDML bool) {
 	if isDML {
 		if filterType.NeedsListArg() {

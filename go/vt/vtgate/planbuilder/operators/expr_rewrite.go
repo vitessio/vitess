@@ -532,17 +532,20 @@ func (r *replaceArgByExpr) apply(
 					return false
 				}
 			case *sqlparser.ColName:
-				// The ColName branch is load-bearing — for some queries the
-				// subquery placeholder is constructed as an unqualified
-				// *ColName (with the arg name as ColName.Name) instead of as
-				// an *Argument. Audited 2026-04-25 by deleting this branch:
-				// at least 5 plantest goldens regress (aggr_cases /
-				// sharded_subquery_inside_aggregation_function_on_a_dual_table
-				// and 3 siblings, plus mirror_cases /
-				// select_unsharded_qualified_table_mirrored_to_unsharded_table_ifnull_dual).
-				// The right fix is upstream — wherever the placeholder is
-				// minted as a ColName, change it to an Argument — but that's
-				// a deeper refactor. For now, match both forms.
+				// The ColName branch is load-bearing. Non-DML queries mint
+				// subquery placeholders as *ColName (rather than *Argument)
+				// in subquery_builder.go's replaceSubqueryNode, because a
+				// ColName flows through SemTable column-resolution and
+				// picks up a type annotation that downstream planning uses.
+				// An *Argument can't acquire the same annotation at that
+				// point in planning (the subquery hasn't been semantically
+				// analysed yet when the placeholder is minted). Switching
+				// the placeholder mint to NewArgument regresses 18+
+				// plantest goldens — see the doc on
+				// subquery_builder.replaceSubqueryNode for the full
+				// rationale and audit. Until that wider design is reworked,
+				// the ColName placeholder is here to stay, and so is this
+				// branch.
 				if !n.Qualifier.IsEmpty() {
 					return true
 				}
