@@ -82,33 +82,41 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 			}
 			return outer, Rewrote("extracted subqueries from subquery container")
 		case *Projection:
-			ap, err := op.GetAliasedProjections()
-			if err != nil {
+			// The Projection-substitution work moved to the engine call
+			// below, but the GetAliasedProjections panic must still fire
+			// during the BottomUp pass to preserve VT09015 error timing —
+			// some queries with deep star projections need the schema
+			// tracking error to surface here, before subsequent BottomUp
+			// branches reach a SubQueryContainer that would panic with a
+			// different error first.
+			if _, err := op.GetAliasedProjections(); err != nil {
 				panic(err)
 			}
-
-			for _, pe := range ap {
-				mergeSubqueryExpr(ctx, pe)
-			}
-		case *Update:
-			for _, setExpr := range op.Assignments {
-				mergeSubqueryExpr(ctx, setExpr.Expr)
-			}
-		case *Aggregator:
-			for _, aggr := range op.Aggregations {
-				newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, aggr.SubQueryExpression, aggr.Original.Expr)
-				if rewritten {
-					aggr.Original.Expr = newExpr
-					op.Columns[aggr.ColOffset].Expr = newExpr
-				}
-			}
 		case *Ordering:
+			// Ordering still uses the per-op-type path; PR 4 adds an
+			// Ordering carrier and folds this into the engine call below.
 			op.settleOrderingExpressions(ctx)
 		}
 		return op, NoRewrite
 	}
 
-	return BottomUp(op, TableID, visit, nil)
+	op = BottomUp(op, TableID, visit, nil)
+
+	// Run the merge-rewrite engine once over the final tree, substituting
+	// every recorded merged subquery into Filter / ApplyJoin / Projection /
+	// Update / Aggregator slots reached via VisitExpressions. This replaces
+	// the per-op-type Projection / Update / Aggregator switch arms above —
+	// each slot now flows through the same uniform path, with FilterType-
+	// aware wrapping baked into MergedSubqueryReplacements at write-time.
+	if len(ctx.MergedSubqueryReplacements) > 0 {
+		applyMergeRewrite(ctx, op, &mergeRewriteProgram{
+			Rules: []exprRule{
+				&replaceArgByExpr{ByName: ctx.MergedSubqueryReplacements},
+			},
+			AssertMode: assertDiagnostic,
+		})
+	}
+	return op
 }
 
 func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
@@ -131,56 +139,6 @@ func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
 			o.Order[idx].SimplifiedExpr = expr.(sqlparser.Expr)
 		}
 	}
-}
-
-func mergeSubqueryExpr(ctx *plancontext.PlanningContext, pe *ProjExpr) {
-	se, ok := pe.Info.(SubQueryExpression)
-	if !ok {
-		return
-	}
-	newExpr, rewritten := rewriteMergedSubqueryExpr(ctx, se, pe.EvalExpr)
-	if rewritten {
-		pe.EvalExpr = newExpr
-	}
-}
-
-func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpression, expr sqlparser.Expr) (sqlparser.Expr, bool) {
-	rewritten := false
-
-	merged := true
-	for merged {
-		// we need to keep rewriting the expression until we can't find any more subqueries to merge
-		// this is because we might have subqueries inside subqueries, and we need to merge them all
-		merged = false
-		for _, sq := range se {
-			if _, ok := ctx.MergedSubqueries[sq.ArgName]; !ok {
-				continue
-			}
-			expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-				switch expr := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
-						return true
-					}
-				case *sqlparser.Argument:
-					if expr.Name != sq.ArgName {
-						return true
-					}
-				default:
-					return true
-				}
-				rewritten = true
-				if sq.FilterType == opcode.PulloutExists {
-					cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
-				} else {
-					cursor.Replace(sq.originalSubquery)
-				}
-				merged = true
-				return false
-			}).(sqlparser.Expr)
-		}
-	}
-	return expr, rewritten
 }
 
 // tryPushSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
@@ -334,8 +292,29 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 
 	outer.RHS = newOp
-	ctx.MergedSubqueries[inner.ArgName] = inner.originalSubquery
+	recordMergedSubquery(ctx, inner)
 	return outer, Rewrote("merged subquery with rhs of join")
+}
+
+// recordMergedSubquery records both the raw subquery and its FilterType-aware
+// wrapped form in the planning context. The wrapped form (ExistsExpr-wrapped
+// for PulloutExists, raw *Subquery otherwise) is what the merge-rewrite
+// engine substitutes; the raw map is kept for compatibility with un-migrated
+// readers (settleOrderingExpressions, SubQuery.isMerged) until later PRs
+// migrate them.
+func recordMergedSubquery(ctx *plancontext.PlanningContext, sq *SubQuery) {
+	ctx.MergedSubqueries[sq.ArgName] = sq.originalSubquery
+	ctx.MergedSubqueryReplacements[sq.ArgName] = wrappedSubqueryForFilterType(sq)
+}
+
+// wrappedSubqueryForFilterType produces the substitution form used by
+// rewriteMergedSubqueryExpr: PulloutExists wraps in ExistsExpr; everything
+// else uses the raw *Subquery directly.
+func wrappedSubqueryForFilterType(sq *SubQuery) sqlparser.Expr {
+	if sq.FilterType == opcode.PulloutExists {
+		return &sqlparser.ExistsExpr{Subquery: sq.originalSubquery}
+	}
+	return sq.originalSubquery
 }
 
 // addSubQuery adds a SubQuery to the given operator. If the operator is a SubQueryContainer,
@@ -552,18 +531,11 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	}
 
 	// In-tree substitution via the merge-rewrite engine. The engine reaches
-	// every Argument reference inside `op` (Filter and ApplyJoin slots in
-	// PR 2's carrier coverage); operators above `op` in the plan tree are
-	// served by the ctx.MergedSubqueries write below until later PRs add
-	// their carriers.
-	//
-	// The replacement form mirrors rewriteMergedSubqueryExpr's FilterType
-	// handling: PulloutExists wraps the subquery in ExistsExpr, otherwise
-	// the raw *Subquery is used directly.
-	replacement := sqlparser.Expr(subQuery.originalSubquery)
-	if subQuery.FilterType == opcode.PulloutExists {
-		replacement = &sqlparser.ExistsExpr{Subquery: subQuery.originalSubquery}
-	}
+	// every Argument and ColName reference inside `op` (Filter, ApplyJoin,
+	// Projection, Update, Aggregator slots after PR 3's carrier coverage);
+	// operators outside `op` in the plan tree are still served by the
+	// ctx.MergedSubqueries → settleSubqueries safety net below until PR 6.
+	replacement := wrappedSubqueryForFilterType(subQuery)
 	applyMergeRewrite(ctx, op, &mergeRewriteProgram{
 		Rules: []exprRule{
 			&replaceArgByExpr{ByName: map[string]sqlparser.Expr{subQuery.ArgName: replacement}},
@@ -574,7 +546,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	// Safety net for operators above `op` that don't yet implement
 	// VisitExpressions — settleSubqueries finds them via this map.
 	// Removed in PR 6 once every relevant carrier is migrated.
-	ctx.MergedSubqueries[subQuery.ArgName] = subQuery.originalSubquery
+	recordMergedSubquery(ctx, subQuery)
 	return op, Rewrote("merged subquery with outer")
 }
 

@@ -79,6 +79,33 @@ func (a *Aggregator) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser
 	return newFilter(a, expr)
 }
 
+// VisitExpressions implements exprCarrier. Yields each Aggregations[i]'s
+// Original.Expr under exprAggregate. The slot's replacement is unconditionally
+// mirrored into the corresponding Columns[ColOffset].Expr — matching the
+// settleSubqueries Aggregator branch's two-write pattern: even when the rule
+// mutated in place (so out is the same pointer as Original.Expr), the
+// Columns slot may be a separate clone that needs the explicit overwrite to
+// pick up the substitution. Drop is not allowed; aggregations are structural.
+//
+// Aggregations whose ColOffset is unset (-1, before offset planning) only
+// update Original.Expr.
+func (a *Aggregator) VisitExpressions(fn func(exprKind, sqlparser.Expr) sqlparser.Expr) {
+	for i := range a.Aggregations {
+		aggr := &a.Aggregations[i]
+		if aggr.Original == nil || aggr.Original.Expr == nil {
+			continue
+		}
+		out := fn(exprAggregate, aggr.Original.Expr)
+		if out == nil {
+			panic(vterrors.VT13001("Aggregator.VisitExpressions: rule returned nil for Aggregations[].Original.Expr (drop not allowed)"))
+		}
+		aggr.Original.Expr = out
+		if aggr.ColOffset >= 0 && aggr.ColOffset < len(a.Columns) && a.Columns[aggr.ColOffset] != nil {
+			a.Columns[aggr.ColOffset].Expr = out
+		}
+	}
+}
+
 // createNonGroupingAggr creates the appropriate aggregation for a non-grouping, non-aggregation column
 // If the expression is constant, it returns AggregateConstant, otherwise AggregateAnyValue
 func createNonGroupingAggr(expr *sqlparser.AliasedExpr) Aggr {

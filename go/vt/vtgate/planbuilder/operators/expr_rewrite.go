@@ -503,15 +503,19 @@ func (r *deleteRoutingPredicatesScopedToSubquery) affectedArgNames() map[string]
 	return r.JoinColumnArgs
 }
 
-// replaceArgByExpr substitutes any *sqlparser.Argument whose Name is a key
-// in ByName with the corresponding expression value. Used at merge time to
-// substitute subquery placeholders with the inner subquery they refer to,
-// once the inner has been baked into the outer route.
+// replaceArgByExpr substitutes subquery-placeholder references with the inner
+// expression they refer to, once the inner subquery has been merged into the
+// outer route. Matches both *sqlparser.Argument{Name} and *sqlparser.ColName
+// whose unqualified Name matches a key in ByName — historical reality is that
+// subquery placeholders appear in either form depending on what planning
+// phase produced them (the equivalent rewriteMergedSubqueryExpr handles both
+// cases via separate switch arms; the TODO at subquery_planning.go:162 notes
+// the ColName matching is a hack to be revisited).
 //
-// Today's equivalent is the deferred ctx.MergedSubqueries → settleSubqueries
-// post-merge sweep. The engine catches in-tree references via every carrier
-// it walks; un-migrated operators still get the safety-net write at the
-// merge site until later PRs migrate them too.
+// The replacement is applied in a fixed-point loop because substituting one
+// argument can introduce another (nested subqueries: replacing :__sq1 yields
+// a Subquery whose body contains :__sq2). Mirrors the for-merged loop in
+// rewriteMergedSubqueryExpr.
 type replaceArgByExpr struct {
 	ByName map[string]sqlparser.Expr
 }
@@ -527,19 +531,34 @@ func (r *replaceArgByExpr) apply(
 	// We use Rewrite (not CopyOnRewrite) because slot-replace semantics
 	// don't require preserving the original AST; the caller already accepts
 	// our return value as the new slot contents.
-	out := sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-		arg, ok := cursor.Node().(*sqlparser.Argument)
-		if !ok {
+	out := expr
+	for {
+		changed := false
+		out = sqlparser.Rewrite(out, nil, func(cursor *sqlparser.Cursor) bool {
+			switch n := cursor.Node().(type) {
+			case *sqlparser.Argument:
+				if repl, hit := r.ByName[n.Name]; hit {
+					cursor.Replace(repl)
+					changed = true
+					return false
+				}
+			case *sqlparser.ColName:
+				if !n.Qualifier.IsEmpty() {
+					return true
+				}
+				if repl, hit := r.ByName[n.Name.String()]; hit {
+					cursor.Replace(repl)
+					changed = true
+					return false
+				}
+			}
 			return true
+		}).(sqlparser.Expr)
+		if !changed {
+			break
 		}
-		repl, hit := r.ByName[arg.Name]
-		if !hit {
-			return true
-		}
-		cursor.Replace(repl)
-		return true
-	})
-	return out.(sqlparser.Expr)
+	}
+	return out
 }
 
 func (r *replaceArgByExpr) affectedIDs() map[predicates.ID]struct{} {

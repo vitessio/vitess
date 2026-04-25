@@ -399,6 +399,29 @@ func (p *Projection) Clone(inputs []Operator) Operator {
 	return &klone
 }
 
+// VisitExpressions implements exprCarrier. Yields each AliasedProjections
+// entry's EvalExpr under exprProjection. Drop semantics are not allowed:
+// projection columns are structural — removing one would change the schema
+// produced by the operator.
+//
+// Star projections don't expose slots; they have no Argument refs to rewrite.
+func (p *Projection) VisitExpressions(fn func(exprKind, sqlparser.Expr) sqlparser.Expr) {
+	ap, err := p.GetAliasedProjections()
+	if err != nil || ap == nil {
+		return
+	}
+	for _, pe := range ap {
+		if pe == nil || pe.EvalExpr == nil {
+			continue
+		}
+		out := fn(exprProjection, pe.EvalExpr)
+		if out == nil {
+			panic(vterrors.VT13001("Projection.VisitExpressions: rule returned nil for EvalExpr (drop not allowed; projection columns are structural)"))
+		}
+		pe.EvalExpr = out
+	}
+}
+
 func (p *Projection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	// we just pass through the predicate to our source
 	p.Source = p.Source.AddPredicate(ctx, expr)

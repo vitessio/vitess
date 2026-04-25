@@ -209,6 +209,46 @@ func TestReplaceArgByExpr(t *testing.T) {
 		assert.True(t, hasA)
 		assert.True(t, hasB)
 	})
+
+	t.Run("matches unqualified ColName by Name", func(t *testing.T) {
+		// Subquery placeholders historically appear as either Argument
+		// or ColName; the rule matches both. See subquery_planning.go's
+		// rewriteMergedSubqueryExpr for the legacy code path that does
+		// the same.
+		expr := parseExpr("__sq1 + 1")
+		rule := &replaceArgByExpr{ByName: map[string]sqlparser.Expr{
+			"__sq1": parseExpr("42"),
+		}}
+		out := rule.apply(&plancontext.PlanningContext{}, exprPredicate, expr)
+		assert.Equal(t, "42 + 1", sqlparser.String(out))
+	})
+
+	t.Run("ignores qualified ColName even if Name matches", func(t *testing.T) {
+		// `__sq1` as an unqualified bare name matches; `t.__sq1` (a real
+		// table-qualified column reference) does not. This protects
+		// against unlikely-but-possible name collisions with real column
+		// names.
+		expr := parseExpr("t.__sq1 + 1")
+		rule := &replaceArgByExpr{ByName: map[string]sqlparser.Expr{
+			"__sq1": parseExpr("42"),
+		}}
+		out := rule.apply(&plancontext.PlanningContext{}, exprPredicate, expr)
+		assert.Equal(t, "t.__sq1 + 1", sqlparser.String(out))
+	})
+
+	t.Run("nested-subquery loop substitutes args introduced by an earlier substitution", func(t *testing.T) {
+		// :outer → (1 + :inner), then :inner → 99. The fixed-point loop
+		// keeps applying until nothing changes, so the second-tier
+		// argument is reached. This mirrors rewriteMergedSubqueryExpr's
+		// `for merged` loop.
+		expr := parseExpr("col = :outer")
+		rule := &replaceArgByExpr{ByName: map[string]sqlparser.Expr{
+			"outer": parseExpr("1 + :inner"),
+			"inner": parseExpr("99"),
+		}}
+		out := rule.apply(&plancontext.PlanningContext{}, exprPredicate, expr)
+		assert.Equal(t, "col = 1 + 99", sqlparser.String(out))
+	})
 }
 
 // stubLeafOp is a test-only leaf Operator for building tiny operator trees

@@ -73,6 +73,23 @@ func (se SetExpr) String() string {
 	return fmt.Sprintf("%s = %s", sqlparser.String(se.Name), sqlparser.String(se.Expr.EvalExpr))
 }
 
+// VisitExpressions implements exprCarrier. Yields each Assignments[i].Expr's
+// EvalExpr under exprSetExpr. Drop is not allowed — every set target needs an
+// expression.
+func (u *Update) VisitExpressions(fn func(exprKind, sqlparser.Expr) sqlparser.Expr) {
+	for i := range u.Assignments {
+		pe := u.Assignments[i].Expr
+		if pe == nil || pe.EvalExpr == nil {
+			continue
+		}
+		out := fn(exprSetExpr, pe.EvalExpr)
+		if out == nil {
+			panic(vterrors.VT13001("Update.VisitExpressions: rule returned nil for Assignments[].Expr.EvalExpr (drop not allowed)"))
+		}
+		pe.EvalExpr = out
+	}
+}
+
 // Clone implements the Operator interface
 func (u *Update) Clone(inputs []Operator) Operator {
 	upd := *u
