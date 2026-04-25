@@ -17,9 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"io"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -31,6 +33,16 @@ type (
 	// nonDeletableSlots registry to reject drops on slots that can't be
 	// removed structurally.
 	exprKind uint8
+
+	// exprCarrier is implemented by every Operator that owns expressions
+	// which may need to be rewritten at merge time. fn is invoked once per
+	// slot; the slot is replaced with whatever fn returns. Returning nil
+	// means "drop this slot"; the engine panics via vterrors.VT13001 if fn
+	// returns nil for a kind in nonDeletableSlots.
+	exprCarrier interface {
+		Operator
+		VisitExpressions(fn func(exprKind, sqlparser.Expr) sqlparser.Expr)
+	}
 
 	// routingExprCarrier is implemented by Routing impls that own predicate
 	// slots (today: ShardedRouting.SeenPredicates). ResetAfterRewrite returns
@@ -62,13 +74,27 @@ type (
 	// default" — every call site declares its mode explicitly.
 	assertMode uint8
 
-	// mergeRewriteProgram is the input to applyRoutingRewrite. AssertMode's
-	// zero value (assertOff) means no end-of-build check is performed. PR 2
-	// extends this with a leftoverReport surface and the tree-walking
-	// applyMergeRewrite entry point.
+	// mergeRewriteProgram is the input to applyRoutingRewrite /
+	// applyMergeRewrite. AssertMode's zero value (assertOff) means no
+	// end-of-build check is performed.
 	mergeRewriteProgram struct {
 		Rules      []exprRule
 		AssertMode assertMode
+	}
+
+	// leftoverReport is populated when AssertMode == assertDiagnostic. It
+	// describes which Argument names and predicate IDs were declared in a
+	// program's affected set yet still appear somewhere in the rewritten
+	// subtree. Tests and future PR migration work read this to discover
+	// which carriers still owe a VisitExpressions implementation.
+	leftoverReport struct {
+		// LeftoverArgs maps an Argument.Name to short string descriptions of
+		// the operator+kind combinations that still hold it.
+		LeftoverArgs map[string][]string
+		// LeftoverIDs is reserved for replaceByID rules — populated when an
+		// affected predicates.ID still resolves to a non-rewritten Current()
+		// in some carrier.
+		LeftoverIDs map[predicates.ID][]string
 	}
 )
 
@@ -114,9 +140,8 @@ var nonDeletableSlots = map[exprKind]bool{
 
 // applyRoutingRewrite is the routing-level applier. Used at merge sites where
 // the operator tree isn't yet finalised but the routing's SeenPredicates need
-// rewriting before resetRoutingLogic is called. Today's only call site is the
-// SeenPredicates filter inside subqueryRouteMerger.mergeShardedRouting; future
-// PRs introduce applyMergeRewrite for tree-wide rewriting.
+// rewriting before resetRoutingLogic is called. The original call site is the
+// SeenPredicates filter inside subqueryRouteMerger.mergeShardedRouting.
 //
 // Returns the replacement Routing, since ResetAfterRewrite (and underneath it
 // resetRoutingLogic) may produce a Routing of a different concrete type than
@@ -131,6 +156,122 @@ func applyRoutingRewrite(
 		return carrier.ResetAfterRewrite(ctx)
 	}
 
+	applyRulesToRoutingCarrier(ctx, carrier, program)
+
+	routing := carrier.ResetAfterRewrite(ctx)
+
+	// runAssertions on a routing-only call walks no operator tree; the
+	// affected sets are checked against the rewritten routing carrier and
+	// any post-rewrite Routing returned above (in case ResetAfterRewrite
+	// swapped to a different impl that also implements the carrier).
+	if program.AssertMode != assertOff {
+		report := newLeftoverReport(program)
+		collectLeftoversFromRouting(ctx, routing, report)
+		finalizeAssertions(program, report)
+	}
+	return routing
+}
+
+// applyMergeRewrite is the tree-walking applier. Walks every reachable
+// operator under root (using the existing Visit infrastructure), applies all
+// rules to every exprCarrier slot, and applies routing rules to any Route's
+// embedded Routing impl that is also a routingExprCarrier — capturing each
+// ResetAfterRewrite's potential Routing-impl swap back into the Route.
+//
+// At end-of-walk the program's AssertMode is honoured (see assertMode).
+//
+// Conventionally, callers pass the just-merged subtree as root, not the
+// global plan root — the engine only needs to reach operators that may
+// contain the rule's substitution targets.
+func applyMergeRewrite(
+	ctx *plancontext.PlanningContext,
+	root Operator,
+	program *mergeRewriteProgram,
+) {
+	if program == nil || len(program.Rules) == 0 || root == nil {
+		return
+	}
+
+	visited := visitTreeForRewrite(ctx, root, program)
+
+	if program.AssertMode == assertOff {
+		return
+	}
+	report := newLeftoverReport(program)
+	for _, op := range visited {
+		collectLeftoversFromCarrier(ctx, op, report)
+		if route, ok := op.(*Route); ok {
+			collectLeftoversFromRouting(ctx, route.Routing, report)
+		}
+	}
+	finalizeAssertions(program, report)
+}
+
+// visitTreeForRewrite walks every operator reachable from root (Visit, not
+// BottomUp — we don't return a transformed tree, we mutate slots in place).
+// For each carrier, runs the program's rules on each slot. For each Route
+// whose Routing is also a routingExprCarrier, runs the rules on routing
+// slots and captures the Routing returned by ResetAfterRewrite back into
+// route.Routing — that is how a Routing-impl swap (e.g. ShardedRouting →
+// NoneRouting) survives the rewrite.
+func visitTreeForRewrite(
+	ctx *plancontext.PlanningContext,
+	root Operator,
+	program *mergeRewriteProgram,
+) []Operator {
+	visited := make([]Operator, 0, 8)
+	if err := Visit(root, func(op Operator) error {
+		visited = append(visited, op)
+		if carrier, ok := op.(exprCarrier); ok {
+			applyRulesToCarrier(ctx, carrier, program)
+		}
+		if route, ok := op.(*Route); ok {
+			if rc, ok := route.Routing.(routingExprCarrier); ok {
+				applyRulesToRoutingCarrier(ctx, rc, program)
+				route.Routing = rc.ResetAfterRewrite(ctx)
+			}
+		}
+		return nil
+	}); err != nil {
+		// Visit only returns errors when the visitor returns one; ours
+		// never does. If this fires it indicates a programming error.
+		panic(vterrors.VT13001(fmt.Sprintf("expr rewrite engine: tree walk failed: %v", err)))
+	}
+	return visited
+}
+
+// applyRulesToCarrier dispatches every rule to every slot of an exprCarrier.
+// Rules return the replacement expression; nil means "drop this slot" and
+// only succeeds for kinds outside nonDeletableSlots — otherwise we panic.
+func applyRulesToCarrier(
+	ctx *plancontext.PlanningContext,
+	carrier exprCarrier,
+	program *mergeRewriteProgram,
+) {
+	carrier.VisitExpressions(func(kind exprKind, expr sqlparser.Expr) sqlparser.Expr {
+		out := expr
+		for _, rule := range program.Rules {
+			out = rule.apply(ctx, kind, out)
+			if out == nil {
+				if nonDeletableSlots[kind] {
+					panic(programmerErrorDropOnNonDeletable(kind))
+				}
+				return nil
+			}
+		}
+		return out
+	})
+}
+
+// applyRulesToRoutingCarrier mirrors applyRulesToCarrier for routing-level
+// slots. Kept distinct so callers can apply rules to a routing carrier
+// before its ResetAfterRewrite — applyRoutingRewrite uses this without
+// walking any operator tree.
+func applyRulesToRoutingCarrier(
+	ctx *plancontext.PlanningContext,
+	carrier routingExprCarrier,
+	program *mergeRewriteProgram,
+) {
 	carrier.VisitRoutingExpressions(func(kind exprKind, expr sqlparser.Expr) sqlparser.Expr {
 		out := expr
 		for _, rule := range program.Rules {
@@ -144,31 +285,137 @@ func applyRoutingRewrite(
 		}
 		return out
 	})
-
-	routing := carrier.ResetAfterRewrite(ctx)
-	runAssertions(ctx, []Operator{}, routing, program)
-	return routing
 }
 
-// runAssertions implements the AssertMode contract. PR 1 only carries
-// routing-level rules so the operator-tree walk is empty; PR 2 extends it.
-// In assertOff mode this is a no-op; in assertDiagnostic mode it populates
-// ctx.RewriteReport; in assertFatal mode it panics on any leftover.
-func runAssertions(
-	ctx *plancontext.PlanningContext,
-	tree []Operator,
-	routing Routing,
-	program *mergeRewriteProgram,
+// newLeftoverReport prepares an empty report shaped to the program's affected
+// sets. Only argument names from rules with non-empty affectedArgNames are
+// pre-keyed, so a report stays small even for large programs.
+func newLeftoverReport(program *mergeRewriteProgram) *leftoverReport {
+	r := &leftoverReport{
+		LeftoverArgs: map[string][]string{},
+		LeftoverIDs:  map[predicates.ID][]string{},
+	}
+	for _, rule := range program.Rules {
+		for name := range rule.affectedArgNames() {
+			if _, exists := r.LeftoverArgs[name]; !exists {
+				r.LeftoverArgs[name] = nil
+			}
+		}
+		for id := range rule.affectedIDs() {
+			if _, exists := r.LeftoverIDs[id]; !exists {
+				r.LeftoverIDs[id] = nil
+			}
+		}
+	}
+	return r
+}
+
+// collectLeftoversFromCarrier walks every slot of a carrier and records any
+// Argument whose name is in the report's affected set as still present.
+// Future PRs add predicates.ID checks for replaceByID rules.
+func collectLeftoversFromCarrier(
+	_ *plancontext.PlanningContext,
+	op Operator,
+	report *leftoverReport,
 ) {
-	if program.AssertMode == assertOff {
+	carrier, ok := op.(exprCarrier)
+	if !ok {
 		return
 	}
-	// PR 1: with no exprCarrier walk, the only post-rewrite surface to
-	// inspect is the routing carrier itself. PR 2 extends this to walk every
-	// reachable carrier in tree and collect leftovers across operator slots.
-	_ = ctx
-	_ = tree
-	_ = routing
+	desc := op.ShortDescription()
+	carrier.VisitExpressions(func(kind exprKind, expr sqlparser.Expr) sqlparser.Expr {
+		recordArgsInExpr(expr, kind, desc, report)
+		return expr
+	})
+}
+
+func collectLeftoversFromRouting(
+	_ *plancontext.PlanningContext,
+	routing Routing,
+	report *leftoverReport,
+) {
+	rc, ok := routing.(routingExprCarrier)
+	if !ok {
+		return
+	}
+	desc := fmt.Sprintf("Routing(%T)", routing)
+	rc.VisitRoutingExpressions(func(kind exprKind, expr sqlparser.Expr) sqlparser.Expr {
+		recordArgsInExpr(expr, kind, desc, report)
+		return expr
+	})
+}
+
+func recordArgsInExpr(expr sqlparser.Expr, kind exprKind, desc string, report *leftoverReport) {
+	if expr == nil || len(report.LeftoverArgs) == 0 {
+		return
+	}
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		arg, ok := node.(*sqlparser.Argument)
+		if !ok {
+			return true, nil
+		}
+		if _, hit := report.LeftoverArgs[arg.Name]; hit {
+			report.LeftoverArgs[arg.Name] = append(
+				report.LeftoverArgs[arg.Name],
+				fmt.Sprintf("%s/%s", desc, kindName(kind)),
+			)
+		}
+		return true, nil
+	}, expr)
+}
+
+// finalizeAssertions interprets the report under the program's AssertMode.
+// In assertDiagnostic the report is dropped on the floor — it lives only for
+// the duration of the call (PR 5/6 will surface it via PlanningContext if
+// telemetry is needed). In assertFatal any non-empty leftover panics.
+func finalizeAssertions(program *mergeRewriteProgram, report *leftoverReport) {
+	switch program.AssertMode {
+	case assertOff, assertDiagnostic:
+		// Diagnostic-mode reports are inspected by callers that want them
+		// (today: tests via the helper added below). Production callers
+		// pass assertDiagnostic during PRs 2-4 to exercise the plumbing
+		// without enforcement.
+		return
+	case assertFatal:
+		var leftovers []string
+		for name, sites := range report.LeftoverArgs {
+			if len(sites) == 0 {
+				continue
+			}
+			leftovers = append(leftovers, fmt.Sprintf("Argument %q at %v", name, sites))
+		}
+		for id, sites := range report.LeftoverIDs {
+			if len(sites) == 0 {
+				continue
+			}
+			leftovers = append(leftovers, fmt.Sprintf("predicates.ID %d at %v", id, sites))
+		}
+		if len(leftovers) > 0 {
+			panic(vterrors.VT13001("expr rewrite engine: leftover affected entries: " + fmt.Sprint(leftovers)))
+		}
+	}
+}
+
+// runMergeRewriteForTest is a test-only helper that runs applyMergeRewrite
+// and surfaces its leftoverReport. Production callers don't need the
+// report; tests do.
+func runMergeRewriteForTest(
+	ctx *plancontext.PlanningContext,
+	root Operator,
+	program *mergeRewriteProgram,
+) *leftoverReport {
+	if program == nil || len(program.Rules) == 0 || root == nil {
+		return newLeftoverReport(&mergeRewriteProgram{})
+	}
+	visited := visitTreeForRewrite(ctx, root, program)
+	report := newLeftoverReport(program)
+	for _, op := range visited {
+		collectLeftoversFromCarrier(ctx, op, report)
+		if route, ok := op.(*Route); ok {
+			collectLeftoversFromRouting(ctx, route.Routing, report)
+		}
+	}
+	return report
 }
 
 // programmerErrorDropOnNonDeletable formats the panic message for fn returning
@@ -254,6 +501,60 @@ func (r *deleteRoutingPredicatesScopedToSubquery) affectedIDs() map[predicates.I
 
 func (r *deleteRoutingPredicatesScopedToSubquery) affectedArgNames() map[string]struct{} {
 	return r.JoinColumnArgs
+}
+
+// replaceArgByExpr substitutes any *sqlparser.Argument whose Name is a key
+// in ByName with the corresponding expression value. Used at merge time to
+// substitute subquery placeholders with the inner subquery they refer to,
+// once the inner has been baked into the outer route.
+//
+// Today's equivalent is the deferred ctx.MergedSubqueries → settleSubqueries
+// post-merge sweep. The engine catches in-tree references via every carrier
+// it walks; un-migrated operators still get the safety-net write at the
+// merge site until later PRs migrate them too.
+type replaceArgByExpr struct {
+	ByName map[string]sqlparser.Expr
+}
+
+func (r *replaceArgByExpr) apply(
+	_ *plancontext.PlanningContext,
+	_ exprKind,
+	expr sqlparser.Expr,
+) sqlparser.Expr {
+	if expr == nil || len(r.ByName) == 0 {
+		return expr
+	}
+	// We use Rewrite (not CopyOnRewrite) because slot-replace semantics
+	// don't require preserving the original AST; the caller already accepts
+	// our return value as the new slot contents.
+	out := sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		arg, ok := cursor.Node().(*sqlparser.Argument)
+		if !ok {
+			return true
+		}
+		repl, hit := r.ByName[arg.Name]
+		if !hit {
+			return true
+		}
+		cursor.Replace(repl)
+		return true
+	})
+	return out.(sqlparser.Expr)
+}
+
+func (r *replaceArgByExpr) affectedIDs() map[predicates.ID]struct{} {
+	return nil
+}
+
+func (r *replaceArgByExpr) affectedArgNames() map[string]struct{} {
+	if len(r.ByName) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(r.ByName))
+	for name := range r.ByName {
+		out[name] = struct{}{}
+	}
+	return out
 }
 
 // exprMentionsAnyArg reports whether expr contains any *sqlparser.Argument

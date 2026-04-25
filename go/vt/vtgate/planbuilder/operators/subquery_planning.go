@@ -550,6 +550,30 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	if outer.Comments != nil {
 		op.Comments = outer.Comments
 	}
+
+	// In-tree substitution via the merge-rewrite engine. The engine reaches
+	// every Argument reference inside `op` (Filter and ApplyJoin slots in
+	// PR 2's carrier coverage); operators above `op` in the plan tree are
+	// served by the ctx.MergedSubqueries write below until later PRs add
+	// their carriers.
+	//
+	// The replacement form mirrors rewriteMergedSubqueryExpr's FilterType
+	// handling: PulloutExists wraps the subquery in ExistsExpr, otherwise
+	// the raw *Subquery is used directly.
+	replacement := sqlparser.Expr(subQuery.originalSubquery)
+	if subQuery.FilterType == opcode.PulloutExists {
+		replacement = &sqlparser.ExistsExpr{Subquery: subQuery.originalSubquery}
+	}
+	applyMergeRewrite(ctx, op, &mergeRewriteProgram{
+		Rules: []exprRule{
+			&replaceArgByExpr{ByName: map[string]sqlparser.Expr{subQuery.ArgName: replacement}},
+		},
+		AssertMode: assertDiagnostic,
+	})
+
+	// Safety net for operators above `op` that don't yet implement
+	// VisitExpressions — settleSubqueries finds them via this map.
+	// Removed in PR 6 once every relevant carrier is migrated.
 	ctx.MergedSubqueries[subQuery.ArgName] = subQuery.originalSubquery
 	return op, Rewrote("merged subquery with outer")
 }

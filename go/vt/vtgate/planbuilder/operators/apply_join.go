@@ -121,6 +121,41 @@ func (aj *ApplyJoin) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpars
 	return AddPredicate(ctx, aj, expr, false, newFilterSinglePredicate)
 }
 
+// VisitExpressions implements exprCarrier. Exposes JoinPredicates' Original
+// and (when non-nil) RHSExpr slots under exprJoinPredicate, so engine rules
+// like replaceArgByExpr can substitute arguments inside join conditions.
+//
+// Most join predicates are wrapped in *predicates.JoinPredicate (an
+// indirection over predicates.Tracker) and won't typically contain subquery
+// arguments — but the carrier exposes them anyway so future replaceByID
+// rules can target them.
+//
+// Drop semantics aren't well-defined for join predicates (a join with no
+// predicates and a join whose predicate dropped to "true" mean different
+// things), so we panic if a rule returns nil for these slots.
+func (aj *ApplyJoin) VisitExpressions(fn func(exprKind, sqlparser.Expr) sqlparser.Expr) {
+	if aj.JoinPredicates == nil {
+		return
+	}
+	for i := range aj.JoinPredicates.columns {
+		col := &aj.JoinPredicates.columns[i]
+		if col.Original != nil {
+			out := fn(exprJoinPredicate, col.Original)
+			if out == nil {
+				panic(vterrors.VT13001("ApplyJoin.VisitExpressions: rule returned nil for JoinPredicates[].Original (drop semantics not defined)"))
+			}
+			col.Original = out
+		}
+		if col.RHSExpr != nil {
+			out := fn(exprJoinPredicate, col.RHSExpr)
+			if out == nil {
+				panic(vterrors.VT13001("ApplyJoin.VisitExpressions: rule returned nil for JoinPredicates[].RHSExpr (drop semantics not defined)"))
+			}
+			col.RHSExpr = out
+		}
+	}
+}
+
 func (aj *ApplyJoin) GetLHS() Operator {
 	return aj.LHS
 }

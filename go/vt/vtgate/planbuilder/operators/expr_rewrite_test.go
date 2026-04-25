@@ -63,7 +63,7 @@ func TestDeleteRoutingPredicatesScopedToSubquery(t *testing.T) {
 	cases := []tc{
 		{
 			name:     "depends on subquery AND has matching arg → DROP",
-			expr:     "user.id = :u_id",
+			expr:     "t.id = :u_id",
 			argName:  "u_id",
 			deps:     subqueryTables,
 			argSet:   matchingArgs,
@@ -71,7 +71,7 @@ func TestDeleteRoutingPredicatesScopedToSubquery(t *testing.T) {
 		},
 		{
 			name:     "depends on subquery, has arg but name does NOT match → KEEP",
-			expr:     "user.id = :other_arg",
+			expr:     "t.id = :other_arg",
 			argName:  "other_arg",
 			deps:     subqueryTables,
 			argSet:   matchingArgs,
@@ -79,7 +79,7 @@ func TestDeleteRoutingPredicatesScopedToSubquery(t *testing.T) {
 		},
 		{
 			name:     "depends on subquery, no Argument at all → KEEP",
-			expr:     "user.id = 5",
+			expr:     "t.id = 5",
 			argName:  "",
 			deps:     subqueryTables,
 			argSet:   matchingArgs,
@@ -103,7 +103,7 @@ func TestDeleteRoutingPredicatesScopedToSubquery(t *testing.T) {
 		},
 		{
 			name:     "empty arg set → KEEP regardless of subquery deps",
-			expr:     "user.id = :u_id",
+			expr:     "t.id = :u_id",
 			argName:  "u_id",
 			deps:     subqueryTables,
 			argSet:   map[string]struct{}{},
@@ -143,7 +143,7 @@ func TestDeleteRoutingPredicatesScopedToSubquery(t *testing.T) {
 // it doesn't recognise.
 func TestDeleteRoutingPredicatesScopedToSubquery_NonRoutingKindIgnored(t *testing.T) {
 	parser := sqlparser.NewTestParser()
-	expr, err := parser.ParseExpr("user.id = :u_id")
+	expr, err := parser.ParseExpr("t.id = :u_id")
 	require.NoError(t, err)
 
 	st := semantics.EmptySemTable()
@@ -162,6 +162,138 @@ func TestDeleteRoutingPredicatesScopedToSubquery_NonRoutingKindIgnored(t *testin
 	assert.NotNil(t, got)
 }
 
+// TestReplaceArgByExpr covers the rule's substitution semantics in isolation.
+// Used at merge time to swap an Argument placeholder for the inner expression
+// it referenced.
+func TestReplaceArgByExpr(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	parseExpr := func(s string) sqlparser.Expr {
+		t.Helper()
+		expr, err := parser.ParseExpr(s)
+		require.NoError(t, err)
+		return expr
+	}
+
+	t.Run("replaces matching Argument", func(t *testing.T) {
+		expr := parseExpr("t.id = :u_id")
+		repl := parseExpr("42")
+		rule := &replaceArgByExpr{ByName: map[string]sqlparser.Expr{"u_id": repl}}
+		out := rule.apply(&plancontext.PlanningContext{}, exprPredicate, expr)
+		assert.Equal(t, "t.id = 42", sqlparser.String(out))
+	})
+
+	t.Run("non-matching Argument is left alone", func(t *testing.T) {
+		expr := parseExpr("t.id = :other")
+		repl := parseExpr("42")
+		rule := &replaceArgByExpr{ByName: map[string]sqlparser.Expr{"u_id": repl}}
+		out := rule.apply(&plancontext.PlanningContext{}, exprPredicate, expr)
+		assert.Equal(t, "t.id = :other", sqlparser.String(out))
+	})
+
+	t.Run("nil ByName is a no-op", func(t *testing.T) {
+		expr := parseExpr("t.id = :u_id")
+		rule := &replaceArgByExpr{}
+		out := rule.apply(&plancontext.PlanningContext{}, exprPredicate, expr)
+		assert.Equal(t, "t.id = :u_id", sqlparser.String(out))
+	})
+
+	t.Run("affectedArgNames returns the set of ByName keys", func(t *testing.T) {
+		rule := &replaceArgByExpr{ByName: map[string]sqlparser.Expr{
+			"a": parseExpr("1"),
+			"b": parseExpr("2"),
+		}}
+		got := rule.affectedArgNames()
+		assert.Len(t, got, 2)
+		_, hasA := got["a"]
+		_, hasB := got["b"]
+		assert.True(t, hasA)
+		assert.True(t, hasB)
+	})
+}
+
+// stubLeafOp is a test-only leaf Operator for building tiny operator trees
+// without going through the full planner. Implements just enough of the
+// Operator interface to satisfy the tree walker.
+type stubLeafOp struct {
+	nullaryOperator
+	noColumns
+	noPredicates
+}
+
+func (s *stubLeafOp) Clone(_ []Operator) Operator                          { return s }
+func (s *stubLeafOp) SetInputs(_ []Operator)                               {}
+func (s *stubLeafOp) ShortDescription() string                             { return "stubLeaf" }
+func (s *stubLeafOp) GetOrdering(_ *plancontext.PlanningContext) []OrderBy { return nil }
+
+// TestApplyMergeRewrite_OnFilter verifies the tree-walking applier reaches a
+// Filter in the subtree and substitutes Argument refs in its predicate slots.
+func TestApplyMergeRewrite_OnFilter(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	expr, err := parser.ParseExpr("col = :sq_arg")
+	require.NoError(t, err)
+	repl, err := parser.ParseExpr("99")
+	require.NoError(t, err)
+
+	st := semantics.EmptySemTable()
+	st.Recursive[expr] = semantics.SingleTableSet(0)
+	ctx := &plancontext.PlanningContext{SemTable: st}
+
+	root := &Filter{
+		unaryOperator: newUnaryOp(&stubLeafOp{}),
+		Predicates:    []sqlparser.Expr{expr},
+	}
+
+	report := runMergeRewriteForTest(ctx, root, &mergeRewriteProgram{
+		Rules: []exprRule{
+			&replaceArgByExpr{ByName: map[string]sqlparser.Expr{"sq_arg": repl}},
+		},
+		AssertMode: assertDiagnostic,
+	})
+
+	require.Len(t, root.Predicates, 1)
+	assert.Equal(t, "col = 99", sqlparser.String(root.Predicates[0]))
+	// Argument was substituted, so no leftover.
+	assert.Empty(t, report.LeftoverArgs["sq_arg"])
+}
+
+// TestApplyMergeRewrite_LeakDetected verifies that when a carrier holds an
+// Argument that's in the program's affected set but no rule substitutes it,
+// the diagnostic-mode report records the leak. PR 5 will flip this to fatal;
+// PRs 2-4 use the diagnostic surface to discover gaps.
+func TestApplyMergeRewrite_LeakDetected(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	expr, err := parser.ParseExpr("col = :sq_arg")
+	require.NoError(t, err)
+
+	st := semantics.EmptySemTable()
+	st.Recursive[expr] = semantics.SingleTableSet(0)
+	ctx := &plancontext.PlanningContext{SemTable: st}
+
+	// A Filter holding an Argument no rule will substitute. The rule's
+	// affectedArgNames mentions "sq_arg" so the report should surface the
+	// leak. Using a deleteRoutingPredicatesScopedToSubquery with empty
+	// SubqueryTables — its table-overlap check fails on every entry, so it
+	// never drops, but its affectedArgNames is still {"sq_arg"}.
+	root := &Filter{
+		unaryOperator: newUnaryOp(&stubLeafOp{}),
+		Predicates:    []sqlparser.Expr{expr},
+	}
+
+	rule := &deleteRoutingPredicatesScopedToSubquery{
+		SubqueryTables: semantics.EmptyTableSet(),
+		JoinColumnArgs: map[string]struct{}{"sq_arg": {}},
+	}
+
+	report := runMergeRewriteForTest(ctx, root, &mergeRewriteProgram{
+		Rules:      []exprRule{rule},
+		AssertMode: assertDiagnostic,
+	})
+
+	// The Argument survived in the Filter — the report should show it as
+	// a leftover.
+	assert.NotEmpty(t, report.LeftoverArgs["sq_arg"], "expected leak to be recorded")
+}
+
 // TestExprMentionsAnyArg covers the small helper directly. The Walk
 // short-circuits via io.EOF on the first match.
 func TestExprMentionsAnyArg(t *testing.T) {
@@ -171,9 +303,9 @@ func TestExprMentionsAnyArg(t *testing.T) {
 		args []string
 		want bool
 	}{
-		{"user.id = :u_id", []string{"u_id"}, true},
-		{"user.id = :u_id", []string{"other"}, false},
-		{"user.id = 5", []string{"u_id"}, false},
+		{"t.id = :u_id", []string{"u_id"}, true},
+		{"t.id = :u_id", []string{"other"}, false},
+		{"t.id = 5", []string{"u_id"}, false},
 		{"x = :a OR y = :b", []string{"b"}, true},
 		{"x = :a OR y = :b", []string{}, false},
 	}

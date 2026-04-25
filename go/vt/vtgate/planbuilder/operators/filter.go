@@ -76,6 +76,25 @@ func (f *Filter) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	return f
 }
 
+// VisitExpressions implements exprCarrier. Filter owns one slot per entry in
+// Predicates, exposed under exprPredicate. fn returning nil drops the slot —
+// allowed for predicates (a Filter with no predicates is trivially
+// removable; later passes can collapse it).
+func (f *Filter) VisitExpressions(fn func(exprKind, sqlparser.Expr) sqlparser.Expr) {
+	if len(f.Predicates) == 0 {
+		return
+	}
+	kept := f.Predicates[:0]
+	for _, p := range f.Predicates {
+		out := fn(exprPredicate, p)
+		if out == nil {
+			continue
+		}
+		kept = append(kept, out)
+	}
+	f.Predicates = kept
+}
+
 func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	return f.Source.AddColumn(ctx, reuse, gb, expr)
 }
