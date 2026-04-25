@@ -18,12 +18,8 @@ package operators
 
 import (
 	"fmt"
-	"io"
-	slices0 "slices"
+	"slices"
 
-	"golang.org/x/exp/slices"
-
-	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -54,7 +50,7 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.TableStatemen
 			// iff we are grouping, we need to check that we can perform the grouping inside a single shard, and we check that
 			// by checking that one of the grouping expressions used is a unique single column vindex.
 			// TODO: we could also support the case where all the columns of a multi-column vindex are used in the grouping
-			return slices0.ContainsFunc(node.GroupBy.Exprs, validVindex)
+			return slices.ContainsFunc(node.GroupBy.Exprs, validVindex)
 		}
 
 		// if we have grouping, we have already checked that it's safe, and don't need to check for aggregations
@@ -560,7 +556,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 
 // This checked if subquery is part of the changed vindex values. Subquery cannot be merged with the outer route.
 func mergingIsBlocked(subQuery *SubQuery, updOp *Update) bool {
-	return slices0.Contains(updOp.SubQueriesArgOnChangedVindex, subQuery.ArgName)
+	return slices.Contains(updOp.SubQueriesArgOnChangedVindex, subQuery.ArgName)
 }
 
 func pushOrMerge(ctx *plancontext.PlanningContext, outer Operator, inner *SubQuery) (Operator, *ApplyResult) {
@@ -600,45 +596,43 @@ func (s *subqueryRouteMerger) mergeShardedRouting(
 		// if the subquery is not at the root level, we can't use it for routing, only for merging
 		tr.SeenPredicates = r2.SeenPredicates
 	} else {
-		tr.SeenPredicates = slice.Filter(append(r1.SeenPredicates, r2.SeenPredicates...), func(expr sqlparser.Expr) bool {
-			// There are two cases we can have - we can have predicates in the outer
-			// that are no longer valid, and predicates in the inner that are no longer valid
-			// For the case WHERE exists(select 1 from user where user.id = ue.user_id)
-			// Outer: ::has_values
-			// Inner: user.id = :ue_user_id
-			//
-			// And for the case WHERE id IN (select id FROM user WHERE id = 5)
-			// Outer: id IN ::__sq1
-			// Inner: id = 5
-			//
-			// We only keep SeenPredicates that are not bind variables in the join columns.
-			// We have to remove the outer predicate since we merge both routes, and no one
-			// is producing the bind variable anymore.
-			if exprFromSubQ := ctx.SemTable.RecursiveDeps(expr).IsOverlapping(TableID(s.subq.Subquery)); !exprFromSubQ {
-				return true
-			}
-			var argFound bool
-			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-				arg, ok := node.(*sqlparser.Argument)
-				if !ok {
-					return true, nil
-				}
-				f := func(bve BindVarExpr) bool { return bve.Name == arg.Name }
-				for _, jc := range s.subq.JoinColumns {
-					if slices.ContainsFunc(jc.LHSExprs, f) {
-						argFound = true
-						return false, io.EOF
-					}
-				}
-				return true, nil
-			}, expr)
-
-			return !argFound
-		})
+		tr.SeenPredicates = append(r1.SeenPredicates, r2.SeenPredicates...)
 	}
 
-	routing := tr.resetRoutingLogic(ctx)
+	// We only keep SeenPredicates that are not bind variables in the join
+	// columns. We have to remove the outer predicate since we merge both
+	// routes, and no one is producing the bind variable anymore.
+	//
+	// Two cases for each predicate:
+	//   WHERE exists(select 1 from user where user.id = ue.user_id)
+	//     Outer: ::has_values, Inner: user.id = :ue_user_id
+	//   WHERE id IN (select id FROM user WHERE id = 5)
+	//     Outer: id IN ::__sq1, Inner: id = 5
+	// The drop is two-part: depends on subquery tables AND mentions a join-
+	// column bind-var name. Either condition false → keep.
+	routing := applyRoutingRewrite(ctx, tr, &mergeRewriteProgram{
+		Rules: []exprRule{
+			&deleteRoutingPredicatesScopedToSubquery{
+				SubqueryTables: TableID(s.subq.Subquery),
+				JoinColumnArgs: lhsArgNamesFromJoinColumns(s.subq.JoinColumns),
+			},
+		},
+	})
 	return s.merge(ctx, old1, old2, routing, conditions...)
+}
+
+// lhsArgNamesFromJoinColumns extracts the BindVarExpr.Name values from every
+// JoinColumn's LHSExprs into a set for fast membership tests by the
+// deleteRoutingPredicatesScopedToSubquery rule. Returns nil if there are no
+// names, so the caller can skip the rule entirely if desired.
+func lhsArgNamesFromJoinColumns(jcs []applyJoinColumn) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, jc := range jcs {
+		for _, bve := range jc.LHSExprs {
+			out[bve.Name] = struct{}{}
+		}
+	}
+	return out
 }
 
 func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions ...engine.Condition) *Route {

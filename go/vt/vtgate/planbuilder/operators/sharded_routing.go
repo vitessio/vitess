@@ -222,6 +222,31 @@ func (tr *ShardedRouting) resetRoutingLogic(ctx *plancontext.PlanningContext) Ro
 	return routing
 }
 
+// VisitExpressions implements routingExprCarrier. The engine yields each
+// SeenPredicates slot to fn; fn returns nil to drop a slot. Routing slots are
+// the only routing-level kind today, so kind is always exprRoutingPredicate.
+func (tr *ShardedRouting) VisitRoutingExpressions(fn func(exprKind, sqlparser.Expr) sqlparser.Expr) {
+	if len(tr.SeenPredicates) == 0 {
+		return
+	}
+	kept := tr.SeenPredicates[:0]
+	for _, expr := range tr.SeenPredicates {
+		out := fn(exprRoutingPredicate, expr)
+		if out == nil {
+			continue
+		}
+		kept = append(kept, out)
+	}
+	tr.SeenPredicates = kept
+}
+
+// ResetAfterRewrite implements routingExprCarrier. Delegates to
+// resetRoutingLogic, which may return a different Routing impl (e.g.
+// *NoneRouting if a SeenPredicates entry now evaluates to false).
+func (tr *ShardedRouting) ResetAfterRewrite(ctx *plancontext.PlanningContext) Routing {
+	return tr.resetRoutingLogic(ctx)
+}
+
 func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool) {
 	jp, ok := predicate.(*predicates.JoinPredicate)
 	if ok {
