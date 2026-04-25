@@ -265,6 +265,36 @@ func extractLHSExpr(
 	}
 }
 
+// rewriteOriginalPushedToRHS rewrites the original expression so any column
+// reference solved by the LHS of the join becomes an Argument keyed by the
+// LHS bind-var name. Used pre-merge by tryMergeWithRHS to make the inner
+// subquery's predicate evaluable on the RHS once the inner is merged.
+//
+// This is pushdown plumbing, not a post-merge rewrite — the merge-rewrite
+// engine doesn't subsume it (the engine substitutes outer→inner; this goes
+// the opposite direction, LHS-column→bind-var). Kept as a local helper
+// alongside its sole caller.
+func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) sqlparser.Expr {
+	outerID := TableID(outer.LHS)
+	result := sqlparser.CopyOnRewrite(expression, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok || ctx.SemTable.RecursiveDeps(col) != outerID {
+			// we are only interested in columns that are coming from the LHS of the join
+			return
+		}
+		// this is a dependency we are being fed from the LHS of the join, so we
+		// need to find the argument name for it and use that instead
+		// we can't use the column name directly, because we're in the RHS of the join
+		name := outer.findOrAddColNameBindVarName(ctx, col)
+		typ, _ := ctx.TypeForExpr(col)
+		arg := sqlparser.NewTypedArgument(name, typ.Type())
+		arg.Scale = typ.Scale()
+		arg.Size = typ.Size()
+		cursor.Replace(arg)
+	}, nil)
+	return result.(sqlparser.Expr)
+}
+
 // tryMergeWithRHS attempts to merge a subquery with the RHS of a join
 func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *ApplyJoin) (Operator, *ApplyResult) {
 	if !outer.IsInner() {
@@ -344,30 +374,6 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 
 	sql.addInner(inner)
 	return sql
-}
-
-// rewriteOriginalPushedToRHS rewrites the original expression to use the argument names instead of the column names
-// this is necessary because we are pushing the subquery into the RHS of the join, and we need to use the argument names
-// instead of the column names
-func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) sqlparser.Expr {
-	outerID := TableID(outer.LHS)
-	result := sqlparser.CopyOnRewrite(expression, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
-		col, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok || ctx.SemTable.RecursiveDeps(col) != outerID {
-			// we are only interested in columns that are coming from the LHS of the join
-			return
-		}
-		// this is a dependency we are being fed from the LHS of the join, so we
-		// need to find the argument name for it and use that instead
-		// we can't use the column name directly, because we're in the RHS of the join
-		name := outer.findOrAddColNameBindVarName(ctx, col)
-		typ, _ := ctx.TypeForExpr(col)
-		arg := sqlparser.NewTypedArgument(name, typ.Type())
-		arg.Scale = typ.Scale()
-		arg.Size = typ.Size()
-		cursor.Replace(arg)
-	}, nil)
-	return result.(sqlparser.Expr)
 }
 
 // rewriteColNameToArgument rewrites the column names in the expression to use the argument names instead
