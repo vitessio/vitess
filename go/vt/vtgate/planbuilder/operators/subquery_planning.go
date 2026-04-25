@@ -366,25 +366,19 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 	return result.(sqlparser.Expr)
 }
 
-// rewriteColNameToArgument rewrites subquery placeholder Arguments in the
-// expression to the argument shape appropriate for their pullout type:
+// rewriteSubqueryArgsForPullout rewrites subquery placeholder Arguments in the
+// expression to the bind-variable shape produced by their pullout:
 //   - PulloutIn / PulloutNotIn → ListArg keyed by the placeholder name
-//   - PulloutExists → typed Argument keyed by the SubQuery's HasValuesName
+//   - PulloutExists → Argument keyed by the SubQuery's HasValuesName
 //     (allocated lazily on first use)
 //   - default (scalar value subquery) → typed Argument carrying the type of
 //     the inner subquery's first SELECT column
 //
 // Used when an operator is pushed from above a subquery into the outer side
-// of the subquery, so its expression now needs the bind-var-shaped form
-// instead of the placeholder it was minted with.
-//
-// The function name is historical: subquery placeholders used to be minted
-// as unqualified *ColName instances and this helper converted them to
-// *Argument. After the typed-Argument migration of replaceSubqueryNode
-// (subquery_builder.go), placeholders are always *Argument; this function
-// now converts placeholder *Argument values to the pullout-aware
-// *Argument / ListArg shape.
-func rewriteColNameToArgument(
+// of the subquery, so its expressions now need to reference the pullout's
+// emitted bind variable instead of the abstract placeholder they were
+// minted with.
+func rewriteSubqueryArgsForPullout(
 	ctx *plancontext.PlanningContext,
 	in sqlparser.Expr, // the expression to rewrite
 	se SubQueryExpression, // the subquery expression we are rewriting
