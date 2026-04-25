@@ -90,6 +90,12 @@ type (
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
 
+		// DeniedSystemVariables is the set of system variable names (lowercased)
+		// that clients are not allowed to SET via this VTGate. Attempts return
+		// an UNIMPLEMENTED error at plan time. A nil or empty map disables the
+		// denylist entirely, preserving the historical behavior.
+		DeniedSystemVariables map[string]struct{}
+
 		WarmingReadsPercent   int
 		WarmingReadsTimeout   time.Duration
 		WarmingReadsSemaphore *semaphore.Weighted
@@ -669,6 +675,20 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *VCursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()
+}
+
+// IsSystemVariableDenied implements the plancontext.VSchema interface.
+func (vc *VCursorImpl) IsSystemVariableDenied(name string) bool {
+	if len(vc.config.DeniedSystemVariables) == 0 {
+		return false
+	}
+	_, denied := vc.config.DeniedSystemVariables[strings.ToLower(name)]
+	return denied
+}
+
+// HasDeniedSystemVariables implements the plancontext.VSchema interface.
+func (vc *VCursorImpl) HasDeniedSystemVariables() bool {
+	return len(vc.config.DeniedSystemVariables) > 0
 }
 
 // KeyspaceExists provides whether the keyspace exists or not.
