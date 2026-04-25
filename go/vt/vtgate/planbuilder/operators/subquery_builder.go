@@ -415,19 +415,29 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 // replaceSubqueryNode replaces the current cursor node with the appropriate
 // argument placeholder for the given bind var name and opcode.
 //
-// For non-list non-DML placeholders we mint a typed *Argument carrying the
-// resolved type of the inner subquery's first SELECT column. The semantic
-// type pipeline (typer.up handling *Argument with Type >= 0) propagates that
-// type into ExprTypes the same way it would for a typed bind variable, so
-// downstream callers that consult ctx.TypeForExpr on the placeholder see
-// the same type information they used to see when the placeholder was a
-// *ColName flowing through column-resolution. When the inner column's
-// type can't be resolved (schemaless test tables, volatile functions like
-// uuid(), nested subqueries whose first column is itself a placeholder),
-// we fall back to an untyped *Argument — which matches today's behaviour
-// for those queries: their *ColName placeholder also fails to acquire a
-// type via the binder, so the emitted SQL has bare `:argName` without a
-// `/* TYPE */` annotation in either case.
+// For scalar (PulloutValue) non-DML placeholders we mint a typed *Argument
+// carrying the resolved type of the inner subquery's first SELECT column.
+// The semantic type pipeline (typer.up handling *Argument with Type >= 0)
+// propagates that type into ExprTypes the same way it would for a typed
+// bind variable, so downstream callers that consult ctx.TypeForExpr on
+// the placeholder see the same type information they used to see when the
+// placeholder was a *ColName flowing through column-resolution. When the
+// inner column's type can't be resolved (schemaless test tables, volatile
+// functions like uuid(), nested subqueries whose first column is itself a
+// placeholder), we fall back to an untyped *Argument — which matches
+// today's behaviour for those queries: their *ColName placeholder also
+// fails to acquire a type via the binder, so the emitted SQL has bare
+// `:argName` without a `/* TYPE */` annotation in either case.
+//
+// EXISTS placeholders are intentionally untyped: their runtime value is a
+// 0/1 flag, completely independent of the inner subquery's first-column
+// type. Inheriting that inner type would be wrong (it could be
+// VARCHAR/Decimal/Datetime/etc.) and could produce invalid emitted SQL via
+// Argument.Format's CAST emissions for those types, plus mislead
+// type-aware planning decisions (e.g. NeedsWeightString triggering on a
+// VARCHAR-typed flag). The eventual rewriteSubqueryArgsForPullout pass
+// replaces this placeholder with NewArgument(HasValuesName) (also
+// untyped), so leaving it untyped here matches the end state.
 func (sqb *SubQueryBuilder) replaceSubqueryNode(
 	ctx *plancontext.PlanningContext,
 	cursor *sqlparser.Cursor,
@@ -438,6 +448,10 @@ func (sqb *SubQueryBuilder) replaceSubqueryNode(
 ) {
 	if filterType.NeedsListArg() {
 		cursor.Replace(sqlparser.NewListArg(argName))
+		return
+	}
+	if filterType == opcode.PulloutExists {
+		cursor.Replace(sqlparser.NewArgument(argName))
 		return
 	}
 	if isDML {
