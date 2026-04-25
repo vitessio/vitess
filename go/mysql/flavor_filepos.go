@@ -242,7 +242,7 @@ func (flv *filePosFlavor) setReplicationPositionCommands(pos replication.Positio
 }
 
 // setReplicationSourceCommand is part of the Flavor interface.
-func (flv *filePosFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+func (flv *filePosFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
 	return "unsupported"
 }
 
