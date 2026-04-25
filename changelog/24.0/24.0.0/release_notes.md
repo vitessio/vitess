@@ -17,6 +17,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
         - [Automatic tablet retry for tablet-specific errors](#vreplication-tablet-error-retry)
+        - [Per-row JSON size limit](#vreplication-json-size-limit)
     - **[VTGate](#minor-changes-vtgate)**
         - [Removed `--grpc-send-session-in-streaming` flag](#vtgate-removed-grpc-send-session-in-streaming)
         - [New default for `--legacy-replication-lag-algorithm` flag](#vtgate-new-default-legacy-replication-lag-algorithm)
@@ -149,6 +150,37 @@ VReplication workflows now automatically retry with different tablets when encou
 When a tablet encounters errors like binary log purging (MySQL error 1236 or 1789) or GTID set mismatches, VReplication adds that tablet to an ignore list and tries other tablets across all cells. Once all matching tablets have been tried, the ignore list is cleared and the workflow retries from scratch.
 
 This is particularly useful in multi-cell deployments where a tablet in the local cell may lack the required binary logs, but tablets in other cells still have them.
+
+#### <a id="vreplication-json-size-limit"/>Per-row JSON size limit</a>
+
+VReplication now supports a configurable limit on the combined byte size of JSON columns in a single row during copy and replay phases. This prevents target mysqld OOM crashes when replicating tables with large JSON columns.
+
+**New flag:**
+
+- `--vreplication-max-row-json-bytes`: Maximum combined byte size of JSON columns in a single row. Defaults to `0` (unlimited).
+
+When a row exceeds the configured limit, the workflow transitions to Error state with an actionable message that identifies the table, the largest JSON column, and its size:
+
+```
+vreplication: row JSON payload 25165824 bytes exceeds vreplication-max-row-json-bytes=16777216 (table=my_table, largest_json_column=data @ 25165824 bytes)
+```
+
+**Per-workflow override:**
+
+Individual workflows can override the tablet-level default using the workflow config option `max-row-json-bytes` (or `max_row_json_bytes`):
+
+```bash
+vtctldclient MoveTables --target-keyspace customer --workflow import create \
+  --source-keyspace commerce \
+  --tables "products" \
+  --config "max-row-json-bytes=16777216"
+```
+
+**Sizing guidance:**
+
+The appropriate limit depends on your target mysqld memory budget. VReplication re-emits JSON values as nested SQL function calls, which can amplify memory usage significantly. As a starting point, a ~16 MB limit works well for mysqld instances with ~1.5 GB of memory. Scale proportionally based on your deployment's memory constraints.
+
+**Note:** When a row exceeds the limit, there is no automatic skip or retry. Operators must either raise the limit, reduce the JSON data size on the source, or remove the offending row.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
