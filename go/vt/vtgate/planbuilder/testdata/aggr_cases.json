@@ -6847,8 +6847,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "max(0|1) AS max((select min(col) from `user` where id = 1))",
-        "ResultColumns": 1,
+        "Aggregates": "max(0) AS max((select min(col) from `user` where id = 1))",
         "Inputs": [
           {
             "OperatorType": "UncorrelatedSubquery",
@@ -6880,8 +6879,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where 1 != 1 group by weight_string(:__sq1 /* INT16 */)",
-                "Query": "select max(:__sq1 /* INT16 */), weight_string(:__sq1 /* INT16 */) from `user` where id = 2 group by weight_string(:__sq1 /* INT16 */)",
+                "FieldQuery": "select max(:__sq1 /* INT16 */) from `user` where 1 != 1",
+                "Query": "select max(:__sq1 /* INT16 */) from `user` where id = 2",
                 "Values": [
                   "2"
                 ],

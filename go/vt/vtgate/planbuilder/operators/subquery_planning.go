@@ -119,17 +119,9 @@ func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
 	for idx := range o.Order {
 		for arg, sq := range ctx.MergedSubqueries {
 			expr := sqlparser.Rewrite(o.Order[idx].SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
-				switch expr := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if expr.Name.String() == arg {
-						cursor.Replace(sq)
-					}
-				case *sqlparser.Argument:
-					if expr.Name == arg {
-						cursor.Replace(sq)
-					}
+				if a, ok := cursor.Node().(*sqlparser.Argument); ok && a.Name == arg {
+					cursor.Replace(sq)
 				}
-
 				return true
 			})
 			o.Order[idx].SimplifiedExpr = expr.(sqlparser.Expr)
@@ -161,16 +153,8 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 				continue
 			}
 			expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
-				switch expr := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
-						return true
-					}
-				case *sqlparser.Argument:
-					if expr.Name != sq.ArgName {
-						return true
-					}
-				default:
+				arg, ok := cursor.Node().(*sqlparser.Argument)
+				if !ok || arg.Name != sq.ArgName {
 					return true
 				}
 				rewritten = true
@@ -382,17 +366,24 @@ func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sql
 	return result.(sqlparser.Expr)
 }
 
-// rewriteColNameToArgument rewrites the column names in the expression to use the argument names instead
-// this is used when we push an operator from above the subquery into the outer side of the subquery
-func rewriteColNameToArgument(
+// rewriteSubqueryArgsForPullout rewrites subquery placeholder Arguments in the
+// expression to the bind-variable shape produced by their pullout:
+//   - PulloutIn / PulloutNotIn → ListArg keyed by the placeholder name
+//   - PulloutExists → Argument keyed by the SubQuery's HasValuesName
+//     (allocated lazily on first use)
+//   - default (scalar value subquery) → typed Argument carrying the type of
+//     the inner subquery's first SELECT column
+//
+// Used when an operator is pushed from above a subquery into the outer side
+// of the subquery, so its expressions now need to reference the pullout's
+// emitted bind variable instead of the abstract placeholder they were
+// minted with.
+func rewriteSubqueryArgsForPullout(
 	ctx *plancontext.PlanningContext,
 	in sqlparser.Expr, // the expression to rewrite
 	se SubQueryExpression, // the subquery expression we are rewriting
 	subqueries ...*SubQuery, // the inner subquery operators
 ) sqlparser.Expr {
-	// the visitor function that will rewrite the expression tree
-	// it will be invoked on unqualified column names, and replace them with arguments
-	// when the column is representing a subquery
 	rewriteIt := func(s string) sqlparser.SQLNode {
 		var sq1, sq2 *SubQuery
 		for _, sq := range se {
@@ -441,17 +432,16 @@ func rewriteColNameToArgument(
 		}
 	}
 
-	// replace the ColNames with Argument inside the subquery
 	result := sqlparser.Rewrite(in, nil, func(cursor *sqlparser.Cursor) bool {
-		col, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok || !col.Qualifier.IsEmpty() {
+		arg, ok := cursor.Node().(*sqlparser.Argument)
+		if !ok {
 			return true
 		}
-		arg := rewriteIt(col.Name.String())
-		if arg == nil {
+		repl := rewriteIt(arg.Name)
+		if repl == nil {
 			return true
 		}
-		cursor.Replace(arg)
+		cursor.Replace(repl)
 		return true
 	})
 	return result.(sqlparser.Expr)

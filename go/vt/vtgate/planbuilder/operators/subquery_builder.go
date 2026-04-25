@@ -389,7 +389,7 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 		sqInner := createSubquery(ctx, original, sq, outerID, original, argName, filterType, true)
 		allSubqs = append(allSubqs, sqInner)
 		sqb.Inner = append(sqb.Inner, sqInner)
-		sqb.replaceSubqueryNode(cursor, argName, filterType, isDML)
+		sqb.replaceSubqueryNode(ctx, cursor, sq, argName, filterType, isDML)
 	}
 
 	expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
@@ -414,16 +414,83 @@ func (sqb *SubQueryBuilder) pullOutValueSubqueries(
 
 // replaceSubqueryNode replaces the current cursor node with the appropriate
 // argument placeholder for the given bind var name and opcode.
-func (sqb *SubQueryBuilder) replaceSubqueryNode(cursor *sqlparser.Cursor, argName string, filterType opcode.PulloutOpcode, isDML bool) {
-	if isDML {
-		if filterType.NeedsListArg() {
-			cursor.Replace(sqlparser.NewListArg(argName))
-		} else {
-			cursor.Replace(sqlparser.NewArgument(argName))
-		}
-	} else {
-		cursor.Replace(sqlparser.NewColName(argName))
+//
+// For scalar (PulloutValue) non-DML placeholders we mint a typed *Argument
+// carrying the resolved type of the inner subquery's first SELECT column.
+// The semantic type pipeline (typer.up handling *Argument with Type >= 0)
+// propagates that type into ExprTypes the same way it would for a typed
+// bind variable, so downstream callers that consult ctx.TypeForExpr on
+// the placeholder see the same type information they used to see when the
+// placeholder was a *ColName flowing through column-resolution. When the
+// inner column's type can't be resolved (schemaless test tables, volatile
+// functions like uuid(), nested subqueries whose first column is itself a
+// placeholder), we fall back to an untyped *Argument — which matches
+// today's behaviour for those queries: their *ColName placeholder also
+// fails to acquire a type via the binder, so the emitted SQL has bare
+// `:argName` without a `/* TYPE */` annotation in either case.
+//
+// EXISTS placeholders are intentionally untyped: their runtime value is a
+// 0/1 flag, completely independent of the inner subquery's first-column
+// type. Inheriting that inner type would be wrong (it could be
+// VARCHAR/Decimal/Datetime/etc.) and could produce invalid emitted SQL via
+// Argument.Format's CAST emissions for those types, plus mislead
+// type-aware planning decisions (e.g. NeedsWeightString triggering on a
+// VARCHAR-typed flag). The eventual rewriteSubqueryArgsForPullout pass
+// replaces this placeholder with NewArgument(HasValuesName) (also
+// untyped), so leaving it untyped here matches the end state.
+func (sqb *SubQueryBuilder) replaceSubqueryNode(
+	ctx *plancontext.PlanningContext,
+	cursor *sqlparser.Cursor,
+	sq *sqlparser.Subquery,
+	argName string,
+	filterType opcode.PulloutOpcode,
+	isDML bool,
+) {
+	if filterType.NeedsListArg() {
+		cursor.Replace(sqlparser.NewListArg(argName))
+		return
 	}
+	if filterType == opcode.PulloutExists {
+		cursor.Replace(sqlparser.NewArgument(argName))
+		return
+	}
+	if isDML {
+		// DML placeholders historically use untyped *Argument; preserved
+		// here to avoid touching DML behaviour as part of this change.
+		cursor.Replace(sqlparser.NewArgument(argName))
+		return
+	}
+	cursor.Replace(typedArgumentFromSubquery(ctx, sq, argName))
+}
+
+// typedArgumentFromSubquery mints an Argument carrying the inner subquery's
+// first-column type, falling back to an untyped Argument when no type can be
+// derived. Goes through ctx.TypeForExpr (not SemTable.TypeForExpr directly)
+// so that lazy evalengine type calculation kicks in for expressions whose
+// types aren't pre-populated in ExprTypes — e.g. uuid() resolves to VARCHAR
+// via evalengine.Translate but isn't entered into ExprTypes by the binder.
+// This matches what the *ColName placeholder used to acquire when consumers
+// later asked ctx.TypeForExpr about it.
+func typedArgumentFromSubquery(ctx *plancontext.PlanningContext, sq *sqlparser.Subquery, argName string) sqlparser.Expr {
+	if sq == nil || sq.Select == nil {
+		return sqlparser.NewArgument(argName)
+	}
+	cols := sq.Select.GetColumns()
+	if len(cols) == 0 {
+		return sqlparser.NewArgument(argName)
+	}
+	ae, ok := cols[0].(*sqlparser.AliasedExpr)
+	if !ok {
+		return sqlparser.NewArgument(argName)
+	}
+	typ, found := ctx.TypeForExpr(ae.Expr)
+	if !found || !typ.Valid() {
+		return sqlparser.NewArgument(argName)
+	}
+	arg := sqlparser.NewTypedArgument(argName, typ.Type())
+	arg.Size = typ.Size()
+	arg.Scale = typ.Scale()
+	return arg
 }
 
 // getOpCodeFromParent determines the pullout opcode for a subquery based on its parent expression type.

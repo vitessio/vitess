@@ -152,7 +152,7 @@ func pushProjectionToOuter(ctx *plancontext.PlanningContext, p *Projection, sq *
 
 		se, ok := pe.Info.(SubQueryExpression)
 		if ok {
-			pe.EvalExpr = rewriteColNameToArgument(ctx, pe.EvalExpr, se, sq)
+			pe.EvalExpr = rewriteSubqueryArgsForPullout(ctx, pe.EvalExpr, se, sq)
 		}
 	}
 	// all projections can be pushed to the outer
@@ -193,7 +193,7 @@ func pushProjectionToOuterContainer(ctx *plancontext.PlanningContext, p *Project
 		}
 
 		if se, ok := pe.Info.(SubQueryExpression); ok {
-			pe.EvalExpr = rewriteColNameToArgument(ctx, pe.EvalExpr, se, src.Inner...)
+			pe.EvalExpr = rewriteSubqueryArgsForPullout(ctx, pe.EvalExpr, se, src.Inner...)
 		}
 	}
 	// all projections can be pushed to the outer

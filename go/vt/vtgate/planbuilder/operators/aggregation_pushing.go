@@ -114,8 +114,8 @@ func pushAggregationThroughSubquery(
 
 	for _, aggr := range pushedAggr.Aggregations {
 		// we rewrite columns in the aggregation to use the argument form of the subquery
-		aggr.Original.Expr = rewriteColNameToArgument(ctx, aggr.Original.Expr, aggr.SubQueryExpression, src.Inner...)
-		pushedAggr.Columns[aggr.ColOffset].Expr = rewriteColNameToArgument(ctx, pushedAggr.Columns[aggr.ColOffset].Expr, aggr.SubQueryExpression, src.Inner...)
+		aggr.Original.Expr = rewriteSubqueryArgsForPullout(ctx, aggr.Original.Expr, aggr.SubQueryExpression, src.Inner...)
+		pushedAggr.Columns[aggr.ColOffset].Expr = rewriteSubqueryArgsForPullout(ctx, pushedAggr.Columns[aggr.ColOffset].Expr, aggr.SubQueryExpression, src.Inner...)
 	}
 
 	if !rootAggr.Original {
