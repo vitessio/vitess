@@ -99,15 +99,18 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 	op = BottomUp(op, TableID, visit, nil)
 
 	// Run the merge-rewrite engine once over the final tree, substituting
-	// every recorded merged subquery into Filter / ApplyJoin / Projection /
-	// Update / Aggregator slots reached via VisitExpressions. This replaces
-	// the per-op-type Projection / Update / Aggregator switch arms above —
-	// each slot now flows through the same uniform path, with FilterType-
-	// aware wrapping baked into MergedSubqueryReplacements at write-time.
-	if len(ctx.MergedSubqueryReplacements) > 0 {
+	// every recorded merged subquery into every Filter / ApplyJoin /
+	// Projection / Update / Aggregator / Ordering slot reached via
+	// VisitExpressions. This is the end-of-pass sweep that picks up
+	// subquery references in operators above the merge sites — the in-tree
+	// engine calls inside tryMergeSubqueryWithOuter / tryMergeWithRHS only
+	// reach the merged subtree, not the wider plan tree. The wrapped
+	// substitution form is baked into ctx.MergedSubqueries at write-time
+	// (see recordMergedSubquery), so this rule is FilterType-aware uniformly.
+	if len(ctx.MergedSubqueries) > 0 {
 		applyMergeRewrite(ctx, op, &mergeRewriteProgram{
 			Rules: []exprRule{
-				&replaceArgByExpr{ByName: ctx.MergedSubqueryReplacements},
+				&replaceArgByExpr{ByName: ctx.MergedSubqueries},
 			},
 			AssertMode: assertFatal,
 		})
@@ -284,20 +287,18 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	return outer, Rewrote("merged subquery with rhs of join")
 }
 
-// recordMergedSubquery records both the raw subquery and its FilterType-aware
-// wrapped form in the planning context. The wrapped form (ExistsExpr-wrapped
-// for PulloutExists, raw *Subquery otherwise) is what the merge-rewrite
-// engine substitutes; the raw map is kept for compatibility with un-migrated
-// readers (settleOrderingExpressions, SubQuery.isMerged) until later PRs
-// migrate them.
+// recordMergedSubquery records the FilterType-aware wrapped substitution form
+// of a merged subquery in the planning context, keyed by its arg name. The
+// wrapped form is what the merge-rewrite engine substitutes into Argument /
+// ColName placeholders during in-tree calls (tryMergeSubqueryWithOuter,
+// tryMergeWithRHS) and the end-of-pass settleSubqueries sweep.
 func recordMergedSubquery(ctx *plancontext.PlanningContext, sq *SubQuery) {
-	ctx.MergedSubqueries[sq.ArgName] = sq.originalSubquery
-	ctx.MergedSubqueryReplacements[sq.ArgName] = wrappedSubqueryForFilterType(sq)
+	ctx.MergedSubqueries[sq.ArgName] = wrappedSubqueryForFilterType(sq)
 }
 
-// wrappedSubqueryForFilterType produces the substitution form used by
-// rewriteMergedSubqueryExpr: PulloutExists wraps in ExistsExpr; everything
-// else uses the raw *Subquery directly.
+// wrappedSubqueryForFilterType produces the substitution form used by the
+// merge-rewrite engine: PulloutExists wraps in ExistsExpr; everything else
+// uses the raw *Subquery directly.
 func wrappedSubqueryForFilterType(sq *SubQuery) sqlparser.Expr {
 	if sq.FilterType == opcode.PulloutExists {
 		return &sqlparser.ExistsExpr{Subquery: sq.originalSubquery}

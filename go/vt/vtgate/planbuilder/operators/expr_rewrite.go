@@ -116,13 +116,14 @@ const (
 	// assertOff: no end-of-build check, no telemetry. Zero value. Programs
 	// that don't opt in pay no walk-cost.
 	assertOff assertMode = iota
-	// assertDiagnostic: collect leftovers into a leftoverReport on the
-	// PlanningContext. Used during PRs 2-4 while ctx.MergedSubqueries is
-	// still acting as the safety net for un-migrated operators. No slog
-	// output, to avoid flake risk in tests that assert on log streams.
+	// assertDiagnostic: collect leftovers into a leftoverReport (no slog
+	// output, to avoid flake risk in tests that assert on log streams).
+	// No production call site uses this mode after PR 5; it stays
+	// available for tests and ad-hoc telemetry when developing new rules
+	// or carriers.
 	assertDiagnostic
-	// assertFatal: panic via vterrors.VT13001 on any leftover. PR 5
-	// replaces every assertDiagnostic with assertFatal in one sweep.
+	// assertFatal: panic via vterrors.VT13001 on any leftover. The mode
+	// every production call site declares.
 	assertFatal
 )
 
@@ -519,14 +520,14 @@ func (r *deleteRoutingPredicatesScopedToSubquery) affectedArgNames() map[string]
 // outer route. Matches both *sqlparser.Argument{Name} and *sqlparser.ColName
 // whose unqualified Name matches a key in ByName — historical reality is that
 // subquery placeholders appear in either form depending on what planning
-// phase produced them (the equivalent rewriteMergedSubqueryExpr handles both
-// cases via separate switch arms; the TODO at subquery_planning.go:162 notes
-// the ColName matching is a hack to be revisited).
+// phase produced them. The ColName match is a hack inherited from the
+// pre-engine rewriteMergedSubqueryExpr path (deleted in PR 3) and is
+// preserved verbatim here to not regress goldens; revisiting it is out of
+// scope.
 //
 // The replacement is applied in a fixed-point loop because substituting one
 // argument can introduce another (nested subqueries: replacing :__sq1 yields
-// a Subquery whose body contains :__sq2). Mirrors the for-merged loop in
-// rewriteMergedSubqueryExpr.
+// a Subquery whose body contains :__sq2).
 type replaceArgByExpr struct {
 	ByName map[string]sqlparser.Expr
 }

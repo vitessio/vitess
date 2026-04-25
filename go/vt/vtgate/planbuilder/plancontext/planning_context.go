@@ -46,18 +46,14 @@ type PlanningContext struct {
 	VerifyAllFKs bool
 
 	// MergedSubqueries tracks subqueries that have been merged into routes,
-	// keyed by their arg name.
-	MergedSubqueries map[string]*sqlparser.Subquery
-
-	// MergedSubqueryReplacements stores the wrapped form of each merged
-	// subquery, keyed by the same arg name as MergedSubqueries. The wrapped
-	// form is &sqlparser.ExistsExpr{Subquery: ...} for PulloutExists
-	// subqueries and the raw *sqlparser.Subquery otherwise. This is what the
-	// merge-rewrite engine substitutes into Argument/ColName placeholders;
-	// keeping the FilterType-aware wrapping at write-time avoids carriers
-	// having to look up FilterType from per-operator SubQueryExpression
-	// metadata at substitute-time.
-	MergedSubqueryReplacements map[string]sqlparser.Expr
+	// keyed by their arg name. The value is the FilterType-aware wrapped
+	// substitution form: &sqlparser.ExistsExpr{Subquery: ...} for
+	// PulloutExists subqueries and the raw *sqlparser.Subquery otherwise.
+	// The merge-rewrite engine substitutes this expression into Argument /
+	// ColName placeholders matching the arg name; keeping the wrapping at
+	// write-time avoids carriers having to look up FilterType from
+	// per-operator SubQueryExpression metadata at substitute-time.
+	MergedSubqueries map[string]sqlparser.Expr
 
 	// CurrentPhase keeps track of how far we've gone in the planning process
 	// The type should be operators.Phase, but depending on that would lead to circular dependencies
@@ -111,15 +107,14 @@ func CreatePlanningContext(stmt sqlparser.Statement,
 	vschema.PlannerWarning(semTable.Warning)
 
 	return &PlanningContext{
-		ReservedVars:               reservedVars,
-		SemTable:                   semTable,
-		VSchema:                    vschema,
-		PlannerVersion:             version,
-		ReservedArguments:          map[sqlparser.Expr]string{},
-		MergedSubqueries:           map[string]*sqlparser.Subquery{},
-		MergedSubqueryReplacements: map[string]sqlparser.Expr{},
-		Statement:                  stmt,
-		PredTracker:                predicates.NewTracker(),
+		ReservedVars:      reservedVars,
+		SemTable:          semTable,
+		VSchema:           vschema,
+		PlannerVersion:    version,
+		ReservedArguments: map[sqlparser.Expr]string{},
+		MergedSubqueries:  map[string]sqlparser.Expr{},
+		Statement:         stmt,
+		PredTracker:       predicates.NewTracker(),
 	}, nil
 }
 
@@ -386,21 +381,20 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		return ctx.mirror
 	}
 	ctx.mirror = &PlanningContext{
-		ReservedVars:               ctx.ReservedVars,
-		SemTable:                   ctx.SemTable,
-		VSchema:                    ctx.VSchema,
-		PlannerVersion:             ctx.PlannerVersion,
-		ReservedArguments:          map[sqlparser.Expr]string{},
-		VerifyAllFKs:               ctx.VerifyAllFKs,
-		MergedSubqueries:           ctx.MergedSubqueries,
-		MergedSubqueryReplacements: ctx.MergedSubqueryReplacements,
-		CurrentPhase:               ctx.CurrentPhase,
-		Statement:                  ctx.Statement,
-		OuterTables:                ctx.OuterTables,
-		CurrentCTE:                 ctx.CurrentCTE,
-		emptyEnv:                   ctx.emptyEnv,
-		PredTracker:                ctx.PredTracker,
-		isMirrored:                 true,
+		ReservedVars:      ctx.ReservedVars,
+		SemTable:          ctx.SemTable,
+		VSchema:           ctx.VSchema,
+		PlannerVersion:    ctx.PlannerVersion,
+		ReservedArguments: map[sqlparser.Expr]string{},
+		VerifyAllFKs:      ctx.VerifyAllFKs,
+		MergedSubqueries:  ctx.MergedSubqueries,
+		CurrentPhase:      ctx.CurrentPhase,
+		Statement:         ctx.Statement,
+		OuterTables:       ctx.OuterTables,
+		CurrentCTE:        ctx.CurrentCTE,
+		emptyEnv:          ctx.emptyEnv,
+		PredTracker:       ctx.PredTracker,
+		isMirrored:        true,
 	}
 	return ctx.mirror
 }
