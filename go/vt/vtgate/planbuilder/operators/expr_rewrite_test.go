@@ -406,17 +406,19 @@ func TestApplyMergeRewrite_LeakDetected(t *testing.T) {
 }
 
 // TestOrderingVisitExpressions verifies the Ordering carrier exposes each
-// Order[i].SimplifiedExpr slot under exprOrderBy and propagates the rule's
-// rewritten expression back into the slice. Inner.Expr is intentionally not
-// exposed (matches what the deleted settleOrderingExpressions did); PR 5's
-// strict assertion will surface any gap.
+// Order entry's SimplifiedExpr AND Inner.Expr slots under exprOrderBy, and
+// propagates the rule's rewritten expression back into the slice. Both
+// matter: SQL_builder.go emits Inner.Expr in the ORDER BY clause; planning
+// passes use SimplifiedExpr.
 func TestOrderingVisitExpressions(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 	expr1, err := parser.ParseExpr("col + :sq_arg")
 	require.NoError(t, err)
 	expr2, err := parser.ParseExpr("col2")
 	require.NoError(t, err)
-	repl, err := parser.ParseExpr("99")
+	repl1, err := parser.ParseExpr("99")
+	require.NoError(t, err)
+	repl2, err := parser.ParseExpr("col + 99")
 	require.NoError(t, err)
 
 	innerOrder := &sqlparser.Order{Expr: expr1, Direction: sqlparser.AscOrder}
@@ -428,21 +430,26 @@ func TestOrderingVisitExpressions(t *testing.T) {
 		},
 	}
 
+	// 4 slots total: Order[0].SimplifiedExpr, Order[0].Inner.Expr,
+	// Order[1].SimplifiedExpr, Order[1].Inner.Expr.
 	visited := 0
 	o.VisitExpressions(func(kind exprKind, e sqlparser.Expr) sqlparser.Expr {
 		assert.Equal(t, exprOrderBy, kind)
 		visited++
-		// substitute :sq_arg in the first slot, leave the second alone
-		if visited == 1 {
-			return repl
+		switch visited {
+		case 1: // Order[0].SimplifiedExpr → 99
+			return repl1
+		case 2: // Order[0].Inner.Expr → col + 99
+			return repl2
+		default: // leave the rest alone
+			return e
 		}
-		return e
 	})
-	assert.Equal(t, 2, visited, "every Order entry should be visited")
-	assert.Same(t, repl, o.Order[0].SimplifiedExpr,
-		"rule's return value should land in SimplifiedExpr")
-	// Inner.Expr is intentionally not updated by the carrier.
-	assert.Equal(t, "col + :sq_arg", sqlparser.String(o.Order[0].Inner.Expr))
+	assert.Equal(t, 4, visited, "every SimplifiedExpr and Inner.Expr should be visited")
+	assert.Same(t, repl1, o.Order[0].SimplifiedExpr)
+	assert.Same(t, repl2, o.Order[0].Inner.Expr)
+	assert.Same(t, expr2, o.Order[1].SimplifiedExpr)
+	assert.Same(t, expr2, o.Order[1].Inner.Expr)
 }
 
 // TestOrderingVisitExpressions_DropPanics verifies drop semantics aren't
