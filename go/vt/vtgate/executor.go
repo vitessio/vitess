@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -1557,11 +1558,12 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		QueryTimeout:  queryTimeout,
 		MaxMemoryRows: maxMemoryRows,
 
-		SetVarEnabled:      sysVarSetEnabled,
-		EnableViews:        enableViews,
-		ForeignKeyMode:     fkMode(foreignKeyMode),
-		EnableShardRouting: enableShardRouting,
-		WarnShardedOnly:    warnOnShardedOnly,
+		SetVarEnabled:         setVarEnabled,
+		DeniedSystemVariables: buildDeniedSystemVariables(deniedSystemVariables),
+		EnableViews:           enableViews,
+		ForeignKeyMode:        fkMode(foreignKeyMode),
+		EnableShardRouting:    enableShardRouting,
+		WarnShardedOnly:       warnOnShardedOnly,
 
 		DBDDLPlugin: dbDDLPlugin,
 
@@ -1569,6 +1571,31 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		WarmingReadsTimeout:   warmingReadsQueryTimeout,
 		WarmingReadsSemaphore: e.warmingReadsSemaphore,
 	}
+}
+
+// buildDeniedSystemVariables normalizes the --denied-system-variables flag
+// slice into the lowercased set form used by VCursorConfig. Returns nil for
+// an empty input so VCursorImpl.IsSystemVariableDenied can short-circuit.
+func buildDeniedSystemVariables(names []string) map[string]struct{} {
+	if len(names) == 0 {
+		return nil
+	}
+	denied := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		n = strings.ToLower(n)
+		if _, ok := sysvars.AllSystemVariables[n]; !ok {
+			log.Warn("unknown system variable in --denied-system-variables", slog.String("name", n))
+		}
+		denied[n] = struct{}{}
+	}
+	if len(denied) == 0 {
+		return nil
+	}
+	return denied
 }
 
 func newWarmingReadsSemaphore(concurrency int) *semaphore.Weighted {
