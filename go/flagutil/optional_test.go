@@ -59,20 +59,20 @@ func TestNewOptionalString(t *testing.T) {
 }
 
 func TestNewOptionalFlag_Generic(t *testing.T) {
-	flag := NewOptionalFlag(
+	flag, err := NewOptionalFlag(
 		42,
 		"int",
 		func(s string) (int, error) { return strconv.Atoi(s) },
 		func(v int) string { return strconv.Itoa(v) },
 	)
-
+	require.NoError(t, err)
 	require.NotNil(t, flag)
 	require.False(t, flag.IsSet())
 	require.Equal(t, "42", flag.String())
 	require.Equal(t, "int", flag.Type())
 	require.Equal(t, 42, flag.Get())
 
-	err := flag.Set("100")
+	err = flag.Set("100")
 	require.NoError(t, err)
 	require.Equal(t, 100, flag.Get())
 	require.True(t, flag.IsSet())
@@ -103,10 +103,10 @@ func TestOptionalFlag_Compatibility(t *testing.T) {
 	require.NotNil(t, str)
 }
 
-func TestNewOptionalFlag_NilParsePanics(t *testing.T) {
-	require.Panics(t, func() {
-		NewOptionalFlag(0, "int", nil, func(v int) string { return strconv.Itoa(v) })
-	})
+func TestNewOptionalFlag_NilParseReturnsError(t *testing.T) {
+	_, err := NewOptionalFlag(0, "int", nil, func(v int) string { return strconv.Itoa(v) })
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "non-nil parse function")
 }
 
 func TestOptionalFlagValue_ZeroValue(t *testing.T) {
