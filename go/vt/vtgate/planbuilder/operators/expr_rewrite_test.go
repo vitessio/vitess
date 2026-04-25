@@ -296,10 +296,57 @@ func TestApplyMergeRewrite_OnFilter(t *testing.T) {
 	assert.Empty(t, report.LeftoverArgs["sq_arg"])
 }
 
+// TestApplyMergeRewrite_FatalLeakPanics verifies that when fatal mode is set
+// and a carrier holds an Argument matching the program's affected set after
+// the rewrite walk, applyMergeRewrite panics via vterrors.VT13001 with a
+// message naming the leftover Argument and the operator/kind site. This is
+// the assertion that runs under every production call site after PR 5's
+// flip from diagnostic to fatal.
+func TestApplyMergeRewrite_FatalLeakPanics(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	expr, err := parser.ParseExpr("col = :sq_arg")
+	require.NoError(t, err)
+
+	st := semantics.EmptySemTable()
+	st.Recursive[expr] = semantics.SingleTableSet(0)
+	ctx := &plancontext.PlanningContext{SemTable: st}
+
+	root := &Filter{
+		unaryOperator: newUnaryOp(&stubLeafOp{}),
+		Predicates:    []sqlparser.Expr{expr},
+	}
+
+	// A rule whose affectedArgNames includes "sq_arg" but whose apply never
+	// substitutes (deleteRoutingPredicatesScopedToSubquery with empty
+	// SubqueryTables fails the table-overlap check on every entry).
+	rule := &deleteRoutingPredicatesScopedToSubquery{
+		SubqueryTables: semantics.EmptyTableSet(),
+		JoinColumnArgs: map[string]struct{}{"sq_arg": {}},
+	}
+
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "expected fatal-mode panic")
+		err, ok := r.(error)
+		require.True(t, ok, "expected panic value to be an error, got %T", r)
+		assert.ErrorContains(t, err, "VT13001")
+		assert.ErrorContains(t, err, "leftover affected entries")
+		assert.ErrorContains(t, err, `Argument "sq_arg"`)
+		assert.ErrorContains(t, err, "exprPredicate")
+	}()
+
+	applyMergeRewrite(ctx, root, &mergeRewriteProgram{
+		Rules:      []exprRule{rule},
+		AssertMode: assertFatal,
+	})
+	t.Fatal("applyMergeRewrite should have panicked")
+}
+
 // TestApplyMergeRewrite_LeakDetected verifies that when a carrier holds an
 // Argument that's in the program's affected set but no rule substitutes it,
-// the diagnostic-mode report records the leak. PR 5 will flip this to fatal;
-// PRs 2-4 use the diagnostic surface to discover gaps.
+// the diagnostic-mode report records the leak (no panic). The diagnostic
+// surface stays available for tests/implementors that want to inspect
+// rewrite gaps without halting planning.
 func TestApplyMergeRewrite_LeakDetected(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 	expr, err := parser.ParseExpr("col = :sq_arg")

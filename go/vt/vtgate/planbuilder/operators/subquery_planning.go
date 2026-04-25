@@ -109,7 +109,7 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 			Rules: []exprRule{
 				&replaceArgByExpr{ByName: ctx.MergedSubqueryReplacements},
 			},
-			AssertMode: assertDiagnostic,
+			AssertMode: assertFatal,
 		})
 	}
 	return op
@@ -277,7 +277,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 				inner.ArgName: wrappedSubqueryForFilterType(inner),
 			}},
 		},
-		AssertMode: assertDiagnostic,
+		AssertMode: assertFatal,
 	})
 
 	recordMergedSubquery(ctx, inner)
@@ -528,7 +528,7 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		Rules: []exprRule{
 			&replaceArgByExpr{ByName: map[string]sqlparser.Expr{subQuery.ArgName: replacement}},
 		},
-		AssertMode: assertDiagnostic,
+		AssertMode: assertFatal,
 	})
 
 	// Safety net for operators above `op` that don't yet implement

@@ -365,9 +365,20 @@ func recordArgsInExpr(expr sqlparser.Expr, kind exprKind, desc string, report *l
 }
 
 // finalizeAssertions interprets the report under the program's AssertMode.
-// In assertDiagnostic the report is dropped on the floor — it lives only for
-// the duration of the call (PR 5/6 will surface it via PlanningContext if
-// telemetry is needed). In assertFatal any non-empty leftover panics.
+// In assertDiagnostic the report is dropped on the floor (no slog noise).
+// In assertFatal any non-empty leftover panics with a vterrors.VT13001
+// naming the leftover Argument(s) and the operator/kind site(s) that still
+// hold them.
+//
+// Scope note: the report only contains leaks found in carrier slots
+// (operators implementing exprCarrier or routingExprCarrier). An operator
+// that holds an Argument matching the affected set but does not implement a
+// carrier is not surfaced here. The assertion's role is to verify that
+// every carrier the engine reached was processed correctly, not to
+// guarantee the absence of un-substituted Arguments anywhere in the tree.
+// The latter guarantee is provided by plantest goldens passing — the
+// emitted Query/FieldQuery would diverge if any operator on the path to
+// SQL emission held a leftover Argument.
 func finalizeAssertions(program *mergeRewriteProgram, report *leftoverReport) {
 	switch program.AssertMode {
 	case assertOff, assertDiagnostic:
