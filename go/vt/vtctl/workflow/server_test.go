@@ -2733,6 +2733,48 @@ func TestWorkflowStatus(t *testing.T) {
 	assert.Equal(t, vtctldatapb.TableCopyPhase_NOT_STARTED, stateTable3.Phase)
 }
 
+func TestGetWorkflowsSummary(t *testing.T) {
+	ctx := context.Background()
+
+	sourceKeyspace := "source_keyspace"
+	targetKeyspace := "target_keyspace"
+	workflow := "test_workflow"
+
+	te := newTestMaterializerEnv(t, ctx, &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: sourceKeyspace,
+		TargetKeyspace: targetKeyspace,
+		Workflow:       workflow,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{
+			{
+				TargetTable:      "table1",
+				SourceExpression: "select * from table1",
+			},
+		},
+	}, []string{"-"}, []string{"-"})
+
+	copyStateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("vrepl_id|table_name|lastpk", "int64|varchar|varchar"),
+		"1|table1|pk:1",
+	)
+	te.tmc.expectVRQuery(200, "select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (1) and id in (select max(id) from _vt.copy_state where vrepl_id in (1) group by vrepl_id, table_name)", copyStateResult)
+
+	res, err := te.ws.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
+		Keyspace:    targetKeyspace,
+		Workflow:    workflow,
+		SummaryOnly: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, res.Workflows, 1)
+
+	got := res.Workflows[0]
+	require.Nil(t, got.ShardStreams)
+	require.NotNil(t, got.Status)
+	assert.Equal(t, int32(1), got.Status.TotalStreams)
+	assert.Equal(t, int32(1), got.Status.CopyingStreams)
+	assert.Equal(t, vtctldatapb.Workflow_WorkflowStatus_COPYING, got.Status.State)
+	assert.Equal(t, "Reads Not Switched. Writes Not Switched", got.Status.TrafficState)
+}
+
 func TestDeleteShard(t *testing.T) {
 	ctx := context.Background()
 

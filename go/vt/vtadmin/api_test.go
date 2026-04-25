@@ -4838,6 +4838,44 @@ func TestGetWorkflows(t *testing.T) {
 	}
 }
 
+func TestGetWorkflowsSummaryOnly(t *testing.T) {
+	t.Parallel()
+
+	fakeClient := &fakevtctldclient.VtctldClient{
+		GetKeyspacesResults: &struct {
+			Keyspaces []*vtctldatapb.Keyspace
+			Error     error
+		}{
+			Keyspaces: []*vtctldatapb.Keyspace{{Name: "testkeyspace"}},
+		},
+		GetWorkflowsResults: map[string]struct {
+			Response *vtctldatapb.GetWorkflowsResponse
+			Error    error
+		}{
+			"testkeyspace": {
+				Response: &vtctldatapb.GetWorkflowsResponse{
+					Workflows: []*vtctldatapb.Workflow{{Name: "workflow1"}},
+				},
+			},
+		},
+	}
+
+	api := NewAPI(vtenv.NewTestEnv(), vtadmintestutil.BuildClusters(t,
+		vtadmintestutil.TestClusterConfig{
+			Cluster:      &vtadminpb.Cluster{Id: "c1", Name: "cluster1"},
+			VtctldClient: fakeClient,
+		},
+	), Options{})
+
+	resp, err := api.GetWorkflows(context.Background(), &vtadminpb.GetWorkflowsRequest{
+		SummaryOnly: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Len(t, fakeClient.GetWorkflowsRequests, 1)
+	assert.True(t, fakeClient.GetWorkflowsRequests[0].SummaryOnly)
+}
+
 func TestVTExplain(t *testing.T) {
 	tests := []struct {
 		name          string

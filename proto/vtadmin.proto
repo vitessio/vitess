@@ -741,6 +741,9 @@ message GetWorkflowsRequest {
     // search. It has the same semantics as the Keyspaces parameter, so refer to
     // that documentation for more details.
     repeated string ignore_keyspaces = 4;
+    // SummaryOnly requests the reduced workflow payload intended for
+    // monitoring-heavy views.
+    bool summary_only = 5;
 }
 
 message GetWorkflowsResponse {
