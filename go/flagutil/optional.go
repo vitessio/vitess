@@ -60,17 +60,17 @@ var (
 
 // NewOptionalFlag returns a *OptionalFlagValue[T] with the given default value,
 // pflag type name, parse function, and stringer.
-// It panics if parse is nil, since a flag without a parse function cannot be set.
-func NewOptionalFlag[T any](defaultVal T, typeName string, parse func(string) (T, error), stringer func(T) string) *OptionalFlagValue[T] {
+// It returns an error if parse is nil, since a flag without a parse function cannot be set.
+func NewOptionalFlag[T any](defaultVal T, typeName string, parse func(string) (T, error), stringer func(T) string) (*OptionalFlagValue[T], error) {
 	if parse == nil {
-		panic("flagutil: NewOptionalFlag requires a non-nil parse function")
+		return nil, errors.New("flagutil: NewOptionalFlag requires a non-nil parse function")
 	}
 	return &OptionalFlagValue[T]{
 		val:      defaultVal,
 		typeName: typeName,
 		parse:    parse,
 		stringer: stringer,
-	}
+	}, nil
 }
 
 func (f *OptionalFlagValue[T]) Set(arg string) error {
@@ -114,7 +114,7 @@ func (f *OptionalFlagValue[T]) IsSet() bool {
 // NewOptionalFloat64 returns an *OptionalFloat64 with the specified value as its
 // starting value.
 func NewOptionalFloat64(val float64) *OptionalFloat64 {
-	return NewOptionalFlag(
+	f, err := NewOptionalFlag(
 		val,
 		"float64",
 		func(s string) (float64, error) {
@@ -128,17 +128,25 @@ func NewOptionalFloat64(val float64) *OptionalFloat64 {
 			return strconv.FormatFloat(v, 'g', -1, 64)
 		},
 	)
+	if err != nil {
+		panic(err) // unreachable: parse is always non-nil
+	}
+	return f
 }
 
 // NewOptionalString returns an *OptionalString with the specified value as its
 // starting value.
 func NewOptionalString(val string) *OptionalString {
-	return NewOptionalFlag(
+	f, err := NewOptionalFlag(
 		val,
 		"string",
 		func(s string) (string, error) { return s, nil },
 		func(v string) string { return v },
 	)
+	if err != nil {
+		panic(err) // unreachable: parse is always non-nil
+	}
+	return f
 }
 
 // lifted directly from package flag to make the behavior of numeric parsing
