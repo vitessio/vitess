@@ -126,42 +126,19 @@ func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string,
 // ERS). The rules live here so tests can exercise them in isolation,
 // without standing up a full gossip agent.
 func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State, primaryAlias string, currentMembers map[string]struct{}, vtorcCorroboratesDown bool) *inst.DetectionAnalysis {
-	// Find the primary member.
-	var primaryID gossip.NodeID
-	found := false
-	for _, m := range group.members {
-		if !isCurrentShardMember(m, currentMembers) {
-			continue
-		}
-		if m.Meta[gossip.MetaKeyTabletAlias] == primaryAlias {
-			primaryID = m.ID
-			found = true
-			break
-		}
-	}
+	aliasStates := aggregateShardMemberStates(group, states, currentMembers)
+	primaryState, found := aliasStates[primaryAlias]
 	if !found {
 		return nil
 	}
 
 	// Primary must be Down (not Suspect, not Alive).
-	if states[primaryID].Status != gossip.StatusDown {
+	if primaryState.Status != gossip.StatusDown {
 		return nil
 	}
 
 	// Count alive and total non-primary replicas.
-	var aliveReplicas, totalReplicas int
-	for _, m := range group.members {
-		if !isCurrentShardMember(m, currentMembers) {
-			continue
-		}
-		if m.ID == primaryID {
-			continue
-		}
-		totalReplicas++
-		if states[m.ID].Status == gossip.StatusAlive {
-			aliveReplicas++
-		}
-	}
+	aliveReplicas, totalReplicas := replicaQuorumCounts(aliasStates, primaryAlias, currentMembers)
 
 	if aliveReplicas < minQuorumObservers {
 		return nil
@@ -198,6 +175,61 @@ func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State
 		IsPrimary:             true,
 		Description:           fmt.Sprintf("gossip quorum agrees primary %s is unreachable in %s/%s", primaryAlias, group.keyspace, group.shard),
 	}
+}
+
+func aggregateShardMemberStates(group *shardGroup, states map[gossip.NodeID]gossip.State, currentMembers map[string]struct{}) map[string]gossip.State {
+	aliasStates := make(map[string]gossip.State, len(group.members))
+	for _, m := range group.members {
+		if !isCurrentShardMember(m, currentMembers) {
+			continue
+		}
+		alias := m.Meta[gossip.MetaKeyTabletAlias]
+		if alias == "" {
+			continue
+		}
+		state := states[m.ID]
+		current, ok := aliasStates[alias]
+		if !ok || preferGossipState(state, current) {
+			aliasStates[alias] = state
+		}
+	}
+	return aliasStates
+}
+
+func replicaQuorumCounts(aliasStates map[string]gossip.State, primaryAlias string, currentMembers map[string]struct{}) (aliveReplicas int, totalReplicas int) {
+	if len(currentMembers) > 0 {
+		for alias := range currentMembers {
+			if alias == "" || alias == primaryAlias {
+				continue
+			}
+			totalReplicas++
+			if aliasStates[alias].Status == gossip.StatusAlive {
+				aliveReplicas++
+			}
+		}
+		return aliveReplicas, totalReplicas
+	}
+
+	for alias, state := range aliasStates {
+		if alias == primaryAlias {
+			continue
+		}
+		totalReplicas++
+		if state.Status == gossip.StatusAlive {
+			aliveReplicas++
+		}
+	}
+	return aliveReplicas, totalReplicas
+}
+
+func preferGossipState(candidate gossip.State, current gossip.State) bool {
+	if candidate.LastUpdate.After(current.LastUpdate) {
+		return true
+	}
+	if candidate.LastUpdate.Equal(current.LastUpdate) && candidate.Status == gossip.StatusAlive && current.Status != gossip.StatusAlive {
+		return true
+	}
+	return current.LastUpdate.IsZero() && !candidate.LastUpdate.IsZero()
 }
 
 // isCurrentShardMember filters out stale gossip entries for tablets

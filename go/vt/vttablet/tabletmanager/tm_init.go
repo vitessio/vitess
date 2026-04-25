@@ -474,9 +474,17 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	// on MySQL being up, the replica being initialized, or the restore
 	// path. Starting it here ensures gossip works for tablets that go
 	// through --restore-from-backup (which returns early below).
+	gossipLifecycleStarted := false
+	startupSucceeded := false
+	defer func() {
+		if gossipLifecycleStarted && !startupSucceeded {
+			tm.stopGossipLifecycle()
+		}
+	}()
 	if err := tm.startGossipLifecycle(tablet); err != nil {
 		return err
 	}
+	gossipLifecycleStarted = true
 
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
@@ -485,6 +493,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if restoring {
 		// If restore was triggered, it will take care
 		// of updating the tablet state and initializing replication.
+		startupSucceeded = true
 		return nil
 	}
 	// We should be re-read the tablet from tabletManager and use the type specified there.
@@ -501,6 +510,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		return err
 	}
 	tm.tmState.Open()
+	startupSucceeded = true
 	return nil
 }
 

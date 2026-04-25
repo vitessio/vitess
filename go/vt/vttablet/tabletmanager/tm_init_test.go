@@ -819,6 +819,44 @@ func TestStartDoesNotStartGossipBeforeMysqlCheckCompletes(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 }
 
+func TestStartStopsGossipLifecycleOnLaterStartupError(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tablet := newTestTablet(t, 1, "ks", "0", nil)
+	fakeDb := newTestMysqlDaemon(t, 0)
+	tm := &TabletManager{
+		BatchCtx:            ctx,
+		TopoServer:          ts,
+		MysqlDaemon:         fakeDb,
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace, &topodatapb.SrvKeyspace{
+		GossipConfig: &topodatapb.GossipConfig{
+			Enabled:      true,
+			PhiThreshold: 4,
+			PingInterval: "100ms",
+			MaxUpdateAge: "1s",
+		},
+	}))
+
+	origRestoreFromBackup := restoreFromBackup
+	restoreFromBackup = true
+	t.Cleanup(func() {
+		restoreFromBackup = origRestoreFromBackup
+		tm.stopGossipLifecycle()
+	})
+
+	err := tm.Start(tablet, nil)
+
+	require.ErrorContains(t, err, "you cannot enable --restore-from-backup")
+	assert.Nil(t, tm.currentGossipAgent())
+	assert.Nil(t, tm.gossipCancel)
+}
+
 func newTestTablet(t *testing.T, uid int, keyspace, shard string, tags map[string]string) *topodatapb.Tablet {
 	shard, keyRange, err := topo.ValidateShardName(shard)
 	require.NoError(t, err)

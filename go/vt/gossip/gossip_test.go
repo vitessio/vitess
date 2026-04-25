@@ -865,6 +865,57 @@ func TestAddMemberLockedEnrichesMetadata(t *testing.T) {
 	}
 }
 
+func TestNewCopiesMemberMetadata(t *testing.T) {
+	selfMeta := map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"}
+	seedMeta := map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"}
+	g := New(Config{
+		NodeID:   "node1",
+		BindAddr: "addr1",
+		Meta:     selfMeta,
+		Seeds:    []Member{{ID: "node2", Addr: "addr2", Meta: seedMeta}},
+	}, nil, &testClock{now: time.Unix(0, 0)})
+
+	selfMeta[MetaKeyShard] = "changed"
+	seedMeta[MetaKeyShard] = "changed"
+
+	members := g.Members()
+	require.Len(t, members, 2)
+	for _, member := range members {
+		assert.Equal(t, "0", member.Meta[MetaKeyShard])
+	}
+}
+
+func TestMembersReturnsMetadataCopies(t *testing.T) {
+	g := New(Config{
+		NodeID:   "node1",
+		BindAddr: "addr1",
+		Meta:     map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"},
+	}, nil, &testClock{now: time.Unix(0, 0)})
+
+	members := g.Members()
+	require.Len(t, members, 1)
+	members[0].Meta[MetaKeyShard] = "changed"
+
+	require.Len(t, g.Members(), 1)
+	assert.Equal(t, "0", g.Members()[0].Meta[MetaKeyShard])
+}
+
+func TestSnapshotMessageLockedReturnsMetadataCopies(t *testing.T) {
+	g := New(Config{
+		NodeID:   "node1",
+		BindAddr: "addr1",
+		Meta:     map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"},
+	}, nil, &testClock{now: time.Unix(0, 0)})
+
+	g.mu.Lock()
+	msg := g.snapshotMessageLocked("")
+	g.mu.Unlock()
+	require.Len(t, msg.Members, 1)
+	msg.Members[0].Meta[MetaKeyShard] = "changed"
+
+	assert.Equal(t, "0", g.Members()[0].Meta[MetaKeyShard])
+}
+
 func TestReconfigure(t *testing.T) {
 	transport := newLocalTransport()
 	g1 := newTestGossip("node1", []Member{{ID: "node2", Addr: "node2"}}, transport, nil, time.Second)

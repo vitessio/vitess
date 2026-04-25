@@ -452,3 +452,89 @@ func TestQuorumAnalysis_IgnoresStaleReplicaMembers(t *testing.T) {
 	require.Len(t, results, 1)
 	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
 }
+
+func TestQuorumAnalysis_CurrentMembersMissingFromGossipCountAgainstQuorum(t *testing.T) {
+	state := &fakeGossipState{
+		members: []gossip.Member{
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+		},
+		states: map[gossip.NodeID]gossip.State{
+			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
+			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
+			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
+		},
+	}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
+	currentMembers := makeCurrentMembers("ks/0",
+		"zone1-0000000100",
+		"zone1-0000000200",
+		"zone1-0000000300",
+		"zone1-0000000400",
+		"zone1-0000000500",
+		"zone1-0000000600",
+	)
+	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
+
+	results := AnalyzeGossipQuorum(state, primaries, currentMembers, vtorcView)
+
+	assert.Empty(t, results)
+}
+
+func TestQuorumAnalysis_DoesNotDoubleCountDuplicateReplicaAliases(t *testing.T) {
+	state := &fakeGossipState{
+		members: []gossip.Member{
+			makeMember("node1", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node2-duplicate", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+		},
+		states: map[gossip.NodeID]gossip.State{
+			"node1":           {Status: gossip.StatusDown, LastUpdate: time.Now()},
+			"node2":           {Status: gossip.StatusAlive, LastUpdate: time.Now()},
+			"node2-duplicate": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
+			"node3":           {Status: gossip.StatusDown, LastUpdate: time.Now()},
+		},
+	}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
+	currentMembers := makeCurrentMembers("ks/0",
+		"zone1-0000000100",
+		"zone1-0000000200",
+		"zone1-0000000300",
+	)
+	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
+
+	results := AnalyzeGossipQuorum(state, primaries, currentMembers, vtorcView)
+
+	assert.Empty(t, results)
+}
+
+func TestQuorumAnalysis_DuplicatePrimaryAliasAlivePreventsDownVerdict(t *testing.T) {
+	now := time.Now()
+	state := &fakeGossipState{
+		members: []gossip.Member{
+			makeMember("primary-old", "ks", "0", "zone1-0000000100"),
+			makeMember("primary-current", "ks", "0", "zone1-0000000100"),
+			makeMember("node2", "ks", "0", "zone1-0000000200"),
+			makeMember("node3", "ks", "0", "zone1-0000000300"),
+		},
+		states: map[gossip.NodeID]gossip.State{
+			"primary-old":     {Status: gossip.StatusDown, LastUpdate: now},
+			"primary-current": {Status: gossip.StatusAlive, LastUpdate: now.Add(time.Second)},
+			"node2":           {Status: gossip.StatusAlive, LastUpdate: now},
+			"node3":           {Status: gossip.StatusAlive, LastUpdate: now},
+		},
+	}
+	primaries := map[string]string{"ks/0": "zone1-0000000100"}
+	currentMembers := makeCurrentMembers("ks/0",
+		"zone1-0000000100",
+		"zone1-0000000200",
+		"zone1-0000000300",
+	)
+	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
+
+	results := AnalyzeGossipQuorum(state, primaries, currentMembers, vtorcView)
+
+	assert.Empty(t, results)
+}

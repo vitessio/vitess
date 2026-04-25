@@ -258,6 +258,8 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	if clock == nil {
 		clock = realClock{}
 	}
+	cfg.Meta = cloneMeta(cfg.Meta)
+	cfg.Seeds = cloneMembers(cfg.Seeds)
 
 	g := &Gossip{
 		cfg:        cfg,
@@ -440,7 +442,7 @@ func (g *Gossip) Debug() *DebugState {
 
 	members := make([]Member, 0, len(g.members))
 	for _, m := range g.members {
-		members = append(members, m)
+		members = append(members, cloneMember(m))
 	}
 
 	states := make(map[NodeID]State, len(g.states))
@@ -513,7 +515,7 @@ func (g *Gossip) Members() []Member {
 
 	result := make([]Member, 0, len(g.members))
 	for _, member := range g.members {
-		result = append(result, member)
+		result = append(result, cloneMember(member))
 	}
 	return result
 }
@@ -787,7 +789,7 @@ func (g *Gossip) addMemberLocked(member Member) {
 		}
 		return
 	}
-	g.members[member.ID] = member
+	g.members[member.ID] = cloneMember(member)
 	if _, ok := g.detectors[member.ID]; !ok {
 		g.detectors[member.ID] = newPhiAccrual(50)
 	}
@@ -896,9 +898,32 @@ func (g *Gossip) membersSliceLocked(scope string) []Member {
 		if scope != "" && memberScope(member.Meta) != scope {
 			continue
 		}
-		members = append(members, member)
+		members = append(members, cloneMember(member))
 	}
 	return members
+}
+
+func cloneMembers(members []Member) []Member {
+	if len(members) == 0 {
+		return nil
+	}
+	cloned := make([]Member, 0, len(members))
+	for _, member := range members {
+		cloned = append(cloned, cloneMember(member))
+	}
+	return cloned
+}
+
+func cloneMember(member Member) Member {
+	member.Meta = cloneMeta(member.Meta)
+	return member
+}
+
+func cloneMeta(meta map[string]string) map[string]string {
+	if len(meta) == 0 {
+		return nil
+	}
+	return maps.Clone(meta)
 }
 
 // localScopeLocked is this agent's own scope (empty for VTOrc; a
