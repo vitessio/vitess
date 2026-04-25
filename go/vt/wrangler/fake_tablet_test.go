@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -34,7 +33,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
@@ -196,15 +194,16 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	ft.Tablet.Hostname = "127.0.0.1"
 	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
+	testEnv := vtenv.NewTestEnv()
 	ft.TM = &tabletmanager.TabletManager{
 		BatchCtx:            context.Background(),
 		TopoServer:          wr.TopoServer(),
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
-		VDiffEngine:         vdiff2.NewEngine(wr.TopoServer(), ft.Tablet, collations.MySQL8(), sqlparser.NewTestParser()),
+		VDiffEngine:         vdiff2.NewEngine(wr.TopoServer(), ft.Tablet, testEnv),
 		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(ft.FakeMysqlDaemon.DB(), exporter),
-		Env:                 vtenv.NewTestEnv(),
+		Env:                 testEnv,
 	}
 	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
 		t.Fatal(err)

@@ -347,6 +347,11 @@ func (c *ColumnDefinitionEntity) HasBlobTypeStorage() bool {
 	return BlobTypeStorage(c.Type()) != 0
 }
 
+// TypeCost returns the relative type cost of this column for PKE ranking.
+func (c *ColumnDefinitionEntity) TypeCost() int {
+	return TypeCost(c.Type())
+}
+
 // Charset returns the column's charset
 func (c *ColumnDefinitionEntity) Charset() string {
 	return c.ColumnDefinition.Type.Charset.Name

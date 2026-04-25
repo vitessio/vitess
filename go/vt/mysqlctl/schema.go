@@ -578,21 +578,9 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 	return &tabletmanagerdatapb.SchemaChangeResult{BeforeSchema: beforeSchema, AfterSchema: afterSchema}, nil
 }
 
-// GetPrimaryKeyEquivalentColumns can be used if the table has
-// no defined PRIMARY KEY. It will return the columns in a
-// viable PRIMARY KEY equivalent (PKE) -- a NON-NULL UNIQUE
-// KEY -- along with that index's name in the specified table.
-// When multiple PKE indexes are available it will attempt to
-// choose the most efficient one based on the column data types
-// and the number of columns in the index. See here for the data
-// type storage sizes:
-//
-//	https://dev.mysql.com/doc/refman/en/storage-requirements.html
-//
-// If this function is used on a table that DOES have a
-// defined PRIMARY KEY then it may return the columns for
-// that index if it is likely the most efficient one amongst
-// the available PKE indexes on the table.
+// Deprecated: GetPrimaryKeyEquivalentColumns is deprecated. Use
+// schemadiff.GetPrimaryKeyEquivalent instead, which works at the SQL
+// parser level and does not require a database connection.
 func GetPrimaryKeyEquivalentColumns(ctx context.Context, exec func(string, int, bool) (*sqltypes.Result, error), dbName, table string) ([]string, string, error) {
 	// We use column name aliases to guarantee lower case for our named results.
 	sql := `
