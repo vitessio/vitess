@@ -408,31 +408,8 @@ func finalizeAssertions(program *mergeRewriteProgram, report *leftoverReport) {
 	}
 }
 
-// runMergeRewriteForTest is a test-only helper that runs applyMergeRewrite
-// and surfaces its leftoverReport. Production callers don't need the
-// report; tests do.
-func runMergeRewriteForTest(
-	ctx *plancontext.PlanningContext,
-	root Operator,
-	program *mergeRewriteProgram,
-) *leftoverReport {
-	if program == nil || len(program.Rules) == 0 || root == nil {
-		return newLeftoverReport(&mergeRewriteProgram{})
-	}
-	visited := visitTreeForRewrite(ctx, root, program)
-	report := newLeftoverReport(program)
-	for _, op := range visited {
-		collectLeftoversFromCarrier(ctx, op, report)
-		if route, ok := op.(*Route); ok {
-			collectLeftoversFromRouting(ctx, route.Routing, report)
-		}
-	}
-	return report
-}
-
 // programmerErrorDropOnNonDeletable formats the panic message for fn returning
-// nil on a non-deletable slot. Kept minimal pending PR 5's full assertion
-// message format.
+// nil on a non-deletable slot.
 func programmerErrorDropOnNonDeletable(kind exprKind) string {
 	return "expr rewrite engine: rule returned nil for non-deletable slot kind " + kindName(kind)
 }

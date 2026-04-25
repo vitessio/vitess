@@ -27,6 +27,30 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+// runMergeRewriteForTest runs applyMergeRewrite and surfaces its
+// leftoverReport. Production callers don't need the report — they pass
+// assertFatal and panic on a leftover, or assertOff and skip collection
+// entirely. Tests use this helper to assert on which slots a rule reached
+// or missed.
+func runMergeRewriteForTest(
+	ctx *plancontext.PlanningContext,
+	root Operator,
+	program *mergeRewriteProgram,
+) *leftoverReport {
+	if program == nil || len(program.Rules) == 0 || root == nil {
+		return newLeftoverReport(&mergeRewriteProgram{})
+	}
+	visited := visitTreeForRewrite(ctx, root, program)
+	report := newLeftoverReport(program)
+	for _, op := range visited {
+		collectLeftoversFromCarrier(ctx, op, report)
+		if route, ok := op.(*Route); ok {
+			collectLeftoversFromRouting(ctx, route.Routing, report)
+		}
+	}
+	return report
+}
+
 // TestDeleteRoutingPredicatesScopedToSubquery exercises the two-part drop
 // condition that today lives as an open-coded slice.Filter in
 // subqueryRouteMerger.mergeShardedRouting (subquery_planning.go:603-637 prior
