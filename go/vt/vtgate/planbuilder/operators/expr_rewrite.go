@@ -532,6 +532,17 @@ func (r *replaceArgByExpr) apply(
 					return false
 				}
 			case *sqlparser.ColName:
+				// The ColName branch is load-bearing — for some queries the
+				// subquery placeholder is constructed as an unqualified
+				// *ColName (with the arg name as ColName.Name) instead of as
+				// an *Argument. Audited 2026-04-25 by deleting this branch:
+				// at least 5 plantest goldens regress (aggr_cases /
+				// sharded_subquery_inside_aggregation_function_on_a_dual_table
+				// and 3 siblings, plus mirror_cases /
+				// select_unsharded_qualified_table_mirrored_to_unsharded_table_ifnull_dual).
+				// The right fix is upstream — wherever the placeholder is
+				// minted as a ColName, change it to an Argument — but that's
+				// a deeper refactor. For now, match both forms.
 				if !n.Qualifier.IsEmpty() {
 					return true
 				}
