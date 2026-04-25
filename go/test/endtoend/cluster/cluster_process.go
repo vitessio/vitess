@@ -1321,7 +1321,12 @@ func (cluster *LocalProcessCluster) NewVttabletInstance(tabletType string, UID i
 
 // NewVTOrcProcess creates a new VTOrcProcess object
 func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration, cell string) *VTOrcProcess {
-	base := VtProcessInstance("vtorc", "vtorc", cluster.TopoProcess.Port, cluster.Hostname)
+	vtorcBinary := "vtorc"
+	if vtroot := os.Getenv("VTROOT"); vtroot != "" {
+		vtorcBinary = path.Join(vtroot, "bin/vtorc")
+	}
+
+	base := VtProcessInstance("vtorc", vtorcBinary, cluster.TopoProcess.Port, cluster.Hostname)
 	return &VTOrcProcess{
 		VtProcess: base,
 		Cell:      cell,

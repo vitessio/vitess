@@ -162,6 +162,9 @@ service Vtctld {
   rpc GetSrvKeyspaces (vtctldata.GetSrvKeyspacesRequest) returns (vtctldata.GetSrvKeyspacesResponse) {};
   // UpdateThrottlerConfig updates the tablet throttler configuration
   rpc UpdateThrottlerConfig(vtctldata.UpdateThrottlerConfigRequest) returns (vtctldata.UpdateThrottlerConfigResponse) {};
+  // UpdateGossipConfig updates the gossip protocol configuration for
+  // all tablets in the given keyspace (across all cells).
+  rpc UpdateGossipConfig(vtctldata.UpdateGossipConfigRequest) returns (vtctldata.UpdateGossipConfigResponse) {};
   // GetSrvVSchema returns the SrvVSchema for a cell.
   rpc GetSrvVSchema(vtctldata.GetSrvVSchemaRequest) returns (vtctldata.GetSrvVSchemaResponse) {};
   // GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
