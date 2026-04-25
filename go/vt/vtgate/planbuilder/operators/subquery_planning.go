@@ -71,8 +71,35 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.TableStatemen
 	}
 }
 
+// settleSubqueries finalises the operator tree's subquery handling at the
+// end of planning. It runs in two phases:
+//
+//  1. extractSubQueryContainers restructures the tree so SubQueryContainers
+//     are unwrapped into their inner+outer pieces.
+//  2. applyMergedSubqueryReplacements sweeps the final tree and substitutes
+//     every Argument / ColName referencing a merged subquery with the
+//     subquery itself.
 func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
-	visit := func(op Operator, lhsTables semantics.TableSet, isRoot bool) (Operator, *ApplyResult) {
+	op = extractSubQueryContainers(ctx, op)
+	op = applyMergedSubqueryReplacements(ctx, op)
+	return op
+}
+
+// extractSubQueryContainers walks the tree bottom-up and replaces each
+// SubQueryContainer with the chained settled-subquery form returned by
+// SubQuery.settle.
+//
+// The pass also panics with VT09015 on any star Projection it encounters.
+// That assertion piggybacks on this BottomUp traversal — not because it has
+// anything to do with subquery extraction, but because the traversal order
+// matters for error timing. A query with a deep star Projection AND a
+// correlated non-EXISTS IN-subquery higher up should surface the
+// "schema tracking required" error (from the Projection) before it reaches
+// the SubQueryContainer.settle call that would panic with the different
+// "correlated subquery only supported for EXISTS" error. Splitting the
+// Projection check into its own pass would invert that order.
+func extractSubQueryContainers(ctx *plancontext.PlanningContext, op Operator) Operator {
+	return BottomUp(op, TableID, func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		switch op := op.(type) {
 		case *SubQueryContainer:
 			outer := op.Outer
@@ -82,39 +109,35 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 			}
 			return outer, Rewrote("extracted subqueries from subquery container")
 		case *Projection:
-			// The Projection-substitution work moved to the engine call
-			// below, but the GetAliasedProjections panic must still fire
-			// during the BottomUp pass to preserve VT09015 error timing —
-			// some queries with deep star projections need the schema
-			// tracking error to surface here, before subsequent BottomUp
-			// branches reach a SubQueryContainer that would panic with a
-			// different error first.
 			if _, err := op.GetAliasedProjections(); err != nil {
 				panic(err)
 			}
 		}
 		return op, NoRewrite
-	}
+	}, nil)
+}
 
-	op = BottomUp(op, TableID, visit, nil)
-
-	// Run the merge-rewrite engine once over the final tree, substituting
-	// every recorded merged subquery into every Filter / ApplyJoin /
-	// Projection / Update / Aggregator / Ordering slot reached via
-	// VisitExpressions. This is the end-of-pass sweep that picks up
-	// subquery references in operators above the merge sites — the in-tree
-	// engine calls inside tryMergeSubqueryWithOuter / tryMergeWithRHS only
-	// reach the merged subtree, not the wider plan tree. The wrapped
-	// substitution form is baked into ctx.MergedSubqueries at write-time
-	// (see recordMergedSubquery), so this rule is FilterType-aware uniformly.
-	if len(ctx.MergedSubqueries) > 0 {
-		applyMergeRewrite(ctx, op, &mergeRewriteProgram{
-			Rules: []exprRule{
-				&replaceArgByExpr{ByName: ctx.MergedSubqueries},
-			},
-			AssertMode: assertFatal,
-		})
+// applyMergedSubqueryReplacements runs the merge-rewrite engine once over the
+// final tree, substituting every recorded merged subquery into every Filter
+// / ApplyJoin / Projection / Update / Aggregator / Ordering slot reached via
+// VisitExpressions.
+//
+// This is the end-of-pass sweep that picks up subquery references in
+// operators above the merge sites — the in-tree engine calls inside
+// tryMergeSubqueryWithOuter / tryMergeWithRHS only reach the just-merged
+// subtree, not the wider plan tree. The wrapped substitution form is baked
+// into ctx.MergedSubqueries at write-time (see recordMergedSubquery), so
+// this rule is FilterType-aware uniformly.
+func applyMergedSubqueryReplacements(ctx *plancontext.PlanningContext, op Operator) Operator {
+	if len(ctx.MergedSubqueries) == 0 {
+		return op
 	}
+	applyMergeRewrite(ctx, op, &mergeRewriteProgram{
+		Rules: []exprRule{
+			&replaceArgByExpr{ByName: ctx.MergedSubqueries},
+		},
+		AssertMode: assertFatal,
+	})
 	return op
 }
 
@@ -272,8 +295,9 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 
 	// In-tree substitution via the merge-rewrite engine over the new RHS.
 	// Operators above outer.RHS (the rest of the join, projections above
-	// the join, etc.) are still served by the recordMergedSubquery write
-	// below until the end-of-pass settleSubqueries engine call covers them.
+	// the join, etc.) are out of reach of this call and are served by the
+	// end-of-pass applyMergedSubqueryReplacements sweep, fed from the
+	// recordMergedSubquery write below.
 	applyMergeRewrite(ctx, outer.RHS, &mergeRewriteProgram{
 		Rules: []exprRule{
 			&replaceArgByExpr{ByName: map[string]sqlparser.Expr{
@@ -291,7 +315,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 // of a merged subquery in the planning context, keyed by its arg name. The
 // wrapped form is what the merge-rewrite engine substitutes into Argument /
 // ColName placeholders during in-tree calls (tryMergeSubqueryWithOuter,
-// tryMergeWithRHS) and the end-of-pass settleSubqueries sweep.
+// tryMergeWithRHS) and the end-of-pass applyMergedSubqueryReplacements sweep.
 func recordMergedSubquery(ctx *plancontext.PlanningContext, sq *SubQuery) {
 	ctx.MergedSubqueries[sq.ArgName] = wrappedSubqueryForFilterType(sq)
 }
@@ -520,10 +544,11 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 	}
 
 	// In-tree substitution via the merge-rewrite engine. The engine reaches
-	// every Argument and ColName reference inside `op` (Filter, ApplyJoin,
-	// Projection, Update, Aggregator slots after PR 3's carrier coverage);
-	// operators outside `op` in the plan tree are still served by the
-	// ctx.MergedSubqueries → settleSubqueries safety net below until PR 6.
+	// every Argument and ColName reference inside `op` via the Filter /
+	// ApplyJoin / Projection / Update / Aggregator / Ordering carriers.
+	// Operators outside `op` in the plan tree are out of reach of this call
+	// and are served by the end-of-pass applyMergedSubqueryReplacements
+	// sweep, fed from the recordMergedSubquery write below.
 	replacement := wrappedSubqueryForFilterType(subQuery)
 	applyMergeRewrite(ctx, op, &mergeRewriteProgram{
 		Rules: []exprRule{
@@ -532,9 +557,6 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		AssertMode: assertFatal,
 	})
 
-	// Safety net for operators above `op` that don't yet implement
-	// VisitExpressions — settleSubqueries finds them via this map.
-	// Removed in PR 6 once every relevant carrier is migrated.
 	recordMergedSubquery(ctx, subQuery)
 	return op, Rewrote("merged subquery with outer")
 }
