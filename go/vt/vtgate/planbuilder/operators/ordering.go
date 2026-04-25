@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -54,6 +55,28 @@ func newOrdering(src Operator, order []OrderBy) Operator {
 func (o *Ordering) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) Operator {
 	o.Source = o.Source.AddPredicate(ctx, expr)
 	return o
+}
+
+// VisitExpressions implements exprCarrier. Yields each Order[i].SimplifiedExpr
+// under exprOrderBy. Drop is not allowed — every ORDER BY entry must keep an
+// expression.
+//
+// We only expose SimplifiedExpr to match what the deleted
+// settleOrderingExpressions did. Inner.Expr (the original AST as written) is
+// what SQL_builder.go emits, but it has historically been left unsubstituted
+// at this stage; PR 5's strict assertion will surface any gap if Inner.Expr
+// references a merged-subquery argument that needs substitution.
+func (o *Ordering) VisitExpressions(fn func(exprKind, sqlparser.Expr) sqlparser.Expr) {
+	for i := range o.Order {
+		if o.Order[i].SimplifiedExpr == nil {
+			continue
+		}
+		out := fn(exprOrderBy, o.Order[i].SimplifiedExpr)
+		if out == nil {
+			panic(vterrors.VT13001("Ordering.VisitExpressions: rule returned nil for Order[].SimplifiedExpr (drop not allowed)"))
+		}
+		o.Order[i].SimplifiedExpr = out
+	}
 }
 
 func (o *Ordering) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {

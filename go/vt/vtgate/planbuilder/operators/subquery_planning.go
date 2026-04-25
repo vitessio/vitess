@@ -92,10 +92,6 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 			if _, err := op.GetAliasedProjections(); err != nil {
 				panic(err)
 			}
-		case *Ordering:
-			// Ordering still uses the per-op-type path; PR 4 adds an
-			// Ordering carrier and folds this into the engine call below.
-			op.settleOrderingExpressions(ctx)
 		}
 		return op, NoRewrite
 	}
@@ -117,28 +113,6 @@ func settleSubqueries(ctx *plancontext.PlanningContext, op Operator) Operator {
 		})
 	}
 	return op
-}
-
-func (o *Ordering) settleOrderingExpressions(ctx *plancontext.PlanningContext) {
-	for idx := range o.Order {
-		for arg, sq := range ctx.MergedSubqueries {
-			expr := sqlparser.Rewrite(o.Order[idx].SimplifiedExpr, nil, func(cursor *sqlparser.Cursor) bool {
-				switch expr := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if expr.Name.String() == arg {
-						cursor.Replace(sq)
-					}
-				case *sqlparser.Argument:
-					if expr.Name == arg {
-						cursor.Replace(sq)
-					}
-				}
-
-				return true
-			})
-			o.Order[idx].SimplifiedExpr = expr.(sqlparser.Expr)
-		}
-	}
 }
 
 // tryPushSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
@@ -292,6 +266,20 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 
 	outer.RHS = newOp
+
+	// In-tree substitution via the merge-rewrite engine over the new RHS.
+	// Operators above outer.RHS (the rest of the join, projections above
+	// the join, etc.) are still served by the recordMergedSubquery write
+	// below until the end-of-pass settleSubqueries engine call covers them.
+	applyMergeRewrite(ctx, outer.RHS, &mergeRewriteProgram{
+		Rules: []exprRule{
+			&replaceArgByExpr{ByName: map[string]sqlparser.Expr{
+				inner.ArgName: wrappedSubqueryForFilterType(inner),
+			}},
+		},
+		AssertMode: assertDiagnostic,
+	})
+
 	recordMergedSubquery(ctx, inner)
 	return outer, Rewrote("merged subquery with rhs of join")
 }
@@ -672,6 +660,16 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 // we should be able to use this method for all plan types,
 // but using this method for sharded queries introduces bugs
 // We really need to figure out why this is not working as expected
+//
+// Audit note (engine migration): this helper is NOT subsumed by the merge-
+// rewrite engine and is intentionally retained. The engine's replaceArgByExpr
+// substitutes a merged subquery's Argument placeholder with the inner
+// subquery (outer→inner direction). rewriteASTExpression goes the opposite
+// way: it walks the inner subquery's emitted AST and substitutes Arguments
+// that reference *outer-scope* columns back to their original column
+// expressions, un-parameterising them now that the merge has put them in
+// scope. The two are functionally orthogonal; deleting this would lose the
+// un-parameterisation step for non-sharded routing cases.
 func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningContext, inner *Route) Operator {
 	src := s.outer.Source
 	stmt, _, err := ToSQL(ctx, inner.Source)

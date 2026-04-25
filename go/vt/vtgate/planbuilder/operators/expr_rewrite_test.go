@@ -334,6 +334,67 @@ func TestApplyMergeRewrite_LeakDetected(t *testing.T) {
 	assert.NotEmpty(t, report.LeftoverArgs["sq_arg"], "expected leak to be recorded")
 }
 
+// TestOrderingVisitExpressions verifies the Ordering carrier exposes each
+// Order[i].SimplifiedExpr slot under exprOrderBy and propagates the rule's
+// rewritten expression back into the slice. Inner.Expr is intentionally not
+// exposed (matches what the deleted settleOrderingExpressions did); PR 5's
+// strict assertion will surface any gap.
+func TestOrderingVisitExpressions(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	expr1, err := parser.ParseExpr("col + :sq_arg")
+	require.NoError(t, err)
+	expr2, err := parser.ParseExpr("col2")
+	require.NoError(t, err)
+	repl, err := parser.ParseExpr("99")
+	require.NoError(t, err)
+
+	innerOrder := &sqlparser.Order{Expr: expr1, Direction: sqlparser.AscOrder}
+	o := &Ordering{
+		unaryOperator: newUnaryOp(&stubLeafOp{}),
+		Order: []OrderBy{
+			{Inner: innerOrder, SimplifiedExpr: expr1},
+			{Inner: &sqlparser.Order{Expr: expr2}, SimplifiedExpr: expr2},
+		},
+	}
+
+	visited := 0
+	o.VisitExpressions(func(kind exprKind, e sqlparser.Expr) sqlparser.Expr {
+		assert.Equal(t, exprOrderBy, kind)
+		visited++
+		// substitute :sq_arg in the first slot, leave the second alone
+		if visited == 1 {
+			return repl
+		}
+		return e
+	})
+	assert.Equal(t, 2, visited, "every Order entry should be visited")
+	assert.Same(t, repl, o.Order[0].SimplifiedExpr,
+		"rule's return value should land in SimplifiedExpr")
+	// Inner.Expr is intentionally not updated by the carrier.
+	assert.Equal(t, "col + :sq_arg", sqlparser.String(o.Order[0].Inner.Expr))
+}
+
+// TestOrderingVisitExpressions_DropPanics verifies drop semantics aren't
+// allowed on ORDER BY slots — every entry must keep an expression.
+func TestOrderingVisitExpressions_DropPanics(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	expr, err := parser.ParseExpr("col")
+	require.NoError(t, err)
+
+	o := &Ordering{
+		unaryOperator: newUnaryOp(&stubLeafOp{}),
+		Order: []OrderBy{
+			{Inner: &sqlparser.Order{Expr: expr}, SimplifiedExpr: expr},
+		},
+	}
+
+	assert.Panics(t, func() {
+		o.VisitExpressions(func(_ exprKind, _ sqlparser.Expr) sqlparser.Expr {
+			return nil
+		})
+	})
+}
+
 // TestExprMentionsAnyArg covers the small helper directly. The Walk
 // short-circuits via io.EOF on the first match.
 func TestExprMentionsAnyArg(t *testing.T) {
