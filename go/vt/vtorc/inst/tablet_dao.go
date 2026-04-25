@@ -93,7 +93,11 @@ func ReadTabletCountsByCell() (map[string]int64, error) {
 	return tabletCounts, err
 }
 
-// ReadTabletAliasesByShard returns the current VTOrc tablet membership grouped by keyspace/shard.
+// ReadTabletAliasesByShard returns the current VTOrc tablet membership
+// grouped by keyspace/shard. Gossip analysis uses this to filter out
+// stale gossip entries (tablets VTOrc no longer tracks) before counting
+// quorum, so a lingering gossip record for a deleted tablet can't tip
+// a close vote.
 func ReadTabletAliasesByShard() (map[string]map[string]struct{}, error) {
 	aliasesByShard := make(map[string]map[string]struct{})
 	query := `SELECT

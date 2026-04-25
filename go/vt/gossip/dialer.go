@@ -115,6 +115,12 @@ func (d *GRPCDialer) Close() {
 	}
 }
 
+// secureDialOption resolves the TLS (or insecure) dial option. Callers
+// wire SecureDialOption from their process-specific TLS flags
+// (tablet-manager flags for vttablet, VTOrc's own flags for VTOrc) so
+// gossip transport security tracks the rest of the deployment. Falls
+// back to the equivalent of grpcclient's "no certs configured" path,
+// which matches how other Vitess clients behave with missing TLS flags.
 func (d *GRPCDialer) secureDialOption() (grpc.DialOption, error) {
 	if d.SecureDialOption != nil {
 		return d.SecureDialOption()

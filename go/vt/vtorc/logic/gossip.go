@@ -59,18 +59,28 @@ var (
 	gossipPollInterval = time.Second
 )
 
+// currentGossipAgent returns the process-wide gossip agent, if any.
+// Used by the debug handler, the gRPC service, and the quorum analysis
+// loop — all of which need the latest agent across enable/disable
+// cycles.
 func currentGossipAgent() *gossip.Gossip {
 	gossipStateMu.RLock()
 	defer gossipStateMu.RUnlock()
 	return gossipAgent
 }
 
+// setGossipCancel installs the cancel func that tears down the
+// SrvKeyspace watcher goroutines spawned by startGossip. Stored under
+// the same mutex as gossipAgent so Stop() can drain both atomically.
 func setGossipCancel(cancel context.CancelFunc) {
 	gossipStateMu.Lock()
 	defer gossipStateMu.Unlock()
 	gossipCancel = cancel
 }
 
+// clearGossipState swaps out both the agent and the watcher-cancel
+// func, returning them to the caller for shutdown. One critical
+// section so readers never see a half-cleared state.
 func clearGossipState() (*gossip.Gossip, context.CancelFunc) {
 	gossipStateMu.Lock()
 	defer gossipStateMu.Unlock()
@@ -82,6 +92,10 @@ func clearGossipState() (*gossip.Gossip, context.CancelFunc) {
 	return agent, cancel
 }
 
+// clearGossipAgent swaps out just the agent (leaving the watcher
+// running). Used by reconcileGossipConfig when gossip gets disabled at
+// the keyspace level but VTOrc itself is still running and should keep
+// watching for a future re-enable.
 func clearGossipAgent() *gossip.Gossip {
 	gossipStateMu.Lock()
 	defer gossipStateMu.Unlock()
@@ -91,6 +105,12 @@ func clearGossipAgent() *gossip.Gossip {
 	return agent
 }
 
+// startGossip is the one-shot process-wide entry point (guarded by
+// gossipOnce). It registers the debug endpoint + gossip gRPC server,
+// does a first reconcile pass, and kicks off either a SrvKeyspace
+// watcher (if a keyspace already has gossip enabled) or a poller (to
+// wait for the first enable). Called from ContinuousDiscovery so it
+// runs as VTOrc boots.
 func startGossip() {
 	gossipOnce.Do(func() {
 		// Register the debug endpoint once — it safely returns empty
@@ -119,6 +139,11 @@ func startGossip() {
 	})
 }
 
+// startGossipRPCServer stands up VTOrc's dedicated gossip gRPC listener
+// bound to --gossip-listen-addr. VTOrc doesn't reuse the main vtctld
+// gRPC server because it exists to serve gossip traffic specifically,
+// which needs to remain available regardless of operator-side service
+// map toggles on the primary gRPC server.
 func startGossipRPCServer() {
 	listenAddr := config.GossipListenAddr()
 	if listenAddr == "" {
@@ -157,6 +182,8 @@ func startGossipRPCServer() {
 	}()
 }
 
+// stopGossipRPCServer tears down the listener + gRPC server spun up by
+// startGossipRPCServer. Invoked from stopGossip at process termination.
 func stopGossipRPCServer() {
 	gossipRPCMu.Lock()
 	server := gossipRPCServer
@@ -237,6 +264,11 @@ func findGossipConfig() (*topodatapb.GossipConfig, string, bool) {
 	return cfg, selected, false
 }
 
+// findGossipConfigState scans every Keyspace for an enabled GossipConfig
+// and returns the first one found, the list of all enabled keyspaces,
+// and whether they conflict on effective tuning. findGossipConfig wraps
+// this into the "which keyspace do I watch" decision; this helper is
+// separate so tests and other callers can see the full picture.
 func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool) {
 	topoServer := ts
 	if topoServer == nil {
@@ -274,12 +306,21 @@ func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool) {
 	return found, enabledKeyspaces, false
 }
 
+// gossipTuning is the normalized shape used for conflict detection and
+// agent startup. It's separate from topodatapb.GossipConfig because the
+// proto allows zero/empty values meaning "use default", and we want to
+// compare post-normalization values so two configs with equivalent
+// effective settings are not flagged as conflicting.
 type gossipTuning struct {
 	PhiThreshold float64
 	PingInterval time.Duration
 	MaxUpdateAge time.Duration
 }
 
+// effectiveGossipTuning normalizes a GossipConfig to its runtime values,
+// substituting defaults for unset/invalid fields. Used both for
+// conflict detection between keyspaces and for driving agent startup /
+// Reconfigure calls.
 func effectiveGossipTuning(cfg *topodatapb.GossipConfig) gossipTuning {
 	if cfg == nil {
 		return gossipTuning{}
@@ -297,6 +338,10 @@ func effectiveGossipTuning(cfg *topodatapb.GossipConfig) gossipTuning {
 	}
 }
 
+// parseDurationVTOrc parses a duration string with a safe fallback for
+// missing/invalid/non-positive values. VTOrc has its own copy (rather
+// than sharing with the vttablet one) just so the two binaries don't
+// have to import each other's packages.
 func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
 	if s == "" {
 		return fallback
@@ -308,6 +353,9 @@ func parseDurationVTOrc(s string, fallback time.Duration) time.Duration {
 	return d
 }
 
+// stopGossip is the process termination hook — wired into servenv.OnTerm
+// from ContinuousDiscovery. Drains watchers, stops the agent, and tears
+// down the gRPC server in one deterministic order.
 func stopGossip() {
 	agent, cancel := clearGossipState()
 	if cancel != nil {
@@ -319,6 +367,12 @@ func stopGossip() {
 	stopGossipRPCServer()
 }
 
+// reconcileGossipConfig reconciles the process-wide agent against the
+// current topology: start an agent if any keyspace has gossip enabled,
+// Reconfigure it if settings changed, or clear it if nothing is enabled
+// or keyspaces conflict. The one place responsible for deciding the
+// agent's lifecycle based on topology state, which makes the
+// enable/disable/re-enable/conflict semantics easier to reason about.
 func reconcileGossipConfig(localCfg *topodatapb.GossipConfig) {
 	cfg, _, conflict := findGossipConfig()
 	if !conflict && cfg == nil && localCfg != nil && localCfg.Enabled {

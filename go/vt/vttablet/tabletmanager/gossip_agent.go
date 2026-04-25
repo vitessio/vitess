@@ -38,7 +38,12 @@ import (
 // insecure, which is only appropriate for local testing.
 var GossipSecureDialOption func() (grpc.DialOption, error)
 
-// newGossipAgent creates a gossip agent from the keyspace-level config and tablet identity.
+// newGossipAgent builds a gossip agent for this tablet: identity from
+// the tablet alias, address from the grpc port, keyspace/shard metadata
+// for scope filtering, seeds from topo, and TLS inherited from
+// tablet-manager flags. Returns (nil, false) when gossip is disabled
+// for the keyspace or the tablet has no grpc port, so callers can treat
+// absent gossip as a normal configuration instead of an error.
 func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts *topo.Server) (*gossip.Gossip, bool) {
 	if cfg == nil || !cfg.Enabled || tablet == nil {
 		return nil, false
@@ -94,7 +99,10 @@ func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts 
 }
 
 // discoverSeeds queries topo for other tablets in the same shard to use
-// as gossip seeds. This replaces the static --gossip-seed-addrs flag.
+// as gossip seeds. This replaces a static --gossip-seed-addrs flag:
+// operators never have to update a seed list when tablets come and go,
+// and new tablets can bootstrap against whatever the topo currently
+// knows about.
 func discoverSeeds(self *topodatapb.Tablet, ts *topo.Server) []gossip.Member {
 	if ts == nil {
 		return nil
@@ -128,7 +136,10 @@ func discoverSeeds(self *topodatapb.Tablet, ts *topo.Server) []gossip.Member {
 	return seeds
 }
 
-// parseDuration parses a duration string with a fallback for empty or invalid values.
+// parseDuration parses a duration string with a fallback for empty or
+// invalid values. Used for tuning fields that arrive as strings via
+// GossipConfig; the fallback lets us treat unset or garbage values as
+// "use the default" rather than failing to start gossip.
 func parseDuration(s string, fallback time.Duration) time.Duration {
 	if s == "" {
 		return fallback

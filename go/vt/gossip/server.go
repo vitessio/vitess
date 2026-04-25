@@ -30,7 +30,10 @@ type Service struct {
 	GetAgent func() *Gossip
 }
 
-// Join handles an incoming gossip join RPC.
+// Join handles an incoming gossip join RPC. When no agent is currently
+// installed (gossip disabled for this process) we return an empty
+// response rather than an error so peers see "nothing to learn" and
+// back off naturally.
 func (s *Service) Join(ctx context.Context, req *gossippb.GossipJoinRequest) (*gossippb.GossipJoinResponse, error) {
 	agent := s.GetAgent()
 	if agent == nil {
@@ -43,7 +46,9 @@ func (s *Service) Join(ctx context.Context, req *gossippb.GossipJoinRequest) (*g
 	return toProtoJoinResponse(resp), nil
 }
 
-// PushPull handles an incoming gossip push-pull RPC.
+// PushPull handles an incoming gossip push-pull RPC. Same no-agent
+// behavior as Join: an empty response keeps the protocol stable while
+// gossip is disabled.
 func (s *Service) PushPull(ctx context.Context, msg *gossippb.GossipMessage) (*gossippb.GossipMessage, error) {
 	agent := s.GetAgent()
 	if agent == nil {

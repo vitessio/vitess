@@ -151,7 +151,10 @@ func RegisterGRPCServerFlags() {
 
 // RegisterGRPCServerOptionFlags registers the standard Vitess gRPC server
 // configuration flags without registering a listener for the global gRPC
-// server managed by servenv.Run/RunDefault.
+// server managed by servenv.Run/RunDefault. Binaries that stand up their
+// own additional listener (e.g. VTOrc's gossip server) call this so the
+// extra listener honors the same TLS / keepalive / message-size options
+// as the primary one without having to re-declare every flag.
 func RegisterGRPCServerOptionFlags() {
 	OnParse(func(fs *pflag.FlagSet) {
 		registerGRPCServerOptionFlags(fs)
@@ -233,12 +236,20 @@ func createGRPCServer() {
 	GRPCServer = NewGRPCServer()
 }
 
-// NewGRPCServer returns a grpc.Server configured with the standard Vitess
-// gRPC server options.
+// NewGRPCServer returns a grpc.Server configured with the standard
+// Vitess gRPC server options (TLS, keepalive, message sizes,
+// interceptors). Used by binaries that need to stand up an auxiliary
+// gRPC server beyond the one servenv manages — e.g. VTOrc's dedicated
+// gossip listener — so the extra server inherits the same security and
+// tuning conventions as the primary server.
 func NewGRPCServer() *grpc.Server {
 	return grpc.NewServer(grpcServerOptions()...)
 }
 
+// grpcServerOptions assembles the shared list of grpc.ServerOptions
+// from the registered flag values (TLS, keepalive, message sizes,
+// interceptors). Pulled out of createGRPCServer so NewGRPCServer can
+// reuse it for auxiliary listeners.
 func grpcServerOptions() []grpc.ServerOption {
 	var opts []grpc.ServerOption
 	if gRPCCert != "" && gRPCKey != "" {

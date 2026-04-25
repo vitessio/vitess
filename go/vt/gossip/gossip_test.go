@@ -822,10 +822,10 @@ func TestDebugState(t *testing.T) {
 	assert.Equal(t, "addr1", debug.BindAddr)
 	assert.Len(t, debug.Members, 2)
 	require.Contains(t, debug.States, NodeID("node1"))
-	assert.Equal(t, "alive", debug.States["node1"].Status)
-	assert.NotEmpty(t, debug.States["node1"].LastUpdate)
+	assert.Equal(t, StatusAlive, debug.States["node1"].Status)
+	assert.False(t, debug.States["node1"].LastUpdate.IsZero())
 	require.Contains(t, debug.States, NodeID("node2"))
-	assert.Equal(t, "unknown", debug.States["node2"].Status)
+	assert.Equal(t, StatusUnknown, debug.States["node2"].Status)
 }
 
 func TestStatusString(t *testing.T) {

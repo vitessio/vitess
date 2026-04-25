@@ -49,6 +49,9 @@ func (t *grpcTransport) Close() {
 	}
 }
 
+// PushPull implements one side of the periodic gossip exchange over
+// gRPC: proto-encode the outgoing snapshot, RPC, decode the response
+// for the caller to merge.
 func (t *grpcTransport) PushPull(ctx context.Context, addr string, msg *Message) (*Message, error) {
 	client, err := t.dial(ctx, addr)
 	if err != nil {
@@ -62,6 +65,9 @@ func (t *grpcTransport) PushPull(ctx context.Context, addr string, msg *Message)
 	return fromProtoMessage(response)
 }
 
+// Join implements the bootstrap RPC over gRPC. Same wire-encoding path
+// as PushPull, different payload shape (no full state snapshot, just
+// the joining member and its seeds).
 func (t *grpcTransport) Join(ctx context.Context, addr string, req *JoinRequest) (*JoinResponse, error) {
 	client, err := t.dial(ctx, addr)
 	if err != nil {
@@ -76,6 +82,9 @@ func (t *grpcTransport) Join(ctx context.Context, addr string, req *JoinRequest)
 	return fromProtoJoinResponse(response)
 }
 
+// dial fetches a client for addr, validating that neither the dialer
+// nor its return value is nil so PushPull/Join never panic on a
+// misconfigured dialer.
 func (t *grpcTransport) dial(ctx context.Context, addr string) (gossippb.GossipClient, error) {
 	if t.dialer == nil {
 		return nil, errors.New("gossip transport dialer is nil")
@@ -89,6 +98,12 @@ func (t *grpcTransport) dial(ctx context.Context, addr string) (gossippb.GossipC
 	}
 	return client, nil
 }
+
+// The to/from proto converters below translate between the gossip
+// package's in-memory types (which use Go-native time.Time, typed
+// enums, etc.) and the protobuf wire types. Keeping the wire layer
+// isolated here means the core gossip logic never deals with
+// gossippb directly and is easier to reason about / unit-test.
 
 func toProtoMessage(msg *Message) *gossippb.GossipMessage {
 	if msg == nil {
@@ -233,6 +248,11 @@ func fromProtoMember(member *gossippb.Member) Member {
 	}
 }
 
+// toProtoState encodes a StateDigest for the wire. A zero LastUpdate
+// is sent as 0 (rather than Unix(0,0).UnixNano()==0 which happens to
+// match) so never-observed peers arrive on the other side with an
+// IsZero timestamp and stay Unknown — a real Unix(0,0) would make them
+// look ancient and immediately age to Down via MaxUpdateAge.
 func toProtoState(state StateDigest) *gossippb.GossipState {
 	var lastUpdateUnix int64
 	if !state.LastUpdate.IsZero() {
@@ -246,6 +266,9 @@ func toProtoState(state StateDigest) *gossippb.GossipState {
 	}
 }
 
+// fromProtoState is the receive-side counterpart: 0 on the wire stays
+// a zero time.Time (never-observed), preserving the "seeds stay Unknown
+// until first exchange" invariant across process boundaries.
 func fromProtoState(state *gossippb.GossipState) (StateDigest, error) {
 	if state == nil {
 		return StateDigest{}, nil
@@ -266,6 +289,10 @@ func fromProtoState(state *gossippb.GossipState) (StateDigest, error) {
 	}, nil
 }
 
+// toProtoStatus / fromProtoStatus keep the wire enum and the in-memory
+// enum in a 1:1 mapping. fromProtoStatus returns an error on unknown
+// values so a mismatched peer version fails the RPC loudly rather than
+// silently folding everything to Unknown.
 func toProtoStatus(status Status) gossippb.Status {
 	switch status {
 	case StatusAlive:

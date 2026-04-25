@@ -26,6 +26,11 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+// UpdateGossipConfig is the CLI front for the UpdateGossipConfig RPC.
+// Operators invoke it via vtctldclient to enable/disable gossip or
+// tune its parameters for a keyspace — the RPC takes care of updating
+// the Keyspace record and fanning the change out to each cell's
+// SrvKeyspace so running vttablets and VTOrc pick it up live.
 var UpdateGossipConfig = &cobra.Command{
 	Use:                   "UpdateGossipConfig [--enable|--disable] [--phi-threshold=<float64>] [--ping-interval=<duration>] [--max-update-age=<duration>] <keyspace>",
 	Short:                 "Update the gossip protocol configuration for all tablets in the given keyspace (across all cells)",
@@ -34,6 +39,11 @@ var UpdateGossipConfig = &cobra.Command{
 	RunE:                  commandUpdateGossipConfig,
 }
 
+// commandUpdateGossipConfig marshals CLI flags into an
+// UpdateGossipConfigRequest. PhiThreshold is only set in the request
+// when the user explicitly passed --phi-threshold, so the server can
+// distinguish "unset (leave as default/existing)" from an explicit
+// value of 0 (which the server then rejects).
 func commandUpdateGossipConfig(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 

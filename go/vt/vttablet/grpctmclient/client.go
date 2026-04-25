@@ -75,6 +75,10 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &name, "tablet-manager-grpc-server-name", name, "the server name to use to validate server certificate")
 }
 
+// SecureDialOption exposes this package's tablet-manager TLS flags as
+// a reusable grpc.DialOption factory. Other tablet-to-tablet transports
+// (e.g. gossip) call this so they inherit the same TLS configuration as
+// regular tablet-manager RPCs without declaring a parallel set of flags.
 func SecureDialOption() (grpc.DialOption, error) {
 	return grpcclient.SecureDialOption(cert, key, ca, crl, name)
 }

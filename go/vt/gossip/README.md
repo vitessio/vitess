@@ -33,8 +33,16 @@ stale verdicts.
 ## Configuration
 
 Gossip is configured per-keyspace via the topo `Keyspace` record and
-propagated to `SrvKeyspace`. No per-process flags are needed (except
-`--gossip-listen-addr` for VTOrc). Use `vtctldclient` to manage it:
+propagated to `SrvKeyspace`. Per-process setup:
+
+- **vttablet**: the gossip gRPC service reuses the existing vttablet
+  gRPC server and inherits the tablet-manager TLS flags. It registers
+  only when `grpc-gossip` is in `--service-map` (the example scripts
+  under `examples/common/scripts/vttablet-up.sh` include it).
+- **VTOrc**: set `--gossip-listen-addr` so VTOrc stands up its own
+  gossip gRPC listener.
+
+Use `vtctldclient` to manage it:
 
 ```sh
 # Enable gossip with default tuning.
@@ -75,14 +83,30 @@ No static seed list is needed.
 VTOrc merges gossip state into its `CheckAndRecover` loop. For each shard:
 
 1. If the PRIMARY's gossip status is `Down`, **and**
-2. A strict majority of non-primary replicas are `Alive` (minimum 2),
+2. A strict majority of non-primary replicas are `Alive` (with at least
+   2 alive observers),
 
 then VTOrc produces a `PrimaryTabletUnreachableByQuorum` analysis, which
 triggers ERS via the existing `recoverDeadPrimaryFunc` path.
 
-On an exact tie (even replica count, exactly half alive), VTOrc's own
-health check acts as a tiebreaker. Errors and unknowns abstain rather than
-affirm.
+### Corroboration from VTOrc's own view
+
+VTOrc augments the gossip verdict with a `VTOrcView` built from its
+per-primary health checks:
+
+- **Small-shard safety**: for shards with ≤2 total replicas, strict
+  majority equals unanimous — too easy for a correlated failure (e.g. a
+  cross-cell partition) to produce a false positive. These shards
+  additionally require VTOrc's own health check to report the primary
+  as unreachable.
+- **Exact-tie breaker**: for larger shards, VTOrc's view breaks exact
+  ties (even replica count, exactly half alive). Errors and unknowns
+  abstain.
+- **Partition heuristic**: if VTOrc cannot reach more than half of the
+  primaries it knows about, its view is most likely about VTOrc's own
+  connectivity rather than the primaries. In that case the corroborating
+  signal is suppressed so VTOrc won't trigger ERS based on its own
+  partition.
 
 ## Debug endpoint
 

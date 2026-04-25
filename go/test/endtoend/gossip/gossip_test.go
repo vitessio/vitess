@@ -141,7 +141,7 @@ func waitFullConvergence(t *testing.T, observer *gossip.Gossip, expectedMembers 
 	}, timeout, 50*time.Millisecond, "metadata did not converge on all %d members", expectedMembers)
 }
 
-func assertDebugStatus(t *testing.T, agent *gossip.Gossip, nodeID string, expected string) {
+func assertDebugStatus(t *testing.T, agent *gossip.Gossip, nodeID string, expected gossip.Status) {
 	t.Helper()
 	debug := agent.Debug()
 	entry, ok := debug.States[gossip.NodeID(nodeID)]
@@ -197,8 +197,8 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 		assert.Len(t, debug.Members, 3)
 		assert.Equal(t, gossip.NodeID("node1"), debug.NodeID)
 		assert.True(t, debug.Epoch > 0)
-		assertDebugStatus(t, g1, "node2", "alive")
-		assertDebugStatus(t, g1, "node3", "alive")
+		assertDebugStatus(t, g1, "node2", gossip.StatusAlive)
+		assertDebugStatus(t, g1, "node3", gossip.StatusAlive)
 	})
 
 	t.Run("NodeFailureDetection", func(t *testing.T) {
@@ -227,10 +227,10 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 		waitStatus(t, g1, "node3", gossip.StatusDown, 10*time.Second)
 		waitStatus(t, g2, "node3", gossip.StatusDown, 10*time.Second)
 
-		assertDebugStatus(t, g1, "node3", "down")
+		assertDebugStatus(t, g1, "node3", gossip.StatusDown)
 		// Surviving nodes still see each other as alive.
-		assertDebugStatus(t, g1, "node2", "alive")
-		assertDebugStatus(t, g2, "node1", "alive")
+		assertDebugStatus(t, g1, "node2", gossip.StatusAlive)
+		assertDebugStatus(t, g2, "node1", gossip.StatusAlive)
 	})
 
 	t.Run("NodeRecovery", func(t *testing.T) {
@@ -265,7 +265,7 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 
 		waitStatus(t, g1, "node3", gossip.StatusAlive, 10*time.Second)
 		waitStatus(t, g2, "node3", gossip.StatusAlive, 10*time.Second)
-		assertDebugStatus(t, g1, "node3", "alive")
+		assertDebugStatus(t, g1, "node3", gossip.StatusAlive)
 	})
 
 	t.Run("JoinProtocol", func(t *testing.T) {
@@ -308,7 +308,7 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 		assert.Equal(t, "node1", debug.BindAddr)
 
 		// Self member has metadata.
-		var self *gossip.DebugMember
+		var self *gossip.Member
 		for _, m := range debug.Members {
 			if m.ID == "node1" {
 				self = &m
@@ -320,9 +320,9 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 		assert.Equal(t, "zone1-0000000100", self.Meta[gossip.MetaKeyTabletAlias])
 
 		// Self state is alive, seed is unknown.
-		assert.Equal(t, "alive", debug.States["node1"].Status)
-		assert.NotEmpty(t, debug.States["node1"].LastUpdate)
-		assert.Equal(t, "unknown", debug.States["node2"].Status)
+		assert.Equal(t, gossip.StatusAlive, debug.States["node1"].Status)
+		assert.False(t, debug.States["node1"].LastUpdate.IsZero())
+		assert.Equal(t, gossip.StatusUnknown, debug.States["node2"].Status)
 	})
 
 	t.Run("EpochAdvances", func(t *testing.T) {
@@ -395,7 +395,7 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 		waitStatus(t, s1R1, "s1-p", gossip.StatusDown, 10*time.Second)
 
 		// Shard 80- primary unaffected.
-		assertDebugStatus(t, s2R1, "s2-p", "alive")
+		assertDebugStatus(t, s2R1, "s2-p", gossip.StatusAlive)
 
 		// Quorum analysis detects only shard -80. Small shards (1
 		// primary + 2 replicas each) require VTOrc corroboration.
@@ -536,6 +536,6 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 			// Wait for r1 to have exchanged with r2 at least once.
 			return r1.Debug().Epoch > 5
 		}, 10*time.Second, 50*time.Millisecond)
-		assertDebugStatus(t, r2, "primary", "alive")
+		assertDebugStatus(t, r2, "primary", gossip.StatusAlive)
 	})
 }

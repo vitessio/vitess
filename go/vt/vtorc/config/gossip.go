@@ -36,11 +36,16 @@ var gossipListenAddr = viperutil.Configure(
 	},
 )
 
+// registerGossipFlags adds the VTOrc-specific gossip flags to fs. Only
+// the listen address is process-level; tuning (phi/ping/age) lives in
+// topology so operators can change it per-keyspace without restarts.
 func registerGossipFlags(fs *pflag.FlagSet) {
 	fs.String("gossip-listen-addr", gossipListenAddr.Default(), "Address to bind gossip gRPC server")
 	viperutil.BindFlags(fs, gossipListenAddr)
 }
 
+// GossipListenAddr returns the --gossip-listen-addr flag value.
+// Consumed by the gossip gRPC server bootstrap and by GossipNodeID.
 func GossipListenAddr() string {
 	return gossipListenAddr.Get()
 }

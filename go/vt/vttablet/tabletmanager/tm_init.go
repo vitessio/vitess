@@ -570,6 +570,9 @@ func (tm *TabletManager) Stop() {
 }
 
 // getGossipConfig reads the gossip configuration from SrvKeyspace.
+// Used at startup to skip the initial watcher hop when gossip is
+// already enabled — the agent can boot with the known config instead
+// of waiting for the first watch event.
 func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.GossipConfig {
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
@@ -580,6 +583,11 @@ func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.
 	return srvKs.GossipConfig
 }
 
+// startGossipLifecycle boots the per-tablet gossip agent (if the
+// keyspace has gossip enabled) and starts a SrvKeyspace watcher that
+// handles future enable / disable / tuning changes live. Called early
+// in TabletManager.Start so the watcher runs even for tablets going
+// through --restore-from-backup.
 func (tm *TabletManager) startGossipLifecycle(tablet *topodatapb.Tablet) error {
 	if tm.currentGossipAgent() == nil {
 		gossipCfg := tm.getGossipConfig(tablet)

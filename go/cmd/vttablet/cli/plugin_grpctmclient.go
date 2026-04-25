@@ -25,6 +25,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 )
 
+// init wires the tabletmanager gossip dialer to the grpctmclient's
+// SecureDialOption so gossip picks up the same TLS configuration as the
+// rest of the tablet-manager gRPC traffic. Done here rather than in
+// tabletmanager itself to avoid an import cycle with grpctmclient's
+// tests (which import tabletmanager).
 func init() {
 	tabletmanager.GossipSecureDialOption = grpctmclient.SecureDialOption
 }

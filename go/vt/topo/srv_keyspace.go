@@ -433,7 +433,12 @@ func (ts *Server) UpdateSrvKeyspaceThrottlerConfig(ctx context.Context, keyspace
 	return updatedCells, nil
 }
 
-// UpdateSrvKeyspaceGossipConfig updates existing gossip config
+// UpdateSrvKeyspaceGossipConfig applies the given update function to
+// each cell's SrvKeyspace gossip config concurrently and returns the
+// list of cells that were successfully updated. Fan-out is necessary
+// because vttablets watch per-cell SrvKeyspace and only react to their
+// own cell's record, so every cell has to see the same change for
+// gossip to enable/disable cluster-wide.
 func (ts *Server) UpdateSrvKeyspaceGossipConfig(ctx context.Context, keyspace string, cells []string, update func(*topodatapb.GossipConfig) *topodatapb.GossipConfig) (updatedCells []string, err error) {
 	if err = CheckKeyspaceLocked(ctx, keyspace); err != nil {
 		return updatedCells, err

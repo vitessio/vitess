@@ -19,6 +19,7 @@ package gossip
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"math"
@@ -30,14 +31,30 @@ import (
 )
 
 type (
+	// NodeID is the stable identifier of a gossip participant. Production
+	// callers use the tablet alias for vttablets and the listen address
+	// (host:port) for VTOrc. Typed as a distinct string so callers can't
+	// accidentally pass a raw address where an ID is expected.
 	NodeID string
 
+	// Status is the liveness verdict a peer holds for another peer. It
+	// is intentionally separate from any higher-level MySQL / tablet
+	// health concept — this layer only reports whether the remote gossip
+	// agent appears to be running.
 	Status int
 
+	// Member is a directory entry: one row per known peer. Addr is where
+	// we dial for gossip RPCs. Meta carries scope metadata (keyspace,
+	// shard, tablet_alias) used both for peer-selection (same-shard
+	// tablets gossip with each other) and for downstream quorum analysis
+	// in VTOrc. Meta is merged on update (not replaced), so a partial
+	// wire message can never erase keys a richer peer already propagated.
+	// The json tags let /debug/gossip emit a stable human-readable shape
+	// without a parallel Debug* type.
 	Member struct {
-		ID   NodeID
-		Addr string
-		Meta map[string]string
+		ID   NodeID            `json:"id"`
+		Addr string            `json:"addr"`
+		Meta map[string]string `json:"meta,omitempty"`
 	}
 
 	// HealthSnapshot refreshes the local node's entry in the gossip
@@ -50,18 +67,35 @@ type (
 		Timestamp time.Time
 	}
 
+	// State is the in-memory liveness record this agent holds for one
+	// peer. Phi is the current phi-accrual suspicion value for that peer
+	// (recomputed on every tick). LastUpdate is the timestamp carried by
+	// the authoritative self-refresh from the peer, NOT the local wall
+	// clock — that lets it propagate unchanged through multi-hop gossip
+	// and gives the merge rule a meaningful "newer" comparison.
+	// The json tags (plus Status.MarshalJSON and State's own
+	// MarshalJSON) let /debug/gossip emit State directly instead of via
+	// a parallel Debug* type.
 	State struct {
-		Status     Status
-		Phi        float64
-		LastUpdate time.Time
+		Status     Status    `json:"status"`
+		Phi        float64   `json:"phi"`
+		LastUpdate time.Time `json:"last_update"`
 	}
 
+	// Message is the wire payload of a push-pull exchange. Epoch is a
+	// monotonic change counter (bumped on every internal state mutation)
+	// useful for debugging/convergence observability; the merge itself
+	// is timestamp-driven, not epoch-driven.
 	Message struct {
 		Members []Member
 		States  []StateDigest
 		Epoch   uint64
 	}
 
+	// StateDigest is the wire-format counterpart of State. The two types
+	// are kept distinct so the wire layout stays stable even if the
+	// in-memory State ever grows additional fields (e.g. local-only
+	// bookkeeping).
 	StateDigest struct {
 		NodeID     NodeID
 		Status     Status
@@ -69,29 +103,44 @@ type (
 		LastUpdate time.Time
 	}
 
+	// JoinRequest is the payload for the bootstrap RPC. Seeds lets the
+	// joiner share its configured seed list so the responder can learn
+	// about peers it might not otherwise discover.
 	JoinRequest struct {
 		Member Member
 		Seeds  []Member
 	}
 
+	// JoinResponse returns the responder's scoped view to the joiner:
+	// Members for directory population and Initial for the first state
+	// snapshot (so the joiner starts with useful state instead of having
+	// to wait for the first push-pull tick).
 	JoinResponse struct {
 		Members []Member
 		Initial Message
 	}
 
+	// Transport abstracts the network layer. Production uses a gRPC
+	// implementation with a per-target *grpc.ClientConn cache; tests use
+	// an in-process transport. Close is invoked from Gossip.Stop so the
+	// implementation can tear down those cached connections.
 	Transport interface {
 		PushPull(ctx context.Context, addr string, msg *Message) (*Message, error)
 		Join(ctx context.Context, addr string, req *JoinRequest) (*JoinResponse, error)
-		// Close releases any resources held by the transport. It is
-		// called from Gossip.Stop so implementations can tear down
-		// cached connections on shutdown.
 		Close()
 	}
 
+	// Clock abstracts wall time. Production uses realClock; tests inject
+	// a controllable clock to exercise time-dependent behavior (phi
+	// accrual, MaxUpdateAge, future-timestamp clamping) deterministically.
 	Clock interface {
 		Now() time.Time
 	}
 
+	// Config is the tuning the agent runs with. Only a subset
+	// (PhiThreshold, PingInterval, MaxUpdateAge) is applied by
+	// Reconfigure — identity/transport/seeds are fixed for the lifetime
+	// of an agent, which matches the one-shot Start semantic.
 	Config struct {
 		NodeID       NodeID
 		BindAddr     string
@@ -103,33 +152,50 @@ type (
 		MaxUpdateAge time.Duration
 	}
 
+	// Gossip is the top-level agent. One instance per process (one per
+	// vttablet, one per VTOrc). All methods are safe for concurrent use.
+	// Internal state (members/states/detectors/epoch) is guarded by mu;
+	// reconfigure state and lifecycle flags use their own synchronization
+	// so they don't contend with the gossip hot path.
 	Gossip struct {
+		// cfg, transport, clock, rng are set at construction and never
+		// reassigned, so they're safe to read without mu.
 		cfg       Config
 		transport Transport
 		clock     Clock
 		rng       *rand.Rand
 
+		// mu guards the in-memory directory (members), liveness view
+		// (states), per-peer heartbeat trackers (detectors), and the
+		// change counter (epoch). Hot-path methods like gossipOnce and
+		// applyMessageLocked briefly hold this to mutate state.
 		mu        sync.Mutex
 		members   map[NodeID]Member
 		states    map[NodeID]State
 		detectors map[NodeID]*phiAccrual
 		epoch     uint64
 
-		// reconfig state: reconfigMu guards pendingConfig. reconfigCh is a
-		// size-1 signal channel that wakes the gossip loop when a new
-		// pending config is set. Multiple concurrent Reconfigure calls are
-		// safe because the latest write to pendingConfig always wins.
+		// reconfigMu guards pendingConfig. reconfigCh is a size-1 signal
+		// channel that wakes the gossip loop when a new pending config
+		// is set. Multiple concurrent Reconfigure calls are safe because
+		// the latest write to pendingConfig always wins (we don't queue
+		// configs — we only care about the newest one).
 		reconfigMu    sync.Mutex
 		pendingConfig Config
 		reconfigCh    chan struct{}
 
-		// stop is created in New and closed exactly once by Stop(). Start
-		// captures it locally so the gossip loop is insulated from any
-		// future reassignments. started enforces one-shot Start semantics.
+		// Lifecycle flags. stop is created in New and closed exactly
+		// once by Stop(). Start captures it locally so the gossip loop
+		// never reads g.stop directly — this keeps the stop channel
+		// read out of any future field-level race analysis.
+		//
+		// started enforces one-shot Start semantics (a stopped agent
+		// cannot be restarted; create a new one instead).
+		//
 		// stopInvoked gates the external Stop() path (and cleanup of
 		// transport resources) independently of loopExited, so Stop()
-		// can always clean up even if the gossip loop already exited
-		// because the caller-supplied ctx was cancelled.
+		// always closes the transport even if the gossip loop already
+		// exited because the caller-supplied ctx was cancelled first.
 		stop        chan struct{}
 		started     atomic.Bool
 		stopInvoked atomic.Bool
@@ -138,12 +204,26 @@ type (
 )
 
 const (
+	// StatusUnknown means we've registered the peer (e.g. as a seed) but
+	// have not yet observed any gossip from it. Unknown peers do NOT age
+	// to Down via MaxUpdateAge — they have to become Alive first.
 	StatusUnknown Status = iota
+	// StatusAlive means the peer is gossiping normally.
 	StatusAlive
+	// StatusSuspect means phi has crossed PhiThreshold but the last
+	// observation is still recent enough (within MaxUpdateAge) that we
+	// don't want to commit to Down yet.
 	StatusSuspect
+	// StatusDown means the peer's last observed update is older than
+	// MaxUpdateAge. This is the verdict VTOrc's quorum analysis looks
+	// for on the primary before triggering ERS.
 	StatusDown
 )
 
+// Meta keys used by higher layers (vttablet, VTOrc) to tag members with
+// topology identity. The agent itself only cares about Keyspace+Shard
+// for peer-selection scoping; TabletAlias is carried through for
+// downstream quorum analysis.
 const (
 	MetaKeyKeyspace    = "keyspace"
 	MetaKeyShard       = "shard"
@@ -151,15 +231,24 @@ const (
 )
 
 type (
+	// phiAccrual is a per-peer heartbeat-interval tracker. It keeps a
+	// bounded ring of recent inter-arrival times and computes a phi
+	// suspicion value from their mean/stddev — the idea being that a
+	// peer whose heartbeats have been ~1s apart should look fine at
+	// 1.2s of silence but increasingly suspicious at 5s, adapting to
+	// however often that particular peer actually gossips.
 	phiAccrual struct {
 		last      time.Time
 		intervals []time.Duration
 		maxSize   int
 	}
 
+	// realClock is the default Clock for production (tests inject a
+	// controllable clock via the Clock interface).
 	realClock struct{}
 )
 
+// Now returns the current wall time — the default Clock production uses.
 func (r realClock) Now() time.Time {
 	return time.Now()
 }
@@ -330,43 +419,32 @@ func (g *Gossip) UpdateLocal(snapshot HealthSnapshot) {
 
 // DebugState is a JSON-serializable snapshot of the gossip agent's
 // full internal state, intended for the /debug/gossip HTTP endpoint.
+// Members and States reuse the core Member and State types directly —
+// the json tags on those types plus custom MarshalJSON on Status and
+// State produce the human-readable shape operators expect, so we don't
+// need a parallel set of Debug* structs.
 type DebugState struct {
-	NodeID   NodeID                 `json:"node_id"`
-	BindAddr string                 `json:"bind_addr"`
-	Epoch    uint64                 `json:"epoch"`
-	Members  []DebugMember          `json:"members"`
-	States   map[NodeID]*DebugEntry `json:"states"`
+	NodeID   NodeID           `json:"node_id"`
+	BindAddr string           `json:"bind_addr"`
+	Epoch    uint64           `json:"epoch"`
+	Members  []Member         `json:"members"`
+	States   map[NodeID]State `json:"states"`
 }
 
-type DebugMember struct {
-	ID   NodeID            `json:"id"`
-	Addr string            `json:"addr"`
-	Meta map[string]string `json:"meta,omitempty"`
-}
-
-type DebugEntry struct {
-	Status     string  `json:"status"`
-	Phi        float64 `json:"phi"`
-	LastUpdate string  `json:"last_update"`
-}
-
+// Debug returns a JSON-serializable snapshot of the full gossip state.
+// Used by the /debug/gossip HTTP endpoint on vttablet and VTOrc so
+// operators can inspect live convergence without attaching a debugger.
 func (g *Gossip) Debug() *DebugState {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	members := make([]DebugMember, 0, len(g.members))
+	members := make([]Member, 0, len(g.members))
 	for _, m := range g.members {
-		members = append(members, DebugMember(m))
+		members = append(members, m)
 	}
 
-	states := make(map[NodeID]*DebugEntry, len(g.states))
-	for id, s := range g.states {
-		states[id] = &DebugEntry{
-			Status:     statusString(s.Status),
-			Phi:        s.Phi,
-			LastUpdate: s.LastUpdate.UTC().Format("2006-01-02T15:04:05.000Z"),
-		}
-	}
+	states := make(map[NodeID]State, len(g.states))
+	maps.Copy(states, g.states)
 
 	return &DebugState{
 		NodeID:   g.cfg.NodeID,
@@ -377,7 +455,34 @@ func (g *Gossip) Debug() *DebugState {
 	}
 }
 
+// MarshalJSON makes Status emit its human-readable name ("alive",
+// "suspect", ...) whenever JSON-encoded. The /debug/gossip endpoint
+// relies on this; it also benefits anything else that happens to
+// JSON-marshal a State or a digest (e.g. log lines).
+func (s Status) MarshalJSON() ([]byte, error) {
+	return json.Marshal(statusString(s))
+}
+
+// MarshalJSON overrides the default time.Time encoding for
+// State.LastUpdate so /debug/gossip consistently emits millisecond
+// precision — the format operator dashboards have parsed since this
+// endpoint was first added. Status and Phi fall through to the normal
+// struct encoding (Status uses its own MarshalJSON above).
+func (s State) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Status     Status  `json:"status"`
+		Phi        float64 `json:"phi"`
+		LastUpdate string  `json:"last_update"`
+	}{
+		Status:     s.Status,
+		Phi:        s.Phi,
+		LastUpdate: s.LastUpdate.UTC().Format("2006-01-02T15:04:05.000Z"),
+	})
+}
+
 // statusString returns the human-readable name for a gossip status.
+// Used by Status.MarshalJSON so both machine-readable JSON output and
+// any string-context formatters share one mapping.
 func statusString(s Status) string {
 	switch s {
 	case StatusAlive:
@@ -464,6 +569,11 @@ func (g *Gossip) Join(ctx context.Context, seedAddr string) (*JoinResponse, erro
 	return g.transport.Join(ctx, seedAddr, &JoinRequest{Member: self, Seeds: g.cfg.Seeds})
 }
 
+// bootstrapSeeds runs once at Start, Joining each configured seed so
+// the agent discovers peers immediately instead of waiting for the
+// first periodic tick. Without this, enabling gossip right before a
+// primary dies could leave that primary as Unknown (never observed)
+// instead of converging to Down.
 func (g *Gossip) bootstrapSeeds(ctx context.Context) {
 	if g.transport == nil {
 		return
@@ -498,6 +608,10 @@ func (g *Gossip) bootstrapSeeds(ctx context.Context) {
 	}
 }
 
+// gossipOnce runs one push-pull exchange with a randomly-picked peer.
+// It also refreshes the local node's own timestamp before sending — a
+// live agent's absence of refresh is precisely the signal peers use to
+// detect that its process has died.
 func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {
 	peer, scope := g.pickPeer()
 	if peer == nil || g.transport == nil {
@@ -530,6 +644,11 @@ func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {
 	g.mu.Unlock()
 }
 
+// pickPeer selects a random peer and the scope to use for the exchange.
+// Scoped nodes (vttablets, which advertise keyspace/shard) only gossip
+// within their own shard so traffic stays local to the shard. Unscoped
+// nodes (VTOrc) pick a shard first, then a member within it, so VTOrc
+// fairly interleaves with every shard it knows about.
 func (g *Gossip) pickPeer() (*Member, string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -590,6 +709,15 @@ func (g *Gossip) pickPeer() (*Member, string) {
 	return &picked, ""
 }
 
+// updateSuspicion runs every tick to translate per-peer phi values into
+// Status transitions (Alive → Suspect when phi exceeds threshold, or
+// Suspect → Alive when it drops back). Peers that haven't refreshed
+// within MaxUpdateAge escalate to Down — the key signal VTOrc's quorum
+// analysis keys off of.
+//
+// Note: this function never MUTATES LastUpdate. Status-only changes stay
+// local to this agent and do not propagate through gossip, which is what
+// makes a single-observer false-positive non-contagious.
 func (g *Gossip) updateSuspicion(now time.Time) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -621,6 +749,11 @@ func (g *Gossip) updateSuspicion(now time.Time) {
 	}
 }
 
+// addMemberLocked upserts a directory entry. Both address and metadata
+// are merged (not replaced wholesale) so a partial message from one
+// peer can't erase richer data another peer already propagated — this
+// matters because seed entries start without metadata and get enriched
+// through multi-hop gossip.
 func (g *Gossip) addMemberLocked(member Member) {
 	if member.ID == "" {
 		return
@@ -660,6 +793,15 @@ func (g *Gossip) addMemberLocked(member Member) {
 	}
 }
 
+// applyMessageLocked merges an incoming wire message into local state
+// using timestamp-based last-writer-wins. The tricky rules:
+//   - digests for our own NodeID are ignored (only gossipOnce's self
+//     refresh may update our own state);
+//   - future timestamps are clamped to now so clock-skewed peers can't
+//     pin a node's freshness beyond any real observation;
+//   - on equal timestamps, Alive beats Down/Suspect so a late-joining
+//     observer doesn't latch onto a stale verdict when a fresher Alive
+//     at the same timestamp is reachable elsewhere in the mesh.
 func (g *Gossip) applyMessageLocked(now time.Time, msg *Message) {
 	if msg == nil {
 		return
@@ -708,6 +850,8 @@ func (g *Gossip) applyMessageLocked(now time.Time, msg *Message) {
 	}
 }
 
+// observeLocked records a fresh heartbeat arrival for a peer, feeding
+// the per-peer phi-accrual detector so its suspicion value decays.
 func (g *Gossip) observeLocked(nodeID NodeID, now time.Time) {
 	detector := g.detectors[nodeID]
 	if detector == nil {
@@ -717,6 +861,9 @@ func (g *Gossip) observeLocked(nodeID NodeID, now time.Time) {
 	detector.Observe(now)
 }
 
+// snapshotMessageLocked builds the wire payload we'll send to a peer,
+// filtered to scope (keyspace/shard) so per-shard gossip traffic stays
+// per-shard. The epoch carried in the payload is purely observational.
 func (g *Gossip) snapshotMessageLocked(scope string) Message {
 	members := g.membersSliceLocked(scope)
 	states := make([]StateDigest, 0, len(g.states))
@@ -740,6 +887,9 @@ func (g *Gossip) snapshotMessageLocked(scope string) Message {
 	}
 }
 
+// membersSliceLocked returns the directory entries matching scope.
+// Passing "" returns all members (used when responding to an unscoped
+// requester like VTOrc).
 func (g *Gossip) membersSliceLocked(scope string) []Member {
 	members := make([]Member, 0, len(g.members))
 	for _, member := range g.members {
@@ -751,10 +901,15 @@ func (g *Gossip) membersSliceLocked(scope string) []Member {
 	return members
 }
 
+// localScopeLocked is this agent's own scope (empty for VTOrc; a
+// "keyspace/shard" string for vttablets).
 func (g *Gossip) localScopeLocked() string {
 	return memberScope(g.cfg.Meta)
 }
 
+// responseScopeForMemberLocked picks the scope to respond with on an
+// incoming Join: the requester's scope when it has one (so a scoped
+// vttablet only learns about its shard), otherwise our own.
 func (g *Gossip) responseScopeForMemberLocked(member Member) string {
 	if scope := memberScope(member.Meta); scope != "" {
 		return scope
@@ -762,6 +917,10 @@ func (g *Gossip) responseScopeForMemberLocked(member Member) string {
 	return g.localScopeLocked()
 }
 
+// responseScopeForMessageLocked picks the scope for a PushPull response.
+// We prefer our own scope; failing that we fall back to any scoped
+// member in the incoming message so an unscoped peer talking to an
+// unscoped peer can still converge in practice.
 func (g *Gossip) responseScopeForMessageLocked(msg *Message) string {
 	if scope := g.localScopeLocked(); scope != "" {
 		return scope
@@ -777,6 +936,9 @@ func (g *Gossip) responseScopeForMessageLocked(msg *Message) string {
 	return ""
 }
 
+// memberScope computes the compound "keyspace/shard" key used to
+// partition gossip traffic, returning "" if either is missing so
+// partially-populated members stay unscoped.
 func memberScope(meta map[string]string) string {
 	if meta == nil {
 		return ""
@@ -789,10 +951,14 @@ func memberScope(meta map[string]string) string {
 	return keyspace + "/" + shard
 }
 
+// bumpEpochLocked advances a monotonic change counter — observability
+// only; the merge logic is timestamp-driven, not epoch-driven.
 func (g *Gossip) bumpEpochLocked() {
 	g.epoch++
 }
 
+// withProbeTimeout caps one gossip RPC at ProbeTimeout when configured.
+// Short deadlines keep a single slow peer from stalling the tick.
 func (g *Gossip) withProbeTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
 	if g.cfg.ProbeTimeout <= 0 {
 		return context.WithCancel(ctx)
@@ -800,6 +966,9 @@ func (g *Gossip) withProbeTimeout(ctx context.Context) (context.Context, context
 	return context.WithTimeout(ctx, g.cfg.ProbeTimeout)
 }
 
+// newPhiAccrual constructs a detector with a bounded sample window.
+// The sample window limits how much historical jitter influences the
+// current phi value — too small is noisy, too large is slow to react.
 func newPhiAccrual(maxSize int) *phiAccrual {
 	if maxSize <= 0 {
 		maxSize = 1
@@ -807,6 +976,9 @@ func newPhiAccrual(maxSize int) *phiAccrual {
 	return &phiAccrual{maxSize: maxSize}
 }
 
+// Observe records that we just saw activity from the peer. Inter-arrival
+// intervals accumulate in a ring up to maxSize, providing the raw data
+// Phi summarizes into a suspicion value.
 func (p *phiAccrual) Observe(now time.Time) {
 	if !p.last.IsZero() {
 		interval := now.Sub(p.last)
@@ -820,6 +992,11 @@ func (p *phiAccrual) Observe(now time.Time) {
 	p.last = now
 }
 
+// Phi is the current suspicion value for the peer: the negative log10
+// of the probability that the current silence is "still within normal
+// jitter." Callers compare this against a threshold (the canonical phi
+// accrual technique); a threshold of 4 means "probability of false
+// positive is roughly 1e-4."
 func (p *phiAccrual) Phi(now time.Time) float64 {
 	if p.last.IsZero() || len(p.intervals) < 2 {
 		return 0
@@ -847,6 +1024,8 @@ func (p *phiAccrual) Phi(now time.Time) float64 {
 	return -math.Log10(1 - cdf)
 }
 
+// stats returns the mean and stddev of the observed inter-arrival
+// intervals, the two moments Phi needs to compute the suspicion value.
 func (p *phiAccrual) stats() (time.Duration, time.Duration) {
 	var sum float64
 	for _, interval := range p.intervals {

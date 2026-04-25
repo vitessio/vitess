@@ -2183,7 +2183,13 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	return &vtctldatapb.UpdateThrottlerConfigResponse{}, err
 }
 
-// UpdateGossipConfig is part of the vtctlservicepb.VtctldServer interface.
+// UpdateGossipConfig is part of the vtctlservicepb.VtctldServer
+// interface. It is the one place that writes gossip config to topo:
+// it validates input, updates the Keyspace record, and fans the change
+// out to each cell's SrvKeyspace so running vttablets and VTOrc pick
+// it up live without restarts. Holds the keyspace lock for the whole
+// sequence so concurrent edits don't leave the Keyspace and
+// SrvKeyspace records out of sync.
 func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.UpdateGossipConfigRequest) (resp *vtctldatapb.UpdateGossipConfigResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateGossipConfig")
 	defer span.Finish()

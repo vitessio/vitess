@@ -120,6 +120,11 @@ func AnalyzeGossipQuorum(state GossipStateProvider, primaries map[string]string,
 	return results
 }
 
+// analyzeShardQuorum applies the per-shard quorum rules to the gossip
+// view. This is the function that decides whether to produce a
+// PrimaryTabletUnreachableByQuorum analysis (and therefore trigger
+// ERS). The rules live here so tests can exercise them in isolation,
+// without standing up a full gossip agent.
 func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State, primaryAlias string, currentMembers map[string]struct{}, vtorcCorroboratesDown bool) *inst.DetectionAnalysis {
 	// Find the primary member.
 	var primaryID gossip.NodeID
@@ -195,6 +200,11 @@ func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State
 	}
 }
 
+// isCurrentShardMember filters out stale gossip entries for tablets
+// that are no longer in VTOrc's current shard membership view — e.g.
+// a replaced tablet whose gossip record hasn't aged out yet. Returning
+// true on an empty filter map is the "no filter configured" case used
+// by tests.
 func isCurrentShardMember(member gossip.Member, currentMembers map[string]struct{}) bool {
 	if len(currentMembers) == 0 {
 		return true
@@ -272,6 +282,11 @@ func buildVTOrcView(primaries map[string]string) *VTOrcView {
 	return view
 }
 
+// ersDisabledFlags carries the keyspace/shard ERS-disabled bits
+// through to the analyses we produce so isERSEnabled() sees the
+// correct values downstream. Kept as a struct rather than a single
+// bool because the DetectionAnalysis struct has separate fields for
+// the two levels.
 type ersDisabledFlags struct {
 	keyspace bool
 	shard    bool
