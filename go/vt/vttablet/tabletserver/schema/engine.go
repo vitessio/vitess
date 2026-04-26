@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	maps0 "maps"
@@ -653,9 +654,9 @@ func (se *Engine) maybeOptimizeGtidExecutedLocked(ctx context.Context, conn *con
 // that case we return ERUnknownSystemVariable from the initial read and
 // treat it as "nothing to do" (no-op restore). Any other failure to read or
 // to flip the value returns an error so the caller can skip OPTIMIZE.
-func (se *Engine) disableSuperReadOnly(conn *dbconnpool.DBConnection) (restore func(), err error) {
+func (se *Engine) disableSuperReadOnly(ctx context.Context, conn *dbconnpool.DBConnection) (restore func(), err error) {
 	noop := func() {}
-	result, err := conn.ExecuteFetch("SELECT @@global.super_read_only", 1, false)
+	result, err := se.executeFetchCtx(ctx, conn, "SELECT @@global.super_read_only", 1, false)
 	if err != nil {
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			return noop, nil
@@ -669,10 +670,26 @@ func (se *Engine) disableSuperReadOnly(conn *dbconnpool.DBConnection) (restore f
 	if wasOn != "1" && wasOn != "ON" {
 		return noop, nil
 	}
-	if _, err := conn.ExecuteFetch("SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
+	if _, err := se.executeFetchCtx(ctx, conn, "SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
+		if shouldRestoreAfterSuperReadOnlyDisableError(err) {
+			se.restoreSuperReadOnly()
+		}
 		return noop, fmt.Errorf("disabling super_read_only: %w", err)
 	}
 	return se.restoreSuperReadOnly, nil
+}
+
+func shouldRestoreAfterSuperReadOnlyDisableError(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	var sqlErr *sqlerror.SQLError
+	if errors.As(err, &sqlErr) {
+		return sqlerror.IsConnErr(sqlErr)
+	}
+
+	return true
 }
 
 // restoreSuperReadOnly re-enables @@global.super_read_only on a fresh
@@ -740,8 +757,8 @@ func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
 //
 // This is necessary because mysql.Conn.ExecuteFetch is not context-aware:
 // the caller's context.WithTimeout only bounds connection setup, so a
-// pathological OPTIMIZE would otherwise run indefinitely (and keep
-// super_read_only OFF longer than intended). Pattern modelled on
+// pathological schema-engine admin query would otherwise run indefinitely
+// (and keep super_read_only OFF longer than intended). Pattern modelled on
 // (*Mysqld).executeFetchContext in go/vt/mysqlctl/query.go, hardened to
 // not hang if KILL itself cannot be issued.
 func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
@@ -779,7 +796,7 @@ func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnec
 		// server unresponsive, pool exhausted, etc.) and is the primary
 		// mechanism we rely on for the timeout to actually hold.
 		connID := conn.ID()
-		log.Warn("schema engine: OPTIMIZE timed out, interrupting in-flight query",
+		log.Warn("schema engine: query timed out, interrupting in-flight query",
 			slog.Int64("connID", connID), slog.String("query", query))
 		conn.Close()
 
@@ -809,21 +826,23 @@ func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnec
 	}
 }
 
-// killMySQLConn opens a standalone DB connection, bounded by a fresh 10s
-// timeout (since the caller's context is likely already expired), and
-// issues a KILL statement for the given connection ID.
+// killMySQLConn opens a standalone DB connection with a fresh 10s timeout
+// for connection establishment (since the caller's context is likely already
+// expired), then issues a best-effort KILL statement for the given connection
+// ID. ExecuteFetch itself is not context-aware, so this goroutine is allowed
+// to remain blocked rather than holding up the caller's timeout path.
 func (se *Engine) killMySQLConn(connID int64) {
 	ctx, cancel := se.backgroundTimeoutContext(10 * time.Second)
 	defer cancel()
 	killConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
 	if err != nil {
-		log.Warn("schema engine: failed to open connection to KILL runaway OPTIMIZE",
+		log.Warn("schema engine: failed to open connection to KILL runaway schema-engine query",
 			slog.Int64("connID", connID), slog.Any("error", err))
 		return
 	}
 	defer killConn.Close()
 	if _, err := killConn.ExecuteFetch(fmt.Sprintf("KILL %d", connID), 1, false); err != nil {
-		log.Warn("schema engine: failed to KILL runaway OPTIMIZE conn",
+		log.Warn("schema engine: failed to KILL runaway schema-engine query conn",
 			slog.Int64("connID", connID), slog.Any("error", err))
 	}
 }
@@ -866,7 +885,7 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 		return
 	}
 
-	restoreSRO, err := se.disableSuperReadOnly(conn)
+	restoreSRO, err := se.disableSuperReadOnly(ctx, conn)
 	// Always defer restore before running OPTIMIZE: we re-enable
 	// super_read_only no matter how the body of this function exits.
 	defer restoreSRO()

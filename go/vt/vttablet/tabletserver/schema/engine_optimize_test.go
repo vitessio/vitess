@@ -100,7 +100,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		conn := newTestDBConnection(t, db)
 		defer conn.Close()
 
-		restore, err := se.disableSuperReadOnly(conn)
+		restore, err := se.disableSuperReadOnly(t.Context(), conn)
 		require.NoError(t, err)
 		require.NotNil(t, restore)
 		restore() // no-op, must not send a SET GLOBAL
@@ -122,7 +122,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		conn := newTestDBConnection(t, db)
 		defer conn.Close()
 
-		restore, err := se.disableSuperReadOnly(conn)
+		restore, err := se.disableSuperReadOnly(t.Context(), conn)
 		require.NoError(t, err)
 		require.NotNil(t, restore)
 		// After disable-flip, we expect the SELECT + OFF to have fired, but
@@ -148,7 +148,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
 		conn := newTestDBConnection(t, db)
 
-		restore, err := se.disableSuperReadOnly(conn)
+		restore, err := se.disableSuperReadOnly(t.Context(), conn)
 		require.NoError(t, err)
 		// Simulate executeFetchCtx having closed the conn after KILL.
 		conn.Close()
@@ -168,7 +168,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		conn := newTestDBConnection(t, db)
 		defer conn.Close()
 
-		restore, err := se.disableSuperReadOnly(conn)
+		restore, err := se.disableSuperReadOnly(t.Context(), conn)
 		require.NoError(t, err, "MariaDB-style unknown-variable error must not surface as an error")
 		require.NotNil(t, restore)
 		restore() // no-op
@@ -192,7 +192,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		conn := newTestDBConnection(t, db)
 		defer conn.Close()
 
-		restore, err := se.disableSuperReadOnly(conn)
+		restore, err := se.disableSuperReadOnly(t.Context(), conn)
 		require.NoError(t, err)
 
 		// Simulate PRS/ERS landing while OPTIMIZE was in flight.
@@ -223,7 +223,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		conn := newTestDBConnection(t, db)
 		defer conn.Close()
 
-		restore, err := se.disableSuperReadOnly(conn)
+		restore, err := se.disableSuperReadOnly(t.Context(), conn)
 		require.NoError(t, err)
 
 		db.SetConnDelay(200 * time.Millisecond)
@@ -255,7 +255,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		conn := newTestDBConnection(t, db)
 		defer conn.Close()
 
-		restore, err := se.disableSuperReadOnly(conn)
+		restore, err := se.disableSuperReadOnly(t.Context(), conn)
 		require.NoError(t, err)
 
 		onResult.BeforeFunc = func() {
@@ -266,6 +266,99 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
 		assert.Equal(t, 2, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"),
 			"restore must turn super_read_only back OFF if the tablet is promoted during the restore SET")
+	})
+
+	t.Run("timeout while disabling restores best effort", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddQuery(selectSuperReadOnlyQuery, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("super_read_only", "int64"),
+			"1",
+		))
+
+		const disableQuery = "SET GLOBAL super_read_only = 'OFF'"
+		db.AddQuery(disableQuery, &sqltypes.Result{})
+		disableStarted := make(chan struct{})
+		releaseDisable := make(chan struct{})
+		var releaseDisableOnce sync.Once
+		t.Cleanup(func() {
+			releaseDisableOnce.Do(func() {
+				close(releaseDisable)
+			})
+		})
+		var disableStartedOnce sync.Once
+		db.SetBeforeFunc(disableQuery, func() {
+			disableStartedOnce.Do(func() {
+				close(disableStarted)
+			})
+			<-releaseDisable
+		})
+
+		var killSeen atomic.Int32
+		db.AddQueryPatternWithCallback(`(?i)^kill [0-9]+$`, &sqltypes.Result{}, func(string) {
+			killSeen.Add(1)
+		})
+		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+		conn := newTestDBConnection(t, db)
+		defer conn.Close()
+
+		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer cancel()
+
+		type disableResult struct {
+			restore func()
+			err     error
+		}
+		done := make(chan disableResult, 1)
+		go func() {
+			restore, err := se.disableSuperReadOnly(ctx, conn)
+			done <- disableResult{restore: restore, err: err}
+		}()
+
+		require.Eventually(t, func() bool {
+			select {
+			case <-disableStarted:
+				return true
+			default:
+				return false
+			}
+		}, 5*time.Second, 10*time.Millisecond, "SET GLOBAL super_read_only = 'OFF' should start")
+		assert.Eventually(t, func() bool { return killSeen.Load() >= 1 },
+			5*time.Second, 10*time.Millisecond, "disable timeout should interrupt the in-flight SET GLOBAL super_read_only = 'OFF'")
+
+		releaseDisableOnce.Do(func() {
+			close(releaseDisable)
+		})
+		res := <-done
+		require.ErrorIs(t, res.err, context.DeadlineExceeded)
+		assert.NotNil(t, res.restore)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+			"disable timeout has unknown MySQL-side result, so it must best-effort restore super_read_only")
+	})
+
+	t.Run("client-side error while disabling restores best effort", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddQuery(selectSuperReadOnlyQuery, sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("super_read_only", "int64"),
+			"1",
+		))
+		db.AddRejectedQuery("SET GLOBAL super_read_only = 'OFF'",
+			sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "lost connection after SET"))
+		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+		conn := newTestDBConnection(t, db)
+		defer conn.Close()
+
+		restore, err := se.disableSuperReadOnly(t.Context(), conn)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "disabling super_read_only")
+		require.NotNil(t, restore)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+			"client-side errors have unknown MySQL-side result, so disable must best-effort restore super_read_only")
 	})
 }
 
@@ -869,7 +962,7 @@ func TestDisableSuperReadOnlyReadError(t *testing.T) {
 	defer conn.Close()
 
 	se := &Engine{}
-	restore, err := se.disableSuperReadOnly(conn)
+	restore, err := se.disableSuperReadOnly(t.Context(), conn)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "reading @@global.super_read_only")
 	// The returned restore is still a no-op and must not panic.
@@ -889,7 +982,7 @@ func TestDisableSuperReadOnlyEmptyResult(t *testing.T) {
 	defer conn.Close()
 
 	se := &Engine{}
-	restore, err := se.disableSuperReadOnly(conn)
+	restore, err := se.disableSuperReadOnly(t.Context(), conn)
 	require.NoError(t, err)
 	require.NotNil(t, restore)
 	restore()
@@ -910,7 +1003,7 @@ func TestDisableSuperReadOnlyFlipError(t *testing.T) {
 	defer conn.Close()
 
 	se := &Engine{}
-	restore, err := se.disableSuperReadOnly(conn)
+	restore, err := se.disableSuperReadOnly(t.Context(), conn)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "disabling super_read_only")
 	require.NotNil(t, restore)
