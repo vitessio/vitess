@@ -2380,6 +2380,29 @@ func TestInsertBadAutoInc(t *testing.T) {
 	}
 }
 
+func TestInsertPinnedTable(t *testing.T) {
+	vschema := `
+{
+	"sharded": true,
+	"tables": {
+		"t1": {
+			"pinned": "00"
+		}
+	}
+}
+`
+	executor, sbc1, sbc2, _, ctx := createCustomExecutor(t, vschema, config.DefaultMySQLVersion)
+
+	_, err := executorExec(ctx, executor, &vtgatepb.Session{}, "insert into t1(vkey, pkey) values (71, 81000)", nil)
+	require.NoError(t, err)
+
+	assertQueries(t, sbc1, []*querypb.BoundQuery{{
+		Sql:           "insert into t1(vkey, pkey) values (71, 81000)",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}})
+	assertQueries(t, sbc2, nil)
+}
+
 func TestKeyDestRangeQuery(t *testing.T) {
 	type testCase struct {
 		inputQuery, targetString string
