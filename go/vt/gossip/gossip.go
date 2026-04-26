@@ -536,11 +536,15 @@ func (g *Gossip) HandleJoin(req *JoinRequest) (*JoinResponse, error) {
 
 	now := g.clock.Now()
 	g.mu.Lock()
+	scope := g.responseScopeForMemberLocked(req.Member)
+	if !memberAllowedForScope(req.Member, scope) {
+		g.mu.Unlock()
+		return nil, errors.New("gossip: join request scope does not match receiver scope")
+	}
 	g.addMemberLocked(req.Member)
 	g.states[req.Member.ID] = State{Status: StatusAlive, LastUpdate: now}
 	g.observeLocked(req.Member.ID, now)
 	g.bumpEpochLocked()
-	scope := g.responseScopeForMemberLocked(req.Member)
 	response := &JoinResponse{
 		Members: g.membersSliceLocked(scope),
 		Initial: g.snapshotMessageLocked(scope),
@@ -554,8 +558,9 @@ func (g *Gossip) HandleJoin(req *JoinRequest) (*JoinResponse, error) {
 func (g *Gossip) HandlePushPull(msg *Message) *Message {
 	now := g.clock.Now()
 	g.mu.Lock()
-	g.applyMessageLocked(now, msg)
-	response := g.snapshotMessageLocked(g.responseScopeForMessageLocked(msg))
+	scope := g.responseScopeForMessageLocked(msg)
+	g.applyMessageLocked(now, msg, scope)
+	response := g.snapshotMessageLocked(scope)
 	g.mu.Unlock()
 	return &response
 }
@@ -602,10 +607,19 @@ func (g *Gossip) bootstrapSeeds(ctx context.Context) {
 
 		now := g.clock.Now()
 		g.mu.Lock()
-		for _, member := range response.Members {
-			g.addMemberLocked(member)
+		scope := g.localScopeLocked()
+		if scope == "" {
+			scope = memberScope(seed.Meta)
 		}
-		g.applyMessageLocked(now, &response.Initial)
+		if scope == "" {
+			scope = firstScope(response.Members)
+		}
+		if scope == "" {
+			scope = firstScope(response.Initial.Members)
+		}
+		initial := response.Initial
+		initial.Members = append(cloneMembers(response.Members), initial.Members...)
+		g.applyMessageLocked(now, &initial, scope)
 		g.mu.Unlock()
 	}
 }
@@ -642,7 +656,7 @@ func (g *Gossip) gossipOnce(ctx context.Context, now time.Time) {
 	}
 
 	g.mu.Lock()
-	g.applyMessageLocked(now, response)
+	g.applyMessageLocked(now, response, scope)
 	g.mu.Unlock()
 }
 
@@ -804,12 +818,17 @@ func (g *Gossip) addMemberLocked(member Member) {
 //   - on equal timestamps, Alive beats Down/Suspect so a late-joining
 //     observer doesn't latch onto a stale verdict when a fresher Alive
 //     at the same timestamp is reachable elsewhere in the mesh.
-func (g *Gossip) applyMessageLocked(now time.Time, msg *Message) {
+func (g *Gossip) applyMessageLocked(now time.Time, msg *Message, scope string) {
 	if msg == nil {
 		return
 	}
 
+	allowedIncomingMembers := make(map[NodeID]struct{}, len(msg.Members))
 	for _, member := range msg.Members {
+		if !memberAllowedForScope(member, scope) {
+			continue
+		}
+		allowedIncomingMembers[member.ID] = struct{}{}
 		g.addMemberLocked(member)
 	}
 
@@ -821,6 +840,9 @@ func (g *Gossip) applyMessageLocked(now time.Time, msg *Message) {
 		// the authoritative source for its own liveness. The self
 		// refresh in gossipOnce is the only thing that can update it.
 		if digest.NodeID == g.cfg.NodeID {
+			continue
+		}
+		if !g.stateAllowedForScope(digest.NodeID, scope, allowedIncomingMembers) {
 			continue
 		}
 		// Clamp future timestamps to local time to prevent clock-skewed
@@ -871,7 +893,7 @@ func (g *Gossip) snapshotMessageLocked(scope string) Message {
 	states := make([]StateDigest, 0, len(g.states))
 	for id, state := range g.states {
 		member, ok := g.members[id]
-		if scope != "" && (!ok || memberScope(member.Meta) != scope) {
+		if scope != "" && (!ok || !memberAllowedForScope(member, scope)) {
 			continue
 		}
 		states = append(states, StateDigest{
@@ -890,12 +912,13 @@ func (g *Gossip) snapshotMessageLocked(scope string) Message {
 }
 
 // membersSliceLocked returns the directory entries matching scope.
-// Passing "" returns all members (used when responding to an unscoped
-// requester like VTOrc).
+// Passing "" returns all members. When scope is set, unscoped members
+// are included because VTOrc participates in each shard-specific
+// exchange without having a single shard identity of its own.
 func (g *Gossip) membersSliceLocked(scope string) []Member {
 	members := make([]Member, 0, len(g.members))
 	for _, member := range g.members {
-		if scope != "" && memberScope(member.Meta) != scope {
+		if !memberAllowedForScope(member, scope) {
 			continue
 		}
 		members = append(members, cloneMember(member))
@@ -932,14 +955,14 @@ func (g *Gossip) localScopeLocked() string {
 	return memberScope(g.cfg.Meta)
 }
 
-// responseScopeForMemberLocked picks the scope to respond with on an
-// incoming Join: the requester's scope when it has one (so a scoped
-// vttablet only learns about its shard), otherwise our own.
+// responseScopeForMemberLocked picks the scope to respond with on an incoming
+// Join. Scoped agents always answer from their own shard; unscoped agents
+// answer from the requester's shard when the requester has one.
 func (g *Gossip) responseScopeForMemberLocked(member Member) string {
-	if scope := memberScope(member.Meta); scope != "" {
+	if scope := g.localScopeLocked(); scope != "" {
 		return scope
 	}
-	return g.localScopeLocked()
+	return memberScope(member.Meta)
 }
 
 // responseScopeForMessageLocked picks the scope for a PushPull response.
@@ -974,6 +997,34 @@ func memberScope(meta map[string]string) string {
 		return ""
 	}
 	return keyspace + "/" + shard
+}
+
+func memberAllowedForScope(member Member, scope string) bool {
+	if scope == "" {
+		return true
+	}
+	memberScope := memberScope(member.Meta)
+	return memberScope == "" || memberScope == scope
+}
+
+func (g *Gossip) stateAllowedForScope(nodeID NodeID, scope string, incomingMembers map[NodeID]struct{}) bool {
+	if scope == "" {
+		return true
+	}
+	if _, ok := incomingMembers[nodeID]; ok {
+		return true
+	}
+	member, ok := g.members[nodeID]
+	return ok && memberAllowedForScope(member, scope)
+}
+
+func firstScope(members []Member) string {
+	for _, member := range members {
+		if scope := memberScope(member.Meta); scope != "" {
+			return scope
+		}
+	}
+	return ""
 }
 
 // bumpEpochLocked advances a monotonic change counter — observability

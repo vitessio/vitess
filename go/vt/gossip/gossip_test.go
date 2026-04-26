@@ -204,7 +204,7 @@ func TestSnapshotMessageLockedFiltersPeerScope(t *testing.T) {
 	assert.Contains(t, memberIDs, NodeID("a1"))
 	assert.Contains(t, memberIDs, NodeID("a2"))
 	assert.NotContains(t, memberIDs, NodeID("b1"))
-	assert.NotContains(t, memberIDs, NodeID("vtorc"))
+	assert.Contains(t, memberIDs, NodeID("vtorc"))
 
 	stateIDs := make(map[NodeID]struct{}, len(msg.States))
 	for _, state := range msg.States {
@@ -213,7 +213,68 @@ func TestSnapshotMessageLockedFiltersPeerScope(t *testing.T) {
 	assert.Contains(t, stateIDs, NodeID("a1"))
 	assert.Contains(t, stateIDs, NodeID("a2"))
 	assert.NotContains(t, stateIDs, NodeID("b1"))
-	assert.NotContains(t, stateIDs, NodeID("vtorc"))
+	assert.Contains(t, stateIDs, NodeID("vtorc"))
+}
+
+func TestScopedAgentIgnoresOutOfScopePushPullData(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	g := New(Config{
+		NodeID:   "a1",
+		BindAddr: "a1",
+		Meta: map[string]string{
+			MetaKeyKeyspace: "ks",
+			MetaKeyShard:    "0",
+		},
+	}, nil, clock)
+
+	g.HandlePushPull(&Message{
+		Members: []Member{
+			scopedMember("a2", "ks", "0"),
+			scopedMember("b1", "ks", "1"),
+		},
+		States: []StateDigest{
+			{NodeID: "a2", Status: StatusAlive, LastUpdate: clock.Now()},
+			{NodeID: "b1", Status: StatusAlive, LastUpdate: clock.Now()},
+		},
+	})
+
+	members := make(map[NodeID]Member)
+	for _, member := range g.Members() {
+		members[member.ID] = member
+	}
+	assert.Contains(t, members, NodeID("a2"))
+	assert.NotContains(t, members, NodeID("b1"))
+
+	states := g.Snapshot()
+	assert.Contains(t, states, NodeID("a2"))
+	assert.NotContains(t, states, NodeID("b1"))
+}
+
+func TestUnscopedAgentIgnoresOutOfExchangeScopePushPullData(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	g := New(Config{NodeID: "vtorc", BindAddr: "vtorc"}, nil, clock)
+
+	g.HandlePushPull(&Message{
+		Members: []Member{
+			scopedMember("a1", "ks", "0"),
+			scopedMember("b1", "ks", "1"),
+		},
+		States: []StateDigest{
+			{NodeID: "a1", Status: StatusAlive, LastUpdate: clock.Now()},
+			{NodeID: "b1", Status: StatusAlive, LastUpdate: clock.Now()},
+		},
+	})
+
+	members := make(map[NodeID]Member)
+	for _, member := range g.Members() {
+		members[member.ID] = member
+	}
+	assert.Contains(t, members, NodeID("a1"))
+	assert.NotContains(t, members, NodeID("b1"))
+
+	states := g.Snapshot()
+	assert.Contains(t, states, NodeID("a1"))
+	assert.NotContains(t, states, NodeID("b1"))
 }
 
 func TestGossipMarksDownWhenPeerUnreachable(t *testing.T) {
