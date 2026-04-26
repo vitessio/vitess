@@ -123,6 +123,19 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 	return ci.RemoteAddr(), ci.Username()
 }
 
+// routingIndexesUsedStrings flattens RoutingIndexesUsed into "keyspace.vindex.opcode"
+// strings so the log output is a flat list of values.
+func (stats *LogStats) routingIndexesUsedStrings() []string {
+	if len(stats.RoutingIndexesUsed) == 0 {
+		return nil
+	}
+	out := make([]string, len(stats.RoutingIndexesUsed))
+	for i, t := range stats.RoutingIndexesUsed {
+		out[i] = t[0] + "." + t[1] + "." + t[2]
+	}
+	return out
+}
+
 // MirorTargetErrorStr returns the mirror target error string or ""
 func (stats *LogStats) MirrorTargetErrorStr() string {
 	if stats.MirrorTargetError != nil {
@@ -190,6 +203,8 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Bool(stats.CachedPlan)
 	log.Key("TablesUsed")
 	log.Strings(stats.TablesUsed)
+	log.Key("RoutingIndexesUsed")
+	log.Strings(stats.routingIndexesUsedStrings())
 	log.Key("ActiveKeyspace")
 	log.String(stats.ActiveKeyspace)
 	log.Key("MirrorSourceExecuteTime")
