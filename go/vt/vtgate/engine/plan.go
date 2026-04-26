@@ -300,17 +300,13 @@ func GetRoutingIndexes(p Primitive) [][3]string {
 	var result [][3]string
 	Visit(p, func(node Primitive) {
 		var rp *RoutingParameters
-		var opcode Opcode
 		switch n := node.(type) {
 		case *Route:
 			rp = n.RoutingParameters
-			opcode = n.RoutingParameters.Opcode
 		case *Update:
 			rp = n.RoutingParameters
-			opcode = n.RoutingParameters.Opcode
 		case *Delete:
 			rp = n.RoutingParameters
-			opcode = n.RoutingParameters.Opcode
 		case *Insert:
 			if n.Keyspace != nil && len(n.ColVindexes) > 0 {
 				result = append(result, [3]string{n.Keyspace.Name, n.ColVindexes[0].Name, "EqualUnique"})
@@ -325,7 +321,7 @@ func GetRoutingIndexes(p Primitive) [][3]string {
 		if rp == nil || rp.Vindex == nil || rp.Keyspace == nil {
 			return
 		}
-		result = append(result, [3]string{rp.Keyspace.Name, rp.Vindex.String(), opcode.String()})
+		result = append(result, [3]string{rp.Keyspace.Name, rp.Vindex.String(), rp.Opcode.String()})
 	})
 	return result
 }
