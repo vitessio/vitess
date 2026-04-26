@@ -15111,6 +15111,48 @@ func TestUpdateGossipConfig(t *testing.T) {
 		assert.Equal(t, "20s", ki.GossipConfig.MaxUpdateAge, "max update age should be updated")
 	})
 
+	t.Run("partial update repairs missing srv keyspace config from keyspace config", func(t *testing.T) {
+		ts := memorytopo.NewServer(ctx, "zone1", "zone2")
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{}))
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone2", "ks", &topodatapb.SrvKeyspace{}))
+
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enable:       true,
+			PhiThreshold: float64Ptr(5),
+			PingInterval: "2s",
+			MaxUpdateAge: "10s",
+		})
+		require.NoError(t, err)
+
+		srvKeyspace, err := ts.GetSrvKeyspace(ctx, "zone1", "ks")
+		require.NoError(t, err)
+		srvKeyspace.GossipConfig = nil
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", srvKeyspace))
+
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			MaxUpdateAge: "20s",
+		})
+		require.NoError(t, err)
+
+		for _, cell := range []string{"zone1", "zone2"} {
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, "ks")
+			require.NoError(t, err)
+			require.NotNil(t, srvKeyspace.GossipConfig)
+			assert.True(t, srvKeyspace.GossipConfig.Enabled)
+			assert.Equal(t, float64(5), srvKeyspace.GossipConfig.PhiThreshold)
+			assert.Equal(t, "2s", srvKeyspace.GossipConfig.PingInterval)
+			assert.Equal(t, "20s", srvKeyspace.GossipConfig.MaxUpdateAge)
+		}
+	})
+
 	t.Run("enable without tuning values stores the defaults", func(t *testing.T) {
 		ts := memorytopo.NewServer(ctx, "zone1")
 		_, err := ts.GetOrCreateShard(ctx, "ks", "0")

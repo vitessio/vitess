@@ -2258,13 +2258,16 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 	}
 
 	ki.GossipConfig = update(ki.GossipConfig)
+	finalGossipConfig := ki.GossipConfig.CloneVT()
 
 	err = s.ts.UpdateKeyspace(ctx, ki)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = s.ts.UpdateSrvKeyspaceGossipConfig(ctx, req.Keyspace, []string{}, update)
+	_, err = s.ts.UpdateSrvKeyspaceGossipConfig(ctx, req.Keyspace, []string{}, func(*topodatapb.GossipConfig) *topodatapb.GossipConfig {
+		return finalGossipConfig.CloneVT()
+	})
 
 	return &vtctldatapb.UpdateGossipConfigResponse{}, err
 }

@@ -283,21 +283,30 @@ func getGossipQuorumAnalyses() []*inst.DetectionAnalysis {
 func buildVTOrcView(primaries map[string]string) *VTOrcView {
 	view := &VTOrcView{HealthCheckFailed: make(map[string]bool, len(primaries))}
 
-	var probed, failed int
+	aliases := make([]string, 0, len(primaries))
+	aliasByKey := make(map[string]string, len(primaries))
 	for key, primaryAlias := range primaries {
-		alias, parseErr := topoproto.ParseTabletAlias(primaryAlias)
-		if parseErr != nil {
+		if _, parseErr := topoproto.ParseTabletAlias(primaryAlias); parseErr != nil {
 			// Can't parse alias — abstain for this shard.
 			continue
 		}
-		instance, found, err := inst.ReadInstance(alias)
-		if err != nil || !found || instance == nil {
-			// No instance record — abstain. Silently missing data
-			// must not be interpreted as confirmation.
+		aliasByKey[key] = primaryAlias
+		aliases = append(aliases, primaryAlias)
+	}
+
+	validByAlias, err := inst.ReadInstanceLastCheckValidByAlias(aliases)
+	if err != nil {
+		return view
+	}
+
+	var probed, failed int
+	for key, primaryAlias := range aliasByKey {
+		valid, found := validByAlias[primaryAlias]
+		if !found {
 			continue
 		}
 		probed++
-		if !instance.IsLastCheckValid {
+		if !valid {
 			failed++
 			view.HealthCheckFailed[key] = true
 		}

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,8 +82,31 @@ func alivePeerCount(state *debugGossipState) int {
 	return alive
 }
 
+func enableVttabletGossipService(t *testing.T) {
+	t.Helper()
+
+	originalServiceMaps := map[*cluster.VttabletProcess]string{}
+	for _, cellInfo := range clusterInfo.CellInfos {
+		for _, tablet := range append(cellInfo.ReplicaTablets, cellInfo.RdonlyTablets...) {
+			process := tablet.VttabletProcess
+			originalServiceMaps[process] = process.ServiceMap
+			if !strings.Contains(","+process.ServiceMap+",", ",grpc-gossip,") {
+				process.ServiceMap += ",grpc-gossip"
+			}
+		}
+	}
+
+	t.Cleanup(func() {
+		for process, serviceMap := range originalServiceMaps {
+			process.ServiceMap = serviceMap
+		}
+	})
+}
+
 func TestVTOrcGossipFlags(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+
+	enableVttabletGossipService(t)
 
 	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 0, []string{
 		"--gossip-listen-addr", "localhost:16110",
