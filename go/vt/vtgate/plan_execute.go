@@ -500,7 +500,11 @@ func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.T
 		logStats.RowsReturned = uint64(len(qr.Rows))
 		// log the tables and routing indexes used in the plan for successful query execution.
 		logStats.TablesUsed = plan.TablesUsed
-		logStats.RoutingIndexesUsed = plan.RoutingIndexesUsed
+		executedRoot := vcursor.ExecutedPrimitive()
+		if executedRoot == nil {
+			executedRoot = plan.Instructions
+		}
+		logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 	}
 
 	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), logStats.TablesUsed)

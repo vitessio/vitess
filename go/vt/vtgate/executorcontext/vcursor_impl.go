@@ -188,6 +188,11 @@ type (
 
 		// For specializing plans for the current query
 		bindVars map[string]*querypb.BindVariable
+
+		// executedPrimitive records the branch chosen by a PlanSwitcher at
+		// execution time, so that downstream consumers (e.g. GetRoutingIndexes)
+		// don't have to re-evaluate PlanSwitcher conditions.
+		executedPrimitive engine.Primitive
 	}
 )
 
@@ -358,6 +363,18 @@ func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 		topoServer: vc.topoServer,
 		observer:   vc.observer,
 	}
+}
+
+// SetExecutedPrimitive records the post-PlanSwitcher root primitive that
+// was actually executed for this query.
+func (vc *VCursorImpl) SetExecutedPrimitive(p engine.Primitive) {
+	vc.executedPrimitive = p
+}
+
+// ExecutedPrimitive returns the value previously recorded by
+// SetExecutedPrimitive, or nil if none was recorded.
+func (vc *VCursorImpl) ExecutedPrimitive() engine.Primitive {
+	return vc.executedPrimitive
 }
 
 // GetExecutionMetrics provides the execution metrics object.

@@ -158,6 +158,14 @@ type (
 		SetLastInsertID(uint64)
 
 		GetExecutionMetrics() *Metrics
+
+		// SetExecutedPrimitive records the post-PlanSwitcher root primitive that
+		// was actually executed. Per-query state set by PlanSwitcher when it
+		// picks a branch.
+		SetExecutedPrimitive(Primitive)
+		// ExecutedPrimitive returns the value previously recorded by
+		// SetExecutedPrimitive, or nil if none was recorded.
+		ExecutedPrimitive() Primitive
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
