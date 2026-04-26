@@ -3294,7 +3294,7 @@ func TestRoutingIndexesUsed(t *testing.T) {
 	session := &vtgatepb.Session{
 		TargetString: "@primary",
 	}
-	wantUser := [][2]string{{"TestExecutor", "hash_index"}}
+	wantUser := [][3]string{{"TestExecutor", "hash_index", "EqualUnique"}}
 
 	// SELECT routed by primary vindex
 	_, err := executorExec(ctx, executor, session, "select id from user where id = 1", nil)

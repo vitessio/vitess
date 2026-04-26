@@ -47,7 +47,7 @@ type (
 		BindVarNeeds       *sqlparser.BindVarNeeds // BindVarNeeds lists required bind vars discovered during planning.
 		Warnings           []*query.QueryWarning   // Warnings accumulates any warnings generated for this plan.
 		TablesUsed         []string                // TablesUsed enumerates the tables this query accesses.
-		RoutingIndexesUsed [][2]string             // RoutingIndexesUsed lists the vindexes used for routing: [keyspace, vindex_name].
+		RoutingIndexesUsed [][3]string             // RoutingIndexesUsed lists the vindexes used for routing: [keyspace, vindex_name, usage].
 		QueryHints         sqlparser.QueryHints    // QueryHints stores any SET_VAR hints that influenced plan generation.
 		ParamsCount        uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
 		Optimized          atomic.Bool             // Prepared queries need to be optimized before the first execution
@@ -289,35 +289,39 @@ func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVa
 // from any Route or DML primitives that use a vindex for shard routing.
 // For inserts, ColVindexes[0] is the primary vindex that determines shard placement;
 // the remaining ColVindexes are secondary/owned vindexes populated as a side effect.
-func getRoutingIndexes(p Primitive) [][2]string {
+func getRoutingIndexes(p Primitive) [][3]string {
 	if p == nil {
 		return nil
 	}
-	var result [][2]string
+	var result [][3]string
 	Visit(p, func(node Primitive) {
 		var rp *RoutingParameters
+		var opcode Opcode
 		switch n := node.(type) {
 		case *Route:
 			rp = n.RoutingParameters
+			opcode = n.RoutingParameters.Opcode
 		case *Update:
 			rp = n.RoutingParameters
+			opcode = n.RoutingParameters.Opcode
 		case *Delete:
 			rp = n.RoutingParameters
+			opcode = n.RoutingParameters.Opcode
 		case *Insert:
 			if n.Keyspace != nil && len(n.ColVindexes) > 0 {
-				result = append(result, [2]string{n.Keyspace.Name, n.ColVindexes[0].Name})
+				result = append(result, [3]string{n.Keyspace.Name, n.ColVindexes[0].Name, "EqualUnique"})
 			}
 			return
 		case *InsertSelect:
 			if n.Keyspace != nil && len(n.ColVindexes) > 0 {
-				result = append(result, [2]string{n.Keyspace.Name, n.ColVindexes[0].Name})
+				result = append(result, [3]string{n.Keyspace.Name, n.ColVindexes[0].Name, "EqualUnique"})
 			}
 			return
 		}
 		if rp == nil || rp.Vindex == nil || rp.Keyspace == nil {
 			return
 		}
-		result = append(result, [2]string{rp.Keyspace.Name, rp.Vindex.String()})
+		result = append(result, [3]string{rp.Keyspace.Name, rp.Vindex.String(), opcode.String()})
 	})
 	return result
 }

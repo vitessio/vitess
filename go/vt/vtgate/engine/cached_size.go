@@ -851,9 +851,9 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
-	// field RoutingIndexesUsed [][2]string
+	// field RoutingIndexesUsed [][3]string
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.RoutingIndexesUsed)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.RoutingIndexesUsed)) * int64(48))
 		for _, elem := range cached.RoutingIndexesUsed {
 			for _, elem := range elem {
 				size += hack.RuntimeAllocSize(int64(len(elem)))
