@@ -30,76 +30,45 @@ func TestSortDetectionAnalysisMatchedProblems(t *testing.T) {
 		postSortByAnalysis []AnalysisCode
 	}{
 		{
-			name: "default",
+			// Per-tablet sort uses priority only (no dependency ordering).
+			// Equal-priority items preserve original order (stable sort).
+			name: "priority only",
 			in: []*DetectionAnalysisProblem{
 				{
 					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:    InvalidReplica,
-						Description: "should be 2nd-last, not a shardWideAction, low priority",
-						Priority:    detectionAnalysisPriorityLow,
+						Analysis: InvalidReplica,
+						Priority: detectionAnalysisPriorityLow,
 					},
 				},
 				{
 					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:    InvalidReplica,
-						Description: "should be last, not a shardWideAction, worst priority",
-						Priority:    worstPriority,
+						Analysis: InvalidReplica,
+						Priority: worstPriority,
 					},
 				},
 				{
 					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:    PrimaryIsReadOnly,
-						Description: "should be after DeadPrimary, high priority",
-						Priority:    detectionAnalysisPriorityHigh,
+						Analysis: PrimaryIsReadOnly,
+						Priority: detectionAnalysisPriorityHigh,
 					},
 				},
 				{
 					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:    PrimarySemiSyncMustBeSet,
-						Description: "should be after ReplicaSemiSyncMustBeSet, has an after dependency",
-						Priority:    detectionAnalysisPriorityMedium,
-					},
-					AfterAnalyses: []AnalysisCode{ReplicaSemiSyncMustBeSet},
-				},
-				{
-					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:    ReplicaSemiSyncMustBeSet,
-						Description: "should be before PrimarySemiSyncMustBeSet, has a before dependency",
-						Priority:    detectionAnalysisPriorityMedium,
-					},
-					BeforeAnalyses: []AnalysisCode{PrimarySemiSyncMustBeSet},
-				},
-				{
-					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:    DeadPrimary,
-						Description: "should be 1st, shard-wide action priority",
-						Priority:    detectionAnalysisPriorityShardWideAction,
+						Analysis: PrimarySemiSyncMustBeSet,
+						Priority: detectionAnalysisPriorityMedium,
 					},
 				},
 				{
 					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:    ReplicaSemiSyncMustNotBeSet,
-						Description: "should be after PrimarySemiSyncMustNotBeSet, has an after dependency",
-						Priority:    detectionAnalysisPriorityMedium,
+						Analysis: DeadPrimary,
+						Priority: detectionAnalysisPriorityShardWideAction,
 					},
-					AfterAnalyses: []AnalysisCode{PrimarySemiSyncMustNotBeSet},
-				},
-				{
-					Meta: &DetectionAnalysisProblemMeta{
-						Analysis:    PrimarySemiSyncMustNotBeSet,
-						Description: "should be before ReplicaSemiSyncMustNotBeSet, has a before dependency",
-						Priority:    detectionAnalysisPriorityMedium,
-					},
-					BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustNotBeSet},
 				},
 			},
 			postSortByAnalysis: []AnalysisCode{
 				DeadPrimary,
 				PrimaryIsReadOnly,
-				ReplicaSemiSyncMustBeSet,
 				PrimarySemiSyncMustBeSet,
-				PrimarySemiSyncMustNotBeSet,
-				ReplicaSemiSyncMustNotBeSet,
 				InvalidReplica,
 				InvalidReplica,
 			},
@@ -123,9 +92,10 @@ func TestSortDetectionAnalysisMatchedProblems(t *testing.T) {
 
 func TestRequiresOrderedExecution(t *testing.T) {
 	tests := []struct {
-		name     string
-		problem  *DetectionAnalysisProblem
-		expected bool
+		name          string
+		problem       *DetectionAnalysisProblem
+		shardAnalyses []*DetectionAnalysis
+		expected      bool
 	}{
 		{
 			name: "shard-wide action priority",
@@ -142,32 +112,50 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "has BeforeAnalyses",
+			name: "has BeforeAnalysesFunc",
 			problem: &DetectionAnalysisProblem{
-				Meta:           &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
-				BeforeAnalyses: []AnalysisCode{DeadPrimary},
+				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
+				BeforeAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
+					return []AnalysisCode{DeadPrimary}
+				},
 			},
 			expected: true,
 		},
 		{
-			name: "has AfterAnalyses",
+			name: "has AfterAnalysesFunc",
 			problem: &DetectionAnalysisProblem{
-				Meta:          &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
-				AfterAnalyses: []AnalysisCode{DeadPrimary},
+				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
+				AfterAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
+					return []AnalysisCode{DeadPrimary}
+				},
 			},
 			expected: true,
 		},
 		{
-			name: "referenced by another problem's BeforeAnalyses",
+			// PrimarySemiSyncMustNotBeSet's BeforeAnalysesFunc references
+			// ReplicaSemiSyncMustNotBeSet, so the latter requires ordered
+			// execution. Shard analyses must contain PrimarySemiSyncMustNotBeSet
+			// so the referencing problem's pSelf is non-nil.
+			name: "referenced by another problem's BeforeAnalysesFunc",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet, Priority: detectionAnalysisPriorityMedium},
 			},
+			shardAnalyses: []*DetectionAnalysis{
+				{Analysis: PrimarySemiSyncMustNotBeSet},
+			},
 			expected: true,
 		},
 		{
-			name: "referenced by another problem's AfterAnalyses",
+			// ReplicaSemiSyncMustNotBeSet's AfterAnalysesFunc references
+			// PrimarySemiSyncMustNotBeSet, so the latter requires ordered
+			// execution. Shard analyses must contain ReplicaSemiSyncMustNotBeSet
+			// so the referencing problem's pSelf is non-nil.
+			name: "referenced by another problem's AfterAnalysesFunc",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet, Priority: detectionAnalysisPriorityMedium},
+			},
+			shardAnalyses: []*DetectionAnalysis{
+				{Analysis: ReplicaSemiSyncMustNotBeSet},
 			},
 			expected: true,
 		},
@@ -181,7 +169,7 @@ func TestRequiresOrderedExecution(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.problem.RequiresOrderedExecution())
+			assert.Equal(t, tt.expected, tt.problem.RequiresOrderedExecution(nil, tt.shardAnalyses))
 		})
 	}
 }
@@ -195,79 +183,64 @@ func TestGetDetectionAnalysisProblem(t *testing.T) {
 	assert.Nil(t, problem)
 }
 
-func TestCompareDetectionAnalysisProblems(t *testing.T) {
+func TestCompareDetectionAnalyses(t *testing.T) {
 	tests := []struct {
 		name     string
-		a, b     *DetectionAnalysisProblem
+		a, b     *DetectionAnalysis
 		expected int
 	}{
 		{
-			name: "shard-wide action beats non-shard-wide",
-			a: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityShardWideAction},
-			},
-			b: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityHigh},
-			},
+			name:     "shard-wide action beats non-shard-wide",
+			a:        &DetectionAnalysis{Analysis: DeadPrimary},
+			b:        &DetectionAnalysis{Analysis: PrimaryIsReadOnly},
 			expected: -1,
 		},
 		{
-			name: "higher priority wins",
-			a: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityHigh},
-			},
-			b: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityLow},
-			},
+			name:     "higher priority wins",
+			a:        &DetectionAnalysis{Analysis: PrimaryIsReadOnly},
+			b:        &DetectionAnalysis{Analysis: ReplicationStopped},
 			expected: -1,
 		},
 		{
-			name: "equal priority",
-			a: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
-			},
-			b: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityMedium},
-			},
+			name:     "equal priority",
+			a:        &DetectionAnalysis{Analysis: ReplicationStopped},
+			b:        &DetectionAnalysis{Analysis: NotConnectedToPrimary},
 			expected: 0,
 		},
 		{
-			name: "before dependency - MustBeSet",
-			a: &DetectionAnalysisProblem{
-				Meta:           &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustBeSet},
-				BeforeAnalyses: []AnalysisCode{PrimarySemiSyncMustBeSet},
-			},
-			b: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustBeSet},
-			},
+			// ReplicaSemiSyncMustBeSet declares BeforeAnalysesFunc → [PrimarySemiSyncMustBeSet]
+			name:     "before dependency - ReplicaSemiSyncMustBeSet before PrimarySemiSyncMustBeSet",
+			a:        &DetectionAnalysis{Analysis: ReplicaSemiSyncMustBeSet},
+			b:        &DetectionAnalysis{Analysis: PrimarySemiSyncMustBeSet},
 			expected: -1,
 		},
 		{
-			name: "before dependency - MustNotBeSet",
-			a: &DetectionAnalysisProblem{
-				Meta:           &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet},
-				BeforeAnalyses: []AnalysisCode{ReplicaSemiSyncMustNotBeSet},
-			},
-			b: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet},
-			},
-			expected: -1,
-		},
-		{
-			name: "after dependency - MustNotBeSet",
-			a: &DetectionAnalysisProblem{
-				Meta:          &DetectionAnalysisProblemMeta{Analysis: ReplicaSemiSyncMustNotBeSet},
-				AfterAnalyses: []AnalysisCode{PrimarySemiSyncMustNotBeSet},
-			},
-			b: &DetectionAnalysisProblem{
-				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet},
-			},
+			// PrimarySemiSyncMustBeSet declares AfterAnalysesFunc → [ReplicaSemiSyncMustBeSet]
+			name:     "after dependency - PrimarySemiSyncMustBeSet after ReplicaSemiSyncMustBeSet",
+			a:        &DetectionAnalysis{Analysis: PrimarySemiSyncMustBeSet},
+			b:        &DetectionAnalysis{Analysis: ReplicaSemiSyncMustBeSet},
 			expected: 1,
+		},
+		{
+			// ReplicationStopped with SemiSyncReplicaEnabled declares
+			// BeforeAnalysesFunc → [PrimarySemiSyncBlocked] when PrimarySemiSyncBlocked is present.
+			name:     "acker ReplicationStopped before PrimarySemiSyncBlocked",
+			a:        &DetectionAnalysis{Analysis: ReplicationStopped, SemiSyncReplicaEnabled: true},
+			b:        &DetectionAnalysis{Analysis: PrimarySemiSyncBlocked},
+			expected: -1,
+		},
+		{
+			// Non-acker ReplicationStopped should NOT declare the dependency.
+			name:     "non-acker ReplicationStopped vs PrimarySemiSyncBlocked uses priority",
+			a:        &DetectionAnalysis{Analysis: ReplicationStopped, SemiSyncReplicaEnabled: false},
+			b:        &DetectionAnalysis{Analysis: PrimarySemiSyncBlocked},
+			expected: 1, // PrimarySemiSyncBlocked is ShardWideAction (priority 0), ReplicationStopped is Medium (priority 3)
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, compareDetectionAnalysisProblems(tt.a, tt.b))
+			shardAnalyses := []*DetectionAnalysis{tt.a, tt.b}
+			assert.Equal(t, tt.expected, compareDetectionAnalyses(tt.a, tt.b, shardAnalyses))
 		})
 	}
 }
