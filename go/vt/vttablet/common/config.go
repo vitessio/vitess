@@ -53,6 +53,7 @@ type VReplicationConfig struct {
 	ParallelReplicationWorkers int
 	TabletTypesStr             string
 	EnableHttpLog              bool // Enable the /debug/vrlog endpoint
+	MaxRowJSONBytes            int64
 
 	// Config parameters applicable to the source side (vstreamer)
 	// The coresponding Override fields are used to determine if the user has provided a value for the parameter so
@@ -99,6 +100,7 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		ParallelReplicationWorkers: vreplicationParallelReplicationWorkers,
 		TabletTypesStr:             vreplicationTabletTypesStr,
 		EnableHttpLog:              vreplicationEnableHttpLog,
+		MaxRowJSONBytes:            vreplicationMaxRowJSONBytes,
 
 		VStreamPacketSizeOverride:              false,
 		VStreamPacketSize:                      VStreamerDefaultPacketSize,
@@ -273,6 +275,13 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.VStreamBinlogRotationThresholdOverride = true
 				c.VStreamBinlogRotationThreshold = value
 			}
+		case "max-row-json-bytes":
+			value, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || value < 0 {
+				errors = append(errors, getError(k, v))
+			} else {
+				c.MaxRowJSONBytes = value
+			}
 		default:
 			errors = append(errors, "unknown vreplication config flag: "+k)
 		}
@@ -333,6 +342,7 @@ func (c VReplicationConfig) Map() map[string]string {
 		"vstream-dynamic-packet-size":               strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_dynamic_packet_size":               strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_binlog_rotation_threshold":         strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
+		"max-row-json-bytes":                        strconv.FormatInt(c.MaxRowJSONBytes, 10),
 	}
 }
 

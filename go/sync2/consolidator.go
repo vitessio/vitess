@@ -30,6 +30,7 @@ type Consolidator interface {
 	Create(string) (PendingResult, bool)
 	Items() []ConsolidatorCacheItem
 	Record(query string)
+	TotalWaiterCount() int64
 }
 
 // PendingResult is a wrapper for result of a query.
@@ -40,7 +41,8 @@ type PendingResult interface {
 	SetResult(*sqltypes.Result)
 	Result() *sqltypes.Result
 	Wait()
-	AddWaiterCounter(int64) *int64
+	HasWaiters() bool
+	AddWaiterCounter(int64)
 }
 
 type consolidator struct {
@@ -68,6 +70,7 @@ type pendingResult struct {
 	query        string
 	result       *sqltypes.Result
 	err          error
+	waiterCount  atomic.Int64
 }
 
 // Create adds a query to currently executing queries and acquires a
@@ -117,6 +120,10 @@ func (rs *pendingResult) SetResult(res *sqltypes.Result) {
 	rs.result = res
 }
 
+func (rs *pendingResult) HasWaiters() bool {
+	return rs.waiterCount.Load() > 0
+}
+
 // Wait waits for the original query to complete execution. Wait should
 // be invoked for duplicate queries.
 func (rs *pendingResult) Wait() {
@@ -124,13 +131,11 @@ func (rs *pendingResult) Wait() {
 	rs.executing.RLock()
 }
 
-// AddWaiterCounter atomically adjusts the consolidator's shared
-// waiter counter by c and returns a pointer to it. Callers that join
-// or leave a consolidation use this to keep the cross-query "queries
-// currently waiting for a leader" gauge accurate.
-func (rs *pendingResult) AddWaiterCounter(c int64) *int64 {
+func (rs *pendingResult) AddWaiterCounter(c int64) {
+	// Non-atomic pair is benign: ConsolidatorQueryWaiterCap is a soft limit and
+	// the per-waiter count is only checked before Broadcast().
+	rs.waiterCount.Add(c)
 	atomic.AddInt64(rs.consolidator.totalWaiterCount, c)
-	return rs.consolidator.totalWaiterCount
 }
 
 // ConsolidatorCache is a thread-safe object used for counting how often recent
@@ -140,6 +145,10 @@ func (rs *pendingResult) AddWaiterCounter(c int64) *int64 {
 type ConsolidatorCache struct {
 	*cache.LRUCache[*ccount]
 	totalWaiterCount *int64
+}
+
+func (cc *ConsolidatorCache) TotalWaiterCount() int64 {
+	return atomic.LoadInt64(cc.totalWaiterCount)
 }
 
 // NewConsolidatorCache creates a new cache with the given capacity.
