@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"math"
@@ -1009,31 +1010,6 @@ func (c *Conn) writeColumnDefinition(field *querypb.Field) error {
 	return c.writeEphemeralPacket()
 }
 
-func (c *Conn) writeRow(row []sqltypes.Value) error {
-	length := 0
-	for _, val := range row {
-		if val.IsNull() {
-			length++
-		} else {
-			l := len(val.Raw())
-			length += lenEncIntSize(uint64(l)) + l
-		}
-	}
-
-	data, pos := c.startEphemeralPacketWithHeader(length)
-	for _, val := range row {
-		if val.IsNull() {
-			pos = writeByte(data, pos, NullValue)
-		} else {
-			l := len(val.Raw())
-			pos = writeLenEncInt(data, pos, uint64(l))
-			pos += copy(data[pos:], val.Raw())
-		}
-	}
-
-	return c.writeEphemeralPacket()
-}
-
 // writeFields writes the fields of a Result. It should be called only
 // if there are valid columns in the result.
 func (c *Conn) writeFields(result *sqltypes.Result) error {
@@ -1059,13 +1035,161 @@ func (c *Conn) writeFields(result *sqltypes.Result) error {
 	return nil
 }
 
+// writeNextPacketHeader writes a continuation packet header for multi-packet
+// rows. remaining is the number of payload bytes left to write.
+func (c *Conn) writeNextPacketHeader(w *bufio.Writer, packetLength int) error {
+	nextLen := min(packetLength, MaxPacketSize)
+	if err := w.WriteByte(byte(nextLen)); err != nil {
+		return vterrors.Wrapf(err, "writeRows: write failed")
+	}
+	if err := w.WriteByte(byte(nextLen >> 8)); err != nil {
+		return vterrors.Wrapf(err, "writeRows: write failed")
+	}
+	if err := w.WriteByte(byte(nextLen >> 16)); err != nil {
+		return vterrors.Wrapf(err, "writeRows: write failed")
+	}
+	if err := w.WriteByte(c.sequence); err != nil {
+		return vterrors.Wrapf(err, "writeRows: write failed")
+	}
+	c.sequence++
+	return nil
+}
+
 // writeRows sends the rows of a Result.
+//
+// It writes row packets directly to the buffered writer, bypassing the
+// per-row ephemeral buffer pool and mutex acquisition. The caller must
+// have called startWriterBuffering before calling this method.
+//
+// For rows whose payload exceeds MaxPacketSize (extremely rare), packet
+// headers are inserted at boundaries automatically. For normal rows the
+// boundary check is a single comparison that the branch predictor skips.
 func (c *Conn) writeRows(result *sqltypes.Result) error {
+	if len(result.Rows) == 0 {
+		return nil
+	}
+
+	var w *bufio.Writer
+
+	c.bufMu.Lock()
+	if c.bufferedWriter != nil {
+		w = c.bufferedWriter
+		defer func() {
+			c.startFlushTimer()
+			c.bufMu.Unlock()
+		}()
+	} else {
+		c.bufMu.Unlock()
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "writeRows: buffered writer is not initialized")
+	}
+
 	for _, row := range result.Rows {
-		if err := c.writeRow(row); err != nil {
+		if err := c.writeRow(w, row); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// writeRow writes a single row as one or more MySQL packets directly to
+// the buffered writer. For rows with payloads under MaxPacketSize (the
+// overwhelming majority), the boundary checks are never triggered.
+// The caller must hold bufMu.
+func (c *Conn) writeRow(w *bufio.Writer, row []sqltypes.Value) error {
+	// Calculate the row packet payload length.
+	length := 0
+	for _, val := range row {
+		if val.IsNull() {
+			length++
+		} else {
+			l := len(val.Raw())
+			length += lenEncIntSize(uint64(l)) + l
+		}
+	}
+
+	// Write first packet header.
+	c.writeNextPacketHeader(w, length)
+
+	// Write row values directly. The boundary-crossing logic handles
+	// multi-packet rows (>=16MB); for normal rows the space check
+	// is always false.
+	totalWritten := 0
+	packetWritten := 0
+
+	for _, val := range row {
+		if val.IsNull() {
+			if packetWritten+1 > MaxPacketSize {
+				if err := c.writeNextPacketHeader(w, length-totalWritten); err != nil {
+					return err
+				}
+				packetWritten = 0
+			}
+
+			if err := w.WriteByte(NullValue); err != nil {
+				return vterrors.Wrapf(err, "writeRow: write failed")
+			}
+
+			totalWritten++
+			packetWritten++
+		} else {
+			raw := val.Raw()
+			l := uint64(len(raw))
+
+			// Write length-encoded integer directly to the writer
+			// using WriteByte to avoid escaping a temporary buffer.
+			// The boundary check handles multi-packet rows (>=16MB);
+			// for normal rows it is always false.
+			var lenBytes [9]byte
+			n := writeLenEncInt(lenBytes[:], 0, l)
+
+			for i := range n {
+				if packetWritten == MaxPacketSize {
+					if err := c.writeNextPacketHeader(w, length-totalWritten); err != nil {
+						return err
+					}
+					packetWritten = 0
+				}
+				if err := w.WriteByte(lenBytes[i]); err != nil {
+					return vterrors.Wrapf(err, "writeRow: write failed")
+				}
+				totalWritten++
+				packetWritten++
+			}
+
+			rawRemaining := len(raw)
+			for packetWritten+rawRemaining > MaxPacketSize {
+				// Write as much as we can in the current packet, then
+				// write a continuation header and the rest in the next packet.
+				partialWrittenBytes, err := w.Write(raw[:(MaxPacketSize - packetWritten)])
+				if err != nil {
+					return vterrors.Wrapf(err, "writeRow: write failed")
+				}
+				totalWritten += partialWrittenBytes
+
+				if err := c.writeNextPacketHeader(w, length-totalWritten); err != nil {
+					return err
+				}
+				packetWritten = 0
+				rawRemaining -= partialWrittenBytes
+				raw = raw[partialWrittenBytes:]
+			}
+
+			if rawRemaining > 0 {
+				if _, err := w.Write(raw); err != nil {
+					return vterrors.Wrapf(err, "writeRow: write failed")
+				}
+				totalWritten += rawRemaining
+				packetWritten += rawRemaining
+			}
+		}
+	}
+
+	// If payload was an exact multiple of MaxPacketSize, send
+	// a zero-length terminator packet.
+	if packetWritten == MaxPacketSize {
+		c.writeNextPacketHeader(w, 0)
+	}
+
 	return nil
 }
 
