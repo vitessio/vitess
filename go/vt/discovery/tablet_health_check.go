@@ -318,16 +318,12 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
 		// Sleep until the next retry is up or the context is done/canceled.
+		// We use a fixed retry interval instead of exponential backoff so that
+		// vtgate rediscovers recovered tablets promptly. See #19894.
 		select {
 		case <-thc.ctx.Done():
 			return
 		case <-time.After(retryDelay):
-			// Exponentially back-off to prevent tight-loop.
-			retryDelay *= 2
-			// Limit the retry delay backoff to the health check timeout
-			if retryDelay > hc.healthCheckTimeout {
-				retryDelay = hc.healthCheckTimeout
-			}
 		}
 	}
 }
