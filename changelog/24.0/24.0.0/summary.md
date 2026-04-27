@@ -51,7 +51,7 @@
 
 This release introduces an optimization that allows window functions to be pushed down to individual shards when they are partitioned by a column that matches a unique vindex.
 
-Previously, all window function queries required single-shard routing, which limited their applicability on sharded tables. With this change, queries where the `PARTITION BY` clause which aligns with a unique vindex can now be pushed down and executed on each shard.
+Previously, all window function queries required single-shard routing, which limited their applicability on sharded tables. With this change, queries where the `PARTITION BY` clause aligns with a unique vindex can now be pushed down and executed on each shard.
 
 For examples and more details, see the [documentation](https://vitess.io/docs/24.0/reference/compatibility/mysql-compatibility/#window-functions).
 
@@ -236,7 +236,7 @@ Four new metrics have been added:
 
 All metrics include labels for `Strategy`, `Workload`, and `Priority`. The `QueryThrottlerThrottled` metric has additional labels for `MetricName`, `MetricValue`, and `DryRun` to identify which metric triggered the throttling and whether it occurred in dry-run mode.
 
-These metrics help monitor query throttling patterns, identifying which workloads are throttled, measure performance overhead, and validate behavior in dry-run mode before deploying configuration changes.
+These metrics help monitor throttling patterns, identify which workloads are throttled, measure performance overhead, and validate behavior in dry-run mode before configuration changes.
 
 #### <a id="vttablet-querythrottler-config-watch"/>QueryThrottler Event-Driven Configuration Updates</a>
 
