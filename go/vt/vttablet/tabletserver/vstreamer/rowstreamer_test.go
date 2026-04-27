@@ -607,26 +607,41 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 		"drop table t1",
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	var heartbeatCount int32
+	var streamCanceled int32
+	var rowsAfterCancel int32
+	var heartbeatsAfterCancel int32
 	dataReceived := false
 
 	var options binlogdatapb.VStreamOptions
 	options.ConfigOverrides = make(map[string]string)
-	options.ConfigOverrides["vstream_dynamic_packet_size"] = "false"
-	options.ConfigOverrides["vstream_packet_size"] = "10"
+
+	// Support both formats for backwards compatibility
+	// TODO(v25): Remove underscore versions
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", "1")
 
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if rows.Heartbeat {
+			if atomic.LoadInt32(&streamCanceled) != 0 {
+				atomic.AddInt32(&heartbeatsAfterCancel, 1)
+				return nil
+			}
 			atomic.AddInt32(&heartbeatCount, 1)
 			// After receiving at least 3 heartbeats, we can be confident the fix is working
 			if atomic.LoadInt32(&heartbeatCount) >= 3 {
+				atomic.StoreInt32(&streamCanceled, 1)
 				cancel()
 				return nil
 			}
 		} else if len(rows.Rows) > 0 {
+			if atomic.LoadInt32(&streamCanceled) != 0 {
+				atomic.AddInt32(&rowsAfterCancel, 1)
+				return nil
+			}
 			dataReceived = true
 		}
 		// Add a small delay to allow heartbeats to be sent
@@ -635,7 +650,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}, &options)
 
 	// We expect context canceled error since we cancel after receiving heartbeats
-	if err != nil && err.Error() != "stream ended: context canceled" {
+	if err != nil && err.Error() != "stream ended: context canceled" && err.Error() != "row stream ended: context canceled" {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -650,6 +665,10 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	if atomic.LoadInt32(&heartbeatCount) < 3 {
 		t.Errorf("expected at least 3 heartbeats, got %d. This indicates the heartbeat goroutine is not running continuously", heartbeatCount)
 	}
+
+	require.Never(t, func() bool {
+		return atomic.LoadInt32(&rowsAfterCancel) != 0 || atomic.LoadInt32(&heartbeatsAfterCancel) != 0
+	}, 50*time.Millisecond, time.Millisecond, "expected context cancellation to stop row and heartbeat callbacks")
 }
 
 func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery string, wantStream []string, options *binlogdatapb.VStreamOptions) {
