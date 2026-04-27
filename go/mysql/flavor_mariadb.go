@@ -197,13 +197,16 @@ func (mariadbFlavor) setReplicationPositionCommands(pos replication.Position) []
 	}
 }
 
-func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+func (m mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),
 		fmt.Sprintf("MASTER_PORT = %d", port),
 		fmt.Sprintf("MASTER_USER = '%s'", params.Uname),
 		fmt.Sprintf("MASTER_PASSWORD = '%s'", params.Pass),
 		fmt.Sprintf("MASTER_CONNECT_RETRY = %d", connectRetry),
+	}
+	if retryCount >= 0 && m.supportsReplicationRetryCount() {
+		args = append(args, fmt.Sprintf("MASTER_RETRY_COUNT = %d", retryCount))
 	}
 	if params.SslEnabled() {
 		args = append(args, "MASTER_SSL = 1")
@@ -225,6 +228,11 @@ func (mariadbFlavor) setReplicationSourceCommand(params *ConnParams, host string
 	}
 	args = append(args, "MASTER_USE_GTID = current_pos")
 	return "CHANGE MASTER TO\n  " + strings.Join(args, ",\n  ")
+}
+
+func (m mariadbFlavor) supportsReplicationRetryCount() bool {
+	atLeast, err := capabilities.ServerVersionAtLeast(m.serverVersion, 12, 0, 1)
+	return err == nil && atLeast
 }
 
 func (mariadbFlavor) resetBinaryLogsCommand() string {

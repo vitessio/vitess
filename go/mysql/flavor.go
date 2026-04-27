@@ -19,8 +19,6 @@ package mysql
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -133,7 +131,7 @@ type flavor interface {
 
 	// setReplicationSourceCommand returns the command to use the provided host/port
 	// as the new replication source (without changing any GTID position).
-	setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string
+	setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string
 
 	// resetBinaryLogsCommand returns the command to reset the binary logs.
 	resetBinaryLogsCommand() string
@@ -198,11 +196,11 @@ func GetFlavor(serverVersion string, flavorFunc func(serverVersion string) flavo
 		canonicalVersion = serverVersion[len(mariaDBReplicationHackPrefix):]
 		f = mariadbFlavor101{mariadbFlavor{serverVersion: canonicalVersion}}
 	case strings.Contains(serverVersion, mariaDBVersionString):
-		mariadbVersion, err := strconv.ParseFloat(serverVersion[:4], 64)
-		if err != nil || mariadbVersion < 10.2 {
-			f = mariadbFlavor101{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
+		atLeast, err := capabilities.ServerVersionAtLeast(canonicalVersion, 10, 2, 0)
+		if err != nil || !atLeast {
+			f = mariadbFlavor101{mariadbFlavor{serverVersion: canonicalVersion}}
 		} else {
-			f = mariadbFlavor102{mariadbFlavor{serverVersion: fmt.Sprintf("%f", mariadbVersion)}}
+			f = mariadbFlavor102{mariadbFlavor{serverVersion: canonicalVersion}}
 		}
 	case strings.HasPrefix(serverVersion, mysql8VersionPrefix):
 		if latest, _ := capabilities.ServerVersionAtLeast(serverVersion, 8, 2, 0); latest {
@@ -400,10 +398,18 @@ func (c *Conn) SetReplicationPositionCommands(pos replication.Position) []string
 
 // SetReplicationSourceCommand returns the command to use the provided host/port
 // as the new replication source (without changing any GTID position).
+// It preserves the historical behavior of omitting an explicit retry-count clause.
 // It is guaranteed to be called with replication stopped.
 // It should not start or stop replication.
 func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
-	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry)
+	return c.SetReplicationSourceCommandWithRetry(params, host, port, heartbeatInterval, connectRetry, -1)
+}
+
+// SetReplicationSourceCommandWithRetry returns the command to use the provided host/port
+// as the new replication source (without changing any GTID position).
+// A negative retryCount omits the retry-count clause and leaves the server default unchanged.
+func (c *Conn) SetReplicationSourceCommandWithRetry(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
+	return c.flavor.setReplicationSourceCommand(params, host, port, heartbeatInterval, connectRetry, retryCount)
 }
 
 // resultToMap is a helper function used by ShowReplicationStatus.
