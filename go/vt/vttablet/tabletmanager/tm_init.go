@@ -599,15 +599,21 @@ func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.
 // in TabletManager.Start so the watcher runs even for tablets going
 // through --restore-from-backup.
 func (tm *TabletManager) startGossipLifecycle(tablet *topodatapb.Tablet) error {
-	if tm.currentGossipAgent() == nil {
-		gossipCfg := tm.getGossipConfig(tablet)
-		if agent, enabled := newGossipAgent(gossipCfg, tablet, tm.TopoServer); enabled {
-			tm.SetGossip(agent, enabled)
-		}
-	}
-
+	// Mirror the watcher path's order: start the agent first and only
+	// publish it on the TabletManager after Start succeeds. Otherwise a
+	// failed Start leaves tm.Gossip pointing at an unstarted agent that
+	// later code has no easy way to distinguish from a healthy one.
 	agent, enabled := tm.currentGossipState()
-	if agent != nil && enabled {
+	if agent == nil {
+		gossipCfg := tm.getGossipConfig(tablet)
+		if newAgent, ok := newGossipAgent(gossipCfg, tablet, tm.TopoServer); ok {
+			if err := newAgent.Start(tm.BatchCtx); err != nil {
+				return err
+			}
+			tm.SetGossip(newAgent, true)
+			servenv.OnTerm(tm.stopGossipLifecycle)
+		}
+	} else if enabled {
 		if err := agent.Start(tm.BatchCtx); err != nil {
 			return err
 		}

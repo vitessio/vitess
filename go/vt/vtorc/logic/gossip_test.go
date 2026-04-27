@@ -34,12 +34,49 @@ import (
 )
 
 func TestParseDurationVTOrc(t *testing.T) {
-	assert.Equal(t, 2*time.Second, parseDurationVTOrc("2s", time.Second))
-	assert.Equal(t, time.Second, parseDurationVTOrc("", time.Second))
-	assert.Equal(t, time.Second, parseDurationVTOrc("invalid", time.Second))
-	assert.Equal(t, time.Second, parseDurationVTOrc("-1s", time.Second))
-	assert.Equal(t, time.Second, parseDurationVTOrc("0s", time.Second))
-	assert.Equal(t, 500*time.Millisecond, parseDurationVTOrc("500ms", time.Second))
+	tests := []struct {
+		name  string
+		input string
+		want  time.Duration
+	}{{
+		name:  "valid seconds",
+		input: "2s",
+		want:  2 * time.Second,
+	}, {
+		name: "empty uses default",
+		want: time.Second,
+	}, {
+		name:  "invalid uses default",
+		input: "invalid",
+		want:  time.Second,
+	}, {
+		name:  "negative uses default",
+		input: "-1s",
+		want:  time.Second,
+	}, {
+		name:  "zero uses default",
+		input: "0s",
+		want:  time.Second,
+	}, {
+		name:  "valid milliseconds",
+		input: "500ms",
+		want:  500 * time.Millisecond,
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, parseDurationVTOrc(tt.input, time.Second))
+		})
+	}
+}
+
+func testEnabledGossipConfig() *topodatapb.GossipConfig {
+	return &topodatapb.GossipConfig{
+		Enabled:      true,
+		PhiThreshold: 4,
+		PingInterval: "100ms",
+		MaxUpdateAge: "1s",
+	}
 }
 
 func TestFindGossipConfig(t *testing.T) {
@@ -101,6 +138,32 @@ func TestFindGossipConfig(t *testing.T) {
 		cfg, _, conflict := findGossipConfig()
 		assert.Nil(t, cfg)
 		assert.False(t, conflict)
+	})
+
+	t.Run("conflicting enabled keyspaces", func(t *testing.T) {
+		origTS := ts
+		ts = memorytopo.NewServer(ctx, "zone1")
+		defer func() { ts = origTS }()
+
+		require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
+			GossipConfig: &topodatapb.GossipConfig{
+				Enabled:      true,
+				PhiThreshold: 4,
+				PingInterval: "1s",
+			},
+		}))
+		require.NoError(t, ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{
+			GossipConfig: &topodatapb.GossipConfig{
+				Enabled:      true,
+				PhiThreshold: 8,
+				PingInterval: "2s",
+			},
+		}))
+
+		cfg, ksName, conflict := findGossipConfig()
+		assert.Nil(t, cfg)
+		assert.Empty(t, ksName)
+		assert.True(t, conflict)
 	})
 }
 
@@ -244,12 +307,7 @@ func TestWatchGossipConfigRecoversAfterSrvKeyspaceCreate(t *testing.T) {
 	go watchGossipConfig(watchCtx, "ks")
 
 	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
-		GossipConfig: &topodatapb.GossipConfig{
-			Enabled:      true,
-			PhiThreshold: 4,
-			PingInterval: "100ms",
-			MaxUpdateAge: "1s",
-		},
+		GossipConfig: testEnabledGossipConfig(),
 	}))
 
 	require.Eventually(t, func() bool {
@@ -268,12 +326,7 @@ func TestWatchGossipConfigRecoversAfterDeleteAndRecreate(t *testing.T) {
 	})
 
 	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
-		GossipConfig: &topodatapb.GossipConfig{
-			Enabled:      true,
-			PhiThreshold: 4,
-			PingInterval: "100ms",
-			MaxUpdateAge: "1s",
-		},
+		GossipConfig: testEnabledGossipConfig(),
 	}))
 
 	watchCtx, cancel := context.WithCancel(ctx)
@@ -293,12 +346,7 @@ func TestWatchGossipConfigRecoversAfterDeleteAndRecreate(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 
 	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
-		GossipConfig: &topodatapb.GossipConfig{
-			Enabled:      true,
-			PhiThreshold: 4,
-			PingInterval: "100ms",
-			MaxUpdateAge: "1s",
-		},
+		GossipConfig: testEnabledGossipConfig(),
 	}))
 
 	require.Eventually(t, func() bool {
@@ -351,12 +399,7 @@ func TestPollForGossipKeyspaceDetectsRuntimeEnableOnExistingKeyspace(t *testing.
 	})
 	go pollForGossipKeyspace(watchCtx)
 
-	cfg := &topodatapb.GossipConfig{
-		Enabled:      true,
-		PhiThreshold: 4,
-		PingInterval: "100ms",
-		MaxUpdateAge: "1s",
-	}
+	cfg := testEnabledGossipConfig()
 	updateKeyspaceGossipConfig(t, ts, "ks", cfg)
 	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{
 		GossipConfig: cfg,
@@ -377,12 +420,7 @@ func TestWatchExistingGossipKeyspacesWatchesOnlyEnabledKeyspaces(t *testing.T) {
 		ts = origTS
 	})
 
-	enabledCfg := &topodatapb.GossipConfig{
-		Enabled:      true,
-		PhiThreshold: 4,
-		PingInterval: "100ms",
-		MaxUpdateAge: "1s",
-	}
+	enabledCfg := testEnabledGossipConfig()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
 		GossipConfig: enabledCfg,
@@ -416,12 +454,7 @@ func TestWatchExistingGossipKeyspacesDoesNotStopEnabledConfigOnOtherKeyspaceChan
 		ts = origTS
 	})
 
-	enabledCfg := &topodatapb.GossipConfig{
-		Enabled:      true,
-		PhiThreshold: 4,
-		PingInterval: "100ms",
-		MaxUpdateAge: "1s",
-	}
+	enabledCfg := testEnabledGossipConfig()
 
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
 		GossipConfig: enabledCfg,
@@ -465,20 +498,10 @@ func TestWatchExistingGossipKeyspacesStopsAfterLastEnabledKeyspaceDisabled(t *te
 
 	for _, keyspace := range []string{"ks1", "ks2"} {
 		require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{
-			GossipConfig: &topodatapb.GossipConfig{
-				Enabled:      true,
-				PhiThreshold: 4,
-				PingInterval: "100ms",
-				MaxUpdateAge: "1s",
-			},
+			GossipConfig: testEnabledGossipConfig(),
 		}))
 		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", keyspace, &topodatapb.SrvKeyspace{
-			GossipConfig: &topodatapb.GossipConfig{
-				Enabled:      true,
-				PhiThreshold: 4,
-				PingInterval: "100ms",
-				MaxUpdateAge: "1s",
-			},
+			GossipConfig: testEnabledGossipConfig(),
 		}))
 	}
 
@@ -526,38 +549,6 @@ func waitForGossipWatchesToStop(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return gossipWatchCount.Load() == 0
 	}, 5*time.Second, 20*time.Millisecond)
-}
-
-func TestFindGossipConfigMultipleKeyspaces(t *testing.T) {
-	ctx := t.Context()
-	origTS := ts
-	ts = memorytopo.NewServer(ctx, "zone1")
-	defer func() { ts = origTS }()
-
-	// Create two keyspaces with different gossip configs.
-	err := ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
-		GossipConfig: &topodatapb.GossipConfig{
-			Enabled:      true,
-			PhiThreshold: 4,
-			PingInterval: "1s",
-		},
-	})
-	require.NoError(t, err)
-
-	err = ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{
-		GossipConfig: &topodatapb.GossipConfig{
-			Enabled:      true,
-			PhiThreshold: 8,
-			PingInterval: "2s",
-		},
-	})
-	require.NoError(t, err)
-
-	// Conflicting configs should fail fast.
-	cfg, ksName, conflict := findGossipConfig()
-	assert.Nil(t, cfg, "conflicting gossip configs should refuse to start")
-	assert.Empty(t, ksName)
-	assert.True(t, conflict)
 }
 
 func TestReconcileGossipConfigFailsClosedOnConflict(t *testing.T) {
@@ -613,38 +604,36 @@ func TestWatchGossipConfigEmptyKeyspace(t *testing.T) {
 }
 
 func TestStartGossipAgent(t *testing.T) {
-	origAgent := gossipAgent
-	defer func() { gossipAgent = origAgent }()
+	tests := []struct {
+		name string
+		cfg  *topodatapb.GossipConfig
+	}{{
+		name: "explicit config",
+		cfg: &topodatapb.GossipConfig{
+			Enabled:      true,
+			PhiThreshold: 5,
+			PingInterval: "100ms",
+			MaxUpdateAge: "500ms",
+		},
+	}, {
+		name: "default phi",
+		cfg: &topodatapb.GossipConfig{
+			Enabled:      true,
+			PhiThreshold: 0,
+			PingInterval: "100ms",
+		},
+	}}
 
-	cfg := &topodatapb.GossipConfig{
-		Enabled:      true,
-		PhiThreshold: 5,
-		PingInterval: "100ms",
-		MaxUpdateAge: "500ms",
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origAgent := gossipAgent
+			defer func() { gossipAgent = origAgent }()
+
+			startGossipAgent(tt.cfg)
+			require.NotNil(t, gossipAgent)
+			gossipAgent.Stop()
+		})
 	}
-
-	// startGossipAgent creates an agent with nil-transport seeds
-	// (discoverGossipSeeds returns nil without a VTOrc DB).
-	// The agent will be created and started successfully.
-	startGossipAgent(cfg)
-	require.NotNil(t, gossipAgent)
-
-	gossipAgent.Stop()
-}
-
-func TestStartGossipAgentDefaultPhi(t *testing.T) {
-	origAgent := gossipAgent
-	defer func() { gossipAgent = origAgent }()
-
-	cfg := &topodatapb.GossipConfig{
-		Enabled:      true,
-		PhiThreshold: 0, // Should default to 4.
-		PingInterval: "100ms",
-	}
-
-	startGossipAgent(cfg)
-	require.NotNil(t, gossipAgent)
-	gossipAgent.Stop()
 }
 
 func TestDiscoverGossipSeeds(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -38,11 +39,23 @@ type localTransport struct {
 }
 
 type testClock struct {
+	mu  sync.Mutex
 	now time.Time
 }
 
 func (c *testClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.now
+}
+
+// advance moves fake time forward. Tests need synchronization here
+// because gossip.Start spawns a bootstrapSeeds goroutine that reads
+// the clock concurrently with the test goroutine advancing it.
+func (c *testClock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
 }
 
 func newLocalTransport() *localTransport {
@@ -216,65 +229,60 @@ func TestSnapshotMessageLockedFiltersPeerScope(t *testing.T) {
 	assert.Contains(t, stateIDs, NodeID("vtorc"))
 }
 
-func TestScopedAgentIgnoresOutOfScopePushPullData(t *testing.T) {
-	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{
-		NodeID:   "a1",
-		BindAddr: "a1",
-		Meta: map[string]string{
-			MetaKeyKeyspace: "ks",
-			MetaKeyShard:    "0",
+func TestGossipIgnoresOutOfScopePushPullData(t *testing.T) {
+	tests := []struct {
+		name       string
+		cfg        Config
+		members    []Member
+		wantNode   NodeID
+		rejectNode NodeID
+	}{{
+		name: "scoped agent",
+		cfg: Config{
+			NodeID:   "a1",
+			BindAddr: "a1",
+			Meta: map[string]string{
+				MetaKeyKeyspace: "ks",
+				MetaKeyShard:    "0",
+			},
 		},
-	}, nil, clock)
+		members:    []Member{scopedMember("a2", "ks", "0"), scopedMember("b1", "ks", "1")},
+		wantNode:   "a2",
+		rejectNode: "b1",
+	}, {
+		name:       "unscoped agent",
+		cfg:        Config{NodeID: "vtorc", BindAddr: "vtorc"},
+		members:    []Member{scopedMember("a1", "ks", "0"), scopedMember("b1", "ks", "1")},
+		wantNode:   "a1",
+		rejectNode: "b1",
+	}}
 
-	g.HandlePushPull(&Message{
-		Members: []Member{
-			scopedMember("a2", "ks", "0"),
-			scopedMember("b1", "ks", "1"),
-		},
-		States: []StateDigest{
-			{NodeID: "a2", Status: StatusAlive, LastUpdate: clock.Now()},
-			{NodeID: "b1", Status: StatusAlive, LastUpdate: clock.Now()},
-		},
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clock := &testClock{now: time.Unix(0, 0)}
+			g := New(tt.cfg, nil, clock)
+			states := make([]StateDigest, 0, len(tt.members))
+			for _, member := range tt.members {
+				states = append(states, StateDigest{NodeID: member.ID, Status: StatusAlive, LastUpdate: clock.Now()})
+			}
 
-	members := make(map[NodeID]Member)
-	for _, member := range g.Members() {
-		members[member.ID] = member
+			g.HandlePushPull(&Message{
+				Members: tt.members,
+				States:  states,
+			})
+
+			members := make(map[NodeID]Member)
+			for _, member := range g.Members() {
+				members[member.ID] = member
+			}
+			assert.Contains(t, members, tt.wantNode)
+			assert.NotContains(t, members, tt.rejectNode)
+
+			snapshot := g.Snapshot()
+			assert.Contains(t, snapshot, tt.wantNode)
+			assert.NotContains(t, snapshot, tt.rejectNode)
+		})
 	}
-	assert.Contains(t, members, NodeID("a2"))
-	assert.NotContains(t, members, NodeID("b1"))
-
-	states := g.Snapshot()
-	assert.Contains(t, states, NodeID("a2"))
-	assert.NotContains(t, states, NodeID("b1"))
-}
-
-func TestUnscopedAgentIgnoresOutOfExchangeScopePushPullData(t *testing.T) {
-	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "vtorc", BindAddr: "vtorc"}, nil, clock)
-
-	g.HandlePushPull(&Message{
-		Members: []Member{
-			scopedMember("a1", "ks", "0"),
-			scopedMember("b1", "ks", "1"),
-		},
-		States: []StateDigest{
-			{NodeID: "a1", Status: StatusAlive, LastUpdate: clock.Now()},
-			{NodeID: "b1", Status: StatusAlive, LastUpdate: clock.Now()},
-		},
-	})
-
-	members := make(map[NodeID]Member)
-	for _, member := range g.Members() {
-		members[member.ID] = member
-	}
-	assert.Contains(t, members, NodeID("a1"))
-	assert.NotContains(t, members, NodeID("b1"))
-
-	states := g.Snapshot()
-	assert.Contains(t, states, NodeID("a1"))
-	assert.NotContains(t, states, NodeID("b1"))
 }
 
 func TestGossipMarksDownWhenPeerUnreachable(t *testing.T) {
@@ -301,7 +309,7 @@ func TestGossipMarksDownWhenPeerUnreachable(t *testing.T) {
 
 	assert.Equal(t, StatusAlive, g1.Snapshot()["node2"].Status)
 
-	clock.now = clock.now.Add(80 * time.Millisecond)
+	clock.advance(80 * time.Millisecond)
 	g1.updateSuspicion(clock.Now())
 	assert.Equal(t, StatusDown, g1.Snapshot()["node2"].Status)
 }
@@ -309,7 +317,7 @@ func TestGossipMarksDownWhenPeerUnreachable(t *testing.T) {
 func TestGossipUpdateLocalUsesConfigNodeID(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
 	g := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4, PingInterval: time.Second}, nil, clock)
-	clock.now = clock.now.Add(10 * time.Millisecond)
+	clock.advance(10 * time.Millisecond)
 
 	g.UpdateLocal(HealthSnapshot{Timestamp: clock.Now()})
 
@@ -463,12 +471,12 @@ func TestGossipUpdateSuspicionMarksSuspect(t *testing.T) {
 	g.states["node2"] = State{Status: StatusAlive, LastUpdate: clock.Now()}
 
 	g.observeLocked("node2", clock.Now())
-	clock.now = clock.now.Add(10 * time.Millisecond)
+	clock.advance(10 * time.Millisecond)
 	g.observeLocked("node2", clock.Now())
-	clock.now = clock.now.Add(10 * time.Millisecond)
+	clock.advance(10 * time.Millisecond)
 	g.observeLocked("node2", clock.Now())
 
-	clock.now = clock.now.Add(200 * time.Millisecond)
+	clock.advance(200 * time.Millisecond)
 	g.updateSuspicion(clock.Now())
 	g.mu.Lock()
 	status := g.states["node2"].Status
@@ -490,27 +498,6 @@ func TestGossipIgnoresOlderStateUpdate(t *testing.T) {
 	assert.Equal(t, StatusAlive, state.Status)
 }
 
-func TestEqualTimestampPrefersAlive(t *testing.T) {
-	clock := &testClock{now: time.Unix(100, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
-
-	ts := clock.Now()
-
-	// First, learn about node2 as Down at timestamp T.
-	g.HandlePushPull(&Message{
-		Members: []Member{{ID: "node2", Addr: "node2"}},
-		States:  []StateDigest{{NodeID: "node2", Status: StatusDown, LastUpdate: ts}},
-	})
-	assert.Equal(t, StatusDown, g.Snapshot()["node2"].Status)
-
-	// Then receive Alive at the same timestamp T — should override Down.
-	g.HandlePushPull(&Message{
-		Members: []Member{{ID: "node2", Addr: "node2"}},
-		States:  []StateDigest{{NodeID: "node2", Status: StatusAlive, LastUpdate: ts}},
-	})
-	assert.Equal(t, StatusAlive, g.Snapshot()["node2"].Status, "equal-timestamp Alive should override Down")
-}
-
 func TestNeverObservedSeedsStayUnknown(t *testing.T) {
 	clock := &testClock{now: time.Now()}
 	g := New(Config{
@@ -522,7 +509,7 @@ func TestNeverObservedSeedsStayUnknown(t *testing.T) {
 	}, nil, clock)
 
 	// Advance time well past MaxUpdateAge.
-	clock.now = clock.now.Add(10 * time.Second)
+	clock.advance(10 * time.Second)
 	g.updateSuspicion(clock.Now())
 
 	// node2 was never observed — it should remain Unknown, not Down.
@@ -531,25 +518,43 @@ func TestNeverObservedSeedsStayUnknown(t *testing.T) {
 		"never-observed seeds must stay Unknown, not age to Down")
 }
 
-func TestEqualTimestampDoesNotDowngradeAlive(t *testing.T) {
-	clock := &testClock{now: time.Unix(100, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+func TestEqualTimestampMergeRules(t *testing.T) {
+	tests := []struct {
+		name       string
+		first      Status
+		second     Status
+		wantSecond Status
+	}{{
+		name:       "alive overrides down",
+		first:      StatusDown,
+		second:     StatusAlive,
+		wantSecond: StatusAlive,
+	}, {
+		name:       "down does not override alive",
+		first:      StatusAlive,
+		second:     StatusDown,
+		wantSecond: StatusAlive,
+	}}
 
-	ts := clock.Now()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clock := &testClock{now: time.Unix(100, 0)}
+			g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+			ts := clock.Now()
 
-	// Learn about node2 as Alive at timestamp T.
-	g.HandlePushPull(&Message{
-		Members: []Member{{ID: "node2", Addr: "node2"}},
-		States:  []StateDigest{{NodeID: "node2", Status: StatusAlive, LastUpdate: ts}},
-	})
-	assert.Equal(t, StatusAlive, g.Snapshot()["node2"].Status)
+			g.HandlePushPull(&Message{
+				Members: []Member{{ID: "node2", Addr: "node2"}},
+				States:  []StateDigest{{NodeID: "node2", Status: tt.first, LastUpdate: ts}},
+			})
+			assert.Equal(t, tt.first, g.Snapshot()["node2"].Status)
 
-	// Then receive Down at the same timestamp T — should NOT override Alive.
-	g.HandlePushPull(&Message{
-		Members: []Member{{ID: "node2", Addr: "node2"}},
-		States:  []StateDigest{{NodeID: "node2", Status: StatusDown, LastUpdate: ts}},
-	})
-	assert.Equal(t, StatusAlive, g.Snapshot()["node2"].Status, "equal-timestamp Down should not override Alive")
+			g.HandlePushPull(&Message{
+				Members: []Member{{ID: "node2", Addr: "node2"}},
+				States:  []StateDigest{{NodeID: "node2", Status: tt.second, LastUpdate: ts}},
+			})
+			assert.Equal(t, tt.wantSecond, g.Snapshot()["node2"].Status)
+		})
+	}
 }
 
 func TestProtoConversions(t *testing.T) {
@@ -587,36 +592,33 @@ func TestPhiAccrualReturnsHighPhiForOldHeartbeat(t *testing.T) {
 	assert.Equal(t, 100.0, phi.Phi(base.Add(50*time.Millisecond)))
 }
 
-func TestGRPCTransportNilDialer(t *testing.T) {
-	transport := NewGRPCTransport(nil).(*grpcTransport)
+func TestGRPCTransportDialFailures(t *testing.T) {
+	tests := []struct {
+		name   string
+		dialer Dialer
+	}{{
+		name: "nil dialer",
+	}, {
+		name:   "nil client",
+		dialer: nilClientDialer{},
+	}, {
+		name:   "error propagation",
+		dialer: failingDialer{},
+	}}
 
-	client, err := transport.dial(t.Context(), "addr")
-	assert.Error(t, err)
-	assert.Nil(t, client)
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			transport := NewGRPCTransport(tt.dialer)
 
-func TestGRPCTransportNilClient(t *testing.T) {
-	transport := NewGRPCTransport(nilClientDialer{})
+			resp, err := transport.PushPull(t.Context(), "addr", &Message{})
+			assert.Error(t, err)
+			assert.Nil(t, resp)
 
-	resp, err := transport.PushPull(t.Context(), "addr", &Message{})
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-
-	joinResp, err := transport.Join(t.Context(), "addr", &JoinRequest{})
-	assert.Error(t, err)
-	assert.Nil(t, joinResp)
-}
-
-func TestGRPCTransportErrorPropagation(t *testing.T) {
-	transport := NewGRPCTransport(failingDialer{})
-
-	resp, err := transport.PushPull(t.Context(), "addr", &Message{})
-	assert.Error(t, err)
-	assert.Nil(t, resp)
-
-	joinResp, err := transport.Join(t.Context(), "addr", &JoinRequest{})
-	assert.Error(t, err)
-	assert.Nil(t, joinResp)
+			joinResp, err := transport.Join(t.Context(), "addr", &JoinRequest{})
+			assert.Error(t, err)
+			assert.Nil(t, joinResp)
+		})
+	}
 }
 
 func TestGRPCDialerUsesInsecureTransport(t *testing.T) {
@@ -703,7 +705,7 @@ func TestSingleObserverDownDoesNotPropagate(t *testing.T) {
 	// Simulate: r1 alone can't reach primary (partition), but primary is actually alive.
 	// Advance time past r1's MaxUpdateAge so r1 locally marks primary as Down.
 	transport.SetOffline("primary", true) // block r1 from reaching primary
-	clock.now = clock.now.Add(80 * time.Millisecond)
+	clock.advance(80 * time.Millisecond)
 	r1.updateSuspicion(clock.Now())
 	assert.Equal(t, StatusDown, r1.Snapshot()["primary"].Status, "r1 should locally see primary as Down")
 
@@ -837,28 +839,37 @@ func TestGossipServiceRejectsEmptyMember(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestWithProbeTimeoutZero(t *testing.T) {
-	g := New(Config{NodeID: "node1", ProbeTimeout: 0}, nil, nil)
-	ctx, cancel := g.withProbeTimeout(t.Context())
-	defer cancel()
-	// Should not have a deadline (just a cancel).
-	_, hasDeadline := ctx.Deadline()
-	assert.False(t, hasDeadline)
-}
+func TestWithProbeTimeout(t *testing.T) {
+	tests := []struct {
+		name         string
+		probeTimeout time.Duration
+		wantDeadline bool
+	}{{
+		name: "zero",
+	}, {
+		name:         "positive",
+		probeTimeout: time.Second,
+		wantDeadline: true,
+	}}
 
-func TestWithProbeTimeoutPositive(t *testing.T) {
-	g := New(Config{NodeID: "node1", ProbeTimeout: time.Second}, nil, nil)
-	ctx, cancel := g.withProbeTimeout(t.Context())
-	defer cancel()
-	_, hasDeadline := ctx.Deadline()
-	assert.True(t, hasDeadline)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := New(Config{NodeID: "node1", ProbeTimeout: tt.probeTimeout}, nil, nil)
+			ctx, cancel := g.withProbeTimeout(t.Context())
+			defer cancel()
+			_, hasDeadline := ctx.Deadline()
+			assert.Equal(t, tt.wantDeadline, hasDeadline)
+		})
+	}
 }
 
 func TestNewPhiAccrualMinSize(t *testing.T) {
-	p := newPhiAccrual(0)
-	assert.Equal(t, 1, p.maxSize)
-	p = newPhiAccrual(-5)
-	assert.Equal(t, 1, p.maxSize)
+	for _, size := range []int{0, -5} {
+		t.Run(strconv.Itoa(size), func(t *testing.T) {
+			p := newPhiAccrual(size)
+			assert.Equal(t, 1, p.maxSize)
+		})
+	}
 }
 
 func TestStartWithZeroPingInterval(t *testing.T) {
@@ -890,11 +901,22 @@ func TestDebugState(t *testing.T) {
 }
 
 func TestStatusString(t *testing.T) {
-	assert.Equal(t, "alive", statusString(StatusAlive))
-	assert.Equal(t, "suspect", statusString(StatusSuspect))
-	assert.Equal(t, "down", statusString(StatusDown))
-	assert.Equal(t, "unknown", statusString(StatusUnknown))
-	assert.Equal(t, "unknown", statusString(Status(99)))
+	tests := []struct {
+		status Status
+		want   string
+	}{
+		{status: StatusAlive, want: "alive"},
+		{status: StatusSuspect, want: "suspect"},
+		{status: StatusDown, want: "down"},
+		{status: StatusUnknown, want: "unknown"},
+		{status: Status(99), want: "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			assert.Equal(t, tt.want, statusString(tt.status))
+		})
+	}
 }
 
 func TestAddMemberLockedEnrichesMetadata(t *testing.T) {

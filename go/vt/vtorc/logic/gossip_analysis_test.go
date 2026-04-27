@@ -17,6 +17,7 @@ limitations under the License.
 package logic
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -28,10 +29,21 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
-type fakeGossipState struct {
-	members []gossip.Member
-	states  map[gossip.NodeID]gossip.State
-}
+type (
+	fakeGossipState struct {
+		members []gossip.Member
+		states  map[gossip.NodeID]gossip.State
+	}
+
+	quorumMember struct {
+		id         string
+		keyspace   string
+		shard      string
+		alias      string
+		status     gossip.Status
+		lastUpdate time.Time
+	}
+)
 
 func (f *fakeGossipState) Members() []gossip.Member                 { return f.members }
 func (f *fakeGossipState) Snapshot() map[gossip.NodeID]gossip.State { return f.states }
@@ -56,91 +68,56 @@ func makeCurrentMembers(shard string, aliases ...string) map[string]map[string]s
 	return map[string]map[string]struct{}{shard: members}
 }
 
-func TestQuorumAnalysis_PrimaryDownMajorityAlive(t *testing.T) {
-	// 3-tablet shard (1 primary + 2 replicas). For small shards we
-	// require VTOrc's own health check to also fail; otherwise the
-	// thin quorum is not considered reliable.
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, vtorcView)
-
-	require.Len(t, results, 1)
-	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
-	assert.Equal(t, "zone1-0000000100", topoproto.TabletAliasString(results[0].AnalyzedInstanceAlias))
-	assert.Equal(t, "ks", results[0].AnalyzedKeyspace)
-	assert.Equal(t, "0", results[0].AnalyzedShard)
-	assert.True(t, results[0].IsClusterPrimary)
-	assert.True(t, results[0].IsPrimary)
+func aliasAt(index int) string {
+	return fmt.Sprintf("zone1-%010d", (index+1)*100)
 }
 
-func TestQuorumAnalysis_SmallShardWithoutVTOrcCorroboration(t *testing.T) {
-	// 3-tablet shard (1 primary + 2 replicas) with unanimous gossip
-	// Down verdict but no VTOrc corroboration. Should abstain because
-	// strict majority equals unanimous at this size — too easy for a
-	// correlated failure (partition) to trigger a false ERS.
+func quorumState(members ...quorumMember) *fakeGossipState {
+	now := time.Now()
 	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
+		members: make([]gossip.Member, 0, len(members)),
+		states:  make(map[gossip.NodeID]gossip.State, len(members)),
 	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-
-	// No VTOrc view at all — no corroboration.
-	assert.Empty(t, AnalyzeGossipQuorum(state, primaries, nil, nil))
-
-	// VTOrc view present but reports healthy — no corroboration.
-	aliveView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": false}}
-	assert.Empty(t, AnalyzeGossipQuorum(state, primaries, nil, aliveView))
+	for _, member := range members {
+		if member.keyspace == "" {
+			member.keyspace = "ks"
+		}
+		if member.shard == "" {
+			member.shard = "0"
+		}
+		if member.lastUpdate.IsZero() {
+			member.lastUpdate = now
+		}
+		state.members = append(state.members, makeMember(member.id, member.keyspace, member.shard, member.alias))
+		state.states[gossip.NodeID(member.id)] = gossip.State{
+			Status:     member.status,
+			LastUpdate: member.lastUpdate,
+		}
+	}
+	return state
 }
 
-func TestQuorumAnalysis_SmallShardIgnoresVTOrcIfPartitioned(t *testing.T) {
-	// Small shard with unanimous gossip Down AND VTOrc reports health
-	// check failure — but VTOrc believes it is itself partitioned.
-	// The signal must be suppressed: do not trigger ERS.
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
+func singleShardState(statuses ...gossip.Status) *fakeGossipState {
+	members := make([]quorumMember, 0, len(statuses))
+	for index, status := range statuses {
+		members = append(members, quorumMember{
+			id:     fmt.Sprintf("node%d", index+1),
+			alias:  aliasAt(index),
+			status: status,
+		})
 	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	view := &VTOrcView{
-		HealthCheckFailed:     map[string]bool{"ks/0": true},
-		SelfLikelyPartitioned: true,
-	}
+	return quorumState(members...)
+}
 
-	assert.Empty(t, AnalyzeGossipQuorum(state, primaries, nil, view))
+func failedVTOrcView(shards ...string) *VTOrcView {
+	view := &VTOrcView{HealthCheckFailed: make(map[string]bool, len(shards))}
+	for _, shard := range shards {
+		view.HealthCheckFailed[shard] = true
+	}
+	return view
 }
 
 func TestBuildVTOrcViewDetectsLikelyPartition(t *testing.T) {
-	// buildVTOrcView is exercised indirectly here by manipulating the
-	// output struct — the real impl reads from the VTOrc DB.
 	view := &VTOrcView{
 		HealthCheckFailed: map[string]bool{
 			"ks/0":    true,
@@ -150,391 +127,194 @@ func TestBuildVTOrcViewDetectsLikelyPartition(t *testing.T) {
 		},
 	}
 
-	// Without the flag, all keys look confirmed down.
 	assert.True(t, view.confirmsPrimaryDown("ks/0"))
 	assert.True(t, view.confirmsPrimaryDown("ks/80-"))
 
-	// When partition flag is set, nothing corroborates.
 	view.SelfLikelyPartitioned = true
 	assert.False(t, view.confirmsPrimaryDown("ks/0"))
 	assert.False(t, view.confirmsPrimaryDown("ks/80-"))
 }
 
-func TestQuorumAnalysis_PrimaryAlive(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_NoQuorum_MostReplicasDown(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-			makeMember("node4", "ks", "0", "zone1-0000000400"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node4": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_InsufficientObservers(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_MinimalValidQuorum(t *testing.T) {
-	// Same 3-tablet small-shard layout — valid quorum requires VTOrc
-	// corroboration.
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, vtorcView)
-
-	require.Len(t, results, 1)
-	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
-}
-
-func TestQuorumAnalysis_MajorityNotMet_NoTiebreaker(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-			makeMember("node4", "ks", "0", "zone1-0000000400"),
-			makeMember("node5", "ks", "0", "zone1-0000000500"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node4": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node5": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_TieBrokenByVTOrc(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-			makeMember("node4", "ks", "0", "zone1-0000000400"),
-			makeMember("node5", "ks", "0", "zone1-0000000500"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node4": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node5": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, vtorcView)
-
-	require.Len(t, results, 1)
-	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
-}
-
-func TestQuorumAnalysis_TieNotBroken_VTOrcSeesPrimaryAlive(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-			makeMember("node4", "ks", "0", "zone1-0000000400"),
-			makeMember("node5", "ks", "0", "zone1-0000000500"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node4": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node5": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": false}}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, vtorcView)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_ClearMajority_VTOrcViewIgnored(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-			makeMember("node4", "ks", "0", "zone1-0000000400"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node4": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
-
-	require.Len(t, results, 1)
-	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
-}
-
-func TestQuorumAnalysis_MultipleShardsIndependent(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-			makeMember("node4", "ks", "80-", "zone1-0000000400"),
-			makeMember("node5", "ks", "80-", "zone1-0000000500"),
-			makeMember("node6", "ks", "80-", "zone1-0000000600"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node4": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node5": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node6": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{
-		"ks/0":   "zone1-0000000100",
-		"ks/80-": "zone1-0000000400",
-	}
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, vtorcView)
-
-	require.Len(t, results, 1)
-	assert.Equal(t, "zone1-0000000100", topoproto.TabletAliasString(results[0].AnalyzedInstanceAlias))
-	assert.Equal(t, "0", results[0].AnalyzedShard)
-}
-
-func TestQuorumAnalysis_PrimarySuspect(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusSuspect, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_NilState(t *testing.T) {
-	results := AnalyzeGossipQuorum(nil, map[string]string{"ks/0": "zone1-0000000100"}, nil, nil)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_ShardNotInPrimariesMap(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{}
-
-	results := AnalyzeGossipQuorum(state, primaries, nil, nil)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_IgnoresStaleReplicaMembers(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-			makeMember("stale1", "ks", "0", "zone1-0000000400"),
-			makeMember("stale2", "ks", "0", "zone1-0000000500"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1":  {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2":  {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3":  {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"stale1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"stale2": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	currentMembers := makeCurrentMembers("ks/0",
-		"zone1-0000000100",
-		"zone1-0000000200",
-		"zone1-0000000300",
-	)
-	// Current membership has 3 tablets (1 primary + 2 replicas) so this
-	// is a small shard — VTOrc corroboration is required.
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
-
-	results := AnalyzeGossipQuorum(state, primaries, currentMembers, vtorcView)
-
-	require.Len(t, results, 1)
-	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
-}
-
-func TestQuorumAnalysis_CurrentMembersMissingFromGossipCountAgainstQuorum(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1": {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	currentMembers := makeCurrentMembers("ks/0",
-		"zone1-0000000100",
-		"zone1-0000000200",
-		"zone1-0000000300",
-		"zone1-0000000400",
-		"zone1-0000000500",
-		"zone1-0000000600",
-	)
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
-
-	results := AnalyzeGossipQuorum(state, primaries, currentMembers, vtorcView)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_DoesNotDoubleCountDuplicateReplicaAliases(t *testing.T) {
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("node1", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node2-duplicate", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"node1":           {Status: gossip.StatusDown, LastUpdate: time.Now()},
-			"node2":           {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node2-duplicate": {Status: gossip.StatusAlive, LastUpdate: time.Now()},
-			"node3":           {Status: gossip.StatusDown, LastUpdate: time.Now()},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	currentMembers := makeCurrentMembers("ks/0",
-		"zone1-0000000100",
-		"zone1-0000000200",
-		"zone1-0000000300",
-	)
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
-
-	results := AnalyzeGossipQuorum(state, primaries, currentMembers, vtorcView)
-
-	assert.Empty(t, results)
-}
-
-func TestQuorumAnalysis_DuplicatePrimaryAliasAlivePreventsDownVerdict(t *testing.T) {
+func TestQuorumAnalysisCases(t *testing.T) {
 	now := time.Now()
-	state := &fakeGossipState{
-		members: []gossip.Member{
-			makeMember("primary-old", "ks", "0", "zone1-0000000100"),
-			makeMember("primary-current", "ks", "0", "zone1-0000000100"),
-			makeMember("node2", "ks", "0", "zone1-0000000200"),
-			makeMember("node3", "ks", "0", "zone1-0000000300"),
-		},
-		states: map[gossip.NodeID]gossip.State{
-			"primary-old":     {Status: gossip.StatusDown, LastUpdate: now},
-			"primary-current": {Status: gossip.StatusAlive, LastUpdate: now.Add(time.Second)},
-			"node2":           {Status: gossip.StatusAlive, LastUpdate: now},
-			"node3":           {Status: gossip.StatusAlive, LastUpdate: now},
-		},
-	}
-	primaries := map[string]string{"ks/0": "zone1-0000000100"}
-	currentMembers := makeCurrentMembers("ks/0",
-		"zone1-0000000100",
-		"zone1-0000000200",
-		"zone1-0000000300",
+	tieState := singleShardState(
+		gossip.StatusDown,
+		gossip.StatusAlive,
+		gossip.StatusAlive,
+		gossip.StatusDown,
+		gossip.StatusDown,
 	)
-	vtorcView := &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": true}}
 
-	results := AnalyzeGossipQuorum(state, primaries, currentMembers, vtorcView)
+	tests := []struct {
+		name           string
+		state          GossipStateProvider
+		primaries      map[string]string
+		currentMembers map[string]map[string]struct{}
+		view           *VTOrcView
+		wantAnalysis   bool
+		wantAlias      string
+		wantShard      string
+	}{{
+		name:         "small shard with vtorc corroboration",
+		state:        singleShardState(gossip.StatusDown, gossip.StatusAlive, gossip.StatusAlive),
+		primaries:    map[string]string{"ks/0": aliasAt(0)},
+		view:         failedVTOrcView("ks/0"),
+		wantAnalysis: true,
+		wantAlias:    aliasAt(0),
+		wantShard:    "0",
+	}, {
+		name:      "small shard without vtorc view",
+		state:     singleShardState(gossip.StatusDown, gossip.StatusAlive, gossip.StatusAlive),
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+	}, {
+		name:      "small shard with primary healthy from vtorc view",
+		state:     singleShardState(gossip.StatusDown, gossip.StatusAlive, gossip.StatusAlive),
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+		view:      &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": false}},
+	}, {
+		name:      "small shard ignores vtorc when self partitioned",
+		state:     singleShardState(gossip.StatusDown, gossip.StatusAlive, gossip.StatusAlive),
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+		view: &VTOrcView{
+			HealthCheckFailed:     map[string]bool{"ks/0": true},
+			SelfLikelyPartitioned: true,
+		},
+	}, {
+		name:      "primary alive",
+		state:     singleShardState(gossip.StatusAlive, gossip.StatusAlive, gossip.StatusAlive),
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+	}, {
+		name: "no quorum when most replicas are down",
+		state: singleShardState(
+			gossip.StatusDown,
+			gossip.StatusDown,
+			gossip.StatusDown,
+			gossip.StatusAlive,
+		),
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+	}, {
+		name:      "insufficient observers",
+		state:     singleShardState(gossip.StatusDown, gossip.StatusAlive),
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+	}, {
+		name:      "majority not met without tiebreaker",
+		state:     tieState,
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+	}, {
+		name:         "tie broken by vtorc",
+		state:        tieState,
+		primaries:    map[string]string{"ks/0": aliasAt(0)},
+		view:         failedVTOrcView("ks/0"),
+		wantAnalysis: true,
+		wantAlias:    aliasAt(0),
+		wantShard:    "0",
+	}, {
+		name:      "tie not broken when vtorc sees primary alive",
+		state:     tieState,
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+		view:      &VTOrcView{HealthCheckFailed: map[string]bool{"ks/0": false}},
+	}, {
+		name: "clear majority ignores vtorc view",
+		state: singleShardState(
+			gossip.StatusDown,
+			gossip.StatusAlive,
+			gossip.StatusAlive,
+			gossip.StatusAlive,
+		),
+		primaries:    map[string]string{"ks/0": aliasAt(0)},
+		wantAnalysis: true,
+		wantAlias:    aliasAt(0),
+		wantShard:    "0",
+	}, {
+		name: "multiple shards stay independent",
+		state: quorumState(
+			quorumMember{id: "node1", shard: "0", alias: aliasAt(0), status: gossip.StatusDown},
+			quorumMember{id: "node2", shard: "0", alias: aliasAt(1), status: gossip.StatusAlive},
+			quorumMember{id: "node3", shard: "0", alias: aliasAt(2), status: gossip.StatusAlive},
+			quorumMember{id: "node4", shard: "80-", alias: aliasAt(3), status: gossip.StatusAlive},
+			quorumMember{id: "node5", shard: "80-", alias: aliasAt(4), status: gossip.StatusAlive},
+			quorumMember{id: "node6", shard: "80-", alias: aliasAt(5), status: gossip.StatusAlive},
+		),
+		primaries: map[string]string{
+			"ks/0":   aliasAt(0),
+			"ks/80-": aliasAt(3),
+		},
+		view:         failedVTOrcView("ks/0"),
+		wantAnalysis: true,
+		wantAlias:    aliasAt(0),
+		wantShard:    "0",
+	}, {
+		name:      "primary suspect",
+		state:     singleShardState(gossip.StatusSuspect, gossip.StatusAlive, gossip.StatusAlive),
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+	}, {
+		name:      "nil state",
+		state:     nil,
+		primaries: map[string]string{"ks/0": aliasAt(0)},
+	}, {
+		name:      "shard not in primaries map",
+		state:     singleShardState(gossip.StatusDown, gossip.StatusAlive, gossip.StatusAlive),
+		primaries: map[string]string{},
+	}, {
+		name: "ignores stale replica members",
+		state: quorumState(
+			quorumMember{id: "node1", alias: aliasAt(0), status: gossip.StatusDown},
+			quorumMember{id: "node2", alias: aliasAt(1), status: gossip.StatusAlive},
+			quorumMember{id: "node3", alias: aliasAt(2), status: gossip.StatusAlive},
+			quorumMember{id: "stale1", alias: aliasAt(3), status: gossip.StatusDown},
+			quorumMember{id: "stale2", alias: aliasAt(4), status: gossip.StatusDown},
+		),
+		primaries:      map[string]string{"ks/0": aliasAt(0)},
+		currentMembers: makeCurrentMembers("ks/0", aliasAt(0), aliasAt(1), aliasAt(2)),
+		view:           failedVTOrcView("ks/0"),
+		wantAnalysis:   true,
+		wantAlias:      aliasAt(0),
+		wantShard:      "0",
+	}, {
+		name:           "current members missing from gossip count against quorum",
+		state:          singleShardState(gossip.StatusDown, gossip.StatusAlive, gossip.StatusAlive),
+		primaries:      map[string]string{"ks/0": aliasAt(0)},
+		currentMembers: makeCurrentMembers("ks/0", aliasAt(0), aliasAt(1), aliasAt(2), aliasAt(3), aliasAt(4), aliasAt(5)),
+		view:           failedVTOrcView("ks/0"),
+	}, {
+		name: "does not double count duplicate replica aliases",
+		state: quorumState(
+			quorumMember{id: "node1", alias: aliasAt(0), status: gossip.StatusDown},
+			quorumMember{id: "node2", alias: aliasAt(1), status: gossip.StatusAlive},
+			quorumMember{id: "node2-duplicate", alias: aliasAt(1), status: gossip.StatusAlive},
+			quorumMember{id: "node3", alias: aliasAt(2), status: gossip.StatusDown},
+		),
+		primaries:      map[string]string{"ks/0": aliasAt(0)},
+		currentMembers: makeCurrentMembers("ks/0", aliasAt(0), aliasAt(1), aliasAt(2)),
+		view:           failedVTOrcView("ks/0"),
+	}, {
+		name: "duplicate primary alias alive prevents down verdict",
+		state: quorumState(
+			quorumMember{id: "primary-old", alias: aliasAt(0), status: gossip.StatusDown, lastUpdate: now},
+			quorumMember{id: "primary-current", alias: aliasAt(0), status: gossip.StatusAlive, lastUpdate: now.Add(time.Second)},
+			quorumMember{id: "node2", alias: aliasAt(1), status: gossip.StatusAlive, lastUpdate: now},
+			quorumMember{id: "node3", alias: aliasAt(2), status: gossip.StatusAlive, lastUpdate: now},
+		),
+		primaries:      map[string]string{"ks/0": aliasAt(0)},
+		currentMembers: makeCurrentMembers("ks/0", aliasAt(0), aliasAt(1), aliasAt(2)),
+		view:           failedVTOrcView("ks/0"),
+	}}
 
-	assert.Empty(t, results)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := AnalyzeGossipQuorum(tt.state, tt.primaries, tt.currentMembers, tt.view)
+			if !tt.wantAnalysis {
+				assert.Empty(t, results)
+				return
+			}
+
+			require.Len(t, results, 1)
+			assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, results[0].Analysis)
+			assert.Equal(t, tt.wantAlias, topoproto.TabletAliasString(results[0].AnalyzedInstanceAlias))
+			assert.Equal(t, "ks", results[0].AnalyzedKeyspace)
+			assert.Equal(t, tt.wantShard, results[0].AnalyzedShard)
+			assert.True(t, results[0].IsClusterPrimary)
+			assert.True(t, results[0].IsPrimary)
+		})
+	}
 }
