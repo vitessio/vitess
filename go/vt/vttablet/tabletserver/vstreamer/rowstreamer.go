@@ -339,7 +339,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		sendMu.Lock()
 		defer sendMu.Unlock()
 		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("row stream ended: %v", err)
+			return fmt.Errorf("row stream ended: %w", context.Cause(ctx))
 		}
 		return send(r)
 	}
