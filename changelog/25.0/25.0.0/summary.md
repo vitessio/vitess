@@ -1,5 +1,5 @@
-<<<<<<< HEAD
 # Release of Vitess v25.0.0
+
 ## Summary
 
 ### Table of Contents
@@ -7,6 +7,10 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
         - [QueryThrottler TABLET_THROTTLER Strategy](#querythrottler-tablet-throttler-strategy)
+    - **[Breaking Changes](#breaking-changes)**
+- **[Minor Changes](#minor-changes)**
+    - **[VReplication](#minor-changes-vreplication)**
+        - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -85,25 +89,6 @@ The strategy exposes detailed observability metrics:
 - `TABLET_THROTTLERFullDecisionLatencyMicroseconds` - Full evaluation latency
 - `TABLET_THROTTLERCacheLoadLatencyMilliseconds` - Background cache refresh latency
 
-||||||| 3cafea8085
-=======
-# Release of Vitess v25.0.0
-
-## Summary
-
-### Table of Contents
-
-- **[Major Changes](#major-changes)**
-    - **[New Support](#new-support)**
-    - **[Breaking Changes](#breaking-changes)**
-- **[Minor Changes](#minor-changes)**
-    - **[VReplication](#minor-changes-vreplication)**
-        - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
-
-## <a id="major-changes"/>Major Changes</a>
-
-### <a id="new-support"/>New Support</a>
-
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
 ## <a id="minor-changes"/>Minor Changes</a>
@@ -123,5 +108,3 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
-
->>>>>>> main
