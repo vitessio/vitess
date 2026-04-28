@@ -153,6 +153,11 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 
 	// Buffering required. Acquire write lock.
 	sb.mu.Lock()
+	// Do not start a new buffering cycle after Buffer.Shutdown() has begun.
+	if sb.buf.stopped.Load() {
+		sb.mu.Unlock()
+		return nil, nil
+	}
 	// Re-check state because it could have changed in the meantime.
 	if !sb.shouldBufferLocked(failoverDetected) {
 		// Buffering no longer required. Return early.
