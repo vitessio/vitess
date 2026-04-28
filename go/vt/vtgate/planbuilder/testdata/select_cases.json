@@ -5663,52 +5663,10 @@
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
-    "comment": "Literal parent alias referenced by subquery is inlined so the subquery stays uncorrelated",
+    "comment": "Literal parent alias referenced by subquery rejected as correlated when subquery cannot merge with outer route",
     "query": "SELECT 1 AS foobar, (SELECT foobar FROM authoritative) FROM authoritative WHERE user_id = 1",
     "skip_e2e": true,
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "SELECT 1 AS foobar, (SELECT foobar FROM authoritative) FROM authoritative WHERE user_id = 1",
-      "Instructions": {
-        "OperatorType": "UncorrelatedSubquery",
-        "Variant": "PulloutValue",
-        "PulloutVars": [
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "InputName": "SubQuery",
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 as foobar from authoritative where 1 != 1",
-            "Query": "select 1 as foobar from authoritative"
-          },
-          {
-            "InputName": "Outer",
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 as foobar, :__sq1 /* INT64 */ as `(select foobar from authoritative)` from authoritative where 1 != 1",
-            "Query": "select 1 as foobar, :__sq1 /* INT64 */ as `(select foobar from authoritative)` from authoritative where user_id = 1",
-            "Values": [
-              "1"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.authoritative"
-      ]
-    }
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
     "comment": "Nested subquery resolves alias across multiple scope levels",

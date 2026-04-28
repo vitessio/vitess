@@ -47,12 +47,6 @@ type binder struct {
 	// walked. This is used to reject forward references to aliases in
 	// subqueries, matching MySQL's behavior.
 	availableAliases map[*sqlparser.AliasedExpr]struct{}
-
-	// aliasRewrites records column references that resolved to a parent
-	// SELECT alias whose expression has no table dependencies. These
-	// references are replaced with a clone of the alias expression so the
-	// subquery stays uncorrelated and can be planned as a standalone query.
-	aliasRewrites map[*sqlparser.ColName]sqlparser.Expr
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
@@ -65,7 +59,6 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 		typer:            typer,
 		usingJoinInfo:    map[TableSet]map[string]TableSet{},
 		availableAliases: map[*sqlparser.AliasedExpr]struct{}{},
-		aliasRewrites:    map[*sqlparser.ColName]sqlparser.Expr{},
 	}
 }
 
@@ -338,13 +331,17 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 					typ := b.typer.exprType(ae.Expr)
 					if recursive.IsEmpty() && direct.IsEmpty() {
 						// The aliased expression has no table dependencies
-						// (e.g. a literal such as `1 AS x`). Schedule a
-						// rewrite of this column reference to a clone of the
-						// alias expression so the subquery stays truly
-						// uncorrelated and can be planned as a standalone
-						// query instead of emitting SQL that references the
-						// alias name as if it were a column of the subquery.
-						b.aliasRewrites[colName] = ae.Expr
+						// (e.g. a literal such as `1 AS x`). Mark the
+						// reference as correlated to the outer scope so
+						// planning falls into the same path as other
+						// correlated references — single-route cases still
+						// merge cleanly, and split-route cases surface the
+						// existing "unsupported correlated subquery" error
+						// instead of emitting SQL that references the alias
+						// as a non-existent column at runtime.
+						outer := scopeTableSet(current, b.org)
+						recursive = outer
+						direct = outer
 					}
 					return dependency{certain: true, recursive: recursive, direct: direct, typ: typ}, nil
 				}
@@ -547,6 +544,16 @@ func (b *binder) findMatchingAlias(sel *sqlparser.Select, lowered string) (*sqlp
 		}
 	}
 	return match, nil
+}
+
+// scopeTableSet returns the union of TableSets for every table directly
+// reachable from the given scope.
+func scopeTableSet(s *scope, org originable) TableSet {
+	id := EmptyTableSet()
+	for _, table := range s.tables {
+		id = id.Merge(table.getTableSet(org))
+	}
+	return id
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
