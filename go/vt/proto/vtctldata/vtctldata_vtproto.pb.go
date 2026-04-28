@@ -2509,10 +2509,12 @@ func (m *UpdateGossipConfigRequest) CloneVT() *UpdateGossipConfigRequest {
 	}
 	r := new(UpdateGossipConfigRequest)
 	r.Keyspace = m.Keyspace
-	r.Enable = m.Enable
-	r.Disable = m.Disable
 	r.PingInterval = m.PingInterval
 	r.MaxUpdateAge = m.MaxUpdateAge
+	if rhs := m.Enabled; rhs != nil {
+		tmpVal := *rhs
+		r.Enabled = &tmpVal
+	}
 	if rhs := m.PhiThreshold; rhs != nil {
 		tmpVal := *rhs
 		r.PhiThreshold = &tmpVal
@@ -13186,34 +13188,24 @@ func (m *UpdateGossipConfigRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		copy(dAtA[i:], m.MaxUpdateAge)
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.MaxUpdateAge)))
 		i--
-		dAtA[i] = 0x32
+		dAtA[i] = 0x2a
 	}
 	if len(m.PingInterval) > 0 {
 		i -= len(m.PingInterval)
 		copy(dAtA[i:], m.PingInterval)
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.PingInterval)))
 		i--
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x22
 	}
 	if m.PhiThreshold != nil {
 		i -= 8
 		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(*m.PhiThreshold))))
 		i--
-		dAtA[i] = 0x21
+		dAtA[i] = 0x19
 	}
-	if m.Disable {
+	if m.Enabled != nil {
 		i--
-		if m.Disable {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x18
-	}
-	if m.Enable {
-		i--
-		if m.Enable {
+		if *m.Enabled {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -25400,10 +25392,7 @@ func (m *UpdateGossipConfigRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.Enable {
-		n += 2
-	}
-	if m.Disable {
+	if m.Enabled != nil {
 		n += 2
 	}
 	if m.PhiThreshold != nil {
@@ -46984,7 +46973,7 @@ func (m *UpdateGossipConfigRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Enable", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Enabled", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -47001,28 +46990,9 @@ func (m *UpdateGossipConfigRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.Enable = bool(v != 0)
+			b := bool(v != 0)
+			m.Enabled = &b
 		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Disable", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.Disable = bool(v != 0)
-		case 4:
 			if wireType != 1 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PhiThreshold", wireType)
 			}
@@ -47034,7 +47004,7 @@ func (m *UpdateGossipConfigRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx += 8
 			v2 := float64(math.Float64frombits(v))
 			m.PhiThreshold = &v2
-		case 5:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PingInterval", wireType)
 			}
@@ -47066,7 +47036,7 @@ func (m *UpdateGossipConfigRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.PingInterval = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 6:
+		case 5:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field MaxUpdateAge", wireType)
 			}

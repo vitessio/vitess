@@ -2196,23 +2196,20 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 
 	defer panicHandler(&err)
 
-	if req.Enable && req.Disable {
-		return nil, errors.New("--enable and --disable are mutually exclusive")
-	}
 	// phi-threshold must be strictly positive when specified. Omit the
 	// flag (nil pointer) to fall back to the default on create or leave
 	// the existing value unchanged on update.
 	if req.PhiThreshold != nil && *req.PhiThreshold <= 0 {
-		return nil, fmt.Errorf("invalid phi-threshold: must be positive, got %v", *req.PhiThreshold)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid phi-threshold: must be positive, got %v", *req.PhiThreshold)
 	}
 	if req.PingInterval != "" {
 		if d, err := time.ParseDuration(req.PingInterval); err != nil || d <= 0 {
-			return nil, fmt.Errorf("invalid ping-interval %q: must be a positive duration", req.PingInterval)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid ping-interval %q: must be a positive duration", req.PingInterval)
 		}
 	}
 	if req.MaxUpdateAge != "" {
 		if d, err := time.ParseDuration(req.MaxUpdateAge); err != nil || d <= 0 {
-			return nil, fmt.Errorf("invalid max-update-age %q: must be a positive duration", req.MaxUpdateAge)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid max-update-age %q: must be a positive duration", req.MaxUpdateAge)
 		}
 	}
 
@@ -2221,11 +2218,8 @@ func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.
 		if gossipConfig == nil {
 			gossipConfig = &topodatapb.GossipConfig{}
 		}
-		if req.Enable {
-			gossipConfig.Enabled = true
-		}
-		if req.Disable {
-			gossipConfig.Enabled = false
+		if req.Enabled != nil {
+			gossipConfig.Enabled = *req.Enabled
 		}
 		if req.PhiThreshold != nil {
 			// Validator has already ensured *req.PhiThreshold > 0.

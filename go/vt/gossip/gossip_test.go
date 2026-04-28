@@ -575,7 +575,7 @@ func TestProtoConversions(t *testing.T) {
 
 	unknownState := StateDigest{NodeID: "node2", Status: StatusUnknown}
 	protoUnknownState := toProtoState(unknownState)
-	assert.Zero(t, protoUnknownState.LastUpdateUnix)
+	assert.Nil(t, protoUnknownState.LastUpdate, "never-observed peers must serialize as nil so they round-trip to a zero time.Time")
 	roundTrippedUnknown, err := fromProtoState(protoUnknownState)
 	require.NoError(t, err)
 	assert.True(t, roundTrippedUnknown.LastUpdate.IsZero())

@@ -177,6 +177,11 @@ func analyzeShardQuorum(group *shardGroup, states map[gossip.NodeID]gossip.State
 	}
 }
 
+// aggregateShardMemberStates collapses a shard's gossip members down to
+// one entry per tablet alias. Multiple gossip records can map to the
+// same alias when a tablet is replaced and the old record hasn't aged
+// out yet — picking one deterministically (via preferGossipState) is
+// what keeps a stale Down record from masking the new tablet's Alive.
 func aggregateShardMemberStates(group *shardGroup, states map[gossip.NodeID]gossip.State, currentMembers map[string]struct{}) map[string]gossip.State {
 	aliasStates := make(map[string]gossip.State, len(group.members))
 	for _, m := range group.members {
@@ -196,6 +201,11 @@ func aggregateShardMemberStates(group *shardGroup, states map[gossip.NodeID]goss
 	return aliasStates
 }
 
+// replicaQuorumCounts produces the alive/total replica counts that the
+// quorum check needs. currentMembers is treated as authoritative when
+// set so a tablet missing from gossip counts toward the denominator
+// (it didn't observe the primary as Alive) without contributing to the
+// numerator. The aliasStates-only fallback only fires from tests.
 func replicaQuorumCounts(aliasStates map[string]gossip.State, primaryAlias string, currentMembers map[string]struct{}) (aliveReplicas int, totalReplicas int) {
 	if len(currentMembers) > 0 {
 		for alias := range currentMembers {
@@ -222,6 +232,11 @@ func replicaQuorumCounts(aliasStates map[string]gossip.State, primaryAlias strin
 	return aliveReplicas, totalReplicas
 }
 
+// preferGossipState is the tiebreak used by aggregateShardMemberStates
+// when two gossip records share a tablet alias. Newer LastUpdate wins;
+// on equal timestamps Alive beats Down/Suspect so a stale Down record
+// from a replaced tablet can never veto an Alive observation of the
+// fresh tablet — a false ERS would be far worse than a missed one.
 func preferGossipState(candidate gossip.State, current gossip.State) bool {
 	if candidate.LastUpdate.After(current.LastUpdate) {
 		return true

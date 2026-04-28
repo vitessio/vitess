@@ -12,6 +12,7 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	io "io"
 	math "math"
+	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -54,7 +55,7 @@ func (m *GossipState) CloneVT() *GossipState {
 	r.NodeId = m.NodeId
 	r.Status = m.Status
 	r.Phi = m.Phi
-	r.LastUpdateUnix = m.LastUpdateUnix
+	r.LastUpdate = m.LastUpdate.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -241,10 +242,15 @@ func (m *GossipState) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.LastUpdateUnix != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.LastUpdateUnix))
+	if m.LastUpdate != nil {
+		size, err := m.LastUpdate.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x20
+		dAtA[i] = 0x22
 	}
 	if m.Phi != 0 {
 		i -= 8
@@ -481,8 +487,9 @@ func (m *GossipState) SizeVT() (n int) {
 	if m.Phi != 0 {
 		n += 9
 	}
-	if m.LastUpdateUnix != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.LastUpdateUnix))
+	if m.LastUpdate != nil {
+		l = m.LastUpdate.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -887,10 +894,10 @@ func (m *GossipState) UnmarshalVT(dAtA []byte) error {
 			iNdEx += 8
 			m.Phi = float64(math.Float64frombits(v))
 		case 4:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field LastUpdateUnix", wireType)
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LastUpdate", wireType)
 			}
-			m.LastUpdateUnix = 0
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -900,11 +907,28 @@ func (m *GossipState) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.LastUpdateUnix |= int64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.LastUpdate == nil {
+				m.LastUpdate = &vttime.Time{}
+			}
+			if err := m.LastUpdate.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -40,22 +40,14 @@ var UpdateGossipConfig = &cobra.Command{
 }
 
 // commandUpdateGossipConfig marshals CLI flags into an
-// UpdateGossipConfigRequest. PhiThreshold is only set in the request
-// when the user explicitly passed --phi-threshold, so the server can
-// distinguish "unset (leave as default/existing)" from an explicit
-// value of 0 (which the server then rejects).
+// UpdateGossipConfigRequest. Optional fields (Enabled, PhiThreshold)
+// are only set in the request when the user explicitly passed the
+// matching flag, so the server can distinguish "unset (leave as
+// default/existing)" from an explicit value.
 func commandUpdateGossipConfig(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	keyspace := cmd.Flags().Arg(0)
-	enable, err := cmd.Flags().GetBool("enable")
-	if err != nil {
-		return err
-	}
-	disable, err := cmd.Flags().GetBool("disable")
-	if err != nil {
-		return err
-	}
 	pingInterval, err := cmd.Flags().GetString("ping-interval")
 	if err != nil {
 		return err
@@ -66,10 +58,16 @@ func commandUpdateGossipConfig(cmd *cobra.Command, args []string) error {
 	}
 	req := &vtctldatapb.UpdateGossipConfigRequest{
 		Keyspace:     keyspace,
-		Enable:       enable,
-		Disable:      disable,
 		PingInterval: pingInterval,
 		MaxUpdateAge: maxUpdateAge,
+	}
+	switch {
+	case cmd.Flags().Changed("enable"):
+		enabled := true
+		req.Enabled = &enabled
+	case cmd.Flags().Changed("disable"):
+		enabled := false
+		req.Enabled = &enabled
 	}
 	if cmd.Flags().Changed("phi-threshold") {
 		phiThreshold, err := cmd.Flags().GetFloat64("phi-threshold")
@@ -95,6 +93,7 @@ func commandUpdateGossipConfig(cmd *cobra.Command, args []string) error {
 func init() {
 	UpdateGossipConfig.Flags().Bool("enable", false, "Enable gossip for this keyspace")
 	UpdateGossipConfig.Flags().Bool("disable", false, "Disable gossip for this keyspace")
+	UpdateGossipConfig.MarkFlagsMutuallyExclusive("enable", "disable")
 	UpdateGossipConfig.Flags().Float64("phi-threshold", 0, "Phi-accrual suspicion threshold. Must be > 0 when specified; omit to use the default (4) on create or preserve the existing value on update")
 	UpdateGossipConfig.Flags().String("ping-interval", "", "Gossip exchange interval. Must be a positive duration when specified; omit to use the default (1s) on create or preserve the existing value on update")
 	UpdateGossipConfig.Flags().String("max-update-age", "", "Max staleness before marking peer down. Must be a positive duration when specified; omit to use the default (5s) on create or preserve the existing value on update")

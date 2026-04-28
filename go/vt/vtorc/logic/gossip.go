@@ -52,10 +52,18 @@ var (
 	gossipAgent   *gossip.Gossip
 	gossipCancel  context.CancelFunc
 
-	gossipRPCMu        sync.Mutex
-	gossipRPCServer    *grpc.Server
-	gossipRPCListener  net.Listener
-	gossipWatchCount   atomic.Int32
+	gossipRPCMu       sync.Mutex
+	gossipRPCServer   *grpc.Server
+	gossipRPCListener net.Listener
+	gossipWatchCount  atomic.Int32
+	// gossipPollInterval governs how often we rescan all keyspaces
+	// looking for the first one with gossip enabled. The poll only
+	// runs while no keyspace is enabled yet — once one shows up we
+	// upgrade to a SrvKeyspace watch with no further polling, and
+	// startGossip itself is gated on --gossip-listen-addr so opt-out
+	// admins never hit this path at all. 1s is what makes a fresh
+	// `UpdateGossipConfig --enable` visible to VTOrc within seconds,
+	// which the issue's manual test relies on.
 	gossipPollInterval = time.Second
 )
 
@@ -111,7 +119,17 @@ func clearGossipAgent() *gossip.Gossip {
 // watcher (if a keyspace already has gossip enabled) or a poller (to
 // wait for the first enable). Called from ContinuousDiscovery so it
 // runs as VTOrc boots.
+//
+// When --gossip-listen-addr is empty the operator has not opted in:
+// the agent could never receive peer traffic anyway, so we skip every
+// piece of ongoing work (keyspace scans, watch goroutines, the debug
+// endpoint, the gRPC listener) instead of paying for them in vain.
+// This is the common case while gossip rolls out — most installs will
+// have it disabled for a long time.
 func startGossip() {
+	if config.GossipListenAddr() == "" {
+		return
+	}
 	gossipOnce.Do(func() {
 		// Register the debug endpoint once — it safely returns empty
 		// when gossipAgent is nil.

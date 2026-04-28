@@ -18,11 +18,14 @@ package gossip
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 type grpcTransport struct {
@@ -87,14 +90,14 @@ func (t *grpcTransport) Join(ctx context.Context, addr string, req *JoinRequest)
 // misconfigured dialer.
 func (t *grpcTransport) dial(ctx context.Context, addr string) (gossippb.GossipClient, error) {
 	if t.dialer == nil {
-		return nil, errors.New("gossip transport dialer is nil")
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "gossip transport dialer is nil")
 	}
 	client, err := t.dialer.Dial(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
 	if client == nil {
-		return nil, fmt.Errorf("gossip transport dialer returned nil client for %q", addr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gossip transport dialer returned nil client for %q", addr)
 	}
 	return client, nil
 }
@@ -104,7 +107,6 @@ func (t *grpcTransport) dial(ctx context.Context, addr string) (gossippb.GossipC
 // enums, etc.) and the protobuf wire types. Keeping the wire layer
 // isolated here means the core gossip logic never deals with
 // gossippb directly and is easier to reason about / unit-test.
-
 func toProtoMessage(msg *Message) *gossippb.GossipMessage {
 	if msg == nil {
 		return &gossippb.GossipMessage{}
@@ -127,10 +129,10 @@ func toProtoMessage(msg *Message) *gossippb.GossipMessage {
 	}
 }
 
-func toProtoMessageValue(msg Message) *gossippb.GossipMessage {
-	return toProtoMessage(&msg)
-}
-
+// fromProtoMessage decodes a wire payload into the gossip package's
+// native types so the merge logic on the receive side never has to
+// touch proto. A nil msg yields an empty Message rather than nil so
+// callers can safely range over Members/States.
 func fromProtoMessage(msg *gossippb.GossipMessage) (*Message, error) {
 	if msg == nil {
 		return &Message{}, nil
@@ -157,6 +159,9 @@ func fromProtoMessage(msg *gossippb.GossipMessage) (*Message, error) {
 	}, nil
 }
 
+// toProtoJoinRequest / fromProtoJoinRequest move a Join payload across
+// the wire boundary. The conversion exists for the same reason as
+// toProtoMessage: keep gossippb out of the core agent.
 func toProtoJoinRequest(req *JoinRequest) *gossippb.GossipJoinRequest {
 	if req == nil {
 		return &gossippb.GossipJoinRequest{}
@@ -189,6 +194,9 @@ func fromProtoJoinRequest(req *gossippb.GossipJoinRequest) *JoinRequest {
 	}
 }
 
+// toProtoJoinResponse / fromProtoJoinResponse are the receive-side
+// counterparts. JoinResponse.Initial is a value (not pointer) so we
+// dereference fromProtoMessage's result when round-tripping.
 func toProtoJoinResponse(resp *JoinResponse) *gossippb.GossipJoinResponse {
 	if resp == nil {
 		return &gossippb.GossipJoinResponse{}
@@ -201,7 +209,7 @@ func toProtoJoinResponse(resp *JoinResponse) *gossippb.GossipJoinResponse {
 
 	return &gossippb.GossipJoinResponse{
 		Members: members,
-		Initial: toProtoMessageValue(resp.Initial),
+		Initial: toProtoMessage(&resp.Initial),
 	}
 }
 
@@ -226,10 +234,11 @@ func fromProtoJoinResponse(resp *gossippb.GossipJoinResponse) (*JoinResponse, er
 	}, nil
 }
 
+// toProtoMember / fromProtoMember translate a single Member. The Meta
+// map is shared by reference in both directions — proto3 marshals empty
+// and nil maps identically and the agent never mutates a Member's Meta
+// after it is published, so a copy here would be wasted work.
 func toProtoMember(member Member) *gossippb.Member {
-	if member.Meta == nil {
-		member.Meta = map[string]string{}
-	}
 	return &gossippb.Member{
 		Id:   string(member.ID),
 		Addr: member.Addr,
@@ -249,26 +258,29 @@ func fromProtoMember(member *gossippb.Member) Member {
 }
 
 // toProtoState encodes a StateDigest for the wire. A zero LastUpdate
-// is sent as 0 (rather than Unix(0,0).UnixNano()==0 which happens to
-// match) so never-observed peers arrive on the other side with an
-// IsZero timestamp and stay Unknown — a real Unix(0,0) would make them
-// look ancient and immediately age to Down via MaxUpdateAge.
+// is sent as nil so never-observed peers arrive on the other side with
+// an IsZero timestamp and stay Unknown — leaving the field unset on the
+// wire (rather than serialising the Unix epoch) is what preserves the
+// distinction; a real Unix(0,0) would make them look ancient and
+// immediately age to Down via MaxUpdateAge.
 func toProtoState(state StateDigest) *gossippb.GossipState {
-	var lastUpdateUnix int64
+	var lastUpdate *vttime.Time
 	if !state.LastUpdate.IsZero() {
-		lastUpdateUnix = state.LastUpdate.UnixNano()
+		lastUpdate = protoutil.TimeToProto(state.LastUpdate)
 	}
 	return &gossippb.GossipState{
-		NodeId:         string(state.NodeID),
-		Status:         toProtoStatus(state.Status),
-		Phi:            state.Phi,
-		LastUpdateUnix: lastUpdateUnix,
+		NodeId:     string(state.NodeID),
+		Status:     toProtoStatus(state.Status),
+		Phi:        state.Phi,
+		LastUpdate: lastUpdate,
 	}
 }
 
-// fromProtoState is the receive-side counterpart: 0 on the wire stays
-// a zero time.Time (never-observed), preserving the "seeds stay Unknown
-// until first exchange" invariant across process boundaries.
+// fromProtoState is the receive-side counterpart: a nil last_update on
+// the wire stays a zero time.Time (never-observed), preserving the
+// "seeds stay Unknown until first exchange" invariant across process
+// boundaries. A non-nil last_update with all-zero fields is interpreted
+// as Unix(0, 0) — which is non-zero and will age normally.
 func fromProtoState(state *gossippb.GossipState) (StateDigest, error) {
 	if state == nil {
 		return StateDigest{}, nil
@@ -278,8 +290,8 @@ func fromProtoState(state *gossippb.GossipState) (StateDigest, error) {
 		return StateDigest{}, err
 	}
 	var lastUpdate time.Time
-	if state.LastUpdateUnix != 0 {
-		lastUpdate = time.Unix(0, state.LastUpdateUnix)
+	if state.LastUpdate != nil {
+		lastUpdate = protoutil.TimeFromProto(state.LastUpdate)
 	}
 	return StateDigest{
 		NodeID:     NodeID(state.NodeId),
@@ -317,6 +329,6 @@ func fromProtoStatus(status gossippb.Status) (Status, error) {
 	case gossippb.Status_STATUS_UNKNOWN:
 		return StatusUnknown, nil
 	default:
-		return StatusUnknown, fmt.Errorf("unknown gossip status: %d", status)
+		return StatusUnknown, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown gossip status: %d", status)
 	}
 }

@@ -19,6 +19,8 @@ option go_package = "vitess.io/vitess/go/vt/proto/gossip";
 
 package gossip;
 
+import "vttime.proto";
+
 // Member is a gossip participant descriptor.
 message Member {
   // Required. id is the unique node identifier.
@@ -45,8 +47,10 @@ message GossipState {
   Status status = 2;
   // phi is the phi-accrual suspicion value.
   double phi = 3;
-  // last_update_unix is the Unix timestamp in nanoseconds for the latest update.
-  int64 last_update_unix = 4;
+  // last_update is the wall-clock time of the latest update. A nil
+  // value means the peer has never been observed (seeds before any
+  // gossip exchange) and must remain Unknown rather than ageing to Down.
+  vttime.Time last_update = 4;
 }
 
 // GossipMessage is the push/pull payload for gossip exchanges.

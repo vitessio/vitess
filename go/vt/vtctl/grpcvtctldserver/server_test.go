@@ -15001,6 +15001,9 @@ func TestUpdateGossipConfig(t *testing.T) {
 	float64Ptr := func(v float64) *float64 {
 		return &v
 	}
+	boolPtr := func(v bool) *bool {
+		return &v
+	}
 	newServer := func(t *testing.T, cells ...string) (*topo.Server, vtctlservicepb.VtctldServer) {
 		t.Helper()
 		if len(cells) == 0 {
@@ -15025,7 +15028,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 
 		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace:     "ks",
-			Enable:       true,
+			Enabled:      boolPtr(true),
 			PhiThreshold: float64Ptr(5),
 			PingInterval: "2s",
 			MaxUpdateAge: "10s",
@@ -15047,14 +15050,14 @@ func TestUpdateGossipConfig(t *testing.T) {
 		// First enable.
 		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace: "ks",
-			Enable:   true,
+			Enabled:  boolPtr(true),
 		})
 		require.NoError(t, err)
 
 		// Then disable.
 		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace: "ks",
-			Disable:  true,
+			Enabled:  boolPtr(false),
 		})
 		require.NoError(t, err)
 
@@ -15064,25 +15067,13 @@ func TestUpdateGossipConfig(t *testing.T) {
 		assert.False(t, ki.GossipConfig.Enabled)
 	})
 
-	t.Run("enable and disable mutually exclusive", func(t *testing.T) {
-		_, vtctld := newServerWithShard(t)
-
-		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
-			Keyspace: "ks",
-			Enable:   true,
-			Disable:  true,
-		})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "mutually exclusive")
-	})
-
 	t.Run("partial update preserves existing config", func(t *testing.T) {
 		ts, vtctld := newServerWithShard(t)
 
 		// Set initial config.
 		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace:     "ks",
-			Enable:       true,
+			Enabled:      boolPtr(true),
 			PhiThreshold: float64Ptr(5),
 			PingInterval: "2s",
 			MaxUpdateAge: "10s",
@@ -15112,7 +15103,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 
 		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace:     "ks",
-			Enable:       true,
+			Enabled:      boolPtr(true),
 			PhiThreshold: float64Ptr(5),
 			PingInterval: "2s",
 			MaxUpdateAge: "10s",
@@ -15146,7 +15137,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 
 		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace: "ks",
-			Enable:   true,
+			Enabled:  boolPtr(true),
 		})
 		require.NoError(t, err)
 
@@ -15165,7 +15156,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 		// Set initial config with all fields.
 		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace:     "ks",
-			Enable:       true,
+			Enabled:      boolPtr(true),
 			PhiThreshold: float64Ptr(6),
 			PingInterval: "3s",
 			MaxUpdateAge: "15s",
@@ -15194,7 +15185,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 
 		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace: "nonexistent",
-			Enable:   true,
+			Enabled:  boolPtr(true),
 		})
 		assert.Error(t, err)
 	})
@@ -15207,7 +15198,7 @@ func TestUpdateGossipConfig(t *testing.T) {
 		name: "explicit zero phi threshold",
 		req: &vtctldatapb.UpdateGossipConfigRequest{
 			Keyspace:     "ks",
-			Enable:       true,
+			Enabled:      boolPtr(true),
 			PhiThreshold: float64Ptr(0),
 		},
 		wantErr: "invalid phi-threshold",

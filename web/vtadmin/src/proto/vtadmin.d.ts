@@ -65790,11 +65790,8 @@ export namespace vtctldata {
         /** UpdateGossipConfigRequest keyspace */
         keyspace?: (string|null);
 
-        /** UpdateGossipConfigRequest enable */
-        enable?: (boolean|null);
-
-        /** UpdateGossipConfigRequest disable */
-        disable?: (boolean|null);
+        /** UpdateGossipConfigRequest enabled */
+        enabled?: (boolean|null);
 
         /** UpdateGossipConfigRequest phi_threshold */
         phi_threshold?: (number|null);
@@ -65818,11 +65815,8 @@ export namespace vtctldata {
         /** UpdateGossipConfigRequest keyspace. */
         public keyspace: string;
 
-        /** UpdateGossipConfigRequest enable. */
-        public enable: boolean;
-
-        /** UpdateGossipConfigRequest disable. */
-        public disable: boolean;
+        /** UpdateGossipConfigRequest enabled. */
+        public enabled?: (boolean|null);
 
         /** UpdateGossipConfigRequest phi_threshold. */
         public phi_threshold?: (number|null);

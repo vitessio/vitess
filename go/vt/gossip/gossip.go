@@ -20,7 +20,6 @@ package gossip
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"maps"
 	"math"
 	"math/rand/v2"
@@ -28,6 +27,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -230,6 +233,12 @@ const (
 	MetaKeyTabletAlias = "tablet_alias"
 )
 
+// defaultPHIAccrual is the ring size every per-peer phi-accrual detector
+// is built with — i.e. how many recent inter-arrival samples we keep
+// when computing the suspicion value. 50 is enough to stabilize the
+// mean/stddev under normal gossip cadence without growing unbounded.
+const defaultPHIAccrual = 50
+
 type (
 	// phiAccrual is a per-peer heartbeat-interval tracker. It keeps a
 	// bounded ring of recent inter-arrival times and computes a phi
@@ -276,7 +285,7 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	if cfg.NodeID != "" {
 		g.members[cfg.NodeID] = Member{ID: cfg.NodeID, Addr: cfg.BindAddr, Meta: cfg.Meta}
 		g.states[cfg.NodeID] = State{Status: StatusAlive, LastUpdate: g.clock.Now()}
-		g.detectors[cfg.NodeID] = newPhiAccrual(50)
+		g.detectors[cfg.NodeID] = newPhiAccrual(defaultPHIAccrual)
 	}
 
 	for _, seed := range cfg.Seeds {
@@ -285,7 +294,7 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 		}
 		g.members[seed.ID] = seed
 		g.states[seed.ID] = State{Status: StatusUnknown}
-		g.detectors[seed.ID] = newPhiAccrual(50)
+		g.detectors[seed.ID] = newPhiAccrual(defaultPHIAccrual)
 	}
 
 	return g
@@ -293,7 +302,7 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 
 // ErrAlreadyStarted is returned by Start when the agent has already been
 // started. Gossip agents are single-shot: create a new one to restart.
-var ErrAlreadyStarted = errors.New("gossip: agent already started")
+var ErrAlreadyStarted = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "gossip: agent already started")
 
 // Start begins the periodic gossip loop in a background goroutine. Start
 // is one-shot per agent instance — a stopped agent cannot be restarted;
@@ -525,43 +534,42 @@ func (g *Gossip) Members() []Member {
 // operators can see the reason in server logs.
 func (g *Gossip) HandleJoin(req *JoinRequest) (*JoinResponse, error) {
 	if req == nil {
-		return nil, errors.New("gossip: join request is nil")
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "gossip: join request is nil")
 	}
 	if req.Member.ID == "" {
-		return nil, errors.New("gossip: join request missing member id")
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "gossip: join request missing member id")
 	}
 	if req.Member.Addr == "" {
-		return nil, errors.New("gossip: join request missing member addr")
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "gossip: join request missing member addr")
 	}
 
 	now := g.clock.Now()
 	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	scope := g.responseScopeForMemberLocked(req.Member)
 	if !memberAllowedForScope(req.Member, scope) {
-		g.mu.Unlock()
-		return nil, errors.New("gossip: join request scope does not match receiver scope")
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "gossip: join request scope does not match receiver scope")
 	}
 	g.addMemberLocked(req.Member)
 	g.states[req.Member.ID] = State{Status: StatusAlive, LastUpdate: now}
 	g.observeLocked(req.Member.ID, now)
 	g.bumpEpochLocked()
-	response := &JoinResponse{
+	return &JoinResponse{
 		Members: g.membersSliceLocked(scope),
 		Initial: g.snapshotMessageLocked(scope),
-	}
-	g.mu.Unlock()
-
-	return response, nil
+	}, nil
 }
 
 // HandlePushPull processes an incoming push-pull exchange and returns the local state.
 func (g *Gossip) HandlePushPull(msg *Message) *Message {
 	now := g.clock.Now()
 	g.mu.Lock()
+	defer g.mu.Unlock()
+
 	scope := g.responseScopeForMessageLocked(msg)
 	g.applyMessageLocked(now, msg, scope)
 	response := g.snapshotMessageLocked(scope)
-	g.mu.Unlock()
 	return &response
 }
 
@@ -805,7 +813,7 @@ func (g *Gossip) addMemberLocked(member Member) {
 	}
 	g.members[member.ID] = cloneMember(member)
 	if _, ok := g.detectors[member.ID]; !ok {
-		g.detectors[member.ID] = newPhiAccrual(50)
+		g.detectors[member.ID] = newPhiAccrual(defaultPHIAccrual)
 	}
 }
 
@@ -879,7 +887,7 @@ func (g *Gossip) applyMessageLocked(now time.Time, msg *Message, scope string) {
 func (g *Gossip) observeLocked(nodeID NodeID, now time.Time) {
 	detector := g.detectors[nodeID]
 	if detector == nil {
-		detector = newPhiAccrual(50)
+		detector = newPhiAccrual(defaultPHIAccrual)
 		g.detectors[nodeID] = detector
 	}
 	detector.Observe(now)
@@ -926,6 +934,11 @@ func (g *Gossip) membersSliceLocked(scope string) []Member {
 	return members
 }
 
+// cloneMembers, cloneMember, and cloneMeta are the deep-copy primitives
+// used at every API boundary that hands a Member to outside code. The
+// merge logic mutates Meta maps in place; without these clones a caller
+// reading via Members() or Debug() could write into the agent's
+// internal state and race with concurrent gossip activity.
 func cloneMembers(members []Member) []Member {
 	if len(members) == 0 {
 		return nil
@@ -999,6 +1012,11 @@ func memberScope(meta map[string]string) string {
 	return keyspace + "/" + shard
 }
 
+// memberAllowedForScope is the predicate that drives intra-shard
+// isolation: a scoped exchange only accepts same-shard or unscoped
+// members, so traffic from one shard never bleeds into another's view.
+// Unscoped members (VTOrc) are always accepted because VTOrc rides
+// along on every per-shard exchange without owning a shard identity.
 func memberAllowedForScope(member Member, scope string) bool {
 	if scope == "" {
 		return true
@@ -1007,6 +1025,10 @@ func memberAllowedForScope(member Member, scope string) bool {
 	return memberScope == "" || memberScope == scope
 }
 
+// stateAllowedForScope decides whether an incoming state digest passes
+// the scope filter. A digest can arrive without its companion Member
+// in the same message (e.g., from a peer that only forwarded state),
+// so we fall back to whatever directory entry we already have on file.
 func (g *Gossip) stateAllowedForScope(nodeID NodeID, scope string, incomingMembers map[NodeID]struct{}) bool {
 	if scope == "" {
 		return true
@@ -1018,6 +1040,10 @@ func (g *Gossip) stateAllowedForScope(nodeID NodeID, scope string, incomingMembe
 	return ok && memberAllowedForScope(member, scope)
 }
 
+// firstScope picks any scoped member's scope from a slice. Used during
+// bootstrap so an unscoped agent (VTOrc) joining a shard's seed can
+// adopt that shard's scope when applying the seed's response, instead
+// of accepting messages without a scope filter at all.
 func firstScope(members []Member) string {
 	for _, member := range members {
 		if scope := memberScope(member.Meta); scope != "" {

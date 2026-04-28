@@ -105,7 +105,7 @@ func TestRootWithInternalVtctld(t *testing.T) {
 		{
 			command:   "UpdateGossipConfig",
 			args:      []string{"--enable", "--disable", "test_ks"},
-			expectErr: "mutually exclusive",
+			expectErr: "none of the others can be",
 		},
 	}
 

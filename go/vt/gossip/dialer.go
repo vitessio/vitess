@@ -18,7 +18,6 @@ package gossip
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"sync"
 
@@ -27,8 +26,10 @@ import (
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	gossippb "vitess.io/vitess/go/vt/proto/gossip"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // GRPCDialer implements the Dialer interface using Vitess gRPC client
@@ -46,7 +47,7 @@ type GRPCDialer struct {
 }
 
 // ErrDialerClosed is returned from Dial when the dialer has been closed.
-var ErrDialerClosed = errors.New("gossip: dialer closed")
+var ErrDialerClosed = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "gossip: dialer closed")
 
 // Dial returns a gossip client bound to target, reusing a cached
 // *grpc.ClientConn when available.

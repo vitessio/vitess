@@ -7020,23 +7020,23 @@ func (*UpdateThrottlerConfigResponse) Descriptor() ([]byte, []int) {
 type UpdateGossipConfigRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Keyspace string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	// enable turns gossip on for the keyspace.
-	Enable bool `protobuf:"varint,2,opt,name=enable,proto3" json:"enable,omitempty"`
-	// disable turns gossip off for the keyspace.
-	Disable bool `protobuf:"varint,3,opt,name=disable,proto3" json:"disable,omitempty"`
+	// enabled turns gossip on or off for the keyspace. Leave unset (nil)
+	// to preserve the current setting; the CLI surfaces this as the
+	// mutually-exclusive --enable / --disable flag pair.
+	Enabled *bool `protobuf:"varint,2,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
 	// phi_threshold is the phi-accrual suspicion threshold. Must be > 0
 	// when set; explicit 0 or negative values are rejected. Leave unset
 	// (nil) to use the default (4) on create or preserve the existing
 	// value on update.
-	PhiThreshold *float64 `protobuf:"fixed64,4,opt,name=phi_threshold,json=phiThreshold,proto3,oneof" json:"phi_threshold,omitempty"`
+	PhiThreshold *float64 `protobuf:"fixed64,3,opt,name=phi_threshold,json=phiThreshold,proto3,oneof" json:"phi_threshold,omitempty"`
 	// ping_interval is the gossip exchange interval. Must be a positive
 	// duration when set; empty preserves the existing value on update or
 	// uses the default (1s) on create.
-	PingInterval string `protobuf:"bytes,5,opt,name=ping_interval,json=pingInterval,proto3" json:"ping_interval,omitempty"`
+	PingInterval string `protobuf:"bytes,4,opt,name=ping_interval,json=pingInterval,proto3" json:"ping_interval,omitempty"`
 	// max_update_age is how long before marking a peer down. Must be a
 	// positive duration when set; empty preserves the existing value on
 	// update or uses the default (5s) on create.
-	MaxUpdateAge  string `protobuf:"bytes,6,opt,name=max_update_age,json=maxUpdateAge,proto3" json:"max_update_age,omitempty"`
+	MaxUpdateAge  string `protobuf:"bytes,5,opt,name=max_update_age,json=maxUpdateAge,proto3" json:"max_update_age,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7078,16 +7078,9 @@ func (x *UpdateGossipConfigRequest) GetKeyspace() string {
 	return ""
 }
 
-func (x *UpdateGossipConfigRequest) GetEnable() bool {
-	if x != nil {
-		return x.Enable
-	}
-	return false
-}
-
-func (x *UpdateGossipConfigRequest) GetDisable() bool {
-	if x != nil {
-		return x.Disable
+func (x *UpdateGossipConfigRequest) GetEnabled() bool {
+	if x != nil && x.Enabled != nil {
+		return *x.Enabled
 	}
 	return false
 }
@@ -18136,14 +18129,15 @@ const file_vtctldata_proto_rawDesc = "" +
 	"metricName\x12\x19\n" +
 	"\bapp_name\x18\v \x01(\tR\aappName\x12.\n" +
 	"\x13app_checked_metrics\x18\f \x03(\tR\x11appCheckedMetrics\"\x1f\n" +
-	"\x1dUpdateThrottlerConfigResponse\"\xf0\x01\n" +
+	"\x1dUpdateThrottlerConfigResponse\"\xe9\x01\n" +
 	"\x19UpdateGossipConfigRequest\x12\x1a\n" +
-	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x16\n" +
-	"\x06enable\x18\x02 \x01(\bR\x06enable\x12\x18\n" +
-	"\adisable\x18\x03 \x01(\bR\adisable\x12(\n" +
-	"\rphi_threshold\x18\x04 \x01(\x01H\x00R\fphiThreshold\x88\x01\x01\x12#\n" +
-	"\rping_interval\x18\x05 \x01(\tR\fpingInterval\x12$\n" +
-	"\x0emax_update_age\x18\x06 \x01(\tR\fmaxUpdateAgeB\x10\n" +
+	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x1d\n" +
+	"\aenabled\x18\x02 \x01(\bH\x00R\aenabled\x88\x01\x01\x12(\n" +
+	"\rphi_threshold\x18\x03 \x01(\x01H\x01R\fphiThreshold\x88\x01\x01\x12#\n" +
+	"\rping_interval\x18\x04 \x01(\tR\fpingInterval\x12$\n" +
+	"\x0emax_update_age\x18\x05 \x01(\tR\fmaxUpdateAgeB\n" +
+	"\n" +
+	"\b_enabledB\x10\n" +
 	"\x0e_phi_threshold\"\x1c\n" +
 	"\x1aUpdateGossipConfigResponse\"*\n" +
 	"\x14GetSrvVSchemaRequest\x12\x12\n" +

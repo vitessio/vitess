@@ -718,7 +718,11 @@ func ReadInstance(tabletAlias *topodatapb.TabletAlias) (*Instance, bool, error) 
 	return instances[0], true, nil
 }
 
-// ReadInstanceLastCheckValidByAlias reads last-check validity for the given aliases in one backend query.
+// ReadInstanceLastCheckValidByAlias reads the IsLastCheckValid bit for
+// many aliases in a single backend query. The gossip analysis path
+// (buildVTOrcView) used to call ReadInstance once per shard primary on
+// every recovery cycle; on installs with hundreds of shards that turned
+// into N+1 query traffic. This helper folds it into one batched query.
 func ReadInstanceLastCheckValidByAlias(aliases []string) (map[string]bool, error) {
 	validByAlias := make(map[string]bool, len(aliases))
 	if len(aliases) == 0 {

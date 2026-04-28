@@ -579,41 +579,24 @@ func (tm *TabletManager) Stop() {
 	tm.tmState.Close()
 }
 
-// getGossipConfig reads the gossip configuration from SrvKeyspace.
-// Used at startup to skip the initial watcher hop when gossip is
-// already enabled — the agent can boot with the known config instead
-// of waiting for the first watch event.
-func (tm *TabletManager) getGossipConfig(tablet *topodatapb.Tablet) *topodatapb.GossipConfig {
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-	defer cancel()
-	srvKs, err := tm.TopoServer.GetSrvKeyspace(ctx, tablet.Alias.Cell, tablet.Keyspace)
-	if err != nil || srvKs == nil {
-		return nil
-	}
-	return srvKs.GossipConfig
-}
-
-// startGossipLifecycle boots the per-tablet gossip agent (if the
-// keyspace has gossip enabled) and starts a SrvKeyspace watcher that
-// handles future enable / disable / tuning changes live. Called early
+// startGossipLifecycle starts a SrvKeyspace watcher that brings the
+// per-tablet gossip agent up when the keyspace has gossip enabled and
+// follows future enable / disable / tuning changes live. Called early
 // in TabletManager.Start so the watcher runs even for tablets going
 // through --restore-from-backup.
+//
+// Tablets in keyspaces with gossip currently disabled (the common case
+// while gossip rolls out) pay nothing here beyond starting one watcher
+// goroutine: there is no synchronous SrvKeyspace read at boot — the
+// watcher's first iteration delivers the initial value the same way it
+// delivers later changes, so we'd just be reading the same record
+// twice.
 func (tm *TabletManager) startGossipLifecycle(tablet *topodatapb.Tablet) error {
-	// Mirror the watcher path's order: start the agent first and only
-	// publish it on the TabletManager after Start succeeds. Otherwise a
-	// failed Start leaves tm.Gossip pointing at an unstarted agent that
-	// later code has no easy way to distinguish from a healthy one.
-	agent, enabled := tm.currentGossipState()
-	if agent == nil {
-		gossipCfg := tm.getGossipConfig(tablet)
-		if newAgent, ok := newGossipAgent(gossipCfg, tablet, tm.TopoServer); ok {
-			if err := newAgent.Start(tm.BatchCtx); err != nil {
-				return err
-			}
-			tm.SetGossip(newAgent, true)
-			servenv.OnTerm(tm.stopGossipLifecycle)
-		}
-	} else if enabled {
+	// Test-injected agent path: the test installed a pre-built agent via
+	// SetGossip before calling Start; we just start it here. Production
+	// always reaches this with agent==nil and lets the watcher build
+	// and install the agent asynchronously when the config says enabled.
+	if agent, enabled := tm.currentGossipState(); agent != nil && enabled {
 		if err := agent.Start(tm.BatchCtx); err != nil {
 			return err
 		}
@@ -697,23 +680,18 @@ func (tm *TabletManager) applyGossipConfigChange(srvKs *topodatapb.SrvKeyspace, 
 	}
 	agent := tm.currentGossipAgent()
 	if agent == nil {
-		agent, enabled := newGossipAgent(cfg, tablet, tm.TopoServer)
+		newAgent, enabled := newGossipAgent(cfg, tablet, tm.TopoServer)
 		if !enabled {
 			return
 		}
-		tm.gossipMu.Lock()
-		if tm.Gossip != nil {
-			tm.gossipMu.Unlock()
-			return
-		}
-		if err := agent.Start(tm.BatchCtx); err != nil {
-			tm.gossipMu.Unlock()
+		installed, err := tm.installGossipAgent(newAgent)
+		if err != nil {
 			log.Error("failed to start gossip agent from watcher", slog.Any("error", err))
 			return
 		}
-		tm.Gossip = agent
-		tm.GossipEnabled = true
-		tm.gossipMu.Unlock()
+		if !installed {
+			return
+		}
 		log.Info("gossip: agent started on vttablet",
 			slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))
 		registerGossipService(tm)
@@ -724,6 +702,26 @@ func (tm *TabletManager) applyGossipConfigChange(srvKs *topodatapb.SrvKeyspace, 
 		PingInterval: parseDuration(cfg.PingInterval, 0),
 		MaxUpdateAge: parseDuration(cfg.MaxUpdateAge, 0),
 	})
+}
+
+// installGossipAgent atomically starts the agent and publishes it on
+// the TabletManager. Reports installed=false if a concurrent watcher
+// callback already installed an agent (we lose the race and discard
+// ours), or err if Start failed (the agent is left unpublished). Lives
+// in its own helper so the lock can be released via defer no matter
+// which exit path runs.
+func (tm *TabletManager) installGossipAgent(agent *gossip.Gossip) (installed bool, err error) {
+	tm.gossipMu.Lock()
+	defer tm.gossipMu.Unlock()
+	if tm.Gossip != nil {
+		return false, nil
+	}
+	if err := agent.Start(tm.BatchCtx); err != nil {
+		return false, err
+	}
+	tm.Gossip = agent
+	tm.GossipEnabled = true
+	return true, nil
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {

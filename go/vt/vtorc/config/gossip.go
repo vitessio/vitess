@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
@@ -58,9 +59,12 @@ var (
 )
 
 // GossipNodeID returns a unique identifier for this VTOrc instance in the
-// gossip network. It combines the hostname with the listen address so two
-// VTOrcs sharing a port on different hosts do not collide. Falls back to
-// just the listen address if the hostname is unavailable.
+// gossip network. It prepends the hostname to the configured listen port
+// when the listen address is hostless ("[:port]"), so two VTOrcs sharing
+// a port on different hosts do not collide. When the hostname is
+// unavailable a random UUID is used in its place rather than the bare
+// port — bare-port IDs would collapse two VTOrcs on different hosts into
+// a single gossip identity, breaking the merge logic.
 func GossipNodeID() string {
 	gossipNodeIDOnce.Do(func() {
 		listenAddr := strings.TrimSpace(GossipListenAddr())
@@ -70,27 +74,29 @@ func GossipNodeID() string {
 }
 
 // computeGossipNodeID is pulled out for testability. If the listen
-// address has no explicit host (e.g. ":8080"), we prepend the
-// hostname so the node ID is unique across hosts; otherwise we use
-// the listen address verbatim since the operator has already chosen
-// a hostname.
+// address already has an explicit host (e.g. "host1:8080"), we use it
+// verbatim. Otherwise we synthesize a per-process unique host component
+// (hostname when available, UUID otherwise) so the resulting node ID is
+// always unique across hosts even if multiple VTOrcs share the listen
+// port.
 func computeGossipNodeID(listenAddr string) string {
 	if listenAddr == "" {
 		return ""
 	}
 	host, port, err := net.SplitHostPort(listenAddr)
 	if err != nil {
-		// Not a host:port form — use as-is.
-		return listenAddr
+		// Not a host:port form — fall back to a UUID so two
+		// misconfigured VTOrcs cannot accidentally share an ID.
+		return "vtorc-" + uuid.NewString()
 	}
 	if host != "" {
 		return listenAddr
 	}
-	hostname := gossipHostname()
-	if hostname == "" {
-		return listenAddr
+	hostComponent := gossipHostname()
+	if hostComponent == "" {
+		hostComponent = "vtorc-" + uuid.NewString()
 	}
-	return net.JoinHostPort(hostname, port)
+	return net.JoinHostPort(hostComponent, port)
 }
 
 // gossipHostname returns the hostname for this process. Exposed as a

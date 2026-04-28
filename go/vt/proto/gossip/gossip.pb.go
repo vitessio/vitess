@@ -27,6 +27,7 @@ import (
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -162,10 +163,12 @@ type GossipState struct {
 	Status Status `protobuf:"varint,2,opt,name=status,proto3,enum=gossip.Status" json:"status,omitempty"`
 	// phi is the phi-accrual suspicion value.
 	Phi float64 `protobuf:"fixed64,3,opt,name=phi,proto3" json:"phi,omitempty"`
-	// last_update_unix is the Unix timestamp in nanoseconds for the latest update.
-	LastUpdateUnix int64 `protobuf:"varint,4,opt,name=last_update_unix,json=lastUpdateUnix,proto3" json:"last_update_unix,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// last_update is the wall-clock time of the latest update. A nil
+	// value means the peer has never been observed (seeds before any
+	// gossip exchange) and must remain Unknown rather than ageing to Down.
+	LastUpdate    *vttime.Time `protobuf:"bytes,4,opt,name=last_update,json=lastUpdate,proto3" json:"last_update,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GossipState) Reset() {
@@ -219,11 +222,11 @@ func (x *GossipState) GetPhi() float64 {
 	return 0
 }
 
-func (x *GossipState) GetLastUpdateUnix() int64 {
+func (x *GossipState) GetLastUpdate() *vttime.Time {
 	if x != nil {
-		return x.LastUpdateUnix
+		return x.LastUpdate
 	}
-	return 0
+	return nil
 }
 
 // GossipMessage is the push/pull payload for gossip exchanges.
@@ -404,19 +407,20 @@ var File_gossip_proto protoreflect.FileDescriptor
 
 const file_gossip_proto_rawDesc = "" +
 	"\n" +
-	"\fgossip.proto\x12\x06gossip\"\x93\x01\n" +
+	"\fgossip.proto\x12\x06gossip\x1a\fvttime.proto\"\x93\x01\n" +
 	"\x06Member\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12,\n" +
 	"\x04meta\x18\x03 \x03(\v2\x18.gossip.Member.MetaEntryR\x04meta\x1a7\n" +
 	"\tMetaEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8a\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8f\x01\n" +
 	"\vGossipState\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12&\n" +
 	"\x06status\x18\x02 \x01(\x0e2\x0e.gossip.StatusR\x06status\x12\x10\n" +
-	"\x03phi\x18\x03 \x01(\x01R\x03phi\x12(\n" +
-	"\x10last_update_unix\x18\x04 \x01(\x03R\x0elastUpdateUnix\"|\n" +
+	"\x03phi\x18\x03 \x01(\x01R\x03phi\x12-\n" +
+	"\vlast_update\x18\x04 \x01(\v2\f.vttime.TimeR\n" +
+	"lastUpdate\"|\n" +
 	"\rGossipMessage\x12(\n" +
 	"\amembers\x18\x01 \x03(\v2\x0e.gossip.MemberR\amembers\x12+\n" +
 	"\x06states\x18\x02 \x03(\v2\x13.gossip.GossipStateR\x06states\x12\x14\n" +
@@ -458,25 +462,27 @@ var file_gossip_proto_goTypes = []any{
 	(*GossipJoinRequest)(nil),  // 4: gossip.GossipJoinRequest
 	(*GossipJoinResponse)(nil), // 5: gossip.GossipJoinResponse
 	nil,                        // 6: gossip.Member.MetaEntry
+	(*vttime.Time)(nil),        // 7: vttime.Time
 }
 var file_gossip_proto_depIdxs = []int32{
 	6,  // 0: gossip.Member.meta:type_name -> gossip.Member.MetaEntry
 	0,  // 1: gossip.GossipState.status:type_name -> gossip.Status
-	1,  // 2: gossip.GossipMessage.members:type_name -> gossip.Member
-	2,  // 3: gossip.GossipMessage.states:type_name -> gossip.GossipState
-	1,  // 4: gossip.GossipJoinRequest.member:type_name -> gossip.Member
-	1,  // 5: gossip.GossipJoinRequest.seeds:type_name -> gossip.Member
-	1,  // 6: gossip.GossipJoinResponse.members:type_name -> gossip.Member
-	3,  // 7: gossip.GossipJoinResponse.initial:type_name -> gossip.GossipMessage
-	4,  // 8: gossip.Gossip.Join:input_type -> gossip.GossipJoinRequest
-	3,  // 9: gossip.Gossip.PushPull:input_type -> gossip.GossipMessage
-	5,  // 10: gossip.Gossip.Join:output_type -> gossip.GossipJoinResponse
-	3,  // 11: gossip.Gossip.PushPull:output_type -> gossip.GossipMessage
-	10, // [10:12] is the sub-list for method output_type
-	8,  // [8:10] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	7,  // 2: gossip.GossipState.last_update:type_name -> vttime.Time
+	1,  // 3: gossip.GossipMessage.members:type_name -> gossip.Member
+	2,  // 4: gossip.GossipMessage.states:type_name -> gossip.GossipState
+	1,  // 5: gossip.GossipJoinRequest.member:type_name -> gossip.Member
+	1,  // 6: gossip.GossipJoinRequest.seeds:type_name -> gossip.Member
+	1,  // 7: gossip.GossipJoinResponse.members:type_name -> gossip.Member
+	3,  // 8: gossip.GossipJoinResponse.initial:type_name -> gossip.GossipMessage
+	4,  // 9: gossip.Gossip.Join:input_type -> gossip.GossipJoinRequest
+	3,  // 10: gossip.Gossip.PushPull:input_type -> gossip.GossipMessage
+	5,  // 11: gossip.Gossip.Join:output_type -> gossip.GossipJoinResponse
+	3,  // 12: gossip.Gossip.PushPull:output_type -> gossip.GossipMessage
+	11, // [11:13] is the sub-list for method output_type
+	9,  // [9:11] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_gossip_proto_init() }
