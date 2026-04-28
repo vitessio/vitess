@@ -145,7 +145,8 @@ type (
 		// queryLogger is passed in for logging from this vtgate executor.
 		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
-		warmingReadsSemaphore *semaphore.Weighted
+		warmingReadsSemaphore  *semaphore.Weighted
+		mirrorTrafficSemaphore *semaphore.Weighted
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
@@ -199,10 +200,11 @@ func NewExecutor(
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
 
-		schemaTracker:         schemaTracker,
-		plans:                 plans,
-		warmingReadsSemaphore: newWarmingReadsSemaphore(warmingReadsConcurrency),
-		ddlConfig:             ddlConfig,
+		schemaTracker:          schemaTracker,
+		plans:                  plans,
+		warmingReadsSemaphore:  newWarmingReadsSemaphore(warmingReadsConcurrency),
+		mirrorTrafficSemaphore: newMirrorTrafficSemaphore(mirrorTrafficConcurrency),
+		ddlConfig:              ddlConfig,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -1567,9 +1569,10 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent:   e.config.WarmingReadsPercent,
-		WarmingReadsTimeout:   warmingReadsQueryTimeout,
-		WarmingReadsSemaphore: e.warmingReadsSemaphore,
+		WarmingReadsPercent:    e.config.WarmingReadsPercent,
+		WarmingReadsTimeout:    warmingReadsQueryTimeout,
+		WarmingReadsSemaphore:  e.warmingReadsSemaphore,
+		MirrorTrafficSemaphore: e.mirrorTrafficSemaphore,
 	}
 }
 
@@ -1603,6 +1606,16 @@ func newWarmingReadsSemaphore(concurrency int) *semaphore.Weighted {
 		return semaphore.NewWeighted(0)
 	}
 	return semaphore.NewWeighted(int64(concurrency) * engine.WarmingReadsBaseWeight)
+}
+
+// newMirrorTrafficSemaphore returns a weighted semaphore sized to cap
+// concurrent mirror queries. Each mirror takes weight 1, so capacity equals
+// concurrency. A non-positive concurrency disables mirror dispatch.
+func newMirrorTrafficSemaphore(concurrency int) *semaphore.Weighted {
+	if concurrency <= 0 {
+		return semaphore.NewWeighted(0)
+	}
+	return semaphore.NewWeighted(int64(concurrency))
 }
 
 func countArguments(statement sqlparser.Statement) (paramsCount uint16) {

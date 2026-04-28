@@ -68,13 +68,25 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 	r, err := vcursor.ExecutePrimitive(ctx, m.primitive, bindVars, wantfields)
 	sourceExecTime := time.Since(sourceStartTime)
 
-	// Fire mirror query in the background. Use a detached context so it
-	// is not cancelled when this function returns the primary result.
-	// The cloned VCursor has an independent SafeSession and logStats,
+	// Reserve a slot in the mirror-traffic semaphore. If the bound is full or
+	// the semaphore is nil (mirror dispatch disabled), drop the mirror so a
+	// slow target cannot exhaust vtgate memory. The primary query result is
+	// already returned; the drop is invisible to the caller apart from the
+	// MirrorTargetDropped counter.
+	sem := vcursor.GetMirrorTrafficSemaphore()
+	if sem == nil || !sem.TryAcquire(1) {
+		vcursor.RecordMirrorDropped()
+		return r, err
+	}
+
+	// Slot reserved — fire the mirror in the background. Use a detached
+	// context so it is not cancelled when this function returns the primary
+	// result. The cloned VCursor has an independent SafeSession and logStats,
 	// so it is safe to use after the primary request completes.
 	mirrorCtx, mirrorCancel := context.WithTimeout(context.Background(), maxMirrorTargetDuration)
 	mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 	go func() {
+		defer sem.Release(1)
 		defer mirrorCancel()
 		targetStartTime := time.Now()
 		_, targetErr := mirrorVCursor.ExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields)
@@ -94,10 +106,18 @@ func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCurs
 	err := vcursor.StreamExecutePrimitive(ctx, m.primitive, bindVars, wantfields, callback)
 	sourceExecTime := time.Since(sourceStartTime)
 
-	// Fire mirror stream in the background.
+	// Reserve a slot in the mirror-traffic semaphore; drop on full. See
+	// TryExecute for rationale.
+	sem := vcursor.GetMirrorTrafficSemaphore()
+	if sem == nil || !sem.TryAcquire(1) {
+		vcursor.RecordMirrorDropped()
+		return err
+	}
+
 	mirrorCtx, mirrorCancel := context.WithTimeout(context.Background(), maxMirrorTargetDuration)
 	mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 	go func() {
+		defer sem.Release(1)
 		defer mirrorCancel()
 		targetStartTime := time.Now()
 		targetErr := mirrorVCursor.StreamExecutePrimitive(mirrorCtx, m.target, bindVars, wantfields, func(_ *sqltypes.Result) error {

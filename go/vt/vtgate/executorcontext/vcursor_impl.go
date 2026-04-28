@@ -100,6 +100,13 @@ type (
 		WarmingReadsPercent   int
 		WarmingReadsTimeout   time.Duration
 		WarmingReadsSemaphore *semaphore.Weighted
+
+		// MirrorTrafficSemaphore is a weighted semaphore that caps concurrent
+		// mirror queries. Each mirror takes weight 1; TryAcquire returns false
+		// when the bound is reached and the dispatch path drops the mirror so
+		// the primary path is unaffected. A nil value disables mirror dispatch
+		// (every TryAcquire returns false).
+		MirrorTrafficSemaphore *semaphore.Weighted
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -1689,6 +1696,12 @@ func (vc *VCursorImpl) GetWarmingReadsSemaphore() *semaphore.Weighted {
 	return vc.config.WarmingReadsSemaphore
 }
 
+// GetMirrorTrafficSemaphore returns the weighted semaphore that caps
+// concurrent mirror queries. Returns nil if mirror dispatch is disabled.
+func (vc *VCursorImpl) GetMirrorTrafficSemaphore() *semaphore.Weighted {
+	return vc.config.MirrorTrafficSemaphore
+}
+
 func (vc *VCursorImpl) GetQueryPriority() (int, error) {
 	if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
 		priority, err := strconv.Atoi(vc.SafeSession.Options.Priority)
@@ -1714,6 +1727,7 @@ var (
 	mirrorSourceLatency = stats.NewTimings("MirrorSourceExecuteTime", "Time spent executing the source (primary) query for mirrored requests", "Keyspace")
 	mirrorTargetLatency = stats.NewTimings("MirrorTargetExecuteTime", "Time spent executing the mirror target query", "Keyspace")
 	mirrorTargetErrors  = stats.NewCountersWithSingleLabel("MirrorTargetErrors", "Number of mirror target query errors", "Keyspace")
+	mirrorTargetDropped = stats.NewCountersWithSingleLabel("MirrorTargetDropped", "Number of mirror target queries dropped because the bounded concurrency limit was full", "Keyspace")
 )
 
 // RecordMirrorStats is used to record stats about a mirror query.
@@ -1732,6 +1746,12 @@ func (vc *VCursorImpl) RecordMirrorStats(sourceExecTime, targetExecTime time.Dur
 	if targetErr != nil {
 		mirrorTargetErrors.Add(keyspace, 1)
 	}
+}
+
+// RecordMirrorDropped increments the counter for mirror queries dropped due
+// to the bounded concurrency limit being full. The primary query is unaffected.
+func (vc *VCursorImpl) RecordMirrorDropped() {
+	mirrorTargetDropped.Add(vc.keyspace, 1)
 }
 
 func (vc *VCursorImpl) GetMarginComments() sqlparser.MarginComments {

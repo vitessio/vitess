@@ -125,6 +125,14 @@ func (t *noopVCursor) GetQueryPriority() (int, error) {
 	panic("implement me")
 }
 
+func (t *noopVCursor) GetMirrorTrafficSemaphore() *semaphore.Weighted {
+	// Return nil so MirrorTraffic dispatch always falls through to the drop
+	// path in tests that don't explicitly exercise mirroring.
+	return nil
+}
+
+func (t *noopVCursor) RecordMirrorDropped() {}
+
 func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
@@ -483,7 +491,14 @@ type loggingVCursor struct {
 	onExecuteMultiShardFn   func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
 	onStreamExecuteMultiFn  func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
 	onRecordMirrorStatsFn   func(time.Duration, time.Duration, error)
+	onRecordMirrorDroppedFn func()
 	onResolveDestinationsFn func(context.Context)
+
+	// mirrorTrafficSemaphore is the bounded semaphore exposed to mirror code.
+	// Lazy-initialized on first access to capacity 8 so existing mirror tests
+	// dispatch normally; tests that exercise the drop path can set this
+	// field directly with a smaller (or zero) capacity.
+	mirrorTrafficSemaphore *semaphore.Weighted
 
 	metrics *Metrics
 }
@@ -615,6 +630,24 @@ func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 
 func (f *loggingVCursor) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	return ctx, func() {}
+}
+
+func (f *loggingVCursor) GetMirrorTrafficSemaphore() *semaphore.Weighted {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.mirrorTrafficSemaphore == nil {
+		// Default capacity is small but enough for normal mirror tests to
+		// dispatch. Tests that exercise the drop path can set this field
+		// directly with a smaller (or zero) capacity.
+		f.mirrorTrafficSemaphore = semaphore.NewWeighted(8)
+	}
+	return f.mirrorTrafficSemaphore
+}
+
+func (f *loggingVCursor) RecordMirrorDropped() {
+	if f.onRecordMirrorDroppedFn != nil {
+		f.onRecordMirrorDroppedFn()
+	}
 }
 
 func (f *loggingVCursor) CloneForMirroring(ctx context.Context) VCursor {

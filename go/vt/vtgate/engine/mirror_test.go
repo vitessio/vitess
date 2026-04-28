@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -558,4 +559,46 @@ func TestMirror(t *testing.T) {
 		case <-time.After(5 * time.Second):
 		}
 	})
+}
+
+// TestMirrorDropsWhenSemaphoreFull verifies that when the bounded mirror
+// concurrency semaphore is at capacity, new mirror queries are dropped
+// (not queued) and the drop hook fires.
+func TestMirrorDropsWhenSemaphoreFull(t *testing.T) {
+	primitive := NewRoute(
+		Unsharded,
+		&vindexes.Keyspace{Name: "ks1"},
+		"select 1 from foo",
+		"select 1 from foo where 1 != 1",
+	)
+	target := NewRoute(
+		Unsharded,
+		&vindexes.Keyspace{Name: "ks2"},
+		"select 1 from foo",
+		"select 1 from foo where 1 != 1",
+	)
+	mirror := NewPercentBasedMirror(100, primitive, target)
+
+	vc := &loggingVCursor{
+		shards:  []string{"-"},
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "varchar"), "x")},
+	}
+
+	// Pre-acquire the only slot so the dispatch path falls through to the
+	// drop branch. Capacity 1, weight 1 already taken => TryAcquire fails.
+	sem := semaphore.NewWeighted(1)
+	require.True(t, sem.TryAcquire(1))
+	vc.mirrorTrafficSemaphore = sem
+
+	var droppedCount atomic.Int32
+	vc.onRecordMirrorDroppedFn = func() { droppedCount.Add(1) }
+	vc.onMirrorClonesFn = func(_ context.Context) VCursor {
+		t.Fatalf("mirror should not have been cloned when semaphore is full")
+		return nil
+	}
+
+	_, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	require.Equal(t, int32(1), droppedCount.Load(), "drop hook should have fired exactly once")
 }
