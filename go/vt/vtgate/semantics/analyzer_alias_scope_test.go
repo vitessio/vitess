@@ -25,37 +25,24 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// Each test in this file uses a subquery with its own authoritative FROM
-// table that does NOT contain the alias name as a column. That forces the
-// inner resolveColumnInScope to return `nothing` (empty deps), which in turn
-// triggers the parent-alias path on the outer scope — exactly the behaviour
-// this PR adds. If the subquery had no FROM, the parser would inject `dual`,
-// which is non-authoritative and short-circuits with an uncertain dep before
-// the alias path ever runs.
-
-// TestSubqueryParentAliasResolution covers the resolveColumn parent-alias path:
-// a subquery column reference that resolves against a parent SELECT alias must
-// take on the alias expression's table dependencies — or, when the alias has
-// no table deps (literal alias), be marked as correlated to the outer scope.
+// TestSubqueryParentAliasResolution checks that a subquery column reference
+// that matches a parent SELECT alias is reported as depending on the alias
+// expression's tables. Literal aliases (no table dependencies of their own)
+// are reported as correlated to the outer scope.
 func TestSubqueryParentAliasResolution(t *testing.T) {
 	tcases := []struct {
 		sql  string
 		deps TableSet
 	}{{
-		// Column alias propagates the outer table dep.
 		sql:  "select id as foobar, (select foobar from t2) from t1",
 		deps: TS0,
 	}, {
-		// Compound alias still propagates the outer table dep.
 		sql:  "select id+1 as foobar, (select foobar from t2) from t1",
 		deps: TS0,
 	}, {
-		// Literal alias has no table deps; the reference is correlated to the
-		// outer scope's tables.
 		sql:  "select 1 as foobar, (select foobar from t2) from t1",
 		deps: TS0,
 	}, {
-		// An outer WHERE clause does not change the resolution.
 		sql:  "select id as foobar, (select foobar from t2) from t1 where id = 1",
 		deps: TS0,
 	}}
@@ -73,26 +60,20 @@ func TestSubqueryParentAliasResolution(t *testing.T) {
 	}
 }
 
-// TestSubqueryParentAliasDualFallback covers the path where the subquery has
-// no explicit FROM and the parser injects `dual`. `dual` is non-authoritative,
-// so resolveColumnInScope returns an uncertain dep at the inner scope and the
-// loop short-circuits before ever reaching the parent-alias check. The end-
-// user query still works (the dual subquery merges with the outer route at
-// planbuilder time and MySQL resolves the alias itself), but the binder
-// resolves the inner column reference to the inner subquery's `dual`, not to
-// the outer alias. This test pins that behaviour so future refactors don't
-// silently change which path handles these shapes.
+// TestSubqueryParentAliasDualFallback covers subqueries with no explicit FROM,
+// where the parser injects an implicit `dual`. The inner column reference is
+// reported as depending on that implicit `dual` rather than on the outer
+// alias. End-user behaviour still matches MySQL because the dual subquery is
+// merged into the outer route at planning time and MySQL itself resolves the
+// alias on the merged single-shard query.
 func TestSubqueryParentAliasDualFallback(t *testing.T) {
 	tcases := []struct {
 		sql string
 	}{{
-		// Both outer and inner have no FROM — each gets its own implicit dual.
 		sql: "select 1 as x, (select x)",
 	}, {
-		// Outer has a real authoritative FROM, inner gets an implicit dual.
 		sql: "select id as foobar, (select foobar) from t1",
 	}, {
-		// Same as above but with a literal alias.
 		sql: "select 1 as foobar, (select foobar) from t1",
 	}}
 	for _, tc := range tcases {
@@ -105,16 +86,13 @@ func TestSubqueryParentAliasDualFallback(t *testing.T) {
 			innerCol := extract(subq, 0)
 
 			require.NoError(t, semTable.NotSingleRouteErr)
-			// The inner column's deps point to the inner subquery's own dual,
-			// not to the outer scope — i.e. the alias path was not used.
 			assert.Equal(t, semTable.TableSetFor(innerDual), semTable.RecursiveDeps(innerCol))
 		})
 	}
 }
 
-// TestSubqueryParentAliasNestedResolution covers the nested case: an inner
-// subquery references an alias defined two scope levels above. Both inner
-// subqueries use authoritative FROM tables that don't contain `foobar`.
+// TestSubqueryParentAliasNestedResolution checks that an alias defined two
+// scope levels above the reference is still reachable.
 func TestSubqueryParentAliasNestedResolution(t *testing.T) {
 	stmt, semTable := parseAndAnalyze(t, "select 1 as foobar, (select (select foobar from t2) as barbaz from t3) from t1", "d")
 	sel := stmt.(*sqlparser.Select)
@@ -127,15 +105,13 @@ func TestSubqueryParentAliasNestedResolution(t *testing.T) {
 	assert.Equal(t, TS0, semTable.RecursiveDeps(innerCol))
 }
 
-// TestSubqueryParentAliasErrors covers the gates that reject invalid alias
-// references: forward references, qualified column refs, same-scope refs, and
-// duplicate-alias ambiguity.
+// TestSubqueryParentAliasErrors covers the cases that match MySQL by failing
+// rather than resolving: forward alias references, qualified column refs,
+// same-scope references, and ambiguous duplicate aliases.
 func TestSubqueryParentAliasErrors(t *testing.T) {
 	tcases := []struct {
-		name string
-		sql  string
-		// errSubstr is matched against either the analyze error or
-		// SemTable.NotUnshardedErr, whichever surfaces first.
+		name      string
+		sql       string
 		errSubstr string
 	}{{
 		name:      "forward reference rejected",
@@ -170,30 +146,25 @@ func TestSubqueryParentAliasErrors(t *testing.T) {
 	}
 }
 
-// TestSubqueryParentAliasDuplicateResolution covers the non-error cases of the
-// duplicate-alias logic: same-column-same-alias, non-column expression beats
-// bare column, and shielded ambiguity.
+// TestSubqueryParentAliasDuplicateResolution covers the duplicate-alias cases
+// that resolve cleanly: the same column repeated under the same alias, a
+// non-column expression sharing an alias with a bare column (the non-column
+// wins regardless of order), and the same alias on three or more expressions
+// where at least one is a non-column.
 func TestSubqueryParentAliasDuplicateResolution(t *testing.T) {
 	tcases := []struct {
 		sql  string
 		deps TableSet
 	}{{
-		// Repeated same column under same alias is not ambiguous.
 		sql:  "select id as foobar, id as foobar, (select foobar from t2) from t1",
 		deps: TS0,
 	}, {
-		// Non-column expression beats bare column when both share an alias.
 		sql:  "select id as foobar, 99 as foobar, (select foobar from t2) from t1",
 		deps: TS0,
 	}, {
-		// Order doesn't matter — non-column still wins.
 		sql:  "select 99 as foobar, id as foobar, (select foobar from t2) from t1",
 		deps: TS0,
 	}, {
-		// Shielded ambiguity: a non-column already in the match buffer
-		// protects against a later column-vs-column collision. The literal
-		// alias has empty deps, so the reference is correlated to the union
-		// of the outer scope's tables.
 		sql:  "select 99 as foobar, id as foobar, uid as foobar, (select foobar from t3) from t1, t2",
 		deps: MergeTableSets(TS0, TS1),
 	}}
@@ -202,8 +173,6 @@ func TestSubqueryParentAliasDuplicateResolution(t *testing.T) {
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 			sel := stmt.(*sqlparser.Select)
 
-			// Locate the subquery — it's the last AliasedExpr whose Expr is a
-			// Subquery.
 			var subq *sqlparser.Subquery
 			for _, se := range sel.SelectExprs.Exprs {
 				ae, ok := se.(*sqlparser.AliasedExpr)
