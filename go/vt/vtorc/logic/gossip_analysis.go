@@ -359,18 +359,19 @@ func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[str
 	disabled := make(map[string]ersDisabledFlags)
 	seen := make(map[string]bool)
 
-	// Pre-load shard-level ERS-disabled state from VTOrc's DB.
-	// ReadKeyspaceShardStats returns per-shard data with both keyspace
-	// and shard disable flags already joined.
+	// Pre-load ERS-disabled state from VTOrc's DB.
 	// If this fails, we return the error so the caller skips gossip
 	// analyses for this cycle rather than failing open.
 	shardStats, err := inst.ReadKeyspaceShardStats()
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	ersMap := make(map[string]bool, len(shardStats))
+	ersMap := make(map[string]ersDisabledFlags, len(shardStats))
 	for _, s := range shardStats {
-		ersMap[s.Keyspace+"/"+s.Shard] = s.DisableEmergencyReparent
+		ersMap[s.Keyspace+"/"+s.Shard] = ersDisabledFlags{
+			keyspace: s.KeyspaceDisableEmergencyReparent,
+			shard:    s.ShardDisableEmergencyReparent,
+		}
 	}
 
 	primaryAliases, err := inst.ReadPrimaryAliasesByShard()
@@ -396,11 +397,8 @@ func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[str
 		}
 		primaries[key] = primaryAlias
 
-		// ersMap has the combined keyspace OR shard disable flag.
-		// Set both fields so isERSEnabled() correctly blocks recovery
-		// when either keyspace or shard has ERS disabled.
-		if ersDisabled := ersMap[key]; ersDisabled {
-			disabled[key] = ersDisabledFlags{keyspace: true, shard: true}
+		if ersDisabled := ersMap[key]; ersDisabled.keyspace || ersDisabled.shard {
+			disabled[key] = ersDisabled
 		}
 	}
 	return primaries, currentMembers, disabled, nil

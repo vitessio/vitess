@@ -40,7 +40,13 @@ propagated to `SrvKeyspace`. Per-process setup:
   only when `grpc-gossip` is in `--service-map` (the example scripts
   under `examples/common/scripts/vttablet-up.sh` include it).
 - **VTOrc**: set `--gossip-listen-addr` so VTOrc stands up its own
-  gossip gRPC listener.
+  gossip gRPC listener. Wildcard hosts (`:16110`, `0.0.0.0:16110`,
+  `[::]:16110`) are supported — VTOrc substitutes the resolved
+  hostname when computing the address it advertises to peers, so the
+  published `Member.addr` stays dialable. The same hostname is mixed
+  into the gossip node ID so two VTOrcs sharing a port on different
+  hosts do not collide; if the hostname call fails, a per-process UUID
+  is used in place of the hostname rather than a bare port.
 
 Use `vtctldclient` to manage it:
 
@@ -68,6 +74,28 @@ watchers. No restart is required.
 | `--phi-threshold` | 4 | Phi-accrual suspicion threshold. |
 | `--ping-interval` | 1s | How often each node exchanges state with a random peer. |
 | `--max-update-age` | 5s | How long a stale last-update must be before marking a peer `Down`. |
+
+### Tuning vs cluster size
+
+VTOrc participates in gossip as an unscoped observer: its `pickPeer`
+picks one shard per tick (uniformly across shards it knows about) and
+then one tablet within that shard. So the steady-state interval at
+which VTOrc refreshes its view of any given shard is roughly
+`N_shards × PingInterval`. **`MaxUpdateAge` should be at least that
+much** — if it isn't, VTOrc's local view of shards it has not visited
+recently will age to `Down` even while nothing is wrong, and you'll
+see flapping on `/debug/gossip`. The defaults (1s ping, 5s update
+age) cover roughly five shards comfortably; for larger fleets, bump
+`--max-update-age` proportionally (or shrink `--ping-interval`,
+trading additional gossip RPCs per tablet for tighter detection
+latency).
+
+Note that this only affects VTOrc's own observation cadence — the
+quorum analysis still requires a strict majority of *replicas*
+reporting the primary as `Down`, and replicas converge with each
+other directly within the shard. So an oversized `MaxUpdateAge` only
+slows VTOrc's reaction to real failures; it does not produce false
+ERS firings.
 
 ## Seed discovery
 
@@ -115,7 +143,7 @@ Both vttablet and VTOrc serve `/debug/gossip` returning a JSON snapshot:
 ```json
 {
   "node_id": "zone1-0000000100",
-  "bind_addr": "host1:15999",
+  "addr": "host1:15999",
   "epoch": 42,
   "members": [
     {"id": "zone1-0000000100", "addr": "host1:15999", "meta": {"keyspace": "commerce", "shard": "0"}},

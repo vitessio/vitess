@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -224,10 +225,11 @@ func startGossipAgent(cfg *topodatapb.GossipConfig) {
 	seeds := discoverGossipSeeds()
 	transport := gossip.NewGRPCTransport(&gossip.GRPCDialer{SecureDialOption: grpctmclient.SecureDialOption})
 	tuning := effectiveGossipTuning(cfg)
+	advertiseAddr := config.GossipAdvertiseAddr()
 
 	agent := gossip.New(gossip.Config{
 		NodeID:       gossip.NodeID(config.GossipNodeID()),
-		BindAddr:     config.GossipListenAddr(),
+		Addr:         advertiseAddr,
 		Seeds:        seeds,
 		PhiThreshold: tuning.PhiThreshold,
 		PingInterval: tuning.PingInterval,
@@ -250,7 +252,7 @@ func startGossipAgent(cfg *topodatapb.GossipConfig) {
 	}
 	log.Info("gossip: agent started",
 		slog.String("node_id", config.GossipNodeID()),
-		slog.String("bind_addr", config.GossipListenAddr()),
+		slog.String("advertise_addr", advertiseAddr),
 		slog.Int("seeds", len(seeds)),
 		slog.Float64("phi_threshold", tuning.PhiThreshold),
 		slog.Duration("ping_interval", tuning.PingInterval),
@@ -261,14 +263,19 @@ func startGossipAgent(cfg *topodatapb.GossipConfig) {
 // findGossipConfig scans all keyspaces for an enabled GossipConfig.
 // Returns the config and the keyspace name it was found in (for watching).
 // If multiple keyspaces have gossip enabled with differing configs,
-// it returns conflict=true so callers can fail closed.
-func findGossipConfig() (*topodatapb.GossipConfig, string, bool) {
-	cfg, enabledKeyspaces, conflict := findGossipConfigState()
+// it returns conflict=true so callers can fail closed. Topology read errors
+// are returned separately so callers do not mistake partial data for an
+// intentional disable.
+func findGossipConfig() (*topodatapb.GossipConfig, string, bool, error) {
+	cfg, enabledKeyspaces, conflict, err := findGossipConfigState()
+	if err != nil {
+		return nil, "", false, err
+	}
 	if conflict {
-		return nil, "", true
+		return nil, "", true, nil
 	}
 	if len(enabledKeyspaces) == 0 {
-		return cfg, "", false
+		return cfg, "", false, nil
 	}
 	// Sort so the pick is deterministic across calls and log the
 	// selection so operators can correlate with the watcher they see.
@@ -279,32 +286,35 @@ func findGossipConfig() (*topodatapb.GossipConfig, string, bool) {
 			slog.String("selected", selected),
 			slog.Int("total_enabled", len(enabledKeyspaces)))
 	}
-	return cfg, selected, false
+	return cfg, selected, false, nil
 }
 
 // findGossipConfigState scans every Keyspace for an enabled GossipConfig
 // and returns the first one found, the list of all enabled keyspaces,
-// and whether they conflict on effective tuning. findGossipConfig wraps
-// this into the "which keyspace do I watch" decision; this helper is
-// separate so tests and other callers can see the full picture.
-func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool) {
+// whether they conflict on effective tuning, and any topology read error.
+// findGossipConfig wraps this into the "which keyspace do I watch" decision;
+// this helper is separate so tests and other callers can see the full picture.
+func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool, error) {
 	topoServer := ts
 	if topoServer == nil {
-		return nil, nil, false
+		return nil, nil, false, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
 
 	keyspaces, err := topoServer.GetKeyspaces(ctx)
 	if err != nil {
-		return nil, nil, false
+		return nil, nil, false, vterrors.Wrap(err, "GetKeyspaces")
 	}
 	var found *topodatapb.GossipConfig
 	var enabledKeyspaces []string
 	for _, ksName := range keyspaces {
 		ki, err := topoServer.GetKeyspace(ctx, ksName)
 		if err != nil {
-			continue
+			if topo.IsErrType(err, topo.NoNode) {
+				continue
+			}
+			return nil, enabledKeyspaces, false, vterrors.Wrapf(err, "GetKeyspace(%s)", ksName)
 		}
 		if ki.GossipConfig == nil || !ki.GossipConfig.Enabled {
 			continue
@@ -318,10 +328,10 @@ func findGossipConfigState() (*topodatapb.GossipConfig, []string, bool) {
 			log.Error("refusing to start gossip: multiple keyspaces have conflicting configs",
 				slog.String("keyspace1", enabledKeyspaces[0]),
 				slog.String("keyspace2", ksName))
-			return nil, enabledKeyspaces, true
+			return nil, enabledKeyspaces, true, nil
 		}
 	}
-	return found, enabledKeyspaces, false
+	return found, enabledKeyspaces, false, nil
 }
 
 // gossipTuning is the normalized shape used for conflict detection and
@@ -392,7 +402,11 @@ func stopGossip() {
 // agent's lifecycle based on topology state, which makes the
 // enable/disable/re-enable/conflict semantics easier to reason about.
 func reconcileGossipConfig(localCfg *topodatapb.GossipConfig) {
-	cfg, _, conflict := findGossipConfig()
+	cfg, _, conflict, err := findGossipConfig()
+	if err != nil {
+		log.Warn("skipping gossip config reconciliation: failed to read keyspace gossip config", slog.Any("error", err))
+		return
+	}
 	if !conflict && cfg == nil && localCfg != nil && localCfg.Enabled {
 		cfg = localCfg
 	}
@@ -429,7 +443,10 @@ func reconcileGossipConfig(localCfg *topodatapb.GossipConfig) {
 // and VTOrc only needs one driver keyspace because the gossip agent
 // is process-global.
 func watchExistingGossipKeyspaces(ctx context.Context) bool {
-	_, selected, _ := findGossipConfig()
+	_, selected, _, err := findGossipConfig()
+	if err != nil {
+		return false
+	}
 	if selected == "" {
 		return false
 	}
@@ -495,6 +512,7 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 		}
 
 		restart := false
+		restartGlobalPoll := false
 		for change := range changes {
 			if change.Err != nil {
 				if ctx.Err() != nil || topo.IsErrType(change.Err, topo.Interrupted) {
@@ -505,7 +523,7 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 					log.Error("gossip SrvKeyspace watch error", slog.Any("error", change.Err))
 				}
 				reconcileGossipConfig(nil)
-				if _, fallbackKeyspace, conflict := findGossipConfig(); !conflict && fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
+				if _, fallbackKeyspace, conflict, err := findGossipConfig(); err == nil && !conflict && fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
 					keyspace = fallbackKeyspace
 				}
 				restart = true
@@ -515,7 +533,18 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 				cfg := change.Value.GossipConfig
 				reconcileGossipConfig(cfg)
 				if cfg == nil || !cfg.Enabled {
-					_, fallbackKeyspace, conflict := findGossipConfig()
+					_, fallbackKeyspace, conflict, err := findGossipConfig()
+					if err != nil {
+						if agent := clearGossipAgent(); agent != nil {
+							log.Info("stopping gossip agent: watched keyspace gossip config disabled",
+								slog.String("keyspace", watchKeyspace),
+								slog.Any("fallback_scan_error", err))
+							agent.Stop()
+						}
+						restartGlobalPoll = true
+						restart = true
+						break
+					}
 					if !conflict && fallbackKeyspace != "" && fallbackKeyspace != watchKeyspace {
 						keyspace = fallbackKeyspace
 						restart = true
@@ -529,11 +558,18 @@ func watchGossipConfig(ctx context.Context, keyspace string) bool {
 					// multiple keyspaces).
 					if conflict || fallbackKeyspace == "" {
 						reconcileGossipConfig(nil)
+						restartGlobalPoll = true
+						restart = true
+						break
 					}
 				}
 			}
 		}
 		watchCancel()
+		if restartGlobalPoll {
+			go pollForGossipKeyspace(ctx)
+			return true
+		}
 		if !restart {
 			return true
 		}

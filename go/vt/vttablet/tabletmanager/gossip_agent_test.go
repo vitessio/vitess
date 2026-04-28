@@ -173,7 +173,11 @@ func TestDiscoverSeeds_WithTablets(t *testing.T) {
 
 	// Should find peer (has grpc port) but not self or peerNoGrpc.
 	assert.Len(t, seeds, 1)
+	assert.Equal(t, gossip.NodeID("zone1-0000000200"), seeds[0].ID)
 	assert.Equal(t, "host2:15200", seeds[0].Addr)
+	assert.Equal(t, "ks", seeds[0].Meta[gossip.MetaKeyKeyspace])
+	assert.Equal(t, "0", seeds[0].Meta[gossip.MetaKeyShard])
+	assert.Equal(t, "zone1-0000000200", seeds[0].Meta[gossip.MetaKeyTabletAlias])
 }
 
 func TestDiscoverSeeds_EmptyShard(t *testing.T) {

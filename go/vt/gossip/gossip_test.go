@@ -121,7 +121,7 @@ func (c localClient) Join(ctx context.Context, in *gossippb.GossipJoinRequest, o
 func newTestGossip(id string, seeds []Member, transport *localTransport, clock Clock, maxUpdateAge time.Duration) *Gossip {
 	cfg := Config{
 		NodeID:       NodeID(id),
-		BindAddr:     id,
+		Addr:         id,
 		Seeds:        seeds,
 		PhiThreshold: 4,
 		PingInterval: 10 * time.Millisecond,
@@ -175,8 +175,8 @@ func TestGossipConvergesWithSeeds(t *testing.T) {
 func TestPickPeerSkipsDifferentShardMembersForScopedNode(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
 	g := New(Config{
-		NodeID:   "node1",
-		BindAddr: "node1",
+		NodeID: "node1",
+		Addr:   "node1",
 		Meta: map[string]string{
 			MetaKeyKeyspace: "ks",
 			MetaKeyShard:    "0",
@@ -196,9 +196,29 @@ func TestPickPeerSkipsDifferentShardMembersForScopedNode(t *testing.T) {
 	}
 }
 
+func TestPickPeerSkipsUnscopedMembersForScopedNode(t *testing.T) {
+	clock := &testClock{now: time.Unix(0, 0)}
+	g := New(Config{
+		NodeID: "node1",
+		Addr:   "node1",
+		Meta: map[string]string{
+			MetaKeyKeyspace: "ks",
+			MetaKeyShard:    "0",
+		},
+	}, nil, clock)
+
+	g.mu.Lock()
+	g.addMemberLocked(Member{ID: "vtorc", Addr: "vtorc"})
+	g.mu.Unlock()
+
+	peer, scope := g.pickPeer()
+	assert.Nil(t, peer)
+	assert.Empty(t, scope)
+}
+
 func TestSnapshotMessageLockedFiltersPeerScope(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "vtorc", BindAddr: "vtorc"}, nil, clock)
+	g := New(Config{NodeID: "vtorc", Addr: "vtorc"}, nil, clock)
 
 	g.mu.Lock()
 	g.addMemberLocked(scopedMember("a1", "ks", "0"))
@@ -239,8 +259,8 @@ func TestGossipIgnoresOutOfScopePushPullData(t *testing.T) {
 	}{{
 		name: "scoped agent",
 		cfg: Config{
-			NodeID:   "a1",
-			BindAddr: "a1",
+			NodeID: "a1",
+			Addr:   "a1",
 			Meta: map[string]string{
 				MetaKeyKeyspace: "ks",
 				MetaKeyShard:    "0",
@@ -251,7 +271,7 @@ func TestGossipIgnoresOutOfScopePushPullData(t *testing.T) {
 		rejectNode: "b1",
 	}, {
 		name:       "unscoped agent",
-		cfg:        Config{NodeID: "vtorc", BindAddr: "vtorc"},
+		cfg:        Config{NodeID: "vtorc", Addr: "vtorc"},
 		members:    []Member{scopedMember("a1", "ks", "0"), scopedMember("b1", "ks", "1")},
 		wantNode:   "a1",
 		rejectNode: "b1",
@@ -316,7 +336,7 @@ func TestGossipMarksDownWhenPeerUnreachable(t *testing.T) {
 
 func TestGossipUpdateLocalUsesConfigNodeID(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4, PingInterval: time.Second}, nil, clock)
+	g := New(Config{NodeID: "node1", Addr: "node1", PhiThreshold: 4, PingInterval: time.Second}, nil, clock)
 	clock.advance(10 * time.Millisecond)
 
 	g.UpdateLocal(HealthSnapshot{Timestamp: clock.Now()})
@@ -335,7 +355,7 @@ func TestGossipHandleJoinReturnsSnapshot(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
 	g := New(Config{
 		NodeID:       "node1",
-		BindAddr:     "node1",
+		Addr:         "node1",
 		Seeds:        []Member{{ID: "node3", Addr: "node3"}},
 		PhiThreshold: 4,
 	}, nil, clock)
@@ -363,7 +383,7 @@ func TestGossipHandleJoinReturnsSnapshot(t *testing.T) {
 
 func TestGossipHandlePushPullAppliesState(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4}, nil, clock)
+	g := New(Config{NodeID: "node1", Addr: "node1", PhiThreshold: 4}, nil, clock)
 
 	msg := &Message{
 		Members: []Member{{ID: "node2", Addr: "node2"}},
@@ -381,7 +401,7 @@ func TestGossipHandlePushPullAppliesState(t *testing.T) {
 
 func TestNewGossipSeedsAndMembers(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1", Seeds: []Member{{ID: "node2", Addr: "node2"}}}, nil, clock)
+	g := New(Config{NodeID: "node1", Addr: "node1", Seeds: []Member{{ID: "node2", Addr: "node2"}}}, nil, clock)
 
 	members := g.Members()
 	require.Len(t, members, 2)
@@ -418,7 +438,7 @@ func TestGossipStartBootstrapsSeedsImmediately(t *testing.T) {
 
 	g1 := New(Config{
 		NodeID:       "node1",
-		BindAddr:     "node1",
+		Addr:         "node1",
 		Seeds:        []Member{{ID: "node2", Addr: "node2"}},
 		PhiThreshold: 4,
 		PingInterval: time.Hour,
@@ -427,7 +447,7 @@ func TestGossipStartBootstrapsSeedsImmediately(t *testing.T) {
 	}, NewGRPCTransport(transport), clock)
 	g2 := New(Config{
 		NodeID:       "node2",
-		BindAddr:     "node2",
+		Addr:         "node2",
 		Seeds:        []Member{{ID: "node1", Addr: "node1"}},
 		PhiThreshold: 4,
 		PingInterval: time.Hour,
@@ -466,7 +486,7 @@ func TestGossipOnceMergesState(t *testing.T) {
 
 func TestGossipUpdateSuspicionMarksSuspect(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 2}, nil, clock)
+	g := New(Config{NodeID: "node1", Addr: "node1", PhiThreshold: 2}, nil, clock)
 	g.addMemberLocked(Member{ID: "node2", Addr: "node2"})
 	g.states["node2"] = State{Status: StatusAlive, LastUpdate: clock.Now()}
 
@@ -486,7 +506,7 @@ func TestGossipUpdateSuspicionMarksSuspect(t *testing.T) {
 
 func TestGossipIgnoresOlderStateUpdate(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+	g := New(Config{NodeID: "node1", Addr: "node1"}, nil, clock)
 	g.states["node2"] = State{Status: StatusAlive, LastUpdate: clock.Now()}
 
 	msg := &Message{
@@ -502,7 +522,7 @@ func TestNeverObservedSeedsStayUnknown(t *testing.T) {
 	clock := &testClock{now: time.Now()}
 	g := New(Config{
 		NodeID:       "node1",
-		BindAddr:     "node1",
+		Addr:         "node1",
 		PhiThreshold: 4,
 		MaxUpdateAge: 50 * time.Millisecond,
 		Seeds:        []Member{{ID: "node2", Addr: "node2"}},
@@ -542,7 +562,7 @@ func TestEqualTimestampMergeRules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clock := &testClock{now: time.Unix(100, 0)}
-			g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+			g := New(Config{NodeID: "node1", Addr: "node1"}, nil, clock)
 			ts := clock.Now()
 
 			g.HandlePushPull(&Message{
@@ -634,7 +654,7 @@ func TestGRPCDialerUsesInsecureTransport(t *testing.T) {
 	server := grpc.NewServer()
 	t.Cleanup(server.Stop)
 
-	agent := New(Config{NodeID: "node1", BindAddr: lis.Addr().String()}, nil, &testClock{now: time.Unix(0, 0)})
+	agent := New(Config{NodeID: "node1", Addr: lis.Addr().String()}, nil, &testClock{now: time.Unix(0, 0)})
 	gossippb.RegisterGossipServer(server, &Service{GetAgent: func() *Gossip { return agent }})
 
 	go func() {
@@ -728,7 +748,7 @@ func TestSingleObserverDownDoesNotPropagate(t *testing.T) {
 
 func TestFutureTimestampClamped(t *testing.T) {
 	clock := &testClock{now: time.Unix(100, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4, MaxUpdateAge: time.Second}, nil, clock)
+	g := New(Config{NodeID: "node1", Addr: "node1", PhiThreshold: 4, MaxUpdateAge: time.Second}, nil, clock)
 
 	// Apply a message with a far-future timestamp.
 	futureTime := clock.Now().Add(time.Hour)
@@ -744,7 +764,7 @@ func TestFutureTimestampClamped(t *testing.T) {
 
 func TestHandleJoinRejectsEmptyMember(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+	g := New(Config{NodeID: "node1", Addr: "node1"}, nil, clock)
 
 	resp, err := g.HandleJoin(&JoinRequest{Member: Member{ID: "", Addr: ""}})
 	require.Error(t, err, "HandleJoin should reject empty member ID")
@@ -801,7 +821,7 @@ func TestPhiAccrualNormalRange(t *testing.T) {
 
 func TestObserveLockedCreatesDetector(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	g := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+	g := New(Config{NodeID: "node1", Addr: "node1"}, nil, clock)
 
 	// ObserveLocked for a node with no existing detector.
 	g.mu.Lock()
@@ -814,7 +834,7 @@ func TestObserveLockedCreatesDetector(t *testing.T) {
 
 func TestGossipServiceWithAgent(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	agent := New(Config{NodeID: "node1", BindAddr: "node1", PhiThreshold: 4}, nil, clock)
+	agent := New(Config{NodeID: "node1", Addr: "node1", PhiThreshold: 4}, nil, clock)
 	service := &Service{GetAgent: func() *Gossip { return agent }}
 
 	// Join with a real agent.
@@ -835,7 +855,7 @@ func TestGossipServiceWithAgent(t *testing.T) {
 
 func TestGossipServiceRejectsEmptyMember(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
-	agent := New(Config{NodeID: "node1", BindAddr: "node1"}, nil, clock)
+	agent := New(Config{NodeID: "node1", Addr: "node1"}, nil, clock)
 	service := &Service{GetAgent: func() *Gossip { return agent }}
 
 	_, err := service.Join(t.Context(), toProtoJoinRequest(&JoinRequest{Member: Member{ID: "", Addr: ""}}))
@@ -885,16 +905,16 @@ func TestStartWithZeroPingInterval(t *testing.T) {
 func TestDebugState(t *testing.T) {
 	clock := &testClock{now: time.Unix(100, 0)}
 	g := New(Config{
-		NodeID:   "node1",
-		BindAddr: "addr1",
-		Meta:     map[string]string{"keyspace": "ks", "shard": "0"},
-		Seeds:    []Member{{ID: "node2", Addr: "addr2"}},
+		NodeID: "node1",
+		Addr:   "addr1",
+		Meta:   map[string]string{"keyspace": "ks", "shard": "0"},
+		Seeds:  []Member{{ID: "node2", Addr: "addr2"}},
 	}, nil, clock)
 	g.UpdateLocal(HealthSnapshot{NodeID: "node1", Timestamp: clock.Now()})
 
 	debug := g.Debug()
 	assert.Equal(t, NodeID("node1"), debug.NodeID)
-	assert.Equal(t, "addr1", debug.BindAddr)
+	assert.Equal(t, "addr1", debug.Addr)
 	assert.Len(t, debug.Members, 2)
 	require.Contains(t, debug.States, NodeID("node1"))
 	assert.Equal(t, StatusAlive, debug.States["node1"].Status)
@@ -925,9 +945,9 @@ func TestStatusString(t *testing.T) {
 func TestAddMemberLockedEnrichesMetadata(t *testing.T) {
 	clock := &testClock{now: time.Unix(0, 0)}
 	g := New(Config{
-		NodeID:   "node1",
-		BindAddr: "addr1",
-		Seeds:    []Member{{ID: "node2", Addr: "addr2"}},
+		NodeID: "node1",
+		Addr:   "addr1",
+		Seeds:  []Member{{ID: "node2", Addr: "addr2"}},
 	}, nil, clock)
 
 	// node2 starts without metadata (seed entry).
@@ -955,10 +975,10 @@ func TestNewCopiesMemberMetadata(t *testing.T) {
 	selfMeta := map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"}
 	seedMeta := map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"}
 	g := New(Config{
-		NodeID:   "node1",
-		BindAddr: "addr1",
-		Meta:     selfMeta,
-		Seeds:    []Member{{ID: "node2", Addr: "addr2", Meta: seedMeta}},
+		NodeID: "node1",
+		Addr:   "addr1",
+		Meta:   selfMeta,
+		Seeds:  []Member{{ID: "node2", Addr: "addr2", Meta: seedMeta}},
 	}, nil, &testClock{now: time.Unix(0, 0)})
 
 	selfMeta[MetaKeyShard] = "changed"
@@ -973,9 +993,9 @@ func TestNewCopiesMemberMetadata(t *testing.T) {
 
 func TestMembersReturnsMetadataCopies(t *testing.T) {
 	g := New(Config{
-		NodeID:   "node1",
-		BindAddr: "addr1",
-		Meta:     map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"},
+		NodeID: "node1",
+		Addr:   "addr1",
+		Meta:   map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"},
 	}, nil, &testClock{now: time.Unix(0, 0)})
 
 	members := g.Members()
@@ -988,9 +1008,9 @@ func TestMembersReturnsMetadataCopies(t *testing.T) {
 
 func TestSnapshotMessageLockedReturnsMetadataCopies(t *testing.T) {
 	g := New(Config{
-		NodeID:   "node1",
-		BindAddr: "addr1",
-		Meta:     map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"},
+		NodeID: "node1",
+		Addr:   "addr1",
+		Meta:   map[string]string{MetaKeyKeyspace: "ks", MetaKeyShard: "0"},
 	}, nil, &testClock{now: time.Unix(0, 0)})
 
 	g.mu.Lock()

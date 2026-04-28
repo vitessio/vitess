@@ -51,6 +51,11 @@ func GossipListenAddr() string {
 	return gossipListenAddr.Get()
 }
 
+// GossipAdvertiseAddr returns the dialable address VTOrc advertises to peers.
+func GossipAdvertiseAddr() string {
+	return computeGossipAdvertiseAddr(strings.TrimSpace(GossipListenAddr()))
+}
+
 // gossipNodeID is computed once per process so the identifier is stable
 // across gossip restarts within the same process lifetime.
 var (
@@ -80,20 +85,34 @@ func GossipNodeID() string {
 // always unique across hosts even if multiple VTOrcs share the listen
 // port.
 func computeGossipNodeID(listenAddr string) string {
+	return computeGossipHostPort(listenAddr, true)
+}
+
+func computeGossipAdvertiseAddr(listenAddr string) string {
+	return computeGossipHostPort(listenAddr, false)
+}
+
+func computeGossipHostPort(listenAddr string, fallbackToUUID bool) string {
 	if listenAddr == "" {
 		return ""
 	}
 	host, port, err := net.SplitHostPort(listenAddr)
 	if err != nil {
-		// Not a host:port form — fall back to a UUID so two
-		// misconfigured VTOrcs cannot accidentally share an ID.
-		return "vtorc-" + uuid.NewString()
+		if fallbackToUUID {
+			// Not a host:port form — fall back to a UUID so two
+			// misconfigured VTOrcs cannot accidentally share an ID.
+			return "vtorc-" + uuid.NewString()
+		}
+		return listenAddr
 	}
 	if host != "" && !isWildcardGossipHost(host) {
 		return listenAddr
 	}
 	hostComponent := gossipHostname()
 	if hostComponent == "" {
+		if !fallbackToUUID {
+			return listenAddr
+		}
 		hostComponent = "vtorc-" + uuid.NewString()
 	}
 	return net.JoinHostPort(hostComponent, port)

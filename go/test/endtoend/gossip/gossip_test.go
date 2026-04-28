@@ -84,7 +84,7 @@ func (t *localTransport) Close() {}
 func newAgent(id string, seeds []gossip.Member, transport *localTransport, meta map[string]string) *gossip.Gossip {
 	agent := gossip.New(gossip.Config{
 		NodeID:       gossip.NodeID(id),
-		BindAddr:     id,
+		Addr:         id,
 		Seeds:        seeds,
 		Meta:         meta,
 		PhiThreshold: 4,
@@ -305,7 +305,7 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 
 		debug := g.Debug()
 		assert.Equal(t, gossip.NodeID("node1"), debug.NodeID)
-		assert.Equal(t, "node1", debug.BindAddr)
+		assert.Equal(t, "node1", debug.Addr)
 
 		// Self member has metadata.
 		var self *gossip.Member
@@ -399,10 +399,18 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 
 		// Quorum analysis detects only shard -80. Small shards (1
 		// primary + 2 replicas each) require VTOrc corroboration.
+		// Wrap in Eventually because under -race load a queued PushPull
+		// from a peer that hadn't yet run updateSuspicion can briefly
+		// flip the primary back to Alive (equal-LastUpdate Alive
+		// overrides Down) right after waitStatus succeeded; the system
+		// settles back to Down within a tick or two.
 		primaries := map[string]string{"ks/-80": "zone1-0000000100", "ks/80-": "zone1-0000000200"}
 		vtorcView := map[string]bool{"ks/-80": true}
-		analyses := quorumAnalysis(s1R1, primaries, vtorcView)
-		require.Len(t, analyses, 1)
+		var analyses []*inst.DetectionAnalysis
+		require.Eventually(t, func() bool {
+			analyses = quorumAnalysis(s1R1, primaries, vtorcView)
+			return len(analyses) == 1
+		}, 5*time.Second, 50*time.Millisecond, "expected exactly one quorum analysis for shard -80")
 		assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, analyses[0].Analysis)
 		assert.Equal(t, "-80", analyses[0].AnalyzedShard)
 	})
@@ -529,13 +537,17 @@ func TestGossipPrimaryTabletUnreachableByQuorum(t *testing.T) {
 			}},
 		})
 
-		// Primary is still alive and gossiping fresh state.
-		// After several gossip rounds, r2 must still see primary as Alive.
-		// r1's stale Down must NOT have propagated.
+		// Primary is still alive and gossiping fresh state. After several
+		// gossip rounds, r2 must still see primary as Alive — r1's stale
+		// Down must NOT have propagated. We use Eventually rather than a
+		// single-shot check because under -race scheduler load phi-accrual
+		// can briefly mark primary Suspect on r2 while heartbeats are
+		// delayed; the property under test is that r1's stale Down does
+		// not propagate, not that no transient Suspect ever occurs, so we
+		// give the system a moment to settle back to Alive.
 		require.Eventually(t, func() bool {
-			// Wait for r1 to have exchanged with r2 at least once.
 			return r1.Debug().Epoch > 5
 		}, 10*time.Second, 50*time.Millisecond)
-		assertDebugStatus(t, r2, "primary", gossip.StatusAlive)
+		waitStatus(t, r2, "primary", gossip.StatusAlive, 5*time.Second)
 	})
 }

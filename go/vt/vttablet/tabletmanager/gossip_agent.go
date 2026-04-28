@@ -86,7 +86,7 @@ func newGossipAgent(cfg *topodatapb.GossipConfig, tablet *topodatapb.Tablet, ts 
 	})
 	agent := gossip.New(gossip.Config{
 		NodeID:       gossip.NodeID(nodeID),
-		BindAddr:     bindAddr,
+		Addr:         bindAddr,
 		Seeds:        seeds,
 		Meta:         meta,
 		PhiThreshold: phiThreshold,
@@ -131,6 +131,11 @@ func discoverSeeds(self *topodatapb.Tablet, ts *topo.Server) []gossip.Member {
 		seeds = append(seeds, gossip.Member{
 			ID:   gossip.NodeID(alias),
 			Addr: addr,
+			Meta: map[string]string{
+				gossip.MetaKeyKeyspace:    t.Keyspace,
+				gossip.MetaKeyShard:       t.Shard,
+				gossip.MetaKeyTabletAlias: alias,
+			},
 		})
 	}
 	return seeds

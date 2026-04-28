@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/gossip"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -87,7 +88,8 @@ func TestFindGossipConfig(t *testing.T) {
 		ts = memorytopo.NewServer(ctx, "zone1")
 		defer func() { ts = origTS }()
 
-		cfg, ksName, conflict := findGossipConfig()
+		cfg, ksName, conflict, err := findGossipConfig()
+		require.NoError(t, err)
 		assert.Nil(t, cfg)
 		assert.Empty(t, ksName)
 		assert.False(t, conflict)
@@ -107,7 +109,8 @@ func TestFindGossipConfig(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		cfg, ksName, conflict := findGossipConfig()
+		cfg, ksName, conflict, err := findGossipConfig()
+		require.NoError(t, err)
 		require.NotNil(t, cfg)
 		assert.True(t, cfg.Enabled)
 		assert.Equal(t, float64(5), cfg.PhiThreshold)
@@ -125,7 +128,8 @@ func TestFindGossipConfig(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		cfg, _, conflict := findGossipConfig()
+		cfg, _, conflict, err := findGossipConfig()
+		require.NoError(t, err)
 		assert.Nil(t, cfg)
 		assert.False(t, conflict)
 	})
@@ -135,7 +139,8 @@ func TestFindGossipConfig(t *testing.T) {
 		ts = nil
 		defer func() { ts = origTS }()
 
-		cfg, _, conflict := findGossipConfig()
+		cfg, _, conflict, err := findGossipConfig()
+		require.NoError(t, err)
 		assert.Nil(t, cfg)
 		assert.False(t, conflict)
 	})
@@ -160,7 +165,8 @@ func TestFindGossipConfig(t *testing.T) {
 			},
 		}))
 
-		cfg, ksName, conflict := findGossipConfig()
+		cfg, ksName, conflict, err := findGossipConfig()
+		require.NoError(t, err)
 		assert.Nil(t, cfg)
 		assert.Empty(t, ksName)
 		assert.True(t, conflict)
@@ -190,7 +196,8 @@ func TestFindGossipConfigState(t *testing.T) {
 			},
 		}))
 
-		cfg, enabledKeyspaces, conflict := findGossipConfigState()
+		cfg, enabledKeyspaces, conflict, err := findGossipConfigState()
+		require.NoError(t, err)
 		assert.Nil(t, cfg)
 		assert.ElementsMatch(t, []string{"ks1", "ks2"}, enabledKeyspaces)
 		assert.True(t, conflict)
@@ -215,11 +222,35 @@ func TestFindGossipConfigState(t *testing.T) {
 			},
 		}))
 
-		cfg, enabledKeyspaces, conflict := findGossipConfigState()
+		cfg, enabledKeyspaces, conflict, err := findGossipConfigState()
+		require.NoError(t, err)
 		require.NotNil(t, cfg)
 		assert.ElementsMatch(t, []string{"ks1", "ks2"}, enabledKeyspaces)
 		assert.False(t, conflict)
 	})
+}
+
+func TestReconcileGossipConfigKeepsAgentOnKeyspaceReadError(t *testing.T) {
+	ctx := t.Context()
+	stopGossip()
+	origTS := ts
+	topoServer, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
+	ts = topoServer
+	t.Cleanup(func() {
+		stopGossip()
+		ts = origTS
+	})
+
+	cfg := testEnabledGossipConfig()
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{GossipConfig: cfg}))
+
+	startGossipAgent(cfg)
+	require.NotNil(t, currentGossipAgent())
+
+	factory.AddOperationError(memorytopo.Get, "^keyspaces/ks/Keyspace$", assert.AnError)
+	reconcileGossipConfig(nil)
+
+	assert.NotNil(t, currentGossipAgent())
 }
 
 func TestStopGossipNilAgent(t *testing.T) {
@@ -531,6 +562,57 @@ func TestWatchExistingGossipKeyspacesStopsAfterLastEnabledKeyspaceDisabled(t *te
 	}, 5*time.Second, 20*time.Millisecond)
 }
 
+func TestWatchExistingGossipKeyspacesPollsAfterWatchedKeyspaceDisabled(t *testing.T) {
+	ctx := t.Context()
+	stopGossip()
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	origPollInterval := gossipPollInterval
+	gossipPollInterval = 10 * time.Millisecond
+	t.Cleanup(func() {
+		stopGossip()
+		ts = origTS
+		gossipPollInterval = origPollInterval
+	})
+
+	cfg := testEnabledGossipConfig()
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{
+		GossipConfig: cfg,
+	}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks1", &topodatapb.SrvKeyspace{
+		GossipConfig: cfg,
+	}))
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks2", &topodatapb.SrvKeyspace{}))
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	t.Cleanup(func() {
+		cancel()
+		waitForGossipWatchesToStop(t)
+	})
+	require.True(t, watchExistingGossipKeyspaces(watchCtx))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+
+	updateKeyspaceGossipConfig(t, ts, "ks1", &topodatapb.GossipConfig{})
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks1", &topodatapb.SrvKeyspace{}))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() == nil
+	}, 5*time.Second, 20*time.Millisecond)
+
+	updateKeyspaceGossipConfig(t, ts, "ks2", cfg)
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks2", &topodatapb.SrvKeyspace{
+		GossipConfig: cfg,
+	}))
+
+	require.Eventually(t, func() bool {
+		return currentGossipAgent() != nil
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
 func updateKeyspaceGossipConfig(t *testing.T, ts *topo.Server, keyspace string, cfg *topodatapb.GossipConfig) {
 	t.Helper()
 	lockCtx, unlock, err := ts.LockKeyspace(t.Context(), keyspace, "update gossip config")
@@ -764,6 +846,81 @@ func TestGossipShardPrimaries(t *testing.T) {
 	assert.Contains(t, currentMembers["ks/0"], "zone1-0000000100")
 	// ERS flags should not be set (no disable configured).
 	assert.False(t, ersFlags["ks/0"].keyspace)
+}
+
+func TestGossipShardPrimariesERSDisabledFlags(t *testing.T) {
+	orcDb, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = orcDb.Exec("delete from vitess_tablet")
+		_, _ = orcDb.Exec("delete from vitess_keyspace")
+		_, _ = orcDb.Exec("delete from vitess_shard")
+	})
+
+	tests := []struct {
+		name              string
+		keyspaceDisabled  bool
+		shardDisabled     bool
+		wantDisabledFlags ersDisabledFlags
+	}{{
+		name:              "keyspace disabled",
+		keyspaceDisabled:  true,
+		wantDisabledFlags: ersDisabledFlags{keyspace: true},
+	}, {
+		name:              "shard disabled",
+		shardDisabled:     true,
+		wantDisabledFlags: ersDisabledFlags{shard: true},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _ = orcDb.Exec("delete from vitess_tablet")
+			_, _ = orcDb.Exec("delete from vitess_keyspace")
+			_, _ = orcDb.Exec("delete from vitess_shard")
+
+			require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Hostname: "host1",
+				PortMap:  map[string]int32{"grpc": 15100},
+				Keyspace: "ks",
+				Shard:    "0",
+				Type:     topodatapb.TabletType_PRIMARY,
+			}))
+			if tt.keyspaceDisabled {
+				keyspaceInfo := &topo.KeyspaceInfo{
+					Keyspace: &topodatapb.Keyspace{
+						VtorcState: &vtorcdatapb.Keyspace{
+							DisableEmergencyReparent: true,
+						},
+					},
+				}
+				keyspaceInfo.SetKeyspaceName("ks")
+				require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+			}
+			if tt.shardDisabled {
+				shardInfo := topo.NewShardInfo("ks", "0", &topodatapb.Shard{
+					VtorcState: &vtorcdatapb.Shard{
+						DisableEmergencyReparent: true,
+					},
+				}, nil)
+				require.NoError(t, inst.SaveShard(shardInfo))
+			}
+
+			state := &fakeState{
+				members: []gossip.Member{{
+					ID: "primary", Addr: "host1:15100", Meta: map[string]string{
+						gossip.MetaKeyKeyspace:    "ks",
+						gossip.MetaKeyShard:       "0",
+						gossip.MetaKeyTabletAlias: "zone1-0000000100",
+					},
+				}},
+			}
+
+			_, _, ersFlags, err := gossipShardPrimaries(state)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantDisabledFlags, ersFlags["ks/0"])
+		})
+	}
 }
 
 func TestGetGossipQuorumAnalyses(t *testing.T) {

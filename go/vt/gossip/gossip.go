@@ -146,7 +146,7 @@ type (
 	// of an agent, which matches the one-shot Start semantic.
 	Config struct {
 		NodeID       NodeID
-		BindAddr     string
+		Addr         string
 		Seeds        []Member
 		Meta         map[string]string
 		PhiThreshold float64
@@ -283,7 +283,7 @@ func New(cfg Config, transport Transport, clock Clock) *Gossip {
 	}
 
 	if cfg.NodeID != "" {
-		g.members[cfg.NodeID] = Member{ID: cfg.NodeID, Addr: cfg.BindAddr, Meta: cfg.Meta}
+		g.members[cfg.NodeID] = Member{ID: cfg.NodeID, Addr: cfg.Addr, Meta: cfg.Meta}
 		g.states[cfg.NodeID] = State{Status: StatusAlive, LastUpdate: g.clock.Now()}
 		g.detectors[cfg.NodeID] = newPhiAccrual(defaultPHIAccrual)
 	}
@@ -423,7 +423,7 @@ func (g *Gossip) UpdateLocal(snapshot HealthSnapshot) {
 	}
 
 	g.states[snapshot.NodeID] = state
-	g.addMemberLocked(Member{ID: snapshot.NodeID, Addr: g.cfg.BindAddr})
+	g.addMemberLocked(Member{ID: snapshot.NodeID, Addr: g.cfg.Addr})
 	g.bumpEpochLocked()
 	g.observeLocked(snapshot.NodeID, now)
 }
@@ -435,11 +435,11 @@ func (g *Gossip) UpdateLocal(snapshot HealthSnapshot) {
 // State produce the human-readable shape operators expect, so we don't
 // need a parallel set of Debug* structs.
 type DebugState struct {
-	NodeID   NodeID           `json:"node_id"`
-	BindAddr string           `json:"bind_addr"`
-	Epoch    uint64           `json:"epoch"`
-	Members  []Member         `json:"members"`
-	States   map[NodeID]State `json:"states"`
+	NodeID  NodeID           `json:"node_id"`
+	Addr    string           `json:"addr"`
+	Epoch   uint64           `json:"epoch"`
+	Members []Member         `json:"members"`
+	States  map[NodeID]State `json:"states"`
 }
 
 // Debug returns a JSON-serializable snapshot of the full gossip state.
@@ -458,11 +458,11 @@ func (g *Gossip) Debug() *DebugState {
 	maps.Copy(states, g.states)
 
 	return &DebugState{
-		NodeID:   g.cfg.NodeID,
-		BindAddr: g.cfg.BindAddr,
-		Epoch:    g.epoch,
-		Members:  members,
-		States:   states,
+		NodeID:  g.cfg.NodeID,
+		Addr:    g.cfg.Addr,
+		Epoch:   g.epoch,
+		Members: members,
+		States:  states,
 	}
 }
 
@@ -578,7 +578,7 @@ func (g *Gossip) Join(ctx context.Context, seedAddr string) (*JoinResponse, erro
 	if g.transport == nil || seedAddr == "" {
 		return nil, nil
 	}
-	self := Member{ID: g.cfg.NodeID, Addr: g.cfg.BindAddr, Meta: g.cfg.Meta}
+	self := Member{ID: g.cfg.NodeID, Addr: g.cfg.Addr, Meta: g.cfg.Meta}
 	ctx, cancel := g.withProbeTimeout(ctx)
 	defer cancel()
 	return g.transport.Join(ctx, seedAddr, &JoinRequest{Member: self, Seeds: g.cfg.Seeds})
@@ -685,7 +685,7 @@ func (g *Gossip) pickPeer() (*Member, string) {
 				continue
 			}
 			scope := memberScope(member.Meta)
-			if scope != "" && scope != selfScope {
+			if scope != selfScope {
 				continue
 			}
 			peers = append(peers, member)

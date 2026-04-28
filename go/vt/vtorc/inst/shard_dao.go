@@ -87,10 +87,12 @@ func ReadShardPrimaryInformation(keyspaceName, shardName string) (
 
 // ShardStats represents stats for a single shard watched by VTOrc.
 type ShardStats struct {
-	Keyspace                 string
-	Shard                    string
-	DisableEmergencyReparent bool
-	TabletCount              int64
+	Keyspace                         string
+	Shard                            string
+	DisableEmergencyReparent         bool
+	KeyspaceDisableEmergencyReparent bool
+	ShardDisableEmergencyReparent    bool
+	TabletCount                      int64
 }
 
 // ReadKeyspaceShardStats returns stats such as # of tablets watched by keyspace/shard and ERS-disabled state.
@@ -117,11 +119,15 @@ func ReadKeyspaceShardStats() ([]ShardStats, error) {
                 vt.keyspace,
                 vt.shard`
 	err := db.QueryVTOrc(query, nil, func(row sqlutils.RowMap) error {
+		keyspaceDisableEmergencyReparent := row.GetBool("ks_ers_disabled")
+		shardDisableEmergencyReparent := row.GetBool("shard_ers_disabled")
 		ksShardStats = append(ksShardStats, ShardStats{
-			Keyspace:                 row.GetString("keyspace"),
-			Shard:                    row.GetString("shard"),
-			TabletCount:              row.GetInt64("tablet_count"),
-			DisableEmergencyReparent: row.GetBool("ks_ers_disabled") || row.GetBool("shard_ers_disabled"),
+			Keyspace:                         row.GetString("keyspace"),
+			Shard:                            row.GetString("shard"),
+			TabletCount:                      row.GetInt64("tablet_count"),
+			KeyspaceDisableEmergencyReparent: keyspaceDisableEmergencyReparent,
+			ShardDisableEmergencyReparent:    shardDisableEmergencyReparent,
+			DisableEmergencyReparent:         keyspaceDisableEmergencyReparent || shardDisableEmergencyReparent,
 		})
 		return nil
 	})
