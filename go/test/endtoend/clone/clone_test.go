@@ -18,6 +18,7 @@ package clone
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -259,6 +260,31 @@ func connectToTablet(ctx context.Context, tablet *cluster.Vttablet) (*mysql.Conn
 	return mysql.Connect(ctx, &params)
 }
 
+// stopMysqldSafeForTablet stops mysqld_safe for a tablet without stopping
+// mysqld itself. This is used to exercise the case where MySQL finishes the
+// clone but cannot restart itself.
+func stopMysqldSafeForTablet(tablet *cluster.Vttablet) error {
+	mysqldSafePattern := fmt.Sprintf("mysqld_safe.*vt_%010d", tablet.TabletUID)
+
+	output, err := exec.Command("pkill", "-9", "-f", mysqldSafePattern).CombinedOutput()
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
+		// pkill exits 1 when no process matched. That is fine if the local
+		// MySQL install already starts mysqld directly.
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf(
+			"failed to stop mysqld_safe for tablet %d: %w, output: %s",
+			tablet.TabletUID,
+			err,
+			output,
+		)
+	}
+
+	return nil
+}
+
 // createMysqldForTablet creates a Mysqld instance for CloneExecutor
 func createMysqldForTablet(tablet *cluster.Vttablet) *mysqlctl.Mysqld {
 	socketPath := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vt_%010d", tablet.TabletUID), "mysql.sock")
@@ -328,6 +354,19 @@ func TestCloneRemote(t *testing.T) {
 	recipientMysqld := createMysqldForTablet(recipientTablet)
 	defer recipientMysqld.Close()
 
+	// Keep the tablet my.cnf available for the recovery path. The clone stops
+	// mysqld, and this test expects mysqlctl to start mysqld again afterward.
+	recipientMycnf, err := mysqlctl.ReadMycnf(
+		mysqlctl.NewMycnf(uint32(recipientTablet.TabletUID), recipientTablet.MySQLPort),
+		30*time.Second,
+	)
+	require.NoError(t, err, "Failed to read recipient my.cnf")
+
+	// Stop only mysqld_safe. The mysqld process must stay alive for CLONE to
+	// run, but mysqld_safe should not restart it when CLONE finishes.
+	err = stopMysqldSafeForTablet(recipientTablet)
+	require.NoError(t, err, "Failed to stop recipient mysqld_safe")
+
 	// Enable MySQL CLONE for the test
 	mysqlctl.SetMySQLCloneEnabled(true)
 	defer mysqlctl.SetMySQLCloneEnabled(false)
@@ -341,7 +380,7 @@ func TestCloneRemote(t *testing.T) {
 		UseSSL:        false,
 	}
 
-	err = executor.ExecuteClone(ctx, recipientMysqld, nil, 5*time.Minute)
+	err = executor.ExecuteClone(ctx, recipientMysqld, recipientMycnf, 5*time.Minute)
 	require.NoError(t, err, "Clone operation failed")
 
 	// Connect to recipient and verify data
@@ -349,7 +388,7 @@ func TestCloneRemote(t *testing.T) {
 	require.NoError(t, err, "Failed to connect to recipient after clone")
 	defer recipientConn.Close()
 
-	// Verify clone succeeded at MySQL level via performance_schema.clone_status
+	// Verify clone succeeded at MySQL level using performance_schema.clone_status
 	qr, err = recipientConn.ExecuteFetch(
 		"SELECT STATE, ERROR_NO, ERROR_MESSAGE FROM performance_schema.clone_status ORDER BY ID DESC LIMIT 1", 1, false)
 	require.NoError(t, err, "Failed to query clone_status")
