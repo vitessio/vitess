@@ -191,6 +191,47 @@ func validateUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error
 	return nil
 }
 
+// validateQueryThrottlerConfigContent performs client-side validation of the
+// config content for fast feedback before the gRPC round-trip.
+func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
+	if !cfg.GetEnabled() {
+		return nil
+	}
+
+	if cfg.GetStrategy() != querythrottler.ThrottlingStrategy_TABLET_THROTTLER {
+		return fmt.Errorf("strategy must be TABLET_THROTTLER when enabled is true, got %s", cfg.GetStrategy())
+	}
+
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return errors.New("tablet_strategy_config is required when strategy is TABLET_THROTTLER")
+	}
+
+	if len(tsc.GetTabletRules()) == 0 {
+		return errors.New("tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
+	}
+
+	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
+		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for metricName, rule := range metricRuleSet.GetMetricRules() {
+				for i, t := range rule.GetThresholds() {
+					if t.GetAbove() < 0 {
+						return fmt.Errorf("threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+
+					if t.GetThrottle() < 0 || t.GetThrottle() > 100 {
+						return fmt.Errorf("threshold[%d] 'throttle' must be between 0 and 100, got %d (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetThrottle(), tabletType, stmtType, metricName)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func commandUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error {
 	keyspace := cmd.Flags().Arg(0)
 	opts := updateQueryThrottlerConfigOptions
@@ -209,6 +250,10 @@ func commandUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error 
 
 	config := &querythrottler.Config{}
 	if err := json2.UnmarshalPB(configBytes, config); err != nil {
+		return err
+	}
+
+	if err := validateQueryThrottlerConfigContent(config); err != nil {
 		return err
 	}
 
