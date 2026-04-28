@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Release of Vitess v25.0.0
 
 ## Summary
@@ -6,10 +5,19 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
+    - **[New Support](#new-support)**
+    - **[Breaking Changes](#breaking-changes)**
     - **[VTOrc](#major-changes-vtorc)**
         - [Gossip Protocol for Primary Tablet Failure Detection](#vtorc-gossip-protocol)
+- **[Minor Changes](#minor-changes)**
+    - **[VReplication](#minor-changes-vreplication)**
+        - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
 
 ## <a id="major-changes"/>Major Changes</a>
+
+### <a id="new-support"/>New Support</a>
+
+### <a id="breaking-changes"/>Breaking Changes</a>
 
 ### <a id="major-changes-vtorc"/>VTOrc</a>
 
@@ -65,27 +73,6 @@ Both vttablet and VTOrc expose a `/debug/gossip` endpoint showing current gossip
 
 See [#19686](https://github.com/vitessio/vitess/pull/19686) for implementation details.
 
-||||||| 3cafea8085
-=======
-# Release of Vitess v25.0.0
-
-## Summary
-
-### Table of Contents
-
-- **[Major Changes](#major-changes)**
-    - **[New Support](#new-support)**
-    - **[Breaking Changes](#breaking-changes)**
-- **[Minor Changes](#minor-changes)**
-    - **[VReplication](#minor-changes-vreplication)**
-        - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
-
-## <a id="major-changes"/>Major Changes</a>
-
-### <a id="new-support"/>New Support</a>
-
-### <a id="breaking-changes"/>Breaking Changes</a>
-
 ## <a id="minor-changes"/>Minor Changes</a>
 
 #### <a id="vreplication-reverse-workflow-data-protection"/>Default data protection for `_reverse` workflow cancel/complete</a>
@@ -103,5 +90,3 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
-
->>>>>>> main
