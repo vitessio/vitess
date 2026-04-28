@@ -5581,6 +5581,12 @@
     }
   },
   {
+    "comment": "Literal parent alias referenced from sharded subquery is correctly tagged as correlated even when outer has no explicit FROM",
+    "query": "SELECT 1 AS x, (SELECT x FROM authoritative)",
+    "skip_e2e": true,
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
     "comment": "Subquery WHERE clause can reference parent alias",
     "query": "SELECT user_id AS foobar, (SELECT foobar WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
     "plan": {
