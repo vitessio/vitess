@@ -73,6 +73,45 @@ func TestSubqueryParentAliasResolution(t *testing.T) {
 	}
 }
 
+// TestSubqueryParentAliasDualFallback covers the path where the subquery has
+// no explicit FROM and the parser injects `dual`. `dual` is non-authoritative,
+// so resolveColumnInScope returns an uncertain dep at the inner scope and the
+// loop short-circuits before ever reaching the parent-alias check. The end-
+// user query still works (the dual subquery merges with the outer route at
+// planbuilder time and MySQL resolves the alias itself), but the binder
+// resolves the inner column reference to the inner subquery's `dual`, not to
+// the outer alias. This test pins that behaviour so future refactors don't
+// silently change which path handles these shapes.
+func TestSubqueryParentAliasDualFallback(t *testing.T) {
+	tcases := []struct {
+		sql string
+	}{{
+		// Both outer and inner have no FROM — each gets its own implicit dual.
+		sql: "select 1 as x, (select x)",
+	}, {
+		// Outer has a real authoritative FROM, inner gets an implicit dual.
+		sql: "select id as foobar, (select foobar) from t1",
+	}, {
+		// Same as above but with a literal alias.
+		sql: "select 1 as foobar, (select foobar) from t1",
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel := stmt.(*sqlparser.Select)
+
+			subq := extract(sel, 1).(*sqlparser.Subquery).Select.(*sqlparser.Select)
+			innerDual := subq.From[0].(*sqlparser.AliasedTableExpr)
+			innerCol := extract(subq, 0)
+
+			require.NoError(t, semTable.NotSingleRouteErr)
+			// The inner column's deps point to the inner subquery's own dual,
+			// not to the outer scope — i.e. the alias path was not used.
+			assert.Equal(t, semTable.TableSetFor(innerDual), semTable.RecursiveDeps(innerCol))
+		})
+	}
+}
+
 // TestSubqueryParentAliasNestedResolution covers the nested case: an inner
 // subquery references an alias defined two scope levels above. Both inner
 // subqueries use authoritative FROM tables that don't contain `foobar`.
