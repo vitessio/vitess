@@ -607,7 +607,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 		"drop table t1",
 	})
 
-	ctx, cancel := context.WithCancel(t.Context())
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 
 	var heartbeatCount int32
@@ -650,7 +650,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}, &options)
 
 	// We expect context canceled error since we cancel after receiving heartbeats
-	if err != nil && err.Error() != "stream ended: context canceled" && err.Error() != "row stream ended: context canceled" {
+	if err != nil && err.Error() != "row stream ended: context canceled" {
 		t.Errorf("unexpected error: %v", err)
 	}
 
