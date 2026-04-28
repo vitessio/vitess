@@ -72,17 +72,6 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-<<<<<<< HEAD
-	forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
-	cacheInitializationCompleted.Store(true)
-||||||| parent of 33aa0f0a1c (vtorc: fix data race in forgetAliases cache initialization (#19843))
-	InitializeForgetAliasesCache()
-}
-
-func InitializeForgetAliasesCache() {
-	forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
-	cacheInitializationCompleted.Store(true)
-=======
 	initForgetAliasesCache()
 }
 
@@ -95,7 +84,6 @@ func initForgetAliasesCache() {
 // InitializeForgetAliasesCache ensures the forgetAliases cache is initialized.
 func InitializeForgetAliasesCache() {
 	initForgetAliasesCache()
->>>>>>> 33aa0f0a1c (vtorc: fix data race in forgetAliases cache initialization (#19843))
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronously or not
@@ -1093,21 +1081,9 @@ func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
 	return ExecDBWriteFunc(writeFunc)
 }
 
-<<<<<<< HEAD
 func InstanceIsForgotten(tabletAlias string) bool {
-	_, found := forgetAliases.Get(tabletAlias)
-||||||| parent of 33aa0f0a1c (vtorc: fix data race in forgetAliases cache initialization (#19843))
-// InstanceIsForgotten returns true if an instance was forgotten.
-func InstanceIsForgotten(tabletAlias *topodatapb.TabletAlias) bool {
-	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
-	_, found := forgetAliases.Get(tabletAliasString)
-=======
-// InstanceIsForgotten returns true if an instance was forgotten.
-func InstanceIsForgotten(tabletAlias *topodatapb.TabletAlias) bool {
 	initForgetAliasesCache()
-	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
-	_, found := forgetAliases.Get(tabletAliasString)
->>>>>>> 33aa0f0a1c (vtorc: fix data race in forgetAliases cache initialization (#19843))
+	_, found := forgetAliases.Get(tabletAlias)
 	return found
 }
 
@@ -1119,19 +1095,9 @@ func ForgetInstance(tabletAlias string) error {
 		log.Errorf(errMsg)
 		return errors.New(errMsg)
 	}
-<<<<<<< HEAD
+	initForgetAliasesCache()
 	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
 	log.Infof("Forgetting: %v", tabletAlias)
-||||||| parent of 33aa0f0a1c (vtorc: fix data race in forgetAliases cache initialization (#19843))
-	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
-	forgetAliases.Set(tabletAliasString, true, cache.DefaultExpiration)
-	log.Info(fmt.Sprintf("Forgetting: %v", tabletAliasString))
-=======
-	initForgetAliasesCache()
-	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
-	forgetAliases.Set(tabletAliasString, true, cache.DefaultExpiration)
-	log.Info(fmt.Sprintf("Forgetting: %v", tabletAliasString))
->>>>>>> 33aa0f0a1c (vtorc: fix data race in forgetAliases cache initialization (#19843))
 
 	// Remove this tablet from errant GTID count metric.
 	currentErrantGTIDCount.Reset(tabletAlias)
