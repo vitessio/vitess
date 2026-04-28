@@ -11,7 +11,7 @@ import {
     useWorkflowSwitchTraffic,
 } from '../../../hooks/api';
 import Toggle from '../../toggle/Toggle';
-import { success } from '../../Snackbar';
+import { success, warn } from '../../Snackbar';
 import { topodata, vtadmin, vtctldata } from '../../../proto/vtadmin';
 import { getReverseWorkflow } from '../../../util/workflows';
 import { Label } from '../../inputs/Label';
@@ -32,19 +32,18 @@ interface WorkflowActionsProps {
 }
 
 interface CompleteMoveTablesOptions {
-    keepData: boolean;
+    keepData?: boolean;
     keepRoutingRules: boolean;
     renameTables: boolean;
 }
 
 const DefaultCompleteMoveTablesOptions: CompleteMoveTablesOptions = {
-    keepData: false,
     keepRoutingRules: false,
     renameTables: false,
 };
 
 interface CancelWorkflowOptions {
-    keepData: boolean;
+    keepData?: boolean;
     keepRoutingRules: boolean;
 }
 
@@ -69,8 +68,12 @@ const DefaultSwitchTrafficOptions: SwitchTrafficOptions = {
 };
 
 const DefaultCancelWorkflowOptions: CancelWorkflowOptions = {
-    keepData: false,
     keepRoutingRules: false,
+};
+
+const showWorkflowMutationNotifications = (summary: string, warnings?: string[] | null) => {
+    success(summary, { autoClose: 1600 });
+    warnings?.forEach((warning) => warn(warning, { autoClose: 5000 }));
 };
 
 const WorkflowActions: React.FC<WorkflowActionsProps> = ({
@@ -93,7 +96,11 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
 
     const [switchTrafficOptions, setSwitchTrafficOptions] = useState<SwitchTrafficOptions>(DefaultSwitchTrafficOptions);
 
-    const closeDialog = () => setCurrentDialog('');
+    const closeDialog = () => {
+        setCurrentDialog('');
+        setCompleteMoveTablesOptions(DefaultCompleteMoveTablesOptions);
+        setCancelWorkflowOptions(DefaultCancelWorkflowOptions);
+    };
 
     const startWorkflowMutation = useStartWorkflow({ keyspace, clusterID, name });
 
@@ -143,13 +150,13 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
             request: {
                 keyspace: keyspace,
                 workflow: name,
-                keep_data: cancelWorkflowOptions.keepData,
+                ...(cancelWorkflowOptions.keepData !== undefined ? { keep_data: cancelWorkflowOptions.keepData } : {}),
                 keep_routing_rules: cancelWorkflowOptions.keepRoutingRules,
             },
         },
         {
             onSuccess: (data) => {
-                success(data.summary, { autoClose: 1600 });
+                showWorkflowMutationNotifications(data.summary, data.warnings);
             },
         }
     );
@@ -160,14 +167,16 @@ const WorkflowActions: React.FC<WorkflowActionsProps> = ({
             request: {
                 workflow: name,
                 target_keyspace: keyspace,
-                keep_data: completeMoveTablesOptions.keepData,
+                ...(completeMoveTablesOptions.keepData !== undefined
+                    ? { keep_data: completeMoveTablesOptions.keepData }
+                    : {}),
                 keep_routing_rules: completeMoveTablesOptions.keepRoutingRules,
                 rename_tables: completeMoveTablesOptions.renameTables,
             },
         },
         {
             onSuccess: (data) => {
-                success(data.summary, { autoClose: 1600 });
+                showWorkflowMutationNotifications(data.summary, data.warnings);
             },
         }
     );
