@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -251,7 +252,7 @@ func startSpanFromPrepareTestable(ctx context.Context, prepare *mysql.PrepareDat
 			trace.AnnotateSQL(span, sqlparser.Preview(prepare.PrepareStmt))
 			return span, ctx, nil
 		}
-		log.Warn("Unable to parse VT_SPAN_CONTEXT: " + err.Error())
+		log.Warn("Unable to parse VT_SPAN_CONTEXT", slog.Any("error", err))
 		// Clear the cached value so subsequent executions skip the parse attempt.
 		*prepare.SpanContext = ""
 	}
