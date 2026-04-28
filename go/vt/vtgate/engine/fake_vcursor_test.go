@@ -133,6 +133,8 @@ func (t *noopVCursor) GetMirrorTrafficSemaphore() *semaphore.Weighted {
 
 func (t *noopVCursor) RecordMirrorDropped() {}
 
+func (t *noopVCursor) RecordMirrorPanic() {}
+
 func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	panic("implement me")
 }
@@ -492,6 +494,7 @@ type loggingVCursor struct {
 	onStreamExecuteMultiFn  func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
 	onRecordMirrorStatsFn   func(time.Duration, time.Duration, error)
 	onRecordMirrorDroppedFn func()
+	onRecordMirrorPanicFn   func()
 	onResolveDestinationsFn func(context.Context)
 
 	// mirrorTrafficSemaphore is the bounded semaphore exposed to mirror code.
@@ -647,6 +650,12 @@ func (f *loggingVCursor) GetMirrorTrafficSemaphore() *semaphore.Weighted {
 func (f *loggingVCursor) RecordMirrorDropped() {
 	if f.onRecordMirrorDroppedFn != nil {
 		f.onRecordMirrorDroppedFn()
+	}
+}
+
+func (f *loggingVCursor) RecordMirrorPanic() {
+	if f.onRecordMirrorPanicFn != nil {
+		f.onRecordMirrorPanicFn()
 	}
 }
 

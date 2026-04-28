@@ -602,3 +602,61 @@ func TestMirrorDropsWhenSemaphoreFull(t *testing.T) {
 
 	require.Equal(t, int32(1), droppedCount.Load(), "drop hook should have fired exactly once")
 }
+
+// TestMirrorRecoversTargetPanic verifies that a panic in the mirror target
+// goroutine is recovered, the primary query result is unaffected, and the
+// MirrorTargetPanics counter is incremented. Mirror is best-effort: it must
+// never crash vtgate.
+func TestMirrorRecoversTargetPanic(t *testing.T) {
+	primitive := NewRoute(
+		Unsharded,
+		&vindexes.Keyspace{Name: "ks1"},
+		"select 1 from foo",
+		"select 1 from foo where 1 != 1",
+	)
+	target := NewRoute(
+		Unsharded,
+		&vindexes.Keyspace{Name: "ks2"},
+		"select 1 from foo",
+		"select 1 from foo where 1 != 1",
+	)
+	mirror := NewPercentBasedMirror(100, primitive, target)
+
+	vc := &loggingVCursor{
+		shards:  []string{"-"},
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "varchar"), "x")},
+	}
+
+	// mirrorVC's onExecuteMultiShardFn will panic; the recover must catch it.
+	var panicCount atomic.Int32
+	panicDone := make(chan struct{}, 1)
+	mirrorVC := &loggingVCursor{
+		shards: []string{"-"},
+		ksShardMap: map[string][]string{
+			"ks2": {"-"},
+		},
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "varchar"), "x")},
+		onExecuteMultiShardFn: func(_ context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
+			panic("synthetic mirror target panic")
+		},
+		onRecordMirrorPanicFn: func() {
+			panicCount.Add(1)
+			select {
+			case panicDone <- struct{}{}:
+			default:
+			}
+		},
+	}
+	vc.onMirrorClonesFn = func(_ context.Context) VCursor { return mirrorVC }
+
+	res, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err, "primary query must not be affected by mirror panic")
+	require.NotNil(t, res, "primary result must be returned")
+
+	select {
+	case <-panicDone:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "mirror panic recover did not fire")
+	}
+	require.Equal(t, int32(1), panicCount.Load(), "panic counter should fire exactly once")
+}

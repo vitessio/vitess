@@ -1728,6 +1728,7 @@ var (
 	mirrorTargetLatency = stats.NewTimings("MirrorTargetExecuteTime", "Time spent executing the mirror target query", "Keyspace")
 	mirrorTargetErrors  = stats.NewCountersWithSingleLabel("MirrorTargetErrors", "Number of mirror target query errors", "Keyspace")
 	mirrorTargetDropped = stats.NewCountersWithSingleLabel("MirrorTargetDropped", "Number of mirror target queries dropped because the bounded concurrency limit was full", "Keyspace")
+	mirrorTargetPanics  = stats.NewCountersWithSingleLabel("MirrorTargetPanics", "Number of mirror target queries that panicked and were recovered", "Keyspace")
 )
 
 // RecordMirrorStats is used to record stats about a mirror query.
@@ -1752,6 +1753,14 @@ func (vc *VCursorImpl) RecordMirrorStats(sourceExecTime, targetExecTime time.Dur
 // to the bounded concurrency limit being full. The primary query is unaffected.
 func (vc *VCursorImpl) RecordMirrorDropped() {
 	mirrorTargetDropped.Add(vc.keyspace, 1)
+}
+
+// RecordMirrorPanic increments the counter for mirror queries that panicked
+// and were recovered. The primary query is unaffected; the panic is logged
+// at the call site (in the mirror goroutine's recover) along with a stack
+// trace.
+func (vc *VCursorImpl) RecordMirrorPanic() {
+	mirrorTargetPanics.Add(vc.keyspace, 1)
 }
 
 func (vc *VCursorImpl) GetMarginComments() sqlparser.MarginComments {

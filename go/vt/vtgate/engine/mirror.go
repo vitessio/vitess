@@ -18,12 +18,26 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
+	"runtime/debug"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+// recoverMirrorPanic is the deferred recovery used by both mirror dispatch
+// paths. Mirror traffic is best-effort; a panic in the target query path must
+// never crash vtgate or affect the primary response. The panic is logged with
+// a stack trace and counted via the MirrorTargetPanics stat.
+func recoverMirrorPanic(vcursor VCursor) {
+	if r := recover(); r != nil {
+		log.Error(fmt.Sprintf("mirror target panic recovered: %v\n%s", r, debug.Stack()))
+		vcursor.RecordMirrorPanic()
+	}
+}
 
 type (
 	// percentBasedMirror represents the instructions to execute an
@@ -86,6 +100,10 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 	mirrorCtx, mirrorCancel := context.WithTimeout(context.Background(), maxMirrorTargetDuration)
 	mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 	go func() {
+		// recover defer is registered first so it runs LAST in the LIFO
+		// chain — that way Release(1) and mirrorCancel() always run, and
+		// any panic from those (very unlikely) is also recovered.
+		defer recoverMirrorPanic(mirrorVCursor)
 		defer sem.Release(1)
 		defer mirrorCancel()
 		targetStartTime := time.Now()
@@ -117,6 +135,7 @@ func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCurs
 	mirrorCtx, mirrorCancel := context.WithTimeout(context.Background(), maxMirrorTargetDuration)
 	mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 	go func() {
+		defer recoverMirrorPanic(mirrorVCursor)
 		defer sem.Release(1)
 		defer mirrorCancel()
 		targetStartTime := time.Now()
