@@ -30,6 +30,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/semaphore"
 
@@ -163,7 +164,7 @@ type Buffer struct {
 	// Key Format: "<keyspace>/<shard>"
 	buffers map[string]*shardBuffer
 	// stopped is true after Shutdown() was run.
-	stopped bool
+	stopped atomic.Bool
 }
 
 // New creates a new Buffer object.
@@ -223,7 +224,7 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 	key := topoproto.KeyspaceShardString(keyspace, shard)
 	b.mu.RLock()
 	sb, ok := b.buffers[key]
-	stopped := b.stopped
+	stopped := b.stopped.Load()
 	b.mu.RUnlock()
 
 	if stopped {
@@ -259,7 +260,7 @@ func (b *Buffer) shutdown() {
 	for _, sb := range b.buffers {
 		sb.shutdown()
 	}
-	b.stopped = true
+	b.stopped.Store(true)
 }
 
 func (b *Buffer) waitForShutdown() {
