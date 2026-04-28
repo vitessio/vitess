@@ -55,12 +55,28 @@ type fuzzer struct {
 	queryFormat  QueryFormat
 	noFkSetVar   bool
 	fkState      *bool
+	insertTables []string
+	updateTables []string
+	deleteTables []string
+	allowReplace bool
+	// The FK fuzz schema includes unique-key FK relationships that Vitess
+	// rejects for ON DUPLICATE KEY UPDATE. Dedicated tests cover supported
+	// ODKU cases.
+	allowOnDup bool
+	// shardScoped disables query forms that mutate a vindex column
+	// (UPDATE, REPLACE, INSERT ... ON DUPLICATE KEY UPDATE). Required when
+	// running against the shard-scoped keyspace whose vschema uses the FK
+	// columns as vindexes.
+	shardScoped bool
 
 	// shouldStop is an internal state variable, that tells the fuzzer
 	// whether it should stop or not.
 	shouldStop atomic.Bool
 	// wg is an internal state variable, that used to know whether the fuzzer threads are running or not.
 	wg sync.WaitGroup
+	// nextInsertID keeps shard-scoped inserts globally unique because those
+	// keyspaces route by FK columns, not by the primary key.
+	nextInsertID atomic.Int64
 	// firstFailureInfo stores the information about the database state after the first failure occurs.
 	firstFailureInfo *debugInfo
 }
@@ -73,8 +89,43 @@ type debugInfo struct {
 	mysqlState  []*sqltypes.Result
 }
 
+var shardScopedFuzzerExcludedTables = map[string]struct{}{
+	// fk_t20 is self-referential from col2 to col, but shard_scoped_vschema
+	// routes it by col2. The parent side is therefore not shard-scoped, so
+	// generated shard-scoped DML can fail in Vitess while MySQL accepts it.
+	"fk_t20": {},
+	// These tables have unique secondary indexes that are not covered by the
+	// shard-scoped primary vindex, so duplicates can be accepted on different
+	// shards while the single MySQL comparison database rejects them.
+	"fk_multicol_t1": {},
+	"fk_multicol_t4": {},
+}
+
+var shardScopedFuzzerDeleteTables = []string{
+	// Deletes from non-leaf shard-scoped FK tables can require cascading or
+	// SET NULL changes to FK columns that are also primary vindex columns.
+	"fk_t5", "fk_t6", "fk_t7", "fk_t12", "fk_t13", "fk_t18", "fk_t19",
+	"fk_multicol_t5", "fk_multicol_t6", "fk_multicol_t7", "fk_multicol_t12", "fk_multicol_t13", "fk_multicol_t18", "fk_multicol_t19",
+}
+
+func fuzzerTables(shardScoped bool) (insertTables, updateTables, deleteTables []string) {
+	if !shardScoped {
+		return fkTables, fkTables, fkTables
+	}
+
+	tables := make([]string, 0, len(fkTables)-len(shardScopedFuzzerExcludedTables))
+	for _, table := range fkTables {
+		if _, excluded := shardScopedFuzzerExcludedTables[table]; excluded {
+			continue
+		}
+		tables = append(tables, table)
+	}
+	return tables, nil, shardScopedFuzzerDeleteTables
+}
+
 // newFuzzer creates a new fuzzer struct.
-func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat, fkState *bool) *fuzzer {
+func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare int, deleteShare int, updateShare int, queryFormat QueryFormat, fkState *bool, shardScoped bool) *fuzzer {
+	insertTables, updateTables, deleteTables := fuzzerTables(shardScoped)
 	fz := &fuzzer{
 		concurrency:  concurrency,
 		maxValForId:  maxValForId,
@@ -84,7 +135,13 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 		updateShare:  updateShare,
 		queryFormat:  queryFormat,
 		fkState:      fkState,
+		insertTables: insertTables,
+		updateTables: updateTables,
+		deleteTables: deleteTables,
+		allowReplace: !shardScoped,
+		allowOnDup:   false,
 		noFkSetVar:   false,
+		shardScoped:  shardScoped,
 		wg:           sync.WaitGroup{},
 	}
 	// Initially the fuzzer thread is stopped.
@@ -92,22 +149,100 @@ func newFuzzer(concurrency int, maxValForId int, maxValForCol int, insertShare i
 	return fz
 }
 
+func queryTable(tables []string) string {
+	return tables[rand.IntN(len(tables))]
+}
+
+func (fz *fuzzer) queryInsertTable() string {
+	return queryTable(fz.insertTables)
+}
+
+func (fz *fuzzer) queryUpdateTable() string {
+	return queryTable(fz.updateTables)
+}
+
+func (fz *fuzzer) queryDeleteTable() string {
+	return queryTable(fz.deleteTables)
+}
+
+func (fz *fuzzer) randomColValue() string {
+	value := rand.IntN(1 + fz.maxValForCol)
+	if fz.shardScoped && value == 0 {
+		value = 1
+	}
+	return convertIntValueToString(value)
+}
+
+func (fz *fuzzer) insertIDValue() int {
+	if fz.shardScoped {
+		return int(fz.nextInsertID.Add(1))
+	}
+	return fz.randomIDValue()
+}
+
+func (fz *fuzzer) randomIDValue() int {
+	if fz.shardScoped {
+		max := int(fz.nextInsertID.Load())
+		if max > 0 {
+			return 1 + rand.IntN(max)
+		}
+	}
+	return 1 + rand.IntN(fz.maxValForId)
+}
+
+func TestFuzzerQueryTables(t *testing.T) {
+	fz := newFuzzer(1, 1, 1, 1, 1, 1, SQLQueries, nil, false)
+	require.Equal(t, fkTables, fz.insertTables)
+	require.Equal(t, fkTables, fz.updateTables)
+	require.Equal(t, fkTables, fz.deleteTables)
+	require.Contains(t, fz.insertTables, "fk_t20")
+	require.True(t, fz.allowReplace)
+	require.False(t, fz.allowOnDup)
+
+	fz = newFuzzer(1, 1, 1, 1, 1, 1, SQLQueries, nil, true)
+	require.NotContains(t, fz.insertTables, "fk_t20")
+	require.NotContains(t, fz.insertTables, "fk_multicol_t1")
+	require.NotContains(t, fz.insertTables, "fk_multicol_t4")
+	require.Len(t, fz.insertTables, len(fkTables)-len(shardScopedFuzzerExcludedTables))
+	require.Empty(t, fz.updateTables)
+	require.ElementsMatch(t, shardScopedFuzzerDeleteTables, fz.deleteTables)
+	require.False(t, fz.allowReplace)
+	require.False(t, fz.allowOnDup)
+	require.Empty(t, fz.getInsertOnDuplicateClause("insert", "fk_t10"))
+	require.Equal(t, 1, fz.insertIDValue())
+	require.Equal(t, 2, fz.insertIDValue())
+	for range 100 {
+		require.NotEqual(t, "NULL", fz.randomColValue())
+	}
+}
+
 // generateQuery generates a query from the parameters for the fuzzer.
 // The returned set is a list of strings, because for prepared statements, we have to run
 // set queries first and then the final query eventually.
 func (fz *fuzzer) generateQuery() []string {
-	val := rand.IntN(fz.insertShare + fz.updateShare + fz.deleteShare)
+	updateShare := fz.updateShare
+	if len(fz.updateTables) == 0 {
+		// In shard-scoped keyspaces, the FK columns are vindexes and
+		// UPDATE/REPLACE that would change them is unsupported, so skip
+		// UPDATEs entirely here.
+		updateShare = 0
+	}
+	deleteShare := fz.deleteShare
+	if len(fz.deleteTables) == 0 {
+		deleteShare = 0
+	}
+	val := rand.IntN(fz.insertShare + updateShare + deleteShare)
 	if val < fz.insertShare {
 		switch fz.queryFormat {
 		case OlapSQLQueries, SQLQueries:
-			return []string{fz.generateInsertDMLQuery(getInsertType())}
+			return []string{fz.generateInsertDMLQuery(fz.getInsertType())}
 		case PreparedStatmentQueries:
-			return fz.getPreparedInsertQueries(getInsertType())
+			return fz.getPreparedInsertQueries(fz.getInsertType())
 		default:
 			panic("Unknown query type")
 		}
 	}
-	if val < fz.insertShare+fz.updateShare {
+	if val < fz.insertShare+updateShare {
 		switch fz.queryFormat {
 		case OlapSQLQueries, SQLQueries:
 			return []string{fz.generateUpdateDMLQuery()}
@@ -127,28 +262,55 @@ func (fz *fuzzer) generateQuery() []string {
 	}
 }
 
-func getInsertType() string {
+// getInsertType picks INSERT vs REPLACE. REPLACE is disabled in shard-scoped
+// keyspaces because the deletion half can be routed to a different shard than
+// the insertion half if the FK column value is changed.
+func (fz *fuzzer) getInsertType() string {
+	if !fz.allowReplace {
+		return "insert"
+	}
 	return []string{"insert", "replace"}[rand.IntN(2)]
 }
 
 // generateInsertDMLQuery generates an INSERT query from the parameters for the fuzzer.
 func (fz *fuzzer) generateInsertDMLQuery(insertType string) string {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
-	tableName := fkTables[tableId]
+	idValue := fz.insertIDValue()
+	tableName := fz.queryInsertTable()
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
+	onDup := fz.getInsertOnDuplicateClause(insertType, tableName)
 	if tableName == "fk_t20" {
-		colValue := rand.IntN(1 + fz.maxValForCol)
-		col2Value := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s %vinto %v (id, col, col2) values (%v, %v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value))
+		colValue := fz.randomColValue()
+		col2Value := fz.randomColValue()
+		return fmt.Sprintf("%s %vinto %v (id, col, col2) values (%v, %v, %v)%s", insertType, setVarFkChecksVal, tableName, idValue, colValue, col2Value, onDup)
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.IntN(1 + fz.maxValForCol)
-		colbValue := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s %vinto %v (id, cola, colb) values (%v, %v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue))
+		colaValue := fz.randomColValue()
+		colbValue := fz.randomColValue()
+		return fmt.Sprintf("%s %vinto %v (id, cola, colb) values (%v, %v, %v)%s", insertType, setVarFkChecksVal, tableName, idValue, colaValue, colbValue, onDup)
 	} else {
-		colValue := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s %vinto %v (id, col) values (%v, %v)", insertType, setVarFkChecksVal, tableName, idValue, convertIntValueToString(colValue))
+		colValue := fz.randomColValue()
+		return fmt.Sprintf("%s %vinto %v (id, col) values (%v, %v)%s", insertType, setVarFkChecksVal, tableName, idValue, colValue, onDup)
 	}
+}
+
+// getInsertOnDuplicateClause randomly returns an ON DUPLICATE KEY UPDATE
+// clause with a leading space (or empty string) for the given table shape.
+// Only applies to INSERT (not REPLACE) when allowOnDup is enabled.
+func (fz *fuzzer) getInsertOnDuplicateClause(insertType, tableName string) string {
+	if !fz.allowOnDup || insertType != "insert" || rand.IntN(2) == 0 {
+		return ""
+	}
+	if tableName == "fk_t20" {
+		colValue := fz.randomColValue()
+		col2Value := fz.randomColValue()
+		return fmt.Sprintf(" on duplicate key update col = %v, col2 = %v", colValue, col2Value)
+	}
+	if isMultiColFkTable(tableName) {
+		colaValue := fz.randomColValue()
+		colbValue := fz.randomColValue()
+		return fmt.Sprintf(" on duplicate key update cola = %v, colb = %v", colaValue, colbValue)
+	}
+	colValue := fz.randomColValue()
+	return fmt.Sprintf(" on duplicate key update col = %v", colValue)
 }
 
 // generateUpdateDMLQuery generates a UPDATE query from the parameters for the fuzzer.
@@ -162,9 +324,8 @@ func (fz *fuzzer) generateUpdateDMLQuery() string {
 
 // generateSingleUpdateDMLQuery generates an UPDATE query from the parameters for the fuzzer.
 func (fz *fuzzer) generateSingleUpdateDMLQuery() string {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
-	tableName := fkTables[tableId]
+	idValue := fz.randomIDValue()
+	tableName := fz.queryUpdateTable()
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
 	updWithLimit := rand.IntN(2)
 	limitCount := rand.IntN(3)
@@ -206,44 +367,44 @@ func (fz *fuzzer) generateSingleUpdateDMLQuery() string {
 
 // generateMultiUpdateDMLQuery generates a UPDATE query using 2 tables from the parameters for the fuzzer.
 func (fz *fuzzer) generateMultiUpdateDMLQuery() string {
-	tableId := rand.IntN(len(fkTables))
-	tableId2 := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
+	tableName := fz.queryUpdateTable()
+	tableName2 := fz.queryUpdateTable()
+	idValue := fz.randomIDValue()
 	colValue := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
 	col2Value := convertIntValueToString(rand.IntN(1 + fz.maxValForCol))
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
-	setExprs := fmt.Sprintf("%v.col = %v", fkTables[tableId], colValue)
+	setExprs := fmt.Sprintf("%v.col = %v", tableName, colValue)
 	if rand.IntN(2)%2 == 0 {
-		setExprs += ", " + fmt.Sprintf("%v.col = %v", fkTables[tableId2], col2Value)
+		setExprs += ", " + fmt.Sprintf("%v.col = %v", tableName2, col2Value)
 	}
-	query := fmt.Sprintf("update %v%v join %v using (id) set %s where %v.id = %v", setVarFkChecksVal, fkTables[tableId], fkTables[tableId2], setExprs, fkTables[tableId], idValue)
+	query := fmt.Sprintf("update %v%v join %v using (id) set %s where %v.id = %v", setVarFkChecksVal, tableName, tableName2, setExprs, tableName, idValue)
 	return query
 }
 
 // generateDeleteDMLQuery generates a DELETE query using 1 table from the parameters for the fuzzer.
 func (fz *fuzzer) generateSingleDeleteDMLQuery() string {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
+	tableName := fz.queryDeleteTable()
+	idValue := fz.randomIDValue()
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
 	delWithLimit := rand.IntN(2)
 	if delWithLimit == 0 {
-		return fmt.Sprintf("delete %vfrom %v where id = %v", setVarFkChecksVal, fkTables[tableId], idValue)
+		return fmt.Sprintf("delete %vfrom %v where id = %v", setVarFkChecksVal, tableName, idValue)
 	}
 	limitCount := rand.IntN(3)
-	return fmt.Sprintf("delete %vfrom %v order by id limit %v", setVarFkChecksVal, fkTables[tableId], limitCount)
+	return fmt.Sprintf("delete %vfrom %v order by id limit %v", setVarFkChecksVal, tableName, limitCount)
 }
 
 // generateMultiDeleteDMLQuery generates a DELETE query using 2 tables from the parameters for the fuzzer.
 func (fz *fuzzer) generateMultiDeleteDMLQuery() string {
-	tableId := rand.IntN(len(fkTables))
-	tableId2 := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
+	tableName := fz.queryDeleteTable()
+	tableName2 := fz.queryDeleteTable()
+	idValue := fz.randomIDValue()
 	setVarFkChecksVal := fz.getSetVarFkChecksVal()
-	target := fkTables[tableId]
+	target := tableName
 	if rand.IntN(2)%2 == 0 {
-		target += ", " + fkTables[tableId2]
+		target += ", " + tableName2
 	}
-	query := fmt.Sprintf("delete %v%v from %v join %v using (id) where %v.id = %v", setVarFkChecksVal, target, fkTables[tableId], fkTables[tableId2], fkTables[tableId], idValue)
+	query := fmt.Sprintf("delete %v%v from %v join %v using (id) where %v.id = %v", setVarFkChecksVal, target, tableName, tableName2, tableName, idValue)
 	return query
 }
 
@@ -395,10 +556,10 @@ func (fz *fuzzer) stop() {
 
 // getPreparedDeleteQueries gets the list of queries to run for executing an DELETE using prepared statements.
 func (fz *fuzzer) getPreparedDeleteQueries() []string {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
+	tableName := fz.queryDeleteTable()
+	idValue := fz.randomIDValue()
 	return []string{
-		fmt.Sprintf("prepare stmt_del from 'delete from %v where id = ?'", fkTables[tableId]),
+		fmt.Sprintf("prepare stmt_del from 'delete from %v where id = ?'", tableName),
 		fmt.Sprintf("SET @id = %v", idValue),
 		"execute stmt_del using @id",
 	}
@@ -406,45 +567,82 @@ func (fz *fuzzer) getPreparedDeleteQueries() []string {
 
 // getPreparedInsertQueries gets the list of queries to run for executing an INSERT using prepared statements.
 func (fz *fuzzer) getPreparedInsertQueries(insertType string) []string {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
-	tableName := fkTables[tableId]
+	idValue := fz.insertIDValue()
+	tableName := fz.queryInsertTable()
+	// Decide up-front whether this INSERT should carry an ON DUPLICATE KEY
+	// UPDATE clause. REPLACE does not support ON DUPLICATE.
+	useOnDup := fz.allowOnDup && insertType == "insert" && rand.IntN(2) == 1
 	if tableName == "fk_t20" {
-		colValue := rand.IntN(1 + fz.maxValForCol)
-		col2Value := rand.IntN(1 + fz.maxValForCol)
-		return []string{
-			fmt.Sprintf("prepare stmt_insert from '%s into fk_t20 (id, col, col2) values (?, ?, ?)'", insertType),
+		colValue := fz.randomColValue()
+		col2Value := fz.randomColValue()
+		queries := []string{
+			fmt.Sprintf("prepare stmt_insert from '%s into fk_t20 (id, col, col2) values (?, ?, ?)%s'", insertType, onDupPreparedSuffix(useOnDup, "col = ?, col2 = ?")),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
-			fmt.Sprintf("SET @col2 = %v", convertIntValueToString(col2Value)),
-			"execute stmt_insert using @id, @col, @col2",
+			fmt.Sprintf("SET @col = %v", colValue),
+			fmt.Sprintf("SET @col2 = %v", col2Value),
 		}
+		execArgs := "@id, @col, @col2"
+		if useOnDup {
+			newCol := fz.randomColValue()
+			newCol2 := fz.randomColValue()
+			queries = append(queries,
+				fmt.Sprintf("SET @new_col = %v", newCol),
+				fmt.Sprintf("SET @new_col2 = %v", newCol2),
+			)
+			execArgs += ", @new_col, @new_col2"
+		}
+		return append(queries, "execute stmt_insert using "+execArgs)
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.IntN(1 + fz.maxValForCol)
-		colbValue := rand.IntN(1 + fz.maxValForCol)
-		return []string{
-			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, cola, colb) values (?, ?, ?)'", insertType, tableName),
+		colaValue := fz.randomColValue()
+		colbValue := fz.randomColValue()
+		queries := []string{
+			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, cola, colb) values (?, ?, ?)%s'", insertType, tableName, onDupPreparedSuffix(useOnDup, "cola = ?, colb = ?")),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @cola = %v", convertIntValueToString(colaValue)),
-			fmt.Sprintf("SET @colb = %v", convertIntValueToString(colbValue)),
-			"execute stmt_insert using @id, @cola, @colb",
+			fmt.Sprintf("SET @cola = %v", colaValue),
+			fmt.Sprintf("SET @colb = %v", colbValue),
 		}
+		execArgs := "@id, @cola, @colb"
+		if useOnDup {
+			newCola := fz.randomColValue()
+			newColb := fz.randomColValue()
+			queries = append(queries,
+				fmt.Sprintf("SET @new_cola = %v", newCola),
+				fmt.Sprintf("SET @new_colb = %v", newColb),
+			)
+			execArgs += ", @new_cola, @new_colb"
+		}
+		return append(queries, "execute stmt_insert using "+execArgs)
 	} else {
-		colValue := rand.IntN(1 + fz.maxValForCol)
-		return []string{
-			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, col) values (?, ?)'", insertType, tableName),
+		colValue := fz.randomColValue()
+		queries := []string{
+			fmt.Sprintf("prepare stmt_insert from '%s into %v (id, col) values (?, ?)%s'", insertType, tableName, onDupPreparedSuffix(useOnDup, "col = ?")),
 			fmt.Sprintf("SET @id = %v", idValue),
-			fmt.Sprintf("SET @col = %v", convertIntValueToString(colValue)),
-			"execute stmt_insert using @id, @col",
+			fmt.Sprintf("SET @col = %v", colValue),
 		}
+		execArgs := "@id, @col"
+		if useOnDup {
+			newCol := fz.randomColValue()
+			queries = append(queries, fmt.Sprintf("SET @new_col = %v", newCol))
+			execArgs += ", @new_col"
+		}
+		return append(queries, "execute stmt_insert using "+execArgs)
 	}
+}
+
+// onDupPreparedSuffix returns the ON DUPLICATE KEY UPDATE clause (with a
+// leading space) to embed inside a `prepare stmt from '...'` string, or
+// empty string when not applicable.
+func onDupPreparedSuffix(useOnDup bool, assignments string) string {
+	if !useOnDup {
+		return ""
+	}
+	return " on duplicate key update " + assignments
 }
 
 // getPreparedUpdateQueries gets the list of queries to run for executing an UPDATE using prepared statements.
 func (fz *fuzzer) getPreparedUpdateQueries() []string {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
-	tableName := fkTables[tableId]
+	idValue := fz.randomIDValue()
+	tableName := fz.queryUpdateTable()
 	if tableName == "fk_t20" {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
@@ -478,11 +676,19 @@ func (fz *fuzzer) getPreparedUpdateQueries() []string {
 
 // generateParameterizedQuery generates a parameterized query for the query format PreparedStatementPacket.
 func (fz *fuzzer) generateParameterizedQuery() (query string, params []any) {
-	val := rand.IntN(fz.insertShare + fz.updateShare + fz.deleteShare)
-	if val < fz.insertShare {
-		return fz.generateParameterizedInsertQuery(getInsertType())
+	updateShare := fz.updateShare
+	if len(fz.updateTables) == 0 {
+		updateShare = 0
 	}
-	if val < fz.insertShare+fz.updateShare {
+	deleteShare := fz.deleteShare
+	if len(fz.deleteTables) == 0 {
+		deleteShare = 0
+	}
+	val := rand.IntN(fz.insertShare + updateShare + deleteShare)
+	if val < fz.insertShare {
+		return fz.generateParameterizedInsertQuery(fz.getInsertType())
+	}
+	if val < fz.insertShare+updateShare {
 		return fz.generateParameterizedUpdateQuery()
 	}
 	return fz.generateParameterizedDeleteQuery()
@@ -490,28 +696,51 @@ func (fz *fuzzer) generateParameterizedQuery() (query string, params []any) {
 
 // generateParameterizedInsertQuery generates a parameterized INSERT query for the query format PreparedStatementPacket.
 func (fz *fuzzer) generateParameterizedInsertQuery(insertType string) (query string, params []any) {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
-	tableName := fkTables[tableId]
+	idValue := fz.insertIDValue()
+	tableName := fz.queryInsertTable()
+	useOnDup := fz.allowOnDup && insertType == "insert" && rand.IntN(2) == 1
 	if tableName == "fk_t20" {
-		colValue := rand.IntN(1 + fz.maxValForCol)
-		col2Value := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s into %v (id, col, col2) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue), convertIntValueToString(col2Value)}
+		colValue := fz.randomColValue()
+		col2Value := fz.randomColValue()
+		query = fmt.Sprintf("%s into %v (id, col, col2) values (?, ?, ?)", insertType, tableName)
+		params = []any{idValue, colValue, col2Value}
+		if useOnDup {
+			query += " on duplicate key update col = ?, col2 = ?"
+			params = append(params,
+				fz.randomColValue(),
+				fz.randomColValue(),
+			)
+		}
+		return query, params
 	} else if isMultiColFkTable(tableName) {
-		colaValue := rand.IntN(1 + fz.maxValForCol)
-		colbValue := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s into %v (id, cola, colb) values (?, ?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colaValue), convertIntValueToString(colbValue)}
+		colaValue := fz.randomColValue()
+		colbValue := fz.randomColValue()
+		query = fmt.Sprintf("%s into %v (id, cola, colb) values (?, ?, ?)", insertType, tableName)
+		params = []any{idValue, colaValue, colbValue}
+		if useOnDup {
+			query += " on duplicate key update cola = ?, colb = ?"
+			params = append(params,
+				fz.randomColValue(),
+				fz.randomColValue(),
+			)
+		}
+		return query, params
 	} else {
-		colValue := rand.IntN(1 + fz.maxValForCol)
-		return fmt.Sprintf("%s into %v (id, col) values (?, ?)", insertType, tableName), []any{idValue, convertIntValueToString(colValue)}
+		colValue := fz.randomColValue()
+		query = fmt.Sprintf("%s into %v (id, col) values (?, ?)", insertType, tableName)
+		params = []any{idValue, colValue}
+		if useOnDup {
+			query += " on duplicate key update col = ?"
+			params = append(params, fz.randomColValue())
+		}
+		return query, params
 	}
 }
 
 // generateParameterizedUpdateQuery generates a parameterized UPDATE query for the query format PreparedStatementPacket.
 func (fz *fuzzer) generateParameterizedUpdateQuery() (query string, params []any) {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
-	tableName := fkTables[tableId]
+	idValue := fz.randomIDValue()
+	tableName := fz.queryUpdateTable()
 	if tableName == "fk_t20" {
 		colValue := rand.IntN(1 + fz.maxValForCol)
 		col2Value := rand.IntN(1 + fz.maxValForCol)
@@ -528,9 +757,9 @@ func (fz *fuzzer) generateParameterizedUpdateQuery() (query string, params []any
 
 // generateParameterizedDeleteQuery generates a parameterized DELETE query for the query format PreparedStatementPacket.
 func (fz *fuzzer) generateParameterizedDeleteQuery() (query string, params []any) {
-	tableId := rand.IntN(len(fkTables))
-	idValue := 1 + rand.IntN(fz.maxValForId)
-	return fmt.Sprintf("delete from %v where id = ?", fkTables[tableId]), []any{idValue}
+	tableName := fz.queryDeleteTable()
+	idValue := fz.randomIDValue()
+	return fmt.Sprintf("delete from %v where id = ?", tableName), []any{idValue}
 }
 
 // getSetVarFkChecksVal generates an optimizer hint to randomly set the foreign key checks to on or off or leave them unaltered.
@@ -627,7 +856,7 @@ func TestFkFuzzTest(t *testing.T) {
 	// Remove all the foreign key constraints for all the replicas.
 	// We can then verify that the replica, and the primary have the same data, to ensure
 	// that none of the queries ever lead to cascades/updates on MySQL level.
-	for _, ks := range []string{shardedKs, unshardedKs} {
+	for _, ks := range []string{shardedKs, unshardedKs, shardScopedKs} {
 		replicas := getReplicaTablets(ks)
 		for _, replica := range replicas {
 			removeAllForeignKeyConstraints(t, replica, ks)
@@ -710,7 +939,7 @@ func TestFkFuzzTest(t *testing.T) {
 	valFalse := false
 	for _, fkState := range []*bool{nil, &valTrue, &valFalse} {
 		for _, tt := range testcases {
-			for _, keyspace := range []string{unshardedKs, shardedKs} {
+			for _, keyspace := range []string{unshardedKs, shardedKs, shardScopedKs} {
 				for _, queryFormat := range []QueryFormat{OlapSQLQueries, SQLQueries, PreparedStatmentQueries, PreparedStatementPacket} {
 					if fkState != nil && (queryFormat != SQLQueries || tt.concurrency != 1) {
 						continue
@@ -729,7 +958,7 @@ func TestFkFuzzTest(t *testing.T) {
 						ensureDatabaseState(t, mcmp.MySQLConn, true)
 
 						// Create the fuzzer.
-						fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat, fkState)
+						fz := newFuzzer(tt.concurrency, tt.maxValForId, tt.maxValForCol, tt.insertShare, tt.deleteShare, tt.updateShare, queryFormat, fkState, keyspace == shardScopedKs)
 
 						// Start the fuzzer.
 						fz.start(t, keyspace)
