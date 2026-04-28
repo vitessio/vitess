@@ -556,7 +556,7 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	// may have been started with super-read-only enabled via my.cnf.
 	resetFunc, err := params.Mysqld.SetSuperReadOnly(initCtx, false)
 	if err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			params.Logger.Infof("Server does not support super_read_only, continuing with init SQL queries: %v", err)
 		} else if params.InitSQL.FailOnError {
 			return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
