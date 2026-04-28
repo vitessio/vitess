@@ -10302,7 +10302,7 @@ type MoveTablesCompleteRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Workflow         string                 `protobuf:"bytes,1,opt,name=workflow,proto3" json:"workflow,omitempty"`
 	TargetKeyspace   string                 `protobuf:"bytes,3,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
-	KeepData         bool                   `protobuf:"varint,4,opt,name=keep_data,json=keepData,proto3" json:"keep_data,omitempty"`
+	KeepData         *bool                  `protobuf:"varint,4,opt,name=keep_data,json=keepData,proto3,oneof" json:"keep_data,omitempty"`
 	KeepRoutingRules bool                   `protobuf:"varint,5,opt,name=keep_routing_rules,json=keepRoutingRules,proto3" json:"keep_routing_rules,omitempty"`
 	RenameTables     bool                   `protobuf:"varint,6,opt,name=rename_tables,json=renameTables,proto3" json:"rename_tables,omitempty"`
 	DryRun           bool                   `protobuf:"varint,7,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
@@ -10359,8 +10359,8 @@ func (x *MoveTablesCompleteRequest) GetTargetKeyspace() string {
 }
 
 func (x *MoveTablesCompleteRequest) GetKeepData() bool {
-	if x != nil {
-		return x.KeepData
+	if x != nil && x.KeepData != nil {
+		return *x.KeepData
 	}
 	return false
 }
@@ -10404,6 +10404,7 @@ type MoveTablesCompleteResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Summary       string                 `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
 	DryRunResults []string               `protobuf:"bytes,2,rep,name=dry_run_results,json=dryRunResults,proto3" json:"dry_run_results,omitempty"`
+	Warnings      []string               `protobuf:"bytes,3,rep,name=warnings,proto3" json:"warnings,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -10448,6 +10449,13 @@ func (x *MoveTablesCompleteResponse) GetSummary() string {
 func (x *MoveTablesCompleteResponse) GetDryRunResults() []string {
 	if x != nil {
 		return x.DryRunResults
+	}
+	return nil
+}
+
+func (x *MoveTablesCompleteResponse) GetWarnings() []string {
+	if x != nil {
+		return x.Warnings
 	}
 	return nil
 }
@@ -15679,7 +15687,7 @@ type WorkflowDeleteRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Keyspace         string                 `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Workflow         string                 `protobuf:"bytes,2,opt,name=workflow,proto3" json:"workflow,omitempty"`
-	KeepData         bool                   `protobuf:"varint,3,opt,name=keep_data,json=keepData,proto3" json:"keep_data,omitempty"`
+	KeepData         *bool                  `protobuf:"varint,3,opt,name=keep_data,json=keepData,proto3,oneof" json:"keep_data,omitempty"`
 	KeepRoutingRules bool                   `protobuf:"varint,4,opt,name=keep_routing_rules,json=keepRoutingRules,proto3" json:"keep_routing_rules,omitempty"`
 	Shards           []string               `protobuf:"bytes,5,rep,name=shards,proto3" json:"shards,omitempty"`
 	// The max records to delete from the moved tables when cleaning
@@ -15739,8 +15747,8 @@ func (x *WorkflowDeleteRequest) GetWorkflow() string {
 }
 
 func (x *WorkflowDeleteRequest) GetKeepData() bool {
-	if x != nil {
-		return x.KeepData
+	if x != nil && x.KeepData != nil {
+		return *x.KeepData
 	}
 	return false
 }
@@ -15777,6 +15785,7 @@ type WorkflowDeleteResponse struct {
 	state         protoimpl.MessageState               `protogen:"open.v1"`
 	Summary       string                               `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
 	Details       []*WorkflowDeleteResponse_TabletInfo `protobuf:"bytes,2,rep,name=details,proto3" json:"details,omitempty"`
+	Warnings      []string                             `protobuf:"bytes,3,rep,name=warnings,proto3" json:"warnings,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -15821,6 +15830,13 @@ func (x *WorkflowDeleteResponse) GetSummary() string {
 func (x *WorkflowDeleteResponse) GetDetails() []*WorkflowDeleteResponse_TabletInfo {
 	if x != nil {
 		return x.Details
+	}
+	return nil
+}
+
+func (x *WorkflowDeleteResponse) GetWarnings() []string {
+	if x != nil {
+		return x.Warnings
 	}
 	return nil
 }
@@ -18360,19 +18376,22 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\n" +
 	"TabletInfo\x12-\n" +
 	"\x06tablet\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x06tablet\x12\x18\n" +
-	"\acreated\x18\x02 \x01(\bR\acreated\"\xb7\x02\n" +
+	"\acreated\x18\x02 \x01(\bR\acreated\"\xca\x02\n" +
 	"\x19MoveTablesCompleteRequest\x12\x1a\n" +
 	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12'\n" +
-	"\x0ftarget_keyspace\x18\x03 \x01(\tR\x0etargetKeyspace\x12\x1b\n" +
-	"\tkeep_data\x18\x04 \x01(\bR\bkeepData\x12,\n" +
+	"\x0ftarget_keyspace\x18\x03 \x01(\tR\x0etargetKeyspace\x12 \n" +
+	"\tkeep_data\x18\x04 \x01(\bH\x00R\bkeepData\x88\x01\x01\x12,\n" +
 	"\x12keep_routing_rules\x18\x05 \x01(\bR\x10keepRoutingRules\x12#\n" +
 	"\rrename_tables\x18\x06 \x01(\bR\frenameTables\x12\x17\n" +
 	"\adry_run\x18\a \x01(\bR\x06dryRun\x12\x16\n" +
 	"\x06shards\x18\b \x03(\tR\x06shards\x124\n" +
-	"\x16ignore_source_keyspace\x18\t \x01(\bR\x14ignoreSourceKeyspace\"^\n" +
+	"\x16ignore_source_keyspace\x18\t \x01(\bR\x14ignoreSourceKeyspaceB\f\n" +
+	"\n" +
+	"_keep_data\"z\n" +
 	"\x1aMoveTablesCompleteResponse\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12&\n" +
-	"\x0fdry_run_results\x18\x02 \x03(\tR\rdryRunResults\"M\n" +
+	"\x0fdry_run_results\x18\x02 \x03(\tR\rdryRunResults\x12\x1a\n" +
+	"\bwarnings\x18\x03 \x03(\tR\bwarnings\"M\n" +
 	"\x11PingTabletRequest\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\x14\n" +
 	"\x12PingTabletResponse\"\xd6\x03\n" +
@@ -18722,18 +18741,21 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x0ftarget_keyspace\x18\x02 \x01(\tR\x0etargetKeyspace\x12\x12\n" +
 	"\x04uuid\x18\x03 \x01(\tR\x04uuid\x12#\n" +
 	"\rtarget_shards\x18\x04 \x03(\tR\ftargetShards\"\x13\n" +
-	"\x11VDiffStopResponse\"\x94\x02\n" +
+	"\x11VDiffStopResponse\"\xa7\x02\n" +
 	"\x15WorkflowDeleteRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x1a\n" +
-	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12\x1b\n" +
-	"\tkeep_data\x18\x03 \x01(\bR\bkeepData\x12,\n" +
+	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12 \n" +
+	"\tkeep_data\x18\x03 \x01(\bH\x00R\bkeepData\x88\x01\x01\x12,\n" +
 	"\x12keep_routing_rules\x18\x04 \x01(\bR\x10keepRoutingRules\x12\x16\n" +
 	"\x06shards\x18\x05 \x03(\tR\x06shards\x12*\n" +
 	"\x11delete_batch_size\x18\x06 \x01(\x03R\x0fdeleteBatchSize\x124\n" +
-	"\x16ignore_source_keyspace\x18\a \x01(\bR\x14ignoreSourceKeyspace\"\xd1\x01\n" +
+	"\x16ignore_source_keyspace\x18\a \x01(\bR\x14ignoreSourceKeyspaceB\f\n" +
+	"\n" +
+	"_keep_data\"\xed\x01\n" +
 	"\x16WorkflowDeleteResponse\x12\x18\n" +
 	"\asummary\x18\x01 \x01(\tR\asummary\x12F\n" +
-	"\adetails\x18\x02 \x03(\v2,.vtctldata.WorkflowDeleteResponse.TabletInfoR\adetails\x1aU\n" +
+	"\adetails\x18\x02 \x03(\v2,.vtctldata.WorkflowDeleteResponse.TabletInfoR\adetails\x12\x1a\n" +
+	"\bwarnings\x18\x03 \x03(\tR\bwarnings\x1aU\n" +
 	"\n" +
 	"TabletInfo\x12-\n" +
 	"\x06tablet\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\x06tablet\x12\x18\n" +
@@ -19492,7 +19514,9 @@ func file_vtctldata_proto_init() {
 	}
 	file_vtctldata_proto_msgTypes[23].OneofWrappers = []any{}
 	file_vtctldata_proto_msgTypes[106].OneofWrappers = []any{}
+	file_vtctldata_proto_msgTypes[163].OneofWrappers = []any{}
 	file_vtctldata_proto_msgTypes[248].OneofWrappers = []any{}
+	file_vtctldata_proto_msgTypes[258].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

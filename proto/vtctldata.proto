@@ -1491,7 +1491,7 @@ message MoveTablesCreateResponse {
 message MoveTablesCompleteRequest {
   string workflow = 1;
   string target_keyspace = 3;
-  bool keep_data = 4;
+  optional bool keep_data = 4;
   bool keep_routing_rules = 5;
   bool rename_tables = 6;
   bool dry_run = 7;
@@ -1504,6 +1504,7 @@ message MoveTablesCompleteRequest {
 message MoveTablesCompleteResponse {
   string summary = 1;
   repeated string dry_run_results = 2;
+  repeated string warnings = 3;
 }
 
 message PingTabletRequest {
@@ -2181,7 +2182,7 @@ message VDiffStopResponse {
 message WorkflowDeleteRequest {
   string keyspace = 1;
   string workflow = 2;
-  bool keep_data = 3;
+  optional bool keep_data = 3;
   bool keep_routing_rules = 4;
   repeated string shards = 5;
   // The max records to delete from the moved tables when cleaning
@@ -2202,6 +2203,7 @@ message WorkflowDeleteResponse {
   }
   string summary = 1;
   repeated TabletInfo details = 2;
+  repeated string warnings = 3;
 }
 
 message WorkflowStatusRequest {

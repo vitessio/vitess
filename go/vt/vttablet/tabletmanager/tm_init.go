@@ -1001,7 +1001,7 @@ func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Con
 	if err != nil {
 		// Ignore the error if the sever doesn't support super read only variable.
 		// We should just redo the preapred transactions before we set it to read-write.
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return err
