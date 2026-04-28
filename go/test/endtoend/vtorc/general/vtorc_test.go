@@ -921,9 +921,14 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	allNonPrimary := []*cluster.Vttablet{replica, rdonly}
 	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 15*time.Second)
 
-	// Verify semi-sync acker status: replica ON, rdonly OFF.
-	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, replica, "ON"), "REPLICA should be a semi-sync acker")
-	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF"), "RDONLY should not be a semi-sync acker")
+	// Verify semi-sync acker status after VTOrc has had time to converge:
+	// replica ON, rdonly OFF.
+	assert.Eventually(t, func() bool {
+		return utils.IsSemiSyncSetupCorrectly(t, replica, "ON")
+	}, 15*time.Second, 500*time.Millisecond, "REPLICA should be a semi-sync acker")
+	assert.Eventually(t, func() bool {
+		return utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF")
+	}, 15*time.Second, 500*time.Millisecond, "RDONLY should not be a semi-sync acker")
 
 	// Snapshot the FixReplica counter before stopping replication.
 	// VTOrc may have already incremented it during setup (e.g., for
@@ -945,7 +950,12 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	_, err := utils.RunSQL(t, "STOP REPLICA", replica, "")
 	require.NoError(t, err)
 
-	// Wait for VTOrc to fix the replica before checking replication.
-	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name, fixReplicaCount+1)
+	// Wait for VTOrc to record at least one new FixReplica recovery before
+	// checking replication. Use > instead of exact match because concurrent
+	// fix-replica recoveries (e.g., semi-sync related) can also increment
+	// this metric.
+	assert.Eventually(t, func() bool {
+		return utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name) > fixReplicaCount
+	}, 30*time.Second, time.Second)
 	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
 }
