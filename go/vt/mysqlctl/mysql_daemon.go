@@ -42,6 +42,7 @@ type MysqlDaemon interface {
 	ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlctlpb.ReadBinlogFilesTimestampsRequest) (*mysqlctlpb.ReadBinlogFilesTimestampsResponse, error)
 	ReinitConfig(ctx context.Context, cnf *Mycnf) error
 	Wait(ctx context.Context, cnf *Mycnf) error
+	StartAfterExit(ctx context.Context, cnf *Mycnf) error
 	WaitForDBAGrants(ctx context.Context, waitTime time.Duration) (err error)
 
 	// GetMysqlPort returns the current port mysql is listening on.
