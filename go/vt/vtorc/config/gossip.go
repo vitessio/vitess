@@ -89,7 +89,7 @@ func computeGossipNodeID(listenAddr string) string {
 		// misconfigured VTOrcs cannot accidentally share an ID.
 		return "vtorc-" + uuid.NewString()
 	}
-	if host != "" {
+	if host != "" && !isWildcardGossipHost(host) {
 		return listenAddr
 	}
 	hostComponent := gossipHostname()
@@ -97,6 +97,12 @@ func computeGossipNodeID(listenAddr string) string {
 		hostComponent = "vtorc-" + uuid.NewString()
 	}
 	return net.JoinHostPort(hostComponent, port)
+}
+
+// isWildcardGossipHost identifies bind-all hosts that cannot be stable IDs.
+func isWildcardGossipHost(host string) bool {
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsUnspecified()
 }
 
 // gossipHostname returns the hostname for this process. Exposed as a

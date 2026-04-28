@@ -70,6 +70,20 @@ func TestTabletManagerStopConcurrentWithGossipConfigChange(t *testing.T) {
 	<-done
 }
 
+// TestInstallGossipAgentAfterLifecycleStopIsIgnored protects shutdown from late watcher installs.
+func TestInstallGossipAgentAfterLifecycleStopIsIgnored(t *testing.T) {
+	tm := &TabletManager{BatchCtx: t.Context()}
+	tm.stopGossipLifecycle()
+
+	agent := gossip.New(gossip.Config{NodeID: "tablet"}, nil, nil)
+	installed, err := tm.installGossipAgent(agent)
+
+	require.NoError(t, err)
+	assert.False(t, installed)
+	assert.Nil(t, tm.currentGossipAgent())
+	assert.False(t, tm.GossipEnabled)
+}
+
 func TestWatchGossipConfigRecoversAfterSrvKeyspaceCreate(t *testing.T) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")

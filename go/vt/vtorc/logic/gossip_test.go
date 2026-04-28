@@ -824,8 +824,103 @@ func TestGetGossipQuorumAnalyses(t *testing.T) {
 	defer func() { gossipAgent = origAgent }()
 
 	now := time.Now()
+	gossipAgent = gossip.New(gossip.Config{
+		NodeID:       "observer",
+		PhiThreshold: 4,
+		PingInterval: time.Millisecond,
+		MaxUpdateAge: time.Second,
+	}, nil, nil)
+	gossipAgent.HandlePushPull(&gossip.Message{
+		Members: []gossip.Member{
+			{ID: "primary", Addr: "host1:15100", Meta: map[string]string{
+				gossip.MetaKeyKeyspace:    "ks",
+				gossip.MetaKeyShard:       "0",
+				gossip.MetaKeyTabletAlias: "zone1-0000000100",
+			}},
+			{ID: "r1", Addr: "host2:15200", Meta: map[string]string{
+				gossip.MetaKeyKeyspace:    "ks",
+				gossip.MetaKeyShard:       "0",
+				gossip.MetaKeyTabletAlias: "zone1-0000000200",
+			}},
+			{ID: "r2", Addr: "host3:15300", Meta: map[string]string{
+				gossip.MetaKeyKeyspace:    "ks",
+				gossip.MetaKeyShard:       "0",
+				gossip.MetaKeyTabletAlias: "zone1-0000000300",
+			}},
+		},
+		States: []gossip.StateDigest{
+			{NodeID: "primary", Status: gossip.StatusAlive, LastUpdate: now.Add(-10 * time.Second)},
+			{NodeID: "r1", Status: gossip.StatusAlive, LastUpdate: now},
+			{NodeID: "r2", Status: gossip.StatusAlive, LastUpdate: now},
+		},
+	})
+	require.NoError(t, gossipAgent.Start(ctx))
+	defer gossipAgent.Stop()
+	require.Eventually(t, func() bool {
+		return gossipAgent.Snapshot()["primary"].Status == gossip.StatusDown
+	}, time.Second, 10*time.Millisecond)
+
+	analyses := getGossipQuorumAnalyses()
+	require.Len(t, analyses, 1)
+	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, analyses[0].Analysis)
+}
+
+// TestGetGossipQuorumAnalysesIgnoresPropagatedDownVerdict protects quorum decisions from relayed failure verdicts.
+func TestGetGossipQuorumAnalysesIgnoresPropagatedDownVerdict(t *testing.T) {
+	ctx := t.Context()
+	orcDb, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	defer func() {
+		_, _ = orcDb.Exec("delete from vitess_tablet")
+		_, _ = orcDb.Exec("delete from vitess_keyspace")
+		_, _ = orcDb.Exec("delete from vitess_shard")
+		db.ClearVTOrcDatabase()
+	}()
+
+	origTS := ts
+	ts = memorytopo.NewServer(ctx, "zone1")
+	defer func() { ts = origTS }()
+
+	primaryTablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Hostname: "host1",
+		PortMap:  map[string]int32{"grpc": 15100},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	require.NoError(t, inst.SaveTablet(primaryTablet))
+	require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Hostname: "host2",
+		PortMap:  map[string]int32{"grpc": 15200},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}))
+	require.NoError(t, inst.SaveTablet(&topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 300},
+		Hostname: "host3",
+		PortMap:  map[string]int32{"grpc": 15300},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}))
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	_, err = ts.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primaryTablet.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	origAgent := gossipAgent
+	defer func() { gossipAgent = origAgent }()
+
+	now := time.Now()
 	gossipAgent = gossip.New(gossip.Config{NodeID: "observer"}, nil, nil)
-	// Inject state: primary is Down, two replicas are Alive.
 	gossipAgent.HandlePushPull(&gossip.Message{
 		Members: []gossip.Member{
 			{ID: "primary", Addr: "host1:15100", Meta: map[string]string{
@@ -851,9 +946,7 @@ func TestGetGossipQuorumAnalyses(t *testing.T) {
 		},
 	})
 
-	analyses := getGossipQuorumAnalyses()
-	require.Len(t, analyses, 1)
-	assert.Equal(t, inst.PrimaryTabletUnreachableByQuorum, analyses[0].Analysis)
+	assert.Empty(t, getGossipQuorumAnalyses())
 }
 
 func TestGetGossipQuorumAnalysesNilAgent(t *testing.T) {

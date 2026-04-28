@@ -72,6 +72,7 @@ func (tm *TabletManager) setGossipCancel(cancel context.CancelFunc) {
 	tm.gossipMu.Lock()
 	defer tm.gossipMu.Unlock()
 	tm.gossipCancel = cancel
+	tm.gossipLifecycleDone = false
 }
 
 // stopGossipAgent tears down just the agent (keeping the watcher
@@ -103,6 +104,7 @@ func (tm *TabletManager) stopGossipLifecycle() {
 	tm.gossipMu.Lock()
 	cancel := tm.gossipCancel
 	tm.gossipCancel = nil
+	tm.gossipLifecycleDone = true
 	agent := tm.Gossip
 	tm.Gossip = nil
 	tm.GossipEnabled = false

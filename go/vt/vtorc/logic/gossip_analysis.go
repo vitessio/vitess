@@ -373,6 +373,11 @@ func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[str
 		ersMap[s.Keyspace+"/"+s.Shard] = s.DisableEmergencyReparent
 	}
 
+	primaryAliases, err := inst.ReadPrimaryAliasesByShard()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	for _, m := range state.Members() {
 		ks := m.Meta[gossip.MetaKeyKeyspace]
 		shard := m.Meta[gossip.MetaKeyShard]
@@ -385,11 +390,11 @@ func gossipShardPrimaries(state GossipStateProvider) (map[string]string, map[str
 		}
 		seen[key] = true
 
-		primary, err := shardPrimary(ks, shard)
-		if err != nil || primary == nil {
+		primaryAlias := primaryAliases[key]
+		if primaryAlias == "" {
 			continue
 		}
-		primaries[key] = topoproto.TabletAliasString(primary.Alias)
+		primaries[key] = primaryAlias
 
 		// ersMap has the combined keyspace OR shard disable flag.
 		// Set both fields so isERSEnabled() correctly blocks recovery

@@ -177,6 +177,7 @@ type TabletManager struct {
 	GossipEnabled       bool
 	gossipMu            sync.RWMutex
 	gossipCancel        context.CancelFunc
+	gossipLifecycleDone bool
 
 	// tmc is used to run an RPC against other vttablets.
 	tmc tmclient.TabletManagerClient
@@ -713,6 +714,9 @@ func (tm *TabletManager) applyGossipConfigChange(srvKs *topodatapb.SrvKeyspace, 
 func (tm *TabletManager) installGossipAgent(agent *gossip.Gossip) (installed bool, err error) {
 	tm.gossipMu.Lock()
 	defer tm.gossipMu.Unlock()
+	if tm.gossipLifecycleDone {
+		return false, nil
+	}
 	if tm.Gossip != nil {
 		return false, nil
 	}

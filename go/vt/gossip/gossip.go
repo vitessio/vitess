@@ -766,7 +766,7 @@ func (g *Gossip) updateSuspicion(now time.Time) {
 		// Only apply MaxUpdateAge to nodes we have actually heard from.
 		// Seeds start with zero LastUpdate and must remain Unknown until
 		// their first gossip exchange, not age directly to Down.
-		if g.cfg.MaxUpdateAge > 0 && !state.LastUpdate.IsZero() && now.Sub(state.LastUpdate) > g.cfg.MaxUpdateAge {
+		if g.updateExpired(now, state.LastUpdate) {
 			state.Status = StatusDown
 		}
 		g.states[id] = state
@@ -858,6 +858,7 @@ func (g *Gossip) applyMessageLocked(now time.Time, msg *Message, scope string) {
 		if digest.LastUpdate.After(now) {
 			digest.LastUpdate = now
 		}
+		digest.Status = transitiveStatus(digest.Status, digest.LastUpdate)
 		current := g.states[digest.NodeID]
 		isNewer := digest.LastUpdate.After(current.LastUpdate)
 		isEqual := digest.LastUpdate.Equal(current.LastUpdate) && !current.LastUpdate.IsZero()
@@ -869,7 +870,10 @@ func (g *Gossip) applyMessageLocked(now time.Time, msg *Message, scope string) {
 			g.states[digest.NodeID] = current
 			g.observeLocked(digest.NodeID, now)
 			g.bumpEpochLocked()
-		} else if isEqual && digest.Status == StatusAlive && current.Status != StatusAlive {
+		} else if isEqual &&
+			digest.Status == StatusAlive &&
+			current.Status != StatusAlive &&
+			!g.updateExpired(now, digest.LastUpdate) {
 			// On equal timestamps, prefer Alive over Down/Suspect.
 			// This prevents a late-starting observer from permanently
 			// latching onto a Down verdict when an Alive at the same
@@ -906,7 +910,7 @@ func (g *Gossip) snapshotMessageLocked(scope string) Message {
 		}
 		states = append(states, StateDigest{
 			NodeID:     id,
-			Status:     state.Status,
+			Status:     transitiveStatus(state.Status, state.LastUpdate),
 			Phi:        state.Phi,
 			LastUpdate: state.LastUpdate,
 		})
@@ -1066,6 +1070,22 @@ func (g *Gossip) withProbeTimeout(ctx context.Context) (context.Context, context
 		return context.WithCancel(ctx)
 	}
 	return context.WithTimeout(ctx, g.cfg.ProbeTimeout)
+}
+
+// transitiveStatus keeps peer gossip from spreading local failure verdicts.
+func transitiveStatus(status Status, lastUpdate time.Time) Status {
+	if lastUpdate.IsZero() {
+		return StatusUnknown
+	}
+	if status == StatusUnknown {
+		return StatusUnknown
+	}
+	return StatusAlive
+}
+
+// updateExpired keeps MaxUpdateAge decisions consistent across merge paths.
+func (g *Gossip) updateExpired(now, lastUpdate time.Time) bool {
+	return g.cfg.MaxUpdateAge > 0 && !lastUpdate.IsZero() && now.Sub(lastUpdate) > g.cfg.MaxUpdateAge
 }
 
 // newPhiAccrual constructs a detector with a bounded sample window.

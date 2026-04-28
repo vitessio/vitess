@@ -523,16 +523,19 @@ func TestEqualTimestampMergeRules(t *testing.T) {
 		name       string
 		first      Status
 		second     Status
+		wantFirst  Status
 		wantSecond Status
 	}{{
-		name:       "alive overrides down",
+		name:       "down normalizes to alive before merge",
 		first:      StatusDown,
 		second:     StatusAlive,
+		wantFirst:  StatusAlive,
 		wantSecond: StatusAlive,
 	}, {
 		name:       "down does not override alive",
 		first:      StatusAlive,
 		second:     StatusDown,
+		wantFirst:  StatusAlive,
 		wantSecond: StatusAlive,
 	}}
 
@@ -546,7 +549,7 @@ func TestEqualTimestampMergeRules(t *testing.T) {
 				Members: []Member{{ID: "node2", Addr: "node2"}},
 				States:  []StateDigest{{NodeID: "node2", Status: tt.first, LastUpdate: ts}},
 			})
-			assert.Equal(t, tt.first, g.Snapshot()["node2"].Status)
+			assert.Equal(t, tt.wantFirst, g.Snapshot()["node2"].Status)
 
 			g.HandlePushPull(&Message{
 				Members: []Member{{ID: "node2", Addr: "node2"}},
