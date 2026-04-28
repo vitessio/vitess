@@ -1095,9 +1095,9 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 //
 // Note: GetDetectionAnalysis may suppress non-primary analyses when a shard-wide
 // action is detected. Problems that declare a dependency on the shard-wide action
-// (via BeforeAnalysesFunc/AfterAnalysesFunc) survive suppression and will still
-// be found here. Non-dependent problems are intentionally suppressed — the
-// shard-wide action takes priority and they will be re-detected on a future poll.
+// (via BeforeAnalyses/AfterAnalyses) survive suppression and will still be found
+// here. Non-dependent problems are intentionally suppressed — the shard-wide
+// action takes priority and they will be re-detected on a future poll.
 func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
 	analysisEntries, err := inst.GetDetectionAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.DetectionAnalysisHints{})
@@ -1124,7 +1124,7 @@ func recoverShardAnalyses(analyses []*inst.DetectionAnalysis, recoverFunc func(*
 	var concurrent []*inst.DetectionAnalysis
 	for _, analysisEntry := range analyses {
 		problem := inst.GetDetectionAnalysisProblem(analysisEntry.Analysis)
-		if problem != nil && problem.RequiresOrderedExecution(analysisEntry, analyses) {
+		if problem != nil && problem.RequiresOrderedExecution() {
 			if err := recoverFunc(analysisEntry); err != nil {
 				log.Error(fmt.Sprintf("Failed to execute CheckAndRecover function: %+v", err))
 			}

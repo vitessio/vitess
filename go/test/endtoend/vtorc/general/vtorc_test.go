@@ -797,7 +797,7 @@ func TestFullStatusConnectionPooling(t *testing.T) {
 
 // TestSemiSyncRecoveryOrdering verifies that when the durability policy changes
 // to semi_sync, VTOrc fixes ReplicaSemiSyncMustBeSet before PrimarySemiSyncMustBeSet.
-// This ordering is enforced by the AfterAnalysesFunc/BeforeAnalysesFunc dependencies.
+// This ordering is enforced by the AfterAnalyses/BeforeAnalyses dependencies.
 func TestSemiSyncRecoveryOrdering(t *testing.T) {
 	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
 	// Start with durability "none" so no semi-sync is required initially.

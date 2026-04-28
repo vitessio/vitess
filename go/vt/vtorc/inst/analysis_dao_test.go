@@ -1511,59 +1511,34 @@ func TestPostProcessAnalyses(t *testing.T) {
 }
 
 func TestDeclaresBefore(t *testing.T) {
-	replicationStoppedProblem := GetDetectionAnalysisProblem(ReplicationStopped)
-	require.NotNil(t, replicationStoppedProblem)
-
 	tests := []struct {
 		name     string
 		problem  *DetectionAnalysisProblem
-		a        *DetectionAnalysis
 		code     AnalysisCode
 		expected bool
 	}{
 		{
-			name:    "acker ReplicationStopped declares before PrimarySemiSyncBlocked",
-			problem: replicationStoppedProblem,
-			a: &DetectionAnalysis{
-				Analysis:               ReplicationStopped,
-				SemiSyncReplicaEnabled: true,
-			},
+			name:     "ReplicationStopped declares before PrimarySemiSyncBlocked",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
 			code:     PrimarySemiSyncBlocked,
 			expected: true,
 		},
 		{
-			name:    "non-acker ReplicationStopped does not declare before PrimarySemiSyncBlocked",
-			problem: replicationStoppedProblem,
-			a: &DetectionAnalysis{
-				Analysis:               ReplicationStopped,
-				SemiSyncReplicaEnabled: false,
-			},
-			code:     PrimarySemiSyncBlocked,
-			expected: false,
-		},
-		{
-			name:    "acker ReplicationStopped does not declare before DeadPrimary",
-			problem: replicationStoppedProblem,
-			a: &DetectionAnalysis{
-				Analysis:               ReplicationStopped,
-				SemiSyncReplicaEnabled: true,
-			},
+			name:     "ReplicationStopped does not declare before DeadPrimary",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
 			code:     DeadPrimary,
 			expected: false,
 		},
 		{
-			name:    "problem with no BeforeAnalysesFunc",
-			problem: GetDetectionAnalysisProblem(NotConnectedToPrimary),
-			a: &DetectionAnalysis{
-				Analysis: NotConnectedToPrimary,
-			},
+			name:     "problem with no BeforeAnalyses",
+			problem:  GetDetectionAnalysisProblem(NotConnectedToPrimary),
 			code:     PrimarySemiSyncBlocked,
 			expected: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, declaresBefore(tt.problem, tt.a, tt.code))
+			assert.Equal(t, tt.expected, declaresBefore(tt.problem, tt.code))
 		})
 	}
 }
@@ -1572,53 +1547,45 @@ func TestDeclaresAfter(t *testing.T) {
 	tests := []struct {
 		name             string
 		shardWideProblem *DetectionAnalysisProblem
-		shardWideCode    AnalysisCode
 		code             AnalysisCode
 		expected         bool
 	}{
 		{
-			name: "shard-wide problem with AfterAnalysesFunc referencing suppressed code",
+			name: "shard-wide problem with AfterAnalyses referencing suppressed code",
 			shardWideProblem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{
 					Analysis:    PrimarySemiSyncBlocked,
 					Description: "test shard-wide",
 					Priority:    detectionAnalysisPriorityShardWideAction,
 				},
-				AfterAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
-					return []AnalysisCode{ReplicationStopped}
-				},
+				AfterAnalyses: []AnalysisCode{ReplicationStopped},
 			},
-			shardWideCode: PrimarySemiSyncBlocked,
-			code:          ReplicationStopped,
-			expected:      true,
+			code:     ReplicationStopped,
+			expected: true,
 		},
 		{
-			name: "shard-wide problem with AfterAnalysesFunc not referencing suppressed code",
+			name: "shard-wide problem with AfterAnalyses not referencing suppressed code",
 			shardWideProblem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{
 					Analysis:    PrimarySemiSyncBlocked,
 					Description: "test shard-wide",
 					Priority:    detectionAnalysisPriorityShardWideAction,
 				},
-				AfterAnalysesFunc: func(a *DetectionAnalysis, as []*DetectionAnalysis) []AnalysisCode {
-					return []AnalysisCode{ReplicationStopped}
-				},
+				AfterAnalyses: []AnalysisCode{ReplicationStopped},
 			},
-			shardWideCode: PrimarySemiSyncBlocked,
-			code:          NotConnectedToPrimary,
-			expected:      false,
+			code:     NotConnectedToPrimary,
+			expected: false,
 		},
 		{
-			name:             "shard-wide problem with no AfterAnalysesFunc",
+			name:             "shard-wide problem with no AfterAnalyses",
 			shardWideProblem: GetDetectionAnalysisProblem(PrimarySemiSyncBlocked),
-			shardWideCode:    PrimarySemiSyncBlocked,
 			code:             ReplicationStopped,
 			expected:         false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, declaresAfter(tt.shardWideProblem, tt.shardWideCode, tt.code))
+			assert.Equal(t, tt.expected, declaresAfter(tt.shardWideProblem, tt.code))
 		})
 	}
 }

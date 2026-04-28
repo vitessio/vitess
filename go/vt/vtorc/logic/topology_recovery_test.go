@@ -674,9 +674,9 @@ func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
 
 func TestRecoverShardAnalyses(t *testing.T) {
 	// DeadPrimary and PrimaryHasPrimary have detectionAnalysisPriorityShardWideAction,
-	// so they require ordered execution. ReplicationStopped and ReplicaIsWritable are
-	// medium priority with no shard-wide action or before/after dependencies,
-	// so they run concurrently.
+	// so they require ordered execution. ReplicationStopped requires ordered execution
+	// because it declares BeforeAnalyses: [PrimarySemiSyncBlocked]. ReplicaIsWritable
+	// has no dependencies, so it runs concurrently.
 	analyses := []*inst.DetectionAnalysis{
 		{Analysis: inst.ReplicationStopped, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}},
 		{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 2}},
@@ -697,10 +697,11 @@ func TestRecoverShardAnalyses(t *testing.T) {
 
 	require.Len(t, order, 4)
 	// Ordered recoveries must come first, in their original order.
-	require.Equal(t, inst.DeadPrimary, order[0])
-	require.Equal(t, inst.PrimaryHasPrimary, order[1])
-	// Concurrent recoveries come after, in any order.
-	require.ElementsMatch(t, []inst.AnalysisCode{inst.ReplicationStopped, inst.ReplicaIsWritable}, order[2:])
+	require.Equal(t, inst.ReplicationStopped, order[0])
+	require.Equal(t, inst.DeadPrimary, order[1])
+	require.Equal(t, inst.PrimaryHasPrimary, order[2])
+	// Concurrent recoveries come after.
+	require.Equal(t, inst.ReplicaIsWritable, order[3])
 }
 
 func TestRecoverIncapacitatedPrimary(t *testing.T) {

@@ -50,29 +50,19 @@ func initializeAnalysisDaoPostConfiguration() {
 	recentInstantAnalysis = cache.New(config.GetRecoveryPollDuration()*2, time.Second)
 }
 
-// declaresBefore returns true if the problem declares (via BeforeAnalysesFunc)
+// declaresBefore returns true if the problem declares (via BeforeAnalyses)
 // that it should run before the given analysis code. This is used to decide
 // whether a tablet's analysis should survive despite a shard-wide action.
-func declaresBefore(problem *DetectionAnalysisProblem, a *DetectionAnalysis, code AnalysisCode) bool {
-	if problem.BeforeAnalysesFunc == nil {
-		return false
-	}
-	// Build a synthetic shard analyses containing only the shard-wide
-	// action, since the full shard analyses aren't available yet.
-	synthetic := []*DetectionAnalysis{{Analysis: code}}
-	return slices.Contains(problem.GetBeforeAnalyses(a, synthetic), code)
+func declaresBefore(problem *DetectionAnalysisProblem, code AnalysisCode) bool {
+	return slices.Contains(problem.BeforeAnalyses, code)
 }
 
 // declaresAfter returns true if the shard-wide problem declares (via
-// AfterAnalysesFunc) that it should run after the given analysis code.
+// AfterAnalyses) that it should run after the given analysis code.
 // This is the symmetric counterpart to declaresBefore — a dependency
 // can be expressed from either side.
-func declaresAfter(shardWideProblem *DetectionAnalysisProblem, shardWideCode AnalysisCode, code AnalysisCode) bool {
-	if shardWideProblem.AfterAnalysesFunc == nil {
-		return false
-	}
-	synthetic := []*DetectionAnalysis{{Analysis: code}}
-	return slices.Contains(shardWideProblem.GetAfterAnalyses(&DetectionAnalysis{Analysis: shardWideCode}, synthetic), code)
+func declaresAfter(shardWideProblem *DetectionAnalysisProblem, code AnalysisCode) bool {
+	return slices.Contains(shardWideProblem.AfterAnalyses, code)
 }
 
 type clusterAnalysis struct {
@@ -444,7 +434,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		ca.totalTablets += 1
 		// Note: when ca.hasShardWideAction is true, we still run matching
 		// below to check if this tablet's problem declares it must run
-		// before the shard-wide action (via BeforeAnalysesFunc).
+		// before the shard-wide action (via BeforeAnalyses).
 		if ca.durability == nil {
 			// We failed to load the durability policy, so we shouldn't run any analysis
 			return nil
@@ -491,15 +481,15 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				// tablet's analysis if a dependency exists between it and
 				// the shard-wide action. The dependency can be expressed
 				// from either side:
-				//   - the tablet's problem declares BeforeAnalysesFunc on
+				//   - the tablet's problem declares BeforeAnalyses on
 				//     the shard-wide action, OR
-				//   - the shard-wide problem declares AfterAnalysesFunc on
+				//   - the shard-wide problem declares AfterAnalyses on
 				//     the tablet's problem.
 				// If a non-chosen problem declares the dependency, promote
 				// it to the chosen problem so the recovery targets it.
 				survives := func(p *DetectionAnalysisProblem) bool {
-					return declaresBefore(p, a, ca.shardWideAnalysisCode) ||
-						declaresAfter(ca.shardWideProblem, ca.shardWideAnalysisCode, p.Meta.Analysis)
+					return declaresBefore(p, ca.shardWideAnalysisCode) ||
+						declaresAfter(ca.shardWideProblem, p.Meta.Analysis)
 				}
 				if !survives(chosenProblem) {
 					found := false
