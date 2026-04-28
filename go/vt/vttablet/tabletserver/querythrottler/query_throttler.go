@@ -178,7 +178,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}()
 
 	// Evaluate the throttling decision
-	decision := qt.strategyHandlerInstance.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
+	decision := tStrategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
 
 	// Record evaluate-window latency immediately after Evaluate returns
 	evaluateLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
