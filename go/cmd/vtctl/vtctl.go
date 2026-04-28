@@ -91,8 +91,6 @@ func init() {
 		fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run vtcl detached from the terminal")
 
 		acl.RegisterFlags(fs)
-
-		fs.SetNormalizeFunc(utils.NormalizeUnderscoresToDashes)
 	})
 }
 

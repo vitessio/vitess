@@ -246,7 +246,6 @@ func registerFlags() {
 func main() {
 	registerFlags()
 
-	rootCmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := rootCmd.Execute(); err != nil {
 		log.Error(fmt.Sprint(err))
 		os.Exit(1)

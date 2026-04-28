@@ -25,12 +25,9 @@ import (
 
 	"vitess.io/vitess/go/cmd/mysqlctld/cli"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
-	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
-
 	if err := cli.Main.Execute(); err != nil {
 		log.Error(fmt.Sprint(err))
 		os.Exit(1)

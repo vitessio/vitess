@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -63,13 +62,13 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--schema-change-signal") + "=false"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema-change-signal" + "=false"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-system-settings=true")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {

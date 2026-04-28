@@ -22,12 +22,10 @@ import (
 
 	"vitess.io/vitess/go/cmd/vttestserver/cli"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
 	cmd := cli.New()
-	cmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cmd.Execute(); err != nil {
 		log.Error(fmt.Sprint(err))
 		os.Exit(1)

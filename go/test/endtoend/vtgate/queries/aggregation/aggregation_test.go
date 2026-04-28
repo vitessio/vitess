@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 func start(t *testing.T) (utils.MySQLCompare, func()) {
@@ -499,7 +498,7 @@ func TestAggregateLeftJoin(t *testing.T) {
 // TestScalarAggregate tests validates that only count is returned and no additional field is returned.gst
 func TestScalarAggregate(t *testing.T) {
 	// disable schema tracking to have weight_string column added to query send down to mysql.
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vtutils.GetFlagVariantForTests("--schema-change-signal")+"=false")
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal"+"=false")
 	require.NoError(t,
 		clusterInstance.RestartVtgate())
 
@@ -508,7 +507,7 @@ func TestScalarAggregate(t *testing.T) {
 
 	defer func() {
 		// roll it back
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vtutils.GetFlagVariantForTests("--schema-change-signal"))
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal")
 		require.NoError(t,
 			clusterInstance.RestartVtgate())
 		//  update vtgate params
