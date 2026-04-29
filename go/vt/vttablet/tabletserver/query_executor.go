@@ -660,7 +660,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 // checkCreateTableLimit rejects a CREATE TABLE that would exceed the
 // schema engine's configured table-count limit.
 func (qre *QueryExecutor) checkCreateTableLimit() error {
-	return eschema.CheckCreateTableLimit(qre.tsv.se, qre.plan.FullStmt)
+	return eschema.CheckCreateTableLimit(qre.tsv.se, []sqlparser.Statement{qre.plan.FullStmt}, 0)
 }
 
 func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, error) {

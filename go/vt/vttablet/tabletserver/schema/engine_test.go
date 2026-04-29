@@ -2020,9 +2020,11 @@ func TestEngineReloadIndependentOfMaxTableCount(t *testing.T) {
 	}
 	AddFakeInnoDBReadRowsResult(db, 0)
 
-	// Override the dynamic flag for the duration of this test.
+	// Override the dynamic flag for the duration of this test, restoring
+	// whatever value was in effect at entry.
+	originalMaxTableCount := MaxTableCount()
 	SetMaxTableCount(1)
-	t.Cleanup(func() { SetMaxTableCount(maxTableCountSetting.Default()) })
+	t.Cleanup(func() { SetMaxTableCount(originalMaxTableCount) })
 
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.SchemaReloadInterval = 1 * time.Second

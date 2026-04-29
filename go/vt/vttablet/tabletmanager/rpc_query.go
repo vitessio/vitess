@@ -46,31 +46,27 @@ func (tm *TabletManager) schemaEngine() *schema.Engine {
 
 // checkCreateTableLimitForSQL splits the given multi-statement SQL into
 // individual statements and applies the schema engine's CREATE TABLE
-// table-count gate to the batch. When some part of the input cannot be
-// parsed, the function falls back to RejectIfAtLimitWithUnparseable so
-// that unparseable CREATE TABLE syntax cannot silently bypass the gate
-// when the engine is already at the limit.
+// table-count gate to the batch. Statements that fail to parse are reported
+// to the gate via parseFailures so that unparseable input cannot silently
+// bypass the limit.
 func checkCreateTableLimitForSQL(parser *sqlparser.Parser, se *schema.Engine, sql string) error {
 	queries, splitErr := parser.SplitStatementToPieces(sql)
 	if splitErr != nil {
 		// We could not split the SQL at all; treat the whole input as a
-		// single unparseable unit and apply the at-limit safety net.
-		return schema.RejectIfAtLimitWithUnparseable(se, true)
+		// single unparseable unit.
+		return schema.CheckCreateTableLimit(se, nil, 1)
 	}
-	hadParseFailure := false
+	parseFailures := 0
 	stmts := make([]sqlparser.Statement, 0, len(queries))
 	for _, query := range queries {
 		stmt, parseErr := parser.Parse(query)
 		if parseErr != nil {
-			hadParseFailure = true
+			parseFailures++
 			continue
 		}
 		stmts = append(stmts, stmt)
 	}
-	if err := schema.CheckCreateTableLimit(se, stmts...); err != nil {
-		return err
-	}
-	return schema.RejectIfAtLimitWithUnparseable(se, hadParseFailure)
+	return schema.CheckCreateTableLimit(se, stmts, parseFailures)
 }
 
 // analyzeExecuteFetchAsDbaMultiQuery reutrns 'true' when at least one of the queries
@@ -164,26 +160,20 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	// Reject any CREATE TABLEs that would collectively exceed the schema
 	// engine's table-count limit before we open a transaction with mysqld.
 	// countCreate also includes CREATE VIEW; CheckCreateTableLimit ignores
-	// non-table statements internally.
+	// non-table statements internally and treats parse failures as worst-case
+	// potential CREATE TABLEs.
 	if countCreate > 0 || !parseable {
-		se := tm.schemaEngine()
-		hadParseFailure := !parseable
+		parseFailures := 0
 		stmts := make([]sqlparser.Statement, 0, len(queries))
 		for _, query := range queries {
 			stmt, parseErr := tm.Env.Parser().Parse(query)
 			if parseErr != nil {
-				hadParseFailure = true
+				parseFailures++
 				continue
 			}
 			stmts = append(stmts, stmt)
 		}
-		if err := schema.CheckCreateTableLimit(se, stmts...); err != nil {
-			return nil, err
-		}
-		// Defense in depth: if any statement could not be parsed and we are
-		// already at the limit, refuse to proceed — the unparseable
-		// statement may be a CREATE TABLE that would silently bypass the gate.
-		if err := schema.RejectIfAtLimitWithUnparseable(se, hadParseFailure); err != nil {
+		if err := schema.CheckCreateTableLimit(tm.schemaEngine(), stmts, parseFailures); err != nil {
 			return nil, err
 		}
 	}

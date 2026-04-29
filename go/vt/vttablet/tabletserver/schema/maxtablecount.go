@@ -57,98 +57,92 @@ func SetMaxTableCount(n int) {
 	maxTableCountSetting.Set(n)
 }
 
-// RejectIfAtLimitWithUnparseable is a defense-in-depth gate for paths that
-// receive raw SQL strings (e.g. TabletManager's ExecuteFetchAsDba and
-// ApplySchema flows). When some part of the request could not be parsed by
-// vttablet, we cannot tell whether it contained a brand-new CREATE TABLE.
-// If the engine is already at or above its configured limit, fail closed:
-// allowing the request through would be the only way to silently bypass the
-// limit. When the engine has headroom, parse failures are tolerated as
-// before so parser quirks don't disrupt unrelated operations.
-func RejectIfAtLimitWithUnparseable(se *Engine, hadParseFailure bool) error {
-	if se == nil || !hadParseFailure {
-		return nil
-	}
-	if count, limit := se.TableCount(), MaxTableCount(); count >= limit {
-		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
-			"schema engine table limit of %d reached and the request contains a statement that vttablet cannot parse; refusing to bypass the limit. "+
-				"Increase --queryserver-config-schema-max-table-count, free space by dropping unused tables, or rephrase the unparseable statement.",
-			limit)
-	}
-	return nil
-}
-
-// CheckCreateTableLimit returns an error if running the given statements as
-// a batch would push the schema engine past its configured table-count
-// limit. It counts brand-new non-temporary CREATE TABLE targets across the
-// whole batch (deduped by name, skipping ones that already exist in the
-// engine), so a batch with two new CREATEs is correctly rejected when
-// adding both would exceed the limit, not just when each one individually
-// would.
+// CheckCreateTableLimit returns an error if running the given statements
+// would push the schema engine past its configured table-count limit. It
+// is the unified gate used by all CREATE TABLE entry points (QueryExecutor,
+// TabletManager.ApplySchema, ExecuteFetchAsDba/AllPrivs/App and friends).
 //
-// Statements that are not a CREATE TABLE, target an existing table, or
-// create a temporary table do not contribute to the count. Passing zero
-// statements or a nil engine is a no-op.
+// Behavior:
+//
+//   - The helper simulates DROP TABLE and CREATE TABLE effects in the order
+//     stmts are given so a batch like "DROP TABLE old; CREATE TABLE new" is
+//     correctly accepted at the limit (running count never exceeds the
+//     limit between statements).
+//   - Temporary CREATE TABLEs are ignored (they are session-scoped and not
+//     tracked by the schema engine).
+//   - A CREATE TABLE that targets an already-present table is treated as a
+//     no-op (IF NOT EXISTS) or as a downstream MySQL failure: it cannot
+//     change the count.
+//   - parseFailures is the number of statements in the original input that
+//     the caller could not parse. vttablet cannot tell whether each one
+//     would have been a CREATE TABLE, so each is treated as a worst-case
+//     potential CREATE TABLE for limit-checking purposes.
+//   - A nil engine, an empty statement list with parseFailures == 0, or a
+//     batch whose net new-table effect fits within the limit is a no-op.
 //
 // The check is best-effort under concurrency: two callers in different
-// goroutines can each see the count below the limit and both proceed to
-// create tables, briefly leaving the count at limit+N. Schema reload
-// tolerates this — the gate's purpose is to give a clear error in the
-// common case, not to enforce strict admission.
+// goroutines can each see the count below the limit and both proceed,
+// briefly leaving the count at limit+N. Schema reload tolerates this; the
+// gate's purpose is a clear operator-facing error in the common case, not
+// strict admission control.
 //
 // TableCount is per-engine instance state; MaxTableCount is the
 // process-wide Viper-managed limit, hence the asymmetric calls.
-func CheckCreateTableLimit(se *Engine, stmts ...sqlparser.Statement) error {
-	if se == nil || len(stmts) == 0 {
+func CheckCreateTableLimit(se *Engine, stmts []sqlparser.Statement, parseFailures int) error {
+	if se == nil {
 		return nil
 	}
-	var newNames []string
-	seen := make(map[string]struct{})
+	limit := MaxTableCount()
+	running := se.TableCount()
+
+	// pendingState tracks the hypothetical existence of tables the batch
+	// has already touched. true = present, false = dropped. Tables not in
+	// the map fall back to the engine's view (se.GetTable).
+	pendingState := map[string]bool{}
+	isPresent := func(name sqlparser.IdentifierCS) bool {
+		if v, ok := pendingState[name.String()]; ok {
+			return v
+		}
+		return se.GetTable(name) != nil
+	}
+
 	for _, stmt := range stmts {
-		create, ok := stmt.(*sqlparser.CreateTable)
-		if !ok {
-			continue
+		switch s := stmt.(type) {
+		case *sqlparser.CreateTable:
+			if s.Temp {
+				continue
+			}
+			if isPresent(s.Table.Name) {
+				continue
+			}
+			running++
+			pendingState[s.Table.Name.String()] = true
+			if running > limit {
+				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
+					"cannot create table %q: schema engine table limit of %d reached. "+
+						"Increase --queryserver-config-schema-max-table-count and ensure "+
+						"vttablet and mysqld have enough memory for a larger schema.",
+					sqlparser.String(s.Table), limit)
+			}
+		case *sqlparser.DropTable:
+			for _, tbl := range s.FromTables {
+				if !isPresent(tbl.Name) {
+					continue
+				}
+				running--
+				pendingState[tbl.Name.String()] = false
+			}
 		}
-		// Temporary tables are session-scoped and not tracked in the
-		// schema engine, so they don't contribute to the count.
-		if create.Temp {
-			continue
-		}
-		// If the target table is already in the engine's schema, this
-		// CREATE is either a no-op (with IF NOT EXISTS) or will fail
-		// downstream in MySQL (without IF NOT EXISTS). Either way the
-		// count cannot increase.
-		if se.GetTable(create.Table.Name) != nil {
-			continue
-		}
-		// Dedupe by the engine's storage key (unqualified case-sensitive
-		// table name) so the same table referenced with and without a
-		// schema qualifier in the same batch is counted once. Keep the
-		// fully-formatted name only for the error message.
-		key := create.Table.Name.String()
-		if _, dup := seen[key]; dup {
-			continue
-		}
-		seen[key] = struct{}{}
-		newNames = append(newNames, sqlparser.String(create.Table))
 	}
-	if len(newNames) == 0 {
-		return nil
-	}
-	count, limit := se.TableCount(), MaxTableCount()
-	if count+len(newNames) <= limit {
-		return nil
-	}
-	if len(newNames) == 1 {
+
+	// Worst-case accounting for unparseable statements: each could be a
+	// CREATE TABLE that mysqld accepts. Treat them as potential creations
+	// added on top of the simulated running count.
+	if parseFailures > 0 && running+parseFailures > limit {
 		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
-			"cannot create table %q: schema engine table limit of %d reached. "+
-				"Increase --queryserver-config-schema-max-table-count and ensure "+
-				"vttablet and mysqld have enough memory for a larger schema.",
-			newNames[0], limit)
+			"schema engine table limit of %d would be exceeded by this batch (running count: %d, %d unparseable statement(s) treated as potential CREATE TABLEs). "+
+				"Increase --queryserver-config-schema-max-table-count, free space by dropping unused tables, or rephrase the unparseable statement(s).",
+			limit, running, parseFailures)
 	}
-	return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
-		"cannot create %d new tables in this batch (first: %q): schema engine table limit of %d would be exceeded (current count: %d). "+
-			"Increase --queryserver-config-schema-max-table-count and ensure "+
-			"vttablet and mysqld have enough memory for a larger schema.",
-		len(newNames), newNames[0], limit, count)
+	return nil
 }
