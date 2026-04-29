@@ -82,7 +82,7 @@ Flags:
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consolidator-cache-proto3-rows                                   If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.
       --consolidator-query-waiter-cap int                                Configure the maximum number of clients allowed to wait on the consolidator.
-      --consolidator-reject-on-cap                                       If true, reject queries with a RESOURCE_EXHAUSTED error when the consolidator waiter cap is exceeded, instead of falling back to independent execution.
+      --consolidator-reject-on-cap                                       If true, reject queries with a RESOURCE_EXHAUSTED error when the global consolidator waiter cap is exceeded, instead of falling back to independent execution. The cap is enforced globally across all consolidated queries, not per-query.
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.

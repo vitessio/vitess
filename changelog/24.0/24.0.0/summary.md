@@ -28,7 +28,6 @@
         - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
         - [Connection Pool Waiter Cap](#vttablet-conn-pool-waiter-cap)
-        - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[Tracing](#minor-changes-tracing)**
         - [OpenTelemetry tracing support](#tracing-opentelemetry)
         - [Deprecation of OpenTracing-based tracing backends](#tracing-opentracing-deprecation)
@@ -254,14 +253,6 @@ the query, stream, and transaction connection pools. The limits are set with the
 * `--queryserver-config-txpool-waiter-cap`
 
 All of the above have a default value of `0`, meaning no limit, thus preserving the behavior of the previous version.
-
-#### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
-
-A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VTTablet. When enabled alongside a non-zero `--consolidator-query-waiter-cap`, queries that exceed the consolidator waiter cap are rejected with a `RESOURCE_EXHAUSTED` error instead of silently falling back to independent MySQL execution.
-
-This gives operators explicit backpressure signaling when too many queries are waiting on a single consolidated query, rather than quietly increasing load on MySQL.
-
-See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
 
 ### <a id="minor-changes-tracing"/>Tracing</a>
 
