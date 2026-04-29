@@ -1016,6 +1016,20 @@ func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 	return false
 }
 
+// GetSuccessfulRecoveryCount returns the current successful recovery count for
+// the given recovery name, keyspace, and shard. Returns 0 if the metric is not
+// yet available.
+func GetSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string) int {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
+	return GetIntFromValue(successfulRecoveriesMap[mapKey])
+}
+
 // WaitForSuccessfulRecoveryCount waits until the given recovery name's count of successful runs matches the count expected
 func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
 	t.Helper()
