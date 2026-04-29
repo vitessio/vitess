@@ -99,7 +99,6 @@ func TestMain(m *testing.M) {
 // VTGate's vschema does not include view definitions, demonstrating
 // that the fix prevents loading view metadata when EnableViews is false.
 func TestVSchemaDoesNotIncludeViews(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 23, "vttablet")
 	// Get the vschema from VTGate
 	var vschemaResult map[string]any
 	readVSchema(t, &clusterInstance.VtgateProcess, &vschemaResult)
@@ -142,7 +141,6 @@ func TestVSchemaDoesNotIncludeViews(t *testing.T) {
 // work correctly when EnableViews is disabled. This verifies that VTGate
 // doesn't perform problematic query rewriting since it cannot load view definitions.
 func TestViewOperationsWithViewsDisabled(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 23, "vttablet")
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -197,7 +195,6 @@ func TestViewOperationsWithViewsDisabled(t *testing.T) {
 // correctly when views are present but views are disabled. This ensures
 // that DDL operations on views don't cause issues.
 func TestSchemaTrackingWithViewsDisabled(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 23, "vttablet")
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

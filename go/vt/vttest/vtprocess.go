@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -36,22 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
-
-var versionRegex = regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
-
-// getMajorVersion extracts the major version from a binary by running binaryName --version
-func getMajorVersion(binaryName string) (int, error) {
-	version, err := exec.Command(binaryName, "--version").Output()
-	if err != nil {
-		return 0, err
-	}
-	v := versionRegex.FindStringSubmatch(string(version))
-	if len(v) != 4 {
-		return 0, fmt.Errorf("could not parse server version from: %s", version)
-	}
-
-	return strconv.Atoi(v[1])
-}
 
 // HealthChecker is a callback that impements a service-specific health check
 // It must return true if the service at the given `addr` is reachable, false
