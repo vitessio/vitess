@@ -58,7 +58,7 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Set extra tablet args for topo custom rule
 	clusterInstance.VtTabletExtraArgs = []string{
-		"--topocustomrule_path", topoCustomRulePath,
+		"--topocustomrule-path", topoCustomRulePath,
 	}
 
 	// Start a new Tablet

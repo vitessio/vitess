@@ -60,8 +60,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var usage = `Usage of test.go:
@@ -180,7 +178,8 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 				testCmd = append(testCmd, "-keep-data")
 			}
 		} else {
-			testCmd = []string{"test/" + t.File, "-v", "--skip-build", utils.GetFlagVariantForTests("--keep-logs")}
+			testCmd = make([]string, 0, 4+len(t.Args))
+			testCmd = append(testCmd, "test/"+t.File, "-v", "--skip-build", "--keep-logs")
 			testCmd = append(testCmd, t.Args...)
 		}
 		if *partialKeyspace {

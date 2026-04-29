@@ -44,7 +44,7 @@ func TestFKWorkflow(t *testing.T) {
 	setSidecarDBName("_vt")
 	extraVTTabletArgs = []string{
 		// Ensure that there are multiple copy phase cycles per table.
-		"--vstream_packet_size=256",
+		"--vstream-packet-size=256",
 	}
 	defer func() { extraVTTabletArgs = nil }()
 
