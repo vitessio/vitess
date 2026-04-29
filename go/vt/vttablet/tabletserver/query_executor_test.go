@@ -671,6 +671,28 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 	}
 }
 
+func TestExecDDLSchemaTableCountLimitIgnoresSyntheticDual(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQueryPattern("create.*", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	originalLimit := eschema.MaxTableCount()
+	eschema.SetMaxTableCount(4)
+	t.Cleanup(func() { eschema.SetMaxTableCount(originalLimit) })
+
+	// The test schema starts with 3 real tables plus Vitess's synthetic dual.
+	// Creating a fourth real table should be allowed when the limit is 4.
+	qre := newTestQueryExecutor(ctx, tsv, "create table c (id int primary key)", 0)
+	_, err := qre.Execute()
+	if err != nil {
+		assert.NotContains(t, err.Error(), "schema engine table limit")
+	}
+}
+
 func TestQueryExecutorLimitFailure(t *testing.T) {
 	type dbResponse struct {
 		query  string

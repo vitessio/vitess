@@ -1036,12 +1036,16 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	return se.tables[tableName.String()]
 }
 
-// TableCount returns the number of tables currently tracked in the schema
-// engine. Safe for concurrent use.
+// TableCount returns the number of real schema objects currently tracked in the
+// schema engine. Safe for concurrent use.
 func (se *Engine) TableCount() int {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	return len(se.tables)
+	count := len(se.tables)
+	if _, ok := se.tables["dual"]; ok {
+		count--
+	}
+	return count
 }
 
 // GetSchema returns the current schema. The Tables are a
@@ -1139,7 +1143,9 @@ func (se *Engine) SetTableForTests(table *Table) {
 func (se *Engine) ResetTablesForTests() {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	se.tables = map[string]*Table{}
+	se.tables = map[string]*Table{
+		"dual": NewTable("dual", NoType),
+	}
 }
 
 func (se *Engine) GetDBConnector() dbconfigs.Connector {

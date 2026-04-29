@@ -794,12 +794,30 @@ func TestEngineTableCount(t *testing.T) {
 	require.NoError(t, se.Open())
 	defer se.Close()
 
-	// Whatever the post-Open baseline is, adding two tables should bump
-	// TableCount() by exactly two.
-	initial := se.TableCount()
+	// TableCount reports user schema objects, not Vitess's synthetic dual entry.
+	assert.Equal(t, 0, se.TableCount())
 	se.SetTableForTests(NewTable("table_count_test_t1", NoType))
 	se.SetTableForTests(NewTable("table_count_test_t2", NoType))
-	assert.Equal(t, initial+2, se.TableCount())
+	assert.Equal(t, 2, se.TableCount())
+}
+
+func TestResetTablesForTestsKeepsSyntheticDual(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+	})
+	AddFakeInnoDBReadRowsResult(db, 0)
+	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
+	require.NoError(t, se.Open())
+	defer se.Close()
+
+	se.SetTableForTests(NewTable("table_count_test_t1", NoType))
+	se.ResetTablesForTests()
+
+	assert.NotNil(t, se.GetTable(sqlparser.NewIdentifierCS("dual")))
+	assert.Equal(t, 0, se.TableCount())
 }
 
 func TestSchemaEngineCloseTickRace(t *testing.T) {
