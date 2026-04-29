@@ -1040,6 +1040,74 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	}
 }
 
+// TestQueryExecutorTableAclUserTableNamedDual verifies that a real user table
+// named `dual` (referenced via backticks per the parser) is subject to ACL like
+// any other table — it does NOT inherit the placeholder-dual ACL bypass.
+func TestQueryExecutorTableAclUserTableNamedDual(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	// Add a real user table named `dual` to the schema fixtures. The default
+	// setUpQueryExecutorTest doesn't include it; we layer it on top.
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseShowTablesRow("dual", false, ""),
+		},
+	})
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowPrimaryRow("test_table", "pk"),
+			mysql.ShowPrimaryRow("seq", "id"),
+			mysql.ShowPrimaryRow("msg", "id"),
+			mysql.ShowPrimaryRow("dual", "pk"),
+		},
+	})
+	db.MockQueriesForTable("dual", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+
+	username := "basic_username"
+	callerID := &querypb.VTGateCallerID{Username: username}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+
+	// ACL config exists but does not authorize this caller for the `dual` table.
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group01",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{username},
+		}},
+	}
+	if err := tableacl.InitFromProto(config); err != nil {
+		t.Fatalf("unable to load tableacl config, error: %v", err)
+	}
+
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	defer tsv.StopService()
+
+	// Backtick-quoted form references the user table (post-#19579), not the
+	// placeholder. ACL must apply.
+	query := "select * from `dual` limit 1000"
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err := qre.Execute()
+	require.Error(t, err, "ACL should deny access to user table `dual`")
+	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
+	}
+	assert.EqualError(t, err, `Select command denied to user 'basic_username' for table 'dual' (ACL check error)`)
+}
+
 func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})

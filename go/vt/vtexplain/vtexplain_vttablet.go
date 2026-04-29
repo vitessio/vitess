@@ -643,7 +643,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 
 		tableName := sqlparser.String(sqlparser.GetTableName(table.Expr))
 		columns, exists := t.vte.getGlobalTabletEnv().tableColumns[tableName]
-		if !exists && tableName != "" && tableName != "dual" {
+		if !exists && tableName != "" {
 			return nil, fmt.Errorf("unable to resolve table name %s", tableName)
 		}
 

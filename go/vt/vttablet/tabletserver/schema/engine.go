@@ -270,9 +270,7 @@ func (se *Engine) Open() error {
 		}
 	}()
 
-	se.tables = map[string]*Table{
-		"dual": NewTable("dual", NoType),
-	}
+	se.tables = make(map[string]*Table)
 	se.notifiers = make(map[string]notifier)
 
 	if err := se.reload(ctx, false); err != nil {
@@ -534,7 +532,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
-	curTables := map[string]bool{"dual": true}
+	curTables := make(map[string]bool)
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
@@ -910,7 +908,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tableNameStr := tableName.String()
-	if st, ok := se.tables[tableNameStr]; ok && tableNameStr != "dual" { // No need to refresh dual
+	if st, ok := se.tables[tableNameStr]; ok {
 		// Test Engines (NewEngineForTests()) don't have a conns pool and are not
 		// supposed to talk to the database, so don't update the cache entry in that
 		// case.
