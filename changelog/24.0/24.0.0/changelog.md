@@ -7,7 +7,8 @@
 #### Backup and Restore
  * BuiltinBackupEngine: Retry file close and fail backup when we cannot [#18848](https://github.com/vitessio/vitess/pull/18848)
  * fix(backup): propagate file hashes to manifest after retry [#19336](https://github.com/vitessio/vitess/pull/19336)
- * fix: Add super_read_only handling in init_clone [#19741](https://github.com/vitessio/vitess/pull/19741) 
+ * fix: Add super_read_only handling in init_clone [#19741](https://github.com/vitessio/vitess/pull/19741)
+ * [release-24.0] vtbackup: handle MySQL termination during CLONE restart (#19808) [#19975](https://github.com/vitessio/vitess/pull/19975) 
 #### Build/CI
  * Fix minor upgrade logic in go upgrade tool  [#19176](https://github.com/vitessio/vitess/pull/19176) 
 #### CLI
@@ -21,16 +22,12 @@
  * evalengine: Fix `NULL` document handling in JSON functions [#19052](https://github.com/vitessio/vitess/pull/19052) 
 #### General
  * Escape control bytes in JSON strings [#19270](https://github.com/vitessio/vitess/pull/19270) 
-#### Observability
- * Improve cgroup metric management [#18791](https://github.com/vitessio/vitess/pull/18791) 
 #### Online DDL
  * copy_state: use a mediumblob instead of a smaller varbinary for lastpk [#18852](https://github.com/vitessio/vitess/pull/18852)
- * Online DDL fix: trip all `--in-order` migrations on dependency error [#19027](https://github.com/vitessio/vitess/pull/19027)
  * Increase GTID position column size to LONGBLOB for VReplication [#19119](https://github.com/vitessio/vitess/pull/19119)
  * increment migration metrics [#19297](https://github.com/vitessio/vitess/pull/19297)
  * vreplication: fix infinite retry loop when terminal error message contains binary data [#19423](https://github.com/vitessio/vitess/pull/19423) 
 #### Query Serving
- * Fix handling of tuple bind variables in filtering operations. [#18736](https://github.com/vitessio/vitess/pull/18736)
  * Fix incorrect escaping of dual in canonical formatting [#18891](https://github.com/vitessio/vitess/pull/18891)
  * [Querythrottler]Remove noisy config loading error log [#18904](https://github.com/vitessio/vitess/pull/18904)
  * Properly Strip Keyspace Table Qualifiers in FK Constraints [#18926](https://github.com/vitessio/vitess/pull/18926)
@@ -61,46 +58,45 @@
  * workflow: finish switch traffic after post-journal cancel [#19672](https://github.com/vitessio/vitess/pull/19672)
  * VReplication: Improve historian / schema tracker [#19697](https://github.com/vitessio/vitess/pull/19697) 
 #### VTAdmin
- * Fix `vtadmin` `package-lock.json` [#18919](https://github.com/vitessio/vitess/pull/18919)
- * VStream: move vstream schema change handling from best effort to reliable [#19204](https://github.com/vitessio/vitess/pull/19204)
- * `VTAdmin`: regenerate vtadmin protos following #19197 [#19418](https://github.com/vitessio/vitess/pull/19418) 
+ * Fix `vtadmin` `package-lock.json` [#18919](https://github.com/vitessio/vitess/pull/18919) 
 #### VTGate
  * show vitess_keyspaces should not trip over deleted keyspaces [#19055](https://github.com/vitessio/vitess/pull/19055)
  * workflows: avoid accidental deletion to routing rules [#19121](https://github.com/vitessio/vitess/pull/19121)
- * vtgate: Add bounds check in `visitUnion` for mismatched column counts [#19476](https://github.com/vitessio/vitess/pull/19476)
  * vtgate: set ServerStatusAutocommit in handshake status flags [#19628](https://github.com/vitessio/vitess/pull/19628)
  * VTGate: fix warming reads timeout context [#19674](https://github.com/vitessio/vitess/pull/19674)
- * planner: push DISTINCT through Window [#19694](https://github.com/vitessio/vitess/pull/19694) 
+ * [release-24.0] planbuilder: fix subquery arg name collision across pullout opcodes (#19781) [#19865](https://github.com/vitessio/vitess/pull/19865)
+ * [release-24.0] proto: fix incorrect flag bits on `RAW` and `ROW_TUPLE` types (#19920) [#19950](https://github.com/vitessio/vitess/pull/19950)
+ * [release-24.0] vtgate: preserve target keyspace when routing rule rewrites table AST (#19948) [#19953](https://github.com/vitessio/vitess/pull/19953)
+ * [release-24.0] vtgate: prevent buffer restart after shutdown (#19954) [#19962](https://github.com/vitessio/vitess/pull/19962) 
 #### VTOrc
  * vtorc: add `StaleTopoPrimary` analysis and recovery [#19173](https://github.com/vitessio/vitess/pull/19173)
- * `vtorc`: detect errant GTIDs for replicas not connected to primary [#19224](https://github.com/vitessio/vitess/pull/19224)
  * vtorc: Add a timeout to `DemotePrimary` RPC [#19432](https://github.com/vitessio/vitess/pull/19432)
- * vtorc: add timeout helpers for remaining recovery topo/tmc calls [#19520](https://github.com/vitessio/vitess/pull/19520) 
+ * vtorc: add timeout helpers for remaining recovery topo/tmc calls [#19520](https://github.com/vitessio/vitess/pull/19520)
+ * [release-24.0] vtorc: fix data race in forgetAliases cache initialization (#19843) [#19847](https://github.com/vitessio/vitess/pull/19847)
+ * [release-24.0] vtorc: bound stale topo reconciliation calls (#19887) [#19900](https://github.com/vitessio/vitess/pull/19900)
+ * [release-24.0] VTOrc: Address panic uncovered by Antithesis (#19904) [#19910](https://github.com/vitessio/vitess/pull/19910) 
 #### VTTablet
  * Fix bug where query consolidator returns empty result without error when the waiter cap exceeded [#18782](https://github.com/vitessio/vitess/pull/18782)
- * repltracker: reset replica lag when we are primary [#18800](https://github.com/vitessio/vitess/pull/18800)
  * connpool: fix connection leak during idle connection reopen [#18967](https://github.com/vitessio/vitess/pull/18967)
  * Change connection pool idle expiration logic [#19004](https://github.com/vitessio/vitess/pull/19004)
- * binlog_json: fix opaque value parsing to read variable-length [#19102](https://github.com/vitessio/vitess/pull/19102)
  * Bug fix: Add missing db_name filters to vreplication and vdiff queries [#19378](https://github.com/vitessio/vitess/pull/19378)
- * vttablet: handle applier metadata init failures in relay-log recovery [#19560](https://github.com/vitessio/vitess/pull/19560)
- * tabletmanager: handle nil Cnf in MysqlHostMetrics to prevent panic [#19752](https://github.com/vitessio/vitess/pull/19752) 
+ * tabletmanager: handle nil Cnf in MysqlHostMetrics to prevent panic [#19752](https://github.com/vitessio/vitess/pull/19752)
+ * [release-24.0] tabletserver: fix data race in testLogger global log function pointers (#19844) [#19856](https://github.com/vitessio/vitess/pull/19856) 
 #### schema management
  * `schemadiff`: support views with CTE [#18893](https://github.com/vitessio/vitess/pull/18893)
- * Fix `DROP CONSTRAINT` to work the same way as MySQL [#19183](https://github.com/vitessio/vitess/pull/19183)
  * sidecardb: make ALTER TABLE algorithm version-aware [#19358](https://github.com/vitessio/vitess/pull/19358)
  * OnlineDDL: Make ENUM/SET eligibility for INSTANT DDL more robust [#19425](https://github.com/vitessio/vitess/pull/19425) 
 #### vtctl
  * vschema revert: initialize as nil so that nil checks do not pass later [#19114](https://github.com/vitessio/vitess/pull/19114)
  * vtctl: fix nil pointer dereference in SNAPSHOT keyspace creation [#19120](https://github.com/vitessio/vitess/pull/19120)
- * Restart IO threads on replicas after ERS failure [#19805](https://github.com/vitessio/vitess/pull/19805) 
+ * Restart IO threads on replicas after ERS failure [#19805](https://github.com/vitessio/vitess/pull/19805)
+ * [release-24.0] `EmergencyReparentShard`: fix nil pointer panic in errant GTID detection (#19848) [#19858](https://github.com/vitessio/vitess/pull/19858)
+ * [release-24.0] `EmergencyReparentShard`: fix cancellation in `reparentReplicas()` (#19849) [#19861](https://github.com/vitessio/vitess/pull/19861) 
 #### vtctldclient
  * Fix zero timestamp if NO_ZERO_DATE is not enabled [#19185](https://github.com/vitessio/vitess/pull/19185)
 ### CI/Build 
 #### Build/CI
  * `pre-commit` hook: support non-`GOPATH` `goimports` [#18741](https://github.com/vitessio/vitess/pull/18741)
- * make build system name configurable [#18779](https://github.com/vitessio/vitess/pull/18779)
- * ci: use the newest mysql apt config package [#18790](https://github.com/vitessio/vitess/pull/18790)
  * ci: revert to using the oracle apt repo for mysql-8.0 builds [#18813](https://github.com/vitessio/vitess/pull/18813)
  * ci: DRY up MySQL Setup [#18815](https://github.com/vitessio/vitess/pull/18815)
  * gha: bump golang version of release-23.0 [#18821](https://github.com/vitessio/vitess/pull/18821)
@@ -122,7 +118,6 @@
  * Add dependabot config [#19150](https://github.com/vitessio/vitess/pull/19150)
  * Update golang version CI: remove deprecated `--workflow-update` flag and v20 [#19171](https://github.com/vitessio/vitess/pull/19171)
  * Update go-upgrade to update docker image digests [#19178](https://github.com/vitessio/vitess/pull/19178)
- * switch end-to-end tests to gotestsum [#19182](https://github.com/vitessio/vitess/pull/19182)
  * Bump the all group with 4 updates [#19213](https://github.com/vitessio/vitess/pull/19213)
  * Switch gotestsum output format [#19215](https://github.com/vitessio/vitess/pull/19215)
  * Fix go upgrade workflow [#19216](https://github.com/vitessio/vitess/pull/19216)
@@ -141,8 +136,6 @@
  * Add lite image build CI job [#19321](https://github.com/vitessio/vitess/pull/19321)
  * try to fix setup mysql [#19371](https://github.com/vitessio/vitess/pull/19371)
  * CI: Fix workflows that install xtrabackup [#19383](https://github.com/vitessio/vitess/pull/19383)
- * Bump the all group across 1 directory with 4 updates [#19409](https://github.com/vitessio/vitess/pull/19409)
- * Fix vtadmin proto check [#19419](https://github.com/vitessio/vitess/pull/19419)
  * `ci`: run code coverage CI only on go packages that had changes [#19431](https://github.com/vitessio/vitess/pull/19431)
  * `e2e`: fix race in `TestFailingReplication` [#19547](https://github.com/vitessio/vitess/pull/19547)
  * Bump the all group with 5 updates [#19556](https://github.com/vitessio/vitess/pull/19556)
@@ -160,7 +153,6 @@
  * ci: add `setup-go` composite action [#19784](https://github.com/vitessio/vitess/pull/19784)
  * go-upgrade: fix Go image digest rewrite matching [#19820](https://github.com/vitessio/vitess/pull/19820) 
 #### Docker
- * Bump node from `3746b7c` to `32f4586` in /docker/lite in the all group across 1 directory [#19408](https://github.com/vitessio/vitess/pull/19408)
  * docker: upgrade lite base images from Debian Bookworm to Trixie [#19440](https://github.com/vitessio/vitess/pull/19440)
  * Bump the all group across 2 directories with 2 updates [#19555](https://github.com/vitessio/vitess/pull/19555)
  * build(deps): bump node from `6bee70a` to `04190ed` in /docker/lite in the docker group across 1 directory [#19733](https://github.com/vitessio/vitess/pull/19733)
@@ -182,7 +174,6 @@
 ### Compatibility Bug 
 #### Query Serving
  * fix streaming binary row corruption in prepared statements [#19381](https://github.com/vitessio/vitess/pull/19381)
- * vtgate: Reject unqualified `*` after comma in `SELECT` list [#19475](https://github.com/vitessio/vitess/pull/19475)
  * sqlparser: replace nested tokenizer with inline versioned comment scanning [#19725](https://github.com/vitessio/vitess/pull/19725) 
 #### VTGate
  * fix sqlSelectLimit propagating to subqueries [#18716](https://github.com/vitessio/vitess/pull/18716)
@@ -202,9 +193,8 @@
  * Bump the all group with 5 updates [#19618](https://github.com/vitessio/vitess/pull/19618)
  * build(deps): bump the all group with 8 updates [#19662](https://github.com/vitessio/vitess/pull/19662)
  * build(deps): bump google.golang.org/grpc from 1.79.2 to 1.79.3 [#19670](https://github.com/vitessio/vitess/pull/19670)
- * build(deps): bump the all group with 2 updates [#19705](https://github.com/vitessio/vitess/pull/19705)
  * Update dependabot minimum-version-age to 14 days (30 days for npm) [#19768](https://github.com/vitessio/vitess/pull/19768)
- * build(deps): bump actions/setup-go from 6.3.0 to 6.4.0 in the actions group [#19772](https://github.com/vitessio/vitess/pull/19772) 
+ * [release-24.0] build(deps): bump the actions group with 2 updates (#19871) [#19874](https://github.com/vitessio/vitess/pull/19874) 
 #### Docker
  * Bump the all group across 4 directories with 3 updates [#19268](https://github.com/vitessio/vitess/pull/19268)
  * [main] Upgrade the Golang version to `go1.25.7` [#19306](https://github.com/vitessio/vitess/pull/19306)
@@ -214,15 +204,13 @@
  * Bump the all group across 3 directories with 2 updates [#19467](https://github.com/vitessio/vitess/pull/19467)
  * Bump the all group across 2 directories with 2 updates [#19616](https://github.com/vitessio/vitess/pull/19616)
  * build(deps): bump the all group across 3 directories with 3 updates [#19661](https://github.com/vitessio/vitess/pull/19661)
- * build(deps): bump golang from `96b2878` to `ce3f1c8` in /docker/lite in the all group across 1 directory [#19702](https://github.com/vitessio/vitess/pull/19702)
  * build(deps): bump the docker group across 2 directories with 3 updates [#19821](https://github.com/vitessio/vitess/pull/19821)
- * [main] Upgrade the Golang version to `go1.26.2` [#19830](https://github.com/vitessio/vitess/pull/19830) 
+ * [release-24.0] build(deps): bump the docker group across 3 directories with 2 updates (#19870) [#19943](https://github.com/vitessio/vitess/pull/19943) 
 #### Documentation
  * Add `--log-format json|text` [#19395](https://github.com/vitessio/vitess/pull/19395) 
 #### General
  * Dockerfile: bump to go 1.25.3 with everything else [#18828](https://github.com/vitessio/vitess/pull/18828)
  * `golangci-lint`: add `mirror`+`nolintlint` linters + fixes [#18863](https://github.com/vitessio/vitess/pull/18863)
- * Bump the all group across 1 directory with 39 updates [#19196](https://github.com/vitessio/vitess/pull/19196)
  * Bump the all group with 2 updates [#19235](https://github.com/vitessio/vitess/pull/19235)
  * Bump the all group with 9 updates [#19262](https://github.com/vitessio/vitess/pull/19262)
  * Bump the all group with 12 updates [#19350](https://github.com/vitessio/vitess/pull/19350)
@@ -231,9 +219,9 @@
  * Bump the all group across 1 directory with 17 updates [#19617](https://github.com/vitessio/vitess/pull/19617)
  * trace: add OpenTelemetry backend, deprecate OpenTracing [#19619](https://github.com/vitessio/vitess/pull/19619)
  * build(deps): bump the all group with 7 updates [#19659](https://github.com/vitessio/vitess/pull/19659)
- * build(deps): bump the all group with 10 updates [#19703](https://github.com/vitessio/vitess/pull/19703)
  * build(deps): bump the go group across 1 directory with 8 updates [#19763](https://github.com/vitessio/vitess/pull/19763)
- * Upgrade the Golang Dependencies [#19774](https://github.com/vitessio/vitess/pull/19774) 
+ * [release-24.0] build(deps): bump the go group with 2 updates (#19868) [#19873](https://github.com/vitessio/vitess/pull/19873)
+ * [release-24.0] Upgrade the Golang Dependencies (#19877) [#19881](https://github.com/vitessio/vitess/pull/19881) 
 #### Java
  * Bump the all group in /java with 31 updates [#19154](https://github.com/vitessio/vitess/pull/19154)
  * Bump the all group in /java with 11 updates [#19267](https://github.com/vitessio/vitess/pull/19267)
@@ -242,9 +230,9 @@
  * Bump the all group in /java with 2 updates [#19552](https://github.com/vitessio/vitess/pull/19552)
  * Bump the all group in /java with 2 updates [#19614](https://github.com/vitessio/vitess/pull/19614)
  * build(deps): bump the all group in /java with 8 updates [#19658](https://github.com/vitessio/vitess/pull/19658)
- * build(deps): bump the all group in /java with 2 updates [#19700](https://github.com/vitessio/vitess/pull/19700)
  * build(deps): bump io.netty:netty-handler from 4.2.11.Final to 4.2.12.Final in /java in the java group [#19729](https://github.com/vitessio/vitess/pull/19729)
- * [release-24.0] build(deps): bump org.apache.logging.log4j:log4j-core from 2.25.3 to 2.25.4 in /java (#19839) [#19840](https://github.com/vitessio/vitess/pull/19840) 
+ * [release-24.0] build(deps): bump org.apache.logging.log4j:log4j-core from 2.25.3 to 2.25.4 in /java (#19839) [#19840](https://github.com/vitessio/vitess/pull/19840)
+ * [release-24.0] build(deps): bump com.google.guava:guava from 33.5.0-jre to 33.6.0-jre in /java in the java group (#19867) [#19886](https://github.com/vitessio/vitess/pull/19886) 
 #### Observability
  * Bump go.opentelemetry.io/otel/sdk from 1.39.0 to 1.40.0 [#19525](https://github.com/vitessio/vitess/pull/19525)
  * build(deps): bump go.opentelemetry.io/otel/sdk from 1.42.0 to 1.43.0 [#19824](https://github.com/vitessio/vitess/pull/19824) 
@@ -255,16 +243,13 @@
 #### VTAdmin
  * Bump lodash-es from 4.17.21 to 4.17.23 in /web/vtadmin [#19191](https://github.com/vitessio/vitess/pull/19191)
  * Bump lodash from 4.17.21 to 4.17.23 in /web/vtadmin [#19192](https://github.com/vitessio/vitess/pull/19192)
- * Bump the all group across 1 directory with 38 updates [#19197](https://github.com/vitessio/vitess/pull/19197)
  * Bump the all group in /web/vtadmin with 18 updates [#19466](https://github.com/vitessio/vitess/pull/19466)
  * Bump rollup in /web/vtadmin [#19492](https://github.com/vitessio/vitess/pull/19492)
  * Bump the all group in /web/vtadmin with 10 updates [#19553](https://github.com/vitessio/vitess/pull/19553)
- * Bump immutable from 5.0.3 to 5.1.5 in /web/vtadmin [#19571](https://github.com/vitessio/vitess/pull/19571)
  * Bump svgo from 4.0.0 to 4.0.1 in /web/vtadmin [#19574](https://github.com/vitessio/vitess/pull/19574)
  * Bump the all group in /web/vtadmin with 8 updates [#19615](https://github.com/vitessio/vitess/pull/19615)
  * build(deps): bump undici from 7.22.0 to 7.24.1 in /web/vtadmin [#19641](https://github.com/vitessio/vitess/pull/19641)
  * build(deps): bump 8 vtadmin web dependencies [#19660](https://github.com/vitessio/vitess/pull/19660)
- * build(deps-dev): bump flatted from 3.3.3 to 3.4.2 in /web/vtadmin [#19685](https://github.com/vitessio/vitess/pull/19685)
  * build(deps): bump picomatch in /web/vtadmin [#19714](https://github.com/vitessio/vitess/pull/19714)
  * build(deps): bump path-to-regexp from 8.3.0 to 8.4.0 in /web/vtadmin [#19748](https://github.com/vitessio/vitess/pull/19748)
  * VTAdmin: migrate from `eslint-config-react-app` to ESLint 9 flat config [#19767](https://github.com/vitessio/vitess/pull/19767)
@@ -288,7 +273,6 @@
 #### Examples
  * fix: update teardown script reference in examples README [#19580](https://github.com/vitessio/vitess/pull/19580) 
 #### Governance
- * Use existing maintainers for steering committee [#19773](https://github.com/vitessio/vitess/pull/19773)
  * Add Mohamed as a Vitess maintainer [#19783](https://github.com/vitessio/vitess/pull/19783) 
 #### Query Serving
  * Comments on subquery builder [#19218](https://github.com/vitessio/vitess/pull/19218)
@@ -309,14 +293,10 @@
  * Fix some issues with the backport / forwardport workflow [#18954](https://github.com/vitessio/vitess/pull/18954)
  * Port `vitess-bot` to Actions [#19048](https://github.com/vitessio/vitess/pull/19048)
  * Delete .github/workflows/backport.yml [#19051](https://github.com/vitessio/vitess/pull/19051)
- * Fix git hooks with worktrees [#19132](https://github.com/vitessio/vitess/pull/19132)
  * `ci`: try `actions/labeler` to auto-label PRs [#19300](https://github.com/vitessio/vitess/pull/19300) 
-#### CLI
- * tests: add unit tests for vtbench package [#19025](https://github.com/vitessio/vitess/pull/19025) 
 #### Docker
  * docker: add arm64 support to `install_dependencies.sh` [#19739](https://github.com/vitessio/vitess/pull/19739) 
 #### Documentation
- * docs: Add changelog entry for OnlineDDL in_order_completion_pending_count field [#19031](https://github.com/vitessio/vitess/pull/19031)
  * docs: Add changelog entry for tablet shutdown tracking and validation [#19037](https://github.com/vitessio/vitess/pull/19037)
  * Add structured logging with `slog` [#19327](https://github.com/vitessio/vitess/pull/19327) 
 #### General
@@ -331,7 +311,6 @@
 #### Query Serving
  * [QueryThrottler]Add query attributes extraction [#18706](https://github.com/vitessio/vitess/pull/18706)
  * planner: allow pushdown of window functions partitioned by unique vindex [#18903](https://github.com/vitessio/vitess/pull/18903)
- * Fix query planning for complex queries with impossible conditions. [#19003](https://github.com/vitessio/vitess/pull/19003)
  * Add support for SO_REUSEPORT to vtgate [#19168](https://github.com/vitessio/vitess/pull/19168)
  * sqlparser: enforce bare `*` restriction in grammar [#19585](https://github.com/vitessio/vitess/pull/19585)
  * asthelpergen: order value-type comparisons before complex ones in equals [#19601](https://github.com/vitessio/vitess/pull/19601) 
@@ -350,15 +329,10 @@
  * VReplication: Show all tables in copy progress output [#18825](https://github.com/vitessio/vitess/pull/18825)
  * VStream: Prevent buffering entire transactions (OOM risk), instead send chunks to client [#18849](https://github.com/vitessio/vitess/pull/18849)
  * vstreamer: improve error message when table not found due to keyspace… [#18961](https://github.com/vitessio/vitess/pull/18961)
- * VDiff: wait for workflow lock with exponential backoff [#18998](https://github.com/vitessio/vitess/pull/18998)
- * VReplication: Add --shards flag to MoveTables/Reshard start and stop commands [#19023](https://github.com/vitessio/vitess/pull/19023)
  * Add support for view routing rules [#19104](https://github.com/vitessio/vitess/pull/19104) 
 #### VTAdmin
- * movetables mirrortraffic: let read-only queries bypass denied tables [#18775](https://github.com/vitessio/vitess/pull/18775)
  * VReplication/VTAdmin: Clean up VReplication lag related metrics [#18802](https://github.com/vitessio/vitess/pull/18802)
  * VReplication: Add support for binlog_rows_query_log_events [#19441](https://github.com/vitessio/vitess/pull/19441) 
-#### VTCombo
- * tests: add unit tests for vtcombo package [#19029](https://github.com/vitessio/vitess/pull/19029) 
 #### VTGate
  * add DialCustom for overridden runtime behavior [#18733](https://github.com/vitessio/vitess/pull/18733)
  * Performance: use `IsSingleShard()` check in `pushDerived` instead of just `engine.EqualUnique` opcode [#18974](https://github.com/vitessio/vitess/pull/18974)
@@ -377,19 +351,18 @@
  * `grpctmclient`: validate tablet record on dial [#19009](https://github.com/vitessio/vitess/pull/19009)
  * vttablet: set time when we start a tablet for use later [#19018](https://github.com/vitessio/vitess/pull/19018)
  * `tabletmanager`: return semi-sync state in `StopReplicationAndGetStatus` RPC [#19074](https://github.com/vitessio/vitess/pull/19074)
- * Pass backup engine to vttablet_restore_done hook [#19405](https://github.com/vitessio/vitess/pull/19405)
  * Fire vttablet_restore_done hook from RestoreFromBackup RPC path [#19592](https://github.com/vitessio/vitess/pull/19592)
  * OnlineDDL: set `wait_timeout` on cutover connections [#19630](https://github.com/vitessio/vitess/pull/19630)
  * fix: Add sqlerror.ERRestartServerFailed to clone errors [#19759](https://github.com/vitessio/vitess/pull/19759)
- * feat: add workflow_type label to VReplication Prometheus metrics [#19786](https://github.com/vitessio/vitess/pull/19786) 
+ * feat: add workflow_type label to VReplication Prometheus metrics [#19786](https://github.com/vitessio/vitess/pull/19786)
+ * [release-24.0] vreplication: fix OOM on tables with large JSON columns (#19878) [#19892](https://github.com/vitessio/vitess/pull/19892) 
 #### vtctl
  * `EmergencyReparentShard`: require stop replication error to be from `PRIMARY` [#19515](https://github.com/vitessio/vitess/pull/19515)
+ * [release-24.0] reparentutil: fix goroutine count and improve logging (#19888) [#19922](https://github.com/vitessio/vitess/pull/19922)
 ### Feature 
 #### Backup and Restore
  * Backups: Add Support for Backup Init SQL Queries [#18883](https://github.com/vitessio/vitess/pull/18883)
  * mysqlctl: add `CloneFromDonor`  [#19064](https://github.com/vitessio/vitess/pull/19064) 
-#### Cluster management
- * Topo lookup tablet type [#18777](https://github.com/vitessio/vitess/pull/18777) 
 #### Evalengine
  * evalengine: Implement `JSON_REMOVE` [#19041](https://github.com/vitessio/vitess/pull/19041) 
 #### Query Serving
@@ -412,7 +385,6 @@
 #### Backup and Restore
  * Backups: Cap the number of backups to list [#19142](https://github.com/vitessio/vitess/pull/19142) 
 #### Build/CI
- * Fix expired MySQL GPG keys in Docker builds [#18795](https://github.com/vitessio/vitess/pull/18795)
  * `vttest`: reduce flakiness from `randomPort()` [#18899](https://github.com/vitessio/vitess/pull/18899)
  * ci: remove code patching for error differences between versions [#18990](https://github.com/vitessio/vitess/pull/18990)
  * `golangci-lint`: fix `QF1008` stragglers from PR #18929 [#19049](https://github.com/vitessio/vitess/pull/19049)
@@ -421,8 +393,6 @@
  * `ci`: use `etcd` v3.5.25, add retries [#19015](https://github.com/vitessio/vitess/pull/19015) 
 #### Documentation
  * fix: replace deprecated maven-badges.herokuapp.com with maven-badges [#19382](https://github.com/vitessio/vitess/pull/19382)
- * `CLAUDE.md`: require git commit signoff and go formatting [#19401](https://github.com/vitessio/vitess/pull/19401)
- * `CLAUDE.md`: required code is formatted by `goimports` [#19417](https://github.com/vitessio/vitess/pull/19417)
  * `CLAUDE.md`: add further recommendations based on testing  [#19671](https://github.com/vitessio/vitess/pull/19671) 
 #### Examples
  * Delete examples/compose directory [#19260](https://github.com/vitessio/vitess/pull/19260) 
@@ -435,7 +405,6 @@
  * Cleanup `.golangci.yml` [#18929](https://github.com/vitessio/vitess/pull/18929)
  * Update repo dotfile configs [#19071](https://github.com/vitessio/vitess/pull/19071)
  * Lint only changed packages [#19397](https://github.com/vitessio/vitess/pull/19397)
- * Fix golangci-lint changed package arg  [#19406](https://github.com/vitessio/vitess/pull/19406)
  * Move `.claude/skills` to `.agents/skills` and symlink [#19787](https://github.com/vitessio/vitess/pull/19787) 
 #### Observability
  * Cleanup dead tracing code [#19092](https://github.com/vitessio/vitess/pull/19092) 
@@ -455,7 +424,9 @@
  * `vtorc`: address CodeQL scanning alerts [#18753](https://github.com/vitessio/vitess/pull/18753) 
 #### VTTablet
  * `tabletmanager`: remove v22 backwards-compatibility for `vterrors` migration [#18986](https://github.com/vitessio/vitess/pull/18986)
- * connpool: use context.AfterFunc to avoid goroutine-per-query [#19654](https://github.com/vitessio/vitess/pull/19654)
+ * connpool: use context.AfterFunc to avoid goroutine-per-query [#19654](https://github.com/vitessio/vitess/pull/19654) 
+#### vtctl
+ * [release-24.0] `EmergencyReparentShard`: small observability and correctness fixes (#19851) [#19882](https://github.com/vitessio/vitess/pull/19882)
 ### Other 
 #### Documentation
  * docs: Add changelog entry for VReplication automatic tablet retry for tablet-specific errors [#19797](https://github.com/vitessio/vitess/pull/19797)
@@ -470,8 +441,8 @@
  * [Stats] Optimize GetSnakeName with sync.Map for concurrent reads [#19146](https://github.com/vitessio/vitess/pull/19146) 
 #### Query Serving
  * planner: Stop searching for alternatives once we found a merge opportunity [#18898](https://github.com/vitessio/vitess/pull/18898)
- * sqlparser: remove strings.Clone from NewIdentifierCS [#19683](https://github.com/vitessio/vitess/pull/19683)
- * sqlparser: eagerly compute IdentifierCI.lowered at construction [#19691](https://github.com/vitessio/vitess/pull/19691) 
+ * sqlparser: eagerly compute IdentifierCI.lowered at construction [#19691](https://github.com/vitessio/vitess/pull/19691)
+ * [release-24.0] vtgate/buffer: lock-free hot-path with atomic state and sync.Map (#19827) [#19929](https://github.com/vitessio/vitess/pull/19929) 
 #### VTGate
  * vtgate: replace heap with tournament tree for k-way merging [#19398](https://github.com/vitessio/vitess/pull/19398) 
 #### VTTablet
@@ -488,7 +459,9 @@
  * docs: Add changelog entry for QueryThrottler event-driven configuration updates [#19190](https://github.com/vitessio/vitess/pull/19190)
  * [main] Copy `v23.0.2` release notes [#19355](https://github.com/vitessio/vitess/pull/19355)
  * [main] Copy `v23.0.3` release notes [#19506](https://github.com/vitessio/vitess/pull/19506)
- * [main] Copy `v22.0.4` release notes [#19511](https://github.com/vitessio/vitess/pull/19511) 
+ * [main] Copy `v22.0.4` release notes [#19511](https://github.com/vitessio/vitess/pull/19511)
+ * [release-24.0] Release of `v24.0.0-RC1` [#19852](https://github.com/vitessio/vitess/pull/19852)
+ * [release-24.0] Tweaks to v24 release summary (#19970) [#19971](https://github.com/vitessio/vitess/pull/19971) 
 #### General
  * Bump to `v24.0.0-SNAPSHOT` after the `v23.0.0-RC1` release [#18730](https://github.com/vitessio/vitess/pull/18730)
  * [main] Copy `v23.0.0-RC1` release notes [#18758](https://github.com/vitessio/vitess/pull/18758)
@@ -499,7 +472,8 @@
  * [main] Copy `v22.0.3` release notes [#19283](https://github.com/vitessio/vitess/pull/19283)
  * [main] Copy `v23.0.1` release notes [#19287](https://github.com/vitessio/vitess/pull/19287)
  * [release-24.0] Code Freeze for `v24.0.0-RC1` [#19837](https://github.com/vitessio/vitess/pull/19837)
- * Bump to `v25.0.0-SNAPSHOT` after the `v24.0.0-RC1` release [#19838](https://github.com/vitessio/vitess/pull/19838) 
+ * Bump to `v25.0.0-SNAPSHOT` after the `v24.0.0-RC1` release [#19838](https://github.com/vitessio/vitess/pull/19838)
+ * [release-24.0] Bump to `v24.0.0-SNAPSHOT` after the `v24.0.0-RC1` release [#19855](https://github.com/vitessio/vitess/pull/19855) 
 #### Query Serving
  * docs: Add changelog entry for QueryThrottler observability metrics [#19036](https://github.com/vitessio/vitess/pull/19036)
 ### Security 
@@ -514,8 +488,7 @@
  * CI: Add harden-runner step to all workflows [#19145](https://github.com/vitessio/vitess/pull/19145)
  * `ci`: pin dependencies for Antithesis tests  [#19782](https://github.com/vitessio/vitess/pull/19782) 
 #### General
- * Bump golang.org/x/crypto from 0.42.0 to 0.45.0 [#18918](https://github.com/vitessio/vitess/pull/18918)
- * Bump the all group across 6 directories with 4 updates [#19184](https://github.com/vitessio/vitess/pull/19184) 
+ * Bump golang.org/x/crypto from 0.42.0 to 0.45.0 [#18918](https://github.com/vitessio/vitess/pull/18918) 
 #### Java
  * Resolve `commons-lang` vulnerability in Java driver [#18768](https://github.com/vitessio/vitess/pull/18768)
  * Bump org.apache.logging.log4j:log4j-core from 2.24.1 to 2.25.3 in /java [#19063](https://github.com/vitessio/vitess/pull/19063) 
@@ -524,9 +497,9 @@
  * vtadmin: upgrade vite to the latest [#18803](https://github.com/vitessio/vitess/pull/18803)
  * Bump js-yaml from 4.1.0 to 4.1.1 in /web/vtadmin [#18908](https://github.com/vitessio/vitess/pull/18908)
  * Drop dependency on `npm`, bump version of `glob`. [#18931](https://github.com/vitessio/vitess/pull/18931)
- * Potential fix for code scanning alert no. 3944: Database query built from user-controlled sources [#18941](https://github.com/vitessio/vitess/pull/18941) 
+ * Potential fix for code scanning alert no. 3944: Database query built from user-controlled sources [#18941](https://github.com/vitessio/vitess/pull/18941)
+ * [release-24.0] build(deps-dev): bump postcss from 8.5.8 to 8.5.10 in /web/vtadmin (#19960) [#19969](https://github.com/vitessio/vitess/pull/19969) 
 #### VTTablet
- * `filebackupstorage`: use `fileutil.SafePathJoin` for all path building [#19479](https://github.com/vitessio/vitess/pull/19479)
  * `vttablet`: harden `ExecuteHook` RPC and backup engine flag inputs [#19486](https://github.com/vitessio/vitess/pull/19486) 
 #### vtctldclient
  * Potential fix for code scanning alert no. 2992: Clear-text logging of sensitive information [#18754](https://github.com/vitessio/vitess/pull/18754)
@@ -539,15 +512,13 @@
  * tests(tools): add unit tests for astfmtgen tool [#19073](https://github.com/vitessio/vitess/pull/19073)
  * Generate race unit tests [#19078](https://github.com/vitessio/vitess/pull/19078)
  * Skip flaky `TestRedial` test [#19106](https://github.com/vitessio/vitess/pull/19106)
- * CI: Look for expected log message rather than code in Backup tests [#19199](https://github.com/vitessio/vitess/pull/19199)
  * CI: Use new Percona Server repo name [#19214](https://github.com/vitessio/vitess/pull/19214)
  * CI: Deflake two flaky tests [#19364](https://github.com/vitessio/vitess/pull/19364)
  * CI: Deflake Code Coverage workflow [#19388](https://github.com/vitessio/vitess/pull/19388)
  * Fix TestSelectScatterPartialOLAP data race [#19390](https://github.com/vitessio/vitess/pull/19390)
  * CI: Use larger runners for vreplication workflows [#19433](https://github.com/vitessio/vitess/pull/19433)
  * test: Add missing unit tests in `vtgate/cli` [#19439](https://github.com/vitessio/vitess/pull/19439)
- * Testing: Antithesis Test reach Setup Complete [#19577](https://github.com/vitessio/vitess/pull/19577)
- * Testing: Antithesis 1 primary 2 replica setup [#19684](https://github.com/vitessio/vitess/pull/19684) 
+ * Testing: Antithesis Test reach Setup Complete [#19577](https://github.com/vitessio/vitess/pull/19577) 
 #### Cluster management
  * tests(cmd): add tests for mysqlctl position command [#18895](https://github.com/vitessio/vitess/pull/18895)
  * test: fix test flakiness in `TestEmergencyReparentWithBlockedPrimary` [#18959](https://github.com/vitessio/vitess/pull/18959) 
