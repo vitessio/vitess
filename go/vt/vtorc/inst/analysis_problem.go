@@ -347,6 +347,17 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	// Replica connectivity checks
 	{
 		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    ReplicationStopped,
+			Description: "Replication is stopped",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    NotConnectedToPrimary,
 			Description: "Not connected to the primary",
 			Priority:    detectionAnalysisPriorityMedium,
@@ -375,17 +386,6 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)
 		},
 	},
-	{
-		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:    ReplicationStopped,
-			Description: "Replication is stopped",
-			Priority:    detectionAnalysisPriorityMedium,
-		},
-		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped
-		},
-	},
-
 	// Unreachable primary checks
 	{
 		Meta: &DetectionAnalysisProblemMeta{
