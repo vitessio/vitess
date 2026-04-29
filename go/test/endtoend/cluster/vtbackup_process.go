@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // VtbackupProcess is a generic handle for a running Vtbackup.
@@ -71,14 +70,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--file-backup-storage-root": vtbackup.FileBackupStorageRoot,
 	}
 
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
-	utils.SetFlagVariantsForTests(flags, "--mysql-port", strconv.Itoa(vtbackup.MysqlPort))
-	utils.SetFlagVariantsForTests(flags, "--init-db-sql-file", vtbackup.initDBfile)
-	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
-	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
-	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)
+	flags["--backup-storage-implementation"] = vtbackup.BackupStorageImplementation
 	flags["--log-format"] = "text"
 
 	vtbackup.proc = exec.Command(vtbackup.Binary)
@@ -87,7 +79,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	}
 
 	if vtbackup.initialBackup {
-		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial_backup")
+		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial-backup")
 	}
 	if vtbackup.ExtraArgs != nil {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, vtbackup.ExtraArgs...)

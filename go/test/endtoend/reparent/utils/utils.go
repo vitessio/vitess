@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
@@ -83,22 +82,22 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	require.NoError(t, err)
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 		// Fast health checks help find corner cases.
-		utils.GetFlagVariantForTests("--health-check-interval"), "1s",
-		utils.GetFlagVariantForTests("--track-schema-versions")+"=true",
-		utils.GetFlagVariantForTests("--queryserver-enable-online-ddl")+"=false")
+		"--health-check-interval", "1s",
+		"--track-schema-versions"+"=true",
+		"--queryserver-enable-online-ddl"+"=false")
 
 	if len(extraVttabletFlags) > 0 {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, extraVttabletFlags...)
 	}
 
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-		"--enable_buffer",
+		"--enable-buffer",
 		// Long timeout in case failover is slow.
-		utils.GetFlagVariantForTests("--buffer-window"), "10m",
-		utils.GetFlagVariantForTests("--buffer-max-failover-duration"), "10m",
-		utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "20m",
+		"--buffer-window", "10m",
+		"--buffer-max-failover-duration", "10m",
+		"--buffer-min-time-between-failovers", "20m",
 	)
 
 	// Start keyspace
@@ -186,16 +185,15 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--lock_tables_timeout", "5s",
-		"--track_schema_versions=true",
+		"--lock-tables-timeout", "5s",
+		"--track-schema-versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
 		// All the tests in this package reparent frequently between different tablets
 		// This means that Promoting a tablet to primary is sometimes immediately followed by a DemotePrimary call.
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"--queryserver_enable_online_ddl"+"=false")
+		"--queryserver-enable-online-ddl"+"=false")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -279,10 +277,9 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		[]string{
-			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-			"--lock_tables_timeout", "5s",
-			"--track_schema_versions=true",
-			"--queryserver_enable_online_ddl" + "=false",
+			"--lock-tables-timeout", "5s",
+			"--track-schema-versions=true",
+			"--queryserver-enable-online-ddl" + "=false",
 		},
 		clusterInstance.DefaultCharset)
 	tablet.VttabletProcess.SupportsBackup = supportsBackup
@@ -367,7 +364,7 @@ func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, 
 		fmt.Sprintf("%s/%s", KeyspaceName, ShardName),
 	}
 	if actionTimeout != "" {
-		args = append(args, "--action_timeout", actionTimeout)
+		args = append(args, "--action-timeout", actionTimeout)
 	}
 	if waitTimeout != "" {
 		args = append(args, "--wait-replicas-timeout", waitTimeout)
@@ -392,7 +389,7 @@ func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, to
 func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
-		args = append(args, "--action_timeout", timeout)
+		args = append(args, "--action-timeout", timeout)
 	}
 	args = append(args, "EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {
