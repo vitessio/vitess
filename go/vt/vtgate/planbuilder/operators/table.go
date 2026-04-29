@@ -137,7 +137,14 @@ func (to *Table) ShortDescription() string {
 	if to.QTable == nil {
 		return "dual"
 	}
-	tbl := to.VTable.String()
+	var tbl string
+	if to.VTable != nil {
+		tbl = to.VTable.String()
+	} else {
+		// CTE recursive references and other virtual tables have no vschema
+		// entity behind them — fall back to the QueryTable's name.
+		tbl = sqlparser.String(to.QTable.Table)
+	}
 	var alias, where string
 	if to.QTable.Alias.As.NotEmpty() {
 		alias = " AS " + to.QTable.Alias.As.String()
