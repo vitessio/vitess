@@ -199,28 +199,6 @@ func hasCommentPrefix(sql string) bool {
 	return len(sql) > 1 && ((sql[0] == '/' && sql[1] == '*') || (sql[0] == '-' && sql[1] == '-'))
 }
 
-// ExtractMysqlComment extracts the version and SQL from a comment-only query
-// such as /*!50708 sql here */
-func ExtractMysqlComment(sql string) (string, string) {
-	sql = sql[3 : len(sql)-2]
-
-	digitCount := 0
-	endOfVersionIndex := strings.IndexFunc(sql, func(c rune) bool {
-		digitCount++
-		return !unicode.IsDigit(c) || digitCount == 6
-	})
-	if endOfVersionIndex < 0 {
-		return "", ""
-	}
-	if endOfVersionIndex < 5 {
-		endOfVersionIndex = 0
-	}
-	version := sql[0:endOfVersionIndex]
-	innerSQL := strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
-
-	return version, innerSQL
-}
-
 const commentDirectivePreamble = "/*vt+"
 
 // CommentDirectives is the parsed representation for execution directives
@@ -316,6 +294,44 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 		return ""
 	}
 	return ""
+}
+
+// GetMySQLSetVarNames gets the variable names used in /*+ SET_VAR() */ MySQL optimizer hints.
+func (c *ParsedComments) GetMySQLSetVarNames() []string {
+	if c == nil {
+		return nil
+	}
+	for _, commentStr := range c.comments {
+		if commentStr[0:3] != queryOptimizerPrefix {
+			continue
+		}
+
+		var names []string
+		pos := 4
+		for pos < len(commentStr) {
+			finalPos, ohNameStart, ohNameEnd, ohContentStart, ohContentEnd := getOptimizerHint(pos, commentStr)
+			pos = finalPos + 1
+			if ohContentEnd == -1 {
+				break
+			}
+
+			ohName := commentStr[ohNameStart:ohNameEnd]
+			ohContent := commentStr[ohContentStart:ohContentEnd]
+			if strings.EqualFold(strings.TrimSpace(ohName), OptimizerHintSetVar) {
+				setVarName, _, isValid := strings.Cut(ohContent, "=")
+				if !isValid {
+					continue
+				}
+				setVarName = strings.TrimSpace(setVarName)
+				if setVarName != "" {
+					names = append(names, setVarName)
+				}
+			}
+		}
+
+		return names
+	}
+	return nil
 }
 
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.

@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -39,6 +40,180 @@ import (
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
+
+func TestNewCopyWorkerFactoryUsesMaxQuerySize(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	dbClient := binlogplayer.NewMockDBClient(t)
+	vr := &vreplicator{
+		dbClient: newVDBClient(dbClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+		stats:    stats,
+	}
+
+	workerFactory := newVCopier(vr).newCopyWorkerFactory(1, 123)
+	worker, err := workerFactory(t.Context())
+	require.NoError(t, err)
+	require.NotNil(t, worker)
+	assert.Equal(t, int64(123), worker.maxQuerySize)
+	assert.Same(t, vr.dbClient, worker.vdbClient)
+}
+
+func TestPlayerCopyRespectsMaxQuerySize(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyRespectsMaxQuerySize, commonVcopierTestCases())
+}
+
+func testPlayerCopyRespectsMaxQuerySize(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	reset := vstreamer.AdjustPacketSize(1 << 20)
+	defer reset()
+
+	ctx := t.Context()
+	qr, err := env.Mysqld.FetchSuperQuery(ctx, "select @@global.max_allowed_packet")
+	require.NoError(t, err)
+	originalMaxAllowedPacket, err := qr.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+
+	val1 := strings.Repeat("a", 350)
+	val2 := strings.Repeat("b", 350)
+	val3 := strings.Repeat("c", 350)
+
+	execStatements(t, []string{
+		"create table src(id int, val varchar(512), primary key(id))",
+		fmt.Sprintf("create table %s.dst(id int, val varchar(512), primary key(id))", vrepldb),
+		fmt.Sprintf("insert into src values(1, '%s')", val1),
+		fmt.Sprintf("insert into src values(2, '%s')", val2),
+		fmt.Sprintf("insert into src values(3, '%s')", val3),
+		"set @@global.max_allowed_packet=1024",
+	})
+	defer execStatements(t, []string{
+		fmt.Sprintf("set @@global.max_allowed_packet=%d", originalMaxAllowedPacket),
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	vrqr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", vrqr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+		playerEngine.Close()
+		playerEngine.Open(context.WithoutCancel(t.Context()))
+	})
+
+	expectNontxQueries(t, qh.Expect(
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		fmt.Sprintf("insert into dst(id,val) values (1,'%s'), (2,'%s')", val1, val2),
+		fmt.Sprintf("insert into dst(id,val) values (3,'%s')", val3),
+		"/insert into _vt.copy_state",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
+		"/update _vt.vreplication set state='Running",
+	), recvTimeout)
+
+	expectData(t, "dst", [][]string{
+		{"1", val1},
+		{"2", val2},
+		{"3", val3},
+	})
+}
+
+// TestPlayerCopyTablesJSONStreamSQL verifies that JSON values round-trip correctly through MySQL
+// when using the streaming JSON_OBJECT/JSON_ARRAY SQL encoding path.
+func TestPlayerCopyTablesJSONStreamSQL(t *testing.T) {
+	testVcopierTestCases(t, testPlayerCopyTablesJSONStreamSQL, commonVcopierTestCases())
+}
+
+func testPlayerCopyTablesJSONStreamSQL(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src(id int, j json, primary key(id))",
+		fmt.Sprintf("create table %s.dst(id int, j json, primary key(id))", vrepldb),
+		`insert into src values(1, '{"foo": "bar"}')`,
+		`insert into src values(2, JSON_ARRAY(123456789012345678901234567890, "abcd"))`,
+		`insert into src values(3, '{"flag": true, "items": [1, false, null]}')`,
+		`insert into src values(4, '{"val": 1.5}')`,
+		`insert into src values(5, 'null')`,
+		`insert into src values(6, null)`,
+		`insert into src values(7, '{}')`,
+		`insert into src values(8, '[]')`,
+		`insert into src values(9, '{"keywordSourceId": 930701976723823}')`,
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+		playerEngine.Close()
+		playerEngine.Open(context.WithoutCancel(t.Context()))
+	})
+
+	expectNontxQueries(t, qh.Expect(
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"/insert into dst",
+		"/insert into _vt.copy_state",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
+		"/update _vt.vreplication set state='Running",
+	), recvTimeout)
+
+	expectData(t, "dst", [][]string{
+		{"1", `{"foo": "bar"}`},
+		{"2", `[123456789012345678901234567890, "abcd"]`},
+		{"3", `{"flag": true, "items": [1, false, null]}`},
+		{"4", `{"val": 1.5}`},
+		{"5", "null"},
+		{"6", ""},
+		{"7", "{}"},
+		{"8", "[]"},
+		{"9", `{"keywordSourceId": 930701976723823}`},
+	})
+}
 
 type vcopierTestCase struct {
 	vreplicationExperimentalFlags     int64

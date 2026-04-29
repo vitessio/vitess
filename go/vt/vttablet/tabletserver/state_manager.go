@@ -117,19 +117,20 @@ type stateManager struct {
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
 	// All Close functions must be called before Open.
-	hs          *healthStreamer
-	se          schemaEngine
-	rt          replTracker
-	vstreamer   subComponent
-	tracker     subComponent
-	qe          queryEngine
-	txThrottler txThrottler
-	te          txEngine
-	messager    subComponent
-	ddle        onlineDDLExecutor
-	throttler   lagThrottler
-	qThrottler  queryThrottler
-	tableGC     tableGarbageCollector
+	hs           *healthStreamer
+	se           schemaEngine
+	rt           replTracker
+	vstreamer    subComponent
+	binlogDumper subComponent
+	tracker      subComponent
+	qe           queryEngine
+	txThrottler  txThrottler
+	te           txEngine
+	messager     subComponent
+	ddle         onlineDDLExecutor
+	throttler    lagThrottler
+	qThrottler   queryThrottler
+	tableGC      tableGarbageCollector
 
 	// hcticks starts on initialization and runs forever.
 	hcticks *timer.Timer
@@ -542,6 +543,7 @@ func (sm *stateManager) connect(tabletType topodatapb.TabletType, serving bool) 
 		return err
 	}
 	sm.vstreamer.Open()
+	sm.binlogDumper.Open()
 	if err := sm.qe.Open(); err != nil {
 		return err
 	}
@@ -635,6 +637,7 @@ func (sm *stateManager) closeAll() {
 	sm.unserveCommon()
 	sm.txThrottler.Close()
 	sm.qe.Close()
+	sm.binlogDumper.Close()
 	sm.vstreamer.Close()
 	sm.rt.Close()
 	sm.se.Close()

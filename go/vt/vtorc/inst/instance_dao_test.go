@@ -260,7 +260,7 @@ func TestReadProblemInstances(t *testing.T) {
 
 			instances, err := ReadProblemInstances("ks", "0")
 			require.NoError(t, err)
-			var tabletAliases []string
+			tabletAliases := make([]string, 0, len(instances))
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
@@ -344,7 +344,7 @@ func TestReadInstancesWithErrantGTIds(t *testing.T) {
 
 			instances, err := ReadInstancesWithErrantGTIds(tt.keyspace, tt.shard)
 			require.NoError(t, err)
-			var tabletAliases []string
+			tabletAliases := make([]string, 0, len(instances))
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, topoproto.TabletAliasString(instance.InstanceAlias))
 			}
@@ -532,7 +532,7 @@ func TestReadOutdatedInstances(t *testing.T) {
 		{
 			name:              "No problems",
 			sql:               []string{"update database_instance set last_checked = DATETIME('now')"},
-			instancesRequired: nil,
+			instancesRequired: []string{},
 		}, {
 			name: "One instance is outdated",
 			sql: []string{
@@ -558,8 +558,8 @@ func TestReadOutdatedInstances(t *testing.T) {
 		},
 	}
 
-	// wait for the forgetAliases cache to be initialized to prevent data race.
-	waitForCacheInitialization()
+	// Ensure the forgetAliases cache is initialized before overriding it.
+	InitializeForgetAliasesCache()
 
 	// We are setting InstancePollSeconds to 59 minutes, just for the test.
 	oldVal := config.GetInstancePollTime()
@@ -598,7 +598,7 @@ from database_instance`, func(rowMap sqlutils.RowMap) error {
 			})
 			require.NoError(t, errInDataCollection)
 			require.NoError(t, err)
-			var tabletAliasStrings []string
+			tabletAliasStrings := make([]string, 0, len(tabletAliases))
 			for _, tabletAlias := range tabletAliases {
 				tabletAliasStrings = append(tabletAliasStrings, topoproto.TabletAliasString(tabletAlias))
 			}
@@ -747,8 +747,8 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 		},
 	}
 
-	// wait for the forgetAliases cache to be initialized to prevent data race.
-	waitForCacheInitialization()
+	// Ensure the forgetAliases cache is initialized before overriding it.
+	InitializeForgetAliasesCache()
 
 	oldCache := forgetAliases
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
@@ -776,7 +776,7 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 
 			instances, err := readInstancesByCondition("1=1", nil, "")
 			require.NoError(t, err)
-			var tabletAliases []*topodatapb.TabletAlias
+			tabletAliases := make([]*topodatapb.TabletAlias, 0, len(instances))
 			for _, instance := range instances {
 				tabletAliases = append(tabletAliases, instance.InstanceAlias)
 			}
@@ -808,17 +808,6 @@ func TestSnapshotTopologies(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"}, tabletAliases)
-}
-
-// waitForCacheInitialization waits for the cache to be initialized to prevent data race in tests
-// that alter the cache or depend on its behaviour.
-func waitForCacheInitialization() {
-	for {
-		if cacheInitializationCompleted.Load() {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
 }
 
 func TestGetDatabaseState(t *testing.T) {

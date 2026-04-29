@@ -1,0 +1,147 @@
+name: CI Rerun Failed Jobs
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number to process (default: all recent open PRs)"
+        required: false
+        type: number
+      branch:
+        description: "Target branch filter"
+        required: false
+        type: string
+        default: "main"
+      ignore:
+        description: "CSV of workflow name substrings to ignore"
+        required: false
+        type: string
+
+concurrency:
+  group: ci-rerun
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  pull-requests: read
+
+jobs:
+  rerun-failed:
+    name: Rerun Failed CI Jobs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: audit
+
+      - name: Rerun failed jobs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          INPUT_PR: ${{ inputs.pr }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+          INPUT_IGNORE: ${{ inputs.ignore }}
+        with:
+          script: |
+            const MAX_PR_AGE_DAYS = 5;
+            const MAX_WORKFLOW_ATTEMPTS = 4;
+            const MAX_ALLOWED_FAILURES = 10;
+            const MAX_PRS_TO_PROCESS = 20;
+            const DEFAULT_IGNORE = ['check pull request labels'];
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const inputPR = Number(process.env.INPUT_PR) || 0;
+            const inputBranch = process.env.INPUT_BRANCH || 'main';
+            const inputIgnore = (process.env.INPUT_IGNORE || '')
+              .split(',')
+              .map(s => s.trim().toLowerCase())
+              .filter(Boolean);
+            const ignorePatterns = [...DEFAULT_IGNORE, ...inputIgnore];
+
+            // Get PRs to process.
+            let prs = [];
+            if (inputPR) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: inputPR });
+              prs = [pr];
+            } else {
+              const { data: allPRs } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                sort: 'updated',
+                direction: 'desc',
+                per_page: 100,
+              });
+
+              const cutoff = new Date(Date.now() - MAX_PR_AGE_DAYS * 24 * 60 * 60 * 1000);
+              const isScheduled = !process.env.INPUT_BRANCH;
+              prs = allPRs
+                .filter(pr => new Date(pr.updated_at) > cutoff)
+                .filter(pr => isScheduled
+                  ? pr.base.ref === 'main' || pr.base.ref.startsWith('release-')
+                  : pr.base.ref === inputBranch)
+                .slice(0, MAX_PRS_TO_PROCESS);
+            }
+
+            core.info(`Found ${prs.length} PR(s) to process`);
+
+            let totalRestarted = 0;
+            for (const pr of prs) {
+              const sha = pr.head.sha;
+              const title = pr.title.length > 60 ? pr.title.slice(0, 60) + '...' : pr.title;
+              core.info(`Processing PR #${pr.number}: ${title} (${sha.slice(0, 8)})`);
+
+              // Get workflow runs for this PR's HEAD SHA.
+              const { data: runsData } = await github.rest.actions.listWorkflowRunsForRepo({
+                owner,
+                repo,
+                head_sha: sha,
+                per_page: 100,
+              });
+
+              const failedRuns = runsData.workflow_runs.filter(
+                run => run.status === 'completed' &&
+                       (run.conclusion === 'failure' ||
+                        run.conclusion === 'cancelled' ||
+                        run.conclusion === 'startup_failure')
+              );
+
+              // Safety: skip PRs with too many failures.
+              if (failedRuns.length > MAX_ALLOWED_FAILURES) {
+                core.warning(`PR #${pr.number}: ${failedRuns.length} failures, skipping (too many)`);
+                continue;
+              }
+
+              for (const run of failedRuns) {
+                // Safety: skip workflows with too many attempts.
+                if (run.run_attempt >= MAX_WORKFLOW_ATTEMPTS) {
+                  core.info(`  Skipping "${run.name}" — already attempted ${run.run_attempt} times`);
+                  continue;
+                }
+
+                // Safety: skip workflows matching ignore patterns.
+                const nameLower = run.name.toLowerCase();
+                if (ignorePatterns.some(pattern => nameLower.includes(pattern))) {
+                  core.info(`  Skipping "${run.name}" — matches ignore pattern`);
+                  continue;
+                }
+
+                // Rerun only the failed jobs for this workflow run.
+                try {
+                  await github.rest.actions.reRunWorkflowFailedJobs({
+                    owner,
+                    repo,
+                    run_id: run.id,
+                  });
+                  core.info(`  Rerunning failed jobs for "${run.name}" (attempt ${run.run_attempt + 1})`);
+                  totalRestarted++;
+                } catch (err) {
+                  core.warning(`  Failed to rerun "${run.name}": ${err.message}`);
+                }
+              }
+            }
+
+            core.info(`Done. Restarted ${totalRestarted} workflow run(s)`);

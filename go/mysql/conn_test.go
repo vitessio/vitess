@@ -87,8 +87,8 @@ func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	}()
 
 	dataLen := len(data)
-	dataWithHeader := make([]byte, packetHeaderSize+dataLen)
-	copy(dataWithHeader[packetHeaderSize:], data)
+	dataWithHeader := make([]byte, PacketHeaderSize+dataLen)
+	copy(dataWithHeader[PacketHeaderSize:], data)
 
 	if err := cConn.writePacket(dataWithHeader); err != nil {
 		t.Fatalf("writePacket failed: %v", err)
@@ -170,6 +170,40 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacketDirect)
 		sConn.recycleReadPacket()
 	}
+}
+
+func TestEndWriterBufferingNoWritesNoPanic(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	// Start buffering but don't write anything, so flushTimer is never created.
+	// endWriterBuffering must not panic on nil flushTimer.
+	cConn.startWriterBuffering()
+	assert.NotPanics(t, func() {
+		err := cConn.endWriterBuffering()
+		assert.NoError(t, err)
+	})
+}
+
+func TestFlushWriteBufferNoWritesNoPanic(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	// Start buffering but don't write anything, so flushTimer is never created.
+	// FlushWriteBuffer must not panic on nil flushTimer.
+	cConn.startWriterBuffering()
+	assert.NotPanics(t, func() {
+		err := cConn.FlushWriteBuffer()
+		assert.NoError(t, err)
+	})
 }
 
 func TestRawConnection(t *testing.T) {
@@ -1037,6 +1071,110 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
 
+func TestParseComBinlogDumpGTID(t *testing.T) {
+	sConn := newConn(testConn{}, DefaultFlushDelay, 0)
+
+	// Test packet structure (COM_BINLOG_DUMP_GTID):
+	// - 1 byte: command (0x1e)
+	// - 2 bytes: flags (0x0001 = NON_BLOCK)
+	// - 4 bytes: server_id (0)
+	// - 4 bytes: filename_len (24)
+	// - 24 bytes: filename ("vt_0000000100-bin.000001")
+	// - 8 bytes: log_pos (4)
+	// - 4 bytes: gtid_data_len (48)
+	// - 48 bytes: SID block for GTID "24bcf1e2-01e0-11ee-8c9c-0242ac120002:1-8"
+	input, err := hex.DecodeString("1e0100000000001800000076745f303030303030303130302d62696e2e303030303031040000000000000030000000010000000000000024bcf1e201e011ee8c9c0242ac120002010000000000000001000000000000000900000000000000")
+	require.NoError(t, err)
+
+	logFile, logPos, position, flags, err := sConn.parseComBinlogDumpGTID(input)
+	require.NoError(t, err)
+
+	require.Equal(t, "vt_0000000100-bin.000001", logFile)
+	require.Equal(t, uint64(4), logPos)
+	require.NotZero(t, flags&BinlogDumpNonBlock)
+	require.Equal(t, "24bcf1e2-01e0-11ee-8c9c-0242ac120002:1-8", position.String())
+}
+
+func TestParseComBinlogDumpGTID_Truncated(t *testing.T) {
+	sConn := newConn(testConn{}, DefaultFlushDelay, 0)
+
+	// Valid packet for reference (from TestParseComBinlogDumpGTID above).
+	valid, err := hex.DecodeString("1e0100000000001800000076745f303030303030303130302d62696e2e303030303031040000000000000030000000010000000000000024bcf1e201e011ee8c9c0242ac120002010000000000000001000000000000000900000000000000")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"command only", []byte{0x1e}},
+		{"truncated flags", []byte{0x1e, 0x01}},
+		{"truncated server-id", []byte{0x1e, 0x01, 0x00, 0x00, 0x00}},
+		{"missing filename len", valid[:7]},
+		{"filename len exceeds data", func() []byte {
+			// Set filename_len to 255 but provide no filename bytes
+			d := make([]byte, 12)
+			copy(d, valid[:7])
+			d[7] = 0xFF
+			d[8] = 0x00
+			d[9] = 0x00
+			d[10] = 0x00
+			return d
+		}()},
+		{"truncated after filename", func() []byte {
+			// Include filename but truncate before logPos
+			fnLen := int(valid[7]) | int(valid[8])<<8 | int(valid[9])<<16 | int(valid[10])<<24
+			return valid[:11+fnLen]
+		}()},
+		{"truncated gtid data size", func() []byte {
+			// Include filename + logPos but truncate before dataSize
+			fnLen := int(valid[7]) | int(valid[8])<<8 | int(valid[9])<<16 | int(valid[10])<<24
+			return valid[:11+fnLen+8]
+		}()},
+		{"gtid data size exceeds data", func() []byte {
+			// Valid up to dataSize, but set dataSize larger than remaining bytes
+			d := make([]byte, len(valid))
+			copy(d, valid)
+			// dataSize is at offset 11 + fileNameLen + 8
+			fnLen := int(d[7]) | int(d[8])<<8 | int(d[9])<<16 | int(d[10])<<24
+			dsOff := 11 + fnLen + 8
+			d[dsOff] = 0xFF // dataSize = 255, but not that many bytes remain
+			d[dsOff+1] = 0x00
+			d[dsOff+2] = 0x00
+			d[dsOff+3] = 0x00
+			return d
+		}()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, _, _, err := sConn.parseComBinlogDumpGTID(tt.data)
+			assert.Error(t, err, "expected error for truncated packet")
+		})
+	}
+}
+
+func TestParseComBinlogDump_Truncated(t *testing.T) {
+	sConn := newConn(testConn{}, DefaultFlushDelay, 0)
+
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"command only", []byte{ComBinlogDump}},
+		{"truncated binlogPos", []byte{ComBinlogDump, 0x01, 0x02}},
+		{"truncated flags+server-id", []byte{ComBinlogDump, 0x04, 0x00, 0x00, 0x00}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := sConn.parseComBinlogDump(tt.data)
+			assert.Error(t, err, "expected error for truncated packet")
+		})
+	}
+}
+
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 func randSeq(n int) string {
@@ -1151,7 +1289,7 @@ func (t testRun) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error 
 	panic("implement me")
 }
 
-func (t testRun) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (t testRun) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	panic("implement me")
 }
 
@@ -1213,3 +1351,92 @@ func (t testRun) Env() *vtenv.Environment {
 }
 
 var _ Handler = (*testRun)(nil)
+
+func TestWritePacketHeader(t *testing.T) {
+	_ = utils.LeakCheckContext(t)
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	t.Run("Single chunk", func(t *testing.T) {
+		payload := []byte{0x00, 0x01, 0x02, 0x03}
+
+		err := cConn.WritePacketHeader(len(payload))
+		require.NoError(t, err)
+		err = cConn.WritePacketRaw(payload)
+		require.NoError(t, err)
+
+		data, err := sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, payload, data)
+	})
+
+	sConn.sequence = 0
+	cConn.sequence = 0
+
+	t.Run("Multiple chunks", func(t *testing.T) {
+		chunks := [][]byte{
+			{0x00, 0x01},
+			{0x02, 0x03},
+			{0x04, 0x05, 0x06},
+		}
+
+		totalLen := 0
+		for _, c := range chunks {
+			totalLen += len(c)
+		}
+
+		err := cConn.WritePacketHeader(totalLen)
+		require.NoError(t, err)
+		for _, chunk := range chunks {
+			err = cConn.WritePacketRaw(chunk)
+			require.NoError(t, err)
+		}
+
+		data, err := sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06}, data)
+	})
+
+	sConn.sequence = 0
+	cConn.sequence = 0
+
+	t.Run("Interleaved with WritePacketDirect", func(t *testing.T) {
+		// Write packet 0 via WritePacketDirect
+		err := cConn.WritePacketDirect([]byte{0xAA})
+		require.NoError(t, err)
+		assert.Equal(t, uint8(1), cConn.sequence)
+
+		// Write packet 1 via WritePacketHeader + WritePacketRaw
+		err = cConn.WritePacketHeader(2)
+		require.NoError(t, err)
+		assert.Equal(t, uint8(2), cConn.sequence)
+		err = cConn.WritePacketRaw([]byte{0xBB})
+		require.NoError(t, err)
+		err = cConn.WritePacketRaw([]byte{0xCC})
+		require.NoError(t, err)
+
+		// Write packet 2 via WritePacketDirect
+		err = cConn.WritePacketDirect([]byte{0xDD})
+		require.NoError(t, err)
+		assert.Equal(t, uint8(3), cConn.sequence)
+
+		// Read all three — sequence validation happens inside ReadPacket
+		data, err := sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xAA}, data)
+
+		data, err = sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xBB, 0xCC}, data)
+
+		data, err = sConn.ReadPacket()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xDD}, data)
+
+		assert.Equal(t, uint8(3), sConn.sequence)
+	})
+}

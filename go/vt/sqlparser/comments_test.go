@@ -222,36 +222,6 @@ a`,
 	}
 }
 
-func TestExtractMysqlComment(t *testing.T) {
-	testCases := []struct {
-		input, outSQL, outVersion string
-	}{{
-		input:      "/*!50708SET max_execution_time=5000 */",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "50708",
-	}, {
-		input:      "/*!50708 SET max_execution_time=5000*/",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "50708",
-	}, {
-		input:      "/*!50708* from*/",
-		outSQL:     "* from",
-		outVersion: "50708",
-	}, {
-		input:      "/*! SET max_execution_time=5000*/",
-		outSQL:     "SET max_execution_time=5000",
-		outVersion: "",
-	}}
-	for _, testCase := range testCases {
-		gotVersion, gotSQL := ExtractMysqlComment(testCase.input)
-		assert.Equal(t, testCase.outVersion, gotVersion, "version mismatch")
-
-		if gotSQL != testCase.outSQL {
-			t.Errorf("test input: '%s', got SQL\n%+v, want\n%+v", testCase.input, gotSQL, testCase.outSQL)
-		}
-	}
-}
-
 func TestExtractCommentDirectives(t *testing.T) {
 	testCases := []struct {
 		input string
@@ -598,6 +568,47 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 				comments: tt.comments,
 			}
 			assert.Equal(t, tt.want, c.GetMySQLSetVarValue(tt.valToFind))
+		})
+	}
+}
+
+func TestGetMySQLSetVarNames(t *testing.T) {
+	tests := []struct {
+		name     string
+		comments []string
+		want     []string
+	}{{
+		name:     "SET_VAR clause in the middle",
+		comments: []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=OFF) NO_ICP(t1, t2) */"},
+		want:     []string{"foreign_key_checks"},
+	}, {
+		name:     "Single SET_VAR clause",
+		comments: []string{"/*+ SET_VAR(sort_buffer_size = 16M) */"},
+		want:     []string{"sort_buffer_size"},
+	}, {
+		name:     "No comments",
+		comments: nil,
+		want:     nil,
+	}, {
+		name:     "Multiple SET_VAR clauses in first optimizer hint comment",
+		comments: []string{"/*+ SET_VAR(sort_buffer_size = 16M) SET_VAR( foReiGn_key_checks = On) */"},
+		want:     []string{"sort_buffer_size", "foReiGn_key_checks"},
+	}, {
+		name:     "Only first optimizer hint comment is parsed",
+		comments: []string{"/*+ SET_VAR(sort_buffer_size = 16M) */", "/*+ SET_VAR(foreign_key_checks = On) */"},
+		want:     []string{"sort_buffer_size"},
+	}, {
+		name:     "Leading comment is a normal comment",
+		comments: []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR( foreign_key_checks = 1) */"},
+		want:     []string{"foreign_key_checks"},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ParsedComments{
+				comments: tt.comments,
+			}
+			assert.Equal(t, tt.want, c.GetMySQLSetVarNames())
 		})
 	}
 }

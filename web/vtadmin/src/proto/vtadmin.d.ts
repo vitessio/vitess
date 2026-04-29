@@ -18830,6 +18830,9 @@ export namespace topodata {
 
             /** TabletControl frozen */
             frozen?: (boolean|null);
+
+            /** TabletControl allow_reads */
+            allow_reads?: (boolean|null);
         }
 
         /** Represents a TabletControl. */
@@ -18852,6 +18855,9 @@ export namespace topodata {
 
             /** TabletControl frozen. */
             public frozen: boolean;
+
+            /** TabletControl allow_reads. */
+            public allow_reads: boolean;
 
             /**
              * Creates a new TabletControl instance using the specified properties.
@@ -42311,6 +42317,236 @@ export namespace binlogdata {
          */
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
+
+    /** Properties of a BinlogDumpGTIDRequest. */
+    interface IBinlogDumpGTIDRequest {
+
+        /** BinlogDumpGTIDRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BinlogDumpGTIDRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BinlogDumpGTIDRequest target */
+        target?: (query.ITarget|null);
+
+        /** BinlogDumpGTIDRequest binlog_filename */
+        binlog_filename?: (string|null);
+
+        /** BinlogDumpGTIDRequest binlog_position */
+        binlog_position?: (number|Long|null);
+
+        /** BinlogDumpGTIDRequest gtid_set */
+        gtid_set?: (string|null);
+
+        /** BinlogDumpGTIDRequest flags */
+        flags?: (number|null);
+    }
+
+    /** Represents a BinlogDumpGTIDRequest. */
+    class BinlogDumpGTIDRequest implements IBinlogDumpGTIDRequest {
+
+        /**
+         * Constructs a new BinlogDumpGTIDRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogDumpGTIDRequest);
+
+        /** BinlogDumpGTIDRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BinlogDumpGTIDRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BinlogDumpGTIDRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** BinlogDumpGTIDRequest binlog_filename. */
+        public binlog_filename: string;
+
+        /** BinlogDumpGTIDRequest binlog_position. */
+        public binlog_position: (number|Long);
+
+        /** BinlogDumpGTIDRequest gtid_set. */
+        public gtid_set: string;
+
+        /** BinlogDumpGTIDRequest flags. */
+        public flags: number;
+
+        /**
+         * Creates a new BinlogDumpGTIDRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogDumpGTIDRequest instance
+         */
+        public static create(properties?: binlogdata.IBinlogDumpGTIDRequest): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Encodes the specified BinlogDumpGTIDRequest message. Does not implicitly {@link binlogdata.BinlogDumpGTIDRequest.verify|verify} messages.
+         * @param message BinlogDumpGTIDRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogDumpGTIDRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogDumpGTIDRequest message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpGTIDRequest.verify|verify} messages.
+         * @param message BinlogDumpGTIDRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogDumpGTIDRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogDumpGTIDRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogDumpGTIDRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Decodes a BinlogDumpGTIDRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogDumpGTIDRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Verifies a BinlogDumpGTIDRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogDumpGTIDRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogDumpGTIDRequest
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogDumpGTIDRequest;
+
+        /**
+         * Creates a plain object from a BinlogDumpGTIDRequest message. Also converts values to other types if specified.
+         * @param message BinlogDumpGTIDRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogDumpGTIDRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogDumpGTIDRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogDumpGTIDRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a BinlogDumpResponse. */
+    interface IBinlogDumpResponse {
+
+        /** BinlogDumpResponse raw */
+        raw?: (Uint8Array|null);
+    }
+
+    /** Represents a BinlogDumpResponse. */
+    class BinlogDumpResponse implements IBinlogDumpResponse {
+
+        /**
+         * Constructs a new BinlogDumpResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: binlogdata.IBinlogDumpResponse);
+
+        /** BinlogDumpResponse raw. */
+        public raw: Uint8Array;
+
+        /**
+         * Creates a new BinlogDumpResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BinlogDumpResponse instance
+         */
+        public static create(properties?: binlogdata.IBinlogDumpResponse): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Encodes the specified BinlogDumpResponse message. Does not implicitly {@link binlogdata.BinlogDumpResponse.verify|verify} messages.
+         * @param message BinlogDumpResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: binlogdata.IBinlogDumpResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BinlogDumpResponse message, length delimited. Does not implicitly {@link binlogdata.BinlogDumpResponse.verify|verify} messages.
+         * @param message BinlogDumpResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: binlogdata.IBinlogDumpResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BinlogDumpResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BinlogDumpResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Decodes a BinlogDumpResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BinlogDumpResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Verifies a BinlogDumpResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BinlogDumpResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BinlogDumpResponse
+         */
+        public static fromObject(object: { [k: string]: any }): binlogdata.BinlogDumpResponse;
+
+        /**
+         * Creates a plain object from a BinlogDumpResponse message. Also converts values to other types if specified.
+         * @param message BinlogDumpResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: binlogdata.BinlogDumpResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BinlogDumpResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for BinlogDumpResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
 }
 
 /** Namespace query. */
@@ -42716,8 +42952,8 @@ export namespace query {
         HEXVAL = 4129,
         BITNUM = 4130,
         VECTOR = 2083,
-        RAW = 2084,
-        ROW_TUPLE = 2085
+        RAW = 36,
+        ROW_TUPLE = 37
     }
 
     /** Properties of a Value. */
@@ -43085,6 +43321,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_timeout */
         transaction_timeout?: (number|Long|null);
+
+        /** ExecuteOptions no_result */
+        no_result?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -43143,6 +43382,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_timeout. */
         public transaction_timeout?: (number|Long|null);
+
+        /** ExecuteOptions no_result. */
+        public no_result: boolean;
 
         /** ExecuteOptions timeout. */
         public timeout?: "authoritative_timeout";
@@ -71410,7 +71652,7 @@ export namespace vtctldata {
         public target_keyspace: string;
 
         /** MoveTablesCompleteRequest keep_data. */
-        public keep_data: boolean;
+        public keep_data?: (boolean|null);
 
         /** MoveTablesCompleteRequest keep_routing_rules. */
         public keep_routing_rules: boolean;
@@ -71513,6 +71755,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteResponse dry_run_results */
         dry_run_results?: (string[]|null);
+
+        /** MoveTablesCompleteResponse warnings */
+        warnings?: (string[]|null);
     }
 
     /** Represents a MoveTablesCompleteResponse. */
@@ -71529,6 +71774,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteResponse dry_run_results. */
         public dry_run_results: string[];
+
+        /** MoveTablesCompleteResponse warnings. */
+        public warnings: string[];
 
         /**
          * Creates a new MoveTablesCompleteResponse instance using the specified properties.
@@ -81390,7 +81638,7 @@ export namespace vtctldata {
         public workflow: string;
 
         /** WorkflowDeleteRequest keep_data. */
-        public keep_data: boolean;
+        public keep_data?: (boolean|null);
 
         /** WorkflowDeleteRequest keep_routing_rules. */
         public keep_routing_rules: boolean;
@@ -81490,6 +81738,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteResponse details */
         details?: (vtctldata.WorkflowDeleteResponse.ITabletInfo[]|null);
+
+        /** WorkflowDeleteResponse warnings */
+        warnings?: (string[]|null);
     }
 
     /** Represents a WorkflowDeleteResponse. */
@@ -81506,6 +81757,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteResponse details. */
         public details: vtctldata.WorkflowDeleteResponse.ITabletInfo[];
+
+        /** WorkflowDeleteResponse warnings. */
+        public warnings: string[];
 
         /**
          * Creates a new WorkflowDeleteResponse instance using the specified properties.

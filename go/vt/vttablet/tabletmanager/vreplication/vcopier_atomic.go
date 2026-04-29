@@ -85,8 +85,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	defer rowsCopiedTicker.Stop()
 
 	parallelism := int(math.Max(1, float64(vc.vr.workflowConfig.ParallelInsertWorkers)))
-
-	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism)
+	maxQuerySize := vc.vr.maxQuerySize(vc.vr.dbClient)
+	copyWorkerFactory := vc.newCopyWorkerFactory(parallelism, maxQuerySize)
 	var copyWorkQueue *vcopierCopyWorkQueue
 
 	// Allocate a result channel to collect results from tasks. To not block fast workers, we allocate a buffer of

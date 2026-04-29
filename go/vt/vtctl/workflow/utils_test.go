@@ -28,6 +28,38 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+func TestResolveWorkflowKeepData(t *testing.T) {
+	t.Run("non-reverse workflow keeps existing default", func(t *testing.T) {
+		keepData, warnings := resolveWorkflowKeepData("wf1", nil)
+		require.False(t, keepData)
+		require.Empty(t, warnings)
+	})
+
+	t.Run("reverse workflow defaults to keeping data", func(t *testing.T) {
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", nil)
+		require.True(t, keepData)
+		require.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "wf1_reverse")
+		assert.Contains(t, warnings[0], "keeping data by default")
+		assert.Contains(t, warnings[0], "keep_data=false")
+		assert.Contains(t, warnings[0], "--keep-data=false")
+	})
+
+	t.Run("explicit false on reverse workflow is honored", func(t *testing.T) {
+		keepDataValue := false
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
+		require.False(t, keepData)
+		require.Empty(t, warnings)
+	})
+
+	t.Run("explicit true on reverse workflow is honored", func(t *testing.T) {
+		keepDataValue := true
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
+		require.True(t, keepData)
+		require.Empty(t, warnings)
+	})
+}
+
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
 // and unsharded keyspaces.
 func TestCreateDefaultShardRoutingRules(t *testing.T) {
