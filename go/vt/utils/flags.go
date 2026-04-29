@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -92,4 +93,29 @@ func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
 	fs.Var(value, name, usage)
+}
+
+var deprecationWarningsEmitted = make(map[string]bool)
+
+// Translate flag names from underscores to dashes and print a deprecation warning.
+func NormalizeUnderscoresToDashes(f *pflag.FlagSet, name string) pflag.NormalizedName {
+	// `log_dir`, `log_link` and `log_backtrace_at` are exceptions because they are used by glog.
+	if name == "log_dir" || name == "log_link" || name == "log_backtrace_at" {
+		return pflag.NormalizedName(name)
+	}
+
+	// We only want to normalize flags that purely use underscores.
+	if !strings.Contains(name, "_") || strings.Contains(name, "-") {
+		return pflag.NormalizedName(name)
+	}
+
+	normalizedName := strings.ReplaceAll(name, "_", "-")
+
+	// Only emit a warning if we haven't emitted one yet
+	if !deprecationWarningsEmitted[name] {
+		deprecationWarningsEmitted[name] = true
+		fmt.Fprintf(os.Stderr, "Flag --%s has been deprecated, use --%s instead \n", name, normalizedName)
+	}
+
+	return pflag.NormalizedName(normalizedName)
 }

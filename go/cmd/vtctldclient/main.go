@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	_flag "vitess.io/vitess/go/internal/flag"
+	flagUtils "vitess.io/vitess/go/vt/utils"
 )
 
 func main() {
@@ -56,6 +57,7 @@ func main() {
 	// hack to get rid of an "ERROR: logging before flag.Parse"
 	_flag.TrickGlog()
 
+	command.Root.SetGlobalNormalizationFunc(flagUtils.NormalizeUnderscoresToDashes)
 	// back to your regularly scheduled cobra programming
 	if err := command.Root.Execute(); err != nil {
 		log.Error(fmt.Sprint(err))

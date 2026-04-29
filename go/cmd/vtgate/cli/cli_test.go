@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/utils"
 )
 
 // TestExecute exercises the cobra Execute() path (PreRunE → RunE) with different
@@ -40,6 +41,8 @@ func TestExecute(t *testing.T) {
 	t.Cleanup(func() {
 		os.Args = append([]string{}, args...)
 	})
+
+	Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 
 	t.Run("help succeeds", func(t *testing.T) {
 		os.Args = []string{"vtgate", "--help"}
