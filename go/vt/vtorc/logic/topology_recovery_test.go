@@ -35,12 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-<<<<<<< HEAD
-||||||| parent of 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
-=======
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
->>>>>>> 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -471,7 +465,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			info: []*test.InfoForRecoveryAnalysis{
 				{
 					TabletInfo: &topodatapb.Tablet{
-						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
 						Hostname:      "localhost",
 						Keyspace:      "ks",
 						Shard:         "0",
@@ -497,7 +491,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				},
 				{
 					TabletInfo: &topodatapb.Tablet{
-						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
 						Hostname:      "localhost",
 						Keyspace:      "ks",
 						Shard:         "0",
@@ -507,7 +501,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 					},
 					DurabilityPolicy: policy.DurabilitySemiSync,
 					PrimaryTabletInfo: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
 					},
 					LastCheckValid:         1,
 					ReadOnly:               1,
@@ -595,7 +589,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 }
 
 func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
-	primaryAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	primaryAlias := topoproto.TabletAliasString(&topodatapb.TabletAlias{Cell: "zone1", Uid: 100})
 
 	tests := []struct {
 		name        string
@@ -632,7 +626,7 @@ func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
 			ignored := shardWideRecoveryIgnoredTablets(recoverDeadPrimaryFunc, entry)
 			if tt.wantIgnored {
 				require.Len(t, ignored, 1)
-				assert.True(t, topoproto.TabletAliasEqual(ignored[0], primaryAlias))
+				assert.Equal(t, primaryAlias, ignored[0])
 			} else {
 				assert.Empty(t, ignored)
 			}

@@ -66,21 +66,11 @@ func declaresAfter(shardWideProblem *DetectionAnalysisProblem, code AnalysisCode
 }
 
 type clusterAnalysis struct {
-<<<<<<< HEAD
-	hasShardWideAction bool
-	totalTablets       int
-	primaryAlias       string
-||||||| parent of 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
-	hasShardWideAction bool
-	totalTablets       int
-	primaryAlias       *topodatapb.TabletAlias
-=======
 	hasShardWideAction    bool
 	shardWideAnalysisCode AnalysisCode
 	shardWideProblem      *DetectionAnalysisProblem
 	totalTablets          int
-	primaryAlias          *topodatapb.TabletAlias
->>>>>>> 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
+	primaryAlias          string
 
 	// primaryTimestamp is the most recent primary term start time observed for the shard.
 	primaryTimestamp time.Time

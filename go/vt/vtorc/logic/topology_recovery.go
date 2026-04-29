@@ -745,8 +745,8 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 // are skipped because they are unreachable; reachable-but-unhealthy primaries
 // (PrimarySemiSyncBlocked, PrimaryDiskStalled) are NOT skipped so that
 // checkIfAlreadyFixed evaluates fresh state.
-func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, analysisEntry *inst.DetectionAnalysis) []*topodatapb.TabletAlias {
-	var tabletsToIgnore []*topodatapb.TabletAlias
+func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, analysisEntry *inst.DetectionAnalysis) []string {
+	var tabletsToIgnore []string
 	if recoveryFunctionCode == recoverDeadPrimaryFunc {
 		switch analysisEntry.Analysis {
 		case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled:
@@ -876,22 +876,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility
 		// before we run a shard-wide operation of our own.
 		if isShardWideRecovery(checkAndRecoverFunctionCode) {
-<<<<<<< HEAD
-			var tabletsToIgnore []string
-			if checkAndRecoverFunctionCode == recoverDeadPrimaryFunc {
-				tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
-			}
-			// We ignore the dead primary tablet because it is going to be unreachable. If all the other tablets aren't able to reach this tablet either,
-||||||| parent of 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
-			tabletsToIgnore := make([]*topodatapb.TabletAlias, 0)
-			if checkAndRecoverFunctionCode == recoverDeadPrimaryFunc {
-				tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
-			}
-			// We ignore the dead primary tablet because it is going to be unreachable. If all the other tablets aren't able to reach this tablet either,
-=======
 			tabletsToIgnore := shardWideRecoveryIgnoredTablets(checkAndRecoverFunctionCode, analysisEntry)
 			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
->>>>>>> 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
 			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
 			logger.Info("Force refreshing all shard tablets")
 			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
@@ -995,35 +981,15 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 		return err
 	}
 
-<<<<<<< HEAD
-	// The original analysis for the tablet has changed.
-	// This could mean that either the original analysis has changed or some other Vtorc instance has already performing the mitigation.
-	// In either case, the original analysis is stale which can be safely aborted.
-	if recoveryRequired {
-		log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
-		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
-		// original analysis is stale, abort.
-		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
-||||||| parent of 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
-	// The original analysis for the tablet has changed.
-	// This could mean that either the original analysis has changed or some other Vtorc instance has already performing the mitigation.
-	// In either case, the original analysis is stale which can be safely aborted.
-	if recoveryRequired {
-		log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
-		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
-		// original analysis is stale, abort.
-		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
-=======
 	if !alreadyFixed {
 		return nil
->>>>>>> 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
 	}
 
 	// The original analysis for the tablet has changed.
 	// This could mean that either the original analysis has changed or some other
 	// VTOrc instance has already performing the mitigation.
 	// In either case, the original analysis is stale which can be safely aborted.
-	log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
+	log.Infof("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias)
 	recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
 	return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 }
