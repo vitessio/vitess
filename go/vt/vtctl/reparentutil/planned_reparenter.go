@@ -754,6 +754,9 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 	for tblStr, info := range tabletMap {
 		tablet := info.Tablet
 		tabletAlias := tblStr
+		if tablet.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
 		errorGroup.Go(func() error {
 			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{InnodbBufferPoolsDataVar})
 			if err != nil {
