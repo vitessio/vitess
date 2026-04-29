@@ -25,7 +25,9 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -85,6 +87,12 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	}
 	defer tm.unlock()
 
+	// Reject any CREATE TABLE that would push the schema engine past its
+	// configured table-count limit before we touch mysqld.
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.QueryServiceControl.SchemaEngine(), change.SQL); err != nil {
+		return nil, err
+	}
+
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(tm.Tablet())
 
@@ -97,4 +105,25 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	// and if it worked, reload the schema
 	tm.ReloadSchema(ctx, "") //nolint:errcheck
 	return scr, nil
+}
+
+// checkCreateTableLimitForSQL splits the given multi-statement SQL into
+// individual statements and applies the schema engine's CREATE TABLE
+// table-count gate to each one. Statements that fail to parse are skipped
+// so we never reject otherwise-valid SQL on parser quirks.
+func checkCreateTableLimitForSQL(parser *sqlparser.Parser, se *schema.Engine, sql string) error {
+	queries, err := parser.SplitStatementToPieces(sql)
+	if err != nil {
+		return nil
+	}
+	for _, query := range queries {
+		stmt, parseErr := parser.Parse(query)
+		if parseErr != nil {
+			continue
+		}
+		if err := schema.CheckCreateTableLimit(se, stmt); err != nil {
+			return err
+		}
+	}
+	return nil
 }

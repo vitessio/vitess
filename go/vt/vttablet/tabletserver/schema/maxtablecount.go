@@ -21,6 +21,10 @@ import (
 
 	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var maxTableCountSetting = viperutil.Configure(
@@ -51,4 +55,47 @@ func MaxTableCount() int {
 // tests; production updates flow through Viper's normal config channels.
 func SetMaxTableCount(n int) {
 	maxTableCountSetting.Set(n)
+}
+
+// CheckCreateTableLimit returns an error if running stmt would push the
+// schema engine past its configured table-count limit. It is a no-op for
+// statements that are not a non-temporary CREATE TABLE for a brand-new
+// table, and for nil engines (which can occur in tests or unconfigured
+// callers).
+//
+// The check is best-effort under concurrency: two callers can each see the
+// count below the limit and both create tables, briefly leaving the count
+// at limit+1. Schema reload tolerates this — the gate's purpose is to give
+// a clear error in the common single-client case rather than to enforce
+// strict admission.
+//
+// TableCount is per-engine instance state; MaxTableCount is the
+// process-wide Viper-managed limit, hence the asymmetric calls.
+func CheckCreateTableLimit(se *Engine, stmt sqlparser.Statement) error {
+	if se == nil {
+		return nil
+	}
+	create, ok := stmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil
+	}
+	// Temporary tables are session-scoped and not tracked in the schema
+	// engine, so they don't contribute to the count.
+	if create.Temp {
+		return nil
+	}
+	// If the target table is already in the engine's schema, this CREATE is
+	// either a no-op (with IF NOT EXISTS) or will fail downstream in MySQL
+	// (without IF NOT EXISTS). Either way the count cannot increase.
+	if se.GetTable(create.Table.Name) != nil {
+		return nil
+	}
+	if count, limit := se.TableCount(), MaxTableCount(); count >= limit {
+		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
+			"cannot create table %q: schema engine table limit of %d reached. "+
+				"Increase --queryserver-config-schema-max-table-count and ensure "+
+				"vttablet and mysqld have enough memory for a larger schema.",
+			sqlparser.String(create.Table), limit)
+	}
+	return nil
 }

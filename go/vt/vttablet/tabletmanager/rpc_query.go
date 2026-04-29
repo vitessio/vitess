@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -118,6 +119,22 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if validateQueries != nil {
 		if err := validateQueries(queries, countCreate); err != nil {
 			return nil, err
+		}
+	}
+	// Reject any CREATE TABLE that would exceed the schema engine's
+	// table-count limit before we open a transaction with mysqld. countCreate
+	// also includes CREATE VIEW, but CheckCreateTableLimit filters non-table
+	// statements internally.
+	if countCreate > 0 {
+		se := tm.QueryServiceControl.SchemaEngine()
+		for _, query := range queries {
+			stmt, parseErr := tm.Env.Parser().Parse(query)
+			if parseErr != nil {
+				continue
+			}
+			if err := schema.CheckCreateTableLimit(se, stmt); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if allowZeroInDate {
