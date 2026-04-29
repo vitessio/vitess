@@ -1,5 +1,4 @@
 # Release of Vitess v24.0.0
-# Release of Vitess v24.0.0
 
 ## Summary
 
@@ -265,21 +264,21 @@ Vitess now supports [OpenTelemetry](https://opentelemetry.io/) as a tracing back
 - `--otel-insecure` (default `false`): use insecure connection to the collector.
 - `--tracing-sampling-rate` (default `0.1`): sampling rate for traces (shared across all tracing backends).
 
-Any OTEL-compatible backend (Jaeger v1.35+, Grafana Tempo, Datadog Agent, etc.) can receive these traces.
+Any OTLP-compatible backend (Jaeger v1.35+, Grafana Tempo, Datadog Agent, etc.) can receive these traces.
 
 #### <a id="tracing-opentracing-deprecation"/>Deprecation of OpenTracing-based tracing backends</a>
 
 The following tracing backends are deprecated as of v24 and will be removed in v25:
 
-- `opentracing-jaeger` — Uses the [Jaeger client-go](https://github.com/uber/jaeger-client-go) library, which has been archived. The Jaeger project [recommends migrating to OpenTelemetry](https://www.jaegertracing.io/docs/next-release/getting-started/#migrating-from-jaeger-clients-to-opentelemetry-sdk). Users should migrate to `--tracer opentelemetry` with an OTEL-compatible Jaeger endpoint (v1.35+).
-- `opentracing-datadog` — Uses the OpenTracing bridge in `dd-trace-go`. Users should migrate to `--tracer opentelemetry` with the Datadog Agent's OTEL ingestion endpoint.
+- `opentracing-jaeger` — Uses the [Jaeger client-go](https://github.com/uber/jaeger-client-go) library, which has been archived. The Jaeger project [recommends migrating to OpenTelemetry](https://www.jaegertracing.io/docs/next-release/getting-started/#migrating-from-jaeger-clients-to-opentelemetry-sdk). Users should migrate to `--tracer opentelemetry` with an OTLP-compatible Jaeger endpoint (v1.35+).
+- `opentracing-datadog` — Uses the OpenTracing bridge in `dd-trace-go`. Users should migrate to `--tracer opentelemetry` with the Datadog Agent's OTLP ingestion endpoint.
 
 The `--tracer opentracing-jaeger` and `--tracer opentracing-datadog` options continue to work in v24 but will log a deprecation warning at startup. The following Jaeger-specific flags are also deprecated and will be removed in v25:
 
 - `--jaeger-agent-host`
 - `--tracing-sampling-type`
 
-**Migration**: Replace `--tracer opentracing-jaeger` with `--tracer opentelemetry` and `--jaeger-agent-host host:port` with `--otel-endpoint host:4317`. Ensure your Jaeger deployment accepts OTEL (Jaeger v1.35+ listens on port 4317 by default).
+**Migration**: Replace `--tracer opentracing-jaeger` with `--tracer opentelemetry` and `--jaeger-agent-host host:port` with `--otel-endpoint host:4317`. Ensure your Jaeger deployment accepts OTLP (Jaeger v1.35+ listens on port 4317 by default).
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
