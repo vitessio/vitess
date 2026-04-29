@@ -242,6 +242,49 @@ func TestCheckCreateTableLimit(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("drop temporary table does not free persistent table slot", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"drop temporary table if exists a",
+			"create table c (id int primary key)",
+		), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+	})
+
+	t.Run("rename then recreate old name at limit rejects", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		withLimit(t, 1)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"rename table a to b",
+			"create table a (id int primary key)",
+		), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 1 reached")
+	})
+
+	t.Run("alter rename then recreate old name at limit rejects", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		withLimit(t, 1)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"alter table a rename to b",
+			"create table a (id int primary key)",
+		), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 1 reached")
+	})
+
 	t.Run("create then drop same table within batch passes when under limit", func(t *testing.T) {
 		// 1 existing, limit 2. Create c (running=2), drop c (running=1),
 		// create d (running=2), drop d (running=1). Running count never
@@ -399,6 +442,35 @@ func TestCheckCreateTableLimit(t *testing.T) {
 		withLimit(t, 2)
 
 		err := CheckCreateTableLimit(se, stmts(t, "drop table a"), 1)
+		assert.NoError(t, err)
+	})
+
+	t.Run("ordered parse failure before drop rejects at limit", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimitForQueries(se, parser, []string{
+			"vitess parser cannot parse this",
+			"drop table a",
+		})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 would be exceeded")
+	})
+
+	t.Run("ordered parse failure after drop uses freed slot", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimitForQueries(se, parser, []string{
+			"drop table a",
+			"vitess parser cannot parse this",
+		})
 		assert.NoError(t, err)
 	})
 }

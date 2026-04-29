@@ -36,6 +36,15 @@ var maxTableCountSetting = viperutil.Configure(
 	},
 )
 
+type (
+	// tableLimitCheckStep preserves execution order across parsed and
+	// unparseable SQL pieces.
+	tableLimitCheckStep struct {
+		stmt        sqlparser.Statement
+		parseFailed bool
+	}
+)
+
 func init() {
 	servenv.OnParseFor("vttablet", registerSchemaFlags)
 	servenv.OnParseFor("vtcombo", registerSchemaFlags)
@@ -75,8 +84,10 @@ func SetMaxTableCount(n int) {
 //     change the count.
 //   - parseFailures is the number of statements in the original input that
 //     the caller could not parse. vttablet cannot tell whether each one
-//     would have been a CREATE TABLE, so each is treated as a worst-case
-//     potential CREATE TABLE for limit-checking purposes.
+//     would have been a CREATE TABLE, so each is treated as a worst-case,
+//     trailing potential CREATE TABLE for limit-checking purposes. Callers
+//     with SQL pieces should use CheckCreateTableLimitForQueries to preserve
+//     the original statement order.
 //   - A nil engine, an empty statement list with parseFailures == 0, or a
 //     batch whose net new-table effect fits within the limit is a no-op.
 //
@@ -89,6 +100,34 @@ func SetMaxTableCount(n int) {
 // TableCount is per-engine instance state; MaxTableCount is the
 // process-wide Viper-managed limit, hence the asymmetric calls.
 func CheckCreateTableLimit(se *Engine, stmts []sqlparser.Statement, parseFailures int) error {
+	steps := make([]tableLimitCheckStep, 0, len(stmts)+parseFailures)
+	for _, stmt := range stmts {
+		steps = append(steps, tableLimitCheckStep{stmt: stmt})
+	}
+	for range parseFailures {
+		steps = append(steps, tableLimitCheckStep{parseFailed: true})
+	}
+	return checkCreateTableLimitSteps(se, steps)
+}
+
+// CheckCreateTableLimitForQueries parses SQL pieces in order so unparseable
+// statements are checked at the same point MySQL would execute them.
+func CheckCreateTableLimitForQueries(se *Engine, parser *sqlparser.Parser, queries []string) error {
+	steps := make([]tableLimitCheckStep, 0, len(queries))
+	for _, query := range queries {
+		stmt, err := parser.Parse(query)
+		if err != nil {
+			steps = append(steps, tableLimitCheckStep{parseFailed: true})
+			continue
+		}
+		steps = append(steps, tableLimitCheckStep{stmt: stmt})
+	}
+	return checkCreateTableLimitSteps(se, steps)
+}
+
+// checkCreateTableLimitSteps applies the limit check to an already ordered
+// stream of parsed statements and worst-case parse failures.
+func checkCreateTableLimitSteps(se *Engine, steps []tableLimitCheckStep) error {
 	if se == nil {
 		return nil
 	}
@@ -105,26 +144,53 @@ func CheckCreateTableLimit(se *Engine, stmts []sqlparser.Statement, parseFailure
 		}
 		return se.GetTable(name) != nil
 	}
+	createTable := func(tableName sqlparser.TableName) error {
+		if isPresent(tableName.Name) {
+			return nil
+		}
+		running++
+		pendingState[tableName.Name.String()] = true
+		if running > limit {
+			return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
+				"cannot create table %q: schema engine table limit of %d reached. "+
+					"Increase --queryserver-config-schema-max-table-count and ensure "+
+					"vttablet and mysqld have enough memory for a larger schema.",
+				sqlparser.String(tableName), limit)
+		}
+		return nil
+	}
+	renameTable := func(fromTable, toTable sqlparser.TableName) {
+		if !isPresent(fromTable.Name) || isPresent(toTable.Name) {
+			return
+		}
+		pendingState[fromTable.Name.String()] = false
+		pendingState[toTable.Name.String()] = true
+	}
 
-	for _, stmt := range stmts {
-		switch s := stmt.(type) {
+	for _, step := range steps {
+		if step.parseFailed {
+			running++
+			if running > limit {
+				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
+					"schema engine table limit of %d would be exceeded by this batch (running count: %d, unparseable statement treated as potential CREATE TABLE). "+
+						"Increase --queryserver-config-schema-max-table-count, free space by dropping unused tables, or rephrase the unparseable statement.",
+					limit, running-1)
+			}
+			continue
+		}
+
+		switch s := step.stmt.(type) {
 		case *sqlparser.CreateTable:
 			if s.Temp {
 				continue
 			}
-			if isPresent(s.Table.Name) {
-				continue
-			}
-			running++
-			pendingState[s.Table.Name.String()] = true
-			if running > limit {
-				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
-					"cannot create table %q: schema engine table limit of %d reached. "+
-						"Increase --queryserver-config-schema-max-table-count and ensure "+
-						"vttablet and mysqld have enough memory for a larger schema.",
-					sqlparser.String(s.Table), limit)
+			if err := createTable(s.Table); err != nil {
+				return err
 			}
 		case *sqlparser.DropTable:
+			if s.Temp {
+				continue
+			}
 			for _, tbl := range s.FromTables {
 				if !isPresent(tbl.Name) {
 					continue
@@ -132,17 +198,15 @@ func CheckCreateTableLimit(se *Engine, stmts []sqlparser.Statement, parseFailure
 				running--
 				pendingState[tbl.Name.String()] = false
 			}
+		case *sqlparser.RenameTable:
+			for _, pair := range s.TablePairs {
+				renameTable(pair.FromTable, pair.ToTable)
+			}
+		case *sqlparser.AlterTable:
+			for _, toTable := range s.GetToTables() {
+				renameTable(s.Table, toTable)
+			}
 		}
-	}
-
-	// Worst-case accounting for unparseable statements: each could be a
-	// CREATE TABLE that mysqld accepts. Treat them as potential creations
-	// added on top of the simulated running count.
-	if parseFailures > 0 && running+parseFailures > limit {
-		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
-			"schema engine table limit of %d would be exceeded by this batch (running count: %d, %d unparseable statement(s) treated as potential CREATE TABLEs). "+
-				"Increase --queryserver-config-schema-max-table-count, free space by dropping unused tables, or rephrase the unparseable statement(s).",
-			limit, running, parseFailures)
 	}
 	return nil
 }
