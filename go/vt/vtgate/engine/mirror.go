@@ -93,11 +93,12 @@ func (m *percentBasedMirror) TryExecute(ctx context.Context, vcursor VCursor, bi
 		return r, err
 	}
 
-	// Slot reserved — fire the mirror in the background. Use a detached
-	// context so it is not cancelled when this function returns the primary
-	// result. The cloned VCursor has an independent SafeSession and logStats,
-	// so it is safe to use after the primary request completes.
-	mirrorCtx, mirrorCancel := context.WithTimeout(context.Background(), maxMirrorTargetDuration)
+	// Slot reserved — fire the mirror in the background. WithoutCancel
+	// detaches the mirror from caller cancellation while preserving
+	// request-scoped values (callerid, tracing) so mirrored queries remain
+	// attributable. The cloned VCursor has an independent SafeSession and
+	// logStats, so it is safe to use after the primary request completes.
+	mirrorCtx, mirrorCancel := context.WithTimeout(context.WithoutCancel(ctx), maxMirrorTargetDuration)
 	mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 	go func() {
 		// recover defer is registered first so it runs LAST in the LIFO
@@ -132,7 +133,7 @@ func (m *percentBasedMirror) TryStreamExecute(ctx context.Context, vcursor VCurs
 		return err
 	}
 
-	mirrorCtx, mirrorCancel := context.WithTimeout(context.Background(), maxMirrorTargetDuration)
+	mirrorCtx, mirrorCancel := context.WithTimeout(context.WithoutCancel(ctx), maxMirrorTargetDuration)
 	mirrorVCursor := vcursor.CloneForMirroring(mirrorCtx)
 	go func() {
 		defer recoverMirrorPanic(mirrorVCursor)

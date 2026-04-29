@@ -322,6 +322,7 @@ func TestMirror(t *testing.T) {
 		select {
 		case <-mirrorStatsDone:
 		case <-time.After(5 * time.Second):
+			require.Fail(t, "mirror goroutine did not finish recording stats")
 		}
 	})
 
@@ -557,6 +558,7 @@ func TestMirror(t *testing.T) {
 		select {
 		case <-mirrorStatsDone:
 		case <-time.After(5 * time.Second):
+			require.Fail(t, "mirror goroutine did not finish recording stats")
 		}
 	})
 }
