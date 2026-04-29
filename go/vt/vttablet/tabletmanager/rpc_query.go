@@ -59,26 +59,35 @@ func checkCreateTableLimitForSQL(parser *sqlparser.Parser, se *schema.Engine, sq
 	return schema.CheckCreateTableLimitForQueries(se, parser, queries)
 }
 
-// analyzeExecuteFetchAsDbaMultiQuery reutrns 'true' when at least one of the queries
-// in the given SQL has a `/*vt+ allowZeroInDate=true */` directive.
-func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (queries []string, parseable bool, countCreate int, allowZeroInDate bool, err error) {
+// analyzeExecuteFetchAsDbaMultiQuery splits and parses sql, returning the
+// individual queries and their parsed AST. parsedStmts has the same length
+// as queries; nil entries indicate statements that failed to parse (which
+// is legitimate for some DDL, e.g. `CHANGE REPLICATION SOURCE TO...`).
+// parseable is false iff any statement failed to parse. allowZeroInDate is
+// true iff any parsed statement carries the `/*vt+ allowZeroInDate=true */`
+// directive.
+func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (queries []string, parsedStmts []sqlparser.Statement, parseable bool, countCreate int, allowZeroInDate bool, err error) {
 	queries, err = parser.SplitStatementToPieces(sql)
 	if err != nil {
-		return nil, false, 0, false, err
+		return nil, nil, false, 0, false, err
 	}
 	if len(queries) == 0 {
-		return nil, false, 0, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no statements found in query: %s", sql)
+		return nil, nil, false, 0, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no statements found in query: %s", sql)
 	}
+	parsedStmts = make([]sqlparser.Statement, len(queries))
 	parseable = true
-	for _, query := range queries {
+	for i, query := range queries {
 		// Some of the queries we receive here are legitimately non-parseable by our
 		// current parser, such as `CHANGE REPLICATION SOURCE TO...`. We must allow
-		// them and so we skip parsing errors.
-		stmt, err := parser.Parse(query)
-		if err != nil {
+		// them and so we skip parsing errors. The corresponding parsedStmts[i]
+		// stays nil so downstream callers can recognize the parse failure in
+		// place.
+		stmt, parseErr := parser.Parse(query)
+		if parseErr != nil {
 			parseable = false
 			continue
 		}
+		parsedStmts[i] = stmt
 		switch stmt.(type) {
 		case *sqlparser.CreateTable, *sqlparser.CreateView:
 			countCreate++
@@ -92,7 +101,7 @@ func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (q
 			}
 		}
 	}
-	return queries, parseable, countCreate, allowZeroInDate, nil
+	return queries, parsedStmts, parseable, countCreate, allowZeroInDate, nil
 }
 
 // ExecuteMultiFetchAsDba will execute the given queries, possibly disabling binlogs and reload schema.
@@ -138,7 +147,7 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
 	}
 
-	queries, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
+	queries, parsedStmts, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -149,11 +158,12 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	}
 	// Reject any CREATE TABLEs that would collectively exceed the schema
 	// engine's table-count limit before we open a transaction with mysqld.
-	// countCreate also includes CREATE VIEW; CheckCreateTableLimit ignores
-	// non-table statements internally. Unparseable statements are treated as
-	// worst-case potential CREATE TABLEs in their original execution order.
+	// countCreate also includes CREATE VIEW; the gate ignores non-table
+	// statements internally. Unparseable statements that look like persistent
+	// CREATE TABLEs are treated as worst-case potential table creations in
+	// their original execution order.
 	if countCreate > 0 || !parseable {
-		if err := schema.CheckCreateTableLimitForQueries(tm.schemaEngine(), tm.Env.Parser(), queries); err != nil {
+		if err := schema.CheckCreateTableLimitForParsedStatements(tm.schemaEngine(), tm.Env.Parser(), queries, parsedStmts); err != nil {
 			return nil, err
 		}
 	}

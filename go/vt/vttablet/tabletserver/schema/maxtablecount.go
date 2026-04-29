@@ -117,12 +117,52 @@ func CheckCreateTableLimitForQueries(se *Engine, parser *sqlparser.Parser, queri
 	for _, query := range queries {
 		stmt, err := parser.Parse(query)
 		if err != nil {
-			steps = append(steps, tableLimitCheckStep{parseFailed: true})
+			if queryCouldCreatePersistentTable(parser, query) {
+				steps = append(steps, tableLimitCheckStep{parseFailed: true})
+			}
 			continue
 		}
 		steps = append(steps, tableLimitCheckStep{stmt: stmt})
 	}
 	return checkCreateTableLimitSteps(se, steps)
+}
+
+// CheckCreateTableLimitForParsedStatements lets callers reuse parse results
+// while still checking parse failures against their original SQL text.
+func CheckCreateTableLimitForParsedStatements(se *Engine, parser *sqlparser.Parser, queries []string, stmts []sqlparser.Statement) error {
+	steps := make([]tableLimitCheckStep, 0, len(stmts))
+	for i, stmt := range stmts {
+		if stmt == nil {
+			if i >= len(queries) || queryCouldCreatePersistentTable(parser, queries[i]) {
+				steps = append(steps, tableLimitCheckStep{parseFailed: true})
+			}
+			continue
+		}
+		steps = append(steps, tableLimitCheckStep{stmt: stmt})
+	}
+	return checkCreateTableLimitSteps(se, steps)
+}
+
+// queryCouldCreatePersistentTable keeps parser failures from blocking
+// unrelated DBA statements while preserving conservative CREATE TABLE handling.
+func queryCouldCreatePersistentTable(parser *sqlparser.Parser, query string) bool {
+	tokenizer := parser.NewStringTokenizer(query)
+	nextToken := func() int {
+		for {
+			token, _ := tokenizer.Scan()
+			if token != sqlparser.COMMENT {
+				return token
+			}
+		}
+	}
+	if nextToken() != sqlparser.CREATE {
+		return false
+	}
+	token := nextToken()
+	if token == sqlparser.TEMPORARY {
+		return false
+	}
+	return token == sqlparser.TABLE
 }
 
 // checkCreateTableLimitSteps applies the limit check to an already ordered
@@ -174,7 +214,7 @@ func checkCreateTableLimitSteps(se *Engine, steps []tableLimitCheckStep) error {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
 					"schema engine table limit of %d would be exceeded by this batch (running count: %d, unparseable statement treated as potential CREATE TABLE). "+
 						"Increase --queryserver-config-schema-max-table-count, free space by dropping unused tables, or rephrase the unparseable statement.",
-					limit, running-1)
+					limit, running)
 			}
 			continue
 		}
