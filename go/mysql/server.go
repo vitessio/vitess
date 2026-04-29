@@ -23,7 +23,6 @@ import (
 	"io"
 	"net"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -211,22 +210,6 @@ type Listener struct {
 	// shutdown indicates that Shutdown method was called.
 	shutdown atomic.Bool
 
-	// mu guards closed and conns, and is the synchronization point for
-	// handlerWG.Add: callers that increment the WaitGroup must do so under mu
-	// while !closed, so that Close can safely wait without racing with Add.
-	mu sync.Mutex
-
-	// closed is true after Close or Shutdown has closed the underlying listener.
-	closed bool
-
-	// conns tracks active server-side connections so that Close can force-close
-	// them and unblock handler goroutines parked in (*Conn).readHeaderFrom.
-	conns map[uint32]net.Conn
-
-	// handlerWG tracks handler goroutines spawned by Accept so that Close can
-	// wait for them to exit.
-	handlerWG sync.WaitGroup
-
 	// RequireSecureTransport configures the server to reject connections from insecure clients
 	RequireSecureTransport bool
 
@@ -346,7 +329,6 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		multiQuery:          cfg.MultiQuery,
 		truncateErrLen:      cfg.Handler.Env().TruncateErrLen(),
 		charset:             cfg.Handler.Env().CollationEnv().DefaultConnectionCharset(),
-		conns:               make(map[uint32]net.Conn),
 	}, nil
 }
 
@@ -369,32 +351,13 @@ func (l *Listener) Accept() {
 
 		acceptTime := time.Now()
 
-		// Reserve a WaitGroup slot and register the conn under l.mu so Close
-		// (which sets closed=true under the same lock before calling Wait) can
-		// neither race with Add(1) nor miss this conn for force-close.
-		l.mu.Lock()
-		if l.closed {
-			l.mu.Unlock()
-			conn.Close()
-			return
-		}
 		connectionID := l.connectionID
 		l.connectionID++
-		l.handlerWG.Add(1)
-		l.conns[connectionID] = conn
-		l.mu.Unlock()
 
 		connCount.Add(1)
 		connAccept.Add(1)
 
 		go func() {
-			defer l.handlerWG.Done()
-			defer func() {
-				l.mu.Lock()
-				delete(l.conns, connectionID)
-				l.mu.Unlock()
-			}()
-
 			if l.PreHandleFunc != nil {
 				conn, err = l.PreHandleFunc(ctx, conn, connectionID)
 				if err != nil {
@@ -607,41 +570,16 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	}
 }
 
-// Close stops the listener, force-closes any active server-side connections,
-// and waits for all in-flight handler goroutines to exit. It is idempotent and
-// safe to call after Shutdown.
+// Close stops the listener, which prevents accept of any new connections. Existing connections won't be closed.
 func (l *Listener) Close() {
-	l.mu.Lock()
-	if !l.closed {
-		l.closed = true
-		l.listener.Close()
-	}
-	snapshot := make([]net.Conn, 0, len(l.conns))
-	for _, c := range l.conns {
-		snapshot = append(snapshot, c)
-	}
-	l.conns = nil
-	l.mu.Unlock()
-
-	for _, c := range snapshot {
-		_ = c.Close()
-	}
-	l.handlerWG.Wait()
+	l.listener.Close()
 }
 
-// Shutdown closes the listener (preventing new connections) and fails any Ping
-// requests from existing connections, but leaves established connections open
-// so clients can observe the graceful "Server shutdown in progress" reply and
-// reconnect elsewhere. Callers that need to wait for handler goroutines to
-// drain — and force-close stragglers — should follow with Close.
+// Shutdown closes listener and fails any Ping requests from existing connections.
+// This can be used for graceful shutdown, to let clients know that they should reconnect to another server.
 func (l *Listener) Shutdown() {
 	if l.shutdown.CompareAndSwap(false, true) {
-		l.mu.Lock()
-		if !l.closed {
-			l.closed = true
-			l.listener.Close()
-		}
-		l.mu.Unlock()
+		l.Close()
 	}
 }
 
