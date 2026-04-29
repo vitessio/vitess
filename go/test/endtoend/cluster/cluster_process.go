@@ -295,7 +295,7 @@ func (cluster *LocalProcessCluster) StartVTOrc(cell, keyspace string) error {
 		return err
 	}
 	if keyspace != "" {
-		vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, fmt.Sprintf(`--clusters_to_watch="%s"`, keyspace))
+		vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, fmt.Sprintf(`--clusters-to-watch="%s"`, keyspace))
 	}
 	cluster.VTOrcProcesses = append(cluster.VTOrcProcesses, vtorcProcess)
 	return nil
