@@ -592,6 +592,12 @@ func (qre *QueryExecutor) recordACLStats(key []string, aclState acl.ACLState) {
 }
 
 func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Result, err error) {
+	// Reject CREATE TABLE before reaching MySQL if it would push the schema
+	// engine past its configured table-count limit.
+	if err := qre.checkCreateTableLimit(); err != nil {
+		return nil, err
+	}
+
 	// Let's see if this is a normal DDL statement or an Online DDL statement.
 	// An Online DDL statement is identified by /*vt+ .. */ comment with expected directives, like uuid etc.
 	if onlineDDL, err := schema.OnlineDDLFromCommentedStatement(qre.plan.FullStmt); err == nil {
@@ -649,6 +655,41 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		}
 	}
 	return qre.execStatefulConn(conn, sql, true)
+}
+
+// checkCreateTableLimit rejects a CREATE TABLE that would exceed the
+// schema engine's configured table-count limit. A nil return means either
+// the statement is not a CREATE TABLE, the new table would not increase
+// the count, or there is room within the limit.
+func (qre *QueryExecutor) checkCreateTableLimit() error {
+	stmt, ok := qre.plan.FullStmt.(*sqlparser.CreateTable)
+	if !ok {
+		return nil
+	}
+	// Temporary tables are session-scoped and not tracked in the schema
+	// engine, so they don't contribute to the count.
+	if stmt.Temp {
+		return nil
+	}
+	// If the target table is already in the engine's schema, this CREATE is
+	// either a no-op (with IF NOT EXISTS) or will fail downstream in MySQL
+	// (without IF NOT EXISTS). Either way the count cannot increase.
+	if qre.tsv.se.GetTable(stmt.Table.Name) != nil {
+		return nil
+	}
+	// TableCount is per-engine instance state; MaxTableCount is the
+	// process-wide Viper-managed limit, hence the asymmetric calls.
+	// The two reads are not atomic: a concurrent CREATE could land at limit+1
+	// before the next reload notices. Acceptable — the gate's purpose is to
+	// give a clear error in the common single-client case.
+	if count, limit := qre.tsv.se.TableCount(), eschema.MaxTableCount(); count >= limit {
+		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
+			"cannot create table %q: schema engine table limit of %d reached. "+
+				"Increase --queryserver-config-schema-max-table-count and ensure "+
+				"vttablet and mysqld have enough memory for a larger schema.",
+			sqlparser.String(stmt.Table), limit)
+	}
+	return nil
 }
 
 func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, error) {

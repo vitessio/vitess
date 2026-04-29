@@ -48,6 +48,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
@@ -556,6 +557,118 @@ func TestDisableOnlineDDL(t *testing.T) {
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
 	require.EqualError(t, err, "online DDL is disabled")
+}
+
+func TestExecDDLSchemaTableCountLimit(t *testing.T) {
+	type setup struct {
+		// limit is what we set the dynamic flag to.
+		limit int
+		// preloadedTables are tables we install in the schema engine before
+		// the test runs (representing the "current" set on disk).
+		preloadedTables []string
+		// query is the DDL to execute.
+		query string
+		// wantErrContains is non-empty if we expect a rejection from our gate.
+		// When empty we expect the gate to let the request through.
+		wantErrContains string
+	}
+	cases := []struct {
+		name string
+		setup
+	}{
+		{
+			name: "below_limit_create_passes_gate",
+			setup: setup{
+				limit:           10,
+				preloadedTables: []string{"a", "b"},
+				query:           "create table c (id int primary key)",
+			},
+		},
+		{
+			name: "at_limit_plain_create_rejected",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create table c (id int primary key)",
+				wantErrContains: "schema engine table limit of 2 reached",
+			},
+		},
+		{
+			name: "at_limit_if_not_exists_on_existing_passes",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create table if not exists a (id int primary key)",
+			},
+		},
+		{
+			name: "at_limit_create_on_existing_passes_gate",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create table a (id int primary key)",
+			},
+		},
+		{
+			name: "at_limit_temporary_passes",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create temporary table c (id int primary key)",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			// Register a pattern so any CREATE TABLE DDL that reaches MySQL
+			// returns an empty success result rather than an "unsupported
+			// query" error.  The deferred schema reload may still encounter
+			// errors for unregistered queries (e.g. SHOW CREATE TABLE), but
+			// those errors are only logged – they do not propagate back
+			// through execDDL.
+			db.AddQueryPattern("create.*", &sqltypes.Result{})
+
+			ctx := context.Background()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
+
+			// Reset the engine's table set so TableCount() exactly equals
+			// len(preloadedTables) when the gate runs. The deferred schema reload
+			// after Execute will repopulate the engine — that is fine, it happens
+			// after the gate check.
+			tsv.se.ResetTablesForTests()
+
+			// Override the dynamic flag for this test only, restoring
+			// whatever value was in effect at entry.
+			originalLimit := eschema.MaxTableCount()
+			eschema.SetMaxTableCount(tc.limit)
+			t.Cleanup(func() { eschema.SetMaxTableCount(originalLimit) })
+
+			// Add the preloaded tables into the schema engine.
+			for _, name := range tc.preloadedTables {
+				tsv.se.SetTableForTests(eschema.NewTable(name, eschema.NoType))
+			}
+
+			qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
+			_, err := qre.Execute()
+
+			if tc.wantErrContains == "" {
+				// Either the request passed our gate (success) or it failed
+				// downstream for unrelated reasons; what matters is that the
+				// error is NOT our limit error.
+				if err != nil {
+					assert.NotContains(t, err.Error(), "schema engine table limit")
+				}
+			} else {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErrContains)
+				assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+			}
+		})
+	}
 }
 
 func TestQueryExecutorLimitFailure(t *testing.T) {
