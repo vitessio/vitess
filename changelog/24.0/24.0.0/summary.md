@@ -1,4 +1,5 @@
 # Release of Vitess v24.0.0
+
 ## Summary
 
 ### Table of Contents
@@ -8,11 +9,11 @@
         - [Window function pushdown for sharded keyspaces](#window-function-pushdown)
         - [View Routing Rules](#view-routing-rules)
         - [Tablet targeting via USE statement](#tablet-targeting)
+        - [VTGate Binlog Streaming Support](#vtgate-binlog-dump)
+        - [Structured logging](#structured-logging)
     - **[Breaking Changes](#breaking-changes)**
         - [External Decompressor No Longer Read from Backup MANIFEST by Default](#vttablet-external-decompressor-manifest)
 - **[Minor Changes](#minor-changes)**
-    - **[Logging](#minor-changes-logging)**
-        - [Structured logging](#structured-logging)
     - **[VReplication](#minor-changes-vreplication)**
         - [`--shards` flag for MoveTables/Reshard start and stop](#vreplication-shards-flag-start-stop)
         - [Automatic tablet retry for tablet-specific errors](#vreplication-tablet-error-retry)
@@ -26,8 +27,6 @@
         - [New Experimental flag `--init-tablet-type-lookup`](#vttablet-init-tablet-type-lookup)
         - [QueryThrottler Observability Metrics](#vttablet-querythrottler-metrics)
         - [QueryThrottler Event-Driven Configuration Updates](#vttablet-querythrottler-config-watch)
-        - [New `in_order_completion_pending_count` field in OnlineDDL outputs](#vttablet-onlineddl-in-order-completion-count)
-        - [Tablet Shutdown Tracking and Connection Validation](#vttablet-tablet-shutdown-validation)
         - [Connection Pool Waiter Cap](#vttablet-conn-pool-waiter-cap)
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[Tracing](#minor-changes-tracing)**
@@ -35,7 +34,6 @@
         - [Deprecation of OpenTracing-based tracing backends](#tracing-opentracing-deprecation)
     - **[VTOrc](#minor-changes-vtorc)**
         - [New `--cell` Flag](#vtorc-cell-flag)
-        - [Improved VTOrc Discovery Logging](#vtorc-improved-discovery-logging)
         - [Ordered Recovery Execution and Semi-Sync Rollout](#vtorc-ordered-recovery-semi-sync)
         - [Deprecated VTOrc Metric Removed](#vtorc-deprecated-metric-removed)
         - [Deprecation of Snapshot Topology feature](#vtorc-snapshot-topology-deprecation)
@@ -105,6 +103,43 @@ Once set, all subsequent queries in the session route to the specified tablet un
 
 Note: A shard must be specified when using tablet targeting. Like shard targeting, this bypasses vindex-based routing, so use with care.
 
+#### <a id="vtgate-binlog-dump"/>Binlog Streaming Support</a>
+
+VTGate now supports GTID-based binlog streaming through two protocols:
+
+- **MySQL protocol**: Clients can connect using the standard MySQL `COM_BINLOG_DUMP_GTID` replication protocol command—no special VStream-aware adapters or direct MySQL access required.
+- **gRPC**: The new `BinlogDumpGTID` streaming RPC in `vtgateservice` provides native gRPC access for custom clients without the MySQL protocol dependency.
+
+Note: Only GTID-based streaming is supported. File/position-based streaming is not available through either `COM_BINLOG_DUMP` or `COM_BINLOG_DUMP_GTID` and returns an error.
+
+This feature is disabled by default. Enable it with `--enable-binlog-dump`.
+
+**New flags:**
+
+- `--enable-binlog-dump`: Enables binlog dump support. Without this flag, binlog dump requests return an error.
+- `--binlog-dump-authorized-users`: Comma-separated list of users authorized to execute binlog dump operations, or `%` to allow all users.
+
+**Requirements:**
+
+When initiating a binlog dump connection, clients must specify:
+- An empty filename
+- A file position (`filepos`) of 4
+- A GTID position
+
+For gRPC clients, specify the keyspace, shard, and optionally the tablet type or tablet alias directly in the `BinlogDumpGTIDRequest`.
+
+**Limitations:**
+
+- Each stream operates on a single tablet—no data aggregation across shards.
+- No automatic failover—if the targeted tablet becomes unavailable, the stream fails and the client must reconnect to a different tablet.
+- Not compatible with `MoveTables` or `Reshard` operations. Use the VStream API for those use cases.
+
+#### <a id="structured-logging"/>Structured logging</a>
+
+Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). For a human-readable format with automatic color detection, pass `--log-format=text`. To revert to the previous `glog` backend, pass `--log-structured=false`.
+
+`glog` is deprecated as of v24 and will be removed in v25.
+
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
 #### <a id="vttablet-external-decompressor-manifest"/>External Decompressor No Longer Read from Backup MANIFEST by Default</a>
@@ -116,14 +151,6 @@ Starting in v24, the `MANIFEST`-based decompressor is ignored unless you explici
 See [#19460](https://github.com/vitessio/vitess/pull/19460) for details.
 
 ## <a id="minor-changes"/>Minor Changes</a>
-
-### <a id="minor-changes-logging"/>Logging</a>
-
-#### <a id="structured-logging"/>Structured logging</a>
-
-Vitess now uses structured JSON logging by default. Log output is emitted as JSON to stderr. To configure the minimum log level, pass `--log-level` (one of `debug`, `info`, `warn`, `error`; default `info`). For a human-readable format with automatic color detection, pass `--log-format=text`. To revert to the previous `glog` backend, pass `--log-structured=false`.
-
-`glog` is deprecated as of v24 and will be removed in v25.
 
 ### <a id="minor-changes-vreplication"/>VReplication</a>
 
@@ -183,7 +210,7 @@ To enable session mode, set the flag when starting VTGate:
 
 The `JSON_EXTRACT` function now supports dynamic path arguments like bind variables or results from other function calls. Previously, `JSON_EXTRACT` only worked with static string literals for path arguments.
 
-Null handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
+NULL handling now matches MySQL behavior. The function returns NULL when either the document or path argument is NULL.
 
 Static path arguments are still optimized, even when mixed with dynamic arguments, so existing queries won't see any performance regression.
 
@@ -195,7 +222,7 @@ The new experimental flag `--init-tablet-type-lookup` for VTTablet allows tablet
 
 When enabled, the tablet uses its alias to look up the tablet type from the existing topology record on restart. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts without manual reconfiguration. If disabled or if no topology record exists, the standard `--init-tablet-type` value will be used instead.
 
-**Note**: Vitess Operator–managed deployments generally do not keep tablet records in the topo between restarts, so this feature will not take effect in those environments.
+**Note**: Vitess Operator–managed deployments generally do not keep matching tablet records in the topo across pod replacements, so this feature will have a more limited effect in those environments.
 
 #### <a id="vttablet-querythrottler-metrics"/>QueryThrottler Observability Metrics</a>
 
@@ -205,8 +232,8 @@ Four new metrics have been added:
 
 - **QueryThrottlerRequests**: Total number of requests evaluated by the query throttler
 - **QueryThrottlerThrottled**: Number of requests that were throttled
-- **QueryThrottlerTotalLatencyNs**: Total time each request takes in query throttling, including evaluation, metric checks, and other overhead (nanoseconds)
-- **QueryThrottlerEvaluateLatencyNs**: Time taken to make the throttling decision (nanoseconds)
+- **QueryThrottlerTotalLatencyNs**: Total time each request takes in query throttling, including evaluation, metric checks, and other overhead (in nanoseconds)
+- **QueryThrottlerEvaluateLatencyNs**: Time taken to make the throttling decision (in nanoseconds)
 
 All metrics include labels for `Strategy`, `Workload`, and `Priority`. The `QueryThrottlerThrottled` metric has additional labels for `MetricName`, `MetricValue`, and `DryRun` to identify which metric triggered the throttling and whether it occurred in dry-run mode.
 
@@ -214,32 +241,17 @@ These metrics help monitor throttling patterns, identify which workloads are thr
 
 #### <a id="vttablet-querythrottler-config-watch"/>QueryThrottler Event-Driven Configuration Updates</a>
 
-QueryThrottler configuration is now stored in `SrvKeyspace` within the topology server and managed using standard topology tools. Previously, tablets polled for configuration changes every 60 seconds. Tablets now use event-driven watches (`WatchSrvKeyspace`) to receive updates immediately when throttling configuration changes. All tablets in a keyspace see configuration changes at roughly the same time, and topology server changes are versioned and auditable.
+QueryThrottler configuration is now propagated to and stored in the `SrvKeyspace` record within the topology server and managed using standard topology tools. Previously, tablets polled for configuration changes every 60 seconds. Tablets now use event-driven watches (`WatchSrvKeyspace`) to receive updates immediately when the query throttling configuration changes. All tablets in a keyspace see configuration changes at roughly the same time, and topology server changes are versioned and auditable.
 
 This change replaces the previous file-based configuration loader with a protobuf-defined configuration structure stored in the topology. The new configuration includes fields for enabling/disabling throttling, selecting the throttling strategy, and configuring strategy-specific rules.
 
-#### <a id="vttablet-onlineddl-in-order-completion-count"/>New `in_order_completion_pending_count` field in OnlineDDL outputs</a>
-
-OnlineDDL migration outputs now include a new `in_order_completion_pending_count` field. When using the `--in-order-completion` flag, this field shows how many migrations must complete before the current migration. The field is visible in `SHOW vitess_migrations` queries and `vtctldclient OnlineDDL <db> show` outputs.
-
-This provides better visibility into migration queue dependencies, making it easier to understand why a migration might be postponed. The count is automatically updated during the scheduler loop and cleared when migrations complete, fail, or are cancelled.
-
-#### <a id="vttablet-tablet-shutdown-validation"/>Tablet Shutdown Tracking and Connection Validation</a>
-
-Vitess now tracks when tablets cleanly shut down and validates tablet records before attempting connections, reducing unnecessary connection attempts and log noise.
-
-**New Field**: A new `tablet_shutdown_time` field has been added to the Tablet protobuf. This field is set to the current timestamp when a tablet cleanly shuts down and is cleared (set to `nil`) when the tablet starts. This allows other Vitess components to detect when a tablet is intentionally offline.
-
-**Connection Validation**: When a tablet record has `tablet_shutdown_time` set, Vitess components will skip connection attempts and return an error indicating the tablet is shutdown. VTOrc will now skip polling tablets that have `tablet_shutdown_time` set. For tablets that shutdown uncleanly (crashed, killed, etc.), the field remains `nil` and the pre-v24 behavior is preserved (connection attempt with error logging).
-
-**Note**: This is a best-effort mechanism. Tablets that are killed or crash may not have the opportunity to set this field, in which case components will continue to attempt connections as they did in v23 and earlier.
-
 #### <a id="vttablet-conn-pool-waiter-cap"/>Tablet Connection Pool Waiter Cap</a>
-VTTablet now allows to set a limit on the number of requests waiting to get a connection from the connection pool, for 
-the query, stream and transaction connection pools. The limits are set with the following flags:
-* `--queryserver-config-query-pool-waiter-cap`.
-* `--queryserver-config-stream-pool-waiter-cap`.
-* `--queryserver-config-txpool-waiter-cap`.
+
+VTTablet now allows users to set a limit on the number of requests waiting to get a connection from the connection pool, for 
+the query, stream, and transaction connection pools. The limits are set with the following flags:
+* `--queryserver-config-query-pool-waiter-cap`
+* `--queryserver-config-stream-pool-waiter-cap`
+* `--queryserver-config-txpool-waiter-cap`
 
 All of the above have a default value of `0`, meaning no limit, thus preserving the behavior of the previous version.
 
@@ -261,21 +273,21 @@ Vitess now supports [OpenTelemetry](https://opentelemetry.io/) as a tracing back
 - `--otel-insecure` (default `false`): use insecure connection to the collector.
 - `--tracing-sampling-rate` (default `0.1`): sampling rate for traces (shared across all tracing backends).
 
-Any OTLP-compatible backend (Jaeger v1.35+, Grafana Tempo, Datadog Agent, etc.) can receive these traces.
+Any OTEL-compatible backend (Jaeger v1.35+, Grafana Tempo, Datadog Agent, etc.) can receive these traces.
 
 #### <a id="tracing-opentracing-deprecation"/>Deprecation of OpenTracing-based tracing backends</a>
 
 The following tracing backends are deprecated as of v24 and will be removed in v25:
 
-- `opentracing-jaeger` — Uses the [Jaeger client-go](https://github.com/uber/jaeger-client-go) library, which has been archived. The Jaeger project [recommends migrating to OpenTelemetry](https://www.jaegertracing.io/docs/next-release/getting-started/#migrating-from-jaeger-clients-to-opentelemetry-sdk). Users should migrate to `--tracer opentelemetry` with an OTLP-compatible Jaeger endpoint (v1.35+).
-- `opentracing-datadog` — Uses the OpenTracing bridge in `dd-trace-go`. Users should migrate to `--tracer opentelemetry` with the Datadog Agent's OTLP ingestion endpoint.
+- `opentracing-jaeger` — Uses the [Jaeger client-go](https://github.com/uber/jaeger-client-go) library, which has been archived. The Jaeger project [recommends migrating to OpenTelemetry](https://www.jaegertracing.io/docs/next-release/getting-started/#migrating-from-jaeger-clients-to-opentelemetry-sdk). Users should migrate to `--tracer opentelemetry` with an OTEL-compatible Jaeger endpoint (v1.35+).
+- `opentracing-datadog` — Uses the OpenTracing bridge in `dd-trace-go`. Users should migrate to `--tracer opentelemetry` with the Datadog Agent's OTEL ingestion endpoint.
 
 The `--tracer opentracing-jaeger` and `--tracer opentracing-datadog` options continue to work in v24 but will log a deprecation warning at startup. The following Jaeger-specific flags are also deprecated and will be removed in v25:
 
 - `--jaeger-agent-host`
 - `--tracing-sampling-type`
 
-**Migration**: Replace `--tracer opentracing-jaeger` with `--tracer opentelemetry` and `--jaeger-agent-host host:port` with `--otel-endpoint host:4317`. Ensure your Jaeger deployment accepts OTLP (Jaeger v1.35+ listens on port 4317 by default).
+**Migration**: Replace `--tracer opentracing-jaeger` with `--tracer opentelemetry` and `--jaeger-agent-host host:port` with `--otel-endpoint host:4317`. Ensure your Jaeger deployment accepts OTEL (Jaeger v1.35+ listens on port 4317 by default).
 
 ### <a id="minor-changes-vtorc"/>VTOrc</a>
 
@@ -289,17 +301,11 @@ This enables future cross-cell problem validation, where VTOrc will be able to a
 
 **Note**: If you're running VTOrc in a multi-cell deployment, start using the `--cell` flag now to prepare for the v25 requirement.
 
-#### <a id="vtorc-improved-discovery-logging"/>Improved VTOrc Discovery Logging</a>
-
-VTOrc's `DiscoverInstance` function now includes the tablet alias in all log messages and uses the correct log level when errors occur. Previously, error messages did not indicate which tablet failed discovery, and errors were logged at INFO level instead of ERROR level.
-
-This improvement makes it easier to identify and debug issues with specific tablets when discovery operations fail.
-
 #### <a id="vtorc-ordered-recovery-semi-sync"/>Ordered Recovery Execution and Semi-Sync Rollout</a>
 
-VTOrc now executes recoveries per-shard with defined ordering, rather than per-tablet in isolation. Problems that have ordering dependencies (e.g., semi-sync configuration) are executed serially first, while independent problems are executed concurrently. This ensures that dependent recoveries happen in the correct sequence within a shard.
+VTOrc now executes recoveries per-shard with a defined ordering, rather than per-tablet in isolation. Problems that have ordering dependencies (e.g., semi-sync configuration) are executed serially first, while independent problems are executed concurrently. This ensures that dependent recoveries happen in the correct sequence within a shard.
 
-The main user-facing improvement is to semi-sync rollouts: VTOrc now ensures replicas have semi-sync enabled before updating the primary. Previously, enabling semi-sync on the primary before enough replicas were ready could stall writes while the primary waited for semi-sync acknowledgements that no replica was prepared to send.
+The main user-facing improvement is for semi-sync rollouts: VTOrc now ensures replicas have semi-sync enabled before updating the primary. Previously, enabling semi-sync on the primary before enough replicas were ready could stall writes while the primary waited for semi-sync acknowledgements that no replica was prepared to send.
 
 See [#19427](https://github.com/vitessio/vitess/pull/19427) for details.
 
@@ -354,7 +360,7 @@ A new `go_info_ext` gauge is also added with `compiler`, `GOARCH`, and `GOOS` la
 
 #### <a id="mysql-clone-support"/>MySQL CLONE Support for Replica Provisioning</a>
 
-VTTablet and VTBackup now support using MySQL's native [CLONE plugin](https://dev.mysql.com/doc/refman/8.0/en/clone-plugin.html) to provision new replicas by copying data directly from a donor tablet over the network. Physical-level data copying is significantly faster than logical backup and restore, especially for large datasets. Requires MySQL 8.0.17+ and InnoDB-only tables.
+VTTablet and VTBackup now support using MySQL's native [CLONE plugin](https://dev.mysql.com/doc/refman/en/clone-plugin.html) to provision new replicas by copying data directly from a donor tablet over the network. Physical-level data copying is significantly faster than logical backup and restore, especially for large datasets. Requires MySQL 8.0.17+ and InnoDB-only tables.
 
 **New Flags:**
 

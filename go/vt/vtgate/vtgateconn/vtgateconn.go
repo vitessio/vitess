@@ -108,6 +108,18 @@ func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.Table
 	return conn.impl.VStream(ctx, tabletType, vgtid, filter, flags)
 }
 
+// BinlogDumpGTIDReader is returned by BinlogDumpGTID.
+type BinlogDumpGTIDReader interface {
+	// Recv returns the next result on the stream.
+	// It will return io.EOF if the stream ended.
+	Recv() (*vtgatepb.BinlogDumpResponse, error)
+}
+
+// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
+func (conn *VTGateConn) BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (BinlogDumpGTIDReader, error) {
+	return conn.impl.BinlogDumpGTID(ctx, keyspace, shard, tabletType, tabletAlias, binlogFilename, binlogPosition, gtidSet, flags)
+}
+
 // VTGateSession exposes the Vitess Execution API to the clients.
 // The object maintains client-side state and is comparable to a native MySQL connection.
 // For example, if you enable autocommit on a Session object, all subsequent calls will respect this.
@@ -208,6 +220,9 @@ type Impl interface {
 
 	// VStream streams binlogevents
 	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error)
+
+	// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
+	BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (BinlogDumpGTIDReader, error)
 
 	// Close must be called for releasing resources.
 	Close()

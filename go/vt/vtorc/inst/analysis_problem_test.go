@@ -172,6 +172,13 @@ func TestRequiresOrderedExecution(t *testing.T) {
 			expected: true,
 		},
 		{
+			// ReplicationStopped declares BeforeAnalyses: [PrimarySemiSyncBlocked],
+			// so it requires ordered execution.
+			name:     "ReplicationStopped has BeforeAnalyses dependency",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
+			expected: true,
+		},
+		{
 			name: "independent problem",
 			problem: &DetectionAnalysisProblem{
 				Meta: &DetectionAnalysisProblemMeta{Priority: detectionAnalysisPriorityLow},
@@ -263,6 +270,17 @@ func TestCompareDetectionAnalysisProblems(t *testing.T) {
 				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncMustNotBeSet},
 			},
 			expected: 1,
+		},
+		{
+			name: "before dependency - ReplicationStopped before PrimarySemiSyncBlocked",
+			a: &DetectionAnalysisProblem{
+				Meta:           &DetectionAnalysisProblemMeta{Analysis: ReplicationStopped},
+				BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
+			},
+			b: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{Analysis: PrimarySemiSyncBlocked},
+			},
+			expected: -1,
 		},
 	}
 	for _, tt := range tests {

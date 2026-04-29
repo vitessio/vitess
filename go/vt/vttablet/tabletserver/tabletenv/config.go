@@ -206,6 +206,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
 
 	fs.Int64Var(&currentConfig.ConsolidatorQueryWaiterCap, "consolidator-query-waiter-cap", 0, "Configure the maximum number of clients allowed to wait on the consolidator.")
+	fs.BoolVar(&currentConfig.ConsolidatorCacheProto3Rows, "consolidator-cache-proto3-rows", defaultConfig.ConsolidatorCacheProto3Rows, "If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.")
 	fs.BoolVar(&currentConfig.ConsolidatorRejectOnCap, "consolidator-reject-on-cap", defaultConfig.ConsolidatorRejectOnCap, "If true, reject queries with a RESOURCE_EXHAUSTED error when the consolidator waiter cap is exceeded, instead of falling back to independent execution.")
 	utils.SetFlagDurationVar(fs, &healthCheckInterval, "health-check-interval", defaultConfig.Healthcheck.Interval, "Interval between health checks")
 	utils.SetFlagDurationVar(fs, &degradedThreshold, "degraded-threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
@@ -343,6 +344,7 @@ type TabletConfig struct {
 	ConsolidatorStreamQuerySize int64         `json:"consolidatorStreamQuerySize,omitempty"`
 	ConsolidatorQueryWaiterCap  int64         `json:"consolidatorMaxQueryWait,omitempty"`
 	ConsolidatorRejectOnCap     bool          `json:"consolidatorRejectOnCap,omitempty"`
+	ConsolidatorCacheProto3Rows bool          `json:"consolidatorCacheProto3Rows,omitempty"`
 	QueryCacheMemory            int64         `json:"queryCacheMemory,omitempty"`
 	QueryCacheDoorkeeper        bool          `json:"queryCacheDoorkeeper,omitempty"`
 	SchemaReloadInterval        time.Duration `json:"schemaReloadIntervalSeconds,omitempty"`
@@ -1098,6 +1100,7 @@ var defaultConfig = TabletConfig{
 	Consolidator:                Enable,
 	ConsolidatorStreamTotalSize: 128 * 1024 * 1024,
 	ConsolidatorStreamQuerySize: 2 * 1024 * 1024,
+	ConsolidatorCacheProto3Rows: false,
 	// The value for StreamBufferSize was chosen after trying out a few of
 	// them. Too small buffers force too many packets to be sent. Too big
 	// buffers force the clients to read them in multiple chunks and make

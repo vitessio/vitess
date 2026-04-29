@@ -29,6 +29,16 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+// execError wraps a SQL execution error, preserving the error chain for
+// errors.As while surfacing a redacted message safe for logging and propagation.
+type execError struct {
+	msg   string
+	cause error
+}
+
+func (e *execError) Error() string { return e.msg }
+func (e *execError) Unwrap() error { return e.cause }
+
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // the connection is lost.
 func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
@@ -80,8 +90,9 @@ func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbcon
 	for _, query := range queryList {
 		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
 		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
-			log.Error(fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error())))
-			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			msg := fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
+			log.Error(msg)
+			return &execError{msg: msg, cause: err}
 		}
 	}
 	return nil

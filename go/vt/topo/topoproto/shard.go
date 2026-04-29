@@ -24,7 +24,7 @@ import (
 // KeyspaceShardString returns a "keyspace/shard" string taking
 // keyspace and shard as separate inputs.
 func KeyspaceShardString(keyspace, shard string) string {
-	return fmt.Sprintf("%v/%v", keyspace, shard)
+	return keyspace + "/" + shard
 }
 
 // ParseKeyspaceShard parse a "keyspace/shard" or "keyspace:shard"
