@@ -1534,6 +1534,41 @@ func TestListenerShutdown(t *testing.T) {
 	require.Equal(t, "Server shutdown in progress", sqlErr.Message)
 }
 
+// TestListenerCloseWaitsForHandlers verifies that Close force-closes active
+// server-side connections and waits for handler goroutines to exit. Without
+// the WaitGroup + active-conn tracking, handlers parked in
+// (*Conn).readHeaderFrom outlive Close and trip LeakCheckContext on faster
+// CI runners (issue #19989).
+func TestListenerCloseWaitsForHandlers(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &testHandler{}
+
+	l, err := NewListener("tcp", "127.0.0.1:", NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+
+	go l.Accept()
+
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{Host: host, Port: port}
+
+	// Establish a real MySQL connection but never send a command, so the
+	// server-side handler parks in handleNextCommand -> readHeaderFrom.
+	c, err := Connect(ctx, params)
+	require.NoError(t, err)
+	defer c.Close()
+
+	done := make(chan struct{})
+	go func() {
+		l.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("Listener.Close did not return within 30s; handler goroutine still parked")
+	}
+}
+
 func TestParseConnAttrs(t *testing.T) {
 	expected := map[string]string{
 		"_client_version": "8.0.11",
