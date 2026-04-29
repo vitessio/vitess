@@ -146,7 +146,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 
 	// start vtgate w/disabled buffering
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-		"--enable_buffer=false",
+		"--enable-buffer=false",
 		"--query-timeout", "3000")
 	err := clusterInstance.StartVtgate()
 	require.NoError(t, err)
@@ -521,9 +521,8 @@ func TestERSForInitialization(t *testing.T) {
 	shard := &cluster.Shard{Name: utils.ShardName}
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--lock_tables_timeout", "5s",
-		"--track_schema_versions=true",
+		"--lock-tables-timeout", "5s",
+		"--track-schema-versions=true",
 	}
 
 	// Initialize Cluster
