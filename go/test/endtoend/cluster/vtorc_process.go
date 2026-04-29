@@ -133,15 +133,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--bind-address":               "127.0.0.1",
 	}
 
-	flags["--topo-implementation"] = orc.TopoImplementation
-	flags["--topo-global-server-address"] = orc.TopoGlobalAddress
-	flags["--topo-global-root"] = orc.TopoGlobalRoot
-	orcVer, versionErr := GetMajorVersion(orc.Binary)
-	if versionErr != nil {
-		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", orc.Binary, versionErr))
-	} else if orcVer >= 24 {
-		flags["--log-format"] = "text"
-	}
+	flags["--log-format"] = "text"
 
 	orc.proc = exec.Command(orc.Binary)
 	for flag, value := range flags {
