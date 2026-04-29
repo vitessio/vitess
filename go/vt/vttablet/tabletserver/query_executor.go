@@ -341,12 +341,24 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 
 // Stream performs a streaming query execution.
 func (qre *QueryExecutor) Stream(callback StreamCallback) error {
-	qre.logStats.PlanType = qre.plan.PlanID.String()
+	planName := qre.plan.PlanID.String()
+	qre.logStats.PlanType = planName
 
+	var totalRows int64
 	defer func(start time.Time) {
-		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
-		qre.tsv.stats.QueryTimingsByTabletType.Record(qre.targetTabletType.String(), start)
-		qre.recordUserQuery("Stream", int64(time.Since(start)))
+		duration := time.Since(start)
+		qre.tsv.stats.QueryTimings.Add(planName, duration)
+		qre.tsv.stats.QueryTimingsByTabletType.Add(qre.targetTabletType.String(), duration)
+		qre.recordUserQuery("Stream", int64(duration))
+
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
+		}
+		mysqlTime := qre.logStats.MysqlResponseTime
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, totalRows, 0, "OK")
+		qre.plan.AddStats(1, duration, mysqlTime, 0, uint64(totalRows), 0)
+		qre.tsv.Stats().ResultHistogram.Add(totalRows)
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -357,16 +369,46 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return reqThrottledErr
 	}
 
+	// Wrap the callback to track total rows for stats recording.
+	countingCallback := func(result *sqltypes.Result) error {
+		totalRows += int64(len(result.Rows))
+		return callback(result)
+	}
+
+	// Handle plans that don't use generic SQL execution.
 	switch qre.plan.PlanID {
-	case p.PlanSelectStream:
+	case p.PlanNextval:
+		result, err := qre.execNextval()
+		if err != nil {
+			return err
+		}
+		return countingCallback(result)
+	case p.PlanShowMigrations:
+		result, err := qre.execShowMigrations(nil)
+		if err != nil {
+			return err
+		}
+		return countingCallback(result)
+	}
+
+	switch qre.plan.PlanID {
+	case p.PlanSelect:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
 	}
 
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
+	var sql string
+	var sqlWithoutComments string
+	if qre.plan.FullQuery != nil {
+		var err error
+		sql, sqlWithoutComments, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return err
+		}
+	} else {
+		sql = qre.query
+		sqlWithoutComments, _ = sqlparser.SplitMarginComments(qre.query)
 	}
 
 	var replaceKeyspace string
@@ -375,8 +417,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
-		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
-			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, callback,
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelect && qre.shouldConsolidate() {
+			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, countingCallback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()
 					if err != nil {
@@ -428,6 +470,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(replaceKeyspace)
 		}
+		totalRows += int64(len(result.Rows))
 		return callback(result)
 	})
 }

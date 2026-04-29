@@ -1314,8 +1314,8 @@ func TestReplaceSchemaName(t *testing.T) {
 	// Test streaming execute.
 	{
 		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, 0)
-		// Stream only replaces schema name when plan is PlanSelectStream.
-		assert.Equal(t, planbuilder.PlanSelectStream, qre.plan.PlanID)
+		// Stream only replaces schema name when plan is PlanSelect.
+		assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 		// Any value other than nil should cause QueryExecutor to replace the
 		// schema name.
 		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
