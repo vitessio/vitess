@@ -109,21 +109,20 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 
 // checkCreateTableLimitForSQL splits the given multi-statement SQL into
 // individual statements and applies the schema engine's CREATE TABLE
-// table-count gate to each one. Statements that fail to parse are skipped
+// table-count gate to the batch. Statements that fail to parse are skipped
 // so we never reject otherwise-valid SQL on parser quirks.
 func checkCreateTableLimitForSQL(parser *sqlparser.Parser, se *schema.Engine, sql string) error {
 	queries, err := parser.SplitStatementToPieces(sql)
 	if err != nil {
 		return nil
 	}
+	stmts := make([]sqlparser.Statement, 0, len(queries))
 	for _, query := range queries {
 		stmt, parseErr := parser.Parse(query)
 		if parseErr != nil {
 			continue
 		}
-		if err := schema.CheckCreateTableLimit(se, stmt); err != nil {
-			return err
-		}
+		stmts = append(stmts, stmt)
 	}
-	return nil
+	return schema.CheckCreateTableLimit(se, stmts...)
 }

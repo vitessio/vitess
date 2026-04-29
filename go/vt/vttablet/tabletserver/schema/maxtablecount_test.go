@@ -119,4 +119,96 @@ func TestCheckCreateTableLimit(t *testing.T) {
 		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
 		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	})
+
+	// Batch-aware behavior: callers passing multiple statements (e.g.
+	// ExecuteMultiFetchAsDba, ApplySchema) get a check that accounts for all
+	// brand-new CREATE TABLEs in the request, not just one at a time.
+
+	t.Run("batch under limit passes", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(10)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		err := CheckCreateTableLimit(se,
+			parse(t, "create table b (id int primary key)"),
+			parse(t, "create table c (id int primary key)"),
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("batch crossing limit rejects with batch error", func(t *testing.T) {
+		// Reproduces the reviewer's scenario: with N tables, limit=N+1,
+		// running two CREATE TABLEs in a single batch must be rejected
+		// even though each one individually would have fit.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(2)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		err := CheckCreateTableLimit(se,
+			parse(t, "create table b (id int primary key)"),
+			parse(t, "create table c (id int primary key)"),
+		)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "cannot create 2 new tables in this batch")
+		assert.ErrorContains(t, err, "schema engine table limit of 2")
+		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	})
+
+	t.Run("batch with only existing tables passes", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(2)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		// Both target existing tables; no new creations counted.
+		err := CheckCreateTableLimit(se,
+			parse(t, "create table if not exists a (id int primary key)"),
+			parse(t, "create table b (id int primary key)"),
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("batch dedupes duplicate names", func(t *testing.T) {
+		// Two CREATE statements naming the same brand-new table count as
+		// one new table. With 1 existing and limit 2, the batch fits.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(2)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		err := CheckCreateTableLimit(se,
+			parse(t, "create table b (id int primary key)"),
+			parse(t, "create table if not exists b (id int primary key)"),
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("batch with mixed temp and real only counts real", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(2)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		// Temp tables don't count; one real new table at limit rejects.
+		err := CheckCreateTableLimit(se,
+			parse(t, "create temporary table tmp1 (id int primary key)"),
+			parse(t, "create table c (id int primary key)"),
+		)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+	})
 }

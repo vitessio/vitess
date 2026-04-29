@@ -121,20 +121,21 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 			return nil, err
 		}
 	}
-	// Reject any CREATE TABLE that would exceed the schema engine's
-	// table-count limit before we open a transaction with mysqld. countCreate
-	// also includes CREATE VIEW, but CheckCreateTableLimit filters non-table
-	// statements internally.
+	// Reject any CREATE TABLEs that would collectively exceed the schema
+	// engine's table-count limit before we open a transaction with mysqld.
+	// countCreate also includes CREATE VIEW; CheckCreateTableLimit ignores
+	// non-table statements internally.
 	if countCreate > 0 {
-		se := tm.QueryServiceControl.SchemaEngine()
+		stmts := make([]sqlparser.Statement, 0, len(queries))
 		for _, query := range queries {
 			stmt, parseErr := tm.Env.Parser().Parse(query)
 			if parseErr != nil {
 				continue
 			}
-			if err := schema.CheckCreateTableLimit(se, stmt); err != nil {
-				return nil, err
-			}
+			stmts = append(stmts, stmt)
+		}
+		if err := schema.CheckCreateTableLimit(tm.QueryServiceControl.SchemaEngine(), stmts...); err != nil {
+			return nil, err
 		}
 	}
 	if allowZeroInDate {
