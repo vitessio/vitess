@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,21 +38,22 @@ import (
 // target (vreplication)and the source (vstreamer) side.
 type VReplicationConfig struct {
 	// Config parameters applicable to the target side (vreplication)
-	ExperimentalFlags       int64
-	NetReadTimeout          int
-	NetWriteTimeout         int
-	CopyPhaseDuration       time.Duration
-	RetryDelay              time.Duration
-	MaxTimeToRetryError     time.Duration
-	RelayLogMaxSize         int
-	RelayLogMaxItems        int
-	ReplicaLagTolerance     time.Duration
-	HeartbeatUpdateInterval int
-	StoreCompressedGTID     bool
-	ParallelInsertWorkers   int
-	TabletTypesStr          string
-	EnableHttpLog           bool // Enable the /debug/vrlog endpoint
-	MaxRowJSONBytes         int64
+	ExperimentalFlags          int64
+	NetReadTimeout             int
+	NetWriteTimeout            int
+	CopyPhaseDuration          time.Duration
+	RetryDelay                 time.Duration
+	MaxTimeToRetryError        time.Duration
+	RelayLogMaxSize            int
+	RelayLogMaxItems           int
+	ReplicaLagTolerance        time.Duration
+	HeartbeatUpdateInterval    int
+	StoreCompressedGTID        bool
+	ParallelInsertWorkers      int
+	ParallelReplicationWorkers int
+	TabletTypesStr             string
+	EnableHttpLog              bool // Enable the /debug/vrlog endpoint
+	MaxRowJSONBytes            int64
 
 	// Config parameters applicable to the source side (vstreamer)
 	// The coresponding Override fields are used to determine if the user has provided a value for the parameter so
@@ -83,21 +85,22 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		return DefaultVReplicationConfig
 	}
 	DefaultVReplicationConfig = &VReplicationConfig{
-		ExperimentalFlags:       vreplicationExperimentalFlags,
-		NetReadTimeout:          vreplicationNetReadTimeout,
-		NetWriteTimeout:         vreplicationNetWriteTimeout,
-		CopyPhaseDuration:       vreplicationCopyPhaseDuration,
-		RetryDelay:              vreplicationRetryDelay,
-		MaxTimeToRetryError:     vreplicationMaxTimeToRetryError,
-		RelayLogMaxSize:         vreplicationRelayLogMaxSize,
-		RelayLogMaxItems:        vreplicationRelayLogMaxItems,
-		ReplicaLagTolerance:     vreplicationReplicaLagTolerance,
-		HeartbeatUpdateInterval: vreplicationHeartbeatUpdateInterval,
-		StoreCompressedGTID:     vreplicationStoreCompressedGTID,
-		ParallelInsertWorkers:   vreplicationParallelInsertWorkers,
-		TabletTypesStr:          vreplicationTabletTypesStr,
-		EnableHttpLog:           vreplicationEnableHttpLog,
-		MaxRowJSONBytes:         vreplicationMaxRowJSONBytes,
+		ExperimentalFlags:          vreplicationExperimentalFlags,
+		NetReadTimeout:             vreplicationNetReadTimeout,
+		NetWriteTimeout:            vreplicationNetWriteTimeout,
+		CopyPhaseDuration:          vreplicationCopyPhaseDuration,
+		RetryDelay:                 vreplicationRetryDelay,
+		MaxTimeToRetryError:        vreplicationMaxTimeToRetryError,
+		RelayLogMaxSize:            vreplicationRelayLogMaxSize,
+		RelayLogMaxItems:           vreplicationRelayLogMaxItems,
+		ReplicaLagTolerance:        vreplicationReplicaLagTolerance,
+		HeartbeatUpdateInterval:    vreplicationHeartbeatUpdateInterval,
+		StoreCompressedGTID:        vreplicationStoreCompressedGTID,
+		ParallelInsertWorkers:      vreplicationParallelInsertWorkers,
+		ParallelReplicationWorkers: vreplicationParallelReplicationWorkers,
+		TabletTypesStr:             vreplicationTabletTypesStr,
+		EnableHttpLog:              vreplicationEnableHttpLog,
+		MaxRowJSONBytes:            vreplicationMaxRowJSONBytes,
 
 		VStreamPacketSizeOverride:              false,
 		VStreamPacketSize:                      VStreamerDefaultPacketSize,
@@ -133,7 +136,21 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 	getError := func(k, v string) string {
 		return fmt.Sprintf("invalid value for %s: %s", k, v)
 	}
-	for k, v := range overrides {
+	// Iterate keys in sorted order so the resulting config is deterministic
+	// when the caller supplies both the hyphen and underscore variants of the
+	// same setting (e.g. `vstream-packet-size` and `vstream_packet_size`).
+	// Go map iteration is intentionally randomized; without sorting, last-
+	// write-wins would produce different results across runs of the same
+	// vttablet. ASCII '-' (0x2D) < '_' (0x5F), so hyphen variants are
+	// applied first and underscore variants override — matching the
+	// "UseEffectiveValues" behaviour exercised by the test suite.
+	keys := make([]string, 0, len(overrides))
+	for k := range overrides {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		v := overrides[k]
 		if v == "" {
 			continue
 		}
@@ -193,6 +210,18 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				errors = append(errors, getError(k, v))
 			} else {
 				c.RelayLogMaxItems = value
+			}
+		case "vreplication-parallel-replication-workers":
+			value, err := strconv.Atoi(v)
+			if err != nil {
+				errors = append(errors, getError(k, v))
+			} else if value < 0 {
+				// Negative values are never meaningful; the flag help text
+				// documents "<= 1 to disable parallelism" so 0 and 1 both
+				// fall through to the serial applier path.
+				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be >= 0; 0 or 1 disables parallel apply)", k, value))
+			} else {
+				c.ParallelReplicationWorkers = value
 			}
 		case "vreplication-replica-lag-tolerance":
 			value, err := time.ParseDuration(v)
@@ -263,31 +292,57 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 	return c, nil
 }
 
+// SourceOverrides returns only the vstreamer-side overrides that can be sent to source tablets.
+func (c VReplicationConfig) SourceOverrides() map[string]string {
+	sourceOverrides := make(map[string]string)
+	for _, key := range []string{
+		"vreplication-experimental-flags",
+		"vreplication-net-read-timeout",
+		"vreplication-net-write-timeout",
+		"vreplication-copy-phase-duration",
+	} {
+		if value, ok := c.Overrides[key]; ok && value != "" {
+			sourceOverrides[key] = value
+		}
+	}
+	if c.VStreamPacketSizeOverride {
+		sourceOverrides["vstream-packet-size"] = strconv.Itoa(c.VStreamPacketSize)
+	}
+	if c.VStreamDynamicPacketSizeOverride {
+		sourceOverrides["vstream-dynamic-packet-size"] = strconv.FormatBool(c.VStreamDynamicPacketSize)
+	}
+	if c.VStreamBinlogRotationThresholdOverride {
+		sourceOverrides["vstream_binlog_rotation_threshold"] = strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10)
+	}
+	return sourceOverrides
+}
+
 // Map returns a map of the VReplicationConfig: the keys are the flag names and the values are string representations.
 // Used in tests to compare the expected and actual configuration values and in validations to check if the user-provided
 // keys are one of those that are supported.
 func (c VReplicationConfig) Map() map[string]string {
 	return map[string]string{
-		"vreplication-experimental-flags":         strconv.FormatInt(c.ExperimentalFlags, 10),
-		"vreplication-net-read-timeout":           strconv.Itoa(c.NetReadTimeout),
-		"vreplication-net-write-timeout":          strconv.Itoa(c.NetWriteTimeout),
-		"vreplication-copy-phase-duration":        c.CopyPhaseDuration.String(),
-		"vreplication-retry-delay":                c.RetryDelay.String(),
-		"vreplication-max-time-to-retry-on-error": c.MaxTimeToRetryError.String(),
-		"relay-log-max-size":                      strconv.Itoa(c.RelayLogMaxSize),
-		"relay_log_max_size":                      strconv.Itoa(c.RelayLogMaxSize),
-		"relay-log-max-items":                     strconv.Itoa(c.RelayLogMaxItems),
-		"relay_log_max_items":                     strconv.Itoa(c.RelayLogMaxItems),
-		"vreplication-replica-lag-tolerance":      c.ReplicaLagTolerance.String(),
-		"vreplication-heartbeat-update-interval":  strconv.Itoa(c.HeartbeatUpdateInterval),
-		"vreplication-store-compressed-gtid":      strconv.FormatBool(c.StoreCompressedGTID),
-		"vreplication-parallel-insert-workers":    strconv.Itoa(c.ParallelInsertWorkers),
-		"vstream-packet-size":                     strconv.Itoa(c.VStreamPacketSize),
-		"vstream_packet_size":                     strconv.Itoa(c.VStreamPacketSize),
-		"vstream-dynamic-packet-size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
-		"vstream_dynamic_packet_size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
-		"vstream_binlog_rotation_threshold":       strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
-		"max-row-json-bytes":                      strconv.FormatInt(c.MaxRowJSONBytes, 10),
+		"vreplication-experimental-flags":           strconv.FormatInt(c.ExperimentalFlags, 10),
+		"vreplication-net-read-timeout":             strconv.Itoa(c.NetReadTimeout),
+		"vreplication-net-write-timeout":            strconv.Itoa(c.NetWriteTimeout),
+		"vreplication-copy-phase-duration":          c.CopyPhaseDuration.String(),
+		"vreplication-retry-delay":                  c.RetryDelay.String(),
+		"vreplication-max-time-to-retry-on-error":   c.MaxTimeToRetryError.String(),
+		"relay-log-max-size":                        strconv.Itoa(c.RelayLogMaxSize),
+		"relay_log_max_size":                        strconv.Itoa(c.RelayLogMaxSize),
+		"relay-log-max-items":                       strconv.Itoa(c.RelayLogMaxItems),
+		"relay_log_max_items":                       strconv.Itoa(c.RelayLogMaxItems),
+		"vreplication-replica-lag-tolerance":        c.ReplicaLagTolerance.String(),
+		"vreplication-heartbeat-update-interval":    strconv.Itoa(c.HeartbeatUpdateInterval),
+		"vreplication-store-compressed-gtid":        strconv.FormatBool(c.StoreCompressedGTID),
+		"vreplication-parallel-insert-workers":      strconv.Itoa(c.ParallelInsertWorkers),
+		"vreplication-parallel-replication-workers": strconv.Itoa(c.ParallelReplicationWorkers),
+		"vstream-packet-size":                       strconv.Itoa(c.VStreamPacketSize),
+		"vstream_packet_size":                       strconv.Itoa(c.VStreamPacketSize),
+		"vstream-dynamic-packet-size":               strconv.FormatBool(c.VStreamDynamicPacketSize),
+		"vstream_dynamic_packet_size":               strconv.FormatBool(c.VStreamDynamicPacketSize),
+		"vstream_binlog_rotation_threshold":         strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
+		"max-row-json-bytes":                        strconv.FormatInt(c.MaxRowJSONBytes, 10),
 	}
 }
 

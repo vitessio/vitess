@@ -791,6 +791,30 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 	}
 }
 
+func TestBuildPlayerPlanInsertIgnorePreservesPKIndices(t *testing.T) {
+	vttablet.InitVReplicationConfigDefaults()
+	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+	plan, err := vr.buildReplicatorPlan(
+		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id, c2 from t1 group by id, c2",
+		}}}),
+		map[string][]*ColumnInfo{"t1": {{Name: "id", IsPK: true}, {Name: "c2"}}},
+		nil,
+		binlogplayer.NewStats(),
+		collations.MySQL8(),
+		sqlparser.NewTestParser(),
+	)
+	require.NoError(t, err)
+
+	tplan := plan.TablePlans["t1"]
+	require.NotNil(t, tplan)
+	require.Equal(t, []string{"id"}, tplan.IdentityColumns)
+	require.Equal(t, []bool{true, false}, tplan.PKIndices)
+	require.NotNil(t, tplan.Insert)
+	require.NotNil(t, tplan.Update)
+}
+
 func TestBuildPlayerPlanExclude(t *testing.T) {
 	PrimaryKeyInfos := map[string][]*ColumnInfo{
 		"t1": {&ColumnInfo{Name: "c1"}},
