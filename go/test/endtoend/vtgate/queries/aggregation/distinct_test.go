@@ -18,8 +18,6 @@ package aggregation
 
 import (
 	"testing"
-
-	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 func TestDistinct(t *testing.T) {
@@ -61,10 +59,8 @@ func TestDistinctIt(t *testing.T) {
 	mcmp.Exec("insert into example_set_unknown(id, foo) values (1, 'a'), (2, 'c')")
 	mcmp.AssertMatchesNoOrder("select distinct foo from example_set_unknown", `[[SET("a")] [SET("c")]]`)
 
-	if utils.BinaryIsAtLeastAtVersion(17, "vtgate") {
-		mcmp.AssertMatches("select distinct val1 from aggr_test order by val1 desc", `[[VARCHAR("e")] [VARCHAR("d")] [VARCHAR("c")] [VARCHAR("b")] [VARCHAR("a")]]`)
-		mcmp.AssertMatchesNoOrder("select distinct val1, count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
-		mcmp.AssertMatchesNoOrder("select distinct val1+val2 from aggr_test", `[[NULL] [FLOAT64(1)] [FLOAT64(3)] [FLOAT64(4)]]`)
-		mcmp.AssertMatchesNoOrder("select distinct count(*) from aggr_test group by val1", `[[INT64(2)] [INT64(1)]]`)
-	}
+	mcmp.AssertMatches("select distinct val1 from aggr_test order by val1 desc", `[[VARCHAR("e")] [VARCHAR("d")] [VARCHAR("c")] [VARCHAR("b")] [VARCHAR("a")]]`)
+	mcmp.AssertMatchesNoOrder("select distinct val1, count(*) from aggr_test group by val1", `[[VARCHAR("a") INT64(2)] [VARCHAR("b") INT64(1)] [VARCHAR("c") INT64(2)] [VARCHAR("d") INT64(1)] [VARCHAR("e") INT64(2)]]`)
+	mcmp.AssertMatchesNoOrder("select distinct val1+val2 from aggr_test", `[[NULL] [FLOAT64(1)] [FLOAT64(3)] [FLOAT64(4)]]`)
+	mcmp.AssertMatchesNoOrder("select distinct count(*) from aggr_test group by val1", `[[INT64(2)] [INT64(1)]]`)
 }

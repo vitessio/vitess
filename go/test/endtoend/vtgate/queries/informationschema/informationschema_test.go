@@ -199,9 +199,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "specifying two different database in the query is not supported")
 
-	if utils.BinaryIsAtLeastAtVersion(20, "vtgate") {
-		_, _ = mcmp.ExecNoCompare("select * from information_schema.columns where table_schema = '' limit 1")
-	}
+	_, _ = mcmp.ExecNoCompare("select * from information_schema.columns where table_schema = '' limit 1")
 }
 
 func TestInfrSchemaAndUnionAll(t *testing.T) {

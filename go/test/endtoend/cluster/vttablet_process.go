@@ -37,8 +37,6 @@ import (
 	"testing"
 	"time"
 
-	vtutils "vitess.io/vitess/go/vt/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -95,10 +93,6 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
-	vttabletVer, err := GetMajorVersion(vttablet.Binary)
-	if err != nil {
-		return err
-	}
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
 		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
@@ -116,16 +110,14 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
 		"--enable_replication_reporter",
 		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
-		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vttabletVer), vttablet.FileBackupStorageRoot,
+		"--file-backup-storage-root", vttablet.FileBackupStorageRoot,
 		"--service_map", vttablet.ServiceMap,
 		"--db_charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",
 		"--grpc_bind_address", "127.0.0.1",
 	)
 
-	if vttabletVer >= 24 {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
-	}
+	vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
 
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))

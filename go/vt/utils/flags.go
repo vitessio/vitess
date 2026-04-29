@@ -136,14 +136,6 @@ func GetFlagVariantForTests(flagName string) string {
 	return dashed
 }
 
-func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
-	underscored, dashed := flagVariants(flagName)
-	if majorVersion > 22 {
-		return dashed
-	}
-	return underscored
-}
-
 var deprecationWarningsEmitted = make(map[string]bool)
 
 // Translate flag names from underscores to dashes and print a deprecation warning.

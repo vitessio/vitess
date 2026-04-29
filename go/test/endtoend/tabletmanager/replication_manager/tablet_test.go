@@ -131,7 +131,7 @@ func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
 func resurrectTablet(t *testing.T, tab cluster.Vttablet) {
 	// initialize config again to regenerate the my.cnf file which has the port to use
 	_, err := tab.MysqlctlProcess.ExecuteCommandWithOutput(
-		utils.GetFlagVariantForTestsByVersion("--tablet-uid", tab.MysqlctlProcess.MajorVersion), strconv.Itoa(tab.MysqlctlProcess.TabletUID),
+		"--tablet-uid", strconv.Itoa(tab.MysqlctlProcess.TabletUID),
 		utils.GetFlagVariantForTests("--mysql-port"), strconv.Itoa(tab.MysqlctlProcess.MySQLPort),
 		"init_config")
 	require.NoError(t, err)

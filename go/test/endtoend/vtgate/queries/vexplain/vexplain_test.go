@@ -72,10 +72,7 @@ func TestVtGateVExplain(t *testing.T) {
 		`vexplain queries insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`,
 		"vexplain queries/all will actually run queries")
 
-	binaryPrefix := ""
-	if utils.BinaryIsAtLeastAtVersion(23, "vtgate") {
-		binaryPrefix = "_binary"
-	}
+	binaryPrefix := "_binary"
 
 	expected := fmt.Sprintf(`[
 		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]
