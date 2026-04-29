@@ -18,6 +18,7 @@ package inst
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -49,10 +50,37 @@ func initializeAnalysisDaoPostConfiguration() {
 	recentInstantAnalysis = cache.New(config.GetRecoveryPollDuration()*2, time.Second)
 }
 
+// declaresBefore returns true if the problem declares (via BeforeAnalyses)
+// that it should run before the given analysis code. This is used to decide
+// whether a tablet's analysis should survive despite a shard-wide action.
+func declaresBefore(problem *DetectionAnalysisProblem, code AnalysisCode) bool {
+	return slices.Contains(problem.BeforeAnalyses, code)
+}
+
+// declaresAfter returns true if the shard-wide problem declares (via
+// AfterAnalyses) that it should run after the given analysis code.
+// This is the symmetric counterpart to declaresBefore — a dependency
+// can be expressed from either side.
+func declaresAfter(shardWideProblem *DetectionAnalysisProblem, code AnalysisCode) bool {
+	return slices.Contains(shardWideProblem.AfterAnalyses, code)
+}
+
 type clusterAnalysis struct {
+<<<<<<< HEAD
 	hasShardWideAction bool
 	totalTablets       int
 	primaryAlias       string
+||||||| parent of 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
+	hasShardWideAction bool
+	totalTablets       int
+	primaryAlias       *topodatapb.TabletAlias
+=======
+	hasShardWideAction    bool
+	shardWideAnalysisCode AnalysisCode
+	shardWideProblem      *DetectionAnalysisProblem
+	totalTablets          int
+	primaryAlias          *topodatapb.TabletAlias
+>>>>>>> 9ba3f8e9f3 (VTOrc: fix `ReplicationStopped` + `PrimarySemiSyncBlocked` recovery deadlock (#19925))
 
 	// primaryTimestamp is the most recent primary term start time observed for the shard.
 	primaryTimestamp time.Time
@@ -413,10 +441,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		ca := clusters[keyspaceShard]
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
-		if ca.hasShardWideAction {
-			// We can only take one shard-wide action at a time.
-			return nil
-		}
+		// Note: when ca.hasShardWideAction is true, we still run matching
+		// below to check if this tablet's problem declares it must run
+		// before the shard-wide action (via BeforeAnalyses).
 		if ca.durability == nil {
 			// We failed to load the durability policy, so we shouldn't run any analysis
 			return nil
@@ -434,6 +461,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				matchedProblems = append(matchedProblems, problem)
 			}
 		}
+		if ca.hasShardWideAction && len(matchedProblems) == 0 {
+			// Shard-wide action already detected and no problems matched
+			// for this tablet — suppress it.
+			return nil
+		}
 		if len(matchedProblems) > 0 {
 			sortDetectionAnalysisMatchedProblems(matchedProblems)
 			for _, problem := range matchedProblems {
@@ -445,7 +477,44 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			chosenProblem := matchedProblems[0]
 			a.Analysis = chosenProblem.Meta.Analysis
 			a.Description = chosenProblem.Meta.Description
-			ca.hasShardWideAction = chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction
+			if chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction {
+				if ca.hasShardWideAction {
+					// Already have a shard-wide action — suppress this one.
+					return nil
+				}
+				ca.hasShardWideAction = true
+				ca.shardWideAnalysisCode = chosenProblem.Meta.Analysis
+				ca.shardWideProblem = chosenProblem
+			} else if ca.hasShardWideAction {
+				// A shard-wide action was already detected. Only keep this
+				// tablet's analysis if a dependency exists between it and
+				// the shard-wide action. The dependency can be expressed
+				// from either side:
+				//   - the tablet's problem declares BeforeAnalyses on
+				//     the shard-wide action, OR
+				//   - the shard-wide problem declares AfterAnalyses on
+				//     the tablet's problem.
+				// If a non-chosen problem declares the dependency, promote
+				// it to the chosen problem so the recovery targets it.
+				survives := func(p *DetectionAnalysisProblem) bool {
+					return declaresBefore(p, ca.shardWideAnalysisCode) ||
+						declaresAfter(ca.shardWideProblem, p.Meta.Analysis)
+				}
+				if !survives(chosenProblem) {
+					found := false
+					for _, p := range matchedProblems[1:] {
+						if survives(p) {
+							a.Analysis = p.Meta.Analysis
+							a.Description = p.Meta.Description
+							found = true
+							break
+						}
+					}
+					if !found {
+						return nil
+					}
+				}
+			}
 		}
 
 		{
