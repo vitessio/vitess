@@ -31,8 +31,6 @@ import (
 	"testing"
 	"time"
 
-	vtutils "vitess.io/vitess/go/vt/utils"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -249,7 +247,6 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	}
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 		"--db-charset", charset,
 		"--db-app-user", user,
 		"--db-app-password", pass,
@@ -288,7 +285,6 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
 	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 
-	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if args.SchemaDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--schema-dir", args.SchemaDir}...)
 	}
@@ -307,12 +303,8 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if servenv.GRPCAuth() == "mtls" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
-	vtVer, err := getMajorVersion(vt.Binary)
-	if err != nil {
-		return nil, err
-	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{vtutils.GetFlagVariantForTestsByVersion("--vschema-ddl-authorized-users", vtVer), args.VSchemaDDLAuthorizedUsers}...)
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-ddl-authorized-users", args.VSchemaDDLAuthorizedUsers}...)
 	}
 	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql-server-version", servenv.MySQLServerVersion())
 	if socket != "" {
