@@ -2742,10 +2742,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
