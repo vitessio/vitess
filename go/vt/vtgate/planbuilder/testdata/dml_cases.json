@@ -7430,5 +7430,57 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "update with IN clause on vindex and limit pushes limit to each shard",
+    "query": "update user_extra set col = 1 where user_id in (1, 2) limit 5",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "UPDATE",
+      "Original": "update user_extra set col = 1 where user_id in (1, 2) limit 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update user_extra set col = 1 where user_id in ::__vals limit 5",
+        "Table": "user_extra",
+        "Values": [
+          "(1, 2)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "delete with IN clause on vindex and limit pushes limit to each shard",
+    "query": "delete from user_extra where user_id in (1, 2) limit 5",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "DELETE",
+      "Original": "delete from user_extra where user_id in (1, 2) limit 5",
+      "Instructions": {
+        "OperatorType": "Delete",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "delete from user_extra where user_id in ::__vals limit 5",
+        "Table": "user_extra",
+        "Values": [
+          "(1, 2)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
   }
 ]

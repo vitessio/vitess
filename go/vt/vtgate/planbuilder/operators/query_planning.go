@@ -525,6 +525,9 @@ func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src
 	}
 
 	if sqlparser.IsDMLStatement(ctx.Statement) {
+		if src.Routing.OpCode() != engine.Scatter {
+			return Swap(in, src, "push limit under route")
+		}
 		return setUpperLimit(in)
 	}
 
