@@ -211,4 +211,83 @@ func TestCheckCreateTableLimit(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
 	})
+
+	t.Run("batch dedupes qualified and unqualified names", func(t *testing.T) {
+		// Same table referenced as `b` and `db.b` in a single batch should
+		// be counted once, since the engine stores by unqualified name.
+		// Without proper dedupe, this batch would falsely reject when
+		// (count + 2) > limit even though only one new table is created.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(2)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		err := CheckCreateTableLimit(se,
+			parse(t, "create table b (id int primary key)"),
+			parse(t, "create table if not exists db.b (id int primary key)"),
+		)
+		assert.NoError(t, err)
+	})
+}
+
+func TestRejectIfAtLimitWithUnparseable(t *testing.T) {
+	openEngine := func(t *testing.T) *Engine {
+		t.Helper()
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+		schematest.AddDefaultQueries(db)
+		db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+			Fields: mysql.BaseShowTablesFields,
+		})
+		AddFakeInnoDBReadRowsResult(db, 0)
+		se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
+		require.NoError(t, se.Open())
+		t.Cleanup(se.Close)
+		return se
+	}
+
+	t.Run("nil engine is a no-op", func(t *testing.T) {
+		assert.NoError(t, RejectIfAtLimitWithUnparseable(nil, true))
+	})
+
+	t.Run("no parse failure is a no-op", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(2)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		assert.NoError(t, RejectIfAtLimitWithUnparseable(se, false))
+	})
+
+	t.Run("under limit is a no-op even with parse failure", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(10)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		assert.NoError(t, RejectIfAtLimitWithUnparseable(se, true))
+	})
+
+	t.Run("at limit with parse failure rejects", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		originalLimit := MaxTableCount()
+		SetMaxTableCount(2)
+		t.Cleanup(func() { SetMaxTableCount(originalLimit) })
+
+		err := RejectIfAtLimitWithUnparseable(se, true)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+		assert.ErrorContains(t, err, "vttablet cannot parse")
+		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	})
 }

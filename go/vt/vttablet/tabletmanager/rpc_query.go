@@ -112,7 +112,7 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
 	}
 
-	queries, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
+	queries, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
 	if err != nil {
 		return nil, err
 	}
@@ -125,16 +125,25 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	// engine's table-count limit before we open a transaction with mysqld.
 	// countCreate also includes CREATE VIEW; CheckCreateTableLimit ignores
 	// non-table statements internally.
-	if countCreate > 0 {
+	if countCreate > 0 || !parseable {
+		se := tm.QueryServiceControl.SchemaEngine()
+		hadParseFailure := !parseable
 		stmts := make([]sqlparser.Statement, 0, len(queries))
 		for _, query := range queries {
 			stmt, parseErr := tm.Env.Parser().Parse(query)
 			if parseErr != nil {
+				hadParseFailure = true
 				continue
 			}
 			stmts = append(stmts, stmt)
 		}
-		if err := schema.CheckCreateTableLimit(tm.QueryServiceControl.SchemaEngine(), stmts...); err != nil {
+		if err := schema.CheckCreateTableLimit(se, stmts...); err != nil {
+			return nil, err
+		}
+		// Defense in depth: if any statement could not be parsed and we are
+		// already at the limit, refuse to proceed — the unparseable
+		// statement may be a CREATE TABLE that would silently bypass the gate.
+		if err := schema.RejectIfAtLimitWithUnparseable(se, hadParseFailure); err != nil {
 			return nil, err
 		}
 	}

@@ -109,20 +109,29 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 
 // checkCreateTableLimitForSQL splits the given multi-statement SQL into
 // individual statements and applies the schema engine's CREATE TABLE
-// table-count gate to the batch. Statements that fail to parse are skipped
-// so we never reject otherwise-valid SQL on parser quirks.
+// table-count gate to the batch. When some part of the input cannot be
+// parsed, the function falls back to RejectIfAtLimitWithUnparseable so
+// that unparseable CREATE TABLE syntax cannot silently bypass the gate
+// when the engine is already at the limit.
 func checkCreateTableLimitForSQL(parser *sqlparser.Parser, se *schema.Engine, sql string) error {
-	queries, err := parser.SplitStatementToPieces(sql)
-	if err != nil {
-		return nil
+	queries, splitErr := parser.SplitStatementToPieces(sql)
+	if splitErr != nil {
+		// We could not split the SQL at all; treat the whole input as a
+		// single unparseable unit and apply the at-limit safety net.
+		return schema.RejectIfAtLimitWithUnparseable(se, true)
 	}
+	hadParseFailure := false
 	stmts := make([]sqlparser.Statement, 0, len(queries))
 	for _, query := range queries {
 		stmt, parseErr := parser.Parse(query)
 		if parseErr != nil {
+			hadParseFailure = true
 			continue
 		}
 		stmts = append(stmts, stmt)
 	}
-	return schema.CheckCreateTableLimit(se, stmts...)
+	if err := schema.CheckCreateTableLimit(se, stmts...); err != nil {
+		return err
+	}
+	return schema.RejectIfAtLimitWithUnparseable(se, hadParseFailure)
 }

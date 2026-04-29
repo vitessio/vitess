@@ -57,6 +57,27 @@ func SetMaxTableCount(n int) {
 	maxTableCountSetting.Set(n)
 }
 
+// RejectIfAtLimitWithUnparseable is a defense-in-depth gate for paths that
+// receive raw SQL strings (e.g. TabletManager's ExecuteFetchAsDba and
+// ApplySchema flows). When some part of the request could not be parsed by
+// vttablet, we cannot tell whether it contained a brand-new CREATE TABLE.
+// If the engine is already at or above its configured limit, fail closed:
+// allowing the request through would be the only way to silently bypass the
+// limit. When the engine has headroom, parse failures are tolerated as
+// before so parser quirks don't disrupt unrelated operations.
+func RejectIfAtLimitWithUnparseable(se *Engine, hadParseFailure bool) error {
+	if se == nil || !hadParseFailure {
+		return nil
+	}
+	if count, limit := se.TableCount(), MaxTableCount(); count >= limit {
+		return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
+			"schema engine table limit of %d reached and the request contains a statement that vttablet cannot parse; refusing to bypass the limit. "+
+				"Increase --queryserver-config-schema-max-table-count, free space by dropping unused tables, or rephrase the unparseable statement.",
+			limit)
+	}
+	return nil
+}
+
 // CheckCreateTableLimit returns an error if running the given statements as
 // a batch would push the schema engine past its configured table-count
 // limit. It counts brand-new non-temporary CREATE TABLE targets across the
@@ -100,12 +121,16 @@ func CheckCreateTableLimit(se *Engine, stmts ...sqlparser.Statement) error {
 		if se.GetTable(create.Table.Name) != nil {
 			continue
 		}
-		name := sqlparser.String(create.Table)
-		if _, dup := seen[name]; dup {
+		// Dedupe by the engine's storage key (unqualified case-sensitive
+		// table name) so the same table referenced with and without a
+		// schema qualifier in the same batch is counted once. Keep the
+		// fully-formatted name only for the error message.
+		key := create.Table.Name.String()
+		if _, dup := seen[key]; dup {
 			continue
 		}
-		seen[name] = struct{}{}
-		newNames = append(newNames, name)
+		seen[key] = struct{}{}
+		newNames = append(newNames, sqlparser.String(create.Table))
 	}
 	if len(newNames) == 0 {
 		return nil
