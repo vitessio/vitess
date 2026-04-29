@@ -33,6 +33,46 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// schemaEngine returns the schema engine if available, or nil. It nil-guards
+// the QueryServiceControl reference so callers — particularly tests that
+// build TabletManager without a controller wired in — don't panic. The
+// schema-package gate helpers all treat a nil engine as a no-op.
+func (tm *TabletManager) schemaEngine() *schema.Engine {
+	if tm.QueryServiceControl == nil {
+		return nil
+	}
+	return tm.QueryServiceControl.SchemaEngine()
+}
+
+// checkCreateTableLimitForSQL splits the given multi-statement SQL into
+// individual statements and applies the schema engine's CREATE TABLE
+// table-count gate to the batch. When some part of the input cannot be
+// parsed, the function falls back to RejectIfAtLimitWithUnparseable so
+// that unparseable CREATE TABLE syntax cannot silently bypass the gate
+// when the engine is already at the limit.
+func checkCreateTableLimitForSQL(parser *sqlparser.Parser, se *schema.Engine, sql string) error {
+	queries, splitErr := parser.SplitStatementToPieces(sql)
+	if splitErr != nil {
+		// We could not split the SQL at all; treat the whole input as a
+		// single unparseable unit and apply the at-limit safety net.
+		return schema.RejectIfAtLimitWithUnparseable(se, true)
+	}
+	hadParseFailure := false
+	stmts := make([]sqlparser.Statement, 0, len(queries))
+	for _, query := range queries {
+		stmt, parseErr := parser.Parse(query)
+		if parseErr != nil {
+			hadParseFailure = true
+			continue
+		}
+		stmts = append(stmts, stmt)
+	}
+	if err := schema.CheckCreateTableLimit(se, stmts...); err != nil {
+		return err
+	}
+	return schema.RejectIfAtLimitWithUnparseable(se, hadParseFailure)
+}
+
 // analyzeExecuteFetchAsDbaMultiQuery reutrns 'true' when at least one of the queries
 // in the given SQL has a `/*vt+ allowZeroInDate=true */` directive.
 func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (queries []string, parseable bool, countCreate int, allowZeroInDate bool, err error) {
@@ -126,7 +166,7 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	// countCreate also includes CREATE VIEW; CheckCreateTableLimit ignores
 	// non-table statements internally.
 	if countCreate > 0 || !parseable {
-		se := tm.QueryServiceControl.SchemaEngine()
+		se := tm.schemaEngine()
 		hadParseFailure := !parseable
 		stmts := make([]sqlparser.Statement, 0, len(queries))
 		for _, query := range queries {
@@ -265,6 +305,11 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	if err != nil {
 		return nil, err
 	}
+	// Reject any CREATE TABLE that would push the schema engine past its
+	// configured table-count limit before reaching mysqld.
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
 	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 
 	if err == nil && req.ReloadSchema {
@@ -290,6 +335,11 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	// Replace any provided sidecar database qualifiers with the correct one.
 	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
 	if err != nil {
+		return nil, err
+	}
+	// Reject any CREATE TABLE that would push the schema engine past its
+	// configured table-count limit before reaching mysqld.
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
 		return nil, err
 	}
 	result, err := conn.Conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)

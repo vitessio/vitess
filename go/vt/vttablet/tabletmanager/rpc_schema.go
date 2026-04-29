@@ -25,9 +25,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -89,7 +87,7 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 
 	// Reject any CREATE TABLE that would push the schema engine past its
 	// configured table-count limit before we touch mysqld.
-	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.QueryServiceControl.SchemaEngine(), change.SQL); err != nil {
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), change.SQL); err != nil {
 		return nil, err
 	}
 
@@ -105,33 +103,4 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	// and if it worked, reload the schema
 	tm.ReloadSchema(ctx, "") //nolint:errcheck
 	return scr, nil
-}
-
-// checkCreateTableLimitForSQL splits the given multi-statement SQL into
-// individual statements and applies the schema engine's CREATE TABLE
-// table-count gate to the batch. When some part of the input cannot be
-// parsed, the function falls back to RejectIfAtLimitWithUnparseable so
-// that unparseable CREATE TABLE syntax cannot silently bypass the gate
-// when the engine is already at the limit.
-func checkCreateTableLimitForSQL(parser *sqlparser.Parser, se *schema.Engine, sql string) error {
-	queries, splitErr := parser.SplitStatementToPieces(sql)
-	if splitErr != nil {
-		// We could not split the SQL at all; treat the whole input as a
-		// single unparseable unit and apply the at-limit safety net.
-		return schema.RejectIfAtLimitWithUnparseable(se, true)
-	}
-	hadParseFailure := false
-	stmts := make([]sqlparser.Statement, 0, len(queries))
-	for _, query := range queries {
-		stmt, parseErr := parser.Parse(query)
-		if parseErr != nil {
-			hadParseFailure = true
-			continue
-		}
-		stmts = append(stmts, stmt)
-	}
-	if err := schema.CheckCreateTableLimit(se, stmts...); err != nil {
-		return err
-	}
-	return schema.RejectIfAtLimitWithUnparseable(se, hadParseFailure)
 }
