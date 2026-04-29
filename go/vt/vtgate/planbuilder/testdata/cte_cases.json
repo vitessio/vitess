@@ -2124,7 +2124,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2174,7 +2173,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2195,10 +2193,7 @@
         },
         "FieldQuery": "with recursive cte as (select 1 as n from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
         "Query": "with recursive cte as (select 1 as n from dual union all select n + 1 from cte where n < 5) select n from cte"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2217,10 +2212,7 @@
         },
         "FieldQuery": "with recursive cte(n) as (select 1 from dual where 1 != 1 union all select n + 1 from cte where 1 != 1) select n from cte where 1 != 1",
         "Query": "with recursive cte(n) as (select 1 from dual union all select n + 1 from cte where n < 5) select n from cte"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2245,7 +2237,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2287,7 +2278,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2334,7 +2324,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2401,7 +2390,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2428,7 +2416,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2476,7 +2463,6 @@
         "Query": "with recursive cte as (select 1 from ref_with_source as sr, ref as rr where rr.bar = sr.bar union all select ue.id, ue.foo from cte, user_extra as ue, `user` as u where cte.foo = ue.foo and ue.user_id = u.id) select id, foo from cte"
       },
       "TablesUsed": [
-        "main.dual",
         "user.ref",
         "user.ref_with_source",
         "user.user",
@@ -2502,7 +2488,6 @@
         "Query": "with recursive hierarchy as (select id, `name`, manager_id from `user` union all select id, `name`, manager_id from `user` union select id * 2, `name`, manager_id from hierarchy where id < 10) select id, `name`, manager_id from hierarchy"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2523,10 +2508,7 @@
         },
         "FieldQuery": "select a from (select 1 from dual where 1 != 1 union all select 2 from dual where 1 != 1) as dt(a) where 1 != 1",
         "Query": "select a from (select 1 from dual union all select 2 from dual) as dt(a) where exists (with recursive qn as (select a * 0 as b from dual union all select b + 1 from qn where b = 0) select 1 from qn where b = a)"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   }
 ]

@@ -290,7 +290,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 				Solved: tableID,
 			}
 		case *semantics.CTETable:
-			return createDualCTETable(ctx, tableID, tableInfo)
+			return createCTERecursionTable(tableID, tableInfo)
 		case *semantics.RealTable:
 			if tableInfo.CTE != nil {
 				return createRecursiveCTE(ctx, tableInfo.CTE, tableID)
@@ -300,9 +300,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 			isInfSchema := tableInfo.IsInfSchema()
 			if ctx.IsMirrored() {
 				mr := tableInfo.GetMirrorRule()
-				vtbl := tableInfo.GetVindexTable()
-				switch {
-				case mr != nil:
+				if mr != nil {
 					newTbl := sqlparser.Clone(tbl)
 					newTbl.Qualifier = sqlparser.NewIdentifierCS(mr.Table.Keyspace.Name)
 					newTbl.Name = mr.Table.Name
@@ -311,11 +309,7 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 						tableExpr.As = tbl.Name
 					}
 					tbl = newTbl
-				case vtbl.Type == vindexes.TypeReference && vtbl.Name.String() == "dual":
-					// Dual tables do not get an entry in the mirror rules,
-					// and we don't really need to mirror them. We just want to
-					// avoid panicking.
-				default:
+				} else {
 					panic(vterrors.VT13001(fmt.Sprintf("unable to find mirror rule for table: %T", tbl)))
 				}
 			}
@@ -354,17 +348,27 @@ func createDualRoute() Operator {
 	}
 }
 
-func createDualCTETable(ctx *plancontext.PlanningContext, tableID semantics.TableSet, tableInfo *semantics.CTETable) Operator {
-	vschemaTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(sqlparser.NewTableName("dual"))
-	if err != nil {
-		panic(err)
+func createCTERecursionTable(tableID semantics.TableSet, tableInfo *semantics.CTETable) Operator {
+	// A recursive CTE reference (the inner `FROM cte` in `WITH RECURSIVE cte AS …`)
+	// has no vschema or real-table entity behind it: the recursion happens
+	// inside MySQL when the whole CTE is dispatched to a single tablet via
+	// DualRouting. Carry the QueryTable so SQL rendering keeps `FROM <cte>`
+	// intact, but leave VTable nil — the CTE name does not refer to a real
+	// table and must not appear in TablesUsed or downstream vschema lookups.
+	tblName, ok := tableInfo.ASTNode.Expr.(sqlparser.TableName)
+	if !ok {
+		panic(vterrors.VT13001(fmt.Sprintf("expected sqlparser.TableName for CTE reference, got %T", tableInfo.ASTNode.Expr)))
 	}
-	qtbl := &QueryTable{
-		ID:    tableID,
-		Alias: tableInfo.ASTNode,
-		Table: sqlparser.NewTableName("dual"),
+	return &Route{
+		unaryOperator: newUnaryOp(&Table{
+			QTable: &QueryTable{
+				ID:    tableID,
+				Alias: tableInfo.ASTNode,
+				Table: tblName,
+			},
+		}),
+		Routing: &DualRouting{},
 	}
-	return createRouteFromVSchemaTable(ctx, qtbl, vschemaTable, false, nil)
 }
 
 func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE, outerID semantics.TableSet) Operator {
