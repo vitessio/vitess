@@ -389,7 +389,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		Gtid:     gtid,
 	})
 	if err != nil {
-		return fmt.Errorf("row stream send error: %v", err)
+		return fmt.Errorf("row stream send error: %w", err)
 	}
 
 	// streamQuery sends heartbeats as long as it operates
