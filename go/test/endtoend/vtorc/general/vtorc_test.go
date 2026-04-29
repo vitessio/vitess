@@ -876,3 +876,86 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 		}
 	}, 30*time.Second, time.Second)
 }
+
+// TestReplicationStoppedWithSemiSyncBlocked verifies that VTOrc restarts
+// replication on a semi-sync acker replica under semi_sync durability.
+// This is a regression test for a deadlock where recheckPrimaryHealth
+// would abort fixReplica because the primary had PrimarySemiSyncBlocked,
+// but the primary problem existed because replicas weren't replicating.
+// The precise deadlock timing (blocked write + simultaneous detection) is
+// covered by unit tests; this test exercises the acker detection path and
+// the suppression bypass end-to-end.
+// See https://github.com/vitessio/vitess/issues/19921.
+func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	// 2 REPLICA (semi-sync ackers) + 1 RDONLY (not an acker).
+	// The RDONLY is included to verify semi-sync acker detection
+	// is selective — only the REPLICA acker's replication is stopped.
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, primary, "should have elected a primary")
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+
+	// Identify the replica (acker) and rdonly (non-acker).
+	// One of the 2 replicas was elected primary, so 1 replica remains.
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == primary.Alias {
+			continue
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		} else {
+			replica = tablet
+		}
+	}
+	require.NotNil(t, replica, "should have a REPLICA tablet")
+	require.NotNil(t, rdonly, "should have an RDONLY tablet")
+
+	allNonPrimary := []*cluster.Vttablet{replica, rdonly}
+	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 15*time.Second)
+
+	// Verify semi-sync acker status after VTOrc has had time to converge:
+	// replica ON, rdonly OFF.
+	assert.Eventually(t, func() bool {
+		return utils.IsSemiSyncSetupCorrectly(t, replica, "ON")
+	}, 15*time.Second, 500*time.Millisecond, "REPLICA should be a semi-sync acker")
+	assert.Eventually(t, func() bool {
+		return utils.IsSemiSyncSetupCorrectly(t, rdonly, "OFF")
+	}, 15*time.Second, 500*time.Millisecond, "RDONLY should not be a semi-sync acker")
+
+	// Snapshot the FixReplica counter before stopping replication.
+	// VTOrc may have already incremented it during setup (e.g., for
+	// ReplicaSemiSyncMustBeSet under semi_sync durability).
+	fixReplicaCount := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name)
+
+	// Stop replication on the semi-sync acker (REPLICA). VTOrc should
+	// detect ReplicationStopped and fix it. The GetDetectionAnalysis
+	// change ensures the acker's analysis is not suppressed by
+	// hasShardWideAction even if PrimarySemiSyncBlocked is also present.
+	//
+	// Note: we cannot reliably assert PrimarySemiSyncBlocked is detected
+	// in this test because it requires a blocked write (SemiSyncBlocked
+	// only flips when a write is waiting for acks), and VTOrc fixes the
+	// replica faster than we can create the blocking condition. The
+	// deadlock scenario is covered by unit tests in analysis_dao_test.go
+	// (TestDeclaresBefore) and topology_recovery_test.go
+	// (TestRecheckPrimaryHealth).
+	_, err := utils.RunSQL(t, "STOP REPLICA", replica, "")
+	require.NoError(t, err)
+
+	// Wait for VTOrc to record at least one new FixReplica recovery before
+	// checking replication. Use > instead of exact match because concurrent
+	// fix-replica recoveries (e.g., semi-sync related) can also increment
+	// this metric.
+	assert.Eventually(t, func() bool {
+		return utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixReplicaRecoveryName, keyspace.Name, shard0.Name) > fixReplicaCount
+	}, 30*time.Second, time.Second)
+	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
+}
