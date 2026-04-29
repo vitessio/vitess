@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -110,11 +109,11 @@ func TestMain(m *testing.M) {
 
 		clusterInstance.VtGateExtraArgs = []string{
 			"--vschema-ddl-authorized-users=%",
-			utils.GetFlagVariantForTests("--mysql-server-query-timeout"), "1s",
-			utils.GetFlagVariantForTests("--mysql-auth-server-impl"), "static",
+			"--mysql-server-query-timeout", "1s",
+			"--mysql-auth-server-impl", "static",
 			"--mysql-auth-server-static-file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
-			utils.GetFlagVariantForTests("--mysql-server-version"), "8.0.16-7",
-			utils.GetFlagVariantForTests("--warn-sharded-only") + "=true",
+			"--mysql-server-version", "8.0.16-7",
+			"--warn-sharded-only" + "=true",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{

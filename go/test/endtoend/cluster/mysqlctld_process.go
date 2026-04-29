@@ -53,10 +53,9 @@ type MysqlctldProcess struct {
 // InitDb executes mysqlctld command to add cell info
 func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 	args := []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
-		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
-		"--init_db_sql_file", mysqlctld.InitDBFile,
+		"--tablet-uid", strconv.Itoa(mysqlctld.TabletUID),
+		"--mysql-port", strconv.Itoa(mysqlctld.MySQLPort),
+		"--init-db-sql-file", mysqlctld.InitDBFile,
 	}
 	mysqlctldVer, versionErr := GetMajorVersion(mysqlctld.Binary)
 	if versionErr != nil {
@@ -65,7 +64,7 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 		args = append(args, "--log-format", "text")
 	}
 	if mysqlctld.SocketFile != "" {
-		args = append(args, "--socket_file", mysqlctld.SocketFile)
+		args = append(args, "--socket-file", mysqlctld.SocketFile)
 	}
 	tmpProcess := exec.Command(
 		mysqlctld.Binary,
@@ -81,9 +80,8 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	}
 	_ = createDirectory(mysqlctld.LogDirectory, 0o700)
 	args := []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
-		"--mysql_port", strconv.Itoa(mysqlctld.MySQLPort),
+		"--tablet-uid", strconv.Itoa(mysqlctld.TabletUID),
+		"--mysql-port", strconv.Itoa(mysqlctld.MySQLPort),
 	}
 	mysqlctldVer, versionErr := GetMajorVersion(mysqlctld.Binary)
 	if versionErr != nil {
@@ -92,8 +90,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		args = append(args, "--log-format", "text")
 	}
 	if mysqlctld.SocketFile != "" {
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		args = append(args, "--socket_file", mysqlctld.SocketFile)
+		args = append(args, "--socket-file", mysqlctld.SocketFile)
 	}
 	tempProcess := exec.Command(
 		mysqlctld.Binary,
@@ -104,8 +101,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 
 	if mysqlctld.InitMysql {
 		tempProcess.Args = append(tempProcess.Args,
-			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-			"--init_db_sql_file", mysqlctld.InitDBFile)
+			"--init-db-sql-file", mysqlctld.InitDBFile)
 	}
 
 	err := os.MkdirAll(mysqlctld.LogDirectory, 0o755)
@@ -174,8 +170,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	// }
 	mysqlctld.exitSignalReceived = true
 	args := []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctld.TabletUID),
+		"--tablet-uid", strconv.Itoa(mysqlctld.TabletUID),
 	}
 	mysqlctlVer, versionErr := GetMajorVersion("mysqlctl")
 	if versionErr != nil {
