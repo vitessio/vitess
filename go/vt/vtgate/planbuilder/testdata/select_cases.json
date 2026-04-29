@@ -624,10 +624,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     },
     "skip_e2e": true
   },
@@ -2068,10 +2065,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2266,10 +2260,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2823,10 +2814,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2988,10 +2976,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3099,10 +3084,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -4018,10 +4000,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
