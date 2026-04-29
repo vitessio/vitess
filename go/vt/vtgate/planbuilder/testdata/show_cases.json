@@ -594,7 +594,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "vgtid(1) AS global vgtid_executed",
+        "Aggregates": "vgtid(1) AS `global vgtid_executed`",
         "ResultColumns": 2,
         "Inputs": [
           {

@@ -714,7 +714,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "constant_aggr(1) AS 1",
+        "Aggregates": "constant_aggr(1) AS `1`",
         "GroupBy": "1, 4",
         "ResultColumns": 1,
         "Inputs": [
@@ -777,7 +777,7 @@
                           {
                             "OperatorType": "Aggregate",
                             "Variant": "Ordered",
-                            "Aggregates": "sum_count_star(1) AS count",
+                            "Aggregates": "sum_count_star(1) AS `count`",
                             "GroupBy": "(0|2)",
                             "Inputs": [
                               {
@@ -883,7 +883,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "1 as 1"
+          "1 as `1`"
         ],
         "Inputs": [
           {
@@ -1075,7 +1075,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "1 as 1"
+          "1 as `1`"
         ],
         "Inputs": [
           {
@@ -2736,7 +2736,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          ":__lastInsertId as last_insert_id()"
+          ":__lastInsertId as `last_insert_id()`"
         ],
         "Inputs": [
           {
@@ -3793,7 +3793,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "user_extra.col + 1 as user_extra.col + 1"
+          "user_extra.col + 1 as `user_extra.col + 1`"
         ],
         "Inputs": [
           {
@@ -3850,7 +3850,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":0 as id",
-              "user_extra.col + 1 as user_extra.col + 1"
+              "user_extra.col + 1 as `user_extra.col + 1`"
             ],
             "Inputs": [
               {
@@ -3913,7 +3913,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "`user`.foo + user_extra.col + 1 as `user`.foo + user_extra.col + 1"
+          "`user`.foo + user_extra.col + 1 as ```user``.foo + user_extra.col + 1`"
         ],
         "Inputs": [
           {
@@ -3964,7 +3964,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS `count(*)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -4512,12 +4512,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count_star(0) AS count(*)",
+        "Aggregates": "count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "1 as 1"
+              "1 as `1`"
             ],
             "Inputs": [
               {
