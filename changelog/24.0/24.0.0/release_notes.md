@@ -408,7 +408,7 @@ vtbackup \
 ------------
 The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/24.0/24.0.0/changelog.md).
 
-The release includes 410 merged Pull Requests.
+The release includes 460 merged Pull Requests.
 
-Thanks to all our contributors: @ChaitanyaD48, @Devanshusharma2005, @MargaretMorehead, @anujagrawal380, @aparajon, @app/dependabot, @app/promptless, @app/vitess-bot, @arthurschreiber, @c-r-dev, @chengyuan, @connorolaya, @dasl-, @dbussink, @demmer, @derekperkins, @ejortegau, @esignorelli, @farhann-saleem, @frouioui, @ghostframe, @harshit-gangal, @jdoupe, @khkim6040, @lizztheblizz, @maksimov, @mattlord, @maxenglander, @mcpherrinm, @mcrauwel, @mhamza15, @nickvanw, @pourtorabehsan, @rjlaine, @rvrangel, @shlomi-noach, @siddharth16396, @stefanb, @stutibiyani, @systay, @tanjinx, @tetsuro-ohyama, @timvaillancourt, @twthorn, @varundeepsaini, @vitess-bot, @yushuqin
+Thanks to all our contributors: @ChaitanyaD48, @Devanshusharma2005, @MargaretMorehead, @anujagrawal380, @aparajon, @app/dependabot, @app/promptless, @app/vitess-bot, @arthurschreiber, @c-r-dev, @chengyuan, @connorolaya, @dasl-, @dbussink, @demmer, @derekperkins, @ejortegau, @esignorelli, @farhann-saleem, @frouioui, @ghostframe, @harshit-gangal, @jdoupe, @khkim6040, @lizztheblizz, @maksimov, @mattlord, @maxenglander, @mcpherrinm, @mcrauwel, @mhamza15, @nickvanw, @pourtorabehsan, @rjlaine, @rvrangel, @sbaker617, @shlomi-noach, @siddharth16396, @stefanb, @stutibiyani, @systay, @tanjinx, @tetsuro-ohyama, @timvaillancourt, @ttran397, @twthorn, @varundeepsaini, @vitess-bot, @yushuqin
 
