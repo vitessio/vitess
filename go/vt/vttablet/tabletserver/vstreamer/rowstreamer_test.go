@@ -575,8 +575,8 @@ func TestStreamRowsCancel(t *testing.T) {
 		cancel()
 		return nil
 	}, &options)
-	if got, want := err.Error(), "row stream ended: context canceled"; got != want {
-		t.Errorf("err: %v, want %s", err, want)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err: %v, want context.Canceled", err)
 	}
 }
 
@@ -650,7 +650,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}, &options)
 
 	// We expect context canceled error since we cancel after receiving heartbeats
-	if err != nil && err.Error() != "row stream ended: context canceled" {
+	if err != nil && !errors.Is(err, context.Canceled) {
 		t.Errorf("unexpected error: %v", err)
 	}
 

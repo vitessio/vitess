@@ -339,7 +339,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		sendMu.Lock()
 		defer sendMu.Unlock()
 		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("row stream ended: %w", context.Cause(ctx))
+			return fmt.Errorf("row stream ended: %w", err)
 		}
 		return send(r)
 	}
@@ -421,9 +421,9 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	byteCount := 0
 	logger := logutil.NewThrottledLogger(rs.vse.GetTabletInfo(), throttledLoggerInterval)
 	for {
-		if rs.ctx.Err() != nil {
+		if err := rs.ctx.Err(); err != nil {
 			log.Info("Row stream ended because of ctx.Done")
-			return fmt.Errorf("row stream ended: %v", rs.ctx.Err())
+			return fmt.Errorf("row stream ended: %w", err)
 		}
 
 		// check throttler.
