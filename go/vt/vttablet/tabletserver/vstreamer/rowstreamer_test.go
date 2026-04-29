@@ -580,6 +580,36 @@ func TestStreamRowsCancel(t *testing.T) {
 	}
 }
 
+func TestStreamRowsSendError(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		"insert into t1 values (1, 'aaa')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+
+	var options binlogdatapb.VStreamOptions
+	options.ConfigOverrides = make(map[string]string)
+
+	// Support both formats for backwards compatibility
+	// TODO(v25): Remove underscore versions
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
+	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", "10")
+
+	sendErr := errors.New("send failed")
+	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		return sendErr
+	}, &options)
+	if !errors.Is(err, sendErr) {
+		t.Errorf("err: %v, want %v", err, sendErr)
+	}
+}
+
 func TestStreamRowsHeartbeat(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
