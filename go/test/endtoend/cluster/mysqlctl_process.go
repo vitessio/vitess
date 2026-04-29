@@ -55,8 +55,8 @@ type MysqlctlProcess struct {
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{
 		// todo: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
-		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
+		"--tablet-uid", strconv.Itoa(mysqlctl.TabletUID),
+		"--mysql-port", strconv.Itoa(mysqlctl.MySQLPort),
 	}
 	if mysqlctl.MajorVersion >= 24 {
 		args = append(args, "--log-format", "text")
@@ -66,8 +66,7 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 		args = append(args, "--")
 	}
 
-	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-	args = append(args, "--init_db_sql_file", mysqlctl.InitDBFile)
+	args = append(args, "--init-db-sql-file", mysqlctl.InitDBFile)
 	if *isCoverage {
 		args = append([]string{"--test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "--test.v"}, args...)
 	}
@@ -102,9 +101,8 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 
 func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 	args := []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
-		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
+		"--tablet-uid", strconv.Itoa(mysqlctl.TabletUID),
+		"--mysql-port", strconv.Itoa(mysqlctl.MySQLPort),
 	}
 	if mysqlctl.MajorVersion >= 24 {
 		args = append(args, "--log-format", "text")
@@ -165,8 +163,7 @@ ssl_key={{.ServerKey}}
 			if mysqlctl.MajorVersion < 18 {
 				tmpProcess.Args = append(tmpProcess.Args, "--")
 			}
-			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-			tmpProcess.Args = append(tmpProcess.Args, "--init_db_sql_file", mysqlctl.InitDBFile)
+			tmpProcess.Args = append(tmpProcess.Args, "--init-db-sql-file", mysqlctl.InitDBFile)
 		} else {
 			tmpProcess.Args = append(tmpProcess.Args, "start")
 		}
@@ -237,8 +234,7 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	args := []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
+		"--tablet-uid", strconv.Itoa(mysqlctl.TabletUID),
 	}
 	if mysqlctl.MajorVersion >= 24 {
 		args = append(args, "--log-format", "text")

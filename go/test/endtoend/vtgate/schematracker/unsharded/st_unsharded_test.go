@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -89,8 +88,8 @@ func TestMain(m *testing.M) {
 
 		// Start vtgate
 		clusterInstance.VtGateExtraArgs = []string{
-			vtutils.GetFlagVariantForTestsByVersion("--schema-change-signal", vtgateVer),
-			vtutils.GetFlagVariantForTestsByVersion("--vschema-ddl-authorized-users", vtgateVer), "%",
+			"--schema-change-signal",
+			"--vschema-ddl-authorized-users", "%",
 		}
 		err = clusterInstance.StartVtgate()
 		if err != nil {

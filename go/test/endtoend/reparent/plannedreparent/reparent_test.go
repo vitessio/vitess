@@ -191,7 +191,7 @@ func TestReparentAvoid(t *testing.T) {
 	// tablets[1] is in the same cell and tablets[3] is in a different cell, so we must land on tablets[1]
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
-	// If we kill the tablet in the same cell as primary then reparent --avoid_tablet will fail.
+	// If we kill the tablet in the same cell as primary then reparent --avoid-tablet will fail.
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
