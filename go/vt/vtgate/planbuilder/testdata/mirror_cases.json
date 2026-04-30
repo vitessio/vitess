@@ -543,5 +543,28 @@
         "unsharded_src3.t1"
       ]
     }
+  },
+  {
+    "comment": "join mirrored table with unmirrored table skips mirroring gracefully",
+    "query": "select t1.id, t5.id from unsharded_src1.t1 join unsharded_src1.t5 on t1.id = t5.id where t1.id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select t1.id, t5.id from unsharded_src1.t1 join unsharded_src1.t5 on t1.id = t5.id where t1.id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "unsharded_src1",
+          "Sharded": false
+        },
+        "FieldQuery": "select t1.id, t5.id from t1, t5 where 1 != 1",
+        "Query": "select t1.id, t5.id from t1, t5 where t1.id = 1 and t1.id = t5.id"
+      },
+      "TablesUsed": [
+        "unsharded_src1.t1",
+        "unsharded_src1.t5"
+      ]
+    }
   }
 ]

@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -54,8 +55,11 @@ func translateQueryToOpWithMirroring(ctx *plancontext.PlanningContext, stmt sqlp
 
 	if selStmt, ok := stmt.(sqlparser.SelectStatement); ok {
 		if mi := ctx.SemTable.GetMirrorInfo(); mi.Percent > 0 {
-			mirrorOp := translateQueryToOp(ctx.UseMirror(), selStmt)
-			op = NewPercentBasedMirror(mi.Percent, op, mirrorOp)
+			mirrorCtx := ctx.UseMirror()
+			mirrorOp := translateQueryToOp(mirrorCtx, selStmt)
+			if !mirrorCtx.MirrorAborted() {
+				op = NewPercentBasedMirror(mi.Percent, op, mirrorOp)
+			}
 		}
 	}
 
@@ -308,10 +312,13 @@ func getOperatorFromAliasedTableExpr(ctx *plancontext.PlanningContext, tableExpr
 					tbl = newTbl
 				case vtbl.Type == vindexes.TypeReference && vtbl.Name.String() == "dual":
 					// Dual tables do not get an entry in the mirror rules,
-					// and we don't really need to mirror them. We just want to
-					// avoid panicking.
+					// and we don't really need to mirror them.
 				default:
-					panic(vterrors.VT13001(fmt.Sprintf("unable to find mirror rule for table: %T", tbl)))
+					// Mirroring is best effort. If we can't find a mirror rule
+					// for a table, abort mirroring for this query rather than
+					// disrupting production traffic.
+					log.Warn(fmt.Sprintf("unable to find mirror rule for table %s, skipping mirror for this query", sqlparser.String(tbl)))
+					ctx.AbortMirror()
 				}
 			}
 			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}

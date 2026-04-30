@@ -180,6 +180,12 @@ var (
 	warmingReadsPercent      = 0
 	warmingReadsQueryTimeout = 5 * time.Second
 	warmingReadsConcurrency  = 500
+
+	// mirrorTrafficConcurrency caps the number of in-flight mirror queries
+	// dispatched by MirrorTraffic. Mirrors that would exceed this bound are
+	// dropped (counter MirrorTargetDropped) so a slow mirror target cannot
+	// exhaust vtgate memory and impact the primary path.
+	mirrorTrafficConcurrency = 256
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -219,6 +225,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&warmingReadsPercent, "warming-reads-percent", 0, "Percentage of reads on the primary to forward to replicas. Useful for keeping buffer pools warm")
 	fs.IntVar(&warmingReadsConcurrency, "warming-reads-concurrency", 500, "Number of concurrent warming reads allowed")
 	fs.DurationVar(&warmingReadsQueryTimeout, "warming-reads-query-timeout", 5*time.Second, "Timeout of warming read queries")
+	fs.IntVar(&mirrorTrafficConcurrency, "mirror-traffic-max-concurrent", mirrorTrafficConcurrency, "Maximum number of concurrent mirror queries dispatched by MirrorTraffic. Mirrors over this bound are dropped (counter: MirrorTargetDropped) so a slow target cannot exhaust vtgate memory.")
 
 	viperutil.BindFlags(fs,
 		enableOnlineDDL,

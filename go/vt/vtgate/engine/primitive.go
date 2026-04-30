@@ -144,6 +144,19 @@ type (
 		// and a cancel function that must be called when the warming query completes.
 		WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc)
 
+		// GetMirrorTrafficSemaphore returns the weighted semaphore that bounds concurrent
+		// mirror queries. A nil value disables mirror dispatch (every TryAcquire returns false).
+		GetMirrorTrafficSemaphore() *semaphore.Weighted
+
+		// RecordMirrorDropped increments the counter for mirror queries dropped because
+		// the bounded concurrency limit was full. The primary query is unaffected.
+		RecordMirrorDropped()
+
+		// RecordMirrorPanic increments the counter for mirror queries that panicked.
+		// Called from a deferred recover in the mirror goroutine so a panic in the
+		// mirror execution path does not crash vtgate. The primary query is unaffected.
+		RecordMirrorPanic()
+
 		// CloneForMirroring clones the VCursor for re-use in mirroring queries to other keyspaces
 		CloneForMirroring(ctx context.Context) VCursor
 		//

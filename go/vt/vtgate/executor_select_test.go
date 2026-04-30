@@ -4559,6 +4559,50 @@ func TestNewWarmingReadsSemaphore(t *testing.T) {
 	}
 }
 
+func TestNewMirrorTrafficSemaphore(t *testing.T) {
+	tests := []struct {
+		name        string
+		concurrency int
+		wantFit     int64 // weight that should fit via TryAcquire
+		wantReject  int64 // weight that should be rejected via TryAcquire
+	}{
+		{
+			name:        "zero concurrency disables dispatch",
+			concurrency: 0,
+			wantReject:  1,
+		},
+		{
+			name:        "negative concurrency disables dispatch",
+			concurrency: -1,
+			wantReject:  1,
+		},
+		{
+			name:        "concurrency 1 fits one mirror then rejects",
+			concurrency: 1,
+			wantFit:     1,
+			wantReject:  1,
+		},
+		{
+			name:        "concurrency 256 fits 256 mirrors then rejects",
+			concurrency: 256,
+			wantFit:     256,
+			wantReject:  1,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := newMirrorTrafficSemaphore(tc.concurrency)
+			require.NotNil(t, sem)
+			if tc.wantFit > 0 {
+				require.True(t, sem.TryAcquire(tc.wantFit), "expected TryAcquire(%d) to succeed", tc.wantFit)
+			}
+			if tc.wantReject > 0 {
+				require.False(t, sem.TryAcquire(tc.wantReject), "expected TryAcquire(%d) to fail", tc.wantReject)
+			}
+		})
+	}
+}
+
 func TestWarmingReads(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	executor, primary, replica := createExecutorEnvWithPrimaryReplicaConn(t, ctx, 100)
