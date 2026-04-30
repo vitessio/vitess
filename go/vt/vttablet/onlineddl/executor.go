@@ -174,6 +174,14 @@ type cancellableMigration struct {
 	message string
 }
 
+// pendingMigration carries both the UUID and migration context of a pending migration.
+// The context is required so that in-order completion logic can be scoped per-context:
+// migrations from different contexts form independent sequences and must not block each other.
+type pendingMigration struct {
+	uuid             string
+	migrationContext string
+}
+
 func newCancellableMigration(uuid string, message string) *cancellableMigration {
 	return &cancellableMigration{uuid: uuid, message: message}
 }
@@ -1585,16 +1593,32 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 }
 
 // readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
-func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []string, err error) {
+func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) ([]string, error) {
+	pending, err := e.readPendingMigrations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	uuids := make([]string, len(pending))
+	for i, pm := range pending {
+		uuids[i] = pm.uuid
+	}
+	return uuids, nil
+}
+
+// readPendingMigrations returns pending migrations (queued/ready/running) with their migration contexts.
+func (e *Executor) readPendingMigrations(ctx context.Context) ([]pendingMigration, error) {
 	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
 	if err != nil {
-		return uuids, err
+		return nil, err
 	}
+	migrations := make([]pendingMigration, 0, len(r.Named().Rows))
 	for _, row := range r.Named().Rows {
-		uuid := row["migration_uuid"].ToString()
-		uuids = append(uuids, uuid)
+		migrations = append(migrations, pendingMigration{
+			uuid:             row["migration_uuid"].ToString(),
+			migrationContext: row["migration_context"].ToString(),
+		})
 	}
-	return uuids, err
+	return migrations, nil
 }
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
@@ -2898,7 +2922,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 // - a migration is 'ready' but is not set to run _concurrently_, and there's a running migration that is also non-concurrent
 // - a migration is 'ready' but there's another migration 'running' on the exact same table
 func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.OnlineDDL, error) {
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -2922,7 +2946,18 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 		}
 		if isImmediateOperation && onlineDDL.StrategySetting().IsInOrderCompletion() {
 			// This migration is immediate: if we run it now, it will complete within a second or two at most.
-			if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+			// For in-order completion, an immediate migration must be the first pending one in its context —
+			// if anything in the same context precedes it, we must wait for that to complete first.
+			// We scope the check to the same context because different contexts are independent sequences:
+			// a pending migration in another context should not delay this one.
+			firstInContext := ""
+			for _, pm := range pendingMigrations {
+				if pm.migrationContext == onlineDDL.MigrationContext {
+					firstInContext = pm.uuid
+					break
+				}
+			}
+			if firstInContext != onlineDDL.UUID {
 				continue
 			}
 		}
@@ -2948,11 +2983,12 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 // reviewInOrderMigrations reviews all pending migrations that are also `--in-order` to see whether
 // they should be failed due to prior failed/cancelled migrations in same context.
 func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return err
 	}
-	for _, uuid := range pendingMigrationsUUIDs {
+	for _, pm := range pendingMigrations {
+		uuid := pm.uuid
 		onlineDDL, _, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return err
@@ -2964,7 +3000,7 @@ func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
 		if wasFailed {
 			log.Info(fmt.Sprintf("reviewInOrderMigrations: failing in-order migration uuid=%s due to previous failed/cancelled migrations in same context", uuid))
 		} else {
-			pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+			pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrations)
 			if err := e.updateInOrderCompletionPendingCount(ctx, uuid, pendingMigrationsCount); err != nil {
 				return vterrors.Wrapf(err, "failed to update in order completion pending count for migration %s", uuid)
 			}
@@ -3182,19 +3218,18 @@ func shouldCutOverAccordingToBackoff(
 
 // getInOrderCompletionPendingCount returns a count of migrations that must cut-over in-order, before the
 // provided migration is able to proceed. This count is relevant only if the migration uses the
-// --in-order-completion option.
-func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) uint64 {
-	if len(pendingMigrationsUUIDs) == 0 {
-		return 0
-	}
+// --in-order-completion option. Only migrations within the same migration context are counted: each
+// context is an independent ordered sequence, so a pending migration in a different context must not
+// hold up this one.
+func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrations []pendingMigration) uint64 {
 	var pendingCount uint64
-	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
-		if pendingMigrationsUUID == onlineDDL.UUID {
-			// found all migrations we must wait for if
-			// we found ourself in the pending list.
+	for _, pm := range pendingMigrations {
+		if pm.uuid == onlineDDL.UUID {
 			break
 		}
-		pendingCount++
+		if pm.migrationContext == onlineDDL.MigrationContext {
+			pendingCount++
+		}
 	}
 	return pendingCount
 }
@@ -3223,7 +3258,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	if err != nil {
 		return countRunnning, cancellable, err
 	}
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return countRunnning, cancellable, err
 	}
@@ -3351,7 +3386,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					return nil
 				}
 				if strategySetting.IsInOrderCompletion() {
-					pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+					pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrations)
 					if pendingMigrationsCount > 0 {
 						postponeCompletion = true
 					}
@@ -3394,8 +3429,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	{
 		// now, let's look at UUIDs we own and _think_ should be running, and see which of them _isn't_ actually running or pending...
 		uuidsFoundPending := map[string]bool{}
-		for _, uuid := range pendingMigrationsUUIDs {
-			uuidsFoundPending[uuid] = true
+		for _, pm := range pendingMigrations {
+			uuidsFoundPending[pm.uuid] = true
 		}
 
 		e.ownedRunningMigrations.Range(func(k, _ any) bool {
@@ -4516,10 +4551,6 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
-	if err != nil {
-		return result, err
-	}
 	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
 		return result, err
@@ -4536,7 +4567,7 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(rows)))
 	return result, nil
 }
 
