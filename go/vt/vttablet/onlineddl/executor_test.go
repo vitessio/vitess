@@ -246,20 +246,29 @@ func TestSafeMigrationCutOverThreshold(t *testing.T) {
 }
 
 func TestGetInOrderCompletionPendingCount(t *testing.T) {
-	onlineDDL := &schema.OnlineDDL{UUID: t.Name()}
+	const ctx = "ctx-same"
+	onlineDDL := &schema.OnlineDDL{UUID: t.Name(), MigrationContext: ctx}
+	pm := func(uuid, migrationContext string) pendingMigration {
+		return pendingMigration{uuid: uuid, migrationContext: migrationContext}
+	}
 	{
 		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, nil))
 	}
 	{
-		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, []string{}))
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, []pendingMigration{}))
 	}
 	{
-		pendingMigrationsUUIDs := []string{t.Name()}
-		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
+		pendingMigrations := []pendingMigration{pm(t.Name(), ctx)}
+		require.Zero(t, getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
 	}
 	{
-		pendingMigrationsUUIDs := []string{"a", "b", "c", t.Name(), "x"}
-		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs))
+		pendingMigrations := []pendingMigration{pm("a", ctx), pm("b", ctx), pm("c", ctx), pm(t.Name(), ctx), pm("x", ctx)}
+		require.Equal(t, uint64(3), getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
+	}
+	{
+		// migrations from a different context do not count
+		pendingMigrations := []pendingMigration{pm("a", "ctx-other"), pm("b", ctx), pm(t.Name(), ctx), pm("x", ctx)}
+		require.Equal(t, uint64(1), getInOrderCompletionPendingCount(onlineDDL, pendingMigrations))
 	}
 }
 
