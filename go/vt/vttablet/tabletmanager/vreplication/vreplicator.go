@@ -388,16 +388,6 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 		if err != nil {
 			return nil, err
 		}
-<<<<<<< HEAD
-		if len(qr.Rows) == 0 {
-			return nil, fmt.Errorf("no data returned from information_schema.columns")
-		}
-||||||| parent of 3d48e0e1b6 (`go/mysql`, `vreplication`: fix flaky unit tests with shared root cause (#19990))
-		if len(qr.Rows) == 0 {
-			return nil, errors.New("no data returned from information_schema.columns")
-		}
-=======
->>>>>>> 3d48e0e1b6 (`go/mysql`, `vreplication`: fix flaky unit tests with shared root cause (#19990))
 
 		var pks []string
 		if len(td.PrimaryKeyColumns) != 0 {

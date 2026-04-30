@@ -34,6 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -43,85 +44,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
-
-<<<<<<< HEAD
-||||||| parent of 3d48e0e1b6 (`go/mysql`, `vreplication`: fix flaky unit tests with shared root cause (#19990))
-func TestMaxQuerySize(t *testing.T) {
-	makeVR := func(dbClient binlogplayer.DBClient, relayLogMaxSize int) *vreplicator {
-		stats := binlogplayer.NewStats()
-		return &vreplicator{
-			dbClient: newVDBClient(dbClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
-			stats:    stats,
-			workflowConfig: &vttablet.VReplicationConfig{
-				RelayLogMaxSize: relayLogMaxSize,
-			},
-		}
-	}
-
-	t.Run("uses session max allowed packet", func(t *testing.T) {
-		dbClient := binlogplayer.NewMockDBClient(t)
-		dbClient.ExpectRequest(
-			SqlMaxAllowedPacket,
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("max_allowed_packet", "int64"),
-				"1024",
-			),
-			nil,
-		)
-
-		vr := makeVR(dbClient, 4096)
-		assert.Equal(t, int64(960), vr.maxQuerySize(vr.dbClient))
-		assert.Nil(t, vr.dbClient.queries)
-	})
-
-	t.Run("falls back to relay log max size", func(t *testing.T) {
-		dbClient := binlogplayer.NewMockDBClient(t)
-		dbClient.ExpectRequest(SqlMaxAllowedPacket, nil, assert.AnError)
-
-		vr := makeVR(dbClient, 4096)
-		assert.Equal(t, int64(4032), vr.maxQuerySize(vr.dbClient))
-		assert.Nil(t, vr.dbClient.queries)
-	})
-}
-
-=======
-func TestMaxQuerySize(t *testing.T) {
-	makeVR := func(dbClient binlogplayer.DBClient, relayLogMaxSize int) *vreplicator {
-		stats := binlogplayer.NewStats()
-		return &vreplicator{
-			dbClient: newVDBClient(dbClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
-			stats:    stats,
-			workflowConfig: &vttablet.VReplicationConfig{
-				RelayLogMaxSize: relayLogMaxSize,
-			},
-		}
-	}
-
-	t.Run("uses session max allowed packet", func(t *testing.T) {
-		dbClient := binlogplayer.NewMockDBClient(t)
-		dbClient.ExpectRequest(
-			SqlMaxAllowedPacket,
-			sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("max_allowed_packet", "int64"),
-				"1024",
-			),
-			nil,
-		)
-
-		vr := makeVR(dbClient, 4096)
-		assert.Equal(t, int64(960), vr.maxQuerySize(vr.dbClient))
-		assert.Nil(t, vr.dbClient.queries)
-	})
-
-	t.Run("falls back to relay log max size", func(t *testing.T) {
-		dbClient := binlogplayer.NewMockDBClient(t)
-		dbClient.ExpectRequest(SqlMaxAllowedPacket, nil, assert.AnError)
-
-		vr := makeVR(dbClient, 4096)
-		assert.Equal(t, int64(4032), vr.maxQuerySize(vr.dbClient))
-		assert.Nil(t, vr.dbClient.queries)
-	})
-}
 
 // fakeFetchSuperQueryMysqld is a minimal MysqlDaemon test double that delegates
 // FetchSuperQuery to a callback. Only the methods exercised by tests are valid;
@@ -197,7 +119,6 @@ func TestFetchInfoSchemaColumnsRetry(t *testing.T) {
 	})
 }
 
->>>>>>> 3d48e0e1b6 (`go/mysql`, `vreplication`: fix flaky unit tests with shared root cause (#19990))
 func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
 	tt := []struct {
 		name             string
