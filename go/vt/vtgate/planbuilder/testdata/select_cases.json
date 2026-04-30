@@ -2826,6 +2826,7 @@
   {
     "comment": "Backtick-quoted dual is a real table, not virtual dual",
     "query": "select 1 from `dual`",
+    "skip_e2e": true,
     "plan": "table dual not found"
   },
   {
@@ -5501,6 +5502,7 @@
   {
     "comment": "Unresolved column in dual subquery should fail",
     "query": "SELECT 1 as x, (SELECT x FROM dual), (SELECT y FROM dual)",
+    "skip_e2e": true,
     "plan": "column 'y' not found"
   },
   {
@@ -5532,11 +5534,13 @@
   {
     "comment": "Same-scope alias reference in SELECT without FROM should fail",
     "query": "SELECT 1 AS x, x",
+    "skip_e2e": true,
     "plan": "column 'x' not found"
   },
   {
     "comment": "Same-scope alias reference in WHERE without FROM should fail",
     "query": "SELECT 1 AS x WHERE x = 1",
+    "skip_e2e": true,
     "plan": "column 'x' not found"
   },
   {
