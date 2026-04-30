@@ -3433,7 +3433,7 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 		fmt.Printf("<%s>\n", uuid)
 	}
 	if !params.skipWait {
-		time.Sleep(time.Second * 20)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 	}
 	return uuid
 }
