@@ -234,6 +234,18 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
+func TestDeniedSystemVariablesWithSetVarHint(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	executor.vConfig.DeniedSystemVariables = map[string]struct{}{"unique_checks": {}}
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
+
+	_, err := executorExecSession(context.Background(), executor, session, "select /*+ SET_VAR(unique_checks=0) */ 1 from user", map[string]*querypb.BindVariable{})
+	require.Error(t, err)
+	assert.Equal(t, "VT12001: unsupported: system setting: unique_checks", err.Error())
+	assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+	assert.Empty(t, sbc1.Queries)
+}
+
 func TestSetSystemVariablesTx(t *testing.T) {
 	executor, sbc1, _, _, _ := createCustomExecutor(t, "{}", "8.0.1")
 	executor.config.Normalize = true
@@ -4499,6 +4511,50 @@ func TestSelectView(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc.Queries)
 }
 
+func TestNewWarmingReadsSemaphore(t *testing.T) {
+	tests := []struct {
+		name        string
+		concurrency int
+		wantFit     int64 // weight that should fit via TryAcquire
+		wantReject  int64 // weight that should be rejected via TryAcquire
+	}{
+		{
+			name:        "zero concurrency blocks all",
+			concurrency: 0,
+			wantReject:  1,
+		},
+		{
+			name:        "negative concurrency blocks all",
+			concurrency: -1,
+			wantReject:  1,
+		},
+		{
+			name:        "concurrency 1 fits priority 0",
+			concurrency: 1,
+			wantFit:     engine.WarmingReadsBaseWeight, // 100
+			wantReject:  1,                             // no room left
+		},
+		{
+			name:        "concurrency 500 fits 500 priority-0 reads",
+			concurrency: 500,
+			wantFit:     500 * engine.WarmingReadsBaseWeight,
+			wantReject:  1,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := newWarmingReadsSemaphore(tc.concurrency)
+			require.NotNil(t, sem)
+			if tc.wantFit > 0 {
+				require.True(t, sem.TryAcquire(tc.wantFit), "expected TryAcquire(%d) to succeed", tc.wantFit)
+			}
+			if tc.wantReject > 0 {
+				require.False(t, sem.TryAcquire(tc.wantReject), "expected TryAcquire(%d) to fail", tc.wantReject)
+			}
+		})
+	}
+}
+
 func TestWarmingReads(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 	executor, primary, replica := createExecutorEnvWithPrimaryReplicaConn(t, ctx, 100)
@@ -4521,6 +4577,10 @@ func TestWarmingReads(t *testing.T) {
 		{Sql: "select age, city from `user`/* warming read */"},
 	}
 	utils.MustMatch(t, wantQueriesReplica, replica.GetQueries())
+	replicaOptions := replica.GetOptions()
+	require.Len(t, replicaOptions, 1)
+	assert.True(t, replicaOptions[0].GetNoResult(), "warming read should set NoResult option")
+	replica.ClearOptions()
 	replica.ClearQueries()
 
 	_, err = executor.Execute(ctx, nil, "TestWarmingReads", session, "select age, city from user /* already has a comment */ ", map[string]*querypb.BindVariable{}, false)

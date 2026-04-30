@@ -18,9 +18,10 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"runtime"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -306,7 +307,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	if err := tm.fixSemiSync(ctx, tm.Tablet().Type, semiSyncAction); err != nil {
 		return err
 	}
-	return tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
+	return tm.startReplicationRecoverable(ctx)
 }
 
 // RestartReplication will stop replication and then start it again
@@ -335,7 +336,7 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 	}
 
 	// Start replication
-	return tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
+	return tm.startReplicationRecoverable(ctx)
 }
 
 // StartReplicationUntilAfter will start the replication and let it catch up
@@ -406,7 +407,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, false); err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return "", err
@@ -524,7 +525,8 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
+
+	if err := tm.setReplicationSourceRecoverable(ctx, ti.MysqlHostname, ti.MysqlPort, 0, false, true); err != nil {
 		return err
 	}
 
@@ -686,7 +688,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return nil, err
@@ -949,23 +951,19 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	}
 	if status.SourceHost != host || status.SourcePort != port || heartbeatInterval != 0 {
 		// This handles both changing the address and starting replication.
-		if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
-			if err := tm.handleRelayLogError(ctx, err); err != nil {
-				return err
-			}
+		if err := tm.setReplicationSourceRecoverable(ctx, host, port, heartbeatInterval, wasReplicating, shouldbeReplicating); err != nil {
+			return err
 		}
 	} else if shouldbeReplicating {
 		// The address is correct. We need to restart replication so that any semi-sync changes if any
-		// are taken into account
+		// are taken into account. We don't attempt to recover from the known recoverable errors here
+		// because recovery requires running `STOP REPLICA` in order to reset the replication metadata.
+		// If we error the first time, we're likely to error the second time as well.
 		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRelayLogError(ctx, err); err != nil {
-				return err
-			}
+			return err
 		}
-		if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
-			if err := tm.handleRelayLogError(ctx, err); err != nil {
-				return err
-			}
+		if err := tm.startReplicationRecoverable(ctx); err != nil {
+			return err
 		}
 	}
 
@@ -1231,25 +1229,118 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 		return vterrors.Wrap(err, "failed to StopReplication")
 	}
-	if err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv()); err != nil {
+	if err := tm.startReplicationRecoverable(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to StartReplication")
 	}
 	return nil
 }
 
-// handleRelayLogError resets replication of the instance.
-// This is required because sometimes MySQL gets stuck due to improper initialization of
-// master info structure or related failures and throws errors like
-// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log
-// These errors can only be resolved by resetting the replication, otherwise START REPLICA fails.
-func (tm *TabletManager) handleRelayLogError(ctx context.Context, err error) error {
-	// attempt to fix this error:
-	// Replica failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START REPLICA
+// startReplicationRecoverable starts replication and handles recoverable errors by resetting replication.
+func (tm *TabletManager) startReplicationRecoverable(ctx context.Context) error {
+	err := tm.MysqlDaemon.StartReplication(ctx, tm.hookExtraEnv())
+	if err == nil {
+		return nil
+	}
+
+	// Try to recover from the error.
+	if err := tm.handleRecoverableReplicationInitError(ctx, err); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setReplicationSourceRecoverable configures the requested replication source and optionally starts
+// replication afterward. When possible, certain errors are recovered by reinitializing replication
+// metadata.
+func (tm *TabletManager) setReplicationSourceRecoverable(ctx context.Context, host string, port int32, heartbeatInterval float64, wasReplicating bool, shouldStartReplication bool) error {
+	// Let's first try to apply the requested source without starting replication afterwards. If the
+	// replica was replicating before, we stop replication first.
+	err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, wasReplicating, false)
+	if err == nil {
+		// We succeeded, let's start replication but only if it was requested.
+		if !shouldStartReplication {
+			return nil
+		}
+
+		return tm.startReplicationRecoverable(ctx)
+	}
+
+	// We hit an error. If the error is not one of the recoverable ones, we can't recover and should return it.
+	if !isRecoverableReplicationInitializationError(err) {
+		return err
+	}
+
+	log.Warn(
+		"Encountered recoverable replication initialization error while changing replication source, resetting "+
+			"replication parameters and reapplying source",
+		slog.String("source_host", host),
+		slog.Int("source_port", int(port)),
+		slog.Any("error", err),
+	)
+
+	// If the replica was running when the source-change attempt failed, stop it
+	// explicitly before resetting replication metadata.
+	if wasReplicating {
+		if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+			return err
+		}
+	}
+
+	// Recover from the error by reinitializing replication metadata through
+	// `RESET REPLICA ALL`.
+	if err := tm.MysqlDaemon.ResetReplicationParameters(ctx); err != nil {
+		return err
+	}
+
+	// Now that we've reinitialized the replication metadata, try setting the source again.
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, host, port, heartbeatInterval, false, false); err != nil {
+		return err
+	}
+
+	// The replication source has finally been set. Let's also start replication if it was requested.
+	if shouldStartReplication {
+		return tm.startReplicationRecoverable(ctx)
+	}
+
+	return nil
+}
+
+// recoverableReplicationInitializationErrorCodes is the set of replication initialization error
+// codes that can be recovered from by reinitializing replication metadata.
+// MySQL used 1871/1872 for master-info and relay-log-info initialization errors
+// through 8.0.32, and reassigned those numbers in 8.0.33 to connection-metadata
+// and applier-metadata initialization errors.
+var recoverableReplicationInitializationErrorCodes = map[sqlerror.ErrorCode]struct{}{
+	sqlerror.ERMasterInfo:                              {},
+	sqlerror.ERReplicaConnectionMetadataInitRepository: {},
+	sqlerror.ERReplicaApplierMetadataInitRepository:    {},
+}
+
+// isRecoverableReplicationInitializationError reports whether an error can be recovered from by
+// reinitializing replication metadata.
+func isRecoverableReplicationInitializationError(err error) bool {
+	sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+	if !ok || sqlErr == nil {
+		return false
+	}
+
+	_, ok = recoverableReplicationInitializationErrorCodes[sqlErr.Number()]
+	return ok
+}
+
+// handleRecoverableReplicationInitError repairs recoverable replication initialization
+// failures by restarting replication.
+func (tm *TabletManager) handleRecoverableReplicationInitError(ctx context.Context, err error) error {
+	// Attempt to self-heal by restarting replication when initialization fails.
 	// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
 	// The same fix also works for https://github.com/vitessio/vitess/issues/10955.
-	if strings.Contains(err.Error(), "Replica failed to initialize relay log info structure from the repository") ||
-		strings.Contains(err.Error(), "Could not initialize master info structure") {
-		// Stop, reset and start replication again to resolve this error
+	if isRecoverableReplicationInitializationError(err) {
+		log.Warn(
+			"Encountered recoverable replication initialization error, restarting replication",
+			slog.Any("error", err),
+		)
+
 		if err := tm.MysqlDaemon.RestartReplication(ctx, tm.hookExtraEnv()); err != nil {
 			return err
 		}

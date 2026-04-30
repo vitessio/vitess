@@ -42,17 +42,23 @@ type binder struct {
 	// that this map is joined with using USING.
 	// This information is used to expand `*` correctly, and is not available post-analysis
 	usingJoinInfo map[TableSet]map[string]TableSet
+
+	// availableAliases tracks which AliasedExpr nodes have been fully
+	// walked. This is used to reject forward references to aliases in
+	// subqueries, matching MySQL's behavior.
+	availableAliases map[*sqlparser.AliasedExpr]struct{}
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
 	return &binder{
-		recursive:     map[sqlparser.Expr]TableSet{},
-		direct:        map[sqlparser.Expr]TableSet{},
-		scoper:        scoper,
-		org:           org,
-		tc:            tc,
-		typer:         typer,
-		usingJoinInfo: map[TableSet]map[string]TableSet{},
+		recursive:        map[sqlparser.Expr]TableSet{},
+		direct:           map[sqlparser.Expr]TableSet{},
+		scoper:           scoper,
+		org:              org,
+		tc:               tc,
+		typer:            typer,
+		usingJoinInfo:    map[TableSet]map[string]TableSet{},
+		availableAliases: map[*sqlparser.AliasedExpr]struct{}{},
 	}
 }
 
@@ -74,6 +80,11 @@ func (b *binder) up(cursor *sqlparser.Cursor) error {
 		return b.bindUpdateExpr(node)
 	case *sqlparser.OverClause:
 		return b.bindOverClause(node)
+	case *sqlparser.AliasedExpr:
+		if node.As.NotEmpty() {
+			b.availableAliases[node] = struct{}{}
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -299,6 +310,43 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		if !thisDeps.empty() {
 			return thisDeps.get(colName)
 		}
+		// For parent scopes only (not the original scope), check if a
+		// SELECT alias satisfies the column reference. Table columns from
+		// resolveColumnInScope above take precedence over aliases.
+		// Same-scope alias references (e.g. SELECT 1 AS x, x) are not
+		// valid in MySQL, so this is gated on !first.
+		if !first && colName.Qualifier.IsEmpty() {
+			if sel, ok := current.stmt.(*sqlparser.Select); ok {
+				ae, err := b.findMatchingAlias(sel, colName.Name.Lowered())
+				if err != nil {
+					return dependency{}, err
+				}
+				if ae != nil {
+					// Use the dependencies of the aliased expression so the
+					// reference is correctly tracked as correlated.
+					// We use .dependencies() instead of direct map lookup
+					// to handle compound expressions (e.g. user_id+1 AS foobar).
+					recursive := b.recursive.dependencies(ae.Expr)
+					direct := b.direct.dependencies(ae.Expr)
+					typ := b.typer.exprType(ae.Expr)
+					if recursive.IsEmpty() && direct.IsEmpty() {
+						// The aliased expression has no table dependencies
+						// (e.g. a literal such as `1 AS x`). Mark the
+						// reference as correlated to the outer scope so
+						// planning falls into the same path as other
+						// correlated references — single-route cases still
+						// merge cleanly, and split-route cases surface the
+						// existing "unsupported correlated subquery" error
+						// instead of emitting SQL that references the alias
+						// as a non-existent column at runtime.
+						outer := scopeTableSet(current, b.org)
+						recursive = outer
+						direct = outer
+					}
+					return dependency{certain: true, recursive: recursive, direct: direct, typ: typ}, nil
+				}
+			}
+		}
 		if current.parent == nil &&
 			len(current.tables) == 1 &&
 			first &&
@@ -460,29 +508,52 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
 		return nil, NotSingleRouteErr{Inner: newAmbiguousColumnError(expr)}
 	}
-	// For scopes with no tables (virtual dual), check if the column matches
-	// a SELECT alias. This allows subqueries like (SELECT x) to reference
-	// aliases from an outer SELECT without a FROM clause.
-	if deps.empty() && len(current.tables) == 0 && expr.Qualifier.IsEmpty() {
-		if sel, ok := current.stmt.(*sqlparser.Select); ok && hasMatchingAlias(sel, expr.Name.String()) {
-			return createUncertain(EmptyTableSet(), EmptyTableSet()), nil
-		}
-	}
 	return deps, nil
 }
 
-func hasMatchingAlias(sel *sqlparser.Select, name string) bool {
-	lowered := strings.ToLower(name)
-	for _, selExpr := range sel.SelectExprs.Exprs {
+func (b *binder) findMatchingAlias(sel *sqlparser.Select, lowered string) (*sqlparser.AliasedExpr, error) {
+	var match *sqlparser.AliasedExpr
+	for _, selExpr := range sel.GetColumns() {
 		ae, ok := selExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			continue
 		}
-		if ae.As.Lowered() == lowered {
-			return true
+		if ae.As.Lowered() != lowered {
+			continue
+		}
+		if _, available := b.availableAliases[ae]; !available {
+			continue
+		}
+		if match == nil {
+			match = ae
+			continue
+		}
+		// MySQL prefers non-column expressions over bare column references
+		// when duplicate aliases appear. Ambiguity is only raised when two
+		// different bare columns compete with no non-column alternative
+		// already in the running.
+		_, matchIsCol := match.Expr.(*sqlparser.ColName)
+		_, thisIsCol := ae.Expr.(*sqlparser.ColName)
+		switch {
+		case matchIsCol && thisIsCol:
+			if !sqlparser.Equals.Expr(match.Expr, ae.Expr) {
+				return nil, newAmbiguousColumnError(sqlparser.NewColName(lowered))
+			}
+		case matchIsCol && !thisIsCol:
+			match = ae
 		}
 	}
-	return false
+	return match, nil
+}
+
+// scopeTableSet returns the union of TableSets for every table directly
+// reachable from the given scope.
+func scopeTableSet(s *scope, org originable) TableSet {
+	id := EmptyTableSet()
+	for _, table := range s.tables {
+		id = id.Merge(table.getTableSet(org))
+	}
+	return id
 }
 
 // GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery

@@ -321,10 +321,10 @@ const (
 	Type_VECTOR Type = 2083
 	// RAW specifies a type which won't be quoted but the value used as-is while encoding.
 	// Properties: 36, None.
-	Type_RAW Type = 2084
+	Type_RAW Type = 36
 	// ROW_TUPLE represents multiple rows.
 	// Properties: 37, None.
-	Type_ROW_TUPLE Type = 2085
+	Type_ROW_TUPLE Type = 37
 )
 
 // Enum value maps for Type.
@@ -366,8 +366,8 @@ var (
 		4129:  "HEXVAL",
 		4130:  "BITNUM",
 		2083:  "VECTOR",
-		2084:  "RAW",
-		2085:  "ROW_TUPLE",
+		36:    "RAW",
+		37:    "ROW_TUPLE",
 	}
 	Type_value = map[string]int32{
 		"NULL_TYPE":  0,
@@ -406,8 +406,8 @@ var (
 		"HEXVAL":     4129,
 		"BITNUM":     4130,
 		"VECTOR":     2083,
-		"RAW":        2084,
-		"ROW_TUPLE":  2085,
+		"RAW":        36,
+		"ROW_TUPLE":  37,
 	}
 )
 
@@ -1404,8 +1404,14 @@ type ExecuteOptions struct {
 	InDmlExecution bool `protobuf:"varint,19,opt,name=in_dml_execution,json=inDmlExecution,proto3" json:"in_dml_execution,omitempty"`
 	// transaction_timeout specifies the transaction timeout in milliseconds. If not set, the default timeout is used.
 	TransactionTimeout *int64 `protobuf:"varint,20,opt,name=transaction_timeout,json=transactionTimeout,proto3,oneof" json:"transaction_timeout,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// no_result specifies that the caller does not need the query result rows.
+	// When set, the server will still execute the query via the Execute RPC
+	// but will not return rows or fields in the response. This flag is not
+	// currently honored by StreamExecute. This is useful for warming reads
+	// where the goal is to warm the buffer pool, not to retrieve data.
+	NoResult      bool `protobuf:"varint,21,opt,name=no_result,json=noResult,proto3" json:"no_result,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ExecuteOptions) Reset() {
@@ -1557,6 +1563,13 @@ func (x *ExecuteOptions) GetTransactionTimeout() int64 {
 		return *x.TransactionTimeout
 	}
 	return 0
+}
+
+func (x *ExecuteOptions) GetNoResult() bool {
+	if x != nil {
+		return x.NoResult
+	}
+	return false
 }
 
 type isExecuteOptions_Timeout interface {
@@ -5826,7 +5839,7 @@ const file_query_proto_rawDesc = "" +
 	"\x0ebind_variables\x18\x02 \x03(\v2$.query.BoundQuery.BindVariablesEntryR\rbindVariables\x1aU\n" +
 	"\x12BindVariablesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
-	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\x83\r\n" +
+	"\x05value\x18\x02 \x01(\v2\x13.query.BindVariableR\x05value:\x028\x01\"\xa0\r\n" +
 	"\x0eExecuteOptions\x12M\n" +
 	"\x0fincluded_fields\x18\x04 \x01(\x0e2$.query.ExecuteOptions.IncludedFieldsR\x0eincludedFields\x12*\n" +
 	"\x11client_found_rows\x18\x05 \x01(\bR\x0fclientFoundRows\x12:\n" +
@@ -5844,7 +5857,8 @@ const file_query_proto_rawDesc = "" +
 	"\x15authoritative_timeout\x18\x11 \x01(\x03H\x00R\x14authoritativeTimeout\x12/\n" +
 	"\x14fetch_last_insert_id\x18\x12 \x01(\bR\x11fetchLastInsertId\x12(\n" +
 	"\x10in_dml_execution\x18\x13 \x01(\bR\x0einDmlExecution\x124\n" +
-	"\x13transaction_timeout\x18\x14 \x01(\x03H\x01R\x12transactionTimeout\x88\x01\x01\";\n" +
+	"\x13transaction_timeout\x18\x14 \x01(\x03H\x01R\x12transactionTimeout\x88\x01\x01\x12\x1b\n" +
+	"\tno_result\x18\x15 \x01(\bR\bnoResult\";\n" +
 	"\x0eIncludedFields\x12\x11\n" +
 	"\rTYPE_AND_NAME\x10\x00\x12\r\n" +
 	"\tTYPE_ONLY\x10\x01\x12\a\n" +
@@ -6241,7 +6255,7 @@ const file_query_proto_rawDesc = "" +
 	"\aISFLOAT\x10\x80\b\x12\r\n" +
 	"\bISQUOTED\x10\x80\x10\x12\v\n" +
 	"\x06ISTEXT\x10\x80 \x12\r\n" +
-	"\bISBINARY\x10\x80@*\xe7\x03\n" +
+	"\bISBINARY\x10\x80@*\xe5\x03\n" +
 	"\x04Type\x12\r\n" +
 	"\tNULL_TYPE\x10\x00\x12\t\n" +
 	"\x04INT8\x10\x81\x02\x12\n" +
@@ -6284,9 +6298,9 @@ const file_query_proto_rawDesc = "" +
 	"\x06HEXNUM\x10\xa0 \x12\v\n" +
 	"\x06HEXVAL\x10\xa1 \x12\v\n" +
 	"\x06BITNUM\x10\xa2 \x12\v\n" +
-	"\x06VECTOR\x10\xa3\x10\x12\b\n" +
-	"\x03RAW\x10\xa4\x10\x12\x0e\n" +
-	"\tROW_TUPLE\x10\xa5\x10*6\n" +
+	"\x06VECTOR\x10\xa3\x10\x12\a\n" +
+	"\x03RAW\x10$\x12\r\n" +
+	"\tROW_TUPLE\x10%*6\n" +
 	"\x10StartCommitState\x12\v\n" +
 	"\aUnknown\x10\x00\x12\b\n" +
 	"\x04Fail\x10\x01\x12\v\n" +

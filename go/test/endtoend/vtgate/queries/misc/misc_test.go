@@ -552,9 +552,7 @@ func TestAliasesInOuterJoinQueries(t *testing.T) {
 	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, tbl.unq_col as col from t1 left outer join tbl on t1.id2 = tbl.nonunq_col order by t1.id2 limit 2 offset 2")
 	mcmp.ExecWithColumnCompare("select t1.id1 as t0, t1.id1 as t1, count(*) as leCount from t1 left outer join tbl on t1.id2 = tbl.nonunq_col group by 1, t1")
 	mcmp.ExecWithColumnCompare("select t.id1, t.id2, derived.unq_col from t1 t join (select id, unq_col, nonunq_col from tbl) as derived on t.id2 = derived.nonunq_col")
-	if utils.BinaryIsAtLeastAtVersion(21, "vtgate") {
-		mcmp.ExecWithColumnCompare("select * from t1 t left join tbl on t.id1 = 666 and t.id2 = tbl.id")
-	}
+	mcmp.ExecWithColumnCompare("select * from t1 t left join tbl on t.id1 = 666 and t.id2 = tbl.id")
 }
 
 func TestJoinTypes(t *testing.T) {
@@ -839,9 +837,12 @@ func TestSemiJoin(t *testing.T) {
 
 // TestTabletTypeRouting tests that the tablet type routing works as intended.
 func TestTabletTypeRouting(t *testing.T) {
-	// We are gonna configure the routing rules to send the
-	// query for a replica tablet in ks_misc.t1 to go to a table that doesn't exist.
-	// I know this doesn't make much practical sense, but makes testing really easy.
+	// We are gonna configure the routing rules to send the query for a replica
+	// tablet in ks_misc.t1 to a table in a different keyspace (uks). Since uks
+	// is started with 0 replica tablets (see TestMain), the replica-side query
+	// will fail with "no healthy tablet available" for the uks keyspace —
+	// which is the signal that the @replica routing rule fired and rewrote the
+	// target keyspace correctly. The primary-side query still reaches ks_misc.t1.
 	routingRules := `{"rules": [
 	{
 	"from_table": "ks_misc.t1@replica",
@@ -867,9 +868,11 @@ func TestTabletTypeRouting(t *testing.T) {
 	utils.AssertMatches(t, vtConn, "select * from ks_misc.t1", `[[INT64(0) INT64(0)]]`)
 	// Now we change the connection's target
 	utils.Exec(t, vtConn, "use ks_misc@replica")
-	// We verify that querying the replica tablet creates an unknown table error.
+	// We verify that the replica-side query is redirected to uks by the routing rule.
 	_, err = utils.ExecAllowError(t, vtConn, "select * from ks_misc.t1")
-	require.ErrorContains(t, err, "table unknown not found")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "uks")
+	require.ErrorContains(t, err, "replica")
 }
 
 // TestJoinMixedCaseExpr tests that join condition with expression from both table having in clause is handled correctly.

@@ -1,5 +1,49 @@
 [
   {
+    "comment": "routing rule redirects an unqualified table reference that renames across keyspaces (issue #19947)",
+    "query": "select intcol from bar",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select intcol from bar",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select intcol from music as bar where 1 != 1",
+        "Query": "select intcol from music as bar"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
+    "comment": "routing rule redirects a qualified table reference that renames across keyspaces (issue #19947 sibling)",
+    "query": "select intcol from second_user.bar",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select intcol from second_user.bar",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select intcol from music as bar where 1 != 1",
+        "Query": "select intcol from music as bar"
+      },
+      "TablesUsed": [
+        "user.music"
+      ]
+    }
+  },
+  {
     "comment": "EXISTS subquery when the default ks is different than the inner query",
     "query": "select exists(select * from user where id = 5)",
     "plan": {

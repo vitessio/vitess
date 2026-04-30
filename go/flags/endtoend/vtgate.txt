@@ -18,7 +18,7 @@ vtgate \
 	--grpc-port 15991 \
 	--mysql-server-port 15306 \
 	--cell test \
-	--cells_to_watch test \
+	--cells-to-watch test \
 	--tablet-types-to-wait PRIMARY,REPLICA \
 	--service-map 'grpc-vtgateservice' \
 	--pid-file $VTDATAROOT/tmp/vtgate.pid \
@@ -30,6 +30,7 @@ Flags:
       --balancer-keyspaces strings                                       Comma-separated list of keyspaces for which to use the balancer (optional). If empty, applies to all keyspaces.
       --balancer-vtgate-cells strings                                    Comma-separated list of cells that contain vttablets. For 'prefer-cell' mode, this is required. For 'random' mode, this is optional and filters tablets to those cells.
       --bind-address string                                              Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
+      --binlog-dump-authorized-users string                              Comma-separated list of users authorized to execute binlog dump operations, or '%' to allow all users.
       --buffer-drain-concurrency int                                     Maximum number of requests retried simultaneously. More concurrency will increase the load on the PRIMARY vttablet when draining the buffer. (default 1)
       --buffer-keyspace-shards string                                    If not empty, limit buffering to these entries (comma separated). Entry format: keyspace or keyspace/shard. Requires --enable_buffer=true.
       --buffer-max-failover-duration duration                            Stop buffering completely if a failover takes longer than this duration. (default 20s)
@@ -46,16 +47,15 @@ Flags:
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
-      --datadog-agent-host string                                        host to send spans to. if empty, no tracing will be done
-      --datadog-agent-port string                                        port to send spans to. if empty, no tracing will be done
-      --datadog-trace-debug-mode                                         enable debug mode for datadog tracing
       --dbddl-plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl-strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
       --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --denied-system-variables strings                                  Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.
       --discovery-high-replication-lag-minimum-serving duration          Threshold above which replication lag is considered too high when applying the min_number_serving_vttablets flag. (default 2h0m0s)
       --discovery-low-replication-lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-balancer                                                  (DEPRECATED: use --vtgate-balancer-mode instead) Enable the tablet balancer to evenly spread query load for a given tablet type
+      --enable-binlog-dump                                               Allow users to perform binlog dump operations for CDC/replication
       --enable-buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable-buffer-dry-run                                            Detect and log failover events, but do not actually buffer requests.
       --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
@@ -103,7 +103,6 @@ Flags:
       --healthcheck-retry-delay duration                                 health check retry delay (default 2ms)
       --healthcheck-timeout duration                                     the health check timeout period (default 1m0s)
   -h, --help                                                             help for vtgate
-      --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done
       --keep-logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --keyspaces-to-watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
@@ -167,6 +166,8 @@ Flags:
       --onclose-timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm-timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb-uri string                                              URI of opentsdb /api/put method
+      --otel-endpoint string                                             OpenTelemetry collector endpoint (host:port for gRPC); if empty, the OTEL_EXPORTER_OTLP_ENDPOINT env var is used
+      --otel-insecure                                                    use insecure connection to OpenTelemetry collector
       --pid-file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --planner-version string                                           Sets the default planner to use when the session has not changed it. Valid values are: Gen4, Gen4Greedy, Gen4Left2Right
       --port int                                                         port for the server
@@ -236,8 +237,7 @@ Flags:
       --topo-zk-tls-key string                                           the key to use to connect to the zk topo server, enables TLS
       --tracer string                                                    tracing service to use (default "noop")
       --tracing-enable-logging                                           whether to enable logging in the tracing service
-      --tracing-sampling-rate float                                      sampling rate for the probabilistic jaeger sampler (default 0.1)
-      --tracing-sampling-type string                                     sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
+      --tracing-sampling-rate float                                      sampling rate for traces as a probability between 0.0 and 1.0 (default 0.1)
       --track-udfs                                                       Track UDFs in vtgate.
       --transaction-mode string                                          SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit (default "MULTI")
       --truncate-error-len int                                           truncate errors sent to client if they are longer than this value (0 means do not truncate)

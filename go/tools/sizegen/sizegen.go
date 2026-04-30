@@ -507,6 +507,15 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 		}), codeWithUnsafe | keyFlag | valFlag
 
 	case *types.Pointer:
+		if basic, ok := node.Elem().(*types.Basic); ok {
+			stmts := []jen.Code{
+				jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(basic)))),
+			}
+			if inner, _ := sizegen.sizeStmtForType(jen.Op("*").Add(fieldName.Clone()), basic, false); inner != nil {
+				stmts = append(stmts, inner)
+			}
+			return jen.If(fieldName.Clone().Op("!=").Nil()).Block(stmts...), 0
+		}
 		return sizegen.sizeStmtForType(fieldName, node.Elem(), true)
 
 	case *types.Named:

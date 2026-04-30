@@ -37,8 +37,6 @@ import (
 	"testing"
 	"time"
 
-	vtutils "vitess.io/vitess/go/vt/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -95,37 +93,30 @@ type VttabletProcess struct {
 
 // Setup starts vttablet process with required arguements
 func (vttablet *VttabletProcess) Setup() (err error) {
-	vttabletVer, err := GetMajorVersion(vttablet.Binary)
-	if err != nil {
-		return err
-	}
 	vttablet.proc = exec.Command(
 		vttablet.Binary,
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--topo_implementation", vttablet.TopoImplementation,
-		"--topo_global_server_address", vttablet.TopoGlobalAddress,
-		"--topo_global_root", vttablet.TopoGlobalRoot,
-		"--log_queries_to_file", vttablet.FileToLogQueries,
+		"--topo-implementation", vttablet.TopoImplementation,
+		"--topo-global-server-address", vttablet.TopoGlobalAddress,
+		"--topo-global-root", vttablet.TopoGlobalRoot,
+		"--log-queries-to-file", vttablet.FileToLogQueries,
 		"--tablet-path", vttablet.TabletPath,
 		"--port", strconv.Itoa(vttablet.Port),
-		"--grpc_port", strconv.Itoa(vttablet.GrpcPort),
-		"--init_shard", vttablet.Shard,
-		"--tablet_hostname", vttablet.TabletHostname,
-		"--init_keyspace", vttablet.Keyspace,
-		"--init_tablet_type", vttablet.TabletType,
-		"--health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
-		"--enable_replication_reporter",
-		"--backup_storage_implementation", vttablet.BackupStorageImplementation,
-		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vttabletVer), vttablet.FileBackupStorageRoot,
-		"--service_map", vttablet.ServiceMap,
-		"--db_charset", vttablet.Charset,
+		"--grpc-port", strconv.Itoa(vttablet.GrpcPort),
+		"--init-shard", vttablet.Shard,
+		"--tablet-hostname", vttablet.TabletHostname,
+		"--init-keyspace", vttablet.Keyspace,
+		"--init-tablet-type", vttablet.TabletType,
+		"--health-check-interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
+		"--enable-replication-reporter",
+		"--backup-storage-implementation", vttablet.BackupStorageImplementation,
+		"--file-backup-storage-root", vttablet.FileBackupStorageRoot,
+		"--service-map", vttablet.ServiceMap,
+		"--db-charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",
-		"--grpc_bind_address", "127.0.0.1",
+		"--grpc-bind-address", "127.0.0.1",
 	)
 
-	if vttabletVer >= 24 {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
-	}
+	vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")
 
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--test.coverprofile="+getCoveragePath("vttablet.out"))
@@ -134,13 +125,11 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--pprof", "cpu,waitSig,path=vttablet_pprof_"+vttablet.Name)
 	}
 
-	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.SupportsBackup {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
+		vttablet.proc.Args = append(vttablet.proc.Args, "--restore-from-backup")
 	}
-	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
 	if vttablet.DbFlavor != "" {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--db_flavor="+vttablet.DbFlavor)
+		vttablet.proc.Args = append(vttablet.proc.Args, "--db-flavor="+vttablet.DbFlavor)
 	}
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -1169,7 +1170,7 @@ func TestStalePrimary(t *testing.T) {
 		},
 	}
 
-	var rowMaps []sqlutils.RowMap
+	rowMaps := make([]sqlutils.RowMap, 0, len(info))
 	for _, analysis := range info {
 		analysis.SetValuesFromTabletInfo()
 		rowMaps = append(rowMaps, analysis.ConvertToRowMap())
@@ -1505,6 +1506,86 @@ func TestPostProcessAnalyses(t *testing.T) {
 			}
 			result := postProcessAnalyses(tt.analyses, clusters)
 			require.ElementsMatch(t, tt.want, result)
+		})
+	}
+}
+
+func TestDeclaresBefore(t *testing.T) {
+	tests := []struct {
+		name     string
+		problem  *DetectionAnalysisProblem
+		code     AnalysisCode
+		expected bool
+	}{
+		{
+			name:     "ReplicationStopped declares before PrimarySemiSyncBlocked",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
+			code:     PrimarySemiSyncBlocked,
+			expected: true,
+		},
+		{
+			name:     "ReplicationStopped does not declare before DeadPrimary",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
+			code:     DeadPrimary,
+			expected: false,
+		},
+		{
+			name:     "problem with no BeforeAnalyses",
+			problem:  GetDetectionAnalysisProblem(NotConnectedToPrimary),
+			code:     PrimarySemiSyncBlocked,
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, declaresBefore(tt.problem, tt.code))
+		})
+	}
+}
+
+func TestDeclaresAfter(t *testing.T) {
+	tests := []struct {
+		name             string
+		shardWideProblem *DetectionAnalysisProblem
+		code             AnalysisCode
+		expected         bool
+	}{
+		{
+			name: "shard-wide problem with AfterAnalyses referencing suppressed code",
+			shardWideProblem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{
+					Analysis:    PrimarySemiSyncBlocked,
+					Description: "test shard-wide",
+					Priority:    detectionAnalysisPriorityShardWideAction,
+				},
+				AfterAnalyses: []AnalysisCode{ReplicationStopped},
+			},
+			code:     ReplicationStopped,
+			expected: true,
+		},
+		{
+			name: "shard-wide problem with AfterAnalyses not referencing suppressed code",
+			shardWideProblem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{
+					Analysis:    PrimarySemiSyncBlocked,
+					Description: "test shard-wide",
+					Priority:    detectionAnalysisPriorityShardWideAction,
+				},
+				AfterAnalyses: []AnalysisCode{ReplicationStopped},
+			},
+			code:     NotConnectedToPrimary,
+			expected: false,
+		},
+		{
+			name:             "shard-wide problem with no AfterAnalyses",
+			shardWideProblem: GetDetectionAnalysisProblem(PrimarySemiSyncBlocked),
+			code:             ReplicationStopped,
+			expected:         false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, declaresAfter(tt.shardWideProblem, tt.code))
 		})
 	}
 }

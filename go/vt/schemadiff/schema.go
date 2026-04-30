@@ -533,7 +533,7 @@ func (s *Schema) Entities() []Entity {
 
 // EntityNames is a convenience function that returns just the names of entities, in good order
 func (s *Schema) EntityNames() []string {
-	var names []string
+	names := make([]string, 0, len(s.Entities()))
 	for _, e := range s.Entities() {
 		names = append(names, e.Name())
 	}
@@ -553,8 +553,9 @@ func (s *Schema) Tables() []*CreateTableEntity {
 
 // TableNames is a convenience function that returns just the names of tables, in good order
 func (s *Schema) TableNames() []string {
-	var names []string
-	for _, e := range s.Tables() {
+	tables := s.Tables()
+	names := make([]string, 0, len(tables))
+	for _, e := range tables {
 		names = append(names, e.Name())
 	}
 	return names
@@ -573,8 +574,9 @@ func (s *Schema) Views() []*CreateViewEntity {
 
 // ViewNames is a convenience function that returns just the names of views, in good order
 func (s *Schema) ViewNames() []string {
-	var names []string
-	for _, e := range s.Views() {
+	views := s.Views()
+	names := make([]string, 0, len(views))
+	for _, e := range views {
 		names = append(names, e.Name())
 	}
 	return names

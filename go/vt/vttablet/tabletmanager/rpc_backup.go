@@ -54,7 +54,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
 	if !req.AllowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
-		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
+		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
 	}
 
 	backupEngine := ""
@@ -72,7 +72,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		return err
 	}
 	if !req.AllowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
-		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
+		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
 	}
 
 	// Create the logger: tee to console and source.
@@ -207,7 +207,9 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// Now we can run restore.
-	_, err = tm.restoreBackupLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, request, mysqlShutdownTimeout)
+	startTime := time.Now()
+	backupEngine, err := tm.restoreBackupLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, request, mysqlShutdownTimeout)
+	tm.invokeRestoreDoneHook(startTime, err, backupEngine)
 
 	// Re-run health check to be sure to capture any replication delay.
 	tm.QueryServiceControl.BroadcastHealth()

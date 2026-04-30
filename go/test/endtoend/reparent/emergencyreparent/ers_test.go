@@ -140,13 +140,9 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 
-	if clusterInstance.VtTabletMajorVersion < 24 {
-		t.Skip("Skipping test since `DemotePrimary` on earlier versions does not handle blocked primaries correctly")
-	}
-
 	// start vtgate w/disabled buffering
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-		"--enable_buffer=false",
+		"--enable-buffer=false",
 		"--query-timeout", "3000")
 	err := clusterInstance.StartVtgate()
 	require.NoError(t, err)
@@ -521,19 +517,16 @@ func TestERSForInitialization(t *testing.T) {
 	shard := &cluster.Shard{Name: utils.ShardName}
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--lock_tables_timeout", "5s",
-		"--track_schema_versions=true",
+		"--lock-tables-timeout", "5s",
+		"--track-schema-versions=true",
 	}
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err)
-	if clusterInstance.VtctlMajorVersion >= 14 {
-		vtctldClientProcess := cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
-		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
-		require.NoError(t, err, out)
-	}
+	vtctldClientProcess := cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
 
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
