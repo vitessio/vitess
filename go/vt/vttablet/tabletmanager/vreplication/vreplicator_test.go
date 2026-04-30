@@ -19,10 +19,12 @@ package vreplication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unicode"
@@ -78,6 +80,80 @@ func TestMaxQuerySize(t *testing.T) {
 		vr := makeVR(dbClient, 4096)
 		assert.Equal(t, int64(4032), vr.maxQuerySize(vr.dbClient))
 		assert.Nil(t, vr.dbClient.queries)
+	})
+}
+
+// fakeFetchSuperQueryMysqld is a minimal MysqlDaemon test double that delegates
+// FetchSuperQuery to a callback. Only the methods exercised by tests are valid;
+// any other call will panic on the embedded nil interface.
+type fakeFetchSuperQueryMysqld struct {
+	mysqlctl.MysqlDaemon
+	callback func(query string) (*sqltypes.Result, error)
+}
+
+func (f *fakeFetchSuperQueryMysqld) FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error) {
+	return f.callback(query)
+}
+
+func TestFetchInfoSchemaColumnsRetry(t *testing.T) {
+	// Speed up retries for the test.
+	savedDelay := buildColInfoMapInitialDelay
+	buildColInfoMapInitialDelay = time.Millisecond
+	t.Cleanup(func() { buildColInfoMapInitialDelay = savedDelay })
+
+	cols := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"character_set_name|collation_name|column_name|data_type|column_type|extra",
+			"varchar|varchar|varchar|varchar|varchar|varchar",
+		),
+		"utf8mb4|utf8mb4_general_ci|id|int|int(11)|",
+	)
+
+	t.Run("returns rows once they appear after empty attempts", func(t *testing.T) {
+		var calls atomic.Int32
+		fmd := &fakeFetchSuperQueryMysqld{
+			callback: func(query string) (*sqltypes.Result, error) {
+				if calls.Add(1) < 3 {
+					return &sqltypes.Result{}, nil
+				}
+				return cols, nil
+			},
+		}
+		vr := &vreplicator{mysqld: fmd, WorkflowName: "wf1"}
+		qr, err := vr.fetchInfoSchemaColumns(t.Context(), "select 1", "t1")
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		require.EqualValues(t, 3, calls.Load())
+	})
+
+	t.Run("returns bounded error after max attempts", func(t *testing.T) {
+		var calls atomic.Int32
+		fmd := &fakeFetchSuperQueryMysqld{
+			callback: func(query string) (*sqltypes.Result, error) {
+				calls.Add(1)
+				return &sqltypes.Result{}, nil
+			},
+		}
+		vr := &vreplicator{mysqld: fmd, WorkflowName: "wf1"}
+		_, err := vr.fetchInfoSchemaColumns(t.Context(), "select 1", "missingTable")
+		require.ErrorContains(t, err, "missingTable")
+		require.ErrorContains(t, err, fmt.Sprintf("%d attempts", buildColInfoMapMaxAttempts))
+		require.EqualValues(t, buildColInfoMapMaxAttempts, calls.Load())
+	})
+
+	t.Run("query error short-circuits retry", func(t *testing.T) {
+		var calls atomic.Int32
+		wantErr := errors.New("boom")
+		fmd := &fakeFetchSuperQueryMysqld{
+			callback: func(query string) (*sqltypes.Result, error) {
+				calls.Add(1)
+				return nil, wantErr
+			},
+		}
+		vr := &vreplicator{mysqld: fmd, WorkflowName: "wf1"}
+		_, err := vr.fetchInfoSchemaColumns(t.Context(), "select 1", "t1")
+		require.ErrorIs(t, err, wantErr)
+		require.EqualValues(t, 1, calls.Load())
 	})
 }
 
