@@ -173,7 +173,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		tpb.Cells = append(tpb.Cells, "test")
 	}
 
-	cmd.Flags().Set("cells_to_watch", strings.Join(tpb.Cells, ","))
+	cmd.Flags().Set("cells-to-watch", strings.Join(tpb.Cells, ","))
 
 	// vtctld UI requires the cell flag
 	cmd.Flags().Set("cell", tpb.Cells[0])

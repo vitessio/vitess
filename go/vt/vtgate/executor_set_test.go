@@ -18,9 +18,11 @@ package vtgate
 
 import (
 	"fmt"
+	"log/slog"
 	"testing"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -285,6 +287,51 @@ func TestExecutorSet(t *testing.T) {
 	}
 }
 
+func TestExecutorInitVConfigUsesSetVarFlag(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	oldSetVarEnabled := setVarEnabled
+	oldSysVarSetEnabled := sysVarSetEnabled
+	t.Cleanup(func() {
+		setVarEnabled = oldSetVarEnabled
+		sysVarSetEnabled = oldSysVarSetEnabled
+	})
+
+	sysVarSetEnabled = true
+	setVarEnabled = false
+	executor.initVConfig(false, querypb.ExecuteOptions_Gen4)
+	assert.False(t, executor.vConfig.SetVarEnabled)
+
+	sysVarSetEnabled = false
+	setVarEnabled = true
+	executor.initVConfig(false, querypb.ExecuteOptions_Gen4)
+	assert.True(t, executor.vConfig.SetVarEnabled)
+}
+
+func TestBuildDeniedSystemVariablesWarnsForUnknownNames(t *testing.T) {
+	oldWarn := log.Warn
+	t.Cleanup(func() {
+		log.Warn = oldWarn
+	})
+
+	var gotMessage string
+	var gotAttrs []slog.Attr
+	log.Warn = func(msg string, attrs ...slog.Attr) {
+		gotMessage = msg
+		gotAttrs = append([]slog.Attr(nil), attrs...)
+	}
+
+	denied := buildDeniedSystemVariables([]string{"unique_checks", "not_a_real_sysvar", " "})
+
+	assert.Equal(t, map[string]struct{}{
+		"unique_checks":     {},
+		"not_a_real_sysvar": {},
+	}, denied)
+	assert.Equal(t, "unknown system variable in --denied-system-variables", gotMessage)
+	require.Len(t, gotAttrs, 1)
+	assert.Equal(t, "name", gotAttrs[0].Key)
+	assert.Equal(t, "not_a_real_sysvar", gotAttrs[0].Value.String())
+}
+
 func TestExecutorSetOp(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 	sysVarSetEnabled = true
@@ -391,6 +438,58 @@ func TestExecutorSetOp(t *testing.T) {
 			require.NoError(t, err)
 			utils.MustMatch(t, tcase.warning, session.Warnings, "")
 			utils.MustMatch(t, tcase.sysVars, session.SystemVariables, "")
+		})
+	}
+}
+
+func TestExecutorSetDeniedSystemVariables(t *testing.T) {
+	cases := []struct {
+		name    string
+		denied  map[string]struct{}
+		query   string
+		wantErr string // empty = expect success
+	}{{
+		name:    "unique_checks denied",
+		denied:  map[string]struct{}{"unique_checks": {}},
+		query:   "set unique_checks = 0",
+		wantErr: "VT12001: unsupported: system setting: unique_checks",
+	}, {
+		name:   "unique_checks allowed when flag empty",
+		denied: nil,
+		query:  "set unique_checks = 0",
+	}, {
+		name:    "case-insensitive match",
+		denied:  map[string]struct{}{"unique_checks": {}},
+		query:   "set UNIQUE_CHECKS = 0",
+		wantErr: "VT12001: unsupported: system setting: UNIQUE_CHECKS",
+	}, {
+		name:    "global scope denied",
+		denied:  map[string]struct{}{"unique_checks": {}},
+		query:   "set @@global.unique_checks = 0",
+		wantErr: "VT12001: unsupported: system setting: unique_checks",
+	}, {
+		name:   "unrelated sysvars unaffected",
+		denied: map[string]struct{}{"unique_checks": {}},
+		query:  "set foreign_key_checks = 0",
+	}}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			executor, _, _, _, ctx := createExecutorEnv(t)
+			executor.vConfig.DeniedSystemVariables = tc.denied
+
+			session := econtext.NewAutocommitSession(&vtgatepb.Session{
+				TargetString:         KsTestUnsharded,
+				EnableSystemSettings: true,
+			})
+			_, err := executorExecSession(ctx, executor, session, tc.query, nil)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, tc.wantErr, err.Error())
+			assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
 		})
 	}
 }

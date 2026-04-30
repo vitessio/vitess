@@ -115,20 +115,10 @@ func TestReparentReplicaOffline(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	killTablet := tablets[3]
 
-	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
+	tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
 	require.NoError(t, err)
-	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
-	require.NoError(t, err)
-
-	// TabletStartTime + TabletShutdownTime are v24+.
-	if vtctldVersion >= 24 {
-		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
-		require.NoError(t, err)
-		if vttabletVersion >= 24 {
-			require.NotNil(t, tabletInfo.TabletStartTime)
-		}
-		require.Nil(t, tabletInfo.TabletShutdownTime)
-	}
+	require.NotNil(t, tabletInfo.TabletStartTime)
+	require.Nil(t, tabletInfo.TabletShutdownTime)
 
 	// Gracefully kill one tablet so we seem offline. Use a SIGKILL-fallback delay of 30s, like kube.
 	startKillTime := time.Now()
@@ -139,18 +129,10 @@ func TestReparentReplicaOffline(t *testing.T) {
 		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
 		require.NoError(c, err)
 
-		// TabletShutdownTime is v24+. Test this is the vttablet and vtctld are v24+.
-		if vtctldVersion >= 24 && vttabletVersion >= 24 {
-			require.Nil(c, tabletInfo.TabletStartTime)
-			require.NotNil(c, tabletInfo.TabletShutdownTime)
-			shutdownTime := protoutil.TimeFromProto(tabletInfo.TabletShutdownTime)
-			require.WithinRange(c, shutdownTime, startKillTime, time.Now())
-		} else {
-			// TODO: remove this test after v25.
-			require.Empty(c, tabletInfo.Hostname)
-			require.Empty(c, tabletInfo.MysqlHostname)
-			require.Empty(c, tabletInfo.PortMap)
-		}
+		require.Nil(c, tabletInfo.TabletStartTime)
+		require.NotNil(c, tabletInfo.TabletShutdownTime)
+		shutdownTime := protoutil.TimeFromProto(tabletInfo.TabletShutdownTime)
+		require.WithinRange(c, shutdownTime, startKillTime, time.Now())
 	}, time.Second, time.Second*31)
 
 	// Perform a graceful reparent operation.
@@ -158,11 +140,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 	require.Error(t, err)
 
 	// Assert that PRS failed
-	if vtctldVersion >= 24 {
-		assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
-	} else {
-		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
-	}
+	assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 }
 
@@ -172,12 +150,9 @@ func TestReparentAvoid(t *testing.T) {
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.DeleteTablet(t, clusterInstance, tablets[2])
 
-	vtctldVersion, err := cluster.GetMajorVersion("vtctld")
-	require.NoError(t, err)
-
 	// Perform a reparent operation with avoid_tablet pointing to non-primary. It
 	// should succeed without doing anything.
-	_, err = utils.PrsAvoid(t, clusterInstance, tablets[1])
+	_, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.NoError(t, err)
 
 	utils.ValidateTopology(t, clusterInstance, false)
@@ -191,23 +166,16 @@ func TestReparentAvoid(t *testing.T) {
 	// tablets[1] is in the same cell and tablets[3] is in a different cell, so we must land on tablets[1]
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
-	// If we kill the tablet in the same cell as primary then reparent --avoid_tablet will fail.
+	// If we kill the tablet in the same cell as primary then reparent --avoid-tablet will fail.
 	utils.StopTablet(t, tablets[0], true)
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
-	if vtctldVersion >= 24 {
-		assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
-	} else {
-		assert.Contains(t, out, "rpc error: code = DeadlineExceeded desc = latest balancer error")
-	}
+	assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
 
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
 	t.Run("Allow cross cell promotion", func(t *testing.T) {
-		if clusterInstance.VtctlMajorVersion <= 20 {
-			t.Skip("Allow Cross Cell Promotion was added in v21")
-		}
 		utils.DeleteTablet(t, clusterInstance, tablets[0])
 		// Perform a graceful reparent operation and verify it fails because we have no replicas in the same cell as the primary.
 		out, err = utils.PrsAvoid(t, clusterInstance, tablets[1])
@@ -345,11 +313,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
 	require.Error(t, err)
 	// Assert that PRS failed
-	if clusterInstance.VtctlMajorVersion <= 20 {
-		assert.Contains(t, out, "TabletManager.PrimaryStatus on "+tablets[2].Alias)
-	} else {
-		assert.Contains(t, out, "TabletManager.GetGlobalStatusVars on "+tablets[2].Alias)
-	}
+	assert.Contains(t, out, "TabletManager.GetGlobalStatusVars on "+tablets[2].Alias)
 	// insert data into the old primary, check the connected replica works. The primary tablet shouldn't have changed.
 	insertVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[3]})
 

@@ -5540,6 +5540,387 @@
     "plan": "column 'x' not found"
   },
   {
+    "comment": "Subquery can reference parent alias in dual context",
+    "query": "SELECT 1 AS x, (SELECT x)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 AS x, (SELECT x)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1) from dual where 1 != 1",
+        "Query": "select 1 as x, (select x from dual) from dual"
+      }
+    }
+  },
+  {
+    "comment": "Literal parent alias referenced from sharded subquery is correctly tagged as correlated even when outer has no explicit FROM",
+    "query": "SELECT 1 AS x, (SELECT x FROM authoritative)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 AS x, (SELECT x FROM authoritative)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select x from authoritative where 1 != 1",
+            "Query": "select x from authoritative"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 as x, :__sq1 /* INT64 */ as `(select x from authoritative)` from dual where 1 != 1",
+            "Query": "select 1 as x, :__sq1 /* INT64 */ as `(select x from authoritative)` from dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Subquery WHERE clause can reference parent alias",
+    "query": "SELECT user_id AS foobar, (SELECT foobar WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT user_id AS foobar, (SELECT foobar WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select user_id as foobar, (select foobar from dual where foobar = 1) from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Subquery with own non-authoritative FROM treats unknown column as table column",
+    "query": "SELECT id AS foobar, (SELECT foobar FROM user_extra WHERE foobar = 1) FROM user WHERE id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT id AS foobar, (SELECT foobar FROM user_extra WHERE foobar = 1) FROM user WHERE id = 1",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foobar from user_extra where 1 != 1",
+            "Query": "select foobar from user_extra where foobar = 1"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id as foobar, :__sq1 as `(select foobar from user_extra where foobar = 1)` from `user` where 1 != 1",
+            "Query": "select id as foobar, :__sq1 as `(select foobar from user_extra where foobar = 1)` from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Subquery with own FROM falls back to parent alias when column not in table",
+    "query": "SELECT user_id AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Literal parent alias referenced by subquery rejected as correlated when subquery cannot merge with outer route",
+    "query": "SELECT 1 AS foobar, (SELECT foobar FROM authoritative) FROM authoritative WHERE user_id = 1",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Nested subquery resolves alias across multiple scope levels",
+    "query": "SELECT user_id AS foobar, (SELECT (SELECT foobar) AS barbaz FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Nested subquery resolves alias across multiple dual scopes",
+    "query": "SELECT 1 AS foobar, (SELECT (SELECT foobar) AS barbaz)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 AS foobar, (SELECT (SELECT foobar) AS barbaz)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as foobar, (select foobar from dual where 1 != 1) as `(select (select foobar from dual) as barbaz from dual)` from dual where 1 != 1",
+        "Query": "select 1 as foobar, (select foobar from dual) as `(select (select foobar from dual) as barbaz from dual)` from dual"
+      }
+    }
+  },
+  {
+    "comment": "Subquery referencing compound expression alias is correctly correlated",
+    "query": "SELECT user_id + 1 AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Duplicate column aliases in subquery are ambiguous in MySQL",
+    "query": "SELECT user_id AS foobar, col1 AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
+    "plan": "Column 'foobar' in field list is ambiguous",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Repeating the same column with the same alias is not ambiguous",
+    "query": "SELECT user_id AS foobar, user_id AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT user_id AS foobar, user_id AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id as foobar, user_id as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select user_id as foobar, user_id as foobar, (select foobar from dual) from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Column + literal sharing an alias - non-column wins, matching MySQL behavior",
+    "query": "SELECT user_id AS foobar, 99 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT user_id AS foobar, 99 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id as foobar, 99 as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select user_id as foobar, 99 as foobar, (select foobar from dual) from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Literal + column sharing an alias - non-column wins, matching MySQL behavior",
+    "query": "SELECT 99 AS foobar, user_id AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 99 AS foobar, user_id AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 99 as foobar, user_id as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select 99 as foobar, user_id as foobar, (select foobar from dual) from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Non-column earlier in the select list shields later ambiguous columns from error",
+    "query": "SELECT 99 AS foobar, user_id AS foobar, col1 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 99 AS foobar, user_id AS foobar, col1 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 99 as foobar, user_id as foobar, col1 as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select 99 as foobar, user_id as foobar, col1 as foobar, (select foobar from dual) from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Duplicate literal aliases - subquery resolves to first matching alias, matching MySQL behavior",
+    "query": "SELECT 1 AS foobar, 2 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 AS foobar, 2 AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 as foobar, 2 as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select 1 as foobar, 2 as foobar, (select foobar from dual) from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Subquery between duplicate literal aliases resolves to first (earlier) match",
+    "query": "SELECT 1 AS foobar, (SELECT foobar), 2 AS foobar FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 AS foobar, (SELECT foobar), 2 AS foobar FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 as foobar, (select foobar from dual where 1 != 1), 2 as foobar from authoritative where 1 != 1",
+        "Query": "select 1 as foobar, (select foobar from dual), 2 as foobar from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "Forward reference to alias in subquery should fail",
+    "query": "SELECT (SELECT foobar FROM authoritative), user_id AS foobar FROM authoritative WHERE user_id = 1",
+    "plan": "column 'foobar' not found",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Qualified column in subquery does not match parent alias",
+    "query": "SELECT user_id AS foobar, (SELECT asdf.foobar) FROM authoritative AS asdf WHERE user_id = 1",
+    "plan": "column 'asdf.foobar' not found",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Subquery can reference parent alias even when parent has FROM clause",
+    "query": "SELECT user_id AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT user_id AS foobar, (SELECT foobar) FROM authoritative WHERE user_id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_id as foobar, (select foobar from dual where 1 != 1) from authoritative where 1 != 1",
+        "Query": "select user_id as foobar, (select foobar from dual) from authoritative where user_id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
     "comment": "duplicate uncorrelated subqueries each get their own pullout",
     "query": "SELECT (SELECT count(*) FROM user_extra), (SELECT count(*) FROM user_extra) FROM user WHERE id = 1",
     "plan": {

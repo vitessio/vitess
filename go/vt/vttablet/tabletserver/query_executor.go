@@ -744,12 +744,15 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			} else {
 				defer conn.Recycle()
 				res, err := qre.execDBConn(conn.Conn, sql, true)
+				if qre.tsv.config.ConsolidatorCacheProto3Rows && q.HasWaiters() {
+					res.CacheProto3Rows()
+				}
 				q.SetResult(res)
 				q.SetErr(err)
 			}
 		} else {
 			waiterCap := qre.tsv.config.ConsolidatorQueryWaiterCap
-			if waiterCap == 0 || *q.AddWaiterCounter(0) <= waiterCap {
+			if waiterCap == 0 || qre.tsv.qe.consolidator.TotalWaiterCount() <= waiterCap {
 				qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 				startTime := time.Now()
 				q.Wait()

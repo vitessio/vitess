@@ -82,9 +82,15 @@ jobs:
 
         PACKAGE_DIRS=$(echo "$CHANGED_GO_FILES" | xargs -n1 dirname | sort -u)
 
-        # Validate as Go packages and exclude endtoend tests
+        # Validate as Go packages and exclude endtoend tests. Only consider
+        # paths under go/; anything else (e.g. ".", "changelog", ".github")
+        # would expand to ./.../... and pull in the full endtoend suite.
         PACKAGES=""
         for dir in $PACKAGE_DIRS; do
+          case "$dir" in
+            go/*) ;;
+            *) continue ;;
+          esac
           case "$dir" in
             */endtoend*|go/cmd/vttestserver*) continue ;;
           esac

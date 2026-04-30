@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -186,7 +187,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 // Regexp to extract parent span id over the sql query
-var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*)\*/`)
+var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*?)\*/`)
 
 // this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
 func startSpanTestable(ctx context.Context, query, label string,
@@ -218,6 +219,50 @@ func getSpan(ctx context.Context, match []string, newSpan func(context.Context, 
 
 func startSpan(ctx context.Context, query, label string) (trace.Span, context.Context, error) {
 	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
+}
+
+// extractSpanContext extracts the VT_SPAN_CONTEXT value from a query's leading comments.
+// Returns empty string if no span context is found.
+func extractSpanContext(query string) string {
+	_, comments := sqlparser.SplitMarginComments(query)
+	match := r.FindStringSubmatch(comments.Leading)
+	if len(match) != 0 {
+		return match[1]
+	}
+	return ""
+}
+
+// startSpanFromPrepareTestable creates a span for a prepared statement execution,
+// caching the extracted VT_SPAN_CONTEXT on the PrepareData to avoid re-parsing
+// the SQL comments on every execution.
+func startSpanFromPrepareTestable(ctx context.Context, prepare *mysql.PrepareData, label string,
+	newSpan func(context.Context, string) (trace.Span, context.Context),
+	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error),
+) (trace.Span, context.Context, error) {
+	if prepare.SpanContext == nil {
+		sc := extractSpanContext(prepare.PrepareStmt)
+		prepare.SpanContext = &sc
+	}
+
+	var span trace.Span
+	if *prepare.SpanContext != "" {
+		var err error
+		span, ctx, err = newSpanFromString(ctx, *prepare.SpanContext, label)
+		if err == nil {
+			trace.AnnotateSQL(span, sqlparser.Preview(prepare.PrepareStmt))
+			return span, ctx, nil
+		}
+		log.Warn("Unable to parse VT_SPAN_CONTEXT", slog.Any("error", err))
+		// Clear the cached value so subsequent executions skip the parse attempt.
+		*prepare.SpanContext = ""
+	}
+	span, ctx = newSpan(ctx, label)
+	trace.AnnotateSQL(span, sqlparser.Preview(prepare.PrepareStmt))
+	return span, ctx, nil
+}
+
+func startSpanFromPrepare(ctx context.Context, prepare *mysql.PrepareData, label string) (trace.Span, context.Context, error) {
+	return startSpanFromPrepareTestable(ctx, prepare, label, trace.NewSpan, trace.NewFromString)
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -428,6 +473,12 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
 		defer cancel()
 	}
+
+	span, ctx, err := startSpanFromPrepare(ctx, prepare, "vtgateHandler.ComStmtExecute")
+	if err != nil {
+		return vterrors.Wrap(err, "failed to extract span")
+	}
+	defer span.Finish()
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
