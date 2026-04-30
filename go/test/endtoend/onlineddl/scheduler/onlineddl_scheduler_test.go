@@ -2266,6 +2266,150 @@ DROP TABLE IF EXISTS stress_test
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
+
+	// The following two scenarios validate that --in-order-completion is scoped to migration
+	// context: migrations from different contexts form independent ordered sequences and must
+	// not block each other.
+
+	t.Run("cross-context in-order: immediate migration in different context is not blocked", func(t *testing.T) {
+		// Validates the getNonConflictingMigration fix: an immediate in-order migration
+		// must only require being first within its own context, not globally.
+
+		// ctx-a: slow ALTER that will not cut over until explicitly completed.
+		uuidA := testOnlineDDLStatement(t, createParams(
+			alterTableTrivialStatement,
+			"vitess --allow-concurrent --in-order-completion --postpone-completion",
+			"vtctl", "ctx-singleton-cross-1a", "hint_col", "", true,
+		))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// ctx-b: immediate migration (DROP IF NOT EXISTS on a non-existent table).
+		// Before the fix: getNonConflictingMigration would not start it because uuidA
+		// globally precedes it and the migration is not globally first.
+		// After the fix: it is first in ctx-b, so it is selected and completes immediately.
+		uuidB := testOnlineDDLStatement(t, createParams(
+			dropNonexistentTableStatement,
+			"vitess --allow-concurrent --in-order-completion",
+			"vtctl", "ctx-singleton-cross-1b", "", "", false,
+		))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidB, schema.OnlineDDLStatusComplete)
+		// ctx-a's migration is unaffected and still running.
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidA, schema.OnlineDDLStatusRunning)
+
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuidA, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+	})
+
+	t.Run("cross-context in-order: non-immediate migration in different context is not blocked from cutting over", func(t *testing.T) {
+		// Validates the getInOrderCompletionPendingCount fix in the reviewRunningMigrations
+		// path: a non-immediate (vreplication) migration that is ready to cut over must not
+		// be blocked by a running migration from a different context.
+		//
+		// Unlike the immediate case (which never starts), a non-immediate migration starts
+		// running fine but gets stuck: reviewRunningMigrations sees pendingMigrationsCount > 0
+		// and sets postponeCompletion, so the migration runs indefinitely without cutting over.
+		// After the fix, only same-context predecessors are counted, so B1 cuts over freely.
+
+		uuid := testOnlineDDLStatement(t, createParams(
+			`CREATE TABLE stress_test_ctx_cross2 (id bigint not null, PRIMARY KEY (id)) ENGINE=InnoDB`,
+			"vitess", "vtctl", "", "", "", false,
+		))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		defer testOnlineDDLStatement(t, createParams(
+			`DROP TABLE IF EXISTS stress_test_ctx_cross2`,
+			"vitess", "vtctl", "", "", "", false,
+		))
+
+		// A1: slow ALTER on stress_test in ctx-a (postponed, will not cut over).
+		uuidA1 := testOnlineDDLStatement(t, createParams(
+			alterTableTrivialStatement,
+			"vitess --allow-concurrent --in-order-completion --postpone-completion",
+			"vtctl", "ctx-singleton-cross-nr-a", "hint_col", "", true,
+		))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA1, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// B1: non-immediate ALTER on stress_test_ctx_cross2 in ctx-b, no postpone.
+		// It can start running (no immediate-operation guard blocks it), and since it has
+		// no same-context predecessors, it must cut over and complete on its own.
+		// Before the fix: reviewRunningMigrations counted A1 (ctx-a) as a predecessor,
+		// so postponeCompletion=true and B1 would run forever without cutting over.
+		// After the fix: A1 is not counted (different context), B1 cuts over normally.
+		uuidB1 := testOnlineDDLStatement(t, createParams(
+			`ALTER TABLE stress_test_ctx_cross2 ENGINE=InnoDB`,
+			"vitess --allow-concurrent --in-order-completion",
+			"vtctl", "ctx-singleton-cross-nr-b", "", "", false,
+		))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidB1, schema.OnlineDDLStatusComplete)
+		// ctx-a's migration is unaffected and still running.
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidA1, schema.OnlineDDLStatusRunning)
+
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuidA1, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA1, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+	})
+
+	t.Run("cross-context in-order: in_order_completion_pending_count is scoped to context", func(t *testing.T) {
+		// Validates the getInOrderCompletionPendingCount fix: a migration's predecessor
+		// count must only include migrations from the same context.
+		//
+		// Setup: A1 (ctx-a, stress_test) and B1 (ctx-b, stress_test_ctx_cross) run
+		// concurrently. A2 (ctx-a, immediate) is then submitted. A2's
+		// in_order_completion_pending_count must be 1 (A1 only), not 2 (which would
+		// incorrectly include B1 from ctx-b).
+
+		uuid := testOnlineDDLStatement(t, createParams(
+			`CREATE TABLE stress_test_ctx_cross (id bigint not null, PRIMARY KEY (id)) ENGINE=InnoDB`,
+			"vitess", "vtctl", "", "", "", false,
+		))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		defer testOnlineDDLStatement(t, createParams(
+			`DROP TABLE IF EXISTS stress_test_ctx_cross`,
+			"vitess", "vtctl", "", "", "", false,
+		))
+
+		// A1: slow ALTER on stress_test in ctx-a.
+		uuidA1 := testOnlineDDLStatement(t, createParams(
+			alterTableTrivialStatement,
+			"vitess --allow-concurrent --in-order-completion --postpone-completion",
+			"vtctl", "ctx-singleton-cross-2a", "hint_col", "", true,
+		))
+		// B1: slow ALTER on stress_test_ctx_cross in ctx-b (different table, runs concurrently with A1).
+		uuidB1 := testOnlineDDLStatement(t, createParams(
+			`ALTER TABLE stress_test_ctx_cross ENGINE=InnoDB`,
+			"vitess --allow-concurrent --in-order-completion --postpone-completion",
+			"vtctl", "ctx-singleton-cross-2b", "", "", true,
+		))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA1, normalWaitTime, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidB1, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// A2: immediate in ctx-a, follows A1 in sequence. Stays queued while A1 is pending.
+		uuidA2 := testOnlineDDLStatement(t, createParams(
+			dropNonexistentTableStatement,
+			"vitess --allow-concurrent --in-order-completion",
+			"vtctl", "ctx-singleton-cross-2a", "", "", true,
+		))
+
+		// A2's in_order_completion_pending_count must be 1: A1 precedes it in ctx-a, but
+		// B1 (ctx-b) must not be counted even though B1 precedes A2 in the global queue.
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, uuidA2)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				assert.EqualValues(c, 1, row.AsUint64("in_order_completion_pending_count", 0))
+			}
+		}, normalWaitTime, time.Second, "expected A2's in_order_completion_pending_count=1 (B1 from ctx-b must not be counted)")
+
+		// Complete A1; A2 (immediate, now first in ctx-a) should start and complete.
+		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuidA1, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA1, normalWaitTime, schema.OnlineDDLStatusComplete)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA2, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidA2, schema.OnlineDDLStatusComplete)
+		// B1 is still running: completing A1 only unblocked ctx-a's sequence, not ctx-b's.
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidB1, schema.OnlineDDLStatusRunning)
+
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuidB1, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidB1, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+	})
 }
 
 func testDeclarative(t *testing.T) {
