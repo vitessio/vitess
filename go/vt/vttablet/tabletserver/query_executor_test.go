@@ -1558,7 +1558,7 @@ func TestQueryExecutorConsolidatorRejectOnCap(t *testing.T) {
 			wantErrMsg:      "consolidator waiter cap exceeded",
 			wantDBQueries:   0,
 			wantWaitCalls:   0,
-			wantCounterArgs: []int64{0, -1},
+			wantCounterArgs: []int64{-1},
 		},
 		{
 			name:            "reject disabled falls back to independent execution",
@@ -1566,7 +1566,7 @@ func TestQueryExecutorConsolidatorRejectOnCap(t *testing.T) {
 			wantErr:         false,
 			wantDBQueries:   1,
 			wantWaitCalls:   0,
-			wantCounterArgs: []int64{0, -1},
+			wantCounterArgs: []int64{-1},
 		},
 	}
 
@@ -1595,9 +1595,10 @@ func TestQueryExecutorConsolidatorRejectOnCap(t *testing.T) {
 				}},
 			}
 
-			fakePendingResult := &sync2.FakePendingResult{}
+			fakePendingResult := &sync2.FakePendingResult{Consolidator: fakeConsolidator}
 			fakePendingResult.SetResult(result)
 			fakePendingResult.WaiterCount = 2
+			fakeConsolidator.SetTotalWaiterCount(2)
 
 			fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
 				Created:       false,
