@@ -307,6 +307,15 @@ func GetRoutingIndexes(p Primitive) [][3]string {
 			rp = n.RoutingParameters
 		case *Delete:
 			rp = n.RoutingParameters
+		case *VindexLookup:
+			// WireupRoute lifts the lookup-planable vindex into a VindexLookup
+			// wrapper and reroutes the underlying Route via ByDestination with
+			// a nil Vindex, so the actual routing vindex lives here, not on
+			// the wrapped Route.
+			if n.Keyspace != nil && n.Vindex != nil {
+				result = append(result, [3]string{n.Keyspace.Name, n.Vindex.String(), n.Opcode.String()})
+			}
+			return
 		case *Insert:
 			if n.Keyspace != nil && len(n.ColVindexes) > 0 {
 				result = append(result, [3]string{n.Keyspace.Name, n.ColVindexes[0].Name, "EqualUnique"})

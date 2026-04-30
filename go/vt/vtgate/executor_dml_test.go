@@ -35,6 +35,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
@@ -3326,14 +3327,8 @@ func TestRoutingIndexesUsed(t *testing.T) {
 	// INSERT routed by primary vindex
 	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
 	require.NoError(t, err)
-	// INSERT generates SavePoint + VindexCreate log entries before the main INSERT
-	for {
-		ls = getQueryLog(logChan)
-		require.NotNil(t, ls)
-		if ls.Method == "TestExecute" && ls.StmtType == "INSERT" {
-			break
-		}
-	}
+	ls = getMatchingQueryLog(logChan, "TestExecute", "INSERT", "")
+	require.NotNil(t, ls)
 	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "INSERT routing indexes")
 
 	sbc1.Queries = nil
@@ -3344,12 +3339,28 @@ func TestRoutingIndexesUsed(t *testing.T) {
 	session2 := econtext.NewAutocommitSession(&vtgatepb.Session{})
 	_, err = executorExecSession(ctx, executor, session2, "insert into user(id, v, name) select 1, 2, 'myname' from dual", nil)
 	require.NoError(t, err)
+	ls = getMatchingQueryLog(logChan, "TestExecute", "INSERT", "")
+	require.NotNil(t, ls)
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "INSERT SELECT routing indexes")
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+
+	// SELECT routed via lookup vindex; music_user_map is a lookup_hash_unique on music.id
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("music_id|user_id", "int64|int64"), "1|1")})
+	_, err = executorExec(ctx, executor, session, "select user_id from music where id = 1", nil)
+	require.NoError(t, err)
+	ls = getMatchingQueryLog(logChan, "TestExecute", "SELECT", "music")
+	require.NotNil(t, ls)
+	wantMusic := [][3]string{{"TestExecutor", "music_user_map", "EqualUnique"}}
+	assert.Equal(t, wantMusic, ls.RoutingIndexesUsed, "lookup-vindex SELECT routing indexes")
+}
+
+func getMatchingQueryLog(logChan chan *logstats.LogStats, method, stmtType, substr string) *logstats.LogStats {
 	for {
-		ls = getQueryLog(logChan)
-		require.NotNil(t, ls)
-		if ls.Method == "TestExecute" && ls.StmtType == "INSERT" {
-			break
+		ls := getQueryLog(logChan)
+		if ls == nil || (ls.Method == method && ls.StmtType == stmtType && (substr == "" || strings.Contains(ls.SQL, substr))) {
+			return ls
 		}
 	}
-	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "INSERT SELECT routing indexes")
 }
