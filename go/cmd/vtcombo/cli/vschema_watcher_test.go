@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -36,12 +35,19 @@ func TestPersistKeyspace_WritesFile(t *testing.T) {
 
 	require.NoError(t, persistKeyspace(dir, "ks1", ks))
 
-	data, err := os.ReadFile(filepath.Join(dir, "ks1.json"))
+	final := filepath.Join(dir, "ks1.json")
+	data, err := os.ReadFile(final)
 	require.NoError(t, err)
 
 	var got vschemapb.Keyspace
 	require.NoError(t, json.Unmarshal(data, &got))
 	assert.True(t, got.Sharded)
+
+	// CreateTemp produces 0o600; persistKeyspace must restore 0o644 so we
+	// don't silently tighten permissions versus the prior os.WriteFile call.
+	info, err := os.Stat(final)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
 }
 
 func TestPersistKeyspace_ReplacesExistingFile(t *testing.T) {
@@ -87,12 +93,8 @@ func TestPersistKeyspace_NoTempLeftover(t *testing.T) {
 // leave an empty file behind on a kill between truncate and write.
 //
 // We force a failure by making the directory non-writable so CreateTemp
-// fails. This test is skipped on Windows (different permission semantics)
-// and when running as root (root ignores 0o555).
+// fails. Skipped when running as root since root ignores 0o555.
 func TestPersistKeyspace_ExistingFilePreservedOnFailure(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("directory permissions don't restrict writes on Windows")
-	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory write permissions")
 	}

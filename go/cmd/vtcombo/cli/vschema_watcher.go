@@ -47,7 +47,7 @@ func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *
 	}
 
 	// Now watch for changes in the SrvVSchema object and persist them to disk.
-	go watchSrvVSchema(ctx, ts, tpb.Cells[0])
+	go watchSrvVSchema(ctx, vschemaPersistenceDir, ts, tpb.Cells[0])
 }
 
 func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
@@ -81,7 +81,7 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 	}
 }
 
-func watchSrvVSchema(ctx context.Context, ts *topo.Server, cell string) {
+func watchSrvVSchema(ctx context.Context, dir string, ts *topo.Server, cell string) {
 	data, ch, err := ts.WatchSrvVSchema(ctx, tpb.Cells[0])
 	if err != nil {
 		log.Error(fmt.Sprintf("WatchSrvVSchema failed: %v", err))
@@ -92,13 +92,13 @@ func watchSrvVSchema(ctx context.Context, ts *topo.Server, cell string) {
 		log.Error(fmt.Sprintf("WatchSrvVSchema could not retrieve initial vschema: %v", data.Err))
 		os.Exit(1)
 	}
-	persistNewSrvVSchema(vschemaPersistenceDir, data.Value)
+	persistNewSrvVSchema(dir, data.Value)
 
 	for update := range ch {
 		if update.Err != nil {
 			log.Error(fmt.Sprintf("WatchSrvVSchema returned an error: %v", update.Err))
 		} else {
-			persistNewSrvVSchema(vschemaPersistenceDir, update.Value)
+			persistNewSrvVSchema(dir, update.Value)
 		}
 	}
 }
@@ -137,6 +137,12 @@ func persistKeyspace(dir, ksName string, ks *vschemapb.Keyspace) error {
 	// successful rename (the temp name no longer exists).
 	defer os.Remove(tmpName)
 
+	// CreateTemp uses 0o600; preserve the 0o644 the original os.WriteFile call
+	// produced so we don't silently tighten permissions on persisted files.
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return fmt.Errorf("chmod temp file %s: %w", tmpName, err)
+	}
 	if _, err := tmp.Write(jsonBytes); err != nil {
 		tmp.Close()
 		return fmt.Errorf("writing temp file %s: %w", tmpName, err)
