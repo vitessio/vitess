@@ -172,6 +172,9 @@ func (s *TabletThrottlerStrategy) Start() {
 }
 
 // Stop stops the background throttle check updater and releases resources.
+// Stop is terminal: this instance must not be restarted after Stop returns.
+// The context and done channel are permanently canceled/closed. Strategy switches
+// in QueryThrottler always create a fresh instance via NewTabletThrottlerStrategy.
 func (s *TabletThrottlerStrategy) Stop() {
 	if s.running.CompareAndSwap(true, false) {
 		// Cancel the main context - this stops both the cache updater goroutine
