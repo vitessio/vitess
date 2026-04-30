@@ -1,0 +1,334 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package gossip
+
+import (
+	"context"
+	"time"
+
+	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	gossippb "vitess.io/vitess/go/vt/proto/gossip"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vttime"
+)
+
+type grpcTransport struct {
+	dialer Dialer
+}
+
+// Dialer provides a gossip client for a target address. Implementations
+// SHOULD cache per-target connections so the gossip hot path does not
+// pay a full TCP/TLS handshake on every RPC; Close releases them.
+type Dialer interface {
+	Dial(ctx context.Context, target string) (gossippb.GossipClient, error)
+	Close()
+}
+
+// NewGRPCTransport creates a gossip transport backed by gRPC using the given dialer.
+func NewGRPCTransport(dialer Dialer) Transport {
+	return &grpcTransport{dialer: dialer}
+}
+
+// Close releases any per-target connections held by the transport.
+func (t *grpcTransport) Close() {
+	if t.dialer != nil {
+		t.dialer.Close()
+	}
+}
+
+// PushPull implements one side of the periodic gossip exchange over
+// gRPC: proto-encode the outgoing snapshot, RPC, decode the response
+// for the caller to merge.
+func (t *grpcTransport) PushPull(ctx context.Context, addr string, msg *Message) (*Message, error) {
+	client, err := t.dial(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := client.PushPull(ctx, toProtoMessage(msg))
+	if err != nil {
+		return nil, err
+	}
+	return fromProtoMessage(response)
+}
+
+// Join implements the bootstrap RPC over gRPC. Same wire-encoding path
+// as PushPull, different payload shape (no full state snapshot, just
+// the joining member and its seeds).
+func (t *grpcTransport) Join(ctx context.Context, addr string, req *JoinRequest) (*JoinResponse, error) {
+	client, err := t.dial(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := client.Join(ctx, toProtoJoinRequest(req))
+	if err != nil {
+		return nil, err
+	}
+
+	return fromProtoJoinResponse(response)
+}
+
+// dial fetches a client for addr, validating that neither the dialer
+// nor its return value is nil so PushPull/Join never panic on a
+// misconfigured dialer.
+func (t *grpcTransport) dial(ctx context.Context, addr string) (gossippb.GossipClient, error) {
+	if t.dialer == nil {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "gossip transport dialer is nil")
+	}
+	client, err := t.dialer.Dial(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gossip transport dialer returned nil client for %q", addr)
+	}
+	return client, nil
+}
+
+// The to/from proto converters below translate between the gossip
+// package's in-memory types (which use Go-native time.Time, typed
+// enums, etc.) and the protobuf wire types. Keeping the wire layer
+// isolated here means the core gossip logic never deals with
+// gossippb directly and is easier to reason about / unit-test.
+func toProtoMessage(msg *Message) *gossippb.GossipMessage {
+	if msg == nil {
+		return &gossippb.GossipMessage{}
+	}
+
+	members := make([]*gossippb.Member, 0, len(msg.Members))
+	for _, member := range msg.Members {
+		members = append(members, toProtoMember(member))
+	}
+
+	states := make([]*gossippb.GossipState, 0, len(msg.States))
+	for _, state := range msg.States {
+		states = append(states, toProtoState(state))
+	}
+
+	return &gossippb.GossipMessage{
+		Members: members,
+		States:  states,
+		Epoch:   msg.Epoch,
+	}
+}
+
+// fromProtoMessage decodes a wire payload into the gossip package's
+// native types so the merge logic on the receive side never has to
+// touch proto. A nil msg yields an empty Message rather than nil so
+// callers can safely range over Members/States.
+func fromProtoMessage(msg *gossippb.GossipMessage) (*Message, error) {
+	if msg == nil {
+		return &Message{}, nil
+	}
+
+	members := make([]Member, 0, len(msg.Members))
+	for _, member := range msg.Members {
+		members = append(members, fromProtoMember(member))
+	}
+
+	states := make([]StateDigest, 0, len(msg.States))
+	for _, state := range msg.States {
+		digest, err := fromProtoState(state)
+		if err != nil {
+			return nil, err
+		}
+		states = append(states, digest)
+	}
+
+	return &Message{
+		Members: members,
+		States:  states,
+		Epoch:   msg.Epoch,
+	}, nil
+}
+
+// toProtoJoinRequest / fromProtoJoinRequest move a Join payload across
+// the wire boundary. The conversion exists for the same reason as
+// toProtoMessage: keep gossippb out of the core agent.
+func toProtoJoinRequest(req *JoinRequest) *gossippb.GossipJoinRequest {
+	if req == nil {
+		return &gossippb.GossipJoinRequest{}
+	}
+
+	members := make([]*gossippb.Member, 0, len(req.Seeds))
+	for _, member := range req.Seeds {
+		members = append(members, toProtoMember(member))
+	}
+
+	return &gossippb.GossipJoinRequest{
+		Member: toProtoMember(req.Member),
+		Seeds:  members,
+	}
+}
+
+func fromProtoJoinRequest(req *gossippb.GossipJoinRequest) *JoinRequest {
+	if req == nil {
+		return &JoinRequest{}
+	}
+
+	seeds := make([]Member, 0, len(req.Seeds))
+	for _, member := range req.Seeds {
+		seeds = append(seeds, fromProtoMember(member))
+	}
+
+	return &JoinRequest{
+		Member: fromProtoMember(req.Member),
+		Seeds:  seeds,
+	}
+}
+
+// toProtoJoinResponse / fromProtoJoinResponse are the receive-side
+// counterparts. JoinResponse.Initial is a value (not pointer) so we
+// dereference fromProtoMessage's result when round-tripping.
+func toProtoJoinResponse(resp *JoinResponse) *gossippb.GossipJoinResponse {
+	if resp == nil {
+		return &gossippb.GossipJoinResponse{}
+	}
+
+	members := make([]*gossippb.Member, 0, len(resp.Members))
+	for _, member := range resp.Members {
+		members = append(members, toProtoMember(member))
+	}
+
+	return &gossippb.GossipJoinResponse{
+		Members: members,
+		Initial: toProtoMessage(&resp.Initial),
+	}
+}
+
+func fromProtoJoinResponse(resp *gossippb.GossipJoinResponse) (*JoinResponse, error) {
+	if resp == nil {
+		return &JoinResponse{}, nil
+	}
+
+	members := make([]Member, 0, len(resp.Members))
+	for _, member := range resp.Members {
+		members = append(members, fromProtoMember(member))
+	}
+
+	initial, err := fromProtoMessage(resp.Initial)
+	if err != nil {
+		return nil, err
+	}
+
+	return &JoinResponse{
+		Members: members,
+		Initial: *initial,
+	}, nil
+}
+
+// toProtoMember / fromProtoMember translate a single Member. The Meta
+// map is shared by reference in both directions — proto3 marshals empty
+// and nil maps identically and the agent never mutates a Member's Meta
+// after it is published, so a copy here would be wasted work.
+func toProtoMember(member Member) *gossippb.Member {
+	return &gossippb.Member{
+		Id:   string(member.ID),
+		Addr: member.Addr,
+		Meta: member.Meta,
+	}
+}
+
+func fromProtoMember(member *gossippb.Member) Member {
+	if member == nil {
+		return Member{}
+	}
+	return Member{
+		ID:   NodeID(member.Id),
+		Addr: member.Addr,
+		Meta: member.Meta,
+	}
+}
+
+// toProtoState encodes a StateDigest for the wire. A zero LastUpdate
+// is sent as nil so never-observed peers arrive on the other side with
+// an IsZero timestamp and stay Unknown — leaving the field unset on the
+// wire (rather than serialising the Unix epoch) is what preserves the
+// distinction; a real Unix(0,0) would make them look ancient and
+// immediately age to Down via MaxUpdateAge.
+func toProtoState(state StateDigest) *gossippb.GossipState {
+	var lastUpdate *vttime.Time
+	if !state.LastUpdate.IsZero() {
+		lastUpdate = protoutil.TimeToProto(state.LastUpdate)
+	}
+	return &gossippb.GossipState{
+		NodeId:     string(state.NodeID),
+		Status:     toProtoStatus(state.Status),
+		Phi:        state.Phi,
+		LastUpdate: lastUpdate,
+	}
+}
+
+// fromProtoState is the receive-side counterpart: a nil last_update on
+// the wire stays a zero time.Time (never-observed), preserving the
+// "seeds stay Unknown until first exchange" invariant across process
+// boundaries. A non-nil last_update with all-zero fields is interpreted
+// as Unix(0, 0) — which is non-zero and will age normally.
+func fromProtoState(state *gossippb.GossipState) (StateDigest, error) {
+	if state == nil {
+		return StateDigest{}, nil
+	}
+	status, err := fromProtoStatus(state.Status)
+	if err != nil {
+		return StateDigest{}, err
+	}
+	var lastUpdate time.Time
+	if state.LastUpdate != nil {
+		lastUpdate = protoutil.TimeFromProto(state.LastUpdate)
+	}
+	return StateDigest{
+		NodeID:     NodeID(state.NodeId),
+		Status:     status,
+		Phi:        state.Phi,
+		LastUpdate: lastUpdate,
+	}, nil
+}
+
+// toProtoStatus / fromProtoStatus keep the wire enum and the in-memory
+// enum in a 1:1 mapping. fromProtoStatus returns an error on unknown
+// values so a mismatched peer version fails the RPC loudly rather than
+// silently folding everything to Unknown.
+func toProtoStatus(status Status) gossippb.Status {
+	switch status {
+	case StatusAlive:
+		return gossippb.Status_STATUS_ALIVE
+	case StatusSuspect:
+		return gossippb.Status_STATUS_SUSPECT
+	case StatusDown:
+		return gossippb.Status_STATUS_DOWN
+	default:
+		return gossippb.Status_STATUS_UNKNOWN
+	}
+}
+
+func fromProtoStatus(status gossippb.Status) (Status, error) {
+	switch status {
+	case gossippb.Status_STATUS_ALIVE:
+		return StatusAlive, nil
+	case gossippb.Status_STATUS_SUSPECT:
+		return StatusSuspect, nil
+	case gossippb.Status_STATUS_DOWN:
+		return StatusDown, nil
+	case gossippb.Status_STATUS_UNKNOWN:
+		return StatusUnknown, nil
+	default:
+		return StatusUnknown, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown gossip status: %d", status)
+	}
+}

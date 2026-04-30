@@ -1097,6 +1097,30 @@ message UpdateThrottlerConfigRequest {
 message UpdateThrottlerConfigResponse {
 }
 
+message UpdateGossipConfigRequest {
+  string keyspace = 1;
+  // enabled turns gossip on or off for the keyspace. Leave unset (nil)
+  // to preserve the current setting; the CLI surfaces this as the
+  // mutually-exclusive --enable / --disable flag pair.
+  optional bool enabled = 2;
+  // phi_threshold is the phi-accrual suspicion threshold. Must be > 0
+  // when set; explicit 0 or negative values are rejected. Leave unset
+  // (nil) to use the default (4) on create or preserve the existing
+  // value on update.
+  optional double phi_threshold = 3;
+  // ping_interval is the gossip exchange interval. Must be a positive
+  // duration when set; empty preserves the existing value on update or
+  // uses the default (1s) on create.
+  string ping_interval = 4;
+  // max_update_age is how long before marking a peer down. Must be a
+  // positive duration when set; empty preserves the existing value on
+  // update or uses the default (5s) on create.
+  string max_update_age = 5;
+}
+
+message UpdateGossipConfigResponse {
+}
+
 message GetSrvVSchemaRequest {
   string cell = 1;
 }

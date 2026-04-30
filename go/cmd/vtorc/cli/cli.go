@@ -90,6 +90,8 @@ func addStatusParts() {
 func init() {
 	servenv.RegisterDefaultFlags()
 	servenv.RegisterFlags()
+	servenv.RegisterGRPCServerOptionFlags()
+	servenv.RegisterGRPCServerAuthFlags()
 
 	servenv.MoveFlagsToCobraCommand(Main)
 

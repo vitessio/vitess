@@ -62,6 +62,7 @@ const (
 	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
+	PrimaryTabletUnreachableByQuorum       AnalysisCode = "PrimaryTabletUnreachableByQuorum"
 
 	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
 	// has been elected. VTOrc should demote this primary to a replica.

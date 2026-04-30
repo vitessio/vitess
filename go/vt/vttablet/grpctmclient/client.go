@@ -75,6 +75,14 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &name, "tablet-manager-grpc-server-name", name, "the server name to use to validate server certificate")
 }
 
+// SecureDialOption exposes this package's tablet-manager TLS flags as
+// a reusable grpc.DialOption factory. Other tablet-to-tablet transports
+// (e.g. gossip) call this so they inherit the same TLS configuration as
+// regular tablet-manager RPCs without declaring a parallel set of flags.
+func SecureDialOption() (grpc.DialOption, error) {
+	return grpcclient.SecureDialOption(cert, key, ca, crl, name)
+}
+
 var _binaries = []string{ // binaries that require the flags in this package
 	"vtbackup",
 	"vtcombo",
@@ -194,7 +202,7 @@ func (client *grpcClient) dial(ctx context.Context, tablet *topodatapb.Tablet) (
 	}
 
 	addr := netutil.JoinHostPort(tablet.Hostname, tablet.PortMap["grpc"])
-	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
+	opt, err := SecureDialOption()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -223,7 +231,7 @@ func (client *grpcClient) dialPool(ctx context.Context, tablet *topodatapb.Table
 	}
 
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
+	opt, err := SecureDialOption()
 	if err != nil {
 		return nil, vterrors.FromGRPC(err)
 	}
@@ -267,7 +275,7 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	}
 
 	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
-	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
+	opt, err := SecureDialOption()
 	if err != nil {
 		return nil, nil, err
 	}

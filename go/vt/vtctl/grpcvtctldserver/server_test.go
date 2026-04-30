@@ -14994,6 +14994,245 @@ func TestValidateShard(t *testing.T) {
 	}
 }
 
+func TestUpdateGossipConfig(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	float64Ptr := func(v float64) *float64 {
+		return &v
+	}
+	boolPtr := func(v bool) *bool {
+		return &v
+	}
+	newServer := func(t *testing.T, cells ...string) (*topo.Server, vtctlservicepb.VtctldServer) {
+		t.Helper()
+		if len(cells) == 0 {
+			cells = []string{"zone1"}
+		}
+		ts := memorytopo.NewServer(ctx, cells...)
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			return NewVtctldServer(vtenv.NewTestEnv(), ts)
+		})
+		return ts, vtctld
+	}
+	newServerWithShard := func(t *testing.T, cells ...string) (*topo.Server, vtctlservicepb.VtctldServer) {
+		t.Helper()
+		ts, vtctld := newServer(t, cells...)
+		_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+		require.NoError(t, err)
+		return ts, vtctld
+	}
+
+	t.Run("enable with config", func(t *testing.T) {
+		ts, vtctld := newServerWithShard(t)
+
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enabled:      boolPtr(true),
+			PhiThreshold: float64Ptr(5),
+			PingInterval: "2s",
+			MaxUpdateAge: "10s",
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.True(t, ki.GossipConfig.Enabled)
+		assert.Equal(t, float64(5), ki.GossipConfig.PhiThreshold)
+		assert.Equal(t, "2s", ki.GossipConfig.PingInterval)
+		assert.Equal(t, "10s", ki.GossipConfig.MaxUpdateAge)
+	})
+
+	t.Run("disable", func(t *testing.T) {
+		ts, vtctld := newServerWithShard(t)
+
+		// First enable.
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "ks",
+			Enabled:  boolPtr(true),
+		})
+		require.NoError(t, err)
+
+		// Then disable.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "ks",
+			Enabled:  boolPtr(false),
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.False(t, ki.GossipConfig.Enabled)
+	})
+
+	t.Run("partial update preserves existing config", func(t *testing.T) {
+		ts, vtctld := newServerWithShard(t)
+
+		// Set initial config.
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enabled:      boolPtr(true),
+			PhiThreshold: float64Ptr(5),
+			PingInterval: "2s",
+			MaxUpdateAge: "10s",
+		})
+		require.NoError(t, err)
+
+		// Update only MaxUpdateAge — other fields should be preserved.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			MaxUpdateAge: "20s",
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.True(t, ki.GossipConfig.Enabled, "enabled should be preserved")
+		assert.Equal(t, float64(5), ki.GossipConfig.PhiThreshold, "phi should be preserved")
+		assert.Equal(t, "2s", ki.GossipConfig.PingInterval, "ping interval should be preserved")
+		assert.Equal(t, "20s", ki.GossipConfig.MaxUpdateAge, "max update age should be updated")
+	})
+
+	t.Run("partial update repairs missing srv keyspace config from keyspace config", func(t *testing.T) {
+		ts, vtctld := newServerWithShard(t, "zone1", "zone2")
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", &topodatapb.SrvKeyspace{}))
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone2", "ks", &topodatapb.SrvKeyspace{}))
+
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enabled:      boolPtr(true),
+			PhiThreshold: float64Ptr(5),
+			PingInterval: "2s",
+			MaxUpdateAge: "10s",
+		})
+		require.NoError(t, err)
+
+		srvKeyspace, err := ts.GetSrvKeyspace(ctx, "zone1", "ks")
+		require.NoError(t, err)
+		srvKeyspace.GossipConfig = nil
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "ks", srvKeyspace))
+
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			MaxUpdateAge: "20s",
+		})
+		require.NoError(t, err)
+
+		for _, cell := range []string{"zone1", "zone2"} {
+			srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, "ks")
+			require.NoError(t, err)
+			require.NotNil(t, srvKeyspace.GossipConfig)
+			assert.True(t, srvKeyspace.GossipConfig.Enabled)
+			assert.Equal(t, float64(5), srvKeyspace.GossipConfig.PhiThreshold)
+			assert.Equal(t, "2s", srvKeyspace.GossipConfig.PingInterval)
+			assert.Equal(t, "20s", srvKeyspace.GossipConfig.MaxUpdateAge)
+		}
+	})
+
+	t.Run("enable without tuning values stores the defaults", func(t *testing.T) {
+		ts, vtctld := newServerWithShard(t)
+
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "ks",
+			Enabled:  boolPtr(true),
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.True(t, ki.GossipConfig.Enabled)
+		assert.Equal(t, float64(4), ki.GossipConfig.PhiThreshold)
+		assert.Equal(t, "1s", ki.GossipConfig.PingInterval)
+		assert.Equal(t, "5s", ki.GossipConfig.MaxUpdateAge)
+	})
+
+	t.Run("empty tuning values do not overwrite existing config", func(t *testing.T) {
+		ts, vtctld := newServerWithShard(t)
+
+		// Set initial config with all fields.
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enabled:      boolPtr(true),
+			PhiThreshold: float64Ptr(6),
+			PingInterval: "3s",
+			MaxUpdateAge: "15s",
+		})
+		require.NoError(t, err)
+
+		// Send an update omitting all tuning values — nothing should change.
+		_, err = vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			PingInterval: "",
+			MaxUpdateAge: "",
+		})
+		require.NoError(t, err)
+
+		ki, err := ts.GetKeyspace(ctx, "ks")
+		require.NoError(t, err)
+		require.NotNil(t, ki.GossipConfig)
+		assert.True(t, ki.GossipConfig.Enabled, "enabled should be unchanged")
+		assert.Equal(t, float64(6), ki.GossipConfig.PhiThreshold, "phi should be unchanged")
+		assert.Equal(t, "3s", ki.GossipConfig.PingInterval, "ping interval should be unchanged")
+		assert.Equal(t, "15s", ki.GossipConfig.MaxUpdateAge, "max update age should be unchanged")
+	})
+
+	t.Run("nonexistent keyspace", func(t *testing.T) {
+		_, vtctld := newServer(t)
+
+		_, err := vtctld.UpdateGossipConfig(ctx, &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace: "nonexistent",
+			Enabled:  boolPtr(true),
+		})
+		assert.Error(t, err)
+	})
+
+	for _, tt := range []struct {
+		name    string
+		req     *vtctldatapb.UpdateGossipConfigRequest
+		wantErr string
+	}{{
+		name: "explicit zero phi threshold",
+		req: &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			Enabled:      boolPtr(true),
+			PhiThreshold: float64Ptr(0),
+		},
+		wantErr: "invalid phi-threshold",
+	}, {
+		name: "invalid ping interval",
+		req: &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			PingInterval: "banana",
+		},
+		wantErr: "invalid ping-interval",
+	}, {
+		name: "invalid max update age",
+		req: &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			MaxUpdateAge: "-5s",
+		},
+		wantErr: "invalid max-update-age",
+	}, {
+		name: "negative phi threshold",
+		req: &vtctldatapb.UpdateGossipConfigRequest{
+			Keyspace:     "ks",
+			PhiThreshold: float64Ptr(-1),
+		},
+		wantErr: "invalid phi-threshold",
+	}} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, vtctld := newServerWithShard(t)
+			_, err := vtctld.UpdateGossipConfig(ctx, tt.req)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
