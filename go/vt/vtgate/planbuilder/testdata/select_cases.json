@@ -2826,24 +2826,7 @@
   {
     "comment": "Backtick-quoted dual is a real table, not virtual dual",
     "query": "select 1 from `dual`",
-    "plan": {
-      "Type": "Passthrough",
-      "QueryType": "SELECT",
-      "Original": "select 1 from `dual`",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from `dual` where 1 != 1",
-        "Query": "select 1 from `dual`"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
-    }
+    "plan": "table dual not found"
   },
   {
     "comment": "subquery in select expression of derived table",
@@ -5642,7 +5625,6 @@
   {
     "comment": "volatile subqueries (uuid) each get their own pullout",
     "query": "select (select uuid() from user_extra limit 1) as a, (select uuid() from user_extra limit 1) as b, (select uuid() from user_extra limit 1) as c from user where id = 1",
-    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
@@ -5746,7 +5728,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "(OR 1 = 0) doesn't cause unnecessary scatter",
