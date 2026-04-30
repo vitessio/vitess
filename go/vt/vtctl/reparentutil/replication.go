@@ -84,6 +84,42 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
+// filterToMostAdvancedCombined filters the given candidates to only those whose Combined
+// position equals the max Combined position across all candidates. Since replication is
+// stopped at this point, Combined positions are frozen — tablets behind the max can never
+// catch up and are safe to exclude from the relay log wait.
+func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
+	if len(candidates) == 0 {
+		return candidates
+	}
+
+	// Find the max Combined position.
+	var maxCombined replication.Position
+	for _, pos := range candidates {
+		if maxCombined.IsZero() || pos.Combined.AtLeast(maxCombined) {
+			maxCombined = pos.Combined
+		}
+	}
+
+	// Collect candidates whose Combined position is at least the max, or is incomparable
+	// (neither is AtLeast the other — e.g., disjoint GTID UUIDs). Incomparable positions
+	// cannot be proven to be behind, so they must be kept.
+	result := make(map[string]*RelayLogPositions)
+	for alias, pos := range candidates {
+		isBehind := maxCombined.AtLeast(pos.Combined) && !pos.Combined.Equal(maxCombined)
+		if !isBehind {
+			result[alias] = pos
+		}
+	}
+
+	excluded := len(candidates) - len(result)
+	if excluded > 0 {
+		logger.Infof("filterToMostAdvancedCombined: filtered %d non-competitive candidate(s), keeping %d at max Combined position %s", excluded, len(result), maxCombined)
+	}
+
+	return result
+}
+
 // FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.

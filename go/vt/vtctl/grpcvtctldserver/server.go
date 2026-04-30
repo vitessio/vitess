@@ -1304,7 +1304,6 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
 	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
 	span.Annotate("wait_for_all_tablets", req.WaitForAllTablets)
-
 	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
 	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {

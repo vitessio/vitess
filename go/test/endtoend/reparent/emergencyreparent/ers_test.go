@@ -18,7 +18,10 @@ package emergencyreparent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os/exec"
 	"sync"
 	"testing"
@@ -631,6 +634,55 @@ func TestERSFailFast(t *testing.T) {
 	}
 }
 
+// TestERSFiltersNonMostAdvancedCandidates verifies that ERS filters out tablets whose
+// Combined (relay log) position is behind the most advanced group. This is done by stopping
+// the IO thread on one replica, writing data through the primary, then triggering ERS.
+// The replica with the stopped IO thread will have a lower Combined position and should be
+// filtered out. We verify this by checking the EmergencyReparentFilteredCandidates stat.
+func TestERSFiltersNonMostAdvancedCandidates(t *testing.T) {
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	ctx := t.Context()
+
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// Stop the IO thread on tablets[3] so it stops receiving binlogs.
+	utils.RunSQL(ctx, t, "STOP REPLICA IO_THREAD", tablets[3])
+
+	// Write data that tablets[3] won't receive (IO thread is stopped).
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2]})
+
+	// Kill the primary so ERS is needed.
+	utils.StopTablet(t, tablets[0], true)
+
+	// Run ERS — tablets[3] should be filtered out as non-most-advanced.
+	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
+	require.NoError(t, err, out)
+
+	// Verify the EmergencyReparentFilteredCandidates stat was incremented.
+	resp, err := http.Get(clusterInstance.VtctldProcess.VerifyURL)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	var vars map[string]any
+	require.NoError(t, json.Unmarshal(body, &vars))
+	filteredCandidates, ok := vars["EmergencyReparentFilteredCandidates"]
+	require.True(t, ok, "EmergencyReparentFilteredCandidates stat not found in vtctld debug/vars")
+	filteredMap, ok := filteredCandidates.(map[string]any)
+	require.True(t, ok, "EmergencyReparentFilteredCandidates is not a map")
+	key := fmt.Sprintf("%s.%s", utils.KeyspaceName, utils.ShardName)
+	count, ok := filteredMap[key]
+	require.True(t, ok, "EmergencyReparentFilteredCandidates does not contain key %s", key)
+	require.Greater(t, count, float64(0), "expected at least 1 filtered candidate")
+
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	require.NotEqual(t, newPrimary.Alias, tablets[0].Alias, "old primary should not be the new primary")
+	require.NotEqual(t, newPrimary.Alias, tablets[3].Alias, "lagging tablet should not be the new primary")
+}
+
 // TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
 // If there are more than 1, we also fail.
 func TestReplicationStopped(t *testing.T) {
@@ -645,14 +697,8 @@ func TestReplicationStopped(t *testing.T) {
 	require.NoError(t, err)
 	// Run an additional command in the current primary which will only be acked by tablets[3] and be in its relay log.
 	insertedVal := utils.ConfirmReplication(t, tablets[0], nil)
-	// Failover to tablets[3]
-	_, err = utils.Ers(clusterInstance, tablets[3], "60s", "30s")
-	require.Error(t, err, "ERS should fail with 2 replicas having replication stopped")
-
-	// Start replication back on tablet[1]
-	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ExecuteFetchAsDBA", tablets[1].Alias, `START REPLICA;`)
-	require.NoError(t, err)
-	// Failover to tablets[3] again. This time it should succeed
+	// Failover to tablets[3]. ERS tolerates partial relay log failures (tablets[1] and tablets[2]
+	// will fail to apply relay logs), so this should succeed with tablets[3] as the surviving candidate.
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 	require.NoError(t, err, out)
 	// Verify that the tablet has the inserted value

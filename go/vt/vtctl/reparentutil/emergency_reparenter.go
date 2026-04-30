@@ -70,8 +70,16 @@ type EmergencyReparentOptions struct {
 }
 
 // counters for Emergency Reparent Shard
-var ersCounter = stats.NewCountersWithMultiLabels("EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
-	[]string{"Keyspace", "Shard", "Result"},
+var (
+	ersCounter = stats.NewCountersWithMultiLabels("EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
+	ersFilteredCandidates = stats.NewCountersWithMultiLabels("EmergencyReparentFilteredCandidates", "Number of candidates filtered out during EmergencyReparentShard because their Combined position was not the most advanced",
+		[]string{"Keyspace", "Shard"},
+	)
+	ersRelayLogApplyFailedCandidates = stats.NewCountersWithMultiLabels("EmergencyReparentRelayLogFailedCandidates", "Number of candidates removed during EmergencyReparentShard because they failed to apply relay logs",
+		[]string{"Keyspace", "Shard"},
+	)
 )
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
@@ -270,9 +278,35 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	// Wait for all candidates to apply relay logs
-	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
+	// Filter to the most-advanced candidates by Combined (relay log) position for the relay log wait.
+	// Since replication is stopped, Combined positions are frozen — tablets behind the max can never
+	// catch up during relay log application. We only wait for the most-advanced group, but keep all
+	// valid candidates for later promotion steps (behind tablets can catch up via the intermediate source).
+	relayLogWaitCandidates := filterToMostAdvancedCombined(validCandidates, erp.logger)
+	if filtered := int64(len(validCandidates) - len(relayLogWaitCandidates)); filtered > 0 {
+		ersFilteredCandidates.Add([]string{keyspace, shard}, filtered)
+	}
+
+	// Wait for relay logs to apply on the most-advanced candidates. Proceeds as soon as one
+	// tablet succeeds (all have the same Combined position, so any success is equivalent).
+	// Tablets that genuinely fail (before a success is found) are removed from relayLogWaitCandidates.
+	relayLogWaitSet := make(map[string]struct{}, len(relayLogWaitCandidates))
+	for alias := range relayLogWaitCandidates {
+		relayLogWaitSet[alias] = struct{}{}
+	}
+	if err = erp.waitForAllRelayLogsToApply(ctx, relayLogWaitCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
 		return err
+	}
+	// Remove genuinely-failed tablets from validCandidates (so they can't be picked as a winner).
+	// Only check tablets that were in the relay log wait set — behind tablets that weren't in
+	// the wait set are still valid candidates (they can catch up via the intermediate source).
+	for alias := range relayLogWaitSet {
+		if _, survived := relayLogWaitCandidates[alias]; !survived {
+			delete(validCandidates, alias)
+		}
+	}
+	if failed := int64(len(relayLogWaitSet)) - int64(len(relayLogWaitCandidates)); failed > 0 {
+		ersRelayLogApplyFailedCandidates.Add([]string{keyspace, shard}, failed)
 	}
 
 	// For GTID based replication, we will run errant GTID detection.
@@ -416,6 +450,12 @@ func (erp *EmergencyReparenter) restartReplicationOnStoppedReplicas(
 	return nil
 }
 
+// relayLogResult is the result of waiting for a single tablet to apply relay logs.
+type relayLogResult struct {
+	alias string
+	err   error
+}
+
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
@@ -423,8 +463,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
 ) error {
-	errCh := make(chan concurrency.Error)
-	defer close(errCh)
+	resultCh := make(chan relayLogResult, len(validCandidates))
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
@@ -456,27 +495,44 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		}
 
 		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
-			var err error
-			defer func() {
-				errCh <- concurrency.Error{
-					Err: err,
-				}
-			}()
-			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
+			resultCh <- relayLogResult{
+				alias: alias,
+				err:   WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status),
+			}
 		}(candidate, status)
 
 		waiterCount++
 	}
 
-	errgroup := concurrency.ErrorGroup{
-		NumGoroutines:        waiterCount,
-		NumRequiredSuccesses: waiterCount,
-		NumAllowedErrors:     0,
+	// If no candidates needed to apply relay logs (e.g., initialization with no replication),
+	// there's nothing to wait for.
+	if waiterCount == 0 {
+		return nil
 	}
-	rec := errgroup.Wait(groupCancel, errCh)
 
-	if len(rec.Errors) != 0 {
-		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided waitReplicasTimeout (%s): %v", waitReplicasTimeout, rec.Error())
+	// Collect results. As soon as one tablet succeeds, cancel the remaining
+	// goroutines — all tablets in this group have the same Combined position so
+	// any single success gives us a valid relay-log-applied candidate. The others
+	// will continue applying relay logs on their own after ERS completes.
+	succeeded := false
+	for range waiterCount {
+		result := <-resultCh
+		if result.err != nil {
+			if !succeeded {
+				// Only count as a real failure if we haven't succeeded yet. After success,
+				// remaining goroutines are cancelled and their errors are expected.
+				erp.logger.Warningf("EmergencyReparent candidate %s failed to apply relay logs: %v; removing from valid candidates", result.alias, result.err)
+				delete(validCandidates, result.alias)
+			}
+		} else if !succeeded {
+			succeeded = true
+			// Cancel remaining goroutines — we have a winner.
+			groupCancel()
+		}
+	}
+
+	if !succeeded {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
 	return nil
