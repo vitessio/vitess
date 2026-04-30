@@ -730,14 +730,17 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 	}
 	colName := strings.ToLower(c.Name.String())
 	colType := querypb.Type_VARCHAR
-	tableExpr := selStmt.From[0]
-	expr, ok := tableExpr.(*sqlparser.AliasedTableExpr)
-	if ok {
-		m := tableColumnMap[sqlparser.GetTableName(expr.Expr)]
-		if m != nil {
-			t, found := m[colName]
-			if found {
-				colType = t
+	// FROM-less SELECTs (post-DUAL-as-keyword virtual dual) have no tables to
+	// infer column types from — leave the default and proceed.
+	if len(selStmt.From) > 0 {
+		expr, ok := selStmt.From[0].(*sqlparser.AliasedTableExpr)
+		if ok {
+			m := tableColumnMap[sqlparser.GetTableName(expr.Expr)]
+			if m != nil {
+				t, found := m[colName]
+				if found {
+					colType = t
+				}
 			}
 		}
 	}
