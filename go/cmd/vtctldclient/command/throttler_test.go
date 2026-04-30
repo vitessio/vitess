@@ -188,6 +188,104 @@ func TestValidateQueryThrottlerConfigContent(t *testing.T) {
 			},
 			wantErr: "threshold[0] 'throttle' must be between 0 and 100, got 150 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
 		},
+		{
+			name: "above zero is valid (boundary)",
+			config: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 0, Throttle: 50},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "throttle zero is valid (boundary)",
+			config: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 5.0, Throttle: 0},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "throttle one hundred is valid (boundary)",
+			config: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 5.0, Throttle: 100},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "second threshold fails (validates loop iterates past index 0)",
+			config: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 5.0, Throttle: 50},
+												{Above: -1.0, Throttle: 100},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "threshold[1] 'above' must be >= 0, got -1 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
 	}
 
 	for _, tt := range tests {
