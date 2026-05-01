@@ -3966,6 +3966,61 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			shouldErr: true,
 			wantErr:   "failed PopulateReparentJournal(primary=zone1-0000000100",
 		},
+		{
+			name:       "success - RESTORE tablets are skipped",
+			durability: policy.DurabilityNone,
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": assert.AnError, // proves RESTORE is skipped
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+			},
+			shouldErr: false,
+		},
 	}
 
 	ctx := context.Background()
@@ -4216,6 +4271,65 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 				},
 			},
 			wantErr: "context deadline exceeded",
+		}, {
+			name: "Restore tablet skipped before RPC",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsDelays: map[string]time.Duration{
+					"zone1-0000000300": 20 * time.Second,
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+					"zone1-0000000200": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000300": {
+						Error: errors.New("should never be called"),
+					},
+				},
+			},
+			remoteOpTime: 100 * time.Millisecond,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000300": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  300,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+			},
+			wantBufferPoolsData: map[string]int{
+				"zone1-0000000100": 1231,
+				"zone1-0000000200": 123,
+			},
 		},
 	}
 	for _, tt := range tests {
