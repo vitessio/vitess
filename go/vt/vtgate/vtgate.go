@@ -524,7 +524,7 @@ func parseSchemaChangeKeyspaces(raw string) (map[string]bool, error) {
 		return nil, nil
 	}
 	allowlist := map[string]bool{}
-	for _, ks := range strings.Split(raw, ",") {
+	for ks := range strings.SplitSeq(raw, ",") {
 		if ks = strings.TrimSpace(ks); ks != "" {
 			allowlist[ks] = true
 		}

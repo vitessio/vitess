@@ -334,6 +334,7 @@ Flags:
       --restore-with-clone                                               (init restore parameter) will restore from a clone, requires either --clone-from-primary or --clone-from-tablet, mutually exclusive with --restore-from-backup
       --retain-online-ddl-tables duration                                How long should vttablet keep an old migrated table before purging it (default 24h0m0s)
       --sanitize-log-messages                                            Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.
+      --schema-change-keyspaces string                                   Comma-separated allowlist of keyspaces the schema tracker should follow. If empty, all keyspaces are tracked.
       --schema-change-reload-timeout duration                            query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up (default 30s)
       --schema-change-signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --schema-dir string                                                Schema base directory. Should contain one directory per keyspace, with a vschema.json file if necessary.
