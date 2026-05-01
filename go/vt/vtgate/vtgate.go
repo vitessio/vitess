@@ -404,14 +404,10 @@ func Init(
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		var keyspacesToTrackSchemaFor map[string]bool
-		if schemaChangeKeyspaces != "" {
-			keyspacesToTrackSchemaFor = map[string]bool{}
-			for _, ks := range strings.Split(schemaChangeKeyspaces, ",") {
-				if ks = strings.TrimSpace(ks); ks != "" {
-					keyspacesToTrackSchemaFor[ks] = true
-				}
-			}
+		keyspacesToTrackSchemaFor, err := parseSchemaChangeKeyspaces(schemaChangeKeyspaces)
+		if err != nil {
+			log.Error(fmt.Sprintf("Invalid --schema-change-keyspaces value: %v", err))
+			os.Exit(1)
 		}
 		st = vtschema.NewTracker(gw.hc.Subscribe(schemaTrackerHcName), enableViews, enableUdfs, env.Parser(), keyspacesToTrackSchemaFor)
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
@@ -516,6 +512,27 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 		return vterrors.Wrap(err, "vtgate Init: failed to read SrvVSchema")
 	}
 	return nil
+}
+
+// parseSchemaChangeKeyspaces parses the comma-separated value of
+// --schema-change-keyspaces into an allowlist set. A blank input returns nil
+// (meaning "track all keyspaces"). A non-blank input that contains only
+// whitespace and commas returns an error so a misconfigured flag does not
+// silently fall back to tracking every keyspace.
+func parseSchemaChangeKeyspaces(raw string) (map[string]bool, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	allowlist := map[string]bool{}
+	for _, ks := range strings.Split(raw, ",") {
+		if ks = strings.TrimSpace(ks); ks != "" {
+			allowlist[ks] = true
+		}
+	}
+	if len(allowlist) == 0 {
+		return nil, fmt.Errorf("flag is set but contains no keyspace names: %q", raw)
+	}
+	return allowlist, nil
 }
 
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
