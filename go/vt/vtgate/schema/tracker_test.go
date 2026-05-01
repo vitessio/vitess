@@ -82,7 +82,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, false, false, sqlparser.NewTestParser())
+	tracker := NewTracker(ch, false, false, sqlparser.NewTestParser(), nil)
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -136,6 +136,90 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 	assert.EqualValues(t, 3, sbc.GetSchemaCount.Load())
 }
 
+// TestShouldTrackKeyspace verifies the keyspace allowlist filter applied by
+// both addKeyspacesToTracker (startup loop) and Tracker.Start (channel
+// goroutine). An empty/nil allowlist tracks all keyspaces; a non-empty
+// allowlist filters strictly.
+func TestShouldTrackKeyspace(t *testing.T) {
+	ch := make(chan *discovery.TabletHealth)
+
+	all := NewTracker(ch, false, false, sqlparser.NewTestParser(), map[string]bool{})
+	assert.True(t, all.ShouldTrackKeyspace("anything"), "empty allowlist must track all keyspaces")
+	assert.True(t, all.ShouldTrackKeyspace(""), "empty allowlist must track empty keyspace name too")
+
+	allNil := NewTracker(ch, false, false, sqlparser.NewTestParser(), nil)
+	assert.True(t, allNil.ShouldTrackKeyspace("anything"), "nil allowlist must track all keyspaces")
+
+	filtered := NewTracker(ch, false, false, sqlparser.NewTestParser(), map[string]bool{"allowed": true})
+	assert.True(t, filtered.ShouldTrackKeyspace("allowed"), "listed keyspace must be tracked")
+	assert.False(t, filtered.ShouldTrackKeyspace("blocked"), "non-listed keyspace must be skipped")
+	assert.False(t, filtered.ShouldTrackKeyspace(""), "empty name must not be tracked when allowlist is set")
+}
+
+// TestTrackingFilteredByKeyspace verifies the keyspace allowlist
+// (--schema-change-keyspaces) gates which TabletHealth events the tracker
+// processes.
+func TestTrackingFilteredByKeyspace(t *testing.T) {
+	allowedTarget := &querypb.Target{
+		Keyspace:   "allowed",
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_PRIMARY,
+		Cell:       cell,
+	}
+	blockedTarget := &querypb.Target{
+		Keyspace:   "blocked",
+		Shard:      "-80",
+		TabletType: topodatapb.TabletType_PRIMARY,
+		Cell:       cell,
+	}
+	allowedTablet := &topodatapb.Tablet{
+		Keyspace: "allowed",
+		Shard:    "-80",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	blockedTablet := &topodatapb.Tablet{
+		Keyspace: "blocked",
+		Shard:    "-80",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+
+	allowedConn := sandboxconn.NewSandboxConn(allowedTablet)
+	blockedConn := sandboxconn.NewSandboxConn(blockedTablet)
+	ch := make(chan *discovery.TabletHealth)
+	tracker := NewTracker(ch, false, false, sqlparser.NewTestParser(), map[string]bool{"allowed": true})
+	tracker.consumeDelay = 1 * time.Millisecond
+	tracker.Start()
+	defer tracker.Stop()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	tracker.RegisterSignalReceiver(func() {
+		wg.Done()
+	})
+
+	// Blocked keyspace event — should be filtered out (no GetSchema, no signal).
+	ch <- &discovery.TabletHealth{
+		Conn:    blockedConn,
+		Tablet:  blockedTablet,
+		Target:  blockedTarget,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{},
+	}
+	time.Sleep(5 * time.Millisecond)
+	// Allowed keyspace event — should be processed and trigger one signal.
+	ch <- &discovery.TabletHealth{
+		Conn:    allowedConn,
+		Tablet:  allowedTablet,
+		Target:  allowedTarget,
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{},
+	}
+
+	require.False(t, waitTimeout(&wg, 5*time.Second), "expected schema-update signal from allowed keyspace")
+	assert.EqualValues(t, 0, blockedConn.GetSchemaCount.Load(), "blocked keyspace must not trigger GetSchema")
+	assert.GreaterOrEqual(t, allowedConn.GetSchemaCount.Load(), int64(1), "allowed keyspace should have triggered GetSchema")
+}
+
 // TestTrackerGetKeyspaceUpdateController tests table update controller initialization.
 func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	ks3 := &updateController{}
@@ -172,7 +256,7 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 // TestTrackerNoLock tests that processing of health check is not blocked while tracking is making GetSchema rpc calls.
 func TestTrackerNoLock(t *testing.T) {
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, true, false, sqlparser.NewTestParser())
+	tracker := NewTracker(ch, true, false, sqlparser.NewTestParser(), nil)
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -528,7 +612,7 @@ type testCases struct {
 
 func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []sandboxconn.SchemaResult, tcases []testCases) {
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, true, enableUDFs, sqlparser.NewTestParser())
+	tracker := NewTracker(ch, true, enableUDFs, sqlparser.NewTestParser(), nil)
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()

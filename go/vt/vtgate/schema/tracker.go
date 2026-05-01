@@ -56,6 +56,15 @@ type (
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
 
+		// trackAllKeyspaces is true when no allowlist is configured, in which
+		// case the tracker follows every keyspace it sees. When false, only
+		// keyspaces present in keyspacesToTrackSchemaFor are tracked. The
+		// allowlist exists so deployments with hundreds of keyspaces can avoid
+		// the per-keyspace startup cost of GetAllKeyspaces + LoadKeyspace,
+		// which can otherwise exceed kubelet liveness thresholds.
+		trackAllKeyspaces         bool
+		keyspacesToTrackSchemaFor map[string]bool
+
 		parser *sqlparser.Parser
 	}
 )
@@ -63,15 +72,19 @@ type (
 // defaultConsumeDelay is the default time, the updateController will wait before checking the schema fetch request queue.
 const defaultConsumeDelay = 1 * time.Second
 
-// NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, enableViews, enableUDFs bool, parser *sqlparser.Parser) *Tracker {
+// NewTracker creates the tracker object. If keyspacesToTrackSchemaFor is empty
+// or nil, the tracker follows every keyspace; otherwise it follows only the
+// keyspaces in the map.
+func NewTracker(ch chan *discovery.TabletHealth, enableViews, enableUDFs bool, parser *sqlparser.Parser, keyspacesToTrackSchemaFor map[string]bool) *Tracker {
 	t := &Tracker{
-		ctx:          context.Background(),
-		ch:           ch,
-		tables:       &tableMap{m: make(map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo)},
-		tracked:      map[keyspaceStr]*updateController{},
-		consumeDelay: defaultConsumeDelay,
-		parser:       parser,
+		ctx:                       context.Background(),
+		ch:                        ch,
+		tables:                    &tableMap{m: make(map[keyspaceStr]map[tableNameStr]*vindexes.TableInfo)},
+		tracked:                   map[keyspaceStr]*updateController{},
+		consumeDelay:              defaultConsumeDelay,
+		keyspacesToTrackSchemaFor: keyspacesToTrackSchemaFor,
+		trackAllKeyspaces:         len(keyspacesToTrackSchemaFor) == 0,
+		parser:                    parser,
 	}
 
 	if enableViews {
@@ -81,6 +94,16 @@ func NewTracker(ch chan *discovery.TabletHealth, enableViews, enableUDFs bool, p
 		t.udfs = map[keyspaceStr][]string{}
 	}
 	return t
+}
+
+// ShouldTrackKeyspace reports whether the given keyspace should be tracked
+// given the configured allowlist. Returns true when no allowlist is set
+// (the default) or when the keyspace is in the allowlist.
+func (t *Tracker) ShouldTrackKeyspace(keyspace string) bool {
+	if t.trackAllKeyspaces {
+		return true
+	}
+	return t.keyspacesToTrackSchemaFor[keyspace]
 }
 
 // LoadKeyspace loads the keyspace schema.
@@ -197,6 +220,9 @@ func (t *Tracker) Start() {
 				if th == nil {
 					// channel closed
 					return
+				}
+				if !t.ShouldTrackKeyspace(th.Target.Keyspace) {
+					continue
 				}
 				ksUpdater := t.getKeyspaceUpdateController(th)
 				ksUpdater.add(th)
