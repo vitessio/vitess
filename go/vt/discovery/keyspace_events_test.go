@@ -758,7 +758,7 @@ func TestKeyspaceEventWatcherMissingKeyspaceCache(t *testing.T) {
 	}
 
 	const lookups = 100
-	for i := 0; i < lookups; i++ {
+	for range lookups {
 		require.Nil(t, kew.getKeyspaceStatus(t.Context(), missing),
 			"getKeyspaceStatus must return nil for a keyspace missing from localCell")
 	}
