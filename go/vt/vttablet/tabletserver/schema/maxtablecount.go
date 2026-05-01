@@ -17,6 +17,8 @@ limitations under the License.
 package schema
 
 import (
+	"strings"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/viperutil"
@@ -26,6 +28,17 @@ import (
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// isPseudoName reports whether name refers to a synthetic schema-engine
+// entry that does not correspond to a real MySQL table. Engine.Open seeds
+// se.tables with a "dual" entry to satisfy queries like SELECT 1 FROM dual,
+// but mysqld has no such table, so DROP / RENAME / CREATE involving it are
+// no-ops or errors there. Engine.TableCount() already excludes dual; the
+// simulator must do the same to keep the running count consistent with what
+// mysqld will actually see after the batch executes.
+func isPseudoName(name sqlparser.IdentifierCS) bool {
+	return strings.EqualFold(name.String(), "dual")
+}
 
 var maxTableCountSetting = viperutil.Configure(
 	"queryserver_config_schema_max_table_count",
@@ -92,6 +105,10 @@ func SetMaxTableCount(n int) {
 //     preserve the original statement order.
 //   - A nil engine, an empty statement list with parseFailures == 0, or a
 //     batch whose net new-object effect fits within the limit is a no-op.
+//   - The synthetic "dual" entry the schema engine seeds is excluded by
+//     Engine.TableCount(); the simulator likewise ignores DROP / RENAME /
+//     CREATE on dual so an in-batch DROP TABLE dual cannot free a slot for
+//     a CREATE that mysqld would reject the limit at.
 //
 // The check is best-effort under concurrency: two callers in different
 // goroutines can each see the count below the limit and both proceed,
@@ -257,7 +274,7 @@ func checkCreateTableLimitSteps(se *Engine, steps []tableLimitCheckStep) error {
 		return se.GetTable(name) != nil
 	}
 	createObject := func(kind string, name sqlparser.TableName) error {
-		if isPresent(name.Name) {
+		if isPseudoName(name.Name) || isPresent(name.Name) {
 			return nil
 		}
 		running++
@@ -273,7 +290,7 @@ func checkCreateTableLimitSteps(se *Engine, steps []tableLimitCheckStep) error {
 	}
 	dropObjects := func(names sqlparser.TableNames) {
 		for _, n := range names {
-			if !isPresent(n.Name) {
+			if isPseudoName(n.Name) || !isPresent(n.Name) {
 				continue
 			}
 			running--
@@ -281,6 +298,9 @@ func checkCreateTableLimitSteps(se *Engine, steps []tableLimitCheckStep) error {
 		}
 	}
 	renameTable := func(fromTable, toTable sqlparser.TableName) {
+		if isPseudoName(fromTable.Name) || isPseudoName(toTable.Name) {
+			return
+		}
 		if !isPresent(fromTable.Name) || isPresent(toTable.Name) {
 			return
 		}

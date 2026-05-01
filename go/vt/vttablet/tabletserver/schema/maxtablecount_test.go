@@ -546,6 +546,80 @@ func TestCheckCreateTableLimit(t *testing.T) {
 		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
 	})
 
+	// Synthetic "dual" handling: Engine.Open seeds se.tables with a "dual"
+	// entry that does NOT correspond to a real MySQL table. TableCount()
+	// excludes it, so the simulator must treat DROP / RENAME / CREATE on
+	// dual as no-ops to keep the running count consistent with what mysqld
+	// will actually see post-batch.
+
+	t.Run("drop dual then create at limit rejects", func(t *testing.T) {
+		// 2 existing, limit 2. DROP TABLE dual is a no-op against mysqld
+		// (dual is synthetic), so it must NOT free a slot for the
+		// subsequent CREATE TABLE — otherwise the simulator under-counts
+		// and we exceed the limit at runtime.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"drop table dual",
+			"create table c (id int primary key)",
+		), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+	})
+
+	t.Run("drop dual case-insensitive", func(t *testing.T) {
+		// Same protection regardless of identifier case.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"drop table DUAL",
+			"create table c (id int primary key)",
+		), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+	})
+
+	t.Run("rename dual then drop renamed then create rejects", func(t *testing.T) {
+		// Renaming dual must be a no-op too. Otherwise pendingState would
+		// mark the renamed name as present (and dual as dropped), letting
+		// a subsequent DROP free a slot for a CREATE that should have been
+		// rejected.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"rename table dual to renamed",
+			"drop table renamed",
+			"create table c (id int primary key)",
+		), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+	})
+
+	t.Run("create dual at limit is a no-op", func(t *testing.T) {
+		// CREATE TABLE dual would be rejected by mysqld anyway (reserved),
+		// so the simulator should not charge it against the limit.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t, "create table dual (id int primary key)"), 0)
+		assert.NoError(t, err)
+	})
+
 	// Worst-case parseFailures handling: vttablet cannot tell what an
 	// unparseable statement actually is, so each one is treated as a
 	// potential CREATE TABLE / CREATE VIEW.
