@@ -66,6 +66,10 @@ func (t *noopVCursor) GetExecutionMetrics() *Metrics {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetExecutedPrimitive(Primitive) {}
+
+func (t *noopVCursor) ExecutedPrimitive() Primitive { return nil }
+
 func (t *noopVCursor) SetExecQueryTimeout(timeout *int) {
 	panic("implement me")
 }
