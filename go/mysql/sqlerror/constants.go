@@ -636,10 +636,18 @@ func IsEphemeralError(err error) bool {
 }
 
 // IsTooManyConnectionsErr returns true if the error is due to too many connections.
+// This covers three cases:
+//   - Global max_connections exceeded: MySQL rejects during handshake with CRServerHandshakeErr
+//     and a "Too many connections" message.
+//   - Per-user max_user_connections exceeded (errno 1203 ERTooManyUserConnections).
+//   - Per-user resource limit reached (errno 1226 ERUserLimitReached) for max_user_connections.
 func IsTooManyConnectionsErr(err error) bool {
 	if sqlErr, ok := err.(*SQLError); ok {
-		if sqlErr.Number() == CRServerHandshakeErr && strings.Contains(sqlErr.Message, "Too many connections") {
+		switch sqlErr.Number() {
+		case ERTooManyUserConnections, ERUserLimitReached:
 			return true
+		case CRServerHandshakeErr:
+			return strings.Contains(sqlErr.Message, "Too many connections")
 		}
 	}
 	return false
