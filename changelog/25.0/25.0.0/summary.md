@@ -46,9 +46,8 @@ Previously the schema engine had a hardcoded cap of 10,000 tables: a vttablet wh
 Two changes:
 
 1. The schema engine no longer enforces a row cap on its reload queries. A vttablet with any number of tables will load successfully.
-2. A new flag, `--queryserver-config-schema-max-table-count` (default `10000`), governs *new* table creation. `CREATE TABLE` statements that would push the engine's tracked-table count above this limit are rejected at vttablet with a clear error before they reach MySQL. The flag is dynamic: changes are observed without restart.
+2. A new flag, `--queryserver-config-schema-max-table-count` (default `10000`), governs new schema object creation for tables and views. `CREATE TABLE` and `CREATE VIEW` statements that would push the engine's tracked schema-object count above this limit are rejected at vttablet with a clear error before they reach MySQL. The flag is dynamic: changes are observed without restart.
 
-Tablets that already have more tables than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
+Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
-

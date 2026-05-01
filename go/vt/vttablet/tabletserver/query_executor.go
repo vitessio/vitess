@@ -592,8 +592,8 @@ func (qre *QueryExecutor) recordACLStats(key []string, aclState acl.ACLState) {
 }
 
 func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Result, err error) {
-	// Reject CREATE TABLE before reaching MySQL if it would push the schema
-	// engine past its configured table-count limit.
+	// Reject CREATE TABLE/VIEW before reaching MySQL if it would push the
+	// schema engine past its configured table-count limit.
 	if err := qre.checkCreateTableLimit(); err != nil {
 		return nil, err
 	}
@@ -657,13 +657,13 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 	return qre.execStatefulConn(conn, sql, true)
 }
 
-// checkCreateTableLimit rejects a CREATE TABLE that would exceed the
-// schema engine's configured table-count limit. Only CREATE TABLE
-// statements need gating in this single-statement path; for any other
-// DDL the gate would be a no-op but still acquire the schema-engine
-// lock, so short-circuit here.
+// checkCreateTableLimit rejects a CREATE TABLE/VIEW that would exceed the
+// schema engine's configured table-count limit. Other DDL is a no-op for the
+// count, so short-circuit it before acquiring the schema-engine lock.
 func (qre *QueryExecutor) checkCreateTableLimit() error {
-	if _, ok := qre.plan.FullStmt.(*sqlparser.CreateTable); !ok {
+	switch qre.plan.FullStmt.(type) {
+	case *sqlparser.CreateTable, *sqlparser.CreateView:
+	default:
 		return nil
 	}
 	return eschema.CheckCreateTableLimit(qre.tsv.se, []sqlparser.Statement{qre.plan.FullStmt}, 0)

@@ -118,6 +118,29 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+
+	// Parse, validate, and gate before acquiring an mysqld connection so a
+	// rejected batch does not cost us a connection acquire and the SET
+	// sql_log_bin / foreign_key_checks / USE round-trips that follow.
+	// countCreate also includes CREATE VIEW; the gate ignores non-table
+	// statements internally. Unparseable statements that look like
+	// persistent CREATE TABLE/VIEW statements are treated as worst-case
+	// potential schema object creations in their original execution order.
+	queries, parsedStmts, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
+	if err != nil {
+		return nil, err
+	}
+	if validateQueries != nil {
+		if err := validateQueries(queries, countCreate); err != nil {
+			return nil, err
+		}
+	}
+	if countCreate > 0 || !parseable {
+		if err := schema.CheckCreateTableLimitForParsedStatements(tm.schemaEngine(), tm.Env.Parser(), queries, parsedStmts); err != nil {
+			return nil, err
+		}
+	}
+
 	// Get a connection.
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
@@ -147,26 +170,6 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
 	}
 
-	queries, parsedStmts, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
-	if err != nil {
-		return nil, err
-	}
-	if validateQueries != nil {
-		if err := validateQueries(queries, countCreate); err != nil {
-			return nil, err
-		}
-	}
-	// Reject any CREATE TABLEs that would collectively exceed the schema
-	// engine's table-count limit before we open a transaction with mysqld.
-	// countCreate also includes CREATE VIEW; the gate ignores non-table
-	// statements internally. Unparseable statements that look like persistent
-	// CREATE TABLEs are treated as worst-case potential table creations in
-	// their original execution order.
-	if countCreate > 0 || !parseable {
-		if err := schema.CheckCreateTableLimitForParsedStatements(tm.schemaEngine(), tm.Env.Parser(), queries, parsedStmts); err != nil {
-			return nil, err
-		}
-	}
 	if allowZeroInDate {
 		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
 			return nil, err
@@ -267,6 +270,16 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+	// Replace any provided sidecar database qualifiers with the correct one,
+	// then gate before opening the mysqld connection so a rejected batch
+	// does not cost a connection acquire and a USE round-trip.
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
@@ -280,16 +293,6 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
-	if err != nil {
-		return nil, err
-	}
-	// Reject any CREATE TABLE that would push the schema engine past its
-	// configured table-count limit before reaching mysqld.
-	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
-		return nil, err
-	}
 	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 
 	if err == nil && req.ReloadSchema {
@@ -306,22 +309,23 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+	// Replace any provided sidecar database qualifiers with the correct one,
+	// then gate before opening the mysqld connection so a rejected batch
+	// does not cost a connection acquire.
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetAppConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
-	if err != nil {
-		return nil, err
-	}
-	// Reject any CREATE TABLE that would push the schema engine past its
-	// configured table-count limit before reaching mysqld.
-	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
-		return nil, err
-	}
+
 	result, err := conn.Conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	return sqltypes.ResultToProto3(result), err
 }

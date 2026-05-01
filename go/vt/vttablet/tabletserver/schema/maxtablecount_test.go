@@ -129,9 +129,9 @@ func TestCheckCreateTableLimit(t *testing.T) {
 	})
 
 	// Batch-aware behavior: multiple statements processed in order, with
-	// DROP TABLE and CREATE TABLE effects simulated step-by-step so a batch
-	// is rejected only if the running count actually exceeds the limit at
-	// some point during execution.
+	// CREATE TABLE / CREATE VIEW / DROP TABLE / DROP VIEW effects simulated
+	// step-by-step so a batch is rejected only if the running count actually
+	// exceeds the limit at some point during execution.
 
 	t.Run("batch under limit passes", func(t *testing.T) {
 		se := openEngine(t)
@@ -445,9 +445,110 @@ func TestCheckCreateTableLimit(t *testing.T) {
 		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
 	})
 
+	// View handling: Engine.TableCount() includes views (everything in
+	// se.tables), so the simulator must model CREATE VIEW / DROP VIEW the
+	// same way it models CREATE TABLE / DROP TABLE — otherwise mixed
+	// view/table batches give inconsistent answers.
+
+	t.Run("create view at limit returns RESOURCE_EXHAUSTED", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", View))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t, "create view v as select 1 from dual"), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "cannot create view")
+		assert.ErrorContains(t, err, "v")
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	})
+
+	t.Run("drop view then create table at limit passes", func(t *testing.T) {
+		// 1 table + 1 view at limit 2. DROP VIEW frees a slot, so a
+		// subsequent CREATE TABLE fits without exceeding the limit.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("v", View))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"drop view v",
+			"create table b (id int primary key)",
+		), 0)
+		assert.NoError(t, err)
+	})
+
+	t.Run("create view then create table at limit-1 rejects", func(t *testing.T) {
+		// 1 existing, limit 2. CREATE VIEW pushes running to 2, then
+		// CREATE TABLE pushes running to 3 — must reject because the
+		// view counts toward the engine's table-count limit.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"create view v as select 1 from dual",
+			"create table b (id int primary key)",
+		), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "cannot create table")
+		assert.ErrorContains(t, err, "b")
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+	})
+
+	t.Run("create or replace view on existing is a no-op", func(t *testing.T) {
+		// CREATE OR REPLACE VIEW on a name already present must not
+		// increment the count.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("v", View))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t, "create or replace view v as select 1 from dual"), 0)
+		assert.NoError(t, err)
+	})
+
+	t.Run("multi-target drop view frees multiple slots", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("v1", View))
+		se.SetTableForTests(NewTable("v2", View))
+		withLimit(t, 3)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"drop view v1, v2",
+			"create table b (id int primary key)",
+			"create table c (id int primary key)",
+		), 0)
+		assert.NoError(t, err)
+	})
+
+	t.Run("drop of non-existent view is a no-op", func(t *testing.T) {
+		// 2 existing, limit 2. DROP VIEW IF EXISTS on a missing name
+		// frees nothing, so a subsequent CREATE TABLE still rejects.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("v", View))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimit(se, stmts(t,
+			"drop view if exists nonexistent",
+			"create table b (id int primary key)",
+		), 0)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 reached")
+	})
+
 	// Worst-case parseFailures handling: vttablet cannot tell what an
 	// unparseable statement actually is, so each one is treated as a
-	// potential CREATE TABLE.
+	// potential CREATE TABLE / CREATE VIEW.
 
 	t.Run("parseFailures within budget passes", func(t *testing.T) {
 		se := openEngine(t)
@@ -571,6 +672,69 @@ func TestCheckCreateTableLimit(t *testing.T) {
 
 		err := CheckCreateTableLimitForQueries(se, parser, []string{
 			"create temporary table c (",
+		})
+		assert.NoError(t, err)
+	})
+
+	t.Run("ordered create-view parse failure counts against table limit", func(t *testing.T) {
+		// Unparseable CREATE VIEW must be treated as a worst-case CREATE
+		// the same way unparseable CREATE TABLE is — Engine.TableCount()
+		// includes views.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimitForQueries(se, parser, []string{
+			"create view v as select",
+		})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 would be exceeded")
+	})
+
+	t.Run("ordered create-or-replace-view parse failure counts against table limit", func(t *testing.T) {
+		// CREATE VIEW allows OR REPLACE / ALGORITHM= / DEFINER= prefixes
+		// before the VIEW keyword. The token walker must see through
+		// those and still treat it as a worst-case CREATE.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimitForQueries(se, parser, []string{
+			"create or replace algorithm=merge view v as select",
+		})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 would be exceeded")
+	})
+
+	t.Run("ordered create-view parse failure with definer counts against table limit", func(t *testing.T) {
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimitForQueries(se, parser, []string{
+			"create definer = user@host view v as select",
+		})
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "schema engine table limit of 2 would be exceeded")
+	})
+
+	t.Run("ordered create-index parse failure does not count against table limit", func(t *testing.T) {
+		// CREATE INDEX is not a table or view, so an unparseable form
+		// must not be charged against the limit.
+		se := openEngine(t)
+		se.ResetTablesForTests()
+		se.SetTableForTests(NewTable("a", NoType))
+		se.SetTableForTests(NewTable("b", NoType))
+		withLimit(t, 2)
+
+		err := CheckCreateTableLimitForQueries(se, parser, []string{
+			"create unique index idx on (",
 		})
 		assert.NoError(t, err)
 	})

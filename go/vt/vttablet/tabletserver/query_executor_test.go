@@ -594,6 +594,15 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 			},
 		},
 		{
+			name: "at_limit_create_view_rejected",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create view c as select 1 from dual",
+				wantErrContains: "schema engine table limit of 2 reached",
+			},
+		},
+		{
 			name: "at_limit_if_not_exists_on_existing_passes",
 			setup: setup{
 				limit:           2,
