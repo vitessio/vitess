@@ -683,6 +683,10 @@ func (pr *PlannedReparenter) reparentTablets(
 			continue
 		}
 
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
 		replicasWg.Add(1)
 
 		go func(alias string, tablet *topodatapb.Tablet) {

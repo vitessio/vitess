@@ -3966,6 +3966,61 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			shouldErr: true,
 			wantErr:   "failed PopulateReparentJournal(primary=zone1-0000000100",
 		},
+		{
+			name:       "success - RESTORE tablets are skipped",
+			durability: policy.DurabilityNone,
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil,
+					"zone1-0000000201": assert.AnError, // proves RESTORE is skipped
+				},
+				SetReplicationSourceSemiSync: map[string]bool{
+					"zone1-0000000200": false,
+				},
+			},
+			ev: &events.Reparent{
+				NewPrimary: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+			},
+			shouldErr: false,
+		},
 	}
 
 	ctx := context.Background()
