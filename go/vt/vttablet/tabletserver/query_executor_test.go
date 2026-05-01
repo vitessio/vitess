@@ -1539,6 +1539,101 @@ func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
 	db.VerifyAllExecutedOrFail()
 }
 
+func TestQueryExecutorConsolidatorRejectOnCap(t *testing.T) {
+	tests := []struct {
+		name            string
+		rejectOnCap     bool
+		wantErr         bool
+		wantErrCode     vtrpcpb.Code
+		wantErrMsg      string
+		wantDBQueries   int
+		wantWaitCalls   int
+		wantCounterArgs []int64
+	}{
+		{
+			name:            "reject enabled",
+			rejectOnCap:     true,
+			wantErr:         true,
+			wantErrCode:     vtrpcpb.Code_RESOURCE_EXHAUSTED,
+			wantErrMsg:      "consolidator waiter cap exceeded",
+			wantDBQueries:   0,
+			wantWaitCalls:   0,
+			wantCounterArgs: []int64{-1},
+		},
+		{
+			name:            "reject disabled falls back to independent execution",
+			rejectOnCap:     false,
+			wantErr:         false,
+			wantDBQueries:   1,
+			wantWaitCalls:   0,
+			wantCounterArgs: []int64{-1},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+
+			ctx := context.Background()
+			tsv := newTestTabletServer(ctx, enableConsolidator, db)
+			defer tsv.StopService()
+
+			tsv.config.ConsolidatorQueryWaiterCap = 1
+			tsv.config.ConsolidatorRejectOnCap = tc.rejectOnCap
+
+			fakeConsolidator := sync2.NewFakeConsolidator()
+			tsv.qe.consolidator = fakeConsolidator
+
+			input := "select * from t limit 10001"
+			result := &sqltypes.Result{
+				Fields: getTestTableFields(),
+				Rows: [][]sqltypes.Value{{
+					sqltypes.NewInt32(1),
+					sqltypes.NewInt32(100),
+					sqltypes.NewInt32(200),
+				}},
+			}
+
+			fakePendingResult := &sync2.FakePendingResult{Consolidator: fakeConsolidator}
+			fakePendingResult.SetResult(result)
+			fakePendingResult.WaiterCount = 2
+			fakeConsolidator.SetTotalWaiterCount(2)
+
+			fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
+				Created:       false,
+				PendingResult: fakePendingResult,
+			}
+
+			db.AddQuery(input, result)
+
+			qre := newTestQueryExecutor(context.Background(), tsv, input, 0)
+			qre.options = &querypb.ExecuteOptions{Consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED}
+
+			got, err := qre.Execute()
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, tc.wantErrCode, vterrors.Code(err))
+				assert.ErrorContains(t, err, tc.wantErrMsg)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, got)
+			}
+
+			require.Len(t, fakeConsolidator.CreateCalls, 1)
+			require.Equal(t, tc.wantWaitCalls, fakePendingResult.WaitCalls)
+			require.Equal(t, 0, fakePendingResult.BroadcastCalls)
+
+			require.Len(t, fakePendingResult.AddWaiterCounterCalls, len(tc.wantCounterArgs))
+			for i, wantArg := range tc.wantCounterArgs {
+				require.Equal(t, wantArg, fakePendingResult.AddWaiterCounterCalls[i])
+			}
+
+			require.Equal(t, tc.wantDBQueries, db.GetQueryCalledNum(input))
+		})
+	}
+}
+
 func TestGetConnectionLogStats(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()

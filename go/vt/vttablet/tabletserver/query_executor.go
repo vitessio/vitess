@@ -766,6 +766,9 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				startTime := time.Now()
 				q.Wait()
 				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			} else if qre.tsv.config.ConsolidatorRejectOnCap {
+				q.AddWaiterCounter(-1)
+				return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "consolidator waiter cap exceeded")
 			} else {
 				// Waiter cap exceeded, fall back to independent query execution
 				waiterCapExceeded = true
