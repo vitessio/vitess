@@ -42,6 +42,8 @@ type ThrottlingStrategyHandler interface {
 	// Stop gracefully shuts down the throttling strategy and releases any resources.
 	// This method should be called when the strategy is no longer needed.
 	// Implementations should clean up background processes, caches, or other resources.
+	// Stop is terminal: implementations are single-use and must not be restarted after Stop returns.
+	// The QueryThrottler enforces this by always constructing a fresh strategy instance on strategy change.
 	Stop()
 
 	// GetStrategyName returns the name of the strategy.
