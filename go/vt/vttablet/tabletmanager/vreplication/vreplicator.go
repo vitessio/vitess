@@ -58,6 +58,13 @@ var (
 	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
+
+	// buildColInfoMapMaxAttempts and buildColInfoMapInitialDelay bound the
+	// retry of the information_schema.columns query when MySQL has just
+	// created a table but has not yet populated its column metadata
+	// (issue #19989).
+	buildColInfoMapMaxAttempts  = 5
+	buildColInfoMapInitialDelay = 100 * time.Millisecond
 )
 
 const (
@@ -90,7 +97,8 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
-	SqlMaxAllowedPacket = "select @@session.max_allowed_packet as max_allowed_packet"
+	SqlMaxAllowedPacket  = "select @@session.max_allowed_packet as max_allowed_packet"
+	maxQuerySizeHeadroom = int64(64)
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -377,12 +385,9 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	colInfoMap := make(map[string][]*ColumnInfo)
 	for _, td := range schema.TableDefinitions {
 		query := fmt.Sprintf(queryTemplate, encodeString(vr.dbClient.DBName()), encodeString(td.Name))
-		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
+		qr, err := vr.fetchInfoSchemaColumns(ctx, query, td.Name)
 		if err != nil {
 			return nil, err
-		}
-		if len(qr.Rows) == 0 {
-			return nil, errors.New("no data returned from information_schema.columns")
 		}
 
 		var pks []string
@@ -455,6 +460,35 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 	return colInfoMap, nil
 }
 
+// fetchInfoSchemaColumns runs the information_schema.columns query with
+// bounded exponential backoff for the documented MySQL race where a newly
+// created table appears in information_schema.tables before its column
+// metadata is queryable (issue #19989). A real query error short-circuits
+// the retry; only an empty result triggers a backoff.
+func (vr *vreplicator) fetchInfoSchemaColumns(ctx context.Context, query, tableName string) (*sqltypes.Result, error) {
+	delay := buildColInfoMapInitialDelay
+	for attempt := 1; ; attempt++ {
+		qr, err := vr.mysqld.FetchSuperQuery(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		if len(qr.Rows) > 0 {
+			return qr, nil
+		}
+		if attempt >= buildColInfoMapMaxAttempts {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"no data returned from information_schema.columns for table %s after %d attempts",
+				tableName, buildColInfoMapMaxAttempts)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+		delay *= 2
+	}
+}
+
 // Same as readSettings, but stores some of the results on this vr.
 func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
 	settings, numTablesToCopy, err = vr.readSettings(ctx, dbClient)
@@ -501,6 +535,23 @@ func (vr *vreplicator) setMessage(message string) (err error) {
 	}
 	insertLog(vr.dbClient, LogMessage, vr.id, vr.state.String(), message)
 	return nil
+}
+
+func (vr *vreplicator) maxQuerySize(dbc *vdbClient) int64 {
+	maxQuerySize := int64(vr.workflowConfig.RelayLogMaxSize)
+	res, err := dbc.DBClient.ExecuteFetch(SqlMaxAllowedPacket, 1)
+	if err != nil {
+		log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+	} else {
+		if maxQuerySize, err = res.Rows[0][0].ToInt64(); err != nil {
+			log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+			maxQuerySize = int64(vr.workflowConfig.RelayLogMaxSize)
+		}
+	}
+	if maxQuerySize > maxQuerySizeHeadroom {
+		maxQuerySize -= maxQuerySizeHeadroom
+	}
+	return maxQuerySize
 }
 
 func (vr *vreplicator) insertLog(typ, message string) {

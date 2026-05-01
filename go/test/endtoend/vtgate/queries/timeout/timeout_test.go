@@ -68,7 +68,6 @@ func TestQueryTimeoutWithDual(t *testing.T) {
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=15 */ sleep(0.001) from dual")
 	assert.NoError(t, err)
 	// infinite query timeout overriding all defaults
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
 	assert.NoError(t, err)
 }
@@ -132,7 +131,6 @@ func TestQueryTimeoutWithShardTargeting(t *testing.T) {
 }
 
 func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
 	// disable query timeout
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 		"--query-timeout", "0")
@@ -185,8 +183,6 @@ func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
 // TestOverallQueryTimeout tests that the query timeout is applied to the overall execution of a query
 // and not just individual routes.
 func TestOverallQueryTimeout(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vtgate")
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
 	mcmp, closer := start(t)
 	defer closer()
 

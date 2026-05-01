@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // VtbackupProcess is a generic handle for a running Vtbackup.
@@ -57,10 +56,6 @@ type VtbackupProcess struct {
 
 // Setup starts vtbackup process with required arguements
 func (vtbackup *VtbackupProcess) Setup() (err error) {
-	vtbackupVer, err := GetMajorVersion(vtbackup.Binary)
-	if err != nil {
-		return err
-	}
 	flags := map[string]string{
 		"--topo-implementation":        vtbackup.TopoImplementation,
 		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
@@ -72,21 +67,11 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		"--init-shard":       vtbackup.Shard,
 
 		// Backup Arguments are not optional
-		utils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtbackupVer): vtbackup.BackupStorageImplementation,
 		"--file-backup-storage-root": vtbackup.FileBackupStorageRoot,
 	}
 
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
-	utils.SetFlagVariantsForTests(flags, "--mysql-port", strconv.Itoa(vtbackup.MysqlPort))
-	utils.SetFlagVariantsForTests(flags, "--init-db-sql-file", vtbackup.initDBfile)
-	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
-	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
-	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)
-	if vtbackupVer >= 24 {
-		flags["--log-format"] = "text"
-	}
+	flags["--backup-storage-implementation"] = vtbackup.BackupStorageImplementation
+	flags["--log-format"] = "text"
 
 	vtbackup.proc = exec.Command(vtbackup.Binary)
 	for k, v := range flags {
@@ -94,7 +79,7 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	}
 
 	if vtbackup.initialBackup {
-		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial_backup")
+		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial-backup")
 	}
 	if vtbackup.ExtraArgs != nil {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, vtbackup.ExtraArgs...)

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -820,6 +821,50 @@ func testShutdown1(t *testing.T, fail failover) {
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestShutdown_WaitForFailoverEndAfterShutdownIsNoop(t *testing.T) {
+	cfg := NewDefaultConfig()
+	cfg.Enabled = true
+	cfg.MaxFailoverDuration = 500 * time.Millisecond
+	b := New(cfg)
+
+	sb := b.getOrCreateBuffer(keyspace, shard)
+	require.NotNil(t, sb)
+	require.Equal(t, stateIdle, sb.testGetState())
+
+	b.Shutdown()
+
+	type result struct {
+		retryDone RetryDoneFunc
+		err       error
+	}
+	resCh := make(chan result, 1)
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	go func() {
+		rd, err := sb.waitForFailoverEnd(ctx, keyspace, shard, nil, failoverErr)
+		resCh <- result{rd, err}
+	}()
+
+	var r result
+	require.Eventually(t, func() bool {
+		select {
+		case r = <-resCh:
+			if r.retryDone != nil {
+				r.retryDone()
+			}
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	assert.Equal(t, stateIdle, sb.testGetState(),
+		"sb transitioned out of stateIdle after Buffer.Shutdown returned")
+	assert.Nil(t, r.retryDone, "waitForFailoverEnd should return nil RetryDoneFunc after Buffer.Shutdown")
+	assert.NoError(t, r.err, "waitForFailoverEnd should return nil error after Buffer.Shutdown")
 }
 
 func TestParallelRangeIndex(t *testing.T) {

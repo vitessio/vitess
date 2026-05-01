@@ -949,9 +949,9 @@ func (tme *testShardMigraterEnv) expectNoPreviousJournals() {
 }
 
 func (tme *testMigraterEnv) close(t *testing.T) {
+	tme.stopTablets(t)
 	tme.mu.Lock()
 	defer tme.mu.Unlock()
-	tme.stopTablets(t)
 	for _, dbclient := range tme.dbSourceClients {
 		dbclient.Close()
 	}

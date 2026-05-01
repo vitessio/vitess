@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -64,6 +65,10 @@ type noopVCursor struct {
 func (t *noopVCursor) GetExecutionMetrics() *Metrics {
 	panic("implement me")
 }
+
+func (t *noopVCursor) SetExecutedPrimitive(Primitive) {}
+
+func (t *noopVCursor) ExecutedPrimitive() Primitive { return nil }
 
 func (t *noopVCursor) SetExecQueryTimeout(timeout *int) {
 	panic("implement me")
@@ -116,7 +121,11 @@ func (t *noopVCursor) GetWarmingReadsPercent() int {
 	panic("implement me")
 }
 
-func (t *noopVCursor) GetWarmingReadsChannel() chan bool {
+func (t *noopVCursor) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetQueryPriority() (int, error) {
 	panic("implement me")
 }
 
@@ -596,8 +605,12 @@ func (f *loggingVCursor) GetWarmingReadsPercent() int {
 	return 0
 }
 
-func (f *loggingVCursor) GetWarmingReadsChannel() chan bool {
-	return make(chan bool)
+func (f *loggingVCursor) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	return semaphore.NewWeighted(0)
+}
+
+func (f *loggingVCursor) GetQueryPriority() (int, error) {
+	return 0, nil
 }
 
 func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
