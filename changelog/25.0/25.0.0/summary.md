@@ -92,10 +92,6 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
-<<<<<<< HEAD
-||||||| 1e59639bc5
-
-=======
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
@@ -111,4 +107,3 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
->>>>>>> main
