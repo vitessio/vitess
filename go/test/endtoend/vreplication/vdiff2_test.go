@@ -138,7 +138,7 @@ func TestVDiff2(t *testing.T) {
 	targetShards := []string{"-80", "80-"}
 	extraVTTabletArgs = []string{
 		// This forces us to use multiple vstream packets even with small test tables.
-		"--vstream_packet_size=1",
+		"--vstream-packet-size=1",
 	}
 
 	vc = NewVitessCluster(t, &clusterOptions{cells: strings.Split(cellNames, ",")})
@@ -272,7 +272,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		waitForShardsToCatchup()
 
 		// This flag is only implemented in vtctldclient.
-		doVtctldclientVDiff(t, tc.targetKs, tc.workflow, allCellNames, nil, "--max-diff-duration", diffDuration)
+		doVtctldclientVDiffWithTimeout(t, tc.targetKs, tc.workflow, allCellNames, nil, maxDiffDurationTimeout, "--max-diff-duration", diffDuration)
 
 		// Confirm that the customer table diff was restarted but not others.
 		tablet := vc.getPrimaryTablet(t, tc.targetKs, arrTargetShards[0])

@@ -150,39 +150,32 @@ const defaultVtGatePlannerVersion = planbuilder.Gen4
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
 	args := []string{
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--topo_implementation", vtgate.TopoImplementation,
-		"--topo_global_server_address", vtgate.TopoGlobalAddress,
-		"--topo_global_root", vtgate.TopoGlobalRoot,
+		"--topo-implementation", vtgate.TopoImplementation,
+		"--topo-global-server-address", vtgate.TopoGlobalAddress,
+		"--topo-global-root", vtgate.TopoGlobalRoot,
 		"--config-file", vtgate.ConfigFile,
-		"--log_queries_to_file", vtgate.FileToLogQueries,
+		"--log-queries-to-file", vtgate.FileToLogQueries,
 		"--port", strconv.Itoa(vtgate.Port),
-		"--grpc_port", strconv.Itoa(vtgate.GrpcPort),
-		"--mysql_server_port", strconv.Itoa(vtgate.MySQLServerPort),
-		"--mysql_server_socket_path", vtgate.MySQLServerSocketPath,
+		"--grpc-port", strconv.Itoa(vtgate.GrpcPort),
+		"--mysql-server-port", strconv.Itoa(vtgate.MySQLServerPort),
+		"--mysql-server-socket-path", vtgate.MySQLServerSocketPath,
 		"--cell", vtgate.Cell,
-		"--cells_to_watch", vtgate.CellsToWatch,
-		"--tablet_types_to_wait", vtgate.TabletTypesToWait,
-		"--service_map", vtgate.ServiceMap,
-		"--mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+		"--cells-to-watch", vtgate.CellsToWatch,
+		"--tablet-types-to-wait", vtgate.TabletTypesToWait,
+		"--service-map", vtgate.ServiceMap,
+		"--mysql-auth-server-impl", vtgate.MySQLAuthServerImpl,
 		"--bind-address", "127.0.0.1",
-		"--grpc_bind_address", "127.0.0.1",
+		"--grpc-bind-address", "127.0.0.1",
 	}
 
-	vtgateVer, err := GetMajorVersion(vtgate.Binary)
-	if err != nil {
-		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", vtgate.Binary, err))
-	} else if vtgateVer >= 24 {
-		args = append(args, "--log-format", "text")
-	}
+	args = append(args, "--log-format", "text")
 
-	// If no explicit mysql_server_version has been specified then we autodetect
+	// If no explicit --mysql-server-version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's
 	// mysql server version on that.
 	msvflag := false
 	for _, f := range vtgate.ExtraArgs {
-		// TODO: Replace flag with dashed version in v25
-		if strings.Contains(f, "mysql_server_version") {
+		if strings.Contains(f, "mysql-server-version") {
 			msvflag = true
 			break
 		}
@@ -210,14 +203,13 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 			return err
 		}
 		mysqlvers := fmt.Sprintf("%d.%d.%d-vitess", vers.Major, vers.Minor, vers.Patch)
-		// TODO: Replace flag with dashed version in v25
-		args = append(args, "--mysql_server_version", mysqlvers)
+		args = append(args, "--mysql-server-version", mysqlvers)
 	}
 	if vtgate.PlannerVersion > 0 {
 		args = append(args, "--planner-version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
-		args = append(args, "--enable_system_settings")
+		args = append(args, "--enable-system-settings")
 	}
 	vtgate.proc = exec.Command(
 		vtgate.Binary,

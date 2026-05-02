@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -31,6 +32,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
@@ -143,7 +145,7 @@ type (
 		// queryLogger is passed in for logging from this vtgate executor.
 		queryLogger *streamlog.StreamLogger[*logstats.LogStats]
 
-		warmingReadsChannel chan bool
+		warmingReadsSemaphore *semaphore.Weighted
 
 		vConfig   econtext.VCursorConfig
 		ddlConfig dynamicconfig.DDL
@@ -197,10 +199,10 @@ func NewExecutor(
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
 
-		schemaTracker:       schemaTracker,
-		plans:               plans,
-		warmingReadsChannel: make(chan bool, warmingReadsConcurrency),
-		ddlConfig:           ddlConfig,
+		schemaTracker:         schemaTracker,
+		plans:                 plans,
+		warmingReadsSemaphore: newWarmingReadsSemaphore(warmingReadsConcurrency),
+		ddlConfig:             ddlConfig,
 	}
 	// setting the vcursor config.
 	e.initVConfig(warnOnShardedOnly, pv)
@@ -395,6 +397,11 @@ func (e *Executor) StreamExecute(
 
 		// 5: Log and add statistics
 		logStats.TablesUsed = plan.TablesUsed
+		executedRoot := vc.ExecutedPrimitive()
+		if executedRoot == nil {
+			executedRoot = plan.Instructions
+		}
+		logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
 		logStats.ActiveKeyspace = vc.GetKeyspace()
@@ -1556,18 +1563,51 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		QueryTimeout:  queryTimeout,
 		MaxMemoryRows: maxMemoryRows,
 
-		SetVarEnabled:      sysVarSetEnabled,
-		EnableViews:        enableViews,
-		ForeignKeyMode:     fkMode(foreignKeyMode),
-		EnableShardRouting: enableShardRouting,
-		WarnShardedOnly:    warnOnShardedOnly,
+		SetVarEnabled:         setVarEnabled,
+		DeniedSystemVariables: buildDeniedSystemVariables(deniedSystemVariables),
+		EnableViews:           enableViews,
+		ForeignKeyMode:        fkMode(foreignKeyMode),
+		EnableShardRouting:    enableShardRouting,
+		WarnShardedOnly:       warnOnShardedOnly,
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent: e.config.WarmingReadsPercent,
-		WarmingReadsTimeout: warmingReadsQueryTimeout,
-		WarmingReadsChannel: e.warmingReadsChannel,
+		WarmingReadsPercent:   e.config.WarmingReadsPercent,
+		WarmingReadsTimeout:   warmingReadsQueryTimeout,
+		WarmingReadsSemaphore: e.warmingReadsSemaphore,
 	}
+}
+
+// buildDeniedSystemVariables normalizes the --denied-system-variables flag
+// slice into the lowercased set form used by VCursorConfig. Returns nil for
+// an empty input so VCursorImpl.IsSystemVariableDenied can short-circuit.
+func buildDeniedSystemVariables(names []string) map[string]struct{} {
+	if len(names) == 0 {
+		return nil
+	}
+	denied := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			continue
+		}
+		n = strings.ToLower(n)
+		if _, ok := sysvars.AllSystemVariables[n]; !ok {
+			log.Warn("unknown system variable in --denied-system-variables", slog.String("name", n))
+		}
+		denied[n] = struct{}{}
+	}
+	if len(denied) == 0 {
+		return nil
+	}
+	return denied
+}
+
+func newWarmingReadsSemaphore(concurrency int) *semaphore.Weighted {
+	if concurrency <= 0 {
+		return semaphore.NewWeighted(0)
+	}
+	return semaphore.NewWeighted(int64(concurrency) * engine.WarmingReadsBaseWeight)
 }
 
 func countArguments(statement sqlparser.Statement) (paramsCount uint16) {

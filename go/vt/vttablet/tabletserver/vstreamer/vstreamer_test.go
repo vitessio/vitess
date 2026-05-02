@@ -2281,7 +2281,6 @@ func TestMinimalMode(t *testing.T) {
 	engine = nil
 	oldEnv := env
 	env = nil
-	newEngine(t, ctx, "minimal")
 	defer func() {
 		if engine != nil {
 			engine.Close()
@@ -2292,6 +2291,7 @@ func TestMinimalMode(t *testing.T) {
 		engine = oldEngine
 		env = oldEnv
 	}()
+	newEngine(t, ctx, "minimal")
 	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }

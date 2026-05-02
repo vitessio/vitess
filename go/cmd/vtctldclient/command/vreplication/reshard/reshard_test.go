@@ -1,11 +1,11 @@
 /*
-Copyright 2024 The Vitess Authors.
+Copyright 2026 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,22 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package trace
+package reshard
 
 import (
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewJaegerTracerFromEnv(t *testing.T) {
-	tracingSvc, closer, err := newJagerTracerFromEnv("noop")
-	require.NoError(t, err)
-	require.NotEmpty(t, tracingSvc)
-	require.NotEmpty(t, closer)
+func TestCancelKeepDataHelpMentionsReverseWorkflowDefault(t *testing.T) {
+	root := &cobra.Command{Use: "test"}
+	registerReshardCommands(root)
 
-	tracingSvc, closer, err = newJagerTracerFromEnv("")
-	require.ErrorContains(t, err, "no service name provided")
-	require.Empty(t, tracingSvc)
-	require.Empty(t, closer)
+	cancelCmd, _, err := root.Find([]string{"Reshard", "cancel"})
+	require.NoError(t, err)
+	require.Contains(t, cancelCmd.Flags().Lookup("keep-data").Usage, "Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided.")
 }

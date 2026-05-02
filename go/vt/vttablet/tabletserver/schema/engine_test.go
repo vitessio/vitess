@@ -782,6 +782,44 @@ func TestStatsURL(t *testing.T) {
 	se.handleDebugSchema(response, request)
 }
 
+func TestEngineTableCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+	})
+	AddFakeInnoDBReadRowsResult(db, 0)
+	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
+	require.NoError(t, se.Open())
+	defer se.Close()
+
+	// TableCount reports user schema objects, not Vitess's synthetic dual entry.
+	assert.Equal(t, 0, se.TableCount())
+	se.SetTableForTests(NewTable("table_count_test_t1", NoType))
+	se.SetTableForTests(NewTable("table_count_test_t2", NoType))
+	assert.Equal(t, 2, se.TableCount())
+}
+
+func TestResetTablesForTestsKeepsSyntheticDual(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+	})
+	AddFakeInnoDBReadRowsResult(db, 0)
+	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
+	require.NoError(t, se.Open())
+	defer se.Close()
+
+	se.SetTableForTests(NewTable("table_count_test_t1", NoType))
+	se.ResetTablesForTests()
+
+	assert.NotNil(t, se.GetTable(sqlparser.NewIdentifierCS("dual")))
+	assert.Equal(t, 0, se.TableCount())
+}
+
 func TestSchemaEngineCloseTickRace(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -1957,4 +1995,50 @@ func TestGetTableForPos(t *testing.T) {
 			require.NoError(t, fakedb.LastError())
 		})
 	}
+}
+
+func TestEngineReloadIndependentOfMaxTableCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	// Mock five user tables. The schematest defaults already cover dual.
+	rows := [][]sqltypes.Value{
+		mysql.BaseShowTablesRow("ut1", false, ""),
+		mysql.BaseShowTablesRow("ut2", false, ""),
+		mysql.BaseShowTablesRow("ut3", false, ""),
+		mysql.BaseShowTablesRow("ut4", false, ""),
+		mysql.BaseShowTablesRow("ut5", false, ""),
+	}
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows:   rows,
+	})
+	for _, r := range rows {
+		name := r[0].ToString()
+		db.MockQueriesForTable(name, sqltypes.MakeTestResult(sqltypes.MakeTestFields("c1", "varchar")))
+	}
+	AddFakeInnoDBReadRowsResult(db, 0)
+
+	// Override the dynamic flag for the duration of this test, restoring
+	// whatever value was in effect at entry.
+	originalMaxTableCount := MaxTableCount()
+	SetMaxTableCount(1)
+	t.Cleanup(func() { SetMaxTableCount(originalMaxTableCount) })
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.SchemaReloadInterval = 1 * time.Second
+	cfg.OltpReadPool.IdleTimeout = 1 * time.Second
+	cfg.OlapReadPool.IdleTimeout = 1 * time.Second
+	cfg.TxPool.IdleTimeout = 1 * time.Second
+	cfg.DB = newDBConfigs(db)
+	se := NewEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "SchemaTest"))
+	se.InitDBConfig(cfg.DB.DbaWithDB())
+
+	require.NoError(t, se.Open())
+	defer se.Close()
+
+	// All five user tables should be present despite MaxTableCount() == 1.
+	got := se.TableCount()
+	assert.GreaterOrEqual(t, got, 5, "reload must load all rows regardless of MaxTableCount")
 }
