@@ -20,6 +20,8 @@ import (
 	"log/slog"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func skippedCount(tl *ThrottledLogger) int {
@@ -40,26 +42,14 @@ func TestThrottledLogger(t *testing.T) {
 	start := time.Now()
 
 	go tl.Infof("test %v", 1)
-	if got, want := <-log, "name: test 1"; got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
+	assert.Equal(t, "name: test 1", <-log)
 
 	go tl.Infof("test %v", 2)
-	if got, want := <-log, "name: skipped 1 log messages"; got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-	if got, want := skippedCount(tl), 0; got != want {
-		t.Errorf("skippedCount is %v but was expecting %v after waiting", got, want)
-	}
-	if got := time.Since(start); got < interval {
-		t.Errorf("didn't wait long enough before logging, got %v, want >= %v", got, interval)
-	}
+	assert.Equal(t, "name: skipped 1 log messages", <-log)
+	assert.Equal(t, 0, skippedCount(tl), "skippedCount after waiting")
+	assert.GreaterOrEqual(t, time.Since(start), interval, "should have waited at least one interval")
 
 	go tl.Infof("test %v", 3)
-	if got, want := <-log, "name: test 3"; got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-	if got, want := skippedCount(tl), 0; got != want {
-		t.Errorf("skippedCount is %v but was expecting %v", got, want)
-	}
+	assert.Equal(t, "name: test 3", <-log)
+	assert.Equal(t, 0, skippedCount(tl))
 }

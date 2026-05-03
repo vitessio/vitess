@@ -20,6 +20,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/race"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -74,14 +77,12 @@ func TestLogEvent(t *testing.T) {
 	ml := NewMemoryLogger()
 	for i, testValue := range testValues {
 		LogEvent(ml, testValue.event)
-		if got, want := ml.Events[i].Value, testValue.expected; got != want {
-			t.Errorf("ml.Events[%v].Value = %q, want %q", i, got, want)
-		}
+		assert.Equal(t, testValue.expected, ml.Events[i].Value, "ml.Events[%d].Value", i)
 		// Skip the check below if go test -race is run because then the stack
 		// is shifted by one and the test would fail.
 		if !race.Enabled {
-			if got, want := ml.Events[i].File, "logger_test.go"; got != want && ml.Events[i].Level != logutilpb.Level_CONSOLE {
-				t.Errorf("ml.Events[%v].File = %q (line = %v), want %q", i, got, ml.Events[i].Line, want)
+			if ml.Events[i].Level != logutilpb.Level_CONSOLE {
+				assert.Equal(t, "logger_test.go", ml.Events[i].File, "ml.Events[%d].File", i)
 			}
 		}
 	}
@@ -90,26 +91,14 @@ func TestLogEvent(t *testing.T) {
 func TestMemoryLogger(t *testing.T) {
 	ml := NewMemoryLogger()
 	ml.Infof("test %v", 123)
-	if got, want := len(ml.Events), 1; got != want {
-		t.Fatalf("len(ml.Events) = %v, want %v", got, want)
-	}
-	if got, want := ml.Events[0].File, "logger_test.go"; got != want {
-		t.Errorf("ml.Events[0].File = %q, want %q", got, want)
-	}
+	require.Len(t, ml.Events, 1)
+	assert.Equal(t, "logger_test.go", ml.Events[0].File)
 	ml.Warningf("test %v", 456)
-	if got, want := len(ml.Events), 2; got != want {
-		t.Fatalf("len(ml.Events) = %v, want %v", got, want)
-	}
-	if got, want := ml.Events[1].File, "logger_test.go"; got != want {
-		t.Errorf("ml.Events[1].File = %q, want %q", got, want)
-	}
+	require.Len(t, ml.Events, 2)
+	assert.Equal(t, "logger_test.go", ml.Events[1].File)
 	ml.Errorf("test %v", 789)
-	if got, want := len(ml.Events), 3; got != want {
-		t.Fatalf("len(ml.Events) = %v, want %v", got, want)
-	}
-	if got, want := ml.Events[2].File, "logger_test.go"; got != want {
-		t.Errorf("ml.Events[2].File = %q, want %q", got, want)
-	}
+	require.Len(t, ml.Events, 3)
+	assert.Equal(t, "logger_test.go", ml.Events[2].File)
 }
 
 func TestTeeLogger(t *testing.T) {
@@ -131,22 +120,16 @@ func TestTeeLogger(t *testing.T) {
 	wantFile := "logger_test.go"
 
 	for i, events := range [][]*logutilpb.Event{ml1.Events, ml2.Events} {
-		if got, want := len(events), len(wantEvents); got != want {
-			t.Fatalf("[%v] len(events) = %v, want %v", i, got, want)
-		}
+		require.Len(t, events, len(wantEvents), "logger %d", i)
 		for j, got := range events {
 			want := wantEvents[j]
-			if got.Level != want.Level {
-				t.Errorf("[%v] events[%v].Level = %s, want %s", i, j, got.Level, want.Level)
-			}
-			if got.Value != want.Value {
-				t.Errorf("[%v] events[%v].Value = %q, want %q", i, j, got.Value, want.Value)
-			}
+			assert.Equal(t, want.Level, got.Level, "[%d] events[%d].Level", i, j)
+			assert.Equal(t, want.Value, got.Value, "[%d] events[%d].Value", i, j)
 			// Skip the check below if go test -race is run because then the stack
 			// is shifted by one and the test would fail.
 			if !race.Enabled {
-				if got.File != wantFile && got.Level != logutilpb.Level_CONSOLE {
-					t.Errorf("[%v] events[%v].File = %q, want %q", i, j, got.File, wantFile)
+				if got.Level != logutilpb.Level_CONSOLE {
+					assert.Equal(t, wantFile, got.File, "[%d] events[%d].File", i, j)
 				}
 			}
 		}
