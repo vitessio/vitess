@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -542,4 +543,31 @@ func TestMessageTruncate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSetVReplicationStateDoesNotAdvanceMetricOnDBError ensures the
+// in-memory State metric stays in sync with the DB row. If the UPDATE
+// on _vt.vreplication fails (e.g. the target's MySQL is read-only),
+// setVReplicationState must not leave the metric advanced to "Error".
+func TestSetVReplicationStateDoesNotAdvanceMetricOnDBError(t *testing.T) {
+	stats := NewStats()
+	defer stats.Stop()
+	stats.State.Store(binlogdatapb.VReplicationWorkflowState_Running.String())
+
+	dbClient := NewMockDBClient(t)
+	defer dbClient.Close()
+
+	dbErr := errors.New("The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)")
+	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='boom' where id=1", nil, dbErr)
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "cell", Uid: 1},
+	}
+	blp := NewBinlogPlayerKeyRange(dbClient, tablet, &topodatapb.KeyRange{End: []byte{0x80}}, 1, stats)
+
+	err := blp.setVReplicationState(binlogdatapb.VReplicationWorkflowState_Error, "boom")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "could not set state")
+	assert.Equal(t, binlogdatapb.VReplicationWorkflowState_Running.String(), stats.State.Load(),
+		"blplStats.State must not advance when the DB UPDATE fails")
 }

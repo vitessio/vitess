@@ -565,7 +565,6 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 			Message: message,
 		})
 	}
-	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
@@ -573,9 +572,11 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 		vr.dbClient.AddQueryToTrxBatch(query)
 	} else { // Otherwise, send it down the wire
 		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+			// Don't advance the in-memory metric when the DB row was not updated.
 			return fmt.Errorf("could not set state: %v: %v", query, err)
 		}
 	}
+	vr.stats.State.Store(state.String())
 	if state == vr.state {
 		return nil
 	}
