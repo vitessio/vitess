@@ -13,6 +13,7 @@
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
+        - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
 - **[Minor Changes](#minor-changes)**
@@ -112,6 +113,16 @@ func (bh *MyBackupHandle) Wait() {}
 ```
 
 See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
+
+#### <a id="vtorc-cells-no-recovery"/>VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`</a>
+
+The `--cells-to-watch` flag has been removed. It restricted vtorc's tablet discovery to a fixed set of cells, which created a serious failure mode for any keyspace that spanned cells: if the primary lived in a cell *not* in `--cells-to-watch`, vtorc filtered the primary out of discovery, concluded the keyspace had no primary, and triggered an `EmergencyReparentShard` against a replica in a watched cell. The other cell's vtorc then saw its primary demoted and ran its own ERS — the two vtorcs ping-ponged ERS operations until the keyspace was destroyed. The flag only "worked" under true cell isolation (each cell hosting an independent primary), a configuration with no practical purpose.
+
+The replacement, `--cells-no-recovery`, is a deny-list for *recovery actions only*; vtorc's discovery still spans all cells, so it always sees the real topology. Detection still happens for tablets in listed cells (so operators retain visibility), but actionable recovery functions are skipped with a `CellNoRecovery` reason recorded under the existing `SkippedRecoveries` stat. Non-actionable recoveries (pure detection paths) are unaffected.
+
+**Migration:** drop `--cells-to-watch` from your vtorc invocation. If you previously used it for true cell-isolated deployments, the new flag is not a like-for-like replacement (vtorc will now discover and watch all cells); discuss your scenario in the linked issue if the new flag does not cover your needs.
+
+See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
