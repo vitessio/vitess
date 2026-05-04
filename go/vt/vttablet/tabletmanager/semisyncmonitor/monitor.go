@@ -416,7 +416,7 @@ func (m *Monitor) clearAllData() {
 		return
 	}
 	defer conn.Recycle()
-	_, _, err = conn.Conn.ExecuteFetchMulti(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)), 0, false)
+	err = conn.Conn.ExecuteFetchMultiDrain(m.addLockWaitTimeout(m.bindSideCarDBName(semiSyncHeartbeatClear)))
 	if err != nil {
 		m.errorCount.Add(1)
 		log.Error(fmt.Sprintf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err))
