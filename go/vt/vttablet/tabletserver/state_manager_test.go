@@ -379,6 +379,14 @@ func (te *delayedTxEngine) Close() {
 func (te *delayedTxEngine) RollbackPrepared() {
 }
 
+// SetClusterAction satisfies txEngine for tests that only need delayed state
+// transitions.
+func (te *delayedTxEngine) SetClusterAction(ClusterActionState) {}
+
+// TerminateActiveCommits satisfies txEngine for tests that only need delayed
+// state transitions.
+func (te *delayedTxEngine) TerminateActiveCommits() {}
+
 type killableConn struct {
 	id     int64
 	killed atomic.Bool
@@ -933,6 +941,12 @@ func (te *testTxEngine) Close() {
 }
 
 func (te *testTxEngine) RollbackPrepared() {}
+
+// SetClusterAction satisfies txEngine for ordering tests.
+func (te *testTxEngine) SetClusterAction(ClusterActionState) {}
+
+// TerminateActiveCommits satisfies txEngine for ordering tests.
+func (te *testTxEngine) TerminateActiveCommits() {}
 
 type testSubcomponent struct {
 	testOrderState

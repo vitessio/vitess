@@ -180,7 +180,7 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	if err = dte.te.twoPC.DeleteRedo(ctx, conn, dtid); err != nil {
 		return err
 	}
-	if _, err = dte.te.txPool.Commit(ctx, conn); err != nil {
+	if _, err = dte.te.commit(ctx, conn); err != nil {
 		return err
 	}
 	dte.te.preparedPool.Forget(dtid)
@@ -262,7 +262,7 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) (querypb.St
 	if err != nil {
 		return querypb.StartCommitState_Fail, err
 	}
-	if _, err = dte.te.txPool.Commit(dte.ctx, conn); err != nil {
+	if _, err = dte.te.commit(dte.ctx, conn); err != nil {
 		return querypb.StartCommitState_Unknown, err
 	}
 	return querypb.StartCommitState_Success, nil
@@ -348,7 +348,7 @@ func (dte *DTExecutor) inTransaction(f func(*StatefulConnection) error) error {
 		return err
 	}
 
-	_, err = dte.te.txPool.Commit(dte.ctx, conn)
+	_, err = dte.te.commit(dte.ctx, conn)
 	if err != nil {
 		return err
 	}

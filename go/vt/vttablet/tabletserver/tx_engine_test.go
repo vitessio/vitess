@@ -147,6 +147,88 @@ func TestTxEngineClose(t *testing.T) {
 	assert.EqualValues(t, 1, te.txPool.env.Stats().KillCounters.Counts()["ReservedConnection"])
 }
 
+// TestActiveCommits verifies that TxEngine can interrupt an active COMMIT during shutdown.
+func TestActiveCommits(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	db.ResetQueryLog()
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	ctx := t.Context()
+
+	commitStarted := make(chan struct{})
+	releaseCommit := make(chan struct{})
+
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.SetBeforeFunc("commit", func() {
+		close(commitStarted)
+
+		// Block the commit so the active commit list has a real connection to terminate. This emulates
+		// the commit stuck on semi-sync in MySQL.
+		<-releaseCommit
+	})
+
+	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	errc := make(chan error, 1)
+	go func() {
+		_, _, err := txEngine.Commit(ctx, txID)
+		errc <- err
+	}()
+
+	// Make sure the commit has started.
+	<-commitStarted
+
+	// Try to terminate active commits.
+	txEngine.TerminateActiveCommits()
+
+	// Allow the BeforeFunc to continue.
+	close(releaseCommit)
+
+	// We expect the commit to be terminated.
+	err = <-errc
+	require.ErrorContains(t, err, "QueryList.TerminateAll()")
+}
+
+// TestActiveCommitsIncludesDTExecutorInternalTransactions verifies that internal 2PC metadata
+// commits can be interrupted during shutdown.
+func TestActiveCommitsIncludesDTExecutorInternalTransactions(t *testing.T) {
+	ctx := t.Context()
+	txe, _, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	commitStarted := make(chan struct{})
+	releaseCommit := make(chan struct{})
+
+	db.SetBeforeFunc("commit", func() {
+		close(commitStarted)
+
+		// Hold COMMIT in MySQL so termination has to find the active statement
+		// instead of racing with a completed transaction.
+		<-releaseCommit
+	})
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- txe.inTransaction(func(*StatefulConnection) error {
+			return nil
+		})
+	}()
+
+	<-commitStarted
+
+	txe.te.TerminateActiveCommits()
+	close(releaseCommit)
+
+	err := <-errc
+	require.ErrorContains(t, err, "QueryList.TerminateAll()")
+}
+
 func TestTxEngineBegin(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
