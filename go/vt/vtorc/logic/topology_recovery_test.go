@@ -473,9 +473,11 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 
 func TestRecheckPrimaryHealth(t *testing.T) {
 	tests := []struct {
-		name    string
-		info    []*test.InfoForRecoveryAnalysis
-		wantErr string
+		name          string
+		info          []*test.InfoForRecoveryAnalysis
+		analysis      inst.AnalysisCode
+		analyzedAlias *topodatapb.TabletAlias
+		wantErr       string
 	}{
 		{
 			name: "analysis change",
@@ -529,6 +531,162 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 					SemiSyncPrimaryWaitForReplicaCount: 1,
 					SemiSyncPrimaryClients:             0,
 					CountSemiSyncReplicasEnabled:       1,
+				},
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_REPLICA,
+						MysqlHostname: "localhost",
+						MysqlPort:     6709,
+					},
+					DurabilityPolicy: policy.DurabilitySemiSync,
+					PrimaryTabletInfo: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					},
+					LastCheckValid:         1,
+					ReadOnly:               1,
+					ReplicationStopped:     1,
+					SemiSyncReplicaEnabled: 1,
+				},
+			},
+		},
+		{
+			// PrimaryIsReadOnly on a primary that is also detected as
+			// PrimarySemiSyncBlocked. GetDetectionAnalysis preserves the
+			// primary read-only analysis (via declaresBefore), so
+			// checkIfAlreadyFixed finds it and recovery proceeds.
+			name:          "PrimaryIsReadOnly preserved despite shard-wide PrimarySemiSyncBlocked",
+			analysis:      inst.PrimaryIsReadOnly,
+			analyzedAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			info: []*test.InfoForRecoveryAnalysis{
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_PRIMARY,
+						MysqlHostname: "localhost",
+						MysqlPort:     6708,
+					},
+					DurabilityPolicy:                   policy.DurabilitySemiSync,
+					LastCheckValid:                     1,
+					CountReplicas:                      1,
+					CountValidReplicas:                 1,
+					CountValidReplicatingReplicas:      1,
+					CountValidOracleGTIDReplicas:       1,
+					CountLoggingReplicas:               1,
+					IsPrimary:                          1,
+					ReadOnly:                           1,
+					CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
+					SemiSyncPrimaryEnabled:             1,
+					SemiSyncPrimaryStatus:              1,
+					SemiSyncBlocked:                    1,
+					SemiSyncPrimaryWaitForReplicaCount: 1,
+					SemiSyncPrimaryClients:             0,
+					CountSemiSyncReplicasEnabled:       1,
+				},
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_REPLICA,
+						MysqlHostname: "localhost",
+						MysqlPort:     6709,
+					},
+					DurabilityPolicy: policy.DurabilitySemiSync,
+					PrimaryTabletInfo: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					},
+					LastCheckValid:         1,
+					ReadOnly:               1,
+					SemiSyncReplicaEnabled: 1,
+				},
+			},
+		},
+		{
+			// PrimaryIsReadOnly on a primary that is also detected as
+			// PrimaryDiskStalled. GetDetectionAnalysis preserves the
+			// primary read-only analysis (via declaresBefore), so
+			// checkIfAlreadyFixed finds it and recovery proceeds.
+			name:          "PrimaryIsReadOnly preserved despite shard-wide PrimaryDiskStalled",
+			analysis:      inst.PrimaryIsReadOnly,
+			analyzedAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			info: []*test.InfoForRecoveryAnalysis{
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_PRIMARY,
+						MysqlHostname: "localhost",
+						MysqlPort:     6708,
+					},
+					DurabilityPolicy:              policy.DurabilitySemiSync,
+					LastCheckValid:                0,
+					CountReplicas:                 1,
+					CountValidReplicas:            1,
+					CountValidReplicatingReplicas: 1,
+					CountValidOracleGTIDReplicas:  1,
+					CountLoggingReplicas:          1,
+					IsPrimary:                     1,
+					ReadOnly:                      1,
+					IsStalledDisk:                 1,
+					CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+				},
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_REPLICA,
+						MysqlHostname: "localhost",
+						MysqlPort:     6709,
+					},
+					DurabilityPolicy: policy.DurabilitySemiSync,
+					PrimaryTabletInfo: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					},
+					LastCheckValid:         1,
+					ReadOnly:               1,
+					SemiSyncReplicaEnabled: 1,
+				},
+			},
+		},
+		{
+			// PrimaryDiskStalled on the primary, acker replica has
+			// ReplicationStopped. GetDetectionAnalysis preserves the
+			// acker's analysis (via declaresBefore), so checkIfAlreadyFixed
+			// finds it and returns alreadyFixed=false, so recovery proceeds.
+			name: "acker ReplicationStopped preserved despite shard-wide PrimaryDiskStalled",
+			info: []*test.InfoForRecoveryAnalysis{
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_PRIMARY,
+						MysqlHostname: "localhost",
+						MysqlPort:     6708,
+					},
+					DurabilityPolicy:              policy.DurabilitySemiSync,
+					LastCheckValid:                0,
+					CountReplicas:                 1,
+					CountValidReplicas:            1,
+					CountValidReplicatingReplicas: 0,
+					CountValidOracleGTIDReplicas:  1,
+					CountLoggingReplicas:          1,
+					IsPrimary:                     1,
+					IsStalledDisk:                 1,
+					CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 				},
 				{
 					TabletInfo: &topodatapb.Tablet{
@@ -607,9 +765,18 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			}
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
+			analysis := tt.analysis
+			if analysis == "" {
+				analysis = inst.ReplicationStopped
+			}
+			analyzedAlias := tt.analyzedAlias
+			if analyzedAlias == nil {
+				analyzedAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+			}
+
 			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
-				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-				Analysis:              inst.ReplicationStopped,
+				AnalyzedInstanceAlias: analyzedAlias,
+				Analysis:              analysis,
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
 			}, []string{"ks", "0", ""}, func(*topodatapb.TabletAlias, bool) {

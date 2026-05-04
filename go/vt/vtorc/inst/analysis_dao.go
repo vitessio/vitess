@@ -468,14 +468,27 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			chosenProblem := matchedProblems[0]
 			a.Analysis = chosenProblem.Meta.Analysis
 			a.Description = chosenProblem.Meta.Description
+			// Record any shard-wide-priority problem in matchedProblems on `ca`
+			// so cross-tablet suppression still fires, even when BeforeAnalyses
+			// has promoted a non-shard-wide problem ahead of it in the chosen-
+			// problem sort. Snapshot the prior state so the duplicate-shard-wide
+			// suppression below uses the correct value.
+			prevHadShardWideAction := ca.hasShardWideAction
+			if !prevHadShardWideAction {
+				for _, p := range matchedProblems {
+					if p.Meta.Priority == detectionAnalysisPriorityShardWideAction {
+						ca.hasShardWideAction = true
+						ca.shardWideAnalysisCode = p.Meta.Analysis
+						ca.shardWideProblem = p
+						break
+					}
+				}
+			}
 			if chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction {
-				if ca.hasShardWideAction {
+				if prevHadShardWideAction {
 					// Already have a shard-wide action — suppress this one.
 					return nil
 				}
-				ca.hasShardWideAction = true
-				ca.shardWideAnalysisCode = chosenProblem.Meta.Analysis
-				ca.shardWideProblem = chosenProblem
 			} else if ca.hasShardWideAction {
 				// A shard-wide action was already detected. Only keep this
 				// tablet's analysis if a dependency exists between it and

@@ -958,3 +958,66 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 	}, 30*time.Second, time.Second)
 	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 30*time.Second)
 }
+
+// TestPrimaryIsReadOnlyWithSemiSyncBlocked verifies that VTOrc clears
+// super_read_only on the primary under semi_sync durability. This is a
+// regression test for a deadlock where recheckPrimaryHealth would abort
+// fixPrimary because the primary had PrimarySemiSyncBlocked, but the
+// primary problem persists until the primary is writable AND replicas
+// are ACKing. The precise deadlock timing is covered by unit tests; this
+// test exercises the PrimaryIsReadOnly detection and the suppression
+// bypass end-to-end.
+// See https://github.com/vitessio/vitess/issues/20011.
+func TestPrimaryIsReadOnlyWithSemiSyncBlocked(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, primary, "should have elected a primary")
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == primary.Alias {
+			continue
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		} else {
+			replica = tablet
+		}
+	}
+	require.NotNil(t, replica, "should have a REPLICA tablet")
+	require.NotNil(t, rdonly, "should have an RDONLY tablet")
+
+	allNonPrimary := []*cluster.Vttablet{replica, rdonly}
+	utils.CheckReplication(t, clusterInfo, primary, allNonPrimary, 15*time.Second)
+
+	// Snapshot the FixPrimary counter before forcing read-only.
+	fixPrimaryCount := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name)
+
+	// Force the primary into super_read_only=ON. VTOrc should detect
+	// PrimaryIsReadOnly and run fixPrimary. The BeforeAnalyses dependency
+	// ensures the analysis is not suppressed by hasShardWideAction even
+	// if PrimarySemiSyncBlocked is also present.
+	//
+	// Note: we cannot reliably assert PrimarySemiSyncBlocked is detected
+	// in this test because it requires a blocked write (SemiSyncBlocked
+	// only flips when a write is waiting for acks), and VTOrc fixes the
+	// primary faster than we can create the blocking condition. The
+	// deadlock scenario is covered by unit tests in analysis_dao_test.go
+	// (TestDeclaresBefore) and topology_recovery_test.go
+	// (TestRecheckPrimaryHealth).
+	_, err := utils.RunSQL(t, "SET GLOBAL super_read_only = ON", primary, "")
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		return utils.GetSuccessfulRecoveryCount(t, vtorc, logic.FixPrimaryRecoveryName, keyspace.Name, shard0.Name) > fixPrimaryCount
+	}, 30*time.Second, time.Second)
+	assert.True(t, utils.WaitForReadOnlyValue(t, primary, 0), "primary should be writable")
+}

@@ -214,6 +214,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Primary is read-only",
 			Priority:    detectionAnalysisPriorityHigh,
 		},
+		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked, PrimaryDiskStalled},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && a.IsReadOnly
 		},
@@ -351,7 +352,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Description: "Replication is stopped",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
-		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked},
+		BeforeAnalyses: []AnalysisCode{PrimarySemiSyncBlocked, PrimaryDiskStalled},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped
 		},
