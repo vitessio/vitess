@@ -62,7 +62,7 @@ jobs:
           config_image: ${{ inputs.config_image || 'us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-config:latest' }}
           images: ${{ inputs.images || 'us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-client:latest;us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-mysql:latest;docker.io/vitess/lite:latest;quay.io/coreos/etcd:v3.5.16' }}
           description: ${{ inputs.description || 'automatic run' }}
-          email_recipients: ${{ inputs.email || '' }}
+          email_recipients: ${{ inputs.email || 'cncf-vitess-maintainers@lists.cncf.io' }}
           test_name: ${{ inputs.test || 'automatic run' }}
           additional_parameters: |-
             custom.duration = ${{ inputs.duration || 0.5 }}
