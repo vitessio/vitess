@@ -1114,6 +1114,19 @@ outer:
 				}
 				continue outer
 			}
+			// FindTable can synthesize a BaseTable for an unsharded keyspace's
+			// missing table without storing it in ks.Tables. Persist it there so
+			// that later schema-tracker updates via setColumns mutate the same
+			// pointer the routing rule references; otherwise the rule keeps a
+			// stale, non-authoritative copy and `t.*` expansion fails for
+			// cross-keyspace JOINs (issue #19986).
+			if t != nil && t.Keyspace != nil {
+				if ks := vschema.Keyspaces[t.Keyspace.Name]; ks != nil {
+					if _, exists := ks.Tables[t.Name.String()]; !exists {
+						ks.Tables[t.Name.String()] = t
+					}
+				}
+			}
 			rr.Tables = append(rr.Tables, t)
 		}
 		vschema.RoutingRules[rule.FromTable] = rr

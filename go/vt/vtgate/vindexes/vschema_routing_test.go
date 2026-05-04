@@ -594,3 +594,46 @@ func TestFindRoutedViewQualifiedLookupIgnoresUnqualifiedRules(t *testing.T) {
 	require.Nil(t, routedName, "qualified lookup should not match unqualified view rule")
 	assert.Equal(t, sqlparser.String(sourceView), sqlparser.String(view))
 }
+
+// TestRoutingRuleSynthesizedTableRegisteredInKeyspace verifies the fix for
+// issue #19986: when a routing rule targets an unsharded keyspace's missing
+// table, FindTable synthesizes a placeholder BaseTable. buildRoutingRule must
+// register that pointer in ks.Tables so that any later mutation of the table
+// (e.g. schema-tracker setColumns) is observed by the routing rule's reference.
+func TestRoutingRuleSynthesizedTableRegisteredInKeyspace(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	source := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks_a": {Sharded: false},
+			"ks_b": {Sharded: false},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "table_a", ToTables: []string{"ks_a.table_a"}},
+				{FromTable: "table_b", ToTables: []string{"ks_b.table_b"}},
+			},
+		},
+	}
+
+	vs := BuildVSchema(source, parser)
+
+	rrA := vs.RoutingRules["table_a"]
+	require.NotNil(t, rrA)
+	require.Len(t, rrA.Tables, 1)
+	require.Same(t, vs.Keyspaces["ks_a"].Tables["table_a"], rrA.Tables[0],
+		"routing rule and ks.Tables should share the same BaseTable pointer")
+
+	rrB := vs.RoutingRules["table_b"]
+	require.NotNil(t, rrB)
+	require.Len(t, rrB.Tables, 1)
+	require.Same(t, vs.Keyspaces["ks_b"].Tables["table_b"], rrB.Tables[0])
+
+	// Mutating the keyspace's BaseTable in place should be reflected in the
+	// routing rule, since they reference the same pointer. This is what makes
+	// schema-tracker setColumns "just work" for routing-rule-only setups.
+	tbl := vs.Keyspaces["ks_a"].Tables["table_a"]
+	tbl.Columns = []Column{{Name: sqlparser.NewIdentifierCI("id")}}
+	tbl.ColumnListAuthoritative = true
+	assert.True(t, rrA.Tables[0].ColumnListAuthoritative)
+	assert.Len(t, rrA.Tables[0].Columns, 1)
+}
