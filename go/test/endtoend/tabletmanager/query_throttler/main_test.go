@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 )
@@ -83,11 +82,11 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
-			utils.GetFlagVariantForTests("--enable-replication-reporter"),
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
+			"--lock-tables-timeout", "5s",
+			"--watch-replication-stream",
+			"--enable-replication-reporter",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
 		}
 
 		keyspace := &cluster.Keyspace{
