@@ -669,8 +669,14 @@ func TestMonitorWriteBlocked(t *testing.T) {
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 	// Block the INSERT so we have a deterministic window in which write() is in
 	// progress; otherwise the goroutine can complete before the assertion below
-	// observes inProgressWriteCount > 0 on a busy CI runner.
+	// observes inProgressWriteCount > 0 on a busy CI runner. release() is
+	// idempotent and registered with t.Cleanup so a require.* failure can't
+	// leave the INSERT goroutine wedged inside BeforeFunc and deadlock
+	// db.Close() during teardown.
 	unblock := make(chan struct{})
+	var unblockOnce sync.Once
+	release := func() { unblockOnce.Do(func() { close(unblock) }) }
+	t.Cleanup(release)
 	db.SetBeforeFunc("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", func() {
 		<-unblock
 	})
@@ -691,7 +697,7 @@ func TestMonitorWriteBlocked(t *testing.T) {
 	}, 15*time.Second, time.Millisecond)
 
 	// Let the INSERT proceed and check that the write finished successfully.
-	close(unblock)
+	release()
 	require.Eventually(t, func() bool {
 		return writeFinished.Load()
 	}, 10*time.Second, 100*time.Millisecond)
