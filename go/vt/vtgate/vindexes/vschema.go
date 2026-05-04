@@ -1076,32 +1076,20 @@ outer:
 				}
 				continue outer
 			}
-			// FindTable synthesizes a placeholder BaseTable for an unsharded
-			// keyspace's missing table and does not store it in ks.Tables.
-			// The planner reads Columns / ColumnListAuthoritative off of the
-			// routing rule's pointer when expanding `t.*` for cross-keyspace
-			// JOINs, so we have to make sure the rule references whatever
-			// pointer the schema tracker's setColumns will update -- which is
-			// ks.Tables[name]. Register t there if no entry exists yet.
-			//
-			// Other call sites that go through FindTable with the same
-			// "construct unsharded if not found" path (buildMirrorRule's
-			// to-table, resolveAutoIncrement's sequence lookup, the FK parent
-			// lookup in updateTableInfo) do not currently need this: their
-			// downstream consumers only read Keyspace.Name / Name, not column
-			// metadata. If a future consumer starts depending on that, lift
-			// this into a shared helper. See issue #19986.
-			if t != nil && t.Keyspace != nil {
-				if ks := vschema.Keyspaces[t.Keyspace.Name]; ks != nil {
-					if _, exists := ks.Tables[t.Name.String()]; !exists {
-						ks.Tables[t.Name.String()] = t
-					}
-				}
-			}
 			rr.Tables = append(rr.Tables, t)
 		}
 		vschema.RoutingRules[rule.FromTable] = rr
 	}
+}
+
+// RebuildRoutingRules clears and rebuilds the routing rules. It is intended
+// to be called after the schema tracker has populated keyspace tables, so
+// that any rule whose target table was synthesized by FindTable on an
+// unsharded keyspace (because the user's vschema was empty) gets re-resolved
+// to the now-populated authoritative BaseTable in ks.Tables. See #19986.
+func RebuildRoutingRules(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
+	vschema.RoutingRules = make(map[string]*RoutingRule)
+	buildRoutingRule(source, vschema, parser)
 }
 
 func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {

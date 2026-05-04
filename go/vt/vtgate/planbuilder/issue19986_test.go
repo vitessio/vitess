@@ -36,10 +36,13 @@ import (
 // at the per-keyspace tables. The planner relies on the schema tracker to
 // supply columns for the routed tables.
 //
-// Before the fix in buildRoutingRule, the routing rule's BaseTable was a
-// distinct pointer from ks.Tables[name], so schema-tracker columns landed
-// on a different pointer and the routing rule kept a non-authoritative
-// placeholder. Cross-keyspace JOIN with `t.*` then failed with VT09015.
+// Before the fix, the routing rule's BaseTable was the synthesized
+// placeholder from the initial buildRoutingRule pass; the schema tracker's
+// setColumns produced a separate authoritative BaseTable in ks.Tables, but
+// the routing rule kept its stale pointer. Cross-keyspace JOIN with `t.*`
+// then failed with VT09015. The fix re-resolves routing rules via
+// RebuildRoutingRules after schema-tracker updates so the rule picks up
+// whatever is in ks.Tables.
 func TestIssue19986CrossKeyspaceJoinStarExpansion(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 
@@ -59,15 +62,20 @@ func TestIssue19986CrossKeyspaceJoinStarExpansion(t *testing.T) {
 
 	vschema := vindexes.BuildVSchema(srcVSchema, parser)
 
-	// Simulate the schema tracker: mutate the existing BaseTables that
-	// buildRoutingRule registered into ks.Tables. With the fix, the routing
-	// rule references the same pointer, so this propagates.
+	// Simulate what vschema_manager does after the schema tracker reports
+	// columns for these tables: place authoritative BaseTables in ks.Tables,
+	// then call RebuildRoutingRules so the routing rule's Tables[0] gets
+	// re-resolved to those entries.
 	populate := func(ks, tbl string, cols []vindexes.Column) {
 		t.Helper()
-		bt := vschema.Keyspaces[ks].Tables[tbl]
-		require.NotNil(t, bt, "table %s.%s not registered in ks.Tables", ks, tbl)
-		bt.Columns = cols
-		bt.ColumnListAuthoritative = true
+		ksSchema := vschema.Keyspaces[ks]
+		require.NotNil(t, ksSchema)
+		ksSchema.Tables[tbl] = &vindexes.BaseTable{
+			Name:                    sqlparser.NewIdentifierCS(tbl),
+			Keyspace:                ksSchema.Keyspace,
+			Columns:                 cols,
+			ColumnListAuthoritative: true,
+		}
 	}
 	populate("ks_a", "table_a", []vindexes.Column{
 		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
@@ -78,6 +86,7 @@ func TestIssue19986CrossKeyspaceJoinStarExpansion(t *testing.T) {
 		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
 		{Name: sqlparser.NewIdentifierCI("label"), Type: querypb.Type_VARCHAR},
 	})
+	vindexes.RebuildRoutingRules(srcVSchema, vschema, parser)
 
 	env := vtenv.NewTestEnv()
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
