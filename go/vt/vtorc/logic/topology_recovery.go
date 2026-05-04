@@ -78,6 +78,7 @@ const (
 	RecoverySkipERSDisabled
 	RecoverySkipStaleAnalysis
 	RecoverySkipPrimaryRecovery
+	RecoverySkipCellNoRecovery
 )
 
 // String represents a RecoverySkip as a string.
@@ -93,6 +94,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "StaleAnalysis"
 	case RecoverySkipPrimaryRecovery:
 		return "PrimaryRecovery"
+	case RecoverySkipCellNoRecovery:
+		return "CellNoRecovery"
 	default:
 		return "None"
 	}
@@ -718,6 +721,18 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	// Will revisit this in the future.
 	// case inst.AllPrimaryReplicasStale:
 	//   recoveryFunc = recoverGenericProblemFunc
+
+	// If --cells-no-recovery contains the analyzed tablet's cell, skip the
+	// recovery action while still surfacing detection through the rest of the
+	// pipeline. Discovery is unaffected, so VTOrc retains a complete view of
+	// the topology and never mistakes a primary in another cell for "no
+	// primary".
+	if recoverySkipCode == RecoverySkipNone &&
+		hasActionableRecovery(recoveryFunc) &&
+		len(cellsNoRecovery) > 0 &&
+		slices.Contains(cellsNoRecovery, analysisEntry.AnalyzedCell) {
+		recoverySkipCode = RecoverySkipCellNoRecovery
+	}
 
 	return recoveryFunc, recoverySkipCode
 }
