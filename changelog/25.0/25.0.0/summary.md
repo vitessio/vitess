@@ -12,6 +12,8 @@
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
+    - **[VTTablet](#minor-changes-vttablet)**
+        - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -47,3 +49,17 @@ A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VT
 
 See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
 
+### <a id="minor-changes-vttablet"/>VTTablet</a>
+
+#### <a id="vttablet-schema-max-table-count"/>Schema engine table-count limit is now configurable</a>
+
+Previously the schema engine had a hardcoded cap of 10,000 tables: a vttablet whose underlying MySQL had more than 10,000 tables would fail to load its schema and could not serve queries. This made recovery from `EmergencyReparentShard` impossible without dropping tables directly on MySQL.
+
+Two changes:
+
+1. The schema engine no longer enforces a row cap on its reload queries. A vttablet with any number of tables will load successfully.
+2. A new flag, `--queryserver-config-schema-max-table-count` (default `10000`), governs new schema object creation for tables and views. `CREATE TABLE` and `CREATE VIEW` statements that would push the engine's tracked schema-object count above this limit are rejected at vttablet with a clear error before they reach MySQL. The flag is dynamic: changes are observed without restart.
+
+Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
+
+See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
