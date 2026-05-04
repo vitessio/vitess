@@ -637,3 +637,47 @@ func TestRoutingRuleSynthesizedTableRegisteredInKeyspace(t *testing.T) {
 	assert.True(t, rrA.Tables[0].ColumnListAuthoritative)
 	assert.Len(t, rrA.Tables[0].Columns, 1)
 }
+
+// TestRoutingRuleSynthesizedTableAddedToGlobalTables verifies that the
+// synthesized BaseTable registered in ks.Tables by buildRoutingRule (fix for
+// issue #19986) is subsequently picked up by AddAdditionalGlobalTables, making
+// the table globally routable even before the schema tracker has populated
+// column metadata. Before the fix, ks.Tables had no entry, so
+// AddAdditionalGlobalTables would not find the table.
+func TestRoutingRuleSynthesizedTableAddedToGlobalTables(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	source := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks_a": {Sharded: false},
+			"ks_b": {Sharded: false},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "table_a", ToTables: []string{"ks_a.table_a"}},
+			},
+		},
+	}
+
+	vs := BuildVSchema(source, parser)
+
+	// The fix must have registered the synthesized BaseTable in ks.Tables.
+	require.NotNil(t, vs.Keyspaces["ks_a"].Tables["table_a"],
+		"synthesized BaseTable must be in ks.Tables after buildRoutingRule")
+
+	// With two keyspaces and no explicit vschema entry, the table is not yet
+	// in globalTables after BuildVSchema alone (buildGlobalTables ran before
+	// buildRoutingRule synthesized the entry). FindTable with no keyspace must
+	// fail.
+	_, err := vs.FindTable("", "table_a")
+	require.Error(t, err, "table_a should not be in globalTables before AddAdditionalGlobalTables")
+
+	// Simulate what buildAndEnhanceVSchema does next: populate globalTables
+	// from ks.Tables.
+	AddAdditionalGlobalTables(source, vs)
+
+	// Now the synthesized entry must be globally routable.
+	tbl, err := vs.FindTable("", "table_a")
+	require.NoError(t, err)
+	require.NotNil(t, tbl)
+	assert.Equal(t, "ks_a", tbl.Keyspace.Name)
+}
