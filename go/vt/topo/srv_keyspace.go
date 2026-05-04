@@ -280,7 +280,7 @@ func (ts *Server) AddSrvKeyspacePartitions(ctx context.Context, keyspace string,
 						ServedType: tabletType,
 					}
 
-					shardReferences := make([]*topodatapb.ShardReference, 0)
+					shardReferences := make([]*topodatapb.ShardReference, 0, len(shards))
 					for _, si := range shards {
 						shardReference := &topodatapb.ShardReference{
 							Name:     si.ShardName(),
@@ -353,7 +353,7 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 						}
 
 						if found {
-							shardReferences := make([]*topodatapb.ShardReference, 0)
+							shardReferences := make([]*topodatapb.ShardReference, 0, len(partition.GetShardReferences()))
 							for _, shardReference := range partition.GetShardReferences() {
 								// Use shard name rather than key range so it works
 								// for both range-based and non-range-based shards.
@@ -553,7 +553,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 						continue
 					}
 
-					shardReferences := make([]*topodatapb.ShardReference, 0)
+					shardReferences := make([]*topodatapb.ShardReference, 0, len(partition.GetShardReferences()))
 
 					for _, shardReference := range partition.GetShardReferences() {
 						inShardsToRemove := false

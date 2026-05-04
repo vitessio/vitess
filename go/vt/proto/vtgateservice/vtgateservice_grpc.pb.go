@@ -51,6 +51,10 @@ type VitessClient interface {
 	// This has the same effect as if a "rollback" statement was executed,
 	// but does not affect the query statistics.
 	CloseSession(ctx context.Context, in *vtgate.CloseSessionRequest, opts ...grpc.CallOption) (*vtgate.CloseSessionResponse, error)
+	// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard
+	// using GTID-based replication. This is the vtgate-level gRPC equivalent
+	// of COM_BINLOG_DUMP_GTID.
+	BinlogDumpGTID(ctx context.Context, in *vtgate.BinlogDumpGTIDRequest, opts ...grpc.CallOption) (Vitess_BinlogDumpGTIDClient, error)
 }
 
 type vitessClient struct {
@@ -202,6 +206,38 @@ func (c *vitessClient) CloseSession(ctx context.Context, in *vtgate.CloseSession
 	return out, nil
 }
 
+func (c *vitessClient) BinlogDumpGTID(ctx context.Context, in *vtgate.BinlogDumpGTIDRequest, opts ...grpc.CallOption) (Vitess_BinlogDumpGTIDClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Vitess_ServiceDesc.Streams[3], "/vtgateservice.Vitess/BinlogDumpGTID", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &vitessBinlogDumpGTIDClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Vitess_BinlogDumpGTIDClient interface {
+	Recv() (*vtgate.BinlogDumpResponse, error)
+	grpc.ClientStream
+}
+
+type vitessBinlogDumpGTIDClient struct {
+	grpc.ClientStream
+}
+
+func (x *vitessBinlogDumpGTIDClient) Recv() (*vtgate.BinlogDumpResponse, error) {
+	m := new(vtgate.BinlogDumpResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // VitessServer is the server API for Vitess service.
 // All implementations must embed UnimplementedVitessServer
 // for forward compatibility
@@ -234,6 +270,10 @@ type VitessServer interface {
 	// This has the same effect as if a "rollback" statement was executed,
 	// but does not affect the query statistics.
 	CloseSession(context.Context, *vtgate.CloseSessionRequest) (*vtgate.CloseSessionResponse, error)
+	// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard
+	// using GTID-based replication. This is the vtgate-level gRPC equivalent
+	// of COM_BINLOG_DUMP_GTID.
+	BinlogDumpGTID(*vtgate.BinlogDumpGTIDRequest, Vitess_BinlogDumpGTIDServer) error
 	mustEmbedUnimplementedVitessServer()
 }
 
@@ -264,6 +304,9 @@ func (UnimplementedVitessServer) Prepare(context.Context, *vtgate.PrepareRequest
 }
 func (UnimplementedVitessServer) CloseSession(context.Context, *vtgate.CloseSessionRequest) (*vtgate.CloseSessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CloseSession not implemented")
+}
+func (UnimplementedVitessServer) BinlogDumpGTID(*vtgate.BinlogDumpGTIDRequest, Vitess_BinlogDumpGTIDServer) error {
+	return status.Errorf(codes.Unimplemented, "method BinlogDumpGTID not implemented")
 }
 func (UnimplementedVitessServer) mustEmbedUnimplementedVitessServer() {}
 
@@ -431,6 +474,27 @@ func _Vitess_CloseSession_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vitess_BinlogDumpGTID_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(vtgate.BinlogDumpGTIDRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VitessServer).BinlogDumpGTID(m, &vitessBinlogDumpGTIDServer{stream})
+}
+
+type Vitess_BinlogDumpGTIDServer interface {
+	Send(*vtgate.BinlogDumpResponse) error
+	grpc.ServerStream
+}
+
+type vitessBinlogDumpGTIDServer struct {
+	grpc.ServerStream
+}
+
+func (x *vitessBinlogDumpGTIDServer) Send(m *vtgate.BinlogDumpResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Vitess_ServiceDesc is the grpc.ServiceDesc for Vitess service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -473,6 +537,11 @@ var Vitess_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "VStream",
 			Handler:       _Vitess_VStream_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "BinlogDumpGTID",
+			Handler:       _Vitess_BinlogDumpGTID_Handler,
 			ServerStreams: true,
 		},
 	},

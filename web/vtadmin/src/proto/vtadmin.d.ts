@@ -42970,8 +42970,8 @@ export namespace query {
         HEXVAL = 4129,
         BITNUM = 4130,
         VECTOR = 2083,
-        RAW = 2084,
-        ROW_TUPLE = 2085
+        RAW = 36,
+        ROW_TUPLE = 37
     }
 
     /** Properties of a Value. */
@@ -71682,7 +71682,7 @@ export namespace vtctldata {
         public target_keyspace: string;
 
         /** MoveTablesCompleteRequest keep_data. */
-        public keep_data: boolean;
+        public keep_data?: (boolean|null);
 
         /** MoveTablesCompleteRequest keep_routing_rules. */
         public keep_routing_rules: boolean;
@@ -71785,6 +71785,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteResponse dry_run_results */
         dry_run_results?: (string[]|null);
+
+        /** MoveTablesCompleteResponse warnings */
+        warnings?: (string[]|null);
     }
 
     /** Represents a MoveTablesCompleteResponse. */
@@ -71801,6 +71804,9 @@ export namespace vtctldata {
 
         /** MoveTablesCompleteResponse dry_run_results. */
         public dry_run_results: string[];
+
+        /** MoveTablesCompleteResponse warnings. */
+        public warnings: string[];
 
         /**
          * Creates a new MoveTablesCompleteResponse instance using the specified properties.
@@ -81662,7 +81668,7 @@ export namespace vtctldata {
         public workflow: string;
 
         /** WorkflowDeleteRequest keep_data. */
-        public keep_data: boolean;
+        public keep_data?: (boolean|null);
 
         /** WorkflowDeleteRequest keep_routing_rules. */
         public keep_routing_rules: boolean;
@@ -81762,6 +81768,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteResponse details */
         details?: (vtctldata.WorkflowDeleteResponse.ITabletInfo[]|null);
+
+        /** WorkflowDeleteResponse warnings */
+        warnings?: (string[]|null);
     }
 
     /** Represents a WorkflowDeleteResponse. */
@@ -81778,6 +81787,9 @@ export namespace vtctldata {
 
         /** WorkflowDeleteResponse details. */
         public details: vtctldata.WorkflowDeleteResponse.ITabletInfo[];
+
+        /** WorkflowDeleteResponse warnings. */
+        public warnings: string[];
 
         /**
          * Creates a new WorkflowDeleteResponse instance using the specified properties.

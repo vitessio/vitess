@@ -274,6 +274,12 @@ func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSpanContextWithMultipleLeadingComments(t *testing.T) {
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*//*vt+ SCATTER_ERRORS_AS_WARNINGS */ SELECT col1 FROM TABLE", "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "123"))
+	assert.NoError(t, err)
+}
+
 func TestSpanContextNotParsable(t *testing.T) {
 	hasRun := false
 	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
@@ -284,6 +290,77 @@ func TestSpanContextNotParsable(t *testing.T) {
 		newFromStringError(t))
 	assert.NoError(t, err)
 	assert.True(t, hasRun, "Should have continued execution despite failure to parse VT_SPAN_CONTEXT")
+}
+
+func TestStartSpanFromPrepare_NoSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "SELECT 1"}
+	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Empty(t, *prepare.SpanContext)
+}
+
+func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
+	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "123"))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Equal(t, "123", *prepare.SpanContext)
+}
+
+func TestStartSpanFromPrepare_CachesSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=456*/SELECT 1"}
+	// First call extracts and caches the span context.
+	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "456"))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Equal(t, "456", *prepare.SpanContext)
+
+	// Second call reuses the cached span context (PrepareStmt is not re-parsed).
+	prepare.PrepareStmt = "modified query that would not match"
+	_, _, err = startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "456"))
+	assert.NoError(t, err)
+}
+
+func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
+	newFromStringCalls := 0
+	newSpanCalls := 0
+	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		func(c context.Context, s string) (trace.Span, context.Context) {
+			newSpanCalls++
+			return trace.NoopSpan{}, context.Background()
+		},
+		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+			newFromStringCalls++
+			return trace.NoopSpan{}, context.Background(), errors.New("parse error")
+		})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, newFromStringCalls, "newFromString should be called on first execution")
+	assert.Equal(t, 1, newSpanCalls, "newSpan should be called as fallback")
+	// After the first failure, the cached SpanContext should be cleared so
+	// subsequent executions skip the parse attempt entirely.
+	require.NotNil(t, prepare.SpanContext)
+	assert.Empty(t, *prepare.SpanContext)
+
+	// Second execution should not call newFromString again.
+	newFromStringCalls = 0
+	newSpanCalls = 0
+	_, _, err = startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		func(c context.Context, s string) (trace.Span, context.Context) {
+			newSpanCalls++
+			return trace.NoopSpan{}, context.Background()
+		},
+		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+			newFromStringCalls++
+			return trace.NoopSpan{}, context.Background(), errors.New("parse error")
+		})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, newFromStringCalls, "newFromString should not be called after cached failure")
+	assert.Equal(t, 1, newSpanCalls, "newSpan should be called directly")
 }
 
 func newTestAuthServerStatic() *mysql.AuthServerStatic {
@@ -979,7 +1056,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
 		vh.session(mysqlConn).TargetString = targetString
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not authorized to perform binlog dump operations")
 	})
@@ -988,7 +1065,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		// Clear any previous target
 		vh.session(mysqlConn).TargetString = ""
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no target specified")
 	})
@@ -1003,7 +1080,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		vh.session(mysqlConn).TargetString = targetString
 		mysqlConn.User = "testuser"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1013,7 +1090,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1025,7 +1102,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
 		vh.session(mysqlConn).TargetString = targetString
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "test binlog error")
 	})
@@ -1035,10 +1112,9 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		sbc1.BinlogDumpError = nil
 		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
 
-		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
-		vh.session(mysqlConn).TargetString = targetString
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000001", 4, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1053,14 +1129,14 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		gtidSet, err := replication.ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100")
 		require.NoError(t, err)
 
-		err = vh.ComBinlogDumpGTID(mysqlConn, "", 0, gtidSet, 0)
+		err = vh.ComBinlogDumpGTID(mysqlConn, "", 4, gtidSet, 0)
 		require.NoError(t, err)
 	})
 
 	t.Run("invalid tablet alias in target", func(t *testing.T) {
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary|invalid-alias"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.Error(t, err)
 		// The error could be about parsing the alias or not finding the tablet
 		assert.True(t, strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "not found"),
@@ -1071,39 +1147,54 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		// Use a valid format but non-existent alias
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary|aa-9999999"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
-	t.Run("file position rejected without tablet alias", func(t *testing.T) {
+	t.Run("filename is rejected", func(t *testing.T) {
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tablet targeting")
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
 	})
 
-	t.Run("non-default position rejected without tablet alias", func(t *testing.T) {
+	t.Run("filename is rejected even with tablet alias", func(t *testing.T) {
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("position below minimum is rejected", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 3, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
+	})
+
+	t.Run("non-default position is rejected", func(t *testing.T) {
 		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
 
 		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tablet targeting")
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
 	})
 
-	t.Run("file position allowed with tablet alias", func(t *testing.T) {
-		sbc1.BinlogDumpError = nil
-		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
-
+	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
 		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
 		vh.session(mysqlConn).TargetString = targetString
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 1234, nil, 0)
-		require.NoError(t, err)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 5, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
 	})
 
-	t.Run("default position allowed without tablet alias", func(t *testing.T) {
+	t.Run("default position is allowed", func(t *testing.T) {
 		sbc1.BinlogDumpError = nil
 		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
 
@@ -1156,7 +1247,7 @@ func TestBinlogDumpACL(t *testing.T) {
 	t.Run("binlog dump disabled globally", func(t *testing.T) {
 		enableBinlogDump.Set(false)
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "binlog dump is disabled")
 	})
@@ -1166,7 +1257,7 @@ func TestBinlogDumpACL(t *testing.T) {
 		// Don't set any authorized users (empty = no one authorized)
 		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not authorized to perform binlog dump")
 		assert.Contains(t, err.Error(), "cdcuser")
@@ -1176,7 +1267,7 @@ func TestBinlogDumpACL(t *testing.T) {
 		enableBinlogDump.Set(true)
 		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("cdcuser,otheruser"))
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.NoError(t, err)
 	})
 
@@ -1184,7 +1275,7 @@ func TestBinlogDumpACL(t *testing.T) {
 		enableBinlogDump.Set(true)
 		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
 
-		err := vh.ComBinlogDumpGTID(mysqlConn, "", 0, nil, 0)
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
 		require.NoError(t, err)
 	})
 

@@ -85,6 +85,12 @@ func (tm *TabletManager) ApplySchema(ctx context.Context, change *tmutils.Schema
 	}
 	defer tm.unlock()
 
+	// Reject any CREATE TABLE that would push the schema engine past its
+	// configured table-count limit before we touch mysqld.
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), change.SQL); err != nil {
+		return nil, err
+	}
+
 	// get the db name from the tablet
 	dbName := topoproto.TabletDbName(tm.Tablet())
 

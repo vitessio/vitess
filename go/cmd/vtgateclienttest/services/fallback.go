@@ -79,6 +79,10 @@ func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.Table
 	return c.fallback.VStream(ctx, tabletType, vgtid, filter, flags, send)
 }
 
+func (c fallbackClient) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
+	return c.fallback.BinlogDumpGTID(ctx, req, send)
+}
+
 func (c fallbackClient) HandlePanic(err *error) {
 	c.fallback.HandlePanic(err)
 }

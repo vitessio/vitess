@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -334,9 +333,8 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 	packetSize := strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
 
 	// Support both formats for backwards compatibility
-	// TODO(v25): Remove underscore versions
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", dynamicPacketSize)
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", packetSize)
+	options.ConfigOverrides["vstream-dynamic-packet-size"] = dynamicPacketSize
+	options.ConfigOverrides["vstream-packet-size"] = packetSize
 
 	appName := throttlerapp.VStreamerName
 	if fullyThrottle {

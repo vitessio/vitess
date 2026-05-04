@@ -3689,11 +3689,14 @@ func (m *MoveTablesCompleteRequest) CloneVT() *MoveTablesCompleteRequest {
 	r := new(MoveTablesCompleteRequest)
 	r.Workflow = m.Workflow
 	r.TargetKeyspace = m.TargetKeyspace
-	r.KeepData = m.KeepData
 	r.KeepRoutingRules = m.KeepRoutingRules
 	r.RenameTables = m.RenameTables
 	r.DryRun = m.DryRun
 	r.IgnoreSourceKeyspace = m.IgnoreSourceKeyspace
+	if rhs := m.KeepData; rhs != nil {
+		tmpVal := *rhs
+		r.KeepData = &tmpVal
+	}
 	if rhs := m.Shards; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -3720,6 +3723,11 @@ func (m *MoveTablesCompleteResponse) CloneVT() *MoveTablesCompleteResponse {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
 		r.DryRunResults = tmpContainer
+	}
+	if rhs := m.Warnings; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.Warnings = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -5631,10 +5639,13 @@ func (m *WorkflowDeleteRequest) CloneVT() *WorkflowDeleteRequest {
 	r := new(WorkflowDeleteRequest)
 	r.Keyspace = m.Keyspace
 	r.Workflow = m.Workflow
-	r.KeepData = m.KeepData
 	r.KeepRoutingRules = m.KeepRoutingRules
 	r.DeleteBatchSize = m.DeleteBatchSize
 	r.IgnoreSourceKeyspace = m.IgnoreSourceKeyspace
+	if rhs := m.KeepData; rhs != nil {
+		tmpVal := *rhs
+		r.KeepData = &tmpVal
+	}
 	if rhs := m.Shards; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -5681,6 +5692,11 @@ func (m *WorkflowDeleteResponse) CloneVT() *WorkflowDeleteResponse {
 			tmpContainer[k] = v.CloneVT()
 		}
 		r.Details = tmpContainer
+	}
+	if rhs := m.Warnings; rhs != nil {
+		tmpContainer := make([]string, len(rhs))
+		copy(tmpContainer, rhs)
+		r.Warnings = tmpContainer
 	}
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -16348,9 +16364,9 @@ func (m *MoveTablesCompleteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		i--
 		dAtA[i] = 0x28
 	}
-	if m.KeepData {
+	if m.KeepData != nil {
 		i--
-		if m.KeepData {
+		if *m.KeepData {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -16404,6 +16420,15 @@ func (m *MoveTablesCompleteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, e
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Warnings) > 0 {
+		for iNdEx := len(m.Warnings) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Warnings[iNdEx])
+			copy(dAtA[i:], m.Warnings[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Warnings[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
 	}
 	if len(m.DryRunResults) > 0 {
 		for iNdEx := len(m.DryRunResults) - 1; iNdEx >= 0; iNdEx-- {
@@ -21498,9 +21523,9 @@ func (m *WorkflowDeleteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i--
 		dAtA[i] = 0x20
 	}
-	if m.KeepData {
+	if m.KeepData != nil {
 		i--
-		if m.KeepData {
+		if *m.KeepData {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -21607,6 +21632,15 @@ func (m *WorkflowDeleteResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if len(m.Warnings) > 0 {
+		for iNdEx := len(m.Warnings) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Warnings[iNdEx])
+			copy(dAtA[i:], m.Warnings[iNdEx])
+			i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Warnings[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
 	}
 	if len(m.Details) > 0 {
 		for iNdEx := len(m.Details) - 1; iNdEx >= 0; iNdEx-- {
@@ -26547,7 +26581,7 @@ func (m *MoveTablesCompleteRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.KeepData {
+	if m.KeepData != nil {
 		n += 2
 	}
 	if m.KeepRoutingRules {
@@ -26584,6 +26618,12 @@ func (m *MoveTablesCompleteResponse) SizeVT() (n int) {
 	}
 	if len(m.DryRunResults) > 0 {
 		for _, s := range m.DryRunResults {
+			l = len(s)
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
+	if len(m.Warnings) > 0 {
+		for _, s := range m.Warnings {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
@@ -28486,7 +28526,7 @@ func (m *WorkflowDeleteRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
-	if m.KeepData {
+	if m.KeepData != nil {
 		n += 2
 	}
 	if m.KeepRoutingRules {
@@ -28538,6 +28578,12 @@ func (m *WorkflowDeleteResponse) SizeVT() (n int) {
 	if len(m.Details) > 0 {
 		for _, e := range m.Details {
 			l = e.SizeVT()
+			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+		}
+	}
+	if len(m.Warnings) > 0 {
+		for _, s := range m.Warnings {
+			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
@@ -54358,7 +54404,8 @@ func (m *MoveTablesCompleteRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.KeepData = bool(v != 0)
+			b := bool(v != 0)
+			m.KeepData = &b
 		case 5:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field KeepRoutingRules", wireType)
@@ -54585,6 +54632,38 @@ func (m *MoveTablesCompleteResponse) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.DryRunResults = append(m.DryRunResults, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Warnings", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Warnings = append(m.Warnings, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -66854,7 +66933,8 @@ func (m *WorkflowDeleteRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.KeepData = bool(v != 0)
+			b := bool(v != 0)
+			m.KeepData = &b
 		case 4:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field KeepRoutingRules", wireType)
@@ -67169,6 +67249,38 @@ func (m *WorkflowDeleteResponse) UnmarshalVT(dAtA []byte) error {
 			if err := m.Details[len(m.Details)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Warnings", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Warnings = append(m.Warnings, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
