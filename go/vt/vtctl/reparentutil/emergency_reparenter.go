@@ -191,7 +191,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
-		err = fmt.Errorf("%w, and restart replication cleanup failed: %v", err, cleanupErr)
+		err = vterrors.Wrapf(err, "restart replication cleanup failed: %v", cleanupErr)
 	}()
 
 	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
@@ -280,6 +280,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
 		if err != nil {
 			return err
+		}
+		if len(validCandidates) == 0 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
 		}
 	}
 
@@ -486,6 +489,9 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
+	if len(validCandidates) == 0 {
+		return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
+	}
 	// convert the valid candidates into a list so that we can use it for sorting
 	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
 	if err != nil {
@@ -909,6 +915,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	for _, candidate := range maxLenCandidates {
 		candidatePositions := validCandidates[candidate]
 		if candidatePositions == nil || candidatePositions.IsZero() {
+			erp.logger.Warningf("skipping candidate %s during errant GTID detection: nil or zero positions", candidate)
 			continue
 		}
 

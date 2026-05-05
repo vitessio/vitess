@@ -264,6 +264,12 @@ func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSpanContextWithMultipleLeadingComments(t *testing.T) {
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*//*vt+ SCATTER_ERRORS_AS_WARNINGS */ SELECT col1 FROM TABLE", "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "123"))
+	assert.NoError(t, err)
+}
+
 func TestSpanContextNotParsable(t *testing.T) {
 	hasRun := false
 	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
@@ -274,6 +280,77 @@ func TestSpanContextNotParsable(t *testing.T) {
 		newFromStringError(t))
 	assert.NoError(t, err)
 	assert.True(t, hasRun, "Should have continued execution despite failure to parse VT_SPAN_CONTEXT")
+}
+
+func TestStartSpanFromPrepare_NoSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "SELECT 1"}
+	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Empty(t, *prepare.SpanContext)
+}
+
+func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
+	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "123"))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Equal(t, "123", *prepare.SpanContext)
+}
+
+func TestStartSpanFromPrepare_CachesSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=456*/SELECT 1"}
+	// First call extracts and caches the span context.
+	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "456"))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Equal(t, "456", *prepare.SpanContext)
+
+	// Second call reuses the cached span context (PrepareStmt is not re-parsed).
+	prepare.PrepareStmt = "modified query that would not match"
+	_, _, err = startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "456"))
+	assert.NoError(t, err)
+}
+
+func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
+	newFromStringCalls := 0
+	newSpanCalls := 0
+	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		func(c context.Context, s string) (trace.Span, context.Context) {
+			newSpanCalls++
+			return trace.NoopSpan{}, context.Background()
+		},
+		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+			newFromStringCalls++
+			return trace.NoopSpan{}, context.Background(), errors.New("parse error")
+		})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, newFromStringCalls, "newFromString should be called on first execution")
+	assert.Equal(t, 1, newSpanCalls, "newSpan should be called as fallback")
+	// After the first failure, the cached SpanContext should be cleared so
+	// subsequent executions skip the parse attempt entirely.
+	require.NotNil(t, prepare.SpanContext)
+	assert.Empty(t, *prepare.SpanContext)
+
+	// Second execution should not call newFromString again.
+	newFromStringCalls = 0
+	newSpanCalls = 0
+	_, _, err = startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+		func(c context.Context, s string) (trace.Span, context.Context) {
+			newSpanCalls++
+			return trace.NoopSpan{}, context.Background()
+		},
+		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+			newFromStringCalls++
+			return trace.NoopSpan{}, context.Background(), errors.New("parse error")
+		})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, newFromStringCalls, "newFromString should not be called after cached failure")
+	assert.Equal(t, 1, newSpanCalls, "newSpan should be called directly")
 }
 
 func newTestAuthServerStatic() *mysql.AuthServerStatic {

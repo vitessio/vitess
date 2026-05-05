@@ -1512,6 +1512,7 @@ func TestListenerShutdown(t *testing.T) {
 
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err)
+	defer conn.Close()
 
 	err = conn.Ping()
 	require.NoError(t, err)
