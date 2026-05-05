@@ -1286,6 +1286,18 @@
       "Tags": [],
       "Needs": []
     },
+    "vtgate_schematracker_multi_ks_routing": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks_routing"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_schema_tracker",
+      "Tags": [],
+      "Needs": []
+    },
     "vtgate_mysql84": {
       "File": "unused.go",
       "Packages": [

@@ -205,6 +205,12 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 		// We need to skip if already present, to handle the case where MoveTables has switched traffic
 		// and removed the source vschema but not from the source database because user asked to --keep-data
 		vindexes.AddAdditionalGlobalTables(v, vschema)
+
+		// Re-resolve routing rules now that updateFromSchema may have
+		// installed authoritative BaseTables for the tracker's tables in
+		// ks.Tables, so each rule's Tables[0] points at the latest pointer
+		// and the planner can expand `t.*` against routed tables at vtgate.
+		vindexes.RebuildRoutingRules(v, vschema, vm.parser)
 	}
 	return vschema
 }

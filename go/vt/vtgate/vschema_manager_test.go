@@ -995,6 +995,115 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 	}
 }
 
+// TestRoutingRulesAuthoritativeAfterSchemaTracker pins down the invariant
+// the planner relies on for routing-rule-only setups: once the schema
+// tracker has reported columns for a routed table, the routing rule's
+// BaseTable has `ColumnListAuthoritative=true` and carries the tracked
+// columns, so the planner can expand `t.*` against it. Two shapes:
+//
+//   - tracker has data for every keyspace at `VSchemaUpdate` time: every
+//     rule is authoritative right after the first build.
+//   - tracker is initially empty and fills in keyspace-by-keyspace across
+//     successive `Rebuild` calls: each rule flips to authoritative the
+//     first time the rebuild sees columns for its target keyspace, and
+//     rules whose target keyspace is still untracked remain non-
+//     authoritative.
+func TestRoutingRulesAuthoritativeAfterSchemaTracker(t *testing.T) {
+	colsA := []vindexes.Column{
+		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
+		{Name: sqlparser.NewIdentifierCI("fk"), Type: querypb.Type_INT64},
+	}
+	colsB := []vindexes.Column{
+		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
+		{Name: sqlparser.NewIdentifierCI("label"), Type: querypb.Type_VARCHAR},
+	}
+
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks_a": {Sharded: false},
+			"ks_b": {Sharded: false},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "table_a", ToTables: []string{"ks_a.table_a"}},
+				{FromTable: "table_b", ToTables: []string{"ks_b.table_b"}},
+			},
+		},
+	}
+
+	checkRule := func(t *testing.T, rr *vindexes.RoutingRule, wantAuthoritative bool, wantCols []vindexes.Column, label string) {
+		t.Helper()
+		require.NotNil(t, rr, label)
+		require.Len(t, rr.Tables, 1, label)
+		tbl := rr.Tables[0]
+		assert.Equal(t, wantAuthoritative, tbl.ColumnListAuthoritative, "%s authoritative state", label)
+		if !wantAuthoritative {
+			// When the rule is non-authoritative the routing rule's BaseTable is
+			// still a placeholder; columns aren't expected.
+			return
+		}
+		require.Len(t, tbl.Columns, len(wantCols), "%s column count", label)
+		for i, want := range wantCols {
+			assert.Equal(t, want.Name.String(), tbl.Columns[i].Name.String(),
+				"%s column[%d] name", label, i)
+		}
+	}
+	check := func(t *testing.T, vs *vindexes.VSchema, wantAColAuthoritative, wantBColAuthoritative bool) {
+		t.Helper()
+		checkRule(t, vs.RoutingRules["table_a"], wantAColAuthoritative, colsA, "routing rule for table_a")
+		checkRule(t, vs.RoutingRules["table_b"], wantBColAuthoritative, colsB, "routing rule for table_b")
+	}
+
+	t.Run("tracker populated when VSchemaUpdate fires", func(t *testing.T) {
+		vm := &VSchemaManager{}
+		var vs *vindexes.VSchema
+		vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+			vs = vschema
+			vs.ResetCreated()
+		}
+		vm.schema = &fakeSchema{
+			tables: map[string]map[string]*vindexes.TableInfo{
+				"ks_a": {"table_a": {Columns: colsA}},
+				"ks_b": {"table_b": {Columns: colsB}},
+			},
+		}
+
+		vm.VSchemaUpdate(srvVSchema, nil)
+		check(t, vs, true, true)
+	})
+
+	t.Run("tracker populates one keyspace late via Rebuild", func(t *testing.T) {
+		vm := &VSchemaManager{}
+		var vs *vindexes.VSchema
+		vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+			vs = vschema
+			vs.ResetCreated()
+		}
+
+		// Tracker is empty when SrvVSchema first arrives (e.g. tablets not
+		// yet healthy at startup). Both routing rules synthesize placeholder
+		// BaseTables; neither is authoritative.
+		tracker := &fakeSchema{}
+		vm.schema = tracker
+		vm.VSchemaUpdate(srvVSchema, nil)
+		check(t, vs, false, false)
+
+		// Tracker subsequently picks up ks_a only; ks_b stays unknown.
+		tracker.tables = map[string]map[string]*vindexes.TableInfo{
+			"ks_a": {"table_a": {Columns: colsA}},
+		}
+		vm.Rebuild()
+		check(t, vs, true, false)
+
+		// Then ks_b is also tracked.
+		tracker.tables["ks_b"] = map[string]*vindexes.TableInfo{
+			"table_b": {Columns: colsB},
+		}
+		vm.Rebuild()
+		check(t, vs, true, true)
+	})
+}
+
 type fakeSchema struct {
 	// Single keyspace (backward compatibility)
 	t    map[string]*vindexes.TableInfo
