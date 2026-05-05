@@ -69,8 +69,6 @@ func createCluster(t *testing.T, vttabletArgs ...string) func() {
 }
 
 func TestTransactionTimeout(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
-
 	// Start cluster with no vtgate or vttablet timeouts
 	teardown := createCluster(t)
 	defer teardown()
@@ -115,8 +113,6 @@ func TestTransactionTimeout(t *testing.T) {
 }
 
 func TestSmallerTimeout(t *testing.T) {
-	utils.SkipIfBinaryIsBelowVersion(t, 21, "vttablet")
-
 	// Start vttablet with a transaction timeout
 	teardown := createCluster(t, "--queryserver-config-transaction-timeout", "1s")
 	defer teardown()

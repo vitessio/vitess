@@ -592,6 +592,12 @@ func (qre *QueryExecutor) recordACLStats(key []string, aclState acl.ACLState) {
 }
 
 func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Result, err error) {
+	// Reject CREATE TABLE/VIEW before reaching MySQL if it would push the
+	// schema engine past its configured table-count limit.
+	if err := qre.checkCreateTableLimit(); err != nil {
+		return nil, err
+	}
+
 	// Let's see if this is a normal DDL statement or an Online DDL statement.
 	// An Online DDL statement is identified by /*vt+ .. */ comment with expected directives, like uuid etc.
 	if onlineDDL, err := schema.OnlineDDLFromCommentedStatement(qre.plan.FullStmt); err == nil {
@@ -649,6 +655,18 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		}
 	}
 	return qre.execStatefulConn(conn, sql, true)
+}
+
+// checkCreateTableLimit rejects a CREATE TABLE/VIEW that would exceed the
+// schema engine's configured table-count limit. Other DDL is a no-op for the
+// count, so short-circuit it before acquiring the schema-engine lock.
+func (qre *QueryExecutor) checkCreateTableLimit() error {
+	switch qre.plan.FullStmt.(type) {
+	case *sqlparser.CreateTable, *sqlparser.CreateView:
+	default:
+		return nil
+	}
+	return eschema.CheckCreateTableLimit(qre.tsv.se, []sqlparser.Statement{qre.plan.FullStmt}, 0)
 }
 
 func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, error) {
@@ -753,12 +771,15 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			} else {
 				defer conn.Recycle()
 				res, err := qre.execDBConn(conn.Conn, sql, true)
+				if qre.tsv.config.ConsolidatorCacheProto3Rows && q.HasWaiters() {
+					res.CacheProto3Rows()
+				}
 				q.SetResult(res)
 				q.SetErr(err)
 			}
 		} else {
 			waiterCap := qre.tsv.config.ConsolidatorQueryWaiterCap
-			if waiterCap == 0 || *q.AddWaiterCounter(0) <= waiterCap {
+			if waiterCap == 0 || qre.tsv.qe.consolidator.TotalWaiterCount() <= waiterCap {
 				qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 				startTime := time.Now()
 				q.Wait()

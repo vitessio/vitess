@@ -658,7 +658,6 @@ func TestStateManagerNotify(t *testing.T) {
 
 func TestDemotePrimaryStalled(t *testing.T) {
 	sm := newTestStateManager()
-	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	// Stopping the ticker so that we don't get unexpected health streams.
@@ -673,7 +672,16 @@ func TestDemotePrimaryStalled(t *testing.T) {
 		})
 		assert.Contains(t, err.Error(), "tabletserver is shutdown")
 	})
+	// Order matters: StopService cancels the streamer's context, which lets
+	// Stream return so wg.Wait can complete. Defers run LIFO.
 	defer wg.Wait()
+	defer sm.StopService()
+
+	// register() pushes the current state onto the channel as soon as the
+	// streaming client subscribes, and that value is racy with respect to
+	// SetServingType's async Broadcast trigger. Drain it so the assertions
+	// below only inspect states produced by our explicit Broadcast calls.
+	<-ch
 
 	// Send a broadcast message and check we have no error there.
 	sm.Broadcast()
@@ -688,9 +696,6 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	// Verify that we can't start a new request once we have a demote primary stalled.
 	err = sm.StartRequest(context.Background(), &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, false)
 	require.ErrorContains(t, err, "operation not allowed in state NOT_SERVING")
-
-	// Stop the state manager.
-	sm.StopService()
 }
 
 func TestRefreshReplHealthLocked(t *testing.T) {
