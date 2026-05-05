@@ -308,7 +308,9 @@ func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
 }
 
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
-	tablets, err := ts.GetTabletsByShard(ctx, keyspace, shard)
+	refreshCtx, refreshCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer refreshCancel()
+	tablets, err := ts.GetTabletsByShard(refreshCtx, keyspace, shard)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err))
 		return
