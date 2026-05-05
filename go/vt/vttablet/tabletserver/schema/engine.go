@@ -958,7 +958,7 @@ func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *conn
 		se.surfacedFreeSpaceTables = nil
 		return
 	}
-	result, err := conn.Exec(ctx, fmt.Sprintf(userTableFreeSpaceQueryFormat, percentThreshold), maxTableCount, false)
+	result, err := conn.Exec(ctx, fmt.Sprintf(userTableFreeSpaceQueryFormat, percentThreshold), maxTableCountSetting.Get(), false)
 	if err != nil {
 		se.throttledLogger.Warningf("schema engine: reading user table DATA_FREE failed: %v", err)
 		return
