@@ -52,7 +52,9 @@ func TestCreateViewDDL(t *testing.T) {
 			}
 			return nil
 		})
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	defer func() {
@@ -108,7 +110,9 @@ func TestAlterViewDDL(t *testing.T) {
 			}
 			return nil
 		})
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	defer func() {

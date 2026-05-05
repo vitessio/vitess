@@ -638,7 +638,9 @@ func TestTransactionWatcherSignal(t *testing.T) {
 			}
 			return nil
 		})
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	err = client.CreateTransaction("aa", []*querypb.Target{

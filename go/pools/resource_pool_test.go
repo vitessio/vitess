@@ -98,15 +98,17 @@ func TestOpen(t *testing.T) {
 	// Test that Get waits
 	ch := make(chan bool)
 	go func() {
+		defer func() { ch <- true }()
 		for i := range 5 {
 			r, err = p.Get(ctx)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			resources[i] = r
 		}
 		for i := range 5 {
 			p.Put(resources[i])
 		}
-		ch <- true
 	}()
 	for i := range 5 {
 		// Sleep to ensure the goroutine waits
@@ -224,10 +226,12 @@ func TestShrinking(t *testing.T) {
 	}
 	// This will wait because pool is empty
 	go func() {
+		defer func() { done <- true }()
 		r, err := p.Get(ctx)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		p.Put(r)
-		done <- true
 	}()
 
 	// This will also wait
@@ -259,10 +263,12 @@ func TestShrinking(t *testing.T) {
 	}
 	// This will wait because pool is empty
 	go func() {
+		defer func() { done <- true }()
 		r, err := p.Get(ctx)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		p.Put(r)
-		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
 

@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -226,7 +227,7 @@ func runQueryInGoRoutineAndCheckError(t *testing.T, conn *mysql.Conn, killConn *
 				return
 			}
 		}
-		require.Failf(t, "error message does not match", "%v does not contain any of %v", err.Error(), errMsgs)
+		assert.Failf(t, "error message does not match", "%v does not contain any of %v", err.Error(), errMsgs)
 		done <- true
 	}()
 

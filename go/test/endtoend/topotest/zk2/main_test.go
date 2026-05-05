@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -125,7 +126,9 @@ func TestNamedLocking(t *testing.T) {
 	go func() {
 		_, unlock, err := ts.LockName(t.Context(), lockName, action)
 		defer unlock(&err)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		secondCallerAcquired = true
 	}()
 
@@ -187,7 +190,9 @@ func TestShardLocking(t *testing.T) {
 	go func() {
 		_, unlock, err := ts.LockShard(t.Context(), KeyspaceName, "0", "TestShardLocking")
 		defer unlock(&err)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		secondThreadLockAcquired = true
 	}()
 
@@ -226,7 +231,9 @@ func TestKeyspaceLocking(t *testing.T) {
 	go func() {
 		_, unlock, err := ts.LockKeyspace(t.Context(), KeyspaceName, "TestKeyspaceLocking")
 		defer unlock(&err)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		secondThreadLockAcquired = true
 	}()
 

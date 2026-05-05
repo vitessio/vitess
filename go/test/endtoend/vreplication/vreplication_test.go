@@ -751,15 +751,22 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 	}
 	ch := make(chan bool, 1)
 	go func() {
+		defer func() { ch <- true }()
 		streamConn, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer streamConn.Close()
 		_, err = streamConn.ExecuteFetch("set workload='olap'", 1000, false)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		query := "vstream * from " + table
 		err = streamConn.ExecuteStreamFetch(query)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		wantFields := []*querypb.Field{{
 			Name: "op",
@@ -778,7 +785,9 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 			Type: sqltypes.Datetime,
 		}}
 		gotFields, err := streamConn.Fields()
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		for i, field := range gotFields {
 			gotFields[i] = &querypb.Field{
 				Name: field.Name,
@@ -788,14 +797,16 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 		utils.MustMatch(t, wantFields, gotFields)
 
 		gotRows, err := streamConn.FetchNext(nil)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		log.Info(fmt.Sprintf("QR1:%v\n", gotRows))
 
 		gotRows, err = streamConn.FetchNext(nil)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		log.Info(fmt.Sprintf("QR2:%+v\n", gotRows))
-
-		ch <- true
 	}()
 
 	select {

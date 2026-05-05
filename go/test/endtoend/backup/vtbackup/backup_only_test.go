@@ -74,9 +74,13 @@ func TestFailingReplication(t *testing.T) {
 	go func() {
 		<-time.After(30 * time.Second)
 		_, err = primary.VttabletProcess.QueryTablet("GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';", keyspaceName, true)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	startTime := time.Now()

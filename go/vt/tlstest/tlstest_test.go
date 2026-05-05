@@ -28,9 +28,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/vt/vttls"
 )

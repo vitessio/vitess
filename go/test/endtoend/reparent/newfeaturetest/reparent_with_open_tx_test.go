@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -40,10 +41,14 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 	createTxAndInsertRows(conn, t, &idx)
 
 	go func() {
+		defer func() {
+			commitDone <- true
+		}()
 		<-tabletStopped
 		_, err := conn.ExecuteFetch("commit", 0, false)
-		require.ErrorContains(t, err, "VT15001")
-		commitDone <- true
+		if !assert.ErrorContains(t, err, "VT15001") {
+			return
+		}
 	}()
 
 	reparent(t, clusterInstance, tablets, tabletStopped, commitDone)
@@ -62,18 +67,26 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 	createTxAndInsertRows(conn, t, &idx)
 
 	go func() {
+		defer func() {
+			executeDone <- true
+		}()
 		idx += 5
 		<-tabletStopped
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
-		require.ErrorContains(t, err, "VT15001")
+		if !assert.ErrorContains(t, err, "VT15001") {
+			return
+		}
 
 		// Subsequent queries after a VT15001 should start returning a VT09032 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
-		require.ErrorContains(t, err, "VT09032")
+		if !assert.ErrorContains(t, err, "VT09032") {
+			return
+		}
 
 		_, err = conn.ExecuteFetch("rollback", 0, false)
-		require.NoError(t, err)
-		executeDone <- true
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	reparent(t, clusterInstance, tablets, tabletStopped, executeDone)
@@ -91,19 +104,29 @@ func testExecuteErrorWhileTabletIsNotServing(t *testing.T, conn *mysql.Conn, clu
 	createTxAndInsertRows(conn, t, &idx)
 
 	go func() {
+		defer func() {
+			executeDone <- true
+		}()
 		idx += 5
 		<-tabletNotServing
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
-		require.ErrorContains(t, err, "VT15001")
-		require.ErrorContains(t, err, vterrors.WrongTablet)
+		if !assert.ErrorContains(t, err, "VT15001") {
+			return
+		}
+		if !assert.ErrorContains(t, err, vterrors.WrongTablet) {
+			return
+		}
 
 		// Subsequent queries after a VT15001 should start returning a VT09032 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
-		require.ErrorContains(t, err, "VT09032")
+		if !assert.ErrorContains(t, err, "VT09032") {
+			return
+		}
 
 		_, err = conn.ExecuteFetch("rollback", 0, false)
-		require.NoError(t, err)
-		executeDone <- true
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	makeTabletNotServing(t, clusterInstance, tablets, tabletNotServing, executeDone)

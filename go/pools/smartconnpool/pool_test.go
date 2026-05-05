@@ -155,19 +155,21 @@ func TestOpen(t *testing.T) {
 	// Test that Get waits
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		for i := range 5 {
 			if i%2 == 0 {
 				r, err = p.Get(ctx, nil)
 			} else {
 				r, err = p.Get(ctx, sFoo)
 			}
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			resources[i] = r
 		}
 		for i := range 5 {
 			p.put(resources[i])
 		}
-		close(done)
 	}()
 	for i := range 5 {
 		// block until we have a client wait for a connection, then offer it
@@ -269,10 +271,11 @@ func TestShrinking(t *testing.T) {
 	}
 	done := make(chan bool)
 	go func() {
+		defer func() { done <- true }()
 		err := p.SetCapacity(ctx, 3)
-		require.NoError(t, err)
-
-		done <- true
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 	expected := map[string]any{
 		"Capacity":          3,
@@ -333,17 +336,21 @@ func TestShrinking(t *testing.T) {
 	}
 	// This will wait because pool is empty
 	go func() {
+		defer func() { done <- true }()
 		r, err := p.Get(ctx, nil)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		p.put(r)
-		done <- true
 	}()
 
 	// This will also wait
 	go func() {
+		defer func() { done <- true }()
 		err := p.SetCapacity(ctx, 2)
-		require.NoError(t, err)
-		done <- true
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 	time.Sleep(10 * time.Millisecond)
 
@@ -375,22 +382,28 @@ func TestShrinking(t *testing.T) {
 	}
 	// This will wait because pool is empty
 	go func() {
+		defer func() { done <- true }()
 		r, err := p.Get(ctx, nil)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		p.put(r)
-		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
 
 	// This will wait till we Put
 	go func() {
 		err := p.SetCapacity(ctx, 2)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 	time.Sleep(10 * time.Millisecond)
 	go func() {
 		err := p.SetCapacity(ctx, 4)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 	time.Sleep(10 * time.Millisecond)
 
@@ -1026,15 +1039,17 @@ func TestMultiSettings(t *testing.T) {
 	// Test that Get waits
 	ch := make(chan bool)
 	go func() {
+		defer func() { ch <- true }()
 		for i := range 5 {
 			r, err = p.Get(ctx, settings[i])
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			resources[i] = r
 		}
 		for i := range 5 {
 			p.put(resources[i])
 		}
-		ch <- true
 	}()
 	for i := range 5 {
 		// Sleep to ensure the goroutine waits

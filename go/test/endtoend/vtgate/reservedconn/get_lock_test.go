@@ -119,7 +119,9 @@ func TestLocksBlockEachOther(t *testing.T) {
 
 	go func() {
 		conn2, err := mysql.Connect(t.Context(), &vtParams)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer conn2.Close()
 
 		// in the second connection, we try to grab a lock, and should get blocked
@@ -149,7 +151,9 @@ func TestLocksBlocksWithTx(t *testing.T) {
 
 	go func() {
 		conn2, err := mysql.Connect(t.Context(), &vtParams)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer conn2.Close()
 
 		// in the second connection, we try to grab a lock, and should get blocked

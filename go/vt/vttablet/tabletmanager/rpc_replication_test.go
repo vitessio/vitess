@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/semaphore"
 
@@ -175,7 +176,9 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 	var demotePrimaryFinished atomic.Bool
 	go func() {
 		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		demotePrimaryFinished.Store(true)
 	}()
 
@@ -246,7 +249,9 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 	var demotePrimaryFinished atomic.Bool
 	go func() {
 		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		demotePrimaryFinished.Store(true)
 	}()
 
@@ -304,7 +309,9 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	var demotePrimaryFinished atomic.Bool
 	go func() {
 		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		demotePrimaryFinished.Store(true)
 	}()
 

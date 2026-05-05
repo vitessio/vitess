@@ -1219,21 +1219,35 @@ func startGoRoutine(ctx context.Context, t *testing.T, s string) {
 		mockData := preparePacket(t, sql)
 
 		err := cConn.writePacket(mockData)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		handler := &testRun{paramCounts: 1}
 
 		ok := sConn.handleNextCommand(handler)
-		require.True(t, ok, "error handling command for id: %s", s)
+		if !assert.True(t, ok, "error handling command for id: %s", s) {
+			return
+		}
 
 		prepareData, ok := sConn.PrepareData[sConn.StatementID]
-		require.True(t, ok, "prepare data not found for id: %d", sConn.StatementID)
-		require.Equal(t, uint16(1), prepareData.ParamsCount)
-		require.NotNil(t, prepareData.BindVars)
+		if !assert.True(t, ok, "prepare data not found for id: %d", sConn.StatementID) {
+			return
+		}
+		if !assert.Equal(t, uint16(1), prepareData.ParamsCount) {
+			return
+		}
+		if !assert.NotNil(t, prepareData.BindVars) {
+			return
+		}
 
 		resp, err := cConn.ReadPacket()
-		require.NoError(t, err)
-		require.EqualValues(t, 0, resp[0])
+		if !assert.NoError(t, err) {
+			return
+		}
+		if !assert.EqualValues(t, 0, resp[0]) {
+			return
+		}
 
 		for count := 0; ; count++ {
 			select {

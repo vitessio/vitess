@@ -220,7 +220,9 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 			}
 			defer conn.Close()
 			_, err = conn.ExecuteFetch(utils.GetInsertQuery(i), 0, false)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 		}(i)
 	}
 

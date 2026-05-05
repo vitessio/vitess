@@ -532,7 +532,9 @@ func TestPlanCachePollution(t *testing.T) {
 		cacheMode := "lfu"
 
 		out, err := os.Create(path.Join(plotPath, fmt.Sprintf("cache_plot_%d_%s.dat", cfg.QueryCacheMemory, cacheMode)))
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer out.Close()
 
 		var last1 uint64

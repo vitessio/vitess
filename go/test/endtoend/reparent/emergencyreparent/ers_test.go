@@ -222,7 +222,7 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 
 		// Run forced reparent operation, this should now proceed unimpeded.
 		out, err := utils.Ers(clusterInstance, tablets[1], "15s", waitReplicasTimeout.String())
-		require.NoError(t, err, out)
+		assert.NoError(t, err, out)
 	}()
 
 	wg.Wait()
@@ -612,7 +612,7 @@ func TestERSFailFast(t *testing.T) {
 	go func() {
 		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
 		out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
-		require.Error(t, err)
+		assert.Error(t, err)
 		select {
 		case strChan <- out:
 			return

@@ -58,6 +58,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
@@ -489,7 +490,9 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 			}
 			return nil
 		}, nil)
-		require.Nil(t, err)
+		if !assert.Nil(t, err) {
+			return
+		}
 	}()
 }
 

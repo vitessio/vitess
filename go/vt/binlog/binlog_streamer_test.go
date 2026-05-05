@@ -320,7 +320,8 @@ func TestStreamerParseEventsGTIDPurged(t *testing.T) {
 		select {
 		case errs <- expectedStreamErr:
 		case <-tmr.C:
-			require.FailNow(t, "timed out sending error message")
+			assert.Fail(t, "timed out sending error message")
+			return
 		}
 	}()
 

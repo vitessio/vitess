@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -54,7 +55,9 @@ func TestCommitPreparedFailNonRetryable(t *testing.T) {
 	go func() {
 		err := client.CommitPrepared("bb")
 		ch <- nil
-		require.ErrorContains(t, err, "commit_prepared")
+		if !assert.ErrorContains(t, err, "commit_prepared") {
+			return
+		}
 	}()
 	time.Sleep(1500 * time.Millisecond)
 
@@ -87,7 +90,9 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	go func() {
 		err := client.CommitPrepared("aa")
 		ch <- nil
-		require.ErrorContains(t, err, "commit_prepared")
+		if !assert.ErrorContains(t, err, "commit_prepared") {
+			return
+		}
 	}()
 	time.Sleep(100 * time.Millisecond)
 

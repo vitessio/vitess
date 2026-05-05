@@ -2408,10 +2408,12 @@ func TestFullyThrottledTimeout(t *testing.T) {
 	defer waitTimer.Stop()
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
 		wg.Wait()
-		require.Zero(t, len(evs))
-		close(done)
+		if !assert.Zero(t, len(evs)) {
+			return
+		}
 	}()
 
 	select {

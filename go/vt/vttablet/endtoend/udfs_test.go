@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -57,7 +58,9 @@ func TestUDFs(t *testing.T) {
 			}
 			return nil
 		})
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	// create a user defined function directly on mysql as it is not supported by vitess parser.

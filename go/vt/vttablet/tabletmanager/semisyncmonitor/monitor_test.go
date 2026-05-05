@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -1134,9 +1135,11 @@ func TestSemiSyncMonitor(t *testing.T) {
 	// Start a waiter.
 	var waitFinished atomic.Bool
 	go func() {
+		defer waitFinished.Store(true)
 		err := m.WaitUntilSemiSyncUnblocked(t.Context())
-		require.NoError(t, err)
-		waitFinished.Store(true)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	// Now unblock and verify the wait completes.

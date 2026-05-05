@@ -356,7 +356,9 @@ func TestFlushLock(t *testing.T) {
 	go func() {
 		ctx := t.Context()
 		conn2, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer conn2.Close()
 
 		cnt.Add(1)
