@@ -1277,6 +1277,33 @@ func testScheduler(t *testing.T) {
 	})
 	onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
 
+	t.Run("ALTER both tables, cross-context concurrent in copy state", func(t *testing.T) {
+		// Regression test for: a running ALTER in copy state should not block a proposed ALTER from a
+		// different migration context. Previously the copy-state conflict check was global; now it is
+		// scoped to the same context, so t2 (ctx-b) must start while t1 (ctx-a) is still copying.
+		onlineddl.ThrottleAllMigrations(t, &vtParams)
+		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
+
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-scheduler-crossctx-a", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		// t1 is now running in copy state (throttled). A migration in a different context must not be blocked.
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-scheduler-crossctx-b", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		time.Sleep(ensureStateNotChangedTime)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
+
+		onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCompleteMigration(t, &vtParams, shards, t2uuid, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
+	})
+	onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
+
 	t.Run("REVERT both tables concurrent, postponed", func(t *testing.T) {
 		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", true))
 		t2uuid = testRevertMigration(t, createRevertParams(t2uuid, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", true))
