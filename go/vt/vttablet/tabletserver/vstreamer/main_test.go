@@ -345,13 +345,17 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 
 func execStatement(t *testing.T, query string) {
 	t.Helper()
-	if err := env.Mysqld.ExecuteSuperQuery(t.Context(), query); err != nil {
+	// Use context.Background() because this helper is called from t.Cleanup,
+	// where t.Context() has already been cancelled.
+	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func execStatements(t *testing.T, queries []string) {
-	if err := env.Mysqld.ExecuteSuperQueryList(t.Context(), queries); err != nil {
+	// Use context.Background() because this helper is called from t.Cleanup,
+	// where t.Context() has already been cancelled.
+	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
 		t.Fatal(err)
 	}
 }
