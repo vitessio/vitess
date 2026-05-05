@@ -123,16 +123,19 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 5
         uses: ./.github/actions/tune-os
 
       - name: Setup MySQL
         if: steps.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 8
         uses: ./.github/actions/setup-mysql
         with:
           flavor: ${{ matrix.flavor }}
 
       - name: Get dependencies
         if: steps.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 5
         run: |
           export DEBIAN_FRONTEND="noninteractive"
           sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
@@ -142,6 +145,7 @@ jobs:
 
       - name: Run make tools
         if: steps.changes.outputs.unit_tests == 'true'
+        timeout-minutes: 10
         run: |
           make BUILD_JAVA=${{ matrix.java && '1' || '0' }} BUILD_PROTOC=0 tools
 

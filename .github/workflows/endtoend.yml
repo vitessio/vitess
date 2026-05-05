@@ -59,16 +59,19 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 8
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.0
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
@@ -79,11 +82,13 @@ jobs:
 
     - name: Run make minimaltools
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         make minimaltools
 
     - name: Build
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
       run: |
         NOVTADMINBUILD=1 make build
 

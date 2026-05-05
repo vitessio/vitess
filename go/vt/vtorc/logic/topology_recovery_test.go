@@ -31,6 +31,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -496,6 +498,60 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			wantErr: "aborting ReplicationStopped, primary mitigation is required",
 		},
 		{
+			// PrimarySemiSyncBlocked on the primary, acker replica has
+			// ReplicationStopped. GetDetectionAnalysis preserves the
+			// acker's analysis (via declaresBefore), so checkIfAlreadyFixed
+			// finds it and returns alreadyFixed=false → proceed.
+			name: "acker ReplicationStopped preserved despite shard-wide PrimarySemiSyncBlocked",
+			info: []*test.InfoForRecoveryAnalysis{
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_PRIMARY,
+						MysqlHostname: "localhost",
+						MysqlPort:     6708,
+					},
+					DurabilityPolicy:                   policy.DurabilitySemiSync,
+					LastCheckValid:                     1,
+					CountReplicas:                      1,
+					CountValidReplicas:                 1,
+					CountValidReplicatingReplicas:      0,
+					CountValidOracleGTIDReplicas:       1,
+					CountLoggingReplicas:               1,
+					IsPrimary:                          1,
+					CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
+					SemiSyncPrimaryEnabled:             1,
+					SemiSyncPrimaryStatus:              1,
+					SemiSyncBlocked:                    1,
+					SemiSyncPrimaryWaitForReplicaCount: 1,
+					SemiSyncPrimaryClients:             0,
+					CountSemiSyncReplicasEnabled:       1,
+				},
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_REPLICA,
+						MysqlHostname: "localhost",
+						MysqlPort:     6709,
+					},
+					DurabilityPolicy: policy.DurabilitySemiSync,
+					PrimaryTabletInfo: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					},
+					LastCheckValid:         1,
+					ReadOnly:               1,
+					ReplicationStopped:     1,
+					SemiSyncReplicaEnabled: 1,
+				},
+			},
+		},
+		{
 			name: "analysis did not change",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
@@ -570,11 +626,57 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 	}
 }
 
+func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
+	primaryAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	tests := []struct {
+		name        string
+		analysis    inst.AnalysisCode
+		wantIgnored bool
+	}{
+		{
+			name:        "DeadPrimary skips primary refresh",
+			analysis:    inst.DeadPrimary,
+			wantIgnored: true,
+		},
+		{
+			name:        "DeadPrimaryAndSomeReplicas skips primary refresh",
+			analysis:    inst.DeadPrimaryAndSomeReplicas,
+			wantIgnored: true,
+		},
+		{
+			name:        "PrimarySemiSyncBlocked does NOT skip primary refresh",
+			analysis:    inst.PrimarySemiSyncBlocked,
+			wantIgnored: false,
+		},
+		{
+			name:        "PrimaryDiskStalled does NOT skip primary refresh",
+			analysis:    inst.PrimaryDiskStalled,
+			wantIgnored: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := &inst.DetectionAnalysis{
+				Analysis:              tt.analysis,
+				AnalyzedInstanceAlias: primaryAlias,
+			}
+			ignored := shardWideRecoveryIgnoredTablets(recoverDeadPrimaryFunc, entry)
+			if tt.wantIgnored {
+				require.Len(t, ignored, 1)
+				assert.True(t, topoproto.TabletAliasEqual(ignored[0], primaryAlias))
+			} else {
+				assert.Empty(t, ignored)
+			}
+		})
+	}
+}
+
 func TestRecoverShardAnalyses(t *testing.T) {
 	// DeadPrimary and PrimaryHasPrimary have detectionAnalysisPriorityShardWideAction,
-	// so they require ordered execution. ReplicationStopped and ReplicaIsWritable are
-	// medium priority with no shard-wide action or before/after dependencies,
-	// so they run concurrently.
+	// so they require ordered execution. ReplicationStopped requires ordered execution
+	// because it declares BeforeAnalyses: [PrimarySemiSyncBlocked]. ReplicaIsWritable
+	// has no dependencies, so it runs concurrently.
 	analyses := []*inst.DetectionAnalysis{
 		{Analysis: inst.ReplicationStopped, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}},
 		{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 2}},
@@ -595,10 +697,11 @@ func TestRecoverShardAnalyses(t *testing.T) {
 
 	require.Len(t, order, 4)
 	// Ordered recoveries must come first, in their original order.
-	require.Equal(t, inst.DeadPrimary, order[0])
-	require.Equal(t, inst.PrimaryHasPrimary, order[1])
-	// Concurrent recoveries come after, in any order.
-	require.ElementsMatch(t, []inst.AnalysisCode{inst.ReplicationStopped, inst.ReplicaIsWritable}, order[2:])
+	require.Equal(t, inst.ReplicationStopped, order[0])
+	require.Equal(t, inst.DeadPrimary, order[1])
+	require.Equal(t, inst.PrimaryHasPrimary, order[2])
+	// Concurrent recoveries come after.
+	require.Equal(t, inst.ReplicaIsWritable, order[3])
 }
 
 func TestRecoverIncapacitatedPrimary(t *testing.T) {

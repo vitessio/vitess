@@ -50,6 +50,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.vtadmin_changes == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Set up Go
@@ -61,6 +62,7 @@ jobs:
 
     - name: Get dependencies
       if: steps.changes.outputs.vtadmin_changes == 'true'
+      timeout-minutes: 5
       run: |
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
@@ -70,6 +72,7 @@ jobs:
 
     - name: Run make minimaltools
       if: steps.changes.outputs.vtadmin_changes == 'true'
+      timeout-minutes: 5
       run: |
         make minimaltools
 

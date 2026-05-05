@@ -27,8 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	vtutils "vitess.io/vitess/go/vt/utils"
-
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -52,31 +50,24 @@ type VtctldProcess struct {
 
 // Setup starts vtctld process with required arguements
 func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
-	vtctldVer, err := GetMajorVersion(vtctld.Binary)
-	if err != nil {
-		return err
-	}
 	_ = createDirectory(vtctld.LogDir, 0o700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--topo_implementation", vtctld.TopoImplementation,
-		"--topo_global_server_address", vtctld.TopoGlobalAddress,
-		"--topo_global_root", vtctld.TopoGlobalRoot,
+		"--topo-implementation", vtctld.TopoImplementation,
+		"--topo-global-server-address", vtctld.TopoGlobalAddress,
+		"--topo-global-root", vtctld.TopoGlobalRoot,
 		"--cell", cell,
-		"--service_map", vtctld.ServiceMap,
-		"--backup_storage_implementation", vtctld.BackupStorageImplementation,
-		vtutils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtctldVer), vtctld.FileBackupStorageRoot,
+		"--service-map", vtctld.ServiceMap,
+		"--backup-storage-implementation", vtctld.BackupStorageImplementation,
+		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,
 		"--port", strconv.Itoa(vtctld.Port),
-		"--grpc_port", strconv.Itoa(vtctld.GrpcPort),
+		"--grpc-port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
-		"--grpc_bind_address", "127.0.0.1",
+		"--grpc-bind-address", "127.0.0.1",
 	)
 
-	if vtctldVer >= 24 {
-		vtctld.proc.Args = append(vtctld.proc.Args, "--log-format", "text")
-	}
+	vtctld.proc.Args = append(vtctld.proc.Args, "--log-format", "text")
 
 	if *isCoverage {
 		vtctld.proc.Args = append(vtctld.proc.Args, "--test.coverprofile="+getCoveragePath("vtctld.out"))

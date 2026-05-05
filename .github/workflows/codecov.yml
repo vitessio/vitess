@@ -82,9 +82,15 @@ jobs:
 
         PACKAGE_DIRS=$(echo "$CHANGED_GO_FILES" | xargs -n1 dirname | sort -u)
 
-        # Validate as Go packages and exclude endtoend tests
+        # Validate as Go packages and exclude endtoend tests. Only consider
+        # paths under go/; anything else (e.g. ".", "changelog", ".github")
+        # would expand to ./.../... and pull in the full endtoend suite.
         PACKAGES=""
         for dir in $PACKAGE_DIRS; do
+          case "$dir" in
+            go/*) ;;
+            *) continue ;;
+          esac
           case "$dir" in
             */endtoend*|go/cmd/vttestserver*) continue ;;
           esac
@@ -105,16 +111,19 @@ jobs:
 
     - name: Tune the OS
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 8
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 5
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -126,6 +135,7 @@ jobs:
 
     - name: Run make tools
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 10
       run: |
         make BUILD_JAVA=0 BUILD_PROTOC=0 tools
 
