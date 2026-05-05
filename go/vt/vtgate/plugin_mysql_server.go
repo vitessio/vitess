@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -37,7 +38,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -87,16 +87,6 @@ var (
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
-
-	// binlogDumpRequests tracks binlog dump request counts by status
-	binlogDumpRequests = stats.NewCountersWithSingleLabel(
-		"VtgateBinlogDumpRequests",
-		"Vtgate binlog dump request counts",
-		"status",
-		"authorized", // successfully authorized requests
-		"denied",     // denied due to user ACL
-		"disabled",   // denied because feature is disabled
-	)
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -197,7 +187,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 // Regexp to extract parent span id over the sql query
-var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*)\*/`)
+var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*?)\*/`)
 
 // this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
 func startSpanTestable(ctx context.Context, query, label string,
@@ -229,6 +219,50 @@ func getSpan(ctx context.Context, match []string, newSpan func(context.Context, 
 
 func startSpan(ctx context.Context, query, label string) (trace.Span, context.Context, error) {
 	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
+}
+
+// extractSpanContext extracts the VT_SPAN_CONTEXT value from a query's leading comments.
+// Returns empty string if no span context is found.
+func extractSpanContext(query string) string {
+	_, comments := sqlparser.SplitMarginComments(query)
+	match := r.FindStringSubmatch(comments.Leading)
+	if len(match) != 0 {
+		return match[1]
+	}
+	return ""
+}
+
+// startSpanFromPrepareTestable creates a span for a prepared statement execution,
+// caching the extracted VT_SPAN_CONTEXT on the PrepareData to avoid re-parsing
+// the SQL comments on every execution.
+func startSpanFromPrepareTestable(ctx context.Context, prepare *mysql.PrepareData, label string,
+	newSpan func(context.Context, string) (trace.Span, context.Context),
+	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error),
+) (trace.Span, context.Context, error) {
+	if prepare.SpanContext == nil {
+		sc := extractSpanContext(prepare.PrepareStmt)
+		prepare.SpanContext = &sc
+	}
+
+	var span trace.Span
+	if *prepare.SpanContext != "" {
+		var err error
+		span, ctx, err = newSpanFromString(ctx, *prepare.SpanContext, label)
+		if err == nil {
+			trace.AnnotateSQL(span, sqlparser.Preview(prepare.PrepareStmt))
+			return span, ctx, nil
+		}
+		log.Warn("Unable to parse VT_SPAN_CONTEXT", slog.Any("error", err))
+		// Clear the cached value so subsequent executions skip the parse attempt.
+		*prepare.SpanContext = ""
+	}
+	span, ctx = newSpan(ctx, label)
+	trace.AnnotateSQL(span, sqlparser.Preview(prepare.PrepareStmt))
+	return span, ctx, nil
+}
+
+func startSpanFromPrepare(ctx context.Context, prepare *mysql.PrepareData, label string) (trace.Span, context.Context, error) {
+	return startSpanFromPrepareTestable(ctx, prepare, label, trace.NewSpan, trace.NewFromString)
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -440,6 +474,12 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		defer cancel()
 	}
 
+	span, ctx, err := startSpanFromPrepare(ctx, prepare, "vtgateHandler.ComStmtExecute")
+	if err != nil {
+		return vterrors.Wrap(err, "failed to extract span")
+	}
+	defer span.Finish()
+
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
 	// Fill in the ImmediateCallerID with the UserData returned by
@@ -590,20 +630,25 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog dump requires keyspace and shard (e.g., 'commerce:0', 'commerce:0@primary', 'commerce:0@primary|zone1-100'): %s", targetString)
 	}
 
-	// File/position-based resumption is only valid when targeting a specific
-	// tablet. When routing via health check, vtgate may pick a different
-	// replica each time, and binlog filenames/positions differ across replicas.
-	// GTIDs are consistent across replicas and can always be used.
-	hasFilePosition := logFile != "" || logPos > 4
-	if hasFilePosition && tabletAlias == nil {
+	// File/position-based replication is not supported through vtgate.
+	// Binlog filenames and positions are local to individual MySQL instances and
+	// differ across replicas, making them unsuitable for vtgate's routing model.
+	// Use GTIDs for all binlog dump operations.
+	if logFile != "" {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"binlog filename/position can only be used with tablet targeting (e.g., 'commerce:0@primary|zone1-100'); "+
-				"use GTIDs for shard-level targeting, as binlog positions differ across replicas")
+			"binlog filename is not supported; use GTIDs instead")
+	}
+	if logPos < 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"Client requested source to start replication from position < 4")
+	}
+	if logPos > 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"only binlog position 4 is supported; use GTIDs for positioning")
 	}
 
 	// Build the BinlogDumpGTID request
 	request := &binlogdatapb.BinlogDumpGTIDRequest{
-		BinlogFilename: logFile,
 		BinlogPosition: logPos,
 		Flags:          uint32(flags),
 		Target:         target,

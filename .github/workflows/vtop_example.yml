@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
         with:
           egress-policy: audit
 
@@ -67,16 +67,19 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 5
         uses: ./.github/actions/tune-os
 
       - name: Setup MySQL
         if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 8
         uses: ./.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 
       - name: Get dependencies
         if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 5
         run: |
           # Install everything we need, and configure
           sudo apt-get install -y make
@@ -85,11 +88,13 @@ jobs:
       # needed for vtctldclient
       - name: Build vitess
         if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 10
         run: |
           make build
 
       - name: Install kubectl & kind
         if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 5
         run: |
           make install_kubectl_kind
 

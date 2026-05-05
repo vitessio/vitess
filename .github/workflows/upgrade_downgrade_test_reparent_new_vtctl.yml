@@ -26,7 +26,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+      uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
       with:
         egress-policy: audit
 
@@ -74,6 +74,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Set up python
@@ -82,6 +83,7 @@ jobs:
 
     - name: Setup MySQL
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 8
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
@@ -114,6 +116,7 @@ jobs:
 
     - name: Get dependencies for the next release
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         go mod download
 
@@ -143,6 +146,7 @@ jobs:
 
     - name: Get dependencies for this commit
       if: steps.output-next-release-ref.outputs.next_release_ref != '' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         go mod download
 

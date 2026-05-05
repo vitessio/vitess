@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+      uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
       with:
         egress-policy: audit
 
@@ -50,6 +50,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.vtadmin_changes == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Set up Go
@@ -61,6 +62,7 @@ jobs:
 
     - name: Get dependencies
       if: steps.changes.outputs.vtadmin_changes == 'true'
+      timeout-minutes: 5
       run: |
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
@@ -70,6 +72,7 @@ jobs:
 
     - name: Run make minimaltools
       if: steps.changes.outputs.vtadmin_changes == 'true'
+      timeout-minutes: 5
       run: |
         make minimaltools
 

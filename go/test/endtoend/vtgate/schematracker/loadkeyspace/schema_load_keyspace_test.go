@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -86,7 +85,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 	}
 
 	// Start vtgate with the schema-change-signal flag
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, vtutils.GetFlagVariantForTests("--schema-change-signal"))
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--schema-change-signal")
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 

@@ -35,6 +35,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
@@ -3283,4 +3284,83 @@ func TestConsistentLookupInsert(t *testing.T) {
 		testQueryLog(t, executor, logChan, "VindexCreate", "INSERT", "insert into t1_lkp_idx(unq_col, keyspace_id) values (:unq_col, :keyspace_id)", 1)
 		testQueryLog(t, executor, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 10), (4, 10)", 0)
 	})
+}
+
+func TestRoutingIndexesUsed(t *testing.T) {
+	executor, sbc1, _, sbclookup, ctx := createExecutorEnv(t)
+
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	session := &vtgatepb.Session{
+		TargetString: "@primary",
+	}
+	wantUser := [][3]string{{"TestExecutor", "hash_index", "EqualUnique"}}
+
+	// SELECT routed by primary vindex
+	_, err := executorExec(ctx, executor, session, "select id from user where id = 1", nil)
+	require.NoError(t, err)
+	ls := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user` where id = 1", 1)
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "SELECT routing indexes")
+
+	sbc1.Queries = nil
+
+	// UPDATE routed by primary vindex
+	_, err = executorExec(ctx, executor, session, "update user set a = 2 where id = 1", nil)
+	require.NoError(t, err)
+	ls = testQueryLog(t, executor, logChan, "TestExecute", "UPDATE", "update `user` set a = 2 where id = 1", 1)
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "UPDATE routing indexes")
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+
+	// DELETE routed by primary vindex
+	// Use user_extra which has no owned vindexes, avoiding extra VindexDelete log entries.
+	_, err = executorExec(ctx, executor, session, "delete from user_extra where user_id = 1", nil)
+	require.NoError(t, err)
+	ls = testQueryLog(t, executor, logChan, "TestExecute", "DELETE", "delete from user_extra where user_id = 1", 1)
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "DELETE routing indexes")
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+
+	// INSERT routed by primary vindex
+	_, err = executorExec(ctx, executor, session, "insert into user(id, v, name) values (1, 2, 'myname')", nil)
+	require.NoError(t, err)
+	ls = getMatchingQueryLog(logChan, "TestExecute", "INSERT", "")
+	require.NotNil(t, ls)
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "INSERT routing indexes")
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+
+	// INSERT ... SELECT routed by primary vindex
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("1|2|myname", "int64|int64|varchar"), "1|2|myname")})
+	session2 := econtext.NewAutocommitSession(&vtgatepb.Session{})
+	_, err = executorExecSession(ctx, executor, session2, "insert into user(id, v, name) select 1, 2, 'myname' from dual", nil)
+	require.NoError(t, err)
+	ls = getMatchingQueryLog(logChan, "TestExecute", "INSERT", "")
+	require.NotNil(t, ls)
+	assert.Equal(t, wantUser, ls.RoutingIndexesUsed, "INSERT SELECT routing indexes")
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+
+	// SELECT routed via lookup vindex; music_user_map is a lookup_hash_unique on music.id
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("music_id|user_id", "int64|int64"), "1|1")})
+	_, err = executorExec(ctx, executor, session, "select user_id from music where id = 1", nil)
+	require.NoError(t, err)
+	ls = getMatchingQueryLog(logChan, "TestExecute", "SELECT", "music")
+	require.NotNil(t, ls)
+	wantMusic := [][3]string{{"TestExecutor", "music_user_map", "EqualUnique"}}
+	assert.Equal(t, wantMusic, ls.RoutingIndexesUsed, "lookup-vindex SELECT routing indexes")
+}
+
+func getMatchingQueryLog(logChan chan *logstats.LogStats, method, stmtType, substr string) *logstats.LogStats {
+	for {
+		ls := getQueryLog(logChan)
+		if ls == nil || (ls.Method == method && ls.StmtType == stmtType && (substr == "" || strings.Contains(ls.SQL, substr))) {
+			return ls
+		}
+	}
 }

@@ -665,28 +665,39 @@ func TestMonitorWriteBlocked(t *testing.T) {
 	m.mu.Unlock()
 
 	// ExecuteFetchMulti will execute each statement separately, so we need to add SET query and INSERT query.
-	// Add them multiple times so the writes can execute.
-	for range maxWritesPermitted {
-		db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
-		db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
-	}
+	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
+	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
+	// Block the INSERT so we have a deterministic window in which write() is in
+	// progress; otherwise the goroutine can complete before the assertion below
+	// observes inProgressWriteCount > 0 on a busy CI runner. release() is
+	// idempotent and registered with t.Cleanup so a require.* failure can't
+	// leave the INSERT goroutine wedged inside BeforeFunc and deadlock
+	// db.Close() during teardown.
+	unblock := make(chan struct{})
+	var unblockOnce sync.Once
+	release := func() { unblockOnce.Do(func() { close(unblock) }) }
+	t.Cleanup(release)
+	db.SetBeforeFunc("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", func() {
+		<-unblock
+	})
 
-	// Do a write, which we expect to block.
+	// Do a write, which we expect to block on the INSERT.
 	var writeFinished atomic.Bool
 	go func() {
 		m.write()
 		writeFinished.Store(true)
 	}()
 
-	// We should see the number of writers increase briefly, before it completes.
+	// We should see the number of writers increase while the INSERT is blocked.
 	require.Zero(t, m.errorCount.Get())
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount > 0
-	}, 15*time.Second, 1*time.Microsecond)
+	}, 15*time.Second, time.Millisecond)
 
-	// Check that the writes finished successfully.
+	// Let the INSERT proceed and check that the write finished successfully.
+	release()
 	require.Eventually(t, func() bool {
 		return writeFinished.Load()
 	}, 10*time.Second, 100*time.Millisecond)

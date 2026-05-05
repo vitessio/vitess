@@ -7127,5 +7127,137 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "UPDATE: same subquery as scalar SET and IN SET",
+    "query": "update user set col = (select count(*) from user_extra), textcol1 = 1 in (select count(*) from user_extra) where id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (select count(*) from user_extra), textcol1 = 1 in (select count(*) from user_extra) where id = 1",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq2"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum_count_star(0) AS count(*)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                "Query": "select count(*) from user_extra lock in share mode"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "sum_count_star(0) AS count(*)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from user_extra where 1 != 1",
+                    "Query": "select count(*) from user_extra lock in share mode"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Update",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "Query": "update `user` set col = :__sq1, textcol1 = 1 in ::__sq2 where id = 1",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "UPDATE: IN subquery in SET that merges into the outer route",
+    "query": "update user set col = (1 in (select id from (select * from user) as t where id = 5)) where id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (1 in (select id from (select * from user) as t where id = 5)) where id = 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update `user` set col = 1 in (select id from (select * from `user`) as t where id = 5) where id = 5",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UPDATE: NOT IN subquery in SET that merges into the outer route",
+    "query": "update user set col = (1 not in (select id from (select * from user) as t where id = 5)) where id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (1 not in (select id from (select * from user) as t where id = 5)) where id = 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update `user` set col = 1 not in (select id from (select * from `user`) as t where id = 5) where id = 5",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
