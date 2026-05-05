@@ -43,10 +43,12 @@ jobs:
           cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
 
       - name: Tune the OS
+        timeout-minutes: 5
         uses: ./.github/actions/tune-os
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
+        timeout-minutes: 5
         uses: github/codeql-action/init@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
         with:
           languages: ${{ matrix.language }}
@@ -58,6 +60,7 @@ jobs:
           # queries: security-extended,security-and-quality
 
       - name: Setup MySQL
+        timeout-minutes: 8
         uses: ./.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
@@ -79,6 +82,7 @@ jobs:
           make build
 
       - name: Perform CodeQL Analysis
+        timeout-minutes: 15
         uses: github/codeql-action/analyze@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
 
       - name: Slack Workflow Notification

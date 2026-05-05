@@ -47,6 +47,7 @@ jobs:
 
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/') == false
+        timeout-minutes: 15
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
@@ -68,6 +69,7 @@ jobs:
 
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
+        timeout-minutes: 15
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
@@ -107,6 +109,7 @@ jobs:
 
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/') == false
+        timeout-minutes: 15
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
@@ -132,6 +135,7 @@ jobs:
 
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
+        timeout-minutes: 15
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
@@ -170,6 +174,7 @@ jobs:
 
       - name: Build and push on main latest tag
         if: startsWith(github.ref, 'refs/tags/') == false && matrix.debian == 'bookworm'
+        timeout-minutes: 15
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: ${{ env.DOCKER_CTX }}
@@ -181,6 +186,7 @@ jobs:
 
       - name: Build and push on main debian specific tag
         if: startsWith(github.ref, 'refs/tags/') == false
+        timeout-minutes: 15
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: ${{ env.DOCKER_CTX }}
@@ -213,6 +219,7 @@ jobs:
       # Build and Push component image to DOCKER_TAG, applies to both debian version
       - name: Build and push on tags using Debian extension
         if: startsWith(github.ref, 'refs/tags/')
+        timeout-minutes: 15
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: ${{ env.DOCKER_CTX }}
@@ -226,6 +233,7 @@ jobs:
       # It is fine to build a second time here when "matrix.debian == 'bookworm'" as we have cached the first build already
       - name: Build and push on tags without Debian extension
         if: startsWith(github.ref, 'refs/tags/') && matrix.debian == 'bookworm'
+        timeout-minutes: 15
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: ${{ env.DOCKER_CTX }}

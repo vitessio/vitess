@@ -35,6 +35,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Run FOSSA scan and upload build data
+        timeout-minutes: 5
         uses: fossa-contrib/fossa-action@3d2ef181b1820d6dcd1972f86a767d18167fa19b # v3.0.1
         with:
           # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
@@ -129,10 +130,12 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 5
         uses: ./.github/actions/tune-os
 
       - name: Get dependencies
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        timeout-minutes: 5
         run: |
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
@@ -141,6 +144,7 @@ jobs:
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        timeout-minutes: 5
         run: |
           make minimaltools
 
@@ -193,6 +197,7 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 15
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.0.0
         with:
           args: --timeout 10m
