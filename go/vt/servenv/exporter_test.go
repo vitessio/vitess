@@ -41,10 +41,17 @@ func TestHandleFunc(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer listener.Close()
 	port := listener.Addr().(*net.TCPAddr).Port
+	// Capture HTTPServe's error so an unexpected early failure doesn't
+	// silently let the rest of the test pass against a dead server.
+	// HTTPServe converts the expected listener-close errors to nil.
+	serveErr := make(chan error, 1)
 	go func() {
-		_ = HTTPServe(listener) // returns with expected error when listener closes
+		serveErr <- HTTPServe(listener)
+	}()
+	defer func() {
+		listener.Close()
+		assert.NoError(t, <-serveErr)
 	}()
 
 	ebd := NewExporter("", "")

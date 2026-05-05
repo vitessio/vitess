@@ -17,7 +17,6 @@ limitations under the License.
 package topotests
 
 import (
-	"reflect"
 	"sort"
 	"testing"
 
@@ -55,29 +54,15 @@ func TestCellsAliases(t *testing.T) {
 	}
 	sort.Strings(aliasesName)
 
-	if len(aliasesName) != 2 {
-		t.Fatalf("Expected to have 2 aliases. Got %v", len(aliasesName))
-	}
-
-	if aliasesName[0] != "alias" {
-		t.Fatalf("Expected alias name to be alias, got: %v", aliasesName[0])
-	}
-
-	if aliasesName[1] != "aliasb" {
-		t.Fatalf("Expected alias name to be aliasb, got: %v", aliasesName[0])
-	}
+	require.Lenf(t, aliasesName, 2, "Expected to have 2 aliases. Got %v", len(aliasesName))
+	require.Equalf(t, "alias", aliasesName[0], "Expected alias name to be alias, got: %v", aliasesName[0])
+	require.Equalf(t, "aliasb", aliasesName[1], "Expected alias name to be aliasb, got: %v", aliasesName[1])
 
 	want := []string{"cell1", "cell2"}
-
-	if !reflect.DeepEqual(aliases[aliasesName[0]].Cells, want) {
-		t.Fatalf("Expected alias to be: %v, got %v", want, aliases[aliasesName[0]])
-	}
+	require.Equalf(t, want, aliases[aliasesName[0]].Cells, "Expected alias to be: %v, got %v", want, aliases[aliasesName[0]])
 
 	want = []string{"cell3", "cell4"}
-
-	if !reflect.DeepEqual(aliases[aliasesName[1]].Cells, want) {
-		t.Fatalf("Expected aliasb to be: %v, got %v", want, aliases[aliasesName[1]])
-	}
+	require.Equalf(t, want, aliases[aliasesName[1]].Cells, "Expected aliasb to be: %v, got %v", want, aliases[aliasesName[1]])
 
 	// Test update on non-existing object.
 
@@ -93,9 +78,7 @@ func TestCellsAliases(t *testing.T) {
 	aliases, err = ts.GetCellsAliases(ctx, true /*strongRead*/)
 	require.NoError(t, err)
 
-	if !reflect.DeepEqual(aliases["newalias"].Cells, want) {
-		t.Fatalf("Expected newalias to be: %v, got %v", want, aliases["newalias"])
-	}
+	require.Equalf(t, want, aliases["newalias"].Cells, "Expected newalias to be: %v, got %v", want, aliases["newalias"])
 
 	// Test update on existing object.
 
@@ -111,9 +94,7 @@ func TestCellsAliases(t *testing.T) {
 	aliases, err = ts.GetCellsAliases(ctx, true /*strongRead*/)
 	require.NoError(t, err)
 
-	if !reflect.DeepEqual(aliases["newalias"].Cells, want) {
-		t.Fatalf("Expected newalias to be: %v, got %v", want, aliases["newalias"])
-	}
+	require.Equalf(t, want, aliases["newalias"].Cells, "Expected newalias to be: %v, got %v", want, aliases["newalias"])
 
 	// Test delete alias
 
@@ -124,20 +105,14 @@ func TestCellsAliases(t *testing.T) {
 	aliases, err = ts.GetCellsAliases(ctx, true /*strongRead*/)
 	require.NoError(t, err)
 
-	if aliases["newalias"] != nil {
-		t.Fatalf("Expected newalias to be: nil, got %v", aliases["newalias"])
-	}
+	require.Nilf(t, aliases["newalias"], "Expected newalias to be: nil, got %v", aliases["newalias"])
 
 	// Create an alias that adds an overlapping cell is not supported
-	if err := ts.CreateCellsAlias(ctx, "invalid", &topodatapb.CellsAlias{Cells: []string{"cell1", "cell2"}}); err == nil {
-		t.Fatal("CreateCellsAlias should fail, got nil")
-	}
+	require.Error(t, ts.CreateCellsAlias(ctx, "invalid", &topodatapb.CellsAlias{Cells: []string{"cell1", "cell2"}}), "CreateCellsAlias should fail, got nil")
 
 	// Update an alias that adds an overlapping cell is not supported
-	if err := ts.UpdateCellsAlias(ctx, "aliasb", func(ca *topodatapb.CellsAlias) error {
+	require.Error(t, ts.UpdateCellsAlias(ctx, "aliasb", func(ca *topodatapb.CellsAlias) error {
 		ca.Cells = []string{"cell1"}
 		return nil
-	}); err == nil {
-		t.Fatalf("UpdateCellsAlias should fail, got nil")
-	}
+	}), "UpdateCellsAlias should fail, got nil")
 }

@@ -29,8 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 
-	"github.com/stretchr/testify/assert"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
 )
@@ -43,9 +41,7 @@ func (factory *fakeACLFactory) New(entries []string) (acl.ACL, error) {
 
 func TestInitWithInvalidFilePath(t *testing.T) {
 	tacl := tableACL{factory: &simpleacl.Factory{}}
-	if err := tacl.init("/invalid_file_path", func() {}); err == nil {
-		t.Fatalf("init should fail for an invalid config file path")
-	}
+	require.Error(t, tacl.init("/invalid_file_path", func() {}), "init should fail for an invalid config file path")
 }
 
 var aclJSON = `{
@@ -62,19 +58,12 @@ var aclJSON = `{
 func TestInitWithValidConfig(t *testing.T) {
 	tacl := tableACL{factory: &simpleacl.Factory{}}
 	f, err := os.CreateTemp("", "tableacl")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(f.Name())
-	if _, err := io.WriteString(f, aclJSON); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := tacl.init(f.Name(), func() {}); err != nil {
-		t.Fatal(err)
-	}
+	_, err = io.WriteString(f, aclJSON)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	require.NoError(t, tacl.init(f.Name(), func() {}))
 }
 
 func TestInitWithEmptyConfig(t *testing.T) {
@@ -94,9 +83,7 @@ func TestInitFromProto(t *testing.T) {
 	tacl := tableACL{factory: &simpleacl.Factory{}}
 	readerACL := tacl.Authorized("my_test_table", READER)
 	want := &ACLResult{ACL: acl.DenyAllACL{}, GroupName: ""}
-	if !reflect.DeepEqual(readerACL, want) {
-		t.Fatalf("tableacl has not been initialized, got: %v, want: %v", readerACL, want)
-	}
+	require.Truef(t, reflect.DeepEqual(readerACL, want), "tableacl has not been initialized, got: %v, want: %v", readerACL, want)
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
 			Name:                 "group01",
@@ -104,20 +91,13 @@ func TestInitFromProto(t *testing.T) {
 			Readers:              []string{"vt"},
 		}},
 	}
-	if err := tacl.Set(config); err != nil {
-		require.NoError(t, err)
-	}
-	if got := tacl.Config(); !proto.Equal(got, config) {
-		t.Fatalf("GetCurrentConfig() = %v, want: %v", got, config)
-	}
+	require.NoError(t, tacl.Set(config))
+	got := tacl.Config()
+	require.Truef(t, proto.Equal(got, config), "GetCurrentConfig() = %v, want: %v", got, config)
 	readerACL = tacl.Authorized("unknown_table", READER)
-	if !reflect.DeepEqual(readerACL, want) {
-		t.Fatalf("there is no config for unknown_table, should deny by default")
-	}
+	require.Truef(t, reflect.DeepEqual(readerACL, want), "there is no config for unknown_table, should deny by default")
 	readerACL = tacl.Authorized("test_table", READER)
-	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "vt"}) {
-		t.Fatalf("user: vt should have reader permission to table: test_table")
-	}
+	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "vt"}), "user: vt should have reader permission to table: test_table")
 }
 
 func TestTableACLValidateConfig(t *testing.T) {
@@ -146,10 +126,10 @@ func TestTableACLValidateConfig(t *testing.T) {
 		}
 		config := &tableaclpb.Config{TableGroups: groups}
 		err := ValidateProto(config)
-		if test.valid && err != nil {
-			t.Fatalf("ValidateProto(%v) = %v, want nil", config, err)
-		} else if !test.valid && err == nil {
-			t.Fatalf("ValidateProto(%v) = nil, want error", config)
+		if test.valid {
+			require.NoErrorf(t, err, "ValidateProto(%v)", config)
+		} else {
+			require.Errorf(t, err, "ValidateProto(%v) = nil, want error", config)
 		}
 	}
 }
@@ -188,17 +168,11 @@ func TestTableACLAuthorize(t *testing.T) {
 			},
 		},
 	}
-	if err := tacl.Set(config); err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, tacl.Set(config))
 
 	readerACL := tacl.Authorized("test_data_any", READER)
-	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}) {
-		t.Fatalf("user u1 should have reader permission to table test_data_any")
-	}
-	if !readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}) {
-		t.Fatalf("user u2 should have reader permission to table test_data_any")
-	}
+	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should have reader permission to table test_data_any")
+	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should have reader permission to table test_data_any")
 }
 
 func TestFailedToCreateACL(t *testing.T) {
@@ -211,9 +185,7 @@ func TestFailedToCreateACL(t *testing.T) {
 			Writers:              []string{"vt"},
 		}},
 	}
-	if err := tacl.Set(config); err == nil {
-		t.Fatalf("tableacl init should fail because fake ACL returns an error")
-	}
+	require.Error(t, tacl.Set(config), "tableacl init should fail because fake ACL returns an error")
 }
 
 func TestDoubleRegisterTheSameKey(t *testing.T) {
@@ -221,9 +193,7 @@ func TestDoubleRegisterTheSameKey(t *testing.T) {
 	Register(name, &simpleacl.Factory{})
 	defer func() {
 		err := recover()
-		if err == nil {
-			t.Fatalf("the second tableacl register should fail")
-		}
+		require.NotNil(t, err, "the second tableacl register should fail")
 	}()
 	Register(name, &simpleacl.Factory{})
 }
@@ -235,15 +205,11 @@ func TestGetCurrentAclFactory(t *testing.T) {
 	aclFactory := &simpleacl.Factory{}
 	Register(name+"-1", aclFactory)
 	f, err := GetCurrentACLFactory()
-	assert.NoError(t, err)
-	if !reflect.DeepEqual(aclFactory, f) {
-		t.Fatalf("should return registered acl factory even if default acl is not set.")
-	}
+	require.NoError(t, err)
+	require.Truef(t, reflect.DeepEqual(aclFactory, f), "should return registered acl factory even if default acl is not set.")
 	Register(name+"-2", aclFactory)
 	_, err = GetCurrentACLFactory()
-	if err == nil {
-		t.Fatalf("there are more than one acl factories, but the default is not set")
-	}
+	require.Error(t, err, "there are more than one acl factories, but the default is not set")
 }
 
 func TestGetCurrentACLFactoryWithWrongDefault(t *testing.T) {
@@ -255,7 +221,5 @@ func TestGetCurrentACLFactoryWithWrongDefault(t *testing.T) {
 	Register(name+"-2", aclFactory)
 	SetDefaultACL("wrong_name")
 	_, err := GetCurrentACLFactory()
-	if err == nil {
-		t.Fatalf("there are more than one acl factories, but the default given does not match any of these.")
-	}
+	require.Error(t, err, "there are more than one acl factories, but the default given does not match any of these.")
 }

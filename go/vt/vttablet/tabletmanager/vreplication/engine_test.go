@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -175,25 +173,19 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err := vre.Exec("insert into _vt.vreplication values(null)")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantqr := &sqltypes.Result{InsertID: 1}
-	if !qr.Equal(wantqr) {
-		t.Errorf("Exec: %v, want %v", qr, wantqr)
-	}
+	assert.Truef(t, qr.Equal(wantqr), "Exec: %v, want %v", qr, wantqr)
 	dbClient.Wait()
 
 	ct := vre.controllers[1]
 	if ct == nil || ct.id != 1 {
-		t.Errorf("ct: %v, id should be 1", ct)
+		assert.Failf(t, "controller mismatch", "ct: %v, id should be 1", ct)
 		return
 	}
 
 	// Verify stats
-	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
-	}
+	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
 
 	// Test Update
 
@@ -218,34 +210,24 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantqr = &sqltypes.Result{RowsAffected: 1}
-	if !qr.Equal(wantqr) {
-		t.Errorf("Exec: %v, want %v", qr, wantqr)
-	}
+	assert.Truef(t, qr.Equal(wantqr), "Exec: %v, want %v", qr, wantqr)
 	dbClient.Wait()
 
 	ct = vre.controllers[1]
 
 	// Verify that the new controller has reused the previous blpStats.
-	if ct.blpStats != savedBlp {
-		t.Errorf("BlpStats: %v and %v, must be same", ct.blpStats, savedBlp)
-	}
+	assert.Samef(t, savedBlp, ct.blpStats, "BlpStats must be same")
 
 	// Verify stats
-	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
-	}
+	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
 
 	// Test no update
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("select id from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
 	_, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 2")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	dbClient.Wait()
 
 	// Test Delete
@@ -259,32 +241,22 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err = vre.Exec("delete from _vt.vreplication where id = 1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantqr = &sqltypes.Result{RowsAffected: 1}
-	if !qr.Equal(wantqr) {
-		t.Errorf("Exec: %v, want %v", qr, wantqr)
-	}
+	assert.Truef(t, qr.Equal(wantqr), "Exec: %v, want %v", qr, wantqr)
 	dbClient.Wait()
 
 	ct = vre.controllers[1]
-	if ct != nil {
-		t.Errorf("ct: %v, want nil", ct)
-	}
+	assert.Nilf(t, ct, "ct: %v, want nil", ct)
 
 	// Verify stats
-	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
-	}
+	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
 
 	// Test simple delete.
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("select id from _vt.vreplication where id = 3", &sqltypes.Result{}, nil)
 	_, err = vre.Exec("delete from _vt.vreplication where id = 3")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	dbClient.Wait()
 
 	// Test unsafe writes of multiple rows, which we want to prevent.
@@ -323,15 +295,10 @@ func TestEngineBadInsert(t *testing.T) {
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{}, nil)
 	_, err := vre.Exec("insert into _vt.vreplication values(null)")
-	want := "insert failed to generate an id"
-	if err == nil || err.Error() != want {
-		t.Errorf("vre.Exec err: %v, want %v", err, want)
-	}
+	assert.EqualError(t, err, "insert failed to generate an id", "vre.Exec")
 
 	// Verify stats
-	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
-	}
+	assert.Equalf(t, vre.controllers, globalStats.controllers, "stats are mismatched")
 }
 
 func TestEngineSelect(t *testing.T) {
@@ -360,12 +327,8 @@ func TestEngineSelect(t *testing.T) {
 	)
 	dbClient.ExpectRequest(wantQuery, wantResult, nil)
 	qr, err := vre.Exec(wantQuery)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !qr.Equal(wantResult) {
-		t.Errorf("Exec: %v, want %v", qr, wantResult)
-	}
+	require.NoError(t, err)
+	assert.Truef(t, qr.Equal(wantResult), "Exec: %v, want %v", qr, wantResult)
 }
 
 func TestWaitForPos(t *testing.T) {
@@ -394,12 +357,9 @@ func TestWaitForPos(t *testing.T) {
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	start := time.Now()
-	if err := vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084"); err != nil {
-		t.Fatal(err)
-	}
-	if duration := time.Since(start); duration < 10*time.Microsecond {
-		t.Errorf("duration: %v, want < 10ms", duration)
-	}
+	require.NoError(t, vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084"))
+	duration := time.Since(start)
+	assert.GreaterOrEqualf(t, duration, 10*time.Microsecond, "duration: %v, want >= 10us", duration)
 }
 
 func TestWaitForPosError(t *testing.T) {
@@ -411,25 +371,17 @@ func TestWaitForPosError(t *testing.T) {
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	err := vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want := `vreplication engine is closed`
-	if err == nil || err.Error() != want {
-		t.Errorf("WaitForPos: %v, want %v", err, want)
-	}
+	assert.EqualError(t, err, `vreplication engine is closed`, "WaitForPos")
 
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	vre.Open(context.Background())
 
 	err = vre.WaitForPos(context.Background(), 1, "BadFlavor/0-1-1084")
-	want = `parse error: unknown GTIDSet flavor "BadFlavor"`
-	if err == nil || err.Error() != want {
-		t.Errorf("WaitForPos: %v, want %v", err, want)
-	}
+	assert.EqualError(t, err, `parse error: unknown GTIDSet flavor "BadFlavor"`, "WaitForPos")
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = "vreplication stream received an unexpected number of columns, got 0 instead of 3"
-
-	assert.EqualError(t, err, want, "WaitForPos:")
+	assert.EqualError(t, err, "vreplication stream received an unexpected number of columns, got 0 instead of 3", "WaitForPos")
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
@@ -437,8 +389,7 @@ func TestWaitForPosError(t *testing.T) {
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = "vreplication stream received more rows than expected, got 2 instead of 1"
-	assert.EqualError(t, err, want, "WaitForPos:")
+	assert.EqualError(t, err, "vreplication stream received more rows than expected, got 2 instead of 1", "WaitForPos")
 }
 
 func TestWaitForPosCancel(t *testing.T) {
@@ -460,10 +411,7 @@ func TestWaitForPosCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084")
-	want := "error waiting for pos: MariaDB/0-1-1084, last pos: MariaDB/0-1-1083: context canceled"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("WaitForPos: %v, must contain %v", err, want)
-	}
+	assert.ErrorContains(t, err, "error waiting for pos: MariaDB/0-1-1084, last pos: MariaDB/0-1-1083: context canceled", "WaitForPos")
 	dbClient.Wait()
 
 	go func() {
@@ -476,10 +424,7 @@ func TestWaitForPosCancel(t *testing.T) {
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = "vreplication is closing: context canceled"
-	if err == nil || err.Error() != want {
-		t.Errorf("WaitForPos: %v, want %v", err, want)
-	}
+	assert.EqualError(t, err, "vreplication is closing: context canceled", "WaitForPos")
 }
 
 func TestGetDBClient(t *testing.T) {

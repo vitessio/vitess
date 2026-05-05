@@ -46,41 +46,25 @@ func TestQueryRules(t *testing.T) {
 	qrs.Add(qr2)
 
 	qrf := qrs.Find("r1")
-	if qrf != qr1 {
-		t.Errorf("want:\n%#v\ngot:\n%#v", qr1, qrf)
-	}
+	assert.Equal(t, qr1, qrf)
 
 	qrf = qrs.Find("r2")
-	if qrf != qr2 {
-		t.Errorf("want:\n%#v\ngot:\n%#v", qr2, qrf)
-	}
+	assert.Equal(t, qr2, qrf)
 
 	qrf = qrs.Find("unknown_rule")
-	if qrf != nil {
-		t.Fatalf("rule: unknown_rule does not exist, should get nil")
-	}
+	require.Nil(t, qrf, "rule: unknown_rule does not exist, should get nil")
 
-	if qrs.rules[0] != qr1 {
-		t.Errorf("want:\n%#v\ngot:\n%#v", qr1, qrs.rules[0])
-	}
+	assert.Equal(t, qr1, qrs.rules[0])
 
 	qrf = qrs.Delete("r1")
-	if qrf != qr1 {
-		t.Errorf("want:\n%#v\ngot:\n%#v", qr1, qrf)
-	}
+	assert.Equal(t, qr1, qrf)
 
-	if len(qrs.rules) != 1 {
-		t.Errorf("want 1, got %d", len(qrs.rules))
-	}
+	assert.Len(t, qrs.rules, 1)
 
-	if qrs.rules[0] != qr2 {
-		t.Errorf("want:\n%#v\ngot:\n%#v", qr2, qrf)
-	}
+	assert.Equal(t, qr2, qrs.rules[0])
 
 	qrf = qrs.Delete("unknown_rule")
-	if qrf != nil {
-		t.Fatalf("delete an unknown_rule, should return nil")
-	}
+	require.Nil(t, qrf, "delete an unknown_rule, should return nil")
 }
 
 // TestCopy tests for deep copy
@@ -96,15 +80,11 @@ func TestCopy(t *testing.T) {
 	qrs1.Add(qr2)
 
 	qrs2 := qrs1.Copy()
-	if !reflect.DeepEqual(qrs2, qrs1) {
-		t.Errorf("qrs1: %+v, not equal to %+v", qrs2, qrs1)
-	}
+	assert.Truef(t, reflect.DeepEqual(qrs2, qrs1), "qrs1: %+v, not equal to %+v", qrs2, qrs1)
 
 	qrs1 = New()
 	qrs2 = qrs1.Copy()
-	if !reflect.DeepEqual(qrs2, qrs1) {
-		t.Errorf("qrs1: %+v, not equal to %+v", qrs2, qrs1)
-	}
+	assert.Truef(t, reflect.DeepEqual(qrs2, qrs1), "qrs1: %+v, not equal to %+v", qrs2, qrs1)
 }
 
 func TestFilterByPlan(t *testing.T) {
@@ -165,9 +145,7 @@ func TestFilterByPlan(t *testing.T) {
 		"Action":"FAIL"
 	}]`)
 	got := marshalled(qrs1)
-	if got != want {
-		t.Errorf("qrs1:\n%s, want\n%s", got, want)
-	}
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
 	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a")
 	want = compacted(`[{
@@ -181,9 +159,7 @@ func TestFilterByPlan(t *testing.T) {
 		"Action":"FAIL"
 	}]`)
 	got = marshalled(qrs1)
-	if got != want {
-		t.Errorf("qrs1:\n%s, want\n%s", got, want)
-	}
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 	{
 		// test multiple tables:
 		qrs1 := qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a", "other_table")
@@ -198,9 +174,7 @@ func TestFilterByPlan(t *testing.T) {
 			"Action":"FAIL"
 		}]`)
 		got = marshalled(qrs1)
-		if got != want {
-			t.Errorf("qrs1:\n%s, want\n%s", got, want)
-		}
+		assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 	}
 	{
 		// test multiple tables:
@@ -216,16 +190,12 @@ func TestFilterByPlan(t *testing.T) {
 			"Action":"FAIL"
 		}]`)
 		got = marshalled(qrs1)
-		if got != want {
-			t.Errorf("qrs1:\n%s, want\n%s", got, want)
-		}
+		assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 	}
 
 	qrs1 = qrs.FilterByPlan("insert", planbuilder.PlanSelect, "a")
 	got = marshalled(qrs1)
-	if got != want {
-		t.Errorf("qrs1:\n%s, want\n%s", got, want)
-	}
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
 	qrs1 = qrs.FilterByPlan("select", planbuilder.PlanInsert, "a")
 	want = compacted(`[{
@@ -239,14 +209,10 @@ func TestFilterByPlan(t *testing.T) {
 		"Action":"FAIL"
 	}]`)
 	got = marshalled(qrs1)
-	if got != want {
-		t.Errorf("qrs1:\n%s, want\n%s", got, want)
-	}
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
 	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsert, "a")
-	if qrs1.rules != nil {
-		t.Errorf("want nil, got non-nil")
-	}
+	assert.Nil(t, qrs1.rules)
 
 	qrs1 = qrs.FilterByPlan("table", planbuilder.PlanInsert, "b")
 	want = compacted(`[{
@@ -255,9 +221,7 @@ func TestFilterByPlan(t *testing.T) {
 		"Action":"FAIL"
 	}]`)
 	got = marshalled(qrs1)
-	if got != want {
-		t.Errorf("qrs1:\n%s, want\n%s", got, want)
-	}
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
 	qr5 := NewQueryRule("rule 5", "r5", QRFail)
 	qrs.Add(qr5)
@@ -269,48 +233,31 @@ func TestFilterByPlan(t *testing.T) {
 		"Action":"FAIL"
 	}]`)
 	got = marshalled(qrs1)
-	if got != want {
-		t.Errorf("qrs1:\n%s, want\n%s", got, want)
-	}
+	assert.Equalf(t, want, got, "qrs1:\n%s, want\n%s", got, want)
 
 	qrsnil1 := New()
-	if qrsnil2 := qrsnil1.FilterByPlan("", planbuilder.PlanSelect, "a"); qrsnil2.rules != nil {
-		t.Errorf("want nil, got non-nil")
-	}
+	qrsnil2 := qrsnil1.FilterByPlan("", planbuilder.PlanSelect, "a")
+	assert.Nil(t, qrsnil2.rules)
 }
 
 func TestQueryRule(t *testing.T) {
 	qr := NewQueryRule("rule 1", "r1", QRFail)
 	err := qr.SetIPCond("123")
 	assert.NoError(t, err)
-	if !qr.requestIP.MatchString("123") {
-		t.Errorf("want match")
-	}
-	if qr.requestIP.MatchString("1234") {
-		t.Errorf("want no match")
-	}
-	if qr.requestIP.MatchString("12") {
-		t.Errorf("want no match")
-	}
+	assert.True(t, qr.requestIP.MatchString("123"), "want match")
+	assert.False(t, qr.requestIP.MatchString("1234"), "want no match")
+	assert.False(t, qr.requestIP.MatchString("12"), "want no match")
 	err = qr.SetIPCond("[")
-	if err == nil {
-		t.Errorf("want error")
-	}
+	assert.Error(t, err, "want error")
 
 	qr.AddPlanCond(planbuilder.PlanSelect)
 	qr.AddPlanCond(planbuilder.PlanInsert)
 
-	if qr.plans[0] != planbuilder.PlanSelect {
-		t.Errorf("want PASS_SELECT, got %s", qr.plans[0].String())
-	}
-	if qr.plans[1] != planbuilder.PlanInsert {
-		t.Errorf("want INSERT_PK, got %s", qr.plans[1].String())
-	}
+	assert.Equalf(t, planbuilder.PlanSelect, qr.plans[0], "want PASS_SELECT, got %s", qr.plans[0].String())
+	assert.Equalf(t, planbuilder.PlanInsert, qr.plans[1], "want INSERT_PK, got %s", qr.plans[1].String())
 
 	qr.AddTableCond("a")
-	if qr.tableNames[0] != "a" {
-		t.Errorf("want a, got %s", qr.tableNames[0])
-	}
+	assert.Equalf(t, "a", qr.tableNames[0], "want a, got %s", qr.tableNames[0])
 }
 
 func TestBindVarStruct(t *testing.T) {
@@ -320,21 +267,11 @@ func TestBindVarStruct(t *testing.T) {
 	assert.NoError(t, err)
 	err = qr.AddBindVarCond("a", true, false, QRNoOp, nil)
 	assert.NoError(t, err)
-	if qr.bindVarConds[1].name != "a" {
-		t.Errorf("want a, got %s", qr.bindVarConds[1].name)
-	}
-	if !qr.bindVarConds[1].onAbsent {
-		t.Errorf("want true, got false")
-	}
-	if qr.bindVarConds[1].onMismatch {
-		t.Errorf("want false, got true")
-	}
-	if qr.bindVarConds[1].op != QRNoOp {
-		t.Errorf("exepecting no-op, got %v", qr.bindVarConds[1])
-	}
-	if qr.bindVarConds[1].value != nil {
-		t.Errorf("want nil, got %#v", qr.bindVarConds[1].value)
-	}
+	assert.Equal(t, "a", qr.bindVarConds[1].name)
+	assert.True(t, qr.bindVarConds[1].onAbsent)
+	assert.False(t, qr.bindVarConds[1].onMismatch)
+	assert.Equalf(t, QRNoOp, qr.bindVarConds[1].op, "expecting no-op, got %v", qr.bindVarConds[1])
+	assert.Nilf(t, qr.bindVarConds[1].value, "want nil, got %#v", qr.bindVarConds[1].value)
 }
 
 type BVCreation struct {
@@ -381,9 +318,7 @@ func TestBVCreation(t *testing.T) {
 	for i, tcase := range creationCases {
 		err := qr.AddBindVarCond(tcase.name, tcase.onAbsent, tcase.onMismatch, tcase.op, tcase.value)
 		haserr := (err != nil)
-		if haserr != tcase.expecterr {
-			t.Errorf("test %d: got %v for %#v", i, haserr, tcase)
-		}
+		assert.Equalf(t, tcase.expecterr, haserr, "test %d: got %v for %#v", i, haserr, tcase)
 	}
 }
 
@@ -508,9 +443,7 @@ func TestBVConditions(t *testing.T) {
 	bv := make(map[string]*querypb.BindVariable)
 	for _, tcase := range bvtestcases {
 		bv["a"] = tcase.bvval
-		if bvMatch(tcase.bvc, bv) != tcase.expected {
-			t.Errorf("bvmatch(%+v, %v): %v, want %v", tcase.bvc, tcase.bvval, !tcase.expected, tcase.expected)
-		}
+		assert.Equalf(t, tcase.expected, bvMatch(tcase.bvc, bv), "bvmatch(%+v, %v)", tcase.bvc, tcase.bvval)
 	}
 }
 
@@ -609,15 +542,10 @@ func TestImport(t *testing.T) {
 		"Action": "FAIL"
 	}]`
 	err := qrs.UnmarshalJSON([]byte(jsondata))
-	if err != nil {
-		t.Error(err)
-		return
-	}
+	require.NoError(t, err)
 	got := marshalled(qrs)
 	want := compacted(jsondata)
-	if got != want {
-		t.Errorf("qrs:\n%s, want\n%s", got, want)
-	}
+	assert.Equalf(t, want, got, "qrs:\n%s, want\n%s", got, want)
 }
 
 type ValidJSONCase struct {
@@ -663,30 +591,18 @@ func TestValidJSON(t *testing.T) {
 	for i, tcase := range validjsons {
 		qrs := New()
 		err := qrs.UnmarshalJSON([]byte(tcase.input))
-		if err != nil {
-			t.Fatalf("Unexpected error for case %d: %v", i, err)
-		}
+		require.NoErrorf(t, err, "Unexpected error for case %d", i)
 		bvc := qrs.rules[0].bindVarConds[0]
-		if bvc.op != tcase.op {
-			t.Errorf("want %v, got %v", tcase.op, bvc.op)
-		}
+		assert.Equal(t, tcase.op, bvc.op)
 		switch tcase.typ {
 		case UINT:
-			if bvc.value.(bvcuint64) != bvcuint64(18446744073709551615) {
-				t.Errorf("want %v, got %v", uint64(18446744073709551615), bvc.value.(bvcuint64))
-			}
+			assert.Equal(t, bvcuint64(18446744073709551615), bvc.value.(bvcuint64))
 		case INT:
-			if bvc.value.(bvcint64) != -123 {
-				t.Errorf("want %v, got %v", -123, bvc.value.(bvcint64))
-			}
+			assert.Equal(t, bvcint64(-123), bvc.value.(bvcint64))
 		case STR:
-			if bvc.value.(bvcstring) != "123" {
-				t.Errorf("want %v, got %v", "123", bvc.value.(bvcint64))
-			}
+			assert.Equal(t, bvcstring("123"), bvc.value.(bvcstring))
 		case REGEXP:
-			if bvc.value.(bvcre).re == nil {
-				t.Errorf("want non-nil")
-			}
+			assert.NotNil(t, bvc.value.(bvcre).re)
 		}
 	}
 }
@@ -735,20 +651,15 @@ func TestInvalidJSON(t *testing.T) {
 	for _, tcase := range invalidjsons {
 		qrs := New()
 		err := qrs.UnmarshalJSON([]byte(tcase.input))
-		if err == nil {
-			t.Errorf("want error for case %q", tcase.input)
+		if !assert.Errorf(t, err, "want error for case %q", tcase.input) {
 			continue
 		}
 		recvd := strings.Replace(err.Error(), "fatal: ", "", 1)
-		if recvd != tcase.err {
-			t.Errorf("invalid json: %s, want '%v', got '%v'", tcase.input, tcase.err, recvd)
-		}
+		assert.Equalf(t, tcase.err, recvd, "invalid json: %s", tcase.input)
 	}
 	qrs := New()
 	err := qrs.UnmarshalJSON([]byte(`{`))
-	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Errorf("qrs.UnmarshalJSON: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
+	assert.Equalf(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err), "qrs.UnmarshalJSON")
 }
 
 func TestBuildQueryRuleActionFail(t *testing.T) {
@@ -756,20 +667,14 @@ func TestBuildQueryRuleActionFail(t *testing.T) {
 	err := json.Unmarshal([]byte(`{"Action": "FAIL" }`), &ruleInfo)
 	require.NoError(t, err)
 	qr, err := BuildQueryRule(ruleInfo)
-	if err != nil {
-		t.Fatalf("build query rule should succeed")
-	}
-	if qr.act != QRFail {
-		t.Fatalf("action should fail")
-	}
+	require.NoError(t, err, "build query rule should succeed")
+	require.Equal(t, QRFail, qr.act, "action should fail")
 }
 
 func TestBadAddBindVarCond(t *testing.T) {
 	qr1 := NewQueryRule("rule 1", "r1", QRFail)
 	err := qr1.AddBindVarCond("a", true, false, QRMatch, uint64(1))
-	if err == nil {
-		t.Fatalf("invalid op: QRMatch for value type: uint64")
-	}
+	require.Error(t, err, "invalid op: QRMatch for value type: uint64")
 }
 
 func TestOpNames(t *testing.T) {
@@ -784,9 +689,7 @@ func TestOpNames(t *testing.T) {
 		"MATCH",
 		"NOMATCH",
 	}
-	if !reflect.DeepEqual(opnames, want) {
-		t.Errorf("opnames: \n%v, want \n%v", opnames, want)
-	}
+	assert.Truef(t, reflect.DeepEqual(opnames, want), "opnames: \n%v, want \n%v", opnames, want)
 }
 
 func compacted(in string) string {

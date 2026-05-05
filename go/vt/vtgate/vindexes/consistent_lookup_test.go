@@ -20,10 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,13 +102,9 @@ func TestConsistentLookupInit(t *testing.T) {
 		sqlparser.NewIdentifierCI("fc"),
 	}
 	err := lookup.(WantOwnerInfo).SetOwnerInfo("ks", "t1", cols)
-	want := "does not match"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("SetOwnerInfo: %v, want %v", err, want)
-	}
-	if got := lookup.(*ConsistentLookup).writeOnly; !got {
-		t.Errorf("lookup.writeOnly: false, want true")
-	}
+	require.Error(t, err, "SetOwnerInfo")
+	assert.Contains(t, err.Error(), "does not match", "SetOwnerInfo")
+	assert.True(t, lookup.(*ConsistentLookup).writeOnly, "lookup.writeOnly")
 }
 
 func TestConsistentLookupMap(t *testing.T) {
@@ -131,9 +125,7 @@ func TestConsistentLookupMap(t *testing.T) {
 			[]byte("2"),
 		}),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 	vc.verifyLog(t, []string{
 		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
@@ -142,10 +134,7 @@ func TestConsistentLookupMap(t *testing.T) {
 	// Test query fail.
 	vc.AddResult(nil, errors.New("execute failed"))
 	_, err = lookup.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)})
-	wantErr := "lookup.Map: execute failed"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("lookup(query fail) err: %v, want %s", err, wantErr)
-	}
+	assert.EqualError(t, err, "lookup.Map: execute failed", "lookup(query fail)")
 }
 
 func TestConsistentLookupMapWriteOnly(t *testing.T) {
@@ -161,9 +150,7 @@ func TestConsistentLookupMapWriteOnly(t *testing.T) {
 			KeyRange: &topodatapb.KeyRange{},
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestConsistentLookupUniqueMap(t *testing.T) {
@@ -178,9 +165,7 @@ func TestConsistentLookupUniqueMap(t *testing.T) {
 		key.DestinationNone{},
 		key.DestinationKeyspaceID([]byte("1")),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 	vc.verifyLog(t, []string{
 		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
@@ -189,10 +174,7 @@ func TestConsistentLookupUniqueMap(t *testing.T) {
 	// More than one result is invalid
 	vc.AddResult(makeTestResultLookup([]int{2}), nil)
 	_, err = lookup.Map(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)})
-	wanterr := "Lookup.Map: unexpected multiple results from vindex t: INT64(1)"
-	if err == nil || err.Error() != wanterr {
-		t.Errorf("lookup(query fail) err: %v, want %s", err, wanterr)
-	}
+	assert.EqualError(t, err, "Lookup.Map: unexpected multiple results from vindex t: INT64(1)", "lookup(query fail)")
 }
 
 func TestConsistentLookupUniqueMapWriteOnly(t *testing.T) {
@@ -208,9 +190,7 @@ func TestConsistentLookupUniqueMapWriteOnly(t *testing.T) {
 			KeyRange: &topodatapb.KeyRange{},
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestConsistentLookupMapAbsent(t *testing.T) {
@@ -225,9 +205,7 @@ func TestConsistentLookupMapAbsent(t *testing.T) {
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 	vc.verifyLog(t, []string{
 		"ExecutePre select fromc1, toc from t where fromc1 in ::fromc1 [{fromc1 }] false",
 	})
@@ -252,19 +230,13 @@ func TestConsistentLookupVerify(t *testing.T) {
 	// Test query fail.
 	vc.AddResult(nil, errors.New("execute failed"))
 	_, err = lookup.Verify(ctx, vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
-	want := "lookup.Verify: execute failed"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookup(query fail) err: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "lookup.Verify: execute failed", "lookup(query fail)")
 
 	// Test write_only.
 	lookup = createConsistentLookup(t, "consistent_lookup", true)
 	got, err := lookup.Verify(ctx, nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
 	require.NoError(t, err)
-	wantBools := []bool{true, true}
-	if !reflect.DeepEqual(got, wantBools) {
-		t.Errorf("lookup.Verify(writeOnly): %v, want %v", got, wantBools)
-	}
+	assert.Equal(t, []bool{true, true}, got, "lookup.Verify(writeOnly)")
 }
 
 func TestConsistentLookupCreateSimple(t *testing.T) {
@@ -390,10 +362,7 @@ func TestConsistentLookupCreateNonDupError(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	}}, [][]byte{[]byte("test1")}, false)
-	want := "general error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("lookup(query fail) err: %v, must contain %s", err, want)
-	}
+	require.ErrorContains(t, err, "general error", "lookup(query fail)")
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 	})
@@ -411,10 +380,7 @@ func TestConsistentLookupCreateThenBadRows(t *testing.T) {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	}}, [][]byte{[]byte("test1")}, false)
-	want := "unexpected rows"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("lookup(query fail) err: %v, must contain %s", err, want)
-	}
+	require.ErrorContains(t, err, "unexpected rows", "lookup(query fail)")
 	vc.verifyLog(t, []string{
 		"ExecutePre insert into t(fromc1, fromc2, toc) values(:fromc1_0, :fromc2_0, :toc_0) [{fromc1_0 1} {fromc2_0 2} {toc_0 test1}] true",
 		"ExecutePre select toc from t where fromc1 = :fromc1 and fromc2 = :fromc2 for update [{fromc1 1} {fromc2 2} {toc test1}] false",
@@ -619,24 +585,18 @@ func (vc *loggingVCursor) execute(ctx context.Context, method string, query stri
 func (vc *loggingVCursor) verifyLog(t *testing.T, want []string) {
 	t.Helper()
 	for i, got := range vc.log {
-		if i >= len(want) {
-			t.Fatalf("index exceeded: %v", vc.log[i:])
-		}
-		if got != want[i] {
-			t.Errorf("log(%d):\n%q, want\n%q", i, got, want[i])
-		}
+		require.Lessf(t, i, len(want), "index exceeded: %v", vc.log[i:])
+		assert.Equalf(t, want[i], got, "log(%d)", i)
 	}
 	if len(want) > len(vc.log) {
-		t.Errorf("expecting queries: %v", want[len(vc.log):])
+		assert.Failf(t, "missing expected queries", "expecting queries: %v", want[len(vc.log):])
 	}
 }
 
 func (vc *loggingVCursor) verifyContext(t *testing.T, want context.Context) {
 	t.Helper()
 	for i, got := range vc.contexts {
-		if got != want {
-			t.Errorf("context(%d):\ngot: %v\nwant: %v", i, got, want)
-		}
+		assert.Equalf(t, want, got, "context(%d)", i)
 	}
 }
 

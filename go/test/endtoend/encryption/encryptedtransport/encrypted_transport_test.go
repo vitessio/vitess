@@ -388,7 +388,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 	}
 	for _, proc := range mysqlProcesses {
 		if err := proc.Wait(); err != nil {
-			return 0, err
+			return 1, fmt.Errorf("mysql process Wait failed: %w", err)
 		}
 	}
 	return 0, nil

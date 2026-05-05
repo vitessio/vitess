@@ -40,18 +40,11 @@ func TestLogStats(t *testing.T) {
 	logStats := NewLogStats(context.Background(), "test", streamlog.QueryLogConfig{})
 	logStats.AddRewrittenSQL("sql1", time.Now())
 
-	if !strings.Contains(logStats.RewrittenSQL(), "sql1") {
-		t.Fatalf("RewrittenSQL should contains sql: sql1")
-	}
-
-	if logStats.SizeOfResponse() != 0 {
-		t.Fatalf("there is no rows in log stats, estimated size should be 0 bytes")
-	}
+	require.Contains(t, logStats.RewrittenSQL(), "sql1", "RewrittenSQL should contains sql: sql1")
+	require.Zero(t, logStats.SizeOfResponse(), "there is no rows in log stats, estimated size should be 0 bytes")
 
 	logStats.Rows = [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}
-	if logStats.SizeOfResponse() <= 0 {
-		t.Fatalf("log stats has some rows, should have positive response size")
-	}
+	require.Positive(t, logStats.SizeOfResponse(), "log stats has some rows, should have positive response size")
 }
 
 func testFormat(stats *LogStats, params url.Values) string {
@@ -88,9 +81,7 @@ func TestLogStatsFormat(t *testing.T) {
 	got = testFormat(logStats, params)
 	var parsed map[string]any
 	err := json.Unmarshal([]byte(got), &parsed)
-	if err != nil {
-		t.Errorf("logstats format: error unmarshaling json: %v -- got:\n%v", err, got)
-	}
+	assert.NoErrorf(t, err, "logstats format: error unmarshaling json -- got:\n%v", got)
 	formatted, err := json.MarshalIndent(parsed, "", "    ")
 	require.NoError(t, err)
 	want = "{\n    \"BindVars\": {\n        \"intVal\": {\n            \"type\": \"INT64\",\n            \"value\": 1\n        }\n    },\n    \"CallInfo\": \"\",\n    \"ConnWaitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"EmitReason\": \"\",\n    \"End\": \"2017-01-01 01:02:04.000001\",\n    \"Error\": \"\",\n    \"ImmediateCaller\": \"\",\n    \"Method\": \"test\",\n    \"MysqlTime\": 0,\n    \"OriginalSQL\": \"sql\",\n    \"PlanType\": \"\",\n    \"Queries\": 1,\n    \"QuerySources\": \"mysql\",\n    \"ResponseSize\": 1,\n    \"RewrittenSQL\": \"sql with pii\",\n    \"RowsAffected\": 0,\n    \"Start\": \"2017-01-01 01:02:03.000000\",\n    \"TotalTime\": 1.000001,\n    \"TransactionID\": 12345,\n    \"Username\": \"\"\n}"
@@ -142,40 +133,28 @@ func TestLogStatsFilter(t *testing.T) {
 
 	got := testFormat(logStats, params)
 	want := "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql /* LOG_THIS_QUERY */\"\t{\"intVal\": {\"type\": \"INT64\", \"value\": 1}}\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t0\t1\t\"\"\t\"\"\t\n"
-	if got != want {
-		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
-	}
+	assert.Equalf(t, want, got, "logstats format")
 
 	logStats.Config.FilterTag = "LOG_THIS_QUERY"
 	got = testFormat(logStats, params)
 	want = "test\t\t\t''\t''\t2017-01-01 01:02:03.000000\t2017-01-01 01:02:04.000001\t1.000001\t\t\"sql /* LOG_THIS_QUERY */\"\t{\"intVal\": {\"type\": \"INT64\", \"value\": 1}}\t1\t\"sql with pii\"\tmysql\t0.000000\t0.000000\t0\t0\t1\t\"\"\t\"filtertag\"\t\n"
-	if got != want {
-		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
-	}
+	assert.Equalf(t, want, got, "logstats format")
 
 	logStats.Config.FilterTag = "NOT_THIS_QUERY"
 	got = testFormat(logStats, params)
 	want = ""
-	if got != want {
-		t.Errorf("logstats format: got:\n%q\nwant:\n%q\n", got, want)
-	}
+	assert.Equalf(t, want, got, "logstats format")
 }
 
 func TestLogStatsFormatQuerySources(t *testing.T) {
 	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
-	if logStats.FmtQuerySources() != "none" {
-		t.Fatalf("should return none since log stats does not have any query source, but got: %s", logStats.FmtQuerySources())
-	}
+	require.Equalf(t, "none", logStats.FmtQuerySources(), "should return none since log stats does not have any query source")
 
 	logStats.QuerySources |= QuerySourceMySQL
-	if !strings.Contains(logStats.FmtQuerySources(), "mysql") {
-		t.Fatalf("'mysql' should be in formatted query sources")
-	}
+	require.Contains(t, logStats.FmtQuerySources(), "mysql", "'mysql' should be in formatted query sources")
 
 	logStats.QuerySources |= QuerySourceConsolidator
-	if !strings.Contains(logStats.FmtQuerySources(), "consolidator") {
-		t.Fatalf("'consolidator' should be in formatted query sources")
-	}
+	require.Contains(t, logStats.FmtQuerySources(), "consolidator", "'consolidator' should be in formatted query sources")
 }
 
 func TestLogStatsContextHTML(t *testing.T) {
@@ -185,32 +164,22 @@ func TestLogStatsContextHTML(t *testing.T) {
 	}
 	ctx := callinfo.NewContext(context.Background(), callInfo)
 	logStats := NewLogStats(ctx, "test", streamlog.NewQueryLogConfigForTest())
-	if logStats.ContextHTML().String() != html {
-		t.Fatalf("expect to get html: %s, but got: %s", html, logStats.ContextHTML().String())
-	}
+	require.Equalf(t, html, logStats.ContextHTML().String(), "expect to get html: %s, but got: %s", html, logStats.ContextHTML().String())
 }
 
 func TestLogStatsErrorStr(t *testing.T) {
 	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
-	if logStats.ErrorStr() != "" {
-		t.Fatalf("should not get error in stats, but got: %s", logStats.ErrorStr())
-	}
+	require.Emptyf(t, logStats.ErrorStr(), "should not get error in stats, but got: %s", logStats.ErrorStr())
 	errStr := "unknown error"
 	logStats.Error = errors.New(errStr)
-	if !strings.Contains(logStats.ErrorStr(), errStr) {
-		t.Fatalf("expect string '%s' in error message, but got: %s", errStr, logStats.ErrorStr())
-	}
+	require.Containsf(t, logStats.ErrorStr(), errStr, "expect string '%s' in error message", errStr)
 }
 
 func TestLogStatsCallInfo(t *testing.T) {
 	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
 	caller, user := logStats.CallInfo()
-	if caller != "" {
-		t.Fatalf("caller should be empty")
-	}
-	if user != "" {
-		t.Fatalf("username should be empty")
-	}
+	require.Empty(t, caller, "caller should be empty")
+	require.Empty(t, user, "username should be empty")
 
 	remoteAddr := "1.2.3.4"
 	username := "vt"
@@ -223,12 +192,8 @@ func TestLogStatsCallInfo(t *testing.T) {
 	logStats = NewLogStats(ctx, "test", streamlog.NewQueryLogConfigForTest())
 	caller, user = logStats.CallInfo()
 	wantCaller := remoteAddr + ":FakeExecute(fakeRPC)"
-	if caller != wantCaller {
-		t.Fatalf("expected to get caller: %s, but got: %s", wantCaller, caller)
-	}
-	if user != username {
-		t.Fatalf("expected to get username: %s, but got: %s", username, user)
-	}
+	require.Equalf(t, wantCaller, caller, "expected to get caller: %s", wantCaller)
+	require.Equalf(t, username, user, "expected to get username: %s", username)
 }
 
 // TestLogStatsErrorsOnly tests that LogStats only logs errors when the query log mode is set to errors only for VTTablet.

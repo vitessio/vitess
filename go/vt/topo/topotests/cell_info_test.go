@@ -44,9 +44,7 @@ func TestCellInfo(t *testing.T) {
 	// Check GetCellInfo returns what memorytopo created.
 	ci, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/)
 	require.NoError(t, err)
-	if ci.Root != "" {
-		t.Fatalf("unexpected CellInfo: %v", ci)
-	}
+	require.Emptyf(t, ci.Root, "unexpected CellInfo: %v", ci)
 
 	var cells []string
 	cells, err = ts.ExpandCells(ctx, cell)
@@ -62,9 +60,7 @@ func TestCellInfo(t *testing.T) {
 	}
 	ci, err = ts.GetCellInfo(ctx, cell, true /*strongRead*/)
 	require.NoError(t, err)
-	if ci.ServerAddress != "new address" {
-		t.Fatalf("unexpected CellInfo: %v", ci)
-	}
+	require.Equalf(t, "new address", ci.ServerAddress, "unexpected CellInfo: %v", ci)
 
 	// Test update with no change.
 	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
@@ -75,9 +71,7 @@ func TestCellInfo(t *testing.T) {
 	}
 	ci, err = ts.GetCellInfo(ctx, cell, true /*strongRead*/)
 	require.NoError(t, err)
-	if ci.ServerAddress != "new address" {
-		t.Fatalf("unexpected CellInfo: %v", ci)
-	}
+	require.Equalf(t, "new address", ci.ServerAddress, "unexpected CellInfo: %v", ci)
 
 	// Test failing update.
 	updateErr := errors.New("inside error")
@@ -97,9 +91,8 @@ func TestCellInfo(t *testing.T) {
 	}
 	ci, err = ts.GetCellInfo(ctx, newCell, true /*strongRead*/)
 	require.NoError(t, err)
-	if ci.ServerAddress != "good address" || ci.Root != "/" {
-		t.Fatalf("unexpected CellInfo: %v", ci)
-	}
+	require.Equalf(t, "good address", ci.ServerAddress, "unexpected CellInfo: %v", ci)
+	require.Equalf(t, "/", ci.Root, "unexpected CellInfo: %v", ci)
 
 	// Add a record that should block CellInfo deletion for safety reasons.
 	if err := ts.UpdateSrvKeyspace(ctx, cell, "keyspace", &topodatapb.SrvKeyspace{}); err != nil {
@@ -107,14 +100,10 @@ func TestCellInfo(t *testing.T) {
 	}
 	srvKeyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 	require.NoError(t, err)
-	if len(srvKeyspaces) == 0 {
-		t.Fatalf("UpdateSrvKeyspace did not add SrvKeyspace.")
-	}
+	require.NotEmpty(t, srvKeyspaces, "UpdateSrvKeyspace did not add SrvKeyspace.")
 
 	// Try to delete without force; it should fail.
-	if err := ts.DeleteCellInfo(ctx, cell, false); err == nil {
-		t.Fatalf("DeleteCellInfo should have failed without -force")
-	}
+	require.Error(t, ts.DeleteCellInfo(ctx, cell, false), "DeleteCellInfo should have failed without -force")
 
 	// Use the force.
 	if err := ts.DeleteCellInfo(ctx, cell, true); err != nil {

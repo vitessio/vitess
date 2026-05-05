@@ -38,15 +38,11 @@ func TestAppend(t *testing.T) {
 	Append(&b, tree)
 	got := b.String()
 	want := query
-	if got != want {
-		t.Errorf("Append: %s, want %s", got, want)
-	}
+	assert.Equalf(t, want, got, "Append: %s, want %s", got, want)
 	Append(&b, tree)
 	got = b.String()
 	want = query + query
-	if got != want {
-		t.Errorf("Append: %s, want %s", got, want)
-	}
+	assert.Equalf(t, want, got, "Append: %s, want %s", got, want)
 }
 
 func TestSelect(t *testing.T) {
@@ -112,18 +108,14 @@ func TestRemoveHints(t *testing.T) {
 		"select * from t force index (i)",
 	} {
 		tree, err := parser.Parse(query)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		sel := tree.(*Select)
 		sel.From = TableExprs{
 			sel.From[0].(*AliasedTableExpr).RemoveHints(),
 		}
 		buf := NewTrackedBuffer(nil)
 		sel.Format(buf)
-		if got, want := buf.String(), "select * from t"; got != want {
-			t.Errorf("stripped query: %s, want %s", got, want)
-		}
+		assert.Equal(t, "select * from t", buf.String(), "stripped query")
 	}
 }
 
@@ -222,19 +214,14 @@ func TestDDL(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		got, err := parser.Parse(tcase.query)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(got, tcase.output) {
-			t.Errorf("%s: %v, want %v", tcase.query, got, tcase.output)
-		}
+		require.NoError(t, err)
+		assert.Truef(t, reflect.DeepEqual(got, tcase.output), "%s: %v, want %v", tcase.query, got, tcase.output)
 		want := make(TableNames, 0, len(tcase.affected))
 		for _, t := range tcase.affected {
 			want = append(want, TableName{Name: NewIdentifierCS(t)})
 		}
-		if affected := got.(DDLStatement).AffectedTables(); !reflect.DeepEqual(affected, want) {
-			t.Errorf("Affected(%s): %v, want %v", tcase.query, affected, want)
-		}
+		affected := got.(DDLStatement).AffectedTables()
+		assert.Truef(t, reflect.DeepEqual(affected, want), "Affected(%s): %v, want %v", tcase.query, affected, want)
 	}
 }
 
@@ -243,51 +230,33 @@ func TestSetAutocommitON(t *testing.T) {
 	stmt, err := parser.Parse("SET autocommit=ON")
 	require.NoError(t, err)
 	s, ok := stmt.(*Set)
-	if !ok {
-		t.Errorf("SET statement is not Set: %T", s)
-	}
+	assert.Truef(t, ok, "SET statement is not Set: %T", s)
 
-	if len(s.Exprs) < 1 {
-		t.Errorf("SET statement has no expressions")
-	}
+	assert.NotEmpty(t, s.Exprs, "SET statement has no expressions")
 
 	e := s.Exprs[0]
 	switch v := e.Expr.(type) {
 	case *Literal:
-		if v.Type != StrVal {
-			t.Errorf("SET statement value is not StrVal: %T", v)
-		}
-
-		if v.Val != "on" {
-			t.Errorf("SET statement value want: on, got: %s", v.Val)
-		}
+		assert.Equalf(t, StrVal, v.Type, "SET statement value is not StrVal: %T", v)
+		assert.Equalf(t, "on", v.Val, "SET statement value want: on, got: %s", v.Val)
 	default:
-		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
+		assert.Failf(t, "SET statement expression is not Literal", "got: %T", e.Expr)
 	}
 
 	stmt, err = parser.Parse("SET @@session.autocommit=ON")
 	require.NoError(t, err)
 	s, ok = stmt.(*Set)
-	if !ok {
-		t.Errorf("SET statement is not Set: %T", s)
-	}
+	assert.Truef(t, ok, "SET statement is not Set: %T", s)
 
-	if len(s.Exprs) < 1 {
-		t.Errorf("SET statement has no expressions")
-	}
+	assert.NotEmpty(t, s.Exprs, "SET statement has no expressions")
 
 	e = s.Exprs[0]
 	switch v := e.Expr.(type) {
 	case *Literal:
-		if v.Type != StrVal {
-			t.Errorf("SET statement value is not StrVal: %T", v)
-		}
-
-		if v.Val != "on" {
-			t.Errorf("SET statement value want: on, got: %s", v.Val)
-		}
+		assert.Equalf(t, StrVal, v.Type, "SET statement value is not StrVal: %T", v)
+		assert.Equalf(t, "on", v.Val, "SET statement value want: on, got: %s", v.Val)
 	default:
-		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
+		assert.Failf(t, "SET statement expression is not Literal", "got: %T", e.Expr)
 	}
 }
 
@@ -296,51 +265,33 @@ func TestSetAutocommitOFF(t *testing.T) {
 	stmt, err := parser.Parse("SET autocommit=OFF")
 	require.NoError(t, err)
 	s, ok := stmt.(*Set)
-	if !ok {
-		t.Errorf("SET statement is not Set: %T", s)
-	}
+	assert.Truef(t, ok, "SET statement is not Set: %T", s)
 
-	if len(s.Exprs) < 1 {
-		t.Errorf("SET statement has no expressions")
-	}
+	assert.NotEmpty(t, s.Exprs, "SET statement has no expressions")
 
 	e := s.Exprs[0]
 	switch v := e.Expr.(type) {
 	case *Literal:
-		if v.Type != StrVal {
-			t.Errorf("SET statement value is not StrVal: %T", v)
-		}
-
-		if v.Val != "off" {
-			t.Errorf("SET statement value want: on, got: %s", v.Val)
-		}
+		assert.Equalf(t, StrVal, v.Type, "SET statement value is not StrVal: %T", v)
+		assert.Equalf(t, "off", v.Val, "SET statement value want: off, got: %s", v.Val)
 	default:
-		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
+		assert.Failf(t, "SET statement expression is not Literal", "got: %T", e.Expr)
 	}
 
 	stmt, err = parser.Parse("SET @@session.autocommit=OFF")
 	require.NoError(t, err)
 	s, ok = stmt.(*Set)
-	if !ok {
-		t.Errorf("SET statement is not Set: %T", s)
-	}
+	assert.Truef(t, ok, "SET statement is not Set: %T", s)
 
-	if len(s.Exprs) < 1 {
-		t.Errorf("SET statement has no expressions")
-	}
+	assert.NotEmpty(t, s.Exprs, "SET statement has no expressions")
 
 	e = s.Exprs[0]
 	switch v := e.Expr.(type) {
 	case *Literal:
-		if v.Type != StrVal {
-			t.Errorf("SET statement value is not StrVal: %T", v)
-		}
-
-		if v.Val != "off" {
-			t.Errorf("SET statement value want: on, got: %s", v.Val)
-		}
+		assert.Equalf(t, StrVal, v.Type, "SET statement value is not StrVal: %T", v)
+		assert.Equalf(t, "off", v.Val, "SET statement value want: off, got: %s", v.Val)
 	default:
-		t.Errorf("SET statement expression is not Literal: %T", e.Expr)
+		assert.Failf(t, "SET statement expression is not Literal", "got: %T", e.Expr)
 	}
 }
 
@@ -348,15 +299,11 @@ func TestWhere(t *testing.T) {
 	var w *Where
 	buf := NewTrackedBuffer(nil)
 	w.Format(buf)
-	if buf.String() != "" {
-		t.Errorf("w.Format(nil): %q, want \"\"", buf.String())
-	}
+	assert.Emptyf(t, buf.String(), "w.Format(nil): %q, want \"\"", buf.String())
 	w = NewWhere(WhereClause, nil)
 	buf = NewTrackedBuffer(nil)
 	w.Format(buf)
-	if buf.String() != "" {
-		t.Errorf("w.Format(&Where{nil}: %q, want \"\"", buf.String())
-	}
+	assert.Emptyf(t, buf.String(), "w.Format(&Where{nil}: %q, want \"\"", buf.String())
 }
 
 func TestIsImpossible(t *testing.T) {
@@ -541,45 +488,25 @@ func TestColNameEqual(t *testing.T) {
 
 func TestIdentifierCI(t *testing.T) {
 	str := NewIdentifierCI("Ab")
-	if str.String() != "Ab" {
-		t.Errorf("String=%s, want Ab", str.String())
-	}
-	if str.String() != "Ab" {
-		t.Errorf("Val=%s, want Ab", str.String())
-	}
-	if str.Lowered() != "ab" {
-		t.Errorf("Val=%s, want ab", str.Lowered())
-	}
-	if !str.Equal(NewIdentifierCI("aB")) {
-		t.Error("str.Equal(NewIdentifierCI(aB))=false, want true")
-	}
-	if !str.EqualString("ab") {
-		t.Error("str.EqualString(ab)=false, want true")
-	}
+	assert.Equalf(t, "Ab", str.String(), "String=%s, want Ab", str.String())
+	assert.Equalf(t, "Ab", str.String(), "Val=%s, want Ab", str.String())
+	assert.Equalf(t, "ab", str.Lowered(), "Val=%s, want ab", str.Lowered())
+	assert.True(t, str.Equal(NewIdentifierCI("aB")), "str.Equal(NewIdentifierCI(aB))=false, want true")
+	assert.True(t, str.EqualString("ab"), "str.EqualString(ab)=false, want true")
 	str = NewIdentifierCI("")
-	if str.Lowered() != "" {
-		t.Errorf("Val=%s, want \"\"", str.Lowered())
-	}
+	assert.Emptyf(t, str.Lowered(), "Val=%s, want \"\"", str.Lowered())
 }
 
 func TestIdentifierCIMarshal(t *testing.T) {
 	str := NewIdentifierCI("Ab")
 	b, err := json.Marshal(str)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := string(b)
 	want := `"Ab"`
-	if got != want {
-		t.Errorf("json.Marshal()= %s, want %s", got, want)
-	}
+	assert.Equalf(t, want, got, "json.Marshal()= %s, want %s", got, want)
 	var out IdentifierCI
-	if err := json.Unmarshal(b, &out); err != nil {
-		assert.NoError(t, err)
-	}
-	if !reflect.DeepEqual(out, str) {
-		t.Errorf("Unmarshal: %v, want %v", out, str)
-	}
+	require.NoError(t, json.Unmarshal(b, &out))
+	assert.Truef(t, reflect.DeepEqual(out, str), "Unmarshal: %v, want %v", out, str)
 }
 
 func TestIdentifierCISize(t *testing.T) {
@@ -591,21 +518,13 @@ func TestIdentifierCISize(t *testing.T) {
 func TestIdentifierCSMarshal(t *testing.T) {
 	str := NewIdentifierCS("Ab")
 	b, err := json.Marshal(str)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := string(b)
 	want := `"Ab"`
-	if got != want {
-		t.Errorf("json.Marshal()= %s, want %s", got, want)
-	}
+	assert.Equalf(t, want, got, "json.Marshal()= %s, want %s", got, want)
 	var out IdentifierCS
-	if err := json.Unmarshal(b, &out); err != nil {
-		assert.NoError(t, err)
-	}
-	if !reflect.DeepEqual(out, str) {
-		t.Errorf("Unmarshal: %v, want %v", out, str)
-	}
+	require.NoError(t, json.Unmarshal(b, &out))
+	assert.Truef(t, reflect.DeepEqual(out, str), "Unmarshal: %v, want %v", out, str)
 }
 
 func TestHexDecode(t *testing.T) {
@@ -624,14 +543,10 @@ func TestHexDecode(t *testing.T) {
 	for _, tc := range testcase {
 		out, err := NewHexLiteral(tc.in).HexDecode()
 		if err != nil {
-			if err.Error() != tc.out {
-				t.Errorf("Decode(%q): %v, want %s", tc.in, err, tc.out)
-			}
+			assert.Equalf(t, tc.out, err.Error(), "Decode(%q)", tc.in)
 			continue
 		}
-		if !bytes.Equal(out, []byte(tc.out)) {
-			t.Errorf("Decode(%q): %s, want %s", tc.in, out, tc.out)
-		}
+		assert.Truef(t, bytes.Equal(out, []byte(tc.out)), "Decode(%q): %s, want %s", tc.in, out, tc.out)
 	}
 }
 
@@ -656,13 +571,9 @@ func TestCompliantName(t *testing.T) {
 	}}
 	for _, tc := range testcases {
 		out := NewIdentifierCI(tc.in).CompliantName()
-		if out != tc.out {
-			t.Errorf("IdentifierCI(%s).CompliantNamt: %s, want %s", tc.in, out, tc.out)
-		}
+		assert.Equalf(t, tc.out, out, "IdentifierCI(%s).CompliantName", tc.in)
 		out = NewIdentifierCS(tc.in).CompliantName()
-		if out != tc.out {
-			t.Errorf("IdentifierCS(%s).CompliantNamt: %s, want %s", tc.in, out, tc.out)
-		}
+		assert.Equalf(t, tc.out, out, "IdentifierCS(%s).CompliantName", tc.in)
 	}
 }
 
@@ -693,9 +604,7 @@ func TestColumns_FindColumn(t *testing.T) {
 
 	for _, tc := range testcases {
 		val := cols.FindColumn(NewIdentifierCI(tc.in))
-		if val != tc.out {
-			t.Errorf("FindColumn(%s): %d, want %d", tc.in, val, tc.out)
-		}
+		assert.Equalf(t, tc.out, val, "FindColumn(%s)", tc.in)
 	}
 }
 

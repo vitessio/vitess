@@ -28,6 +28,7 @@ import (
 	"testing/quick"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testEnt struct {
@@ -134,7 +135,7 @@ func TestNewFromFloat(t *testing.T) {
 	for _, n := range shouldPanicOn {
 		var d Decimal
 		if !didPanic(func() { d = NewFromFloat(n) }) {
-			t.Fatalf("Expected panic when creating a Decimal from %v, got %v instead", n, d.String())
+			require.Failf(t, "expected panic", "Expected panic when creating a Decimal from %v, got %v instead", n, d.String())
 		}
 	}
 }
@@ -175,35 +176,23 @@ func TestNewFromString(t *testing.T) {
 	for _, x := range testTable {
 		s := x.short
 		d, err := NewFromString(s)
-		if err != nil {
-			t.Errorf("error while parsing %s", s)
-		} else if d.String() != s {
-			t.Errorf("expected %s, got %s (%s, %d)",
-				s, d.String(),
-				d.value.String(), d.exp)
+		if assert.NoErrorf(t, err, "error while parsing %s", s) {
+			assert.Equalf(t, s, d.String(), "expected %s, got %s (%s, %d)", s, d.String(), d.value.String(), d.exp)
 		}
 	}
 
 	for _, x := range testTable {
 		s := x.exact
 		d, err := NewFromString(s)
-		if err != nil {
-			t.Errorf("error while parsing %s", s)
-		} else if d.String() != s {
-			t.Errorf("expected %s, got %s (%s, %d)",
-				s, d.String(),
-				d.value.String(), d.exp)
+		if assert.NoErrorf(t, err, "error while parsing %s", s) {
+			assert.Equalf(t, s, d.String(), "expected %s, got %s (%s, %d)", s, d.String(), d.value.String(), d.exp)
 		}
 	}
 
 	for e, s := range testTableScientificNotation {
 		d, err := NewFromString(e)
-		if err != nil {
-			t.Errorf("error while parsing %s", e)
-		} else if d.String() != s {
-			t.Errorf("expected %s, got %s (%s, %d)",
-				s, d.String(),
-				d.value.String(), d.exp)
+		if assert.NoErrorf(t, err, "error while parsing %s", e) {
+			assert.Equalf(t, s, d.String(), "expected %s, got %s (%s, %d)", s, d.String(), d.value.String(), d.exp)
 		}
 	}
 }
@@ -217,17 +206,15 @@ func TestFloat64(t *testing.T) {
 		}
 		s := x.exact
 		d, err := NewFromString(s)
-		if err != nil {
-			t.Errorf("error while parsing %s", s)
-		} else if f, exact := d.Float64(); !exact || f != x.float {
-			t.Errorf("cannot represent exactly %s", s)
+		if assert.NoErrorf(t, err, "error while parsing %s", s) {
+			f, exact := d.Float64()
+			assert.Truef(t, exact && f == x.float, "cannot represent exactly %s", s)
 		}
 		s = x.inexact
 		d, err = NewFromString(s)
-		if err != nil {
-			t.Errorf("error while parsing %s", s)
-		} else if f, exact := d.Float64(); exact || f != x.float {
-			t.Errorf("%s should be represented inexactly", s)
+		if assert.NoErrorf(t, err, "error while parsing %s", s) {
+			f, exact := d.Float64()
+			assert.Falsef(t, exact || f != x.float, "%s should be represented inexactly", s)
 		}
 	}
 }
@@ -300,9 +287,8 @@ func TestNewFromStringDeepEquals(t *testing.T) {
 		d1, err1 := NewFromString(cmp.str1)
 		d2, err2 := NewFromString(cmp.str2)
 
-		if err1 != nil || err2 != nil {
-			t.Errorf("error parsing strings to decimals")
-		}
+		assert.NoError(t, err1, "error parsing strings to decimals")
+		assert.NoError(t, err2, "error parsing strings to decimals")
 		assert.Equal(t, cmp.expected, reflect.DeepEqual(d1, d2))
 	}
 }
@@ -311,17 +297,11 @@ func TestRequireFromString(t *testing.T) {
 	s := "1.23"
 	defer func() {
 		err := recover()
-		if err != nil {
-			t.Errorf("error while parsing %s", s)
-		}
+		assert.Nilf(t, err, "error while parsing %s", s)
 	}()
 
 	d := RequireFromString(s)
-	if d.String() != s {
-		t.Errorf("expected %s, got %s (%s, %d)",
-			s, d.String(),
-			d.value.String(), d.exp)
-	}
+	assert.Equalf(t, s, d.String(), "expected %s, got %s (%s, %d)", s, d.String(), d.value.String(), d.exp)
 }
 
 func TestRequireFromStringErrs(t *testing.T) {
@@ -337,9 +317,7 @@ func TestRequireFromStringErrs(t *testing.T) {
 		RequireFromString(s)
 	}(d)
 
-	if err == nil {
-		t.Errorf("panic expected when parsing %s", s)
-	}
+	assert.NotNilf(t, err, "panic expected when parsing %s", s)
 }
 
 func TestNewFromInt(t *testing.T) {
@@ -602,20 +580,11 @@ func TestDecimal_QuoRem(t *testing.T) {
 		q, r := d.QuoRem(d2, prec)
 		expectedQ, _ := NewFromString(inp4.q)
 		expectedR, _ := NewFromString(inp4.r)
-		if !q.Equal(expectedQ) || !r.Equal(expectedR) {
-			t.Errorf("bad QuoRem division %s , %s , %d got %v, %v expected %s , %s",
-				inp4.d, inp4.d2, prec, q, r, inp4.q, inp4.r)
-		}
+		assert.Truef(t, q.Equal(expectedQ) && r.Equal(expectedR), "bad QuoRem division %s , %s , %d got %v, %v expected %s , %s", inp4.d, inp4.d2, prec, q, r, inp4.q, inp4.r)
 		assert.True(t, d.Equal(d2.mul(q).Add(r)))
 		assert.True(t, q.Equal(q.Truncate(prec)))
-		if r.Abs().Cmp(d2.Abs().mul(New(1, -prec))) >= 0 {
-			t.Errorf("remainder too large: d=%v, d2= %v, prec=%d, q=%v, r=%v",
-				d, d2, prec, q, r)
-		}
-		if r.value.Sign()*d.value.Sign() < 0 {
-			t.Errorf("signum of divisor and rest do not match: d=%v, d2= %v, prec=%d, q=%v, r=%v",
-				d, d2, prec, q, r)
-		}
+		assert.Lessf(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), 0, "remainder too large: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
+		assert.GreaterOrEqualf(t, r.value.Sign()*d.value.Sign(), 0, "signum of divisor and rest do not match: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 	}
 }
 
@@ -667,16 +636,9 @@ func TestDecimal_QuoRem2(t *testing.T) {
 		assert.True(t, q.Equal(q.Truncate(prec)))
 
 		// rule 3: abs(r)<abs(d) * 10^(-prec)
-		if r.Abs().Cmp(d2.Abs().mul(New(1, -prec))) >= 0 {
-			t.Errorf("remainder too large, d=%v, d2=%v, prec=%d, q=%v, r=%v",
-				d, d2, prec, q, r)
-		}
+		assert.Lessf(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), 0, "remainder too large, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 		// rule 4: r and d have the same sign
-		if r.value.Sign()*d.value.Sign() < 0 {
-			t.Errorf("signum of divisor and rest do not match, "+
-				"d=%v, d2=%v, prec=%d, q=%v, r=%v",
-				d, d2, prec, q, r)
-		}
+		assert.GreaterOrEqualf(t, r.value.Sign()*d.value.Sign(), 0, "signum of divisor and rest do not match, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 	}
 }
 
@@ -685,12 +647,8 @@ func sign(d Decimal) int {
 }
 
 func TestDecimal_Overflow(t *testing.T) {
-	if !didPanic(func() { New(1, math.MinInt32).mul(New(1, math.MinInt32)) }) {
-		t.Fatalf("should have gotten an overflow panic")
-	}
-	if !didPanic(func() { New(1, math.MaxInt32).mul(New(1, math.MaxInt32)) }) {
-		t.Fatalf("should have gotten an overflow panic")
-	}
+	require.True(t, didPanic(func() { New(1, math.MinInt32).mul(New(1, math.MinInt32)) }), "should have gotten an overflow panic")
+	require.True(t, didPanic(func() { New(1, math.MaxInt32).mul(New(1, math.MaxInt32)) }), "should have gotten an overflow panic")
 }
 
 // old tests after this line
@@ -719,9 +677,7 @@ func TestDecimal_Abs2(t *testing.T) {
 func TestDecimal_ScalesNotEqual(t *testing.T) {
 	a := New(1234, 2)
 	b := New(1234, 3)
-	if a.Equal(b) {
-		t.Errorf("%q should not equal %q", a, b)
-	}
+	assert.Falsef(t, a.Equal(b), "%q should not equal %q", a, b)
 }
 
 func TestDecimal_Cmp1(t *testing.T) {
