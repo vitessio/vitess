@@ -182,6 +182,59 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 					}).(sqlparser.Expr)
 				}
 			}
+<<<<<<< HEAD
+||||||| parent of 5ea4edd93c (planner: substitute merged DML IN/NOT IN subqueries via ListArg placeholder (#19973))
+			expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+				switch expr := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
+						return true
+					}
+				case *sqlparser.Argument:
+					if expr.Name != sq.ArgName {
+						return true
+					}
+				default:
+					return true
+				}
+				rewritten = true
+				if sq.FilterType == opcode.PulloutExists {
+					cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
+				} else {
+					cursor.Replace(sq.originalSubquery)
+				}
+				merged = true
+				return false
+			}).(sqlparser.Expr)
+=======
+			expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+				switch expr := cursor.Node().(type) {
+				case *sqlparser.ColName:
+					if expr.Name.String() != sq.ArgName { // TODO systay 2023.09.15 - This is not safe enough. We should figure out a better way.
+						return true
+					}
+				case *sqlparser.Argument:
+					if expr.Name != sq.ArgName {
+						return true
+					}
+				case sqlparser.ListArg:
+					// DML IN/NOT IN subqueries use ListArg placeholders, not Argument.
+					if string(expr) != sq.ArgName {
+						return true
+					}
+				default:
+					return true
+				}
+				rewritten = true
+				if sq.FilterType == opcode.PulloutExists {
+					cursor.Replace(&sqlparser.ExistsExpr{Subquery: sq.originalSubquery})
+				} else {
+					cursor.Replace(sq.originalSubquery)
+				}
+				merged = true
+				return false
+			}).(sqlparser.Expr)
+>>>>>>> 5ea4edd93c (planner: substitute merged DML IN/NOT IN subqueries via ListArg placeholder (#19973))
 		}
 	}
 	return expr, rewritten
