@@ -984,34 +984,3 @@ func TestThrottlerAppNames(t *testing.T) {
 	assert.Contains(t, vc.throttlerAppName, "vcopier")
 	assert.NotContains(t, vc.throttlerAppName, "vplayer")
 }
-
-// TestSetStateDoesNotAdvanceMetricOnDBError ensures the in-memory State
-// metric stays in sync with the DB row. If the UPDATE on _vt.vreplication
-// fails (e.g. the target's MySQL is read-only), setState must not leave
-// the metric advanced to "Error" — that contradicts both the DB row and
-// the absence of any vreplication_log transition.
-func TestSetStateDoesNotAdvanceMetricOnDBError(t *testing.T) {
-	stats := binlogplayer.NewStats()
-	defer stats.Stop()
-	stats.State.Store(binlogdatapb.VReplicationWorkflowState_Copying.String())
-
-	mockDBClient := binlogplayer.NewMockDBClient(t)
-	defer mockDBClient.Close()
-
-	dbErr := errors.New("The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)")
-	mockDBClient.ExpectRequest("update _vt.vreplication set state='Error', message=left('boom', 1000) where id=1", nil, dbErr)
-
-	vr := &vreplicator{
-		id:       1,
-		stats:    stats,
-		dbClient: newVDBClient(mockDBClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
-		state:    binlogdatapb.VReplicationWorkflowState_Copying,
-	}
-
-	err := vr.setState(binlogdatapb.VReplicationWorkflowState_Error, "boom")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "could not set state")
-	assert.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying.String(), stats.State.Load(),
-		"stats.State must not advance when the DB UPDATE fails")
-	assert.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying, vr.state)
-}

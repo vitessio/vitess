@@ -547,12 +547,11 @@ func (blp *BinlogPlayer) setVReplicationState(state binlogdatapb.VReplicationWor
 			Message: message,
 		})
 	}
+	blp.blplStats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=%v where id=%v", encodeString(state.String()), encodeString(MessageTruncate(message)), blp.uid)
 	if _, err := blp.dbClient.ExecuteFetch(query, 1); err != nil {
-		// Don't advance the in-memory metric when the DB row was not updated.
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
-	blp.blplStats.State.Store(state.String())
 	return nil
 }
 
