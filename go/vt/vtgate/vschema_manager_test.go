@@ -1076,6 +1076,106 @@ func TestViewRoutingRulesRebuild(t *testing.T) {
 	assert.Equal(t, "v1", vs.ViewRoutingRules["source_ks.v1"].TargetViewName)
 }
 
+// TestRoutingRulesAuthoritativeAfterSchemaTracker pins down the invariant
+// the planner relies on for routing-rule-only setups: once the schema
+// tracker has reported columns for a routed table, the routing rule's
+// BaseTable has `ColumnListAuthoritative=true` and carries the tracked
+// columns, so the planner can expand `t.*` against it. Two shapes:
+//
+//   - tracker has data for every keyspace at `VSchemaUpdate` time: every
+//     rule is authoritative right after the first build.
+//   - tracker is initially empty and fills in keyspace-by-keyspace across
+//     successive `Rebuild` calls: each rule flips to authoritative the
+//     first time the rebuild sees columns for its target keyspace, and
+//     rules whose target keyspace is still untracked remain non-
+//     authoritative.
+func TestRoutingRulesAuthoritativeAfterSchemaTracker(t *testing.T) {
+	colsA := []vindexes.Column{
+		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
+		{Name: sqlparser.NewIdentifierCI("fk"), Type: querypb.Type_INT64},
+	}
+	colsB := []vindexes.Column{
+		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
+		{Name: sqlparser.NewIdentifierCI("label"), Type: querypb.Type_VARCHAR},
+	}
+
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks_a": {Sharded: false},
+			"ks_b": {Sharded: false},
+		},
+		RoutingRules: &vschemapb.RoutingRules{
+			Rules: []*vschemapb.RoutingRule{
+				{FromTable: "table_a", ToTables: []string{"ks_a.table_a"}},
+				{FromTable: "table_b", ToTables: []string{"ks_b.table_b"}},
+			},
+		},
+	}
+
+	check := func(t *testing.T, vs *vindexes.VSchema, wantAColAuthoritative, wantBColAuthoritative bool) {
+		t.Helper()
+		rrA := vs.RoutingRules["table_a"]
+		require.NotNil(t, rrA)
+		require.Len(t, rrA.Tables, 1)
+		assert.Equal(t, wantAColAuthoritative, rrA.Tables[0].ColumnListAuthoritative,
+			"routing rule for table_a authoritative state")
+		rrB := vs.RoutingRules["table_b"]
+		require.NotNil(t, rrB)
+		require.Len(t, rrB.Tables, 1)
+		assert.Equal(t, wantBColAuthoritative, rrB.Tables[0].ColumnListAuthoritative,
+			"routing rule for table_b authoritative state")
+	}
+
+	t.Run("tracker populated when VSchemaUpdate fires", func(t *testing.T) {
+		vm := &VSchemaManager{}
+		var vs *vindexes.VSchema
+		vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+			vs = vschema
+			vs.ResetCreated()
+		}
+		vm.schema = &fakeSchema{
+			tables: map[string]map[string]*vindexes.TableInfo{
+				"ks_a": {"table_a": {Columns: colsA}},
+				"ks_b": {"table_b": {Columns: colsB}},
+			},
+		}
+
+		vm.VSchemaUpdate(srvVSchema, nil)
+		check(t, vs, true, true)
+	})
+
+	t.Run("tracker populates one keyspace late via Rebuild", func(t *testing.T) {
+		vm := &VSchemaManager{}
+		var vs *vindexes.VSchema
+		vm.subscriber = func(vschema *vindexes.VSchema, _ *VSchemaStats) {
+			vs = vschema
+			vs.ResetCreated()
+		}
+
+		// Tracker is empty when SrvVSchema first arrives (e.g. tablets not
+		// yet healthy at startup). Both routing rules synthesize placeholder
+		// BaseTables; neither is authoritative.
+		tracker := &fakeSchema{}
+		vm.schema = tracker
+		vm.VSchemaUpdate(srvVSchema, nil)
+		check(t, vs, false, false)
+
+		// Tracker subsequently picks up ks_a only; ks_b stays unknown.
+		tracker.tables = map[string]map[string]*vindexes.TableInfo{
+			"ks_a": {"table_a": {Columns: colsA}},
+		}
+		vm.Rebuild()
+		check(t, vs, true, false)
+
+		// Then ks_b is also tracked.
+		tracker.tables["ks_b"] = map[string]*vindexes.TableInfo{
+			"table_b": {Columns: colsB},
+		}
+		vm.Rebuild()
+		check(t, vs, true, true)
+	})
+}
+
 // testView creates a simple view selecting from the given table.
 func testView(tableName string) *sqlparser.Select {
 	return &sqlparser.Select{
