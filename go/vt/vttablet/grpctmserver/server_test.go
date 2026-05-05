@@ -26,8 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tmrpctest"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"github.com/stretchr/testify/require"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestGRPCTMServer creates a fake server implementation, a fake client

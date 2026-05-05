@@ -23,8 +23,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"github.com/stretchr/testify/assert"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type topoLayout struct {

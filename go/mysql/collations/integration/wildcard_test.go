@@ -20,11 +20,12 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/collations/remote"
-	"github.com/stretchr/testify/require"
 )
 
 func TestRemoteWildcardMatches(t *testing.T) {

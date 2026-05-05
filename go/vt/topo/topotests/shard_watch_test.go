@@ -27,9 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // waitForInitialShard waits for the initial Shard to appear.
@@ -209,9 +209,7 @@ func TestWatchShardCancel(t *testing.T) {
 
 	// No Shard -> ErrNoNode
 	_, _, err := ts.WatchShard(ctx, keyspace, shard)
-	if !topo.IsErrType(err, topo.NoNode) {
-		assert.NoError(t, err)
-	}
+	require.Truef(t, topo.IsErrType(err, topo.NoNode), "expected topo.NoNode error, got: %v", err)
 
 	// Create keyspace
 	if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {

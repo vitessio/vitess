@@ -25,9 +25,10 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayertest"
 	"vitess.io/vitess/go/vt/binlog/grpcbinlogstreamer"
 
+	"github.com/stretchr/testify/require"
+
 	binlogservicepb "vitess.io/vitess/go/vt/proto/binlogservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"github.com/stretchr/testify/require"
 )
 
 // the test here creates a fake server implementation, a fake client

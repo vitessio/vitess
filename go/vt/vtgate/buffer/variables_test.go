@@ -24,9 +24,10 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/stats"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/stats"
 )
 
 func TestVariables(t *testing.T) {

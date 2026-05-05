@@ -21,8 +21,9 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
 var (

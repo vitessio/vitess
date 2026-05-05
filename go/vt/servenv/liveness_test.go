@@ -21,8 +21,9 @@ import (
 	"net/http"
 	"testing"
 
-	"vitess.io/vitess/go/vt/servenv/testutils"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/servenv/testutils"
 )
 
 func TestLivenessHandler(t *testing.T) {

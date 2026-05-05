@@ -20,8 +20,9 @@ import (
 	"context"
 	"testing"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestBasicCompare(t *testing.T) {

@@ -34,9 +34,10 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	"github.com/stretchr/testify/require"
+
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCopySchemaShard_UseTabletAsSource(t *testing.T) {

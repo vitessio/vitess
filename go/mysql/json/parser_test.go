@@ -20,8 +20,9 @@ package json
 import (
 	"testing"
 
-	"vitess.io/vitess/go/hack"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/hack"
 )
 
 func TestParseRawNumber(t *testing.T) {

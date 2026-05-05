@@ -21,8 +21,9 @@ import (
 	"io"
 	"testing"
 
-	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
 
 // This file tests the file BackupStorage engine.

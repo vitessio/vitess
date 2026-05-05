@@ -32,8 +32,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"github.com/stretchr/testify/assert"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // waitForInitialSrvKeyspace waits for the initial SrvKeyspace to
@@ -121,9 +122,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 
 	// Bad data in topo, setting the watch should now fail.
 	_, _, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if err == nil || !strings.Contains(err.Error(), "error unpacking initial SrvKeyspace object") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, err, "error unpacking initial SrvKeyspace object")
 
 	// Update content, wait until Watch works again
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {

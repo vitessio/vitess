@@ -219,9 +219,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// Now sleep for the rest of the interval and we should get the value again
 	time.Sleep(srvTopoCacheRefresh)
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-	if err != nil || !proto.Equal(want, got) {
-		assert.NoError(t, err)
-	}
+	assert.NoError(t, err)
+	assert.True(t, proto.Equal(want, got), "expected value to be restored, got %v", got)
 
 	// Now sleep for the full TTL before setting the error again to test
 	// that even when there is no activity on the key, it is still cached
@@ -321,9 +320,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 	time.Sleep(srvTopoCacheTTL)
 
 	got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-	if err != nil || !proto.Equal(want, got) {
-		assert.NoError(t, err)
-	}
+	assert.NoError(t, err)
+	assert.True(t, proto.Equal(want, got), "expected error to clear, got %v", got)
 
 	// Force another error and lock the topo. Then wait for the TTL to
 	// expire and verify that the context timeout unblocks the request.

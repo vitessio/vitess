@@ -18,7 +18,6 @@ package testlib
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -33,9 +32,10 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	"github.com/stretchr/testify/require"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"github.com/stretchr/testify/require"
 )
 
 func TestPermissions(t *testing.T) {
@@ -594,7 +594,5 @@ func TestPermissions(t *testing.T) {
 	}
 
 	// run ValidatePermissionsKeyspace again, this should now fail
-	if err := vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "has an extra user") {
-		require.NoError(t, err)
-	}
+	require.ErrorContains(t, vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}), "has an extra user")
 }

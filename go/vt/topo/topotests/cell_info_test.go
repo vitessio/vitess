@@ -81,11 +81,10 @@ func TestCellInfo(t *testing.T) {
 
 	// Test failing update.
 	updateErr := errors.New("inside error")
-	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
+	err = ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
 		return updateErr
-	}); err != updateErr {
-		require.NoError(t, err)
-	}
+	})
+	require.ErrorIs(t, err, updateErr)
 
 	// Test update on non-existing object.
 	newCell := "new_cell"
@@ -121,9 +120,8 @@ func TestCellInfo(t *testing.T) {
 	if err := ts.DeleteCellInfo(ctx, cell, true); err != nil {
 		require.NoError(t, err)
 	}
-	if _, err := ts.GetCellInfo(ctx, cell, true /*strongRead*/); !topo.IsErrType(err, topo.NoNode) {
-		require.NoError(t, err)
-	}
+	_, err = ts.GetCellInfo(ctx, cell, true /*strongRead*/)
+	require.Truef(t, topo.IsErrType(err, topo.NoNode), "expected topo.NoNode error, got: %v", err)
 }
 
 func TestExpandCells(t *testing.T) {

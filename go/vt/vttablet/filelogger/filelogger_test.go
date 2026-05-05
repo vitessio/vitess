@@ -23,9 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"github.com/stretchr/testify/require"
 )
 
 // TestFileLog sends a stream of five query records to the plugin, and verifies that they are logged.

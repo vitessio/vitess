@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"sync/atomic"
 	"testing"
+
 	"github.com/stretchr/testify/require"
 )
 

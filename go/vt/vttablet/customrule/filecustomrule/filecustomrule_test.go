@@ -21,9 +21,10 @@ import (
 	"path"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
-	"github.com/stretchr/testify/require"
 )
 
 var customRule1 = `[

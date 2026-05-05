@@ -30,8 +30,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/vt/vttls"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/vttls"
 )
 
 func TestClientServerWithoutCombineCerts(t *testing.T) {
@@ -153,25 +154,15 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	// With TLS 1.3, the Dial will succeed and the first Read will fail.
 	clientConn, err := tls.DialWithDialer(dialer, "tcp", addr, badClientConfig)
 	if err != nil {
-		if !strings.Contains(err.Error(), "certificate required") {
-			assert.NoError(t, err)
-		}
+		assert.ErrorContains(t, err, "certificate required")
 		return
 	}
 
-	if err := serverEG.Wait(); err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, serverEG.Wait())
 
 	data := make([]byte, 1)
 	_, err = clientConn.Read(data)
-	if err == nil {
-		t.Fatalf("Dial or first Read was expected to fail")
-	}
-
-	if !strings.Contains(err.Error(), "certificate required") {
-		assert.NoError(t, err)
-	}
+	require.ErrorContains(t, err, "certificate required", "Dial or first Read was expected to fail with 'certificate required'")
 }
 
 func getServerConfigWithoutCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
@@ -324,13 +315,11 @@ func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Confi
 	}
 
 	err = serverConn.(*tls.Conn).Handshake()
-	if err != nil {
-		if !strings.Contains(err.Error(), "Certificate revoked: CommonName=") && !strings.Contains(err.Error(), "remote error: tls: bad certificate") {
-			require.NoError(t, err)
-		}
-	} else {
-		t.Fatal("Server should have failed the TLS handshake but it did not")
-	}
+	require.Error(t, err, "Server should have failed the TLS handshake but it did not")
+	assert.Truef(t,
+		strings.Contains(err.Error(), "Certificate revoked: CommonName=") ||
+			strings.Contains(err.Error(), "remote error: tls: bad certificate"),
+		"unexpected handshake error: %v", err)
 	serverConn.Close()
 	wg.Wait()
 }

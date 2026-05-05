@@ -24,8 +24,9 @@ import (
 
 	"github.com/google/safehtml/template"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"github.com/stretchr/testify/require"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestTabletStatusAggregator(t *testing.T) {
