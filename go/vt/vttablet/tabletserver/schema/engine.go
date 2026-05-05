@@ -83,6 +83,10 @@ const (
 	// flips the type, and we don't want to kick off background admin work
 	// while the tablet's role is still settling.
 	tabletTypeStabilityCooldown = 5 * time.Minute
+	// schemaMaintenanceProbeTimeout gives best-effort maintenance probes a
+	// bounded budget inside reload so slow probes do not consume the whole
+	// schema reload context before the required table metadata queries run.
+	schemaMaintenanceProbeTimeout = 5 * time.Second
 )
 
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
@@ -958,7 +962,7 @@ func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *conn
 		se.surfacedFreeSpaceTables = nil
 		return
 	}
-	result, err := conn.Exec(ctx, fmt.Sprintf(userTableFreeSpaceQueryFormat, percentThreshold), maxTableCountSetting.Get(), false)
+	result, err := conn.Exec(ctx, fmt.Sprintf(userTableFreeSpaceQueryFormat, percentThreshold), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		se.throttledLogger.Warningf("schema engine: reading user table DATA_FREE failed: %v", err)
 		return
@@ -1047,8 +1051,13 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		// fail the reload. These helpers rely on ReloadAtEx holding se.mu
 		// for the lifetime of the reload, and do not re-acquire it (Go
 		// mutexes are not re-entrant).
-		se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, tabletenv.SchemaUserTablesFreeSpacePercentThreshold())
-		se.maybeOptimizeGtidExecutedLocked(ctx, conn.Conn)
+		maintenanceCtx, maintenanceCancel := context.WithTimeout(ctx, schemaMaintenanceProbeTimeout)
+		se.updateUserTableFreeSpaceLocked(maintenanceCtx, conn.Conn, tabletenv.SchemaUserTablesFreeSpacePercentThreshold())
+		maintenanceCancel()
+
+		maintenanceCtx, maintenanceCancel = context.WithTimeout(ctx, schemaMaintenanceProbeTimeout)
+		se.maybeOptimizeGtidExecutedLocked(maintenanceCtx, conn.Conn)
+		maintenanceCancel()
 	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
 	if err != nil {

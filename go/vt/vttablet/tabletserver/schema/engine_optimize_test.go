@@ -667,6 +667,39 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	assert.Equal(t, int64(900), se.tableDataFreeBytes.Counts()["t_b"])
 }
 
+// TestUpdateUserTableFreeSpaceIgnoresMaxTableCount verifies that the
+// visibility query is not coupled to the DDL guard for creating tables.
+func TestUpdateUserTableFreeSpaceIgnoresMaxTableCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	se.MakePrimary(true)
+	se.conns.Open(se.cp, se.cp, se.cp)
+	defer se.conns.Close()
+
+	originalMaxTableCount := MaxTableCount()
+	SetMaxTableCount(1)
+	t.Cleanup(func() { SetMaxTableCount(originalMaxTableCount) })
+
+	dataFreeQuery := "select table_name, data_free, data_length + index_length + data_free as total_size from information_schema.TABLES where table_schema = database() and data_free * 100 > (data_length + index_length + data_free) * 50"
+	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("table_name|data_free|total_size", "varchar|uint64|uint64"),
+		"t_a|600|1000",
+		"t_b|800|1000",
+	))
+
+	ctx := t.Context()
+	conn, err := se.conns.Get(ctx, nil)
+	require.NoError(t, err)
+	se.mu.Lock()
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, 50)
+	se.mu.Unlock()
+	conn.Recycle()
+
+	assert.Equal(t, int64(600), se.tableDataFreeBytes.Counts()["t_a"])
+	assert.Equal(t, int64(800), se.tableDataFreeBytes.Counts()["t_b"])
+}
+
 // TestMaybeOptimizeGtidExecutedSmallDataFreeSkips verifies that when
 // mysql.gtid_executed's DATA_FREE is under the 128 MiB threshold, we
 // neither spawn the OPTIMIZE goroutine nor stamp the last-run time.
