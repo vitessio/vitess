@@ -98,49 +98,50 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-// TestIssue19986CrossKeyspaceJoinStarExpansion reproduces the user's report
-// from issue #19986. With both keyspaces having empty `tables: {}` in vschema
-// and routing rules redirecting unqualified table names at the per-keyspace
-// tables, every shape of query should plan once the schema tracker has
-// populated columns -- including a cross-keyspace JOIN with `t.*`.
-func TestIssue19986CrossKeyspaceJoinStarExpansion(t *testing.T) {
+// TestRoutedTableColumnsAreAuthoritativeForStarExpansion exercises the case
+// where two unsharded keyspaces have empty `tables: {}` in vschema and rely
+// entirely on routing rules + the schema tracker to make their tables
+// queryable. Once the tracker has reported columns for each routed table,
+// the planner has to treat those columns as authoritative so it can expand
+// `t.*` for queries it executes at vtgate.
+//
+// We cover four query shapes:
+//   - `t.*` against each routed table (single-Route push-down),
+//   - a cross-keyspace JOIN with explicit columns (no `*` expansion),
+//   - a cross-keyspace JOIN with `t.*` qualified to one side (forces
+//     vtgate-side expansion of the qualified `*`).
+//
+// All four should plan and return the seeded rows.
+func TestRoutedTableColumnsAreAuthoritativeForStarExpansion(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// Wait for the schema tracker to have populated columns for the routed
-	// tables. We assert by checking that the unqualified `select t.*` against
-	// each keyspace returns the expected columns.
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, ksA,
-		func(t *testing.T, keyspace map[string]any) bool {
-			tables, ok := keyspace["tables"].(map[string]any)
-			if !ok {
-				return false
-			}
-			tbl, ok := tables["table_a"].(map[string]any)
-			if !ok {
-				return false
-			}
-			cols, ok := tbl["columns"].([]any)
-			return ok && len(cols) >= 3
-		}, "ks_a.table_a columns not yet tracked")
+	// Wait until the schema tracker has reported columns for both routed
+	// tables. We poll the published vschema rather than retrying the query
+	// itself so a transient `table not found` doesn't get conflated with the
+	// authoritativeness bug we're actually testing.
+	waitForColumns := func(ks, tbl string, want int) {
+		t.Helper()
+		utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, ks,
+			func(t *testing.T, keyspace map[string]any) bool {
+				tables, ok := keyspace["tables"].(map[string]any)
+				if !ok {
+					return false
+				}
+				table, ok := tables[tbl].(map[string]any)
+				if !ok {
+					return false
+				}
+				cols, ok := table["columns"].([]any)
+				return ok && len(cols) >= want
+			}, fmt.Sprintf("%s.%s columns not yet tracked", ks, tbl))
+	}
+	waitForColumns(ksA, "table_a", 3)
+	waitForColumns(ksB, "table_b", 2)
 
-	utils.WaitForVschemaCondition(t, clusterInstance.VtgateProcess, ksB,
-		func(t *testing.T, keyspace map[string]any) bool {
-			tables, ok := keyspace["tables"].(map[string]any)
-			if !ok {
-				return false
-			}
-			tbl, ok := tables["table_b"].(map[string]any)
-			if !ok {
-				return false
-			}
-			cols, ok := tbl["columns"].([]any)
-			return ok && len(cols) >= 2
-		}, "ks_b.table_b columns not yet tracked")
-
-	// Seed a couple of rows so the JOIN actually returns matching data and the
-	// test exercises both planning and execution end-to-end.
+	// Seed two matching rows on each side so the JOINs actually return data
+	// and we can verify execution, not just planning.
 	utils.Exec(t, conn, "use @primary")
 	utils.Exec(t, conn, "insert into table_a (id, fk, name) values (1, 10, 'alice'), (2, 20, 'bob')")
 	utils.Exec(t, conn, "insert into table_b (id, label) values (10, 'ten'), (20, 'twenty')")
@@ -150,22 +151,24 @@ func TestIssue19986CrossKeyspaceJoinStarExpansion(t *testing.T) {
 		query  string
 		expect string
 	}{{
-		name:   "single-table star ks_a",
+		name:   "star against routed unsharded table on ks_a",
 		query:  "select a.* from table_a a where a.id = 1",
-		expect: "[[INT32(1) INT32(10) VARCHAR(\"alice\")]]",
+		expect: `[[INT32(1) INT32(10) VARCHAR("alice")]]`,
 	}, {
-		name:   "single-table star ks_b",
+		name:   "star against routed unsharded table on ks_b",
 		query:  "select b.* from table_b b where b.id = 10",
-		expect: "[[INT32(10) VARCHAR(\"ten\")]]",
+		expect: `[[INT32(10) VARCHAR("ten")]]`,
 	}, {
-		name:   "cross-keyspace join with explicit columns",
+		name:   "cross-keyspace join, explicit columns",
 		query:  "select a.id, b.label from table_a a join table_b b on a.fk = b.id order by a.id",
-		expect: "[[INT32(1) VARCHAR(\"ten\")] [INT32(2) VARCHAR(\"twenty\")]]",
+		expect: `[[INT32(1) VARCHAR("ten")] [INT32(2) VARCHAR("twenty")]]`,
 	}, {
-		// Before the fix: VT09015: schema tracking required.
-		name:   "cross-keyspace join with star (issue #19986)",
+		// The JOIN can't be pushed to a single MySQL, so the planner has to
+		// expand `a.*` at vtgate using the columns the tracker reported for
+		// the routing rule's target table.
+		name:   "cross-keyspace join, star qualified to one side",
 		query:  "select a.* from table_a a join table_b b on a.fk = b.id order by a.id",
-		expect: "[[INT32(1) INT32(10) VARCHAR(\"alice\")] [INT32(2) INT32(20) VARCHAR(\"bob\")]]",
+		expect: `[[INT32(1) INT32(10) VARCHAR("alice")] [INT32(2) INT32(20) VARCHAR("bob")]]`,
 	}}
 
 	for _, tc := range tcases {

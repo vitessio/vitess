@@ -30,20 +30,24 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// TestIssue19986CrossKeyspaceJoinStarExpansion reproduces issue #19986:
-// `SELECT a.* FROM table_a a JOIN table_b b ON ...` over two unsharded
-// keyspaces with empty `tables: {}` in vschema and routing rules pointing
-// at the per-keyspace tables. The planner relies on the schema tracker to
-// supply columns for the routed tables.
+// TestRoutedCrossKeyspaceJoinStarExpansion exercises the planner against a
+// routing-rule-only setup: two unsharded keyspaces with empty `tables: {}`
+// in vschema, routing rules redirecting unqualified names at per-keyspace
+// tables, and authoritative columns installed afterwards (as the schema
+// tracker would in production).
 //
-// Before the fix, the routing rule's BaseTable was the synthesized
-// placeholder from the initial buildRoutingRule pass; the schema tracker's
-// setColumns produced a separate authoritative BaseTable in ks.Tables, but
-// the routing rule kept its stale pointer. Cross-keyspace JOIN with `t.*`
-// then failed with VT09015. The fix re-resolves routing rules via
-// RebuildRoutingRules after schema-tracker updates so the rule picks up
-// whatever is in ks.Tables.
-func TestIssue19986CrossKeyspaceJoinStarExpansion(t *testing.T) {
+// All four query shapes must plan:
+//   - `select t.*` against either routed table -- single-Route push-down.
+//   - cross-keyspace JOIN with explicit columns -- no `*` expansion needed.
+//   - cross-keyspace JOIN with `t.*` qualified to one side -- the planner
+//     expands the qualified `*` at vtgate using the routing rule's
+//     BaseTable, which has to be authoritative.
+//
+// We replicate what `vschema_manager` does in production by installing
+// authoritative BaseTables into `ks.Tables` (matching `setColumns`) and
+// calling `RebuildRoutingRules` so each rule's `Tables[0]` picks up the new
+// pointer.
+func TestRoutedCrossKeyspaceJoinStarExpansion(t *testing.T) {
 	parser := sqlparser.NewTestParser()
 
 	srcVSchema := &vschemapb.SrvVSchema{
@@ -62,10 +66,10 @@ func TestIssue19986CrossKeyspaceJoinStarExpansion(t *testing.T) {
 
 	vschema := vindexes.BuildVSchema(srcVSchema, parser)
 
-	// Simulate what vschema_manager does after the schema tracker reports
-	// columns for these tables: place authoritative BaseTables in ks.Tables,
-	// then call RebuildRoutingRules so the routing rule's Tables[0] gets
-	// re-resolved to those entries.
+	// Stand in for the schema tracker: install authoritative BaseTables in
+	// `ks.Tables`, then re-resolve routing rules so each rule's `Tables[0]`
+	// points at those entries (matching what `buildAndEnhanceVSchema` does
+	// once the tracker reports columns).
 	populate := func(ks, tbl string, cols []vindexes.Column) {
 		t.Helper()
 		ksSchema := vschema.Keyspaces[ks]

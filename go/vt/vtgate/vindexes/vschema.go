@@ -1082,11 +1082,13 @@ outer:
 	}
 }
 
-// RebuildRoutingRules clears and rebuilds the routing rules. It is intended
-// to be called after the schema tracker has populated keyspace tables, so
-// that any rule whose target table was synthesized by FindTable on an
-// unsharded keyspace (because the user's vschema was empty) gets re-resolved
-// to the now-populated authoritative BaseTable in ks.Tables. See #19986.
+// RebuildRoutingRules clears and rebuilds the table routing rules so each
+// rule's `Tables[0]` is re-resolved against the current state of
+// `vschema.Keyspaces[*].Tables`. Call this whenever those keyspace tables
+// have changed since the last `buildRoutingRule` pass -- typically after
+// the schema tracker installs authoritative BaseTables for tracked tables
+// -- so the planner reads up-to-date `Columns` and `ColumnListAuthoritative`
+// off the rule pointer.
 func RebuildRoutingRules(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlparser.Parser) {
 	vschema.RoutingRules = make(map[string]*RoutingRule)
 	buildRoutingRule(source, vschema, parser)

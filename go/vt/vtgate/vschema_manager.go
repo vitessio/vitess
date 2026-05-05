@@ -206,12 +206,10 @@ func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vinde
 		// and removed the source vschema but not from the source database because user asked to --keep-data
 		vindexes.AddAdditionalGlobalTables(v, vschema)
 
-		// Re-resolve routing rules so that rules whose target table was synthesized
-		// against an empty unsharded keyspace by buildRoutingRule pick up the
-		// authoritative BaseTable that updateFromSchema may have just populated in
-		// ks.Tables. Without this, cross-keyspace JOINs with `t.*` against routed
-		// tables fail with VT09015 even after the schema tracker has populated
-		// columns. See #19986.
+		// Re-resolve routing rules now that updateFromSchema may have
+		// installed authoritative BaseTables for the tracker's tables in
+		// ks.Tables, so each rule's Tables[0] points at the latest pointer
+		// and the planner can expand `t.*` against routed tables at vtgate.
 		vindexes.RebuildRoutingRules(v, vschema, vm.parser)
 	}
 	return vschema

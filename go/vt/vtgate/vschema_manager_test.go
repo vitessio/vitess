@@ -995,11 +995,19 @@ func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Tabl
 	}
 }
 
-// TestRoutingRulesAuthoritativeAfterSchemaTracker covers issue #19986:
-// when both keyspaces have empty vschema and rely on routing rules + the
-// schema tracker, the routing rule's BaseTable must end up authoritative
-// after the tracker populates columns. Otherwise cross-keyspace JOINs with
-// `t.*` fail with VT09015.
+// TestRoutingRulesAuthoritativeAfterSchemaTracker pins down the invariant
+// the planner relies on for routing-rule-only setups: once the schema
+// tracker has reported columns for a routed table, the routing rule's
+// BaseTable has `ColumnListAuthoritative=true` and carries the tracked
+// columns, so the planner can expand `t.*` against it. Two shapes:
+//
+//   - tracker has data for every keyspace at `VSchemaUpdate` time: every
+//     rule is authoritative right after the first build.
+//   - tracker is initially empty and fills in keyspace-by-keyspace across
+//     successive `Rebuild` calls: each rule flips to authoritative the
+//     first time the rebuild sees columns for its target keyspace, and
+//     rules whose target keyspace is still untracked remain non-
+//     authoritative.
 func TestRoutingRulesAuthoritativeAfterSchemaTracker(t *testing.T) {
 	colsA := []vindexes.Column{
 		{Name: sqlparser.NewIdentifierCI("id"), Type: querypb.Type_INT64},
