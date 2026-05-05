@@ -25,6 +25,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -115,7 +117,7 @@ func TestTabletData(t *testing.T) {
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
 	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	tablet1 := testlib.NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
@@ -145,9 +147,7 @@ func TestTabletData(t *testing.T) {
 	result, err := thc.Get(requestCtx, tablet1.Tablet.Alias)
 	close(stop)
 
-	if err != nil {
-		t.Fatalf("thc.Get failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	stats := &querypb.RealtimeStats{
 		HealthError:           "testHealthError",

@@ -27,6 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -51,14 +54,12 @@ func TestFixShardReplication(t *testing.T) {
 		Alias:    alias,
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Make sure it's in the ShardReplication.
 	sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil {
-		t.Fatalf("GetShardReplication failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
 		t.Errorf("Missing or wrong alias in ShardReplication: %v", sri)
 	}
@@ -66,16 +67,12 @@ func TestFixShardReplication(t *testing.T) {
 	// Run FixShardReplication, should do nothing.
 	logger := logutil.NewMemoryLogger()
 	problem, err := topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	if err != nil {
-		t.Errorf("FixShardReplication failed: %v", err)
-	}
+	assert.NoError(t, err)
 	if problem != nil {
 		t.Errorf("FixShardReplication should have found no issues, got %+v", problem)
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil {
-		t.Fatalf("GetShardReplication failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
 		t.Errorf("Missing or wrong alias in ShardReplication: %v", sri)
 	}
@@ -97,13 +94,11 @@ func TestFixShardReplication(t *testing.T) {
 		})
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardReplicationFields failed: %v", err)
+		require.NoError(t, err)
 	}
 	logger.Clear()
 	problem, err = topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	if err != nil {
-		t.Errorf("FixShardReplication failed: %v", err)
-	}
+	assert.NoError(t, err)
 	if problem == nil {
 		t.Errorf("FixShardReplication should have found problem, but found none")
 	} else {
@@ -116,9 +111,7 @@ func TestFixShardReplication(t *testing.T) {
 		}
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil {
-		t.Fatalf("GetShardReplication failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
 		t.Errorf("Missing or wrong alias in ShardReplication: %v", sri)
 	}
@@ -136,7 +129,7 @@ func TestFixShardReplication(t *testing.T) {
 		},
 	}
 	if err := ts.CreateTablet(ctx, bogusTablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{
@@ -144,13 +137,11 @@ func TestFixShardReplication(t *testing.T) {
 		})
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardReplicationFields failed: %v", err)
+		require.NoError(t, err)
 	}
 	logger.Clear()
 	problem, err = topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	if err != nil {
-		t.Errorf("FixShardReplication failed: %v", err)
-	}
+	assert.NoError(t, err)
 	if problem == nil {
 		t.Errorf("FixShardReplication should have found problem, but found none")
 	} else {
@@ -163,9 +154,7 @@ func TestFixShardReplication(t *testing.T) {
 		}
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil {
-		t.Fatalf("GetShardReplication failed: %v", err)
-	}
+	require.NoError(t, err)
 	if len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
 		t.Errorf("Missing or wrong alias in ShardReplication: %v", sri)
 	}

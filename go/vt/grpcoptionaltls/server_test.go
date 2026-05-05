@@ -27,6 +27,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
@@ -76,14 +78,10 @@ func TestOptionalTLS(t *testing.T) {
 	testCtx := t.Context()
 
 	tc, err := createCredentials(t)
-	if err != nil {
-		t.Fatalf("failed to create credentials %v", err)
-	}
+	require.NoError(t, err)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to listen %v", err)
-	}
+	require.NoError(t, err)
 	defer lis.Close()
 	addr := lis.Addr().String()
 
@@ -97,15 +95,11 @@ func TestOptionalTLS(t *testing.T) {
 		ctx, cancel := context.WithTimeout(testCtx, 5*time.Second)
 		defer cancel()
 		conn, err := grpc.DialContext(ctx, addr, dialOpt) //nolint:staticcheck
-		if err != nil {
-			t.Fatalf("failed to connect to the server %v", err)
-		}
+		require.NoError(t, err)
 		defer conn.Close()
 		c := pb.NewGreeterClient(conn)
 		resp, err := c.SayHello(ctx, &pb.HelloRequest{Name: "Vittes"})
-		if err != nil {
-			t.Fatalf("could not greet: %v", err)
-		}
+		require.NoError(t, err)
 		if resp.Message != "Hello Vittes" {
 			t.Fatalf("unexpected reply %s", resp.Message)
 		}

@@ -24,6 +24,9 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/stats"
 )
 
@@ -31,7 +34,7 @@ func TestVariables(t *testing.T) {
 	fs := pflag.NewFlagSet("vtgate_buffer_variables_test", pflag.ContinueOnError)
 	registerFlags(fs)
 	if err := fs.Parse(nil); err != nil {
-		t.Errorf("failed to parse with default values: %v", err)
+		assert.NoError(t, err)
 	}
 
 	fs.Set("buffer-size", "23")
@@ -52,9 +55,7 @@ func TestVariablesAreInitialized(t *testing.T) {
 	// After that, the variables should be initialized for that shard.
 	b := New(NewDefaultConfig())
 	_, err := b.WaitForFailoverEnd(context.Background(), "init_test", "0", nil, nil)
-	if err != nil {
-		t.Fatalf("buffer should just passthrough and not return an error: %v", err)
-	}
+	require.NoError(t, err)
 
 	statsKey := []string{"init_test", "0"}
 	type testCase struct {

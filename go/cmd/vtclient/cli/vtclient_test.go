@@ -69,16 +69,12 @@ func TestVtclient(t *testing.T) {
 			},
 		},
 	}
-	if err := cfg.InitSchemas("test_keyspace", schema, vschema); err != nil {
-		t.Fatalf("InitSchemas failed: %v", err)
-	}
+	require.NoError(t, cfg.InitSchemas("test_keyspace", schema, vschema))
 	defer os.RemoveAll(cfg.SchemaDir)
 	cluster := vttest.LocalCluster{
 		Config: cfg,
 	}
-	if err := cluster.Setup(); err != nil {
-		t.Fatalf("InitSchemas failed: %v", err)
-	}
+	require.NoError(t, cluster.Setup())
 	defer cluster.TearDown()
 
 	vtgateAddr := fmt.Sprintf("localhost:%v", cluster.Env.PortForProtocol("vtcombo", "grpc"))

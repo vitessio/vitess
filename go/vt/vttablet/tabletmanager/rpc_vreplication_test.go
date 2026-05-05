@@ -1168,8 +1168,8 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			// This is needed because MockDBClient uses t.Fatal()
 			// which doesn't play well with subtests.
 			defer func() {
-				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v", err)
+				if r := recover(); r != nil {
+					t.Errorf("Recovered from panic: %v", r)
 				}
 			}()
 

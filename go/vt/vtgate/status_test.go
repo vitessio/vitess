@@ -24,6 +24,8 @@ import (
 
 	"github.com/google/safehtml/template"
 
+	"github.com/stretchr/testify/require"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -114,11 +116,9 @@ func TestTabletStatusAggregator(t *testing.T) {
 	// Make sure the HTML rendering of the cache works.
 	// This will catch most typos.
 	templ, err := template.New("").Parse(StatusTemplate)
-	if err != nil {
-		t.Fatalf("error parsing template: %v", err)
-	}
+	require.NoError(t, err)
 	wr := &bytes.Buffer{}
 	if err := templ.Execute(wr, []*TabletCacheStatus{got}); err != nil {
-		t.Fatalf("error executing template: %v", err)
+		require.NoError(t, err)
 	}
 }

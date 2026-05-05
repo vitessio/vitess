@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
@@ -75,13 +77,9 @@ func TestMapSetRulesWithNil(t *testing.T) {
 
 	qri.RegisterSource(denyListQueryRules)
 	err := qri.SetRules(denyListQueryRules, denyRules)
-	if err != nil {
-		t.Errorf("Failed to set denyListQueryRules Rules : %s", err)
-	}
+	assert.NoError(t, err)
 	qrs, err := qri.Get(denyListQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
-	}
+	assert.NoError(t, err)
 	if !reflect.DeepEqual(qrs, denyRules) {
 		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyListQueryRules)
 	}
@@ -89,9 +87,7 @@ func TestMapSetRulesWithNil(t *testing.T) {
 	qri.SetRules(denyListQueryRules, nil)
 
 	qrs, err = qri.Get(denyListQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
-	}
+	assert.NoError(t, err)
 	if !reflect.DeepEqual(qrs, New()) {
 		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyListQueryRules)
 	}
@@ -124,39 +120,27 @@ func TestMapGetSetQueryRules(t *testing.T) {
 
 	// Test if we can successfully set Rules previously mocked into Map
 	err = qri.SetRules(denyListQueryRules, denyRules)
-	if err != nil {
-		t.Errorf("Failed to set denylist Rules : %s", err)
-	}
+	assert.NoError(t, err)
 	err = qri.SetRules(denyListQueryRules, denyRules)
-	if err != nil {
-		t.Errorf("Failed to set denylist Rules: %s", err)
-	}
+	assert.NoError(t, err)
 	err = qri.SetRules(customQueryRules, otherRules)
-	if err != nil {
-		t.Errorf("Failed to set custom Rules: %s", err)
-	}
+	assert.NoError(t, err)
 
 	// Test if we can successfully retrieve rules which been set
 	qrs, err = qri.Get(denyListQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
-	}
+	assert.NoError(t, err)
 	if !reflect.DeepEqual(qrs, denyRules) {
 		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyRules)
 	}
 
 	qrs, err = qri.Get(denyListQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
-	}
+	assert.NoError(t, err)
 	if !reflect.DeepEqual(qrs, denyRules) {
 		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyRules)
 	}
 
 	qrs, err = qri.Get(customQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve customQueryRules that has been set: %s", err)
-	}
+	assert.NoError(t, err)
 	if !reflect.DeepEqual(qrs, otherRules) {
 		t.Errorf("customQueryRules retrieved is %v, but the expected value should be %v", qrs, customQueryRules)
 	}

@@ -62,9 +62,7 @@ func TestVrLog(t *testing.T) {
 		t.Fatalf("log line should have %d columns, not %d, : %s", numCols, len(ss), strings.Join(ss, "|"))
 	}
 	lastColValue, err := strconv.Atoi(ss[len(ss)-1])
-	if err != nil {
-		t.Fatalf("Duration is not an integer: %s", err)
-	}
+	require.NoError(t, err)
 	require.NotZero(t, lastColValue, "duration")
 
 	stats = &VrLogStats{}

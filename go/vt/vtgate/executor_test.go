@@ -1606,7 +1606,7 @@ func TestVSchemaStats(t *testing.T) {
 	require.NoError(t, err)
 	wr := &bytes.Buffer{}
 	if err := templ.Execute(wr, stats); err != nil {
-		t.Fatalf("error executing template: %v", err)
+		require.NoError(t, err)
 	}
 	result := wr.String()
 	if !strings.Contains(result, "<td>TestXBadSharding</td>") ||

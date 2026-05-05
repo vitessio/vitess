@@ -304,7 +304,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {
-		return 1, fmt.Errorf("unable to start topo %w", err)
+		return 1, err
 	}
 
 	// create all certs
@@ -388,9 +388,8 @@ func clusterSetUp(t *testing.T) (int, error) {
 		clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, keyspace)
 	}
 	for _, proc := range mysqlProcesses {
-		err := proc.Wait()
-		if err != nil {
-			return 1, fmt.Errorf("unable to wait on mysql process %w", err)
+		if err := proc.Wait(); err != nil {
+			return 0, err
 		}
 	}
 	return 0, nil

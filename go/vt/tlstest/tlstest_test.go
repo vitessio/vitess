@@ -30,6 +30,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -64,9 +66,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		clientServerKeyPairs.ClientCRL,
 		serverCA,
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 	clientConfig, err := vttls.ClientConfig(
 		vttls.VerifyIdentity,
 		clientServerKeyPairs.ClientCert,
@@ -75,15 +75,11 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		clientServerKeyPairs.ServerCRL,
 		clientServerKeyPairs.ServerName,
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSClientConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Create a TLS server listener.
 	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverConfig)
-	if err != nil {
-		t.Fatalf("Listen failed: %v", err)
-	}
+	require.NoError(t, err)
 	addr := listener.Addr().String()
 	defer listener.Close()
 	// create a dialer with timeout
@@ -106,9 +102,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	})
 
 	serverConn, err := listener.Accept()
-	if err != nil {
-		t.Fatalf("Accept failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	result := make([]byte, 1)
 	if n, err := serverConn.Read(result); (err != nil && err != io.EOF) || n != 1 {
@@ -120,7 +114,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	serverConn.Close()
 
 	if err := clientEG.Wait(); err != nil {
-		t.Fatalf("client dial failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	//
@@ -136,9 +130,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		clientServerKeyPairs.ServerCRL,
 		clientServerKeyPairs.ServerName,
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSClientConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	var serverEG errgroup.Group
 	serverEG.Go(func() error {
@@ -162,25 +154,15 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	// With TLS 1.3, the Dial will succeed and the first Read will fail.
 	clientConn, err := tls.DialWithDialer(dialer, "tcp", addr, badClientConfig)
 	if err != nil {
-		if !strings.Contains(err.Error(), "certificate required") {
-			t.Errorf("Wrong error returned: %v", err)
-		}
+		assert.ErrorContains(t, err, "certificate required")
 		return
 	}
 
-	if err := serverEG.Wait(); err != nil {
-		t.Fatalf("server read failed: %v", err)
-	}
+	require.NoError(t, serverEG.Wait())
 
 	data := make([]byte, 1)
 	_, err = clientConn.Read(data)
-	if err == nil {
-		t.Fatalf("Dial or first Read was expected to fail")
-	}
-
-	if !strings.Contains(err.Error(), "certificate required") {
-		t.Errorf("Wrong error returned: %v", err)
-	}
+	require.ErrorContains(t, err, "certificate required", "Dial or first Read was expected to fail with 'certificate required'")
 }
 
 func getServerConfigWithoutCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
@@ -293,9 +275,7 @@ func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int,
 		clientServerKeyPairs.ClientCRL,
 		serverCA,
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 	assert.Equal(t, numCertsExpected, len(serverConfig.Certificates[0].Certificate))
 }
 
@@ -310,9 +290,7 @@ func TestNumberOfCertsWithCombining(t *testing.T) {
 func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Config) {
 	// Create a TLS server listener.
 	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverConfig)
-	if err != nil {
-		t.Fatalf("Listen failed: %v", err)
-	}
+	require.NoError(t, err)
 	addr := listener.Addr().String()
 	defer listener.Close()
 	// create a dialer with timeout
@@ -333,17 +311,15 @@ func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Confi
 	serverConn, err := listener.Accept()
 	if err != nil {
 		// We should always be able to accept on the socket
-		t.Fatalf("Accept failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	err = serverConn.(*tls.Conn).Handshake()
-	if err != nil {
-		if !strings.Contains(err.Error(), "Certificate revoked: CommonName=") && !strings.Contains(err.Error(), "remote error: tls: bad certificate") {
-			t.Fatalf("Wrong error returned: %v", err)
-		}
-	} else {
-		t.Fatal("Server should have failed the TLS handshake but it did not")
-	}
+	require.Error(t, err, "Server should have failed the TLS handshake but it did not")
+	assert.Truef(t,
+		strings.Contains(err.Error(), "Certificate revoked: CommonName=") ||
+			strings.Contains(err.Error(), "remote error: tls: bad certificate"),
+		"unexpected handshake error: %v", err)
 	serverConn.Close()
 	wg.Wait()
 }
@@ -360,9 +336,7 @@ func TestClientServerWithRevokedServerCert(t *testing.T) {
 		clientServerKeyPairs.ClientCRL,
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	clientConfig, err := vttls.ClientConfig(
 		vttls.VerifyIdentity,
@@ -372,9 +346,7 @@ func TestClientServerWithRevokedServerCert(t *testing.T) {
 		clientServerKeyPairs.ServerCRL,
 		clientServerKeyPairs.RevokedServerName,
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSClientConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	assertTLSHandshakeFails(t, serverConfig, clientConfig)
 
@@ -385,9 +357,7 @@ func TestClientServerWithRevokedServerCert(t *testing.T) {
 		clientServerKeyPairs.CombinedCRL,
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	clientConfig, err = vttls.ClientConfig(
 		vttls.VerifyIdentity,
@@ -397,9 +367,7 @@ func TestClientServerWithRevokedServerCert(t *testing.T) {
 		clientServerKeyPairs.CombinedCRL,
 		clientServerKeyPairs.RevokedServerName,
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSClientConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	assertTLSHandshakeFails(t, serverConfig, clientConfig)
 }
@@ -418,9 +386,7 @@ func TestClientServerWithRevokedClientCert(t *testing.T) {
 		clientServerKeyPairs.ClientCRL,
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	clientConfig, err := vttls.ClientConfig(
 		vttls.VerifyIdentity,
@@ -430,9 +396,7 @@ func TestClientServerWithRevokedClientCert(t *testing.T) {
 		clientServerKeyPairs.ServerCRL,
 		clientServerKeyPairs.ServerName,
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSClientConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	assertTLSHandshakeFails(t, serverConfig, clientConfig)
 
@@ -445,9 +409,7 @@ func TestClientServerWithRevokedClientCert(t *testing.T) {
 		clientServerKeyPairs.CombinedCRL,
 		"",
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSServerConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	clientConfig, err = vttls.ClientConfig(
 		vttls.VerifyIdentity,
@@ -457,9 +419,7 @@ func TestClientServerWithRevokedClientCert(t *testing.T) {
 		clientServerKeyPairs.CombinedCRL,
 		clientServerKeyPairs.ServerName,
 		tls.VersionTLS12)
-	if err != nil {
-		t.Fatalf("TLSClientConfig failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	assertTLSHandshakeFails(t, serverConfig, clientConfig)
 }

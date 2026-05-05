@@ -27,11 +27,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -134,9 +132,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
-	if err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
@@ -200,9 +196,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events, errs)
-	if err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
@@ -238,9 +232,7 @@ func TestStreamerStop(t *testing.T) {
 
 	select {
 	case err := <-done:
-		if err != context.Canceled {
-			t.Errorf("wrong context interruption returned value: %v", err)
-		}
+		require.ErrorIs(t, err, context.Canceled)
 	case <-time.After(1 * time.Second):
 		t.Errorf("timed out waiting for binlogConnStreamer.Stop()")
 	}
@@ -700,9 +692,8 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
@@ -774,9 +765,8 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
@@ -852,9 +842,8 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
@@ -916,9 +905,8 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
@@ -1027,9 +1015,8 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
@@ -1093,9 +1080,8 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
@@ -1139,9 +1125,8 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 	after := binlogStreamerErrors.Counts()["ParseEvents"]
 	if got := after - before; got != 1 {
 		t.Errorf("error count change = %v, want 1", got)
@@ -1208,9 +1193,8 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)
@@ -1268,9 +1252,8 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
-		t.Errorf("unexpected error: %v", err)
-	}
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.ErrorIs(t, err, ErrServerEOF)
 
 	if !got.equal(want) {
 		t.Errorf("binlogConnStreamer.parseEvents(): got:\n%v\nwant:\n%v", got, want)

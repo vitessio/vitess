@@ -23,6 +23,8 @@ import (
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
+	"github.com/stretchr/testify/require"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -48,7 +50,7 @@ func TestCreateTablet(t *testing.T) {
 		Alias:    alias,
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Get the tablet, make sure it's good. Also check ShardReplication.

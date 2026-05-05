@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -34,9 +36,7 @@ func TestFileLog(t *testing.T) {
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)
 	defer logger.Stop()
-	if err != nil {
-		t.Fatalf("error setting up file logger: %v", err)
-	}
+	require.NoError(t, err)
 
 	ctx := context.Background()
 
@@ -80,9 +80,7 @@ func TestFileLogRedacted(t *testing.T) {
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)
 	defer logger.Stop()
-	if err != nil {
-		t.Fatalf("error setting up file logger: %v", err)
-	}
+	require.NoError(t, err)
 
 	ctx := context.Background()
 

@@ -44,9 +44,7 @@ func TestVtctlServer(t *testing.T) {
 
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a gRPC server and listen on the port
@@ -56,9 +54,7 @@ func TestVtctlServer(t *testing.T) {
 
 	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
-	if err != nil {
-		t.Fatalf("Cannot create client: %v", err)
-	}
+	require.NoError(t, err)
 	defer client.Close()
 
 	vtctlclienttest.TestSuite(t, ts, client)
@@ -72,9 +68,7 @@ func TestVtctlAuthClient(t *testing.T) {
 
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	// Create a gRPC server and listen on the port
@@ -115,9 +109,7 @@ func TestVtctlAuthClient(t *testing.T) {
 
 	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := gRPCVtctlClientFactory(ctx, fmt.Sprintf("localhost:%v", port))
-	if err != nil {
-		t.Fatalf("Cannot create client: %v", err)
-	}
+	require.NoError(t, err)
 	defer client.Close()
 
 	vtctlclienttest.TestSuite(t, ts, client)
