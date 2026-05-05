@@ -55,9 +55,7 @@ var (
 
 func testChecksum(t *testing.T, want, got int64) {
 	t.Helper()
-	if want != got {
-		t.Errorf("want checksum %v, got %v", want, got)
-	}
+	assert.Equalf(t, want, got, "want checksum %v, got %v", want, got)
 }
 
 func init() {

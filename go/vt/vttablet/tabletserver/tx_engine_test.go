@@ -79,9 +79,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Immediate close.
 	te.AcceptReadOnly()
 	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
 	te.Close()
@@ -126,10 +124,10 @@ func TestTxEngineClose(t *testing.T) {
 	start = time.Now()
 	te.Close()
 	if diff := time.Since(start); diff > 250*time.Millisecond {
-		t.Errorf("Close time: %v, must be under 0.25s", diff)
+		assert.Failf(t, "close time too long", "Close time: %v, must be under 0.25s", diff)
 	}
 	if diff := time.Since(start); diff < 100*time.Millisecond {
-		t.Errorf("Close time: %v, must be over 0.1", diff)
+		assert.Failf(t, "close time too short", "Close time: %v, must be over 0.1", diff)
 	}
 
 	// Normal close with Reserved connection timeout wait.
@@ -665,7 +663,7 @@ func TestWithInnerTests(outerT *testing.T) {
 				err := startTx(te, false)
 				require.Error(t, err)
 			default:
-				t.Fatalf("don't know how to [%v]", test.tx)
+				require.Failf(t, "unknown tx type", "don't know how to [%v]", test.tx)
 			}
 
 			wg := sync.WaitGroup{}

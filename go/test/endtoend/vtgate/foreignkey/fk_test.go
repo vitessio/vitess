@@ -295,7 +295,7 @@ func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string
 		case re := <-ch:
 			rowEvents = append(rowEvents, re.RowEvent.String())
 		case <-time.After(10 * time.Second):
-			t.Fatalf("timeout waiting for event number: %d", i+1)
+			require.Failf(t, "timeout", "timeout waiting for event number: %d", i+1)
 		}
 	}
 	return rowEvents

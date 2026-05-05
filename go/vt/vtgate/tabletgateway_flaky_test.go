@@ -132,7 +132,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, sqlResult1, res)
 	case <-time.After(15 * time.Second):
-		t.Fatalf("timed out waiting for query to execute")
+		require.Fail(t, "timed out waiting for query to execute")
 	}
 }
 
@@ -264,7 +264,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, sqlResult1, res)
 		case <-time.After(15 * time.Second):
-			t.Fatalf("timed out waiting for query to execute")
+			require.Fail(t, "timed out waiting for query to execute")
 		}
 	})
 }
@@ -351,6 +351,6 @@ func TestInconsistentStateDetectedBuffering(t *testing.T) {
 				err.Error() == "target: ks1.-80.primary: no healthy tablet available for 'keyspace:\"ks1\" shard:\"-80\" tablet_type:PRIMARY'",
 			"unexpected error: %v", err)
 	case <-time.After(15 * time.Second):
-		t.Fatalf("timed out waiting for query to execute")
+		require.Fail(t, "timed out waiting for query to execute")
 	}
 }

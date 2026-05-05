@@ -59,7 +59,7 @@ func TestJsonConfigParser(t *testing.T) {
 	require.Equal(t, "localhost", config["mysql_user"][0].SourceHost, "SourceHost should be equal to localhost")
 
 	if len(config["mysql_user"][2].Groups) != 1 || config["mysql_user"][2].Groups[0] != "user_group" {
-		t.Fatalf("Groups should be equal to [\"user_group\"]")
+		require.Fail(t, "Groups should be equal to [\"user_group\"]")
 	}
 
 	jsonConfig = `{
@@ -89,7 +89,7 @@ func TestValidateHashGetter(t *testing.T) {
 	require.Equal(t, "user.name", callerID.Username, "getter username incorrect, expected \"user.name\", got %v", callerID.Username)
 
 	if len(callerID.Groups) != 1 || callerID.Groups[0] != "user_group" {
-		t.Fatalf("getter groups incorrect, expected [\"user_group\"], got %v", callerID.Groups)
+		require.Failf(t, "getter groups incorrect", "expected [\"user_group\"], got %v", callerID.Groups)
 	}
 }
 

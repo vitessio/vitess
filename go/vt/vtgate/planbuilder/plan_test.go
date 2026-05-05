@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/nsf/jsondiff"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -709,7 +710,7 @@ func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchem
 						t.Error(message)
 					}
 				} else if tcase.Skip {
-					t.Errorf("query is correct even though it is skipped:\n %s", tcase.Query)
+					assert.Failf(t, "skipped query is correct", "query is correct even though it is skipped:\n %s", tcase.Query)
 				}
 				current.Plan = []byte(out)
 			})

@@ -17,9 +17,10 @@ limitations under the License.
 package messager
 
 import (
-	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -73,30 +74,22 @@ func TestEngineSchemaChanged(t *testing.T) {
 	engine.schemaChanged(nil, []*schema.Table{meTableT1, tableT2}, nil, nil, true)
 	got := extractManagerNames(engine.managers)
 	want := map[string]bool{"t1": true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got: %+v, want %+v", got, want)
-	}
+	assert.Equalf(t, want, got, "got: %+v, want %+v", got, want)
 
 	engine.schemaChanged(nil, []*schema.Table{meTableT3}, nil, nil, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t3": true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got: %+v, want %+v", got, want)
-	}
+	assert.Equalf(t, want, got, "got: %+v, want %+v", got, want)
 
 	engine.schemaChanged(nil, []*schema.Table{meTableT4}, nil, []*schema.Table{meTableT3, tableT5}, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t4": true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got: %+v, want %+v", got, want)
-	}
+	assert.Equalf(t, want, got, "got: %+v, want %+v", got, want)
 	// Test update
 	engine.schemaChanged(nil, nil, []*schema.Table{meTableT2, tableT4}, nil, true)
 	got = extractManagerNames(engine.managers)
 	want = map[string]bool{"t1": true, "t2": true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got: %+v, want %+v", got, want)
-	}
+	assert.Equalf(t, want, got, "got: %+v, want %+v", got, want)
 }
 
 func extractManagerNames(in map[string]*messageManager) map[string]bool {
@@ -125,16 +118,13 @@ func TestSubscribe(t *testing.T) {
 	// Error case.
 	want := "message table t3 not found"
 	_, err := engine.Subscribe(t.Context(), "t3", f1)
-	if err == nil || err.Error() != want {
-		t.Errorf("Subscribe: %v, want %s", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "Subscribe: %v, want %s", err, want)
 
 	// After close, Subscribe should return a closed channel.
 	engine.Close()
 	_, err = engine.Subscribe(t.Context(), "t1", nil)
-	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
-		t.Errorf("Subscribed on closed engine error code: %v, want %v", got, want)
-	}
+	got, wantCode := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE
+	assert.Equalf(t, wantCode, got, "Subscribed on closed engine error code: %v, want %v", got, wantCode)
 }
 
 func TestEngineGenerate(t *testing.T) {
@@ -146,9 +136,8 @@ func TestEngineGenerate(t *testing.T) {
 		t.Error(err)
 	}
 	want := "message table t2 not found in schema"
-	if _, err := engine.GetGenerator("t2"); err == nil || err.Error() != want {
-		t.Errorf("engine.GenerateAckQuery(invalid): %v, want %s", err, want)
-	}
+	_, err := engine.GetGenerator("t2")
+	assert.EqualErrorf(t, err, want, "engine.GenerateAckQuery(invalid): %v, want %s", err, want)
 }
 
 func newTestEngine() *Engine {

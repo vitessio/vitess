@@ -558,7 +558,7 @@ func TestReloadView(t *testing.T) {
 			db.AddQueryPattern("SELECT .* information_schema.innodb_tablespaces .*", tcases[idx].showTablesWithSizesOutput)
 			db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", tcases[idx].detectViewChangeOutput)
 		case <-time.After(10 * time.Second):
-			t.Fatalf("timed out")
+			require.Fail(t, "timed out")
 		}
 	}
 }

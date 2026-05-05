@@ -193,7 +193,7 @@ func TestComparisonSemantics(t *testing.T) {
 						require.True(t, strings.Contains(errRemote.Error(), "Illegal mix of collations"), "query %s failed: %v", query, errRemote)
 
 						if errLocal == nil {
-							t.Errorf("expected %s vs %s to fail coercion: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errRemote)
+							assert.Failf(t, "expected coercion to fail", "expected %s vs %s to fail coercion: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errRemote)
 							continue
 						}
 						require.True(t, strings.HasPrefix(normalizeCollationInError(errRemote.Error()), normalizeCollationInError(errLocal.Error())), "bad error message: expected %q, got %q", errRemote, errLocal)
@@ -202,7 +202,7 @@ func TestComparisonSemantics(t *testing.T) {
 					}
 
 					if errLocal != nil {
-						t.Errorf("expected %s vs %s to coerce, but they failed: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errLocal)
+						assert.Failf(t, "expected coercion to succeed", "expected %s vs %s to coerce, but they failed: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errLocal)
 						continue
 					}
 

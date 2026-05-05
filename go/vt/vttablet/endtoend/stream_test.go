@@ -19,7 +19,6 @@ package endtoend
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -174,9 +173,7 @@ func TestStreamBigData(t *testing.T) {
 		"10",
 		"10",
 	}
-	if !reflect.DeepEqual(row10, want) {
-		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
-	}
+	assert.Equalf(t, want, row10, "Row10: \n%#v, want \n%#v", row10, want)
 }
 
 func TestStreamBigDataInTx(t *testing.T) {
@@ -223,9 +220,7 @@ func TestStreamBigDataInTx(t *testing.T) {
 		"10",
 		"10",
 	}
-	if !reflect.DeepEqual(row10, want) {
-		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
-	}
+	assert.Equalf(t, want, row10, "Row10: \n%#v, want \n%#v", row10, want)
 }
 
 func TestStreamTerminate(t *testing.T) {
@@ -245,7 +240,7 @@ func TestStreamTerminate(t *testing.T) {
 			if !called {
 				queries := framework.LiveQueryz()
 				if l := len(queries); l != 1 {
-					t.Errorf("len(queries): %d, want 1", l)
+					assert.Failf(t, "unexpected queries length", "len(queries): %d, want 1", l)
 					return errors.New("no queries from LiveQueryz")
 				}
 				err := framework.StreamTerminate(queries[0].ConnID)
@@ -258,9 +253,8 @@ func TestStreamTerminate(t *testing.T) {
 			return nil
 		},
 	)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_CANCELED {
-		t.Errorf("Errorcode: %v, want %v", code, vtrpcpb.Code_CANCELED)
-	}
+	code := vterrors.Code(err)
+	assert.Equalf(t, vtrpcpb.Code_CANCELED, code, "Errorcode: %v, want %v", code, vtrpcpb.Code_CANCELED)
 }
 
 func populateBigData(client *framework.QueryClient) error {
@@ -297,6 +291,6 @@ func TestStreamError(t *testing.T) {
 	_, err := framework.NewClient().StreamExecute("select count(abcd) from vitess_big", nil)
 	want := "Unknown column"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, must start with %s", err, want)
+		assert.Failf(t, "unexpected error", "Error: %v, must start with %s", err, want)
 	}
 }

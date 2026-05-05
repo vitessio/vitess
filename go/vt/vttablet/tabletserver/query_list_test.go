@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -52,7 +53,7 @@ func TestQueryList(t *testing.T) {
 	require.NoError(t, err)
 
 	if qd1, ok := ql.queryDetails[connID]; !ok || qd1[0].connID != connID {
-		t.Errorf("failed to add to QueryList")
+		assert.Fail(t, "failed to add to QueryList")
 	}
 
 	conn2ID := int64(2)
@@ -62,12 +63,12 @@ func TestQueryList(t *testing.T) {
 
 	rows := ql.AppendQueryzRows(nil)
 	if len(rows) != 2 || rows[0].ConnID != 1 || rows[1].ConnID != 2 {
-		t.Errorf("wrong rows returned %v", rows)
+		assert.Failf(t, "wrong rows returned", "wrong rows returned %v", rows)
 	}
 
 	ql.Remove(qd)
 	if _, ok := ql.queryDetails[connID]; ok {
-		t.Errorf("failed to remove from QueryList")
+		assert.Fail(t, "failed to remove from QueryList")
 	}
 }
 

@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -155,6 +156,6 @@ func TestTabletData(t *testing.T) {
 		CpuUsage:              1.1,
 	}
 	if got, want := result.RealtimeStats, stats; !proto.Equal(got, want) {
-		t.Errorf("RealtimeStats = %#v, want %#v", got, want)
+		assert.Failf(t, "RealtimeStats mismatch", "RealtimeStats = %#v, want %#v", got, want)
 	}
 }

@@ -17,8 +17,9 @@ limitations under the License.
 package vindexes
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -131,9 +132,7 @@ func TestUnicodeLooseXXHashMap(t *testing.T) {
 			t.Error(err)
 		}
 		out := string(got[0].(key.DestinationKeyspaceID))
-		if out != tcase.out {
-			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
-		}
+		assert.Equalf(t, tcase.out, out, "Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 	}
 }
 
@@ -145,7 +144,5 @@ func TestUnicodeLooseXXHashVerify(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []bool{true, true, false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("UnicodeLooseXXHash.Verify: %v, want %v", got, want)
-	}
+	assert.Equalf(t, want, got, "UnicodeLooseXXHash.Verify: %v, want %v", got, want)
 }

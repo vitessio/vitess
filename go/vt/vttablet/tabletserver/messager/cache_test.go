@@ -17,8 +17,9 @@ limitations under the License.
 package messager
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -76,9 +77,7 @@ func TestMessagerCacheOrder(t *testing.T) {
 		"row12",
 		"row11",
 	}
-	if !reflect.DeepEqual(rows, want) {
-		t.Errorf("Pop order: %+v, want %+v", rows, want)
-	}
+	assert.Equalf(t, want, rows, "Pop order: %+v, want %+v", rows, want)
 }
 
 func TestMessagerCacheDupKey(t *testing.T) {
@@ -126,7 +125,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 	}
 	mc.Discard([]string{"row01"})
 	if row := mc.Pop(); row != nil {
-		t.Errorf("Pop: want nil, got %v", row.Row[0])
+		assert.Failf(t, "Pop", "want nil, got %v", row.Row[0])
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
@@ -136,7 +135,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if row := mc.Pop(); row == nil || row.Row[0].ToString() != "row01" {
-		t.Errorf("Pop: want row01, got %v", row)
+		assert.Failf(t, "Pop", "want row01, got %v", row)
 	}
 
 	// Add will be a no-op.
@@ -148,7 +147,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if row := mc.Pop(); row != nil {
-		t.Errorf("Pop: want nil, got %v", row.Row[0])
+		assert.Failf(t, "Pop", "want nil, got %v", row.Row[0])
 	}
 	mc.Discard([]string{"row01"})
 
@@ -161,7 +160,7 @@ func TestMessagerCacheDiscard(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if row := mc.Pop(); row == nil || row.Row[0].ToString() != "row01" {
-		t.Errorf("Pop: want row01, got %v", row)
+		assert.Failf(t, "Pop", "want row01, got %v", row)
 	}
 }
 
@@ -201,7 +200,7 @@ func TestMessagerCacheEmpty(t *testing.T) {
 	}
 	mc.Clear()
 	if row := mc.Pop(); row != nil {
-		t.Errorf("Pop(empty): %v, want nil", row)
+		assert.Failf(t, "Pop(empty)", "%v, want nil", row)
 	}
 	if !mc.Add(&MessageRow{
 		TimeNext: 1,
@@ -211,6 +210,6 @@ func TestMessagerCacheEmpty(t *testing.T) {
 		t.Fatal("Add returned false")
 	}
 	if row := mc.Pop(); row == nil {
-		t.Errorf("Pop(non-empty): nil, want %v", row)
+		assert.Failf(t, "Pop(non-empty)", "nil, want %v", row)
 	}
 }

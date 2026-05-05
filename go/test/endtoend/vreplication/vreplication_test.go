@@ -1095,9 +1095,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 		for shard := range strings.SplitSeq("-40,40-c0,c0-", ",") {
 			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", ksShard)
-			if err != nil {
-				t.Fatalf("GetShard merchant failed for: %s: %v", shard, err)
-			}
+			require.NoErrorf(t, err, "GetShard merchant failed for: %s: %v", shard, err)
 			assert.NotContains(t, output, "node doesn't exist", "GetShard failed for valid shard "+ksShard)
 			assert.Contains(t, output, "primary_alias", "GetShard failed for valid shard "+ksShard)
 		}
@@ -1576,7 +1574,7 @@ func waitForLowLag(t *testing.T, keyspace, workflow string) {
 	}
 
 	if duration <= 0 {
-		t.Fatalf("waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+		require.Failf(t, "waitForLowLag timed out", "waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
 	}
 }
 
@@ -1619,7 +1617,7 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 			action, workflow, output)
 	}
 	if err != nil {
-		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
+		require.Failf(t, "MoveTables command failed", "MoveTables %s command failed with %+v\n", action, err)
 	}
 }
 
@@ -1627,7 +1625,7 @@ func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourc
 	if err := vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
 		"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes); err != nil {
 		if !ignoreErrors {
-			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
+			require.Failf(t, "MoveTables command failed", "MoveTables %s command failed with %+v\n", action, err)
 		}
 	}
 }
@@ -1657,7 +1655,7 @@ func reshardAction(t *testing.T, action, workflow, keyspaceName, sourceShards, t
 		log.Info(fmt.Sprintf("Output of vtctldclient Reshard %s for %s workflow:\n++++++\n%s\n--------\n", action, workflow, output))
 	}
 	if err != nil {
-		t.Fatalf("Reshard %s command failed with %+v\nOutput: %s", action, err, output)
+		require.Failf(t, "Reshard command failed", "Reshard %s command failed with %+v\nOutput: %s", action, err, output)
 	}
 }
 
@@ -1696,7 +1694,7 @@ func ensureCanSwitch(t *testing.T, workflowType, cells, ksWorkflow string) {
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("Did not become ready to switch traffic for %s before the timeout of %s", ksWorkflow, defaultTimeout)
+			require.Failf(t, "ensureCanSwitch timeout", "Did not become ready to switch traffic for %s before the timeout of %s", ksWorkflow, defaultTimeout)
 		default:
 			time.Sleep(defaultTick)
 		}

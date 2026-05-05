@@ -60,7 +60,7 @@ func waitForValue(t *testing.T, qsc *tabletservermock.Controller, expected *rule
 			}
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("timeout: value in topo was not propagated in time")
+			require.Fail(t, "timeout: value in topo was not propagated in time")
 		}
 		t.Logf("sleeping for 10ms waiting for value %v (current=%v)", expected, val)
 		time.Sleep(10 * time.Millisecond)

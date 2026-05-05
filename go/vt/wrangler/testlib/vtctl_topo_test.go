@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -33,9 +34,7 @@ import (
 
 func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want string) {
 	got, err := vp.RunAndOutput(args)
-	if err != nil {
-		t.Fatalf("testVtctlTopoCommand(%v) failed: %v", args, err)
-	}
+	require.NoErrorf(t, err, "testVtctlTopoCommand(%v) failed: %v", args, err)
 
 	// Remove the variable version numbers.
 	lines := strings.Split(got, "\n")
@@ -45,9 +44,7 @@ func testVtctlTopoCommand(t *testing.T, vp *VtctlPipe, args []string, want strin
 		}
 	}
 	got = strings.Join(lines, "\n")
-	if got != want {
-		t.Errorf("testVtctlTopoCommand(%v) failed: got:\n%vwant:\n%v", args, got, want)
-	}
+	assert.Equalf(t, want, got, "testVtctlTopoCommand(%v) failed: got:\n%vwant:\n%v", args, got, want)
 }
 
 // TestVtctlTopoCommands tests all vtctl commands from the
@@ -85,7 +82,7 @@ keyspace_type:SNAPSHOT
 		require.NoError(t, err)
 	}
 	if !proto.Equal(got, expected) {
-		t.Fatalf("bad proto data: Got %v expected %v", got, expected)
+		require.Failf(t, "bad proto data", "bad proto data: Got %v expected %v", got, expected)
 	}
 
 	// Test TopoCp from disk to topo.
@@ -94,6 +91,6 @@ keyspace_type:SNAPSHOT
 	ks3, err := ts.GetKeyspace(t.Context(), "ks3")
 	require.NoError(t, err)
 	if !proto.Equal(ks3.Keyspace, expected) {
-		t.Fatalf("copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
+		require.Failf(t, "copy data to topo failed", "copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
 	}
 }

@@ -635,7 +635,7 @@ func getVarValue[T any](t *testing.T, key string, varFunc func() map[string]any)
 	}
 	castValue, ok := value.(T)
 	if !ok {
-		t.Errorf("unexpected type, want: %T, got %T", new(T), value)
+		assert.Failf(t, "unexpected type", "unexpected type, want: %T, got %T", new(T), value)
 	}
 	return castValue
 }

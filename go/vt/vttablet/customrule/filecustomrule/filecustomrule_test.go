@@ -46,9 +46,7 @@ func TestFileCustomRule(t *testing.T) {
 	rulepath := path.Join(os.TempDir(), ".customrule.json")
 	// Set r1 and try to get it back
 	err := os.WriteFile(rulepath, []byte(customRule1), os.FileMode(0o644))
-	if err != nil {
-		t.Fatalf("Cannot write r1 to rule file %s, err=%v", rulepath, err)
-	}
+	require.NoErrorf(t, err, "Cannot write r1 to rule file %s, err=%v", rulepath, err)
 
 	fcr := NewFileCustomRule()
 	// Let FileCustomRule to build rule from the local file
@@ -58,7 +56,5 @@ func TestFileCustomRule(t *testing.T) {
 	qrs, _, err = fcr.GetRules()
 	require.NoError(t, err)
 	qr := qrs.Find("r1")
-	if qr == nil {
-		t.Fatalf("Expect custom rule r1 to be found, but got nothing, qrs=%v", qrs)
-	}
+	require.NotNilf(t, qr, "Expect custom rule r1 to be found, but got nothing, qrs=%v", qrs)
 }

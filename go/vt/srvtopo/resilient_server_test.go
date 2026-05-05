@@ -83,7 +83,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 			break
 		}
 		if time.Now().After(expiry) {
-			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
+			require.Failf(t, "timeout", "GetSrvKeyspace() timeout = %+v, want %+v", got, want)
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
@@ -99,7 +99,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	got, err = rs.GetSrvKeyspace(t.Context(), "test_cell", "test_ks")
 	require.NoError(t, err)
 	if !proto.Equal(want, got) {
-		t.Fatalf("GetSrvKeyspace() = %+v, want %+v", got, want)
+		require.Failf(t, "GetSrvKeyspace mismatch", "GetSrvKeyspace() = %+v, want %+v", got, want)
 	}
 
 	// make sure the HTML template works
@@ -124,7 +124,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 			break
 		}
 		if time.Now().After(expiry) {
-			t.Fatalf("timeout waiting for no keyspace error")
+			require.Fail(t, "timeout waiting for no keyspace error")
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -132,7 +132,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	// Now send an updated real value, see it come through.
 	keyRange, err := key.ParseShardingSpec("-")
 	if err != nil || len(keyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
 	}
 
 	want = &topodatapb.SrvKeyspace{
@@ -159,7 +159,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 			break
 		}
 		if time.Now().After(expiry) {
-			t.Fatalf("timeout waiting for new keyspace value")
+			require.Fail(t, "timeout waiting for new keyspace value")
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -184,7 +184,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 				break
 			}
 
-			t.Errorf("expected keyspace to be cached for at least %s seconds, got error %v", time.Since(updateTime), err)
+			assert.Failf(t, "keyspace not cached", "expected keyspace to be cached for at least %s seconds, got error %v", time.Since(updateTime), err)
 		}
 
 		if time.Now().After(expiry) {
@@ -203,7 +203,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 		}
 
 		if time.Now().After(expiry) {
-			t.Fatalf("timed out waiting for error to be returned")
+			require.Fail(t, "timed out waiting for error to be returned")
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -213,7 +213,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	factory.SetError(nil)
 	_, err = rs.GetSrvKeyspace(t.Context(), "test_cell", "test_ks")
 	if err == nil || err != forceErr {
-		t.Errorf("expected error to be cached")
+		assert.Fail(t, "expected error to be cached")
 	}
 
 	// Now sleep for the rest of the interval and we should get the value again
@@ -247,11 +247,11 @@ func TestGetSrvKeyspace(t *testing.T) {
 			if err == forceErr {
 				break
 			}
-			t.Fatalf("expected %v got %v", forceErr, err)
+			require.Failf(t, "unexpected error", "expected %v got %v", forceErr, err)
 		}
 
 		if time.Now().After(expiry) {
-			t.Fatalf("timed out waiting for error")
+			require.Fail(t, "timed out waiting for error")
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -263,7 +263,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	errorReqs := counts.Counts()[errorCategory]
 	expectedErrors := int64(time.Since(errorTestStart) / srvTopoCacheRefresh)
 	if errorReqs-errorReqsBefore > expectedErrors {
-		t.Errorf("expected <= %v error requests got %d", expectedErrors, errorReqs-errorReqsBefore)
+		assert.Failf(t, "too many error requests", "expected <= %v error requests got %d", expectedErrors, errorReqs-errorReqsBefore)
 	}
 
 	// Check that the watch now works to update the value
@@ -277,7 +277,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 			break
 		}
 		if time.Now().After(expiry) {
-			t.Fatalf("timeout waiting for new keyspace value")
+			require.Fail(t, "timeout waiting for new keyspace value")
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -305,7 +305,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 				break
 			}
 
-			t.Errorf("expected keyspace to be cached for at least %s seconds, got error %v", time.Since(updateTime), err)
+			assert.Failf(t, "keyspace not cached", "expected keyspace to be cached for at least %s seconds, got error %v", time.Since(updateTime), err)
 		}
 
 		if time.Now().After(expiry) {
@@ -339,9 +339,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 		defer cancel()
 		_, err = rs.GetSrvKeyspace(timeoutCtx, "test_cell", "test_ks")
 		wantErr := "timed out waiting for keyspace"
-		if err == nil || err.Error() != wantErr {
-			t.Errorf("expected error '%v', got '%v'", wantErr, err)
-		}
+		require.EqualError(t, err, wantErr)
 		factory.Unlock()
 	*/
 }
@@ -362,23 +360,19 @@ func TestSrvKeyspaceCachedError(t *testing.T) {
 
 	// Ask for an unknown keyspace, should get an error.
 	_, err := rs.GetSrvKeyspace(ctx, "test_cell", "unknown_ks")
-	if err == nil {
-		t.Fatalf("First GetSrvKeyspace didn't return an error")
-	}
+	require.Error(t, err, "First GetSrvKeyspace didn't return an error")
 	entry := rs.SrvKeyspaceWatcher.rw.getEntry(&srvKeyspaceKey{"test_cell", "unknown_ks"})
 	if err != entry.lastError {
-		t.Errorf("Error wasn't saved properly")
+		assert.Fail(t, "Error wasn't saved properly")
 	}
 
 	time.Sleep(srvTopoCacheTTL + 10*time.Millisecond)
 	// Ask again with a different context, should get an error and
 	// save that context.
 	_, err2 := rs.GetSrvKeyspace(ctx, "test_cell", "unknown_ks")
-	if err2 == nil {
-		t.Fatalf("Second GetSrvKeyspace didn't return an error")
-	}
+	require.Error(t, err2, "Second GetSrvKeyspace didn't return an error")
 	if err2 != entry.lastError {
-		t.Errorf("Error wasn't saved properly")
+		assert.Fail(t, "Error wasn't saved properly")
 	}
 }
 
@@ -412,7 +406,7 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 			require.NoError(t, err)
 		}
 		if time.Now().After(expiry) {
-			t.Fatalf("GetSrvKeyspace() timeout = %+v, want %+v", got, want)
+			require.Failf(t, "timeout", "GetSrvKeyspace() timeout = %+v, want %+v", got, want)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -462,7 +456,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 			break
 		}
 		if time.Since(start) > 5*time.Second {
-			t.Fatalf("timed out waiting for new SrvVschema")
+			require.Fail(t, "timed out waiting for new SrvVschema")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -482,7 +476,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 			break
 		}
 		if time.Since(start) > 5*time.Second {
-			t.Fatalf("timed out waiting for updated SrvVschema")
+			require.Fail(t, "timed out waiting for updated SrvVschema")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -497,7 +491,7 @@ func TestWatchSrvVSchema(t *testing.T) {
 			break
 		}
 		if time.Since(start) > 5*time.Second {
-			t.Fatalf("timed out waiting for deleted SrvVschema")
+			require.Fail(t, "timed out waiting for deleted SrvVschema")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -530,9 +524,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	assert.NoError(t, err)
 	wantNames := []string{"test_ks", "test_ks2"}
 
-	if !reflect.DeepEqual(names, wantNames) {
-		t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
-	}
+	assert.Equalf(t, wantNames, names, "GetSrvKeyspaceNames got %v want %v", names, wantNames)
 
 	forceErr := errors.New("force test error")
 	factory.SetError(forceErr)
@@ -552,9 +544,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
 		assert.NoError(t, err)
 
-		if !reflect.DeepEqual(names, wantNames) {
-			t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
-		}
+		assert.Equalf(t, wantNames, names, "GetSrvKeyspaceNames got %v want %v", names, wantNames)
 
 		if time.Since(start) >= srvTopoCacheRefresh+10*time.Millisecond {
 			break
@@ -573,12 +563,12 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 
 		if time.Since(start) > 2*time.Second {
-			t.Fatalf("expected error after TTL expires")
+			require.Fail(t, "expected error after TTL expires")
 		}
 	}
 
 	if err != forceErr {
-		t.Errorf("got error %v want %v", err, forceErr)
+		assert.Failf(t, "unexpected error", "got error %v want %v", err, forceErr)
 	}
 
 	// Now, since the TTL has expired, check that when we ask for stale
@@ -590,14 +580,14 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	time.Sleep(srvTopoCacheRefresh*2 + 2*time.Millisecond)
 	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", true)
 	if err != forceErr {
-		t.Fatalf("expected an error if asking for really stale cache data")
+		require.Fail(t, "expected an error if asking for really stale cache data")
 	}
 
 	// Check that we only checked the topo service 1 or 2 times during the
 	// period where we got the cached error.
 	cachedReqs, ok := counts.Counts()[cachedCategory]
 	if !ok || cachedReqs > 2 {
-		t.Errorf("expected <= 2 cached requests got %v", cachedReqs)
+		assert.Failf(t, "too many cached requests", "expected <= 2 cached requests got %v", cachedReqs)
 	}
 
 	// Clear the error and wait until the cached error state expires
@@ -613,17 +603,15 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 
 		if time.Since(start) > 2*time.Second {
-			t.Fatalf("expected error after TTL expires")
+			require.Fail(t, "expected error after TTL expires")
 		}
 	}
 
-	if !reflect.DeepEqual(names, wantNames) {
-		t.Errorf("GetSrvKeyspaceNames got %v want %v", names, wantNames)
-	}
+	assert.Equalf(t, wantNames, names, "GetSrvKeyspaceNames got %v want %v", names, wantNames)
 
 	errorReqs, ok := counts.Counts()[errorCategory]
 	if !ok || errorReqs == 0 {
-		t.Errorf("expected non-zero error requests got %v", errorReqs)
+		assert.Failf(t, "no error requests", "expected non-zero error requests got %v", errorReqs)
 	}
 
 	// Force another error and lock the topo. Then wait for the TTL to
@@ -638,7 +626,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	defer timeoutCancel()
 	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
 	if err != context.DeadlineExceeded {
-		t.Errorf("expected error '%v', got '%v'", context.DeadlineExceeded, err.Error())
+		assert.Failf(t, "unexpected error", "expected error '%v', got '%v'", context.DeadlineExceeded, err.Error())
 	}
 	factory.Unlock()
 }
@@ -714,9 +702,9 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 
 			if err != nil {
 				atomic.AddInt32(&errorCount, 1)
-				t.Errorf("Goroutine %d got error after service recovery: %v", id, err)
+				assert.Failf(t, "error after service recovery", "Goroutine %d got error after service recovery: %v", id, err)
 			} else if !reflect.DeepEqual(names, expectedNames) {
-				t.Errorf("Goroutine %d got wrong names: %v", id, names)
+				assert.Failf(t, "wrong names", "Goroutine %d got wrong names: %v", id, names)
 			} else {
 				atomic.AddInt32(&successCount, 1)
 			}
@@ -789,7 +777,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 			}
 			time.Sleep(2 * time.Millisecond)
 		}
-		t.Fatalf("Failed to receive %d entries after 5s (got %d entries so far)", entryCount, len(current))
+		require.Failf(t, "missing entries", "Failed to receive %d entries after 5s (got %d entries so far)", entryCount, len(current))
 		return nil
 	}
 
@@ -827,7 +815,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 
 	keyRange, err := key.ParseShardingSpec("-")
 	if err != nil || len(keyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
 	}
 
 	for i := range 5 {

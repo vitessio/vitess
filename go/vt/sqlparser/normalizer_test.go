@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"fmt"
 	"math/rand/v2"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -567,9 +566,7 @@ func TestGetBindVars(t *testing.T) {
 		"v4": {},
 		"v5": {},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetBindVars: %v, want: %v", got, want)
-	}
+	assert.Equalf(t, want, got, "GetBindVars")
 }
 
 type testCaseSetVar struct {

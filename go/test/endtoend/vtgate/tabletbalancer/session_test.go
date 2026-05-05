@@ -204,7 +204,7 @@ func createSessionConnections(t *testing.T, vtParams *mysql.ConnParams, numConne
 		conn.Close()
 	}
 
-	t.Fatalf("could not create %d connections with different tablets after 50 attempts, only got %d", numConnections, len(conns))
+	require.Failf(t, "not enough connections", "could not create %d connections with different tablets after 50 attempts, only got %d", numConnections, len(conns))
 	return nil
 }
 

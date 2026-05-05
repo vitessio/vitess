@@ -290,7 +290,7 @@ func (ls *fkLoadSimulator) waitForAdditionalRows(count int) {
 	for {
 		switch {
 		case shortCtx.Err() != nil:
-			t.Fatalf("Timed out waiting for additional rows")
+			require.Failf(t, "timeout", "Timed out waiting for additional rows")
 		default:
 			numRows := ls.getNumRowsParent(vtgateConn)
 			if numRows >= numRowsStart+count {

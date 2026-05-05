@@ -405,7 +405,7 @@ func (tmc *testMaterializerTMClient) verifyQueries(t *testing.T) {
 			for _, qr := range qrs {
 				list = append(list, qr.query)
 			}
-			t.Errorf("tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
+			assert.Failf(t, "queries not executed", "tablet %v: found queries that were expected but never got executed by the test: %v", tabletID, list)
 		}
 	}
 }

@@ -581,7 +581,7 @@ func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp
 		if validValues, isFlexi := flexibleExp[key]; isFlexi {
 			// For the flexible key, check if the actual value matches one of the valid values
 			if !reflect.DeepEqual(actualValue, validValues[0]) && !reflect.DeepEqual(actualValue, validValues[1]) {
-				t.Fatalf("mismatch in values for key '%s': expected one of: %v, got: %v", key, validValues, actualValue)
+				require.Failf(t, "mismatch", "mismatch in values for key '%s': expected one of: %v, got: %v", key, validValues, actualValue)
 			}
 		} else {
 			// Sort the slices before comparison

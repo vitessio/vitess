@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -286,9 +287,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 		got := fmt.Sprintf("%q", rows.Rows[0].Values)
 		// We should expect a "Mojibaked" version of the string.
 		want := `"1ðŸ‘\u008d"`
-		if got != want {
-			t.Errorf("rows.Rows[0].Values: %s, want %s", got, want)
-		}
+		assert.Equalf(t, want, got, "rows.Rows[0].Values: %s, want %s", got, want)
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -572,9 +571,7 @@ func TestStreamRowsCancel(t *testing.T) {
 		cancel()
 		return nil
 	}, &options)
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("err: %v, want context.Canceled", err)
-	}
+	assert.ErrorIsf(t, err, context.Canceled, "err: %v, want context.Canceled", err)
 }
 
 func TestStreamRowsSendError(t *testing.T) {
@@ -599,9 +596,7 @@ func TestStreamRowsSendError(t *testing.T) {
 	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		return sendErr
 	}, &options)
-	if !errors.Is(err, sendErr) {
-		t.Errorf("err: %v, want %v", err, sendErr)
-	}
+	assert.ErrorIsf(t, err, sendErr, "err: %v, want %v", err, sendErr)
 }
 
 func TestStreamRowsHeartbeat(t *testing.T) {
@@ -683,7 +678,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	// Without the fix (missing for loop), we would only get 1 heartbeat
 	// With the fix, we should get at least 3 heartbeats
 	if atomic.LoadInt32(&heartbeatCount) < 3 {
-		t.Errorf("expected at least 3 heartbeats, got %d. This indicates the heartbeat goroutine is not running continuously", heartbeatCount)
+		assert.Failf(t, "expected at least 3 heartbeats", "expected at least 3 heartbeats, got %d. This indicates the heartbeat goroutine is not running continuously", heartbeatCount)
 	}
 
 	require.Never(t, func() bool {

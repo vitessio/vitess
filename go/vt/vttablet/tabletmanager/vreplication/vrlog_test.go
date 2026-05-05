@@ -53,13 +53,13 @@ func TestVrLog(t *testing.T) {
 	want := fmt.Sprintf("%s Event	%s", eventType, detail)
 	require.Contains(t, s, want)
 	if strings.HasSuffix(s, "\\n") {
-		t.Fatalf("does not end in a newline: %s", s)
+		require.Failf(t, "missing newline", "does not end in a newline: %s", s)
 	}
 	s = strings.TrimSuffix(s, "\n")
 	ss := strings.Split(s, "	")
 	numCols := 4
 	if ss == nil || len(ss) != numCols {
-		t.Fatalf("log line should have %d columns, not %d, : %s", numCols, len(ss), strings.Join(ss, "|"))
+		require.Failf(t, "wrong column count", "log line should have %d columns, not %d, : %s", numCols, len(ss), strings.Join(ss, "|"))
 	}
 	lastColValue, err := strconv.Atoi(ss[len(ss)-1])
 	require.NoError(t, err)
@@ -79,6 +79,6 @@ func TestVrLog(t *testing.T) {
 	}
 	prefix := "Error: Type not specified"
 	if !strings.HasPrefix(s, prefix) {
-		t.Fatalf("Incorrect Type for uninitialized stat, got %v", s)
+		require.Failf(t, "incorrect type", "Incorrect Type for uninitialized stat, got %v", s)
 	}
 }

@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -93,9 +92,7 @@ func TestAddNumeric(t *testing.T) {
 			if tcase.err == nil {
 				t.Fatal(err)
 			}
-			if err.Error() != tcase.err.Error() {
-				t.Fatalf("bad error message: got %q want %q", err, tcase.err)
-			}
+			require.EqualErrorf(t, err, tcase.err.Error(), "bad error message: got %q want %q", err, tcase.err)
 			continue
 		}
 		utils.MustMatch(t, tcase.out, got, "addNumeric")
@@ -241,9 +238,7 @@ func TestToSqlValue(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got := evalToSQLValueWithType(tcase.v, tcase.typ)
-		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("toSQLValue(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
-		}
+		assert.Equalf(t, tcase.out, got, "toSQLValue(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
 	}
 }
 

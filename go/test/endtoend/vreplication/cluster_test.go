@@ -580,9 +580,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			log.Info(fmt.Sprintf("Shard %s already exists, not adding", shardName))
 		} else {
 			log.Info("Adding Shard " + shardName)
-			if err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName); err != nil {
-				t.Fatalf("CreateShard command failed with %+v\n", err)
-			}
+			err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName)
+			require.NoErrorf(t, err, "CreateShard command failed with %+v\n", err)
 			keyspace.Shards[shardName] = shard
 		}
 		for i, cell := range cells {
@@ -660,7 +659,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 							log.Error(fmt.Sprintf("Failed to read the mysqld error log file %q: %v", mysqldLog, ferr))
 						}
 						output, _ := dbcmd.CombinedOutput()
-						t.Fatalf("%v :: Unable to start mysql server for %v; Output: %s", err,
+						require.FailNowf(t, "Unable to start mysql server", "%v :: Unable to start mysql server for %v; Output: %s", err,
 							tablets[ind].Vttablet, string(output))
 					}
 				}
@@ -672,9 +671,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				// Set time_zone to UTC for all tablets. Without this it fails locally on some MacOS setups.
 				query := "SET GLOBAL time_zone = '+00:00';"
 				qr, err := tablet.Vttablet.QueryTablet(query, tablet.Vttablet.Keyspace, false)
-				if err != nil {
-					t.Fatalf("failed to set time_zone: %v, output: %v", err, qr)
-				}
+				require.NoErrorf(t, err, "failed to set time_zone: %v, output: %v", err, qr)
 			}
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
@@ -745,9 +742,8 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	}
 	log.Info("Deleting Shard " + shardName)
 	// TODO how can we avoid the use of even_if_serving?
-	if output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName); err != nil {
-		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
-	}
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName)
+	require.NoErrorf(t, err, "DeleteShard command failed with error %+v and output %s\n", err, output)
 }
 
 // StartVtgate starts a vtgate process
@@ -944,9 +940,7 @@ func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing
 // function to reset any environment changes made.
 func setupDBTypeVersion(t *testing.T, value string) func() {
 	details := strings.Split(value, "-")
-	if len(details) != 2 {
-		t.Fatalf("Invalid database details: %s", value)
-	}
+	require.Lenf(t, details, 2, "Invalid database details: %s", value)
 	dbType := strings.ToLower(details[0])
 	majorVersion := details[1]
 	dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
@@ -960,11 +954,11 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 	path := "/tmp/" + dbTypeMajorVersion
 	// Set the root path and create it if needed
 	if err := setVtMySQLRoot(path); err != nil {
-		t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
+		require.FailNowf(t, "Could not set VT_MYSQL_ROOT", "Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
 	}
 	// Download and extract the version artifact if needed
 	if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
-		t.Fatalf("Could not download %s, error: %v", majorVersion, err)
+		require.FailNowf(t, "Could not download", "Could not download %s, error: %v", majorVersion, err)
 	}
 	return func() {
 		unsetVtMySQLRoot()

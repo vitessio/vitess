@@ -450,9 +450,7 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 }
 
 func assertEqual(t *testing.T, actual string, expected string, message string) {
-	if actual != expected {
-		t.Errorf("%s: actual %s, expected %s", message, actual, expected)
-	}
+	assert.Equalf(t, expected, actual, "%s: actual %s, expected %s", message, actual, expected)
 }
 
 func resetConfig(conf vttest.Config) {
@@ -522,9 +520,7 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
 	c, err := api.NewClient(cfg)
-	if err != nil {
-		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
-	}
+	require.NoErrorf(t, err, "api.NewClient(%v) failed", serverAddr)
 
 	// Wait until we can list "/", or timeout.
 	start := time.Now()

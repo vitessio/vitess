@@ -19,6 +19,7 @@ package vterrors
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -53,7 +54,7 @@ func TestFromVtRPCError(t *testing.T) {
 	for _, tcase := range testcases {
 		got := FromVTRPC(tcase.in)
 		if !Equals(got, tcase.want) {
-			t.Errorf("FromVtRPCError(%v): [%v], want [%v]", tcase.in, got, tcase.want)
+			assert.Failf(t, "FromVTRPC mismatch", "FromVtRPCError(%v): [%v], want [%v]", tcase.in, got, tcase.want)
 		}
 	}
 }
@@ -75,7 +76,7 @@ func TestVtRPCErrorFromVtError(t *testing.T) {
 	for _, tcase := range testcases {
 		got := ToVTRPC(tcase.in)
 		if !proto.Equal(got, tcase.want) {
-			t.Errorf("VtRPCErrorFromVtError(%v): %v, want %v", tcase.in, got, tcase.want)
+			assert.Failf(t, "ToVTRPC mismatch", "VtRPCErrorFromVtError(%v): %v, want %v", tcase.in, got, tcase.want)
 		}
 	}
 }

@@ -1281,15 +1281,13 @@ func TestNullsafeCompareCollate(t *testing.T) {
 				require.Error(t, err)
 			}
 			if !vterrors.Equals(err, tcase.err) {
-				t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+				assert.Failf(t, "NullsafeCompare error mismatch", "NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
 			}
 			if tcase.err != nil {
 				return
 			}
 
-			if got != tcase.out {
-				t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
-			}
+			assert.Equalf(t, tcase.out, got, "NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		})
 	}
 }
@@ -1420,7 +1418,7 @@ func TestCompareSorter(t *testing.T) {
 			assert.Equal(t, len(want), len(sorted))
 			for i := 0; i < len(want); i++ {
 				if !sqltypes.RowEqual(want[i], sorted[i]) {
-					t.Fatalf("row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
+					require.Failf(t, "row not sorted", "row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
 				}
 			}
 		})

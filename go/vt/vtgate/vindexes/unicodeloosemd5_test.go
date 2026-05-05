@@ -17,8 +17,10 @@ limitations under the License.
 package vindexes
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -123,13 +125,9 @@ func TestUnicodeLooseMD5Map(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := charVindexMD5.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
-		if err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
 		out := string(got[0].(key.DestinationKeyspaceID))
-		if out != tcase.out {
-			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
-		}
+		assert.Equalf(t, tcase.out, out, "Map(%#v)", tcase.in)
 	}
 }
 
@@ -137,11 +135,6 @@ func TestUnicodeLooseMD5Verify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
 	ksids := [][]byte{[]byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5"), []byte("\v^۴\x01\xfdu$96\x90I\x1dd\xf1\xf5")}
 	got, err := charVindexMD5.Verify(t.Context(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []bool{true, true, false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("UnicodeLooseMD5.Verify: %v, want %v", got, want)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, true, false}, got, "UnicodeLooseMD5.Verify")
 }

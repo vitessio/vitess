@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -143,9 +142,7 @@ func TestTranslateSimplification(t *testing.T) {
 				if tc.converted.err == "" {
 					require.NoError(t, err)
 				}
-				if !strings.Contains(err.Error(), tc.converted.err) {
-					t.Fatalf("wrong Convert error (simplify=false): %q (expected %q)", err, tc.converted.err)
-				}
+				require.ErrorContainsf(t, err, tc.converted.err, "wrong Convert error (simplify=false): %q (expected %q)", err, tc.converted.err)
 				return
 			}
 			assert.Equal(t, tc.converted.literal, sqlparser.String(converted))
@@ -156,9 +153,7 @@ func TestTranslateSimplification(t *testing.T) {
 				if tc.simplified.err == "" {
 					require.NoError(t, err)
 				}
-				if !strings.Contains(err.Error(), tc.simplified.err) {
-					t.Fatalf("wrong Convert error (simplify=true): %q (expected %q)", err, tc.simplified.err)
-				}
+				require.ErrorContainsf(t, err, tc.simplified.err, "wrong Convert error (simplify=true): %q (expected %q)", err, tc.simplified.err)
 				return
 			}
 			assert.Equal(t, tc.simplified.literal, sqlparser.String(simplified))

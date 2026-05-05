@@ -638,7 +638,7 @@ func TestStreamUnsharded(t *testing.T) {
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		diff := cmp.Diff(wantResult, result)
-		t.Errorf("result: %+v, want %+v\ndiff: %s", result, wantResult, diff)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v\ndiff: %s", result, wantResult, diff)
 	}
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", sql, 1)
 }
@@ -1235,7 +1235,7 @@ func TestSelectEqual(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 
@@ -1247,10 +1247,10 @@ func TestSelectEqual(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
+		assert.Failf(t, "wrong ExecCount", "sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+		assert.Failf(t, "sbc1.Queries not nil", "sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 	sbc2.Queries = nil
 
@@ -1262,10 +1262,10 @@ func TestSelectEqual(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
+		assert.Failf(t, "wrong ExecCount", "sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+		assert.Failf(t, "sbc1.Queries not nil", "sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 	sbc2.Queries = nil
 
@@ -1341,7 +1341,7 @@ func TestSelectComments(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 }
@@ -1362,7 +1362,7 @@ func TestSelectNormalize(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 
@@ -1395,7 +1395,7 @@ func TestSelectCaseSensitivity(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 }
@@ -1408,7 +1408,7 @@ func TestStreamSelectEqual(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 }
 
@@ -1426,7 +1426,7 @@ func TestSelectKeyRange(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 }
@@ -1445,7 +1445,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 }
@@ -1465,7 +1465,7 @@ func TestSelectIN(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
 	// Constants in IN clause are just numbers, not bind variables.
@@ -1547,7 +1547,7 @@ func TestStreamSelectIN(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 
 	sql = "select id from user where id in (1, 3)"
@@ -1562,7 +1562,7 @@ func TestStreamSelectIN(t *testing.T) {
 		RowsAffected: 0,
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 
 	sql = "select id from user where name = 'foo'"
@@ -1570,7 +1570,7 @@ func TestStreamSelectIN(t *testing.T) {
 	require.NoError(t, err)
 	wantResult = sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewVarChar("foo")})
@@ -1731,14 +1731,12 @@ func TestSelectScatterPartial(t *testing.T) {
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(ctx, executor, session, "select id from `user`", nil)
 	wantErr := "TestExecutor.40-60.primary"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("want error %v, got %v", wantErr, err)
-	}
+	assert.ErrorContainsf(t, err, wantErr, "want error %v, got %v", wantErr, err)
 	if vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED {
-		t.Errorf("want error code Code_RESOURCE_EXHAUSTED, but got %v", vterrors.Code(err))
+		assert.Failf(t, "wrong error code", "want error code Code_RESOURCE_EXHAUSTED, but got %v", vterrors.Code(err))
 	}
 	if results != nil {
-		t.Errorf("want nil results, got %v", results)
+		assert.Failf(t, "results not nil", "want nil results, got %v", results)
 	}
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user`", 8)
 
@@ -1746,7 +1744,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	results, err = executorExec(ctx, executor, session, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	require.NoError(t, err)
 	if results == nil || len(results.Rows) != 7 {
-		t.Errorf("want 7 results, got %v", results)
+		assert.Failf(t, "wrong number of results", "want 7 results, got %v", results)
 	}
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
@@ -2506,7 +2504,7 @@ func TestSimpleJoin(t *testing.T) {
 		},
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
@@ -2569,7 +2567,7 @@ func TestSimpleJoinStream(t *testing.T) {
 		RowsAffected: 0,
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
@@ -2689,7 +2687,7 @@ func TestLeftJoin(t *testing.T) {
 		},
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: \n%+v, want \n%+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: \n%+v, want \n%+v", result, wantResult)
 	}
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 left join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
@@ -2730,7 +2728,7 @@ func TestLeftJoinStream(t *testing.T) {
 		RowsAffected: 0,
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 }
 
@@ -2771,7 +2769,7 @@ func TestEmptyJoin(t *testing.T) {
 		},
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 }
 
@@ -2809,7 +2807,7 @@ func TestEmptyJoinStream(t *testing.T) {
 		},
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 }
 
@@ -2856,7 +2854,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 		},
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 }
 
@@ -2900,7 +2898,7 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 		},
 	}
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 }
 
@@ -4637,7 +4635,7 @@ func waitUntilQueryCount(t *testing.T, tab *sandboxconn.SandboxConn, count int) 
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timed out waiting for tablet %v query count to reach %v", topoproto.TabletAliasString(tab.Tablet().Alias), count)
+			require.Failf(t, "timeout waiting for query count", "Timed out waiting for tablet %v query count to reach %v", topoproto.TabletAliasString(tab.Tablet().Alias), count)
 		default:
 			time.Sleep(10 * time.Millisecond)
 			if len(tab.GetQueries()) == count {

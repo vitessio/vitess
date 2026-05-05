@@ -146,7 +146,7 @@ func (lg *SimpleLoadGenerator) WaitForAdditionalRows(count int) error {
 	for {
 		select {
 		case <-shortCtx.Done():
-			t.Fatalf("Timed out waiting for additional rows in %q table", "parent")
+			require.Failf(t, "timeout", "Timed out waiting for additional rows in %q table", "parent")
 		default:
 			numRows := lg.getNumRows(vtgateConn, "parent")
 			if numRows >= numRowsStart+count {

@@ -58,7 +58,7 @@ func TestKill(t *testing.T) {
 	// Give extra time for the query to start executing.
 	time.Sleep(2 * time.Second)
 	if _, err := killConn.ExecuteFetch(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
-		t.Fatalf("Kill(%v) failed: %v", conn.ConnectionID, err)
+		require.Failf(t, "Kill failed", "Kill(%v) failed: %v", conn.ConnectionID, err)
 	}
 
 	// The error text will depend on what ExecuteFetch in the go
@@ -96,7 +96,7 @@ func TestKill2006(t *testing.T) {
 	defer killConn.Close()
 
 	if _, err := killConn.ExecuteFetch(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
-		t.Fatalf("Kill(%v) failed: %v", conn.ConnectionID, err)
+		require.Failf(t, "Kill failed", "Kill(%v) failed: %v", conn.ConnectionID, err)
 	}
 
 	// Now we should get a CRServerGone.  Since we are using a
@@ -280,7 +280,7 @@ func TestTLS(t *testing.T) {
 
 	if len(result.Rows) != 1 || result.Rows[0][0].ToString() != "Ssl_cipher" ||
 		result.Rows[0][1].ToString() == "" {
-		t.Fatalf("SHOW STATUS LIKE 'Ssl_cipher' returned unexpected result: %v", result)
+		require.Failf(t, "unexpected result", "SHOW STATUS LIKE 'Ssl_cipher' returned unexpected result: %v", result)
 	}
 }
 
@@ -352,7 +352,7 @@ func TestCachingSha2Password(t *testing.T) {
 	}
 
 	if len(qr.Rows) != 1 || qr.Rows[0][0].ToString() != "sha2user@localhost" {
-		t.Errorf("Logged in user is not sha2user")
+		assert.Fail(t, "Logged in user is not sha2user")
 	}
 }
 

@@ -191,9 +191,7 @@ func TestAutoCommit(t *testing.T) {
 		want := framework.FetchInt(vstart, expected.tag) + expected.diff
 		// It's possible that other house-keeping transactions (like messaging)
 		// can happen during this test. So, don't perform equality comparisons.
-		if got < want {
-			t.Errorf("%s: %d, must be at least %d", expected.tag, got, want)
-		}
+		assert.GreaterOrEqualf(t, got, want, "%s: %d, must be at least %d", expected.tag, got, want)
 	}
 }
 
@@ -532,7 +530,7 @@ func TestMMCommitFlow(t *testing.T) {
 	require.NoError(t, err)
 	wantInfo = &querypb.TransactionMetadata{}
 	if !proto.Equal(info, wantInfo) {
-		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
+		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %#v, want %#v", info, wantInfo)
 	}
 }
 
@@ -577,7 +575,7 @@ func TestMMRollbackFlow(t *testing.T) {
 		}},
 	}
 	if !proto.Equal(info, wantInfo) {
-		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
+		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %#v, want %#v", info, wantInfo)
 	}
 
 	err = client.ConcludeTransaction("aa")
@@ -682,9 +680,8 @@ func TestUnresolvedTracking(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(10 * time.Second)
 	vars := framework.DebugVars()
-	if val := framework.FetchInt(vars, "Unresolved/Prepares"); val != 1 {
-		t.Errorf("Unresolved: %d, want 1", val)
-	}
+	val := framework.FetchInt(vars, "Unresolved/Prepares")
+	assert.Equalf(t, 1, val, "Unresolved: %d, want 1", val)
 }
 
 func TestManualTwopcz(t *testing.T) {

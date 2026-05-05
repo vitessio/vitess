@@ -401,12 +401,10 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	for receivedPackets < 3 {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout waiting for packets, received %d", receivedPackets)
+			require.Failf(t, "timeout waiting for packets", "Timeout waiting for packets, received %d", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
-			if err != nil {
-				t.Fatalf("Error reading packet: %v", err)
-			}
+			require.NoErrorf(t, err, "Error reading packet: %v", err)
 			if len(data) > 0 && data[0] == mysql.OKPacket {
 				receivedPackets++
 				t.Logf("Received packet %d: size=%d bytes", receivedPackets, len(data))
@@ -580,7 +578,7 @@ readLoop:
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout waiting for EOF packet - nonBlock flag may not be implemented. Received %d packets.", receivedPackets)
+			require.Failf(t, "timeout waiting for EOF packet", "Timeout waiting for EOF packet - nonBlock flag may not be implemented. Received %d packets.", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
@@ -668,7 +666,7 @@ readLoop:
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout - received %d packets but no EOF. NonBlock may not be implemented.", receivedPackets)
+			require.Failf(t, "timeout waiting for EOF", "Timeout - received %d packets but no EOF. NonBlock may not be implemented.", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
@@ -687,7 +685,7 @@ readLoop:
 				break readLoop
 			case mysql.ErrPacket:
 				sqlErr := mysql.ParseErrorPacket(data)
-				t.Fatalf("Unexpected error packet: %v", sqlErr)
+				require.Failf(t, "unexpected error packet", "Unexpected error packet: %v", sqlErr)
 			case mysql.OKPacket:
 				receivedPackets++
 				if receivedPackets <= 10 {
@@ -804,7 +802,7 @@ readLoop:
 				}
 			}
 		case err := <-errCh:
-			t.Fatalf("Error reading packet: %v", err)
+			require.Failf(t, "error reading packet", "Error reading packet: %v", err)
 		case <-timeout:
 			if receivedPackets > 0 {
 				t.Logf("Timeout after receiving %d packets - blocking mode works", receivedPackets)
@@ -951,7 +949,7 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 		for {
 			select {
 			case <-timeout:
-				t.Fatalf("[%s] Timeout waiting for EOF, received %d packets", label, count)
+				require.Failf(t, "timeout waiting for EOF", "[%s] Timeout waiting for EOF, received %d packets", label, count)
 			default:
 			}
 
@@ -970,7 +968,7 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 				return count
 			case mysql.ErrPacket:
 				sqlErr := mysql.ParseErrorPacket(data)
-				t.Fatalf("[%s] Unexpected error packet: %v", label, sqlErr)
+				require.Failf(t, "unexpected error packet", "[%s] Unexpected error packet: %v", label, sqlErr)
 			case mysql.OKPacket:
 				count++
 			}

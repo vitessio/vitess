@@ -17,11 +17,12 @@ limitations under the License.
 package vindexes
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -124,13 +125,9 @@ func TestXXHashMap(t *testing.T) {
 
 	for _, tcase := range tcases {
 		got, err := xxHash.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
-		if err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
 		out := []byte(got[0].(key.DestinationKeyspaceID))
-		if !bytes.Equal(tcase.out, out) {
-			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
-		}
+		assert.Equalf(t, tcase.out, out, "Map(%#v)", tcase.in)
 	}
 }
 
@@ -142,13 +139,8 @@ func TestXXHashVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewUint64(1), sqltypes.NewUint64(2), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
 	ksids := [][]byte{{0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, {0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, vXXHash(hexBytes), vXXHash(hexBytes)}
 	got, err := xxHash.Verify(t.Context(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []bool{true, false, true, true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("xxHash.Verify: %v, want %v", got, want)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false, true, true}, got, "xxHash.Verify")
 }
 
 func BenchmarkXXHash(b *testing.B) {

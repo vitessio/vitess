@@ -29,6 +29,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -73,10 +74,10 @@ func newContext() context.Context {
 func (f *fakeVTGateService) checkCallerID(ctx context.Context, name string) {
 	ef := callerid.EffectiveCallerIDFromContext(ctx)
 	if ef == nil {
-		f.t.Errorf("no effective caller id for %v", name)
+		assert.Failf(f.t, "missing effective caller id", "no effective caller id for %v", name)
 	} else {
 		if !proto.Equal(ef, testCallerID) {
-			f.t.Errorf("invalid effective caller id for %v: got %v expected %v", name, ef, testCallerID)
+			assert.Failf(f.t, "invalid effective caller id", "invalid effective caller id for %v: got %v expected %v", name, ef, testCallerID)
 		}
 	}
 }
@@ -121,7 +122,7 @@ func (f *fakeVTGateService) Execute(
 		Session:       session,
 	}
 	if !query.equal(execCase.execQuery) {
-		f.t.Errorf("Execute:\n%+v, want\n%+v", query, execCase.execQuery)
+		assert.Failf(f.t, "unexpected Execute query", "Execute:\n%+v, want\n%+v", query, execCase.execQuery)
 		return session, nil, nil
 	}
 
@@ -159,7 +160,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 		Session:       session,
 	}
 	if !query.equal(execCase.execQuery) {
-		f.t.Errorf("Execute: %+v, want %+v", query, execCase.execQuery)
+		assert.Failf(f.t, "unexpected ExecuteBatch query", "Execute: %+v, want %+v", query, execCase.execQuery)
 		return session, nil, nil
 	}
 	if execCase.outSession != nil {
@@ -189,7 +190,7 @@ func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgatese
 		Session:       session,
 	}
 	if !query.equal(execCase.execQuery) {
-		f.t.Errorf("StreamExecute:\n%+v, want\n%+v", query, execCase.execQuery)
+		assert.Failf(f.t, "unexpected StreamExecute query", "StreamExecute:\n%+v, want\n%+v", query, execCase.execQuery)
 		return session, nil
 	}
 	if execCase.result != nil {
@@ -276,7 +277,7 @@ func (f *fakeVTGateService) Prepare(ctx context.Context, session *vtgatepb.Sessi
 		Session: session,
 	}
 	if !query.equal(execCase.execQuery) {
-		f.t.Errorf("Prepare:\n%+v, want\n%+v", query, execCase.execQuery)
+		assert.Failf(f.t, "unexpected Prepare query", "Prepare:\n%+v, want\n%+v", query, execCase.execQuery)
 		return session, nil, 0, nil
 	}
 	if execCase.outSession != nil {
@@ -377,33 +378,29 @@ func expectPanic(t *testing.T, err error) {
 	expected1 := "test forced panic"
 	expected2 := "uncaught panic"
 	if err == nil || !strings.Contains(err.Error(), expected1) || !strings.Contains(err.Error(), expected2) {
-		t.Fatalf("Expected a panic error with '%v' or '%v' but got: %v", expected1, expected2, err)
+		require.Failf(t, "expected panic error", "Expected a panic error with '%v' or '%v' but got: %v", expected1, expected2, err)
 	}
 }
 
 // Verifies the returned error has the properties that we expect.
 func verifyError(t *testing.T, err error, method string) {
 	if err == nil {
-		t.Errorf("%s was expecting an error, didn't get one", method)
+		assert.Failf(t, "expected error", "%s was expecting an error, didn't get one", method)
 		return
 	}
 	// verify error code
 	code := vterrors.Code(err)
-	if code != expectedCode {
-		t.Errorf("Unexpected error code from %s: got %v, wanted %v", method, code, expectedCode)
-	}
+	assert.Equalf(t, expectedCode, code, "Unexpected error code from %s: got %v, wanted %v", method, code, expectedCode)
 	verifyErrorString(t, err, method)
 }
 
 func verifyErrorString(t *testing.T, err error, method string) {
 	if err == nil {
-		t.Errorf("%s was expecting an error, didn't get one", method)
+		assert.Failf(t, "expected error", "%s was expecting an error, didn't get one", method)
 		return
 	}
 
-	if !strings.Contains(err.Error(), expectedErrMatch) {
-		t.Errorf("Unexpected error from %s: got %v, wanted err containing: %v", method, err, errTestVtGateError.Error())
-	}
+	assert.Containsf(t, err.Error(), expectedErrMatch, "Unexpected error from %s: got %v, wanted err containing: %v", method, err, errTestVtGateError.Error())
 }
 
 func testExecute(t *testing.T, session *vtgateconn.VTGateSession, request string) {
@@ -412,14 +409,12 @@ func testExecute(t *testing.T, session *vtgateconn.VTGateSession, request string
 	qr, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
-		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
+		assert.Failf(t, "unexpected Execute result", "Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	}
 
 	_, err = session.Execute(ctx, "none", nil, false)
 	want := "no match for: none"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("none request: %v, want %v", err, want)
-	}
+	assert.ErrorContainsf(t, err, want, "none request: %v, want %v", err, want)
 }
 
 func testExecuteMulti(t *testing.T, session *vtgateconn.VTGateSession) {
@@ -472,14 +467,12 @@ func testExecuteBatch(t *testing.T, session *vtgateconn.VTGateSession) {
 	qr, err := session.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]*querypb.BindVariable{execCase.execQuery.BindVariables})
 	require.NoError(t, err)
 	if !qr[0].QueryResult.Equal(execCase.result) {
-		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
+		assert.Failf(t, "unexpected ExecuteBatch result", "Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	}
 
 	_, err = session.ExecuteBatch(ctx, []string{"none"}, nil)
 	want := "no match for: none"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("none request: %v, want %v", err, want)
-	}
+	assert.ErrorContainsf(t, err, want, "none request: %v, want %v", err, want)
 }
 
 func testExecuteBatchError(t *testing.T, session *vtgateconn.VTGateSession, fake *fakeVTGateService) {
@@ -525,7 +518,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	wantResult.InsertID = 0
 	wantResult.InsertIDChanged = false
 	if !qr.Equal(&wantResult) {
-		t.Errorf("Unexpected result from StreamExecute: got %+v want %+v", qr, wantResult)
+		assert.Failf(t, "unexpected StreamExecute result", "Unexpected result from StreamExecute: got %+v want %+v", qr, wantResult)
 	}
 
 	stream, err = session.StreamExecute(ctx, "none", nil)
@@ -534,9 +527,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	}
 	_, err = stream.Recv()
 	want := "no match for: none"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("none request: %v, want %v", err, want)
-	}
+	assert.ErrorContainsf(t, err, want, "none request: %v, want %v", err, want)
 }
 
 func testStreamExecuteMulti(t *testing.T, session *vtgateconn.VTGateSession) {
@@ -615,15 +606,13 @@ func testStreamExecuteError(t *testing.T, session *vtgateconn.VTGateSession, fak
 	require.NoError(t, err)
 
 	if !qr.Equal(&streamResultFields) {
-		t.Errorf("Unexpected result from StreamExecute: got %#v want %#v", qr, &streamResultFields)
+		assert.Failf(t, "unexpected StreamExecute result", "Unexpected result from StreamExecute: got %#v want %#v", qr, &streamResultFields)
 	}
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
 	_, err = stream.Recv()
-	if err == nil {
-		t.Fatalf("StreamExecute channel wasn't closed")
-	}
+	require.Error(t, err, "StreamExecute channel wasn't closed")
 	verifyError(t, err, "StreamExecute")
 }
 
@@ -635,9 +624,7 @@ func testStreamExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 		t.Fatal(err)
 	}
 	_, err = stream.Recv()
-	if err == nil {
-		t.Fatalf("Received packets instead of panic?")
-	}
+	require.Error(t, err, "Received packets instead of panic?")
 	expectPanic(t, err)
 }
 

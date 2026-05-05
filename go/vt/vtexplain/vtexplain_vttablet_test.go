@@ -159,11 +159,11 @@ create table test_partitioned (
 	assert.Equal(t, wantCols, string(got))
 
 	if !t1.HasPrimary() || len(t1.PKColumns) != 1 || t1.PKColumns[0] != 0 {
-		t.Errorf("expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
+		assert.Failf(t, "unexpected primary key", "expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
 	}
 	pkCol := t1.GetPKColumn(0)
 	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64 charset:33 flags:32800` {
-		t.Errorf("expected pkCol[0] == id, got %v", pkCol)
+		assert.Failf(t, "unexpected pk column", "expected pkCol[0] == id, got %v", pkCol)
 	}
 
 	t2 := tables["t2"]
@@ -174,7 +174,7 @@ create table test_partitioned (
 	assert.Equal(t, wantCols, string(got))
 
 	if t2.HasPrimary() || len(t2.PKColumns) != 0 {
-		t.Errorf("expected !HasPrimary && t2.PKColumns == [] got %v", t2.PKColumns)
+		assert.Failf(t, "unexpected primary key", "expected !HasPrimary && t2.PKColumns == [] got %v", t2.PKColumns)
 	}
 
 	t5 := tables["t5"]
@@ -183,7 +183,7 @@ create table test_partitioned (
 	assert.Equal(t, wantCols, string(got))
 
 	if t5.HasPrimary() || len(t5.PKColumns) != 0 {
-		t.Errorf("expected !HasPrimary && t5.PKColumns == [] got %v", t5.PKColumns)
+		assert.Failf(t, "unexpected primary key", "expected !HasPrimary && t5.PKColumns == [] got %v", t5.PKColumns)
 	}
 
 	seq := tables["t1_seq"]

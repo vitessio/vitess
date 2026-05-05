@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/streamlog"
@@ -67,7 +68,7 @@ func TestFileLog(t *testing.T) {
 		}
 		// Last iteration.
 		if i == 9 {
-			t.Errorf("streamlog file: want %q got %q", want, got)
+			assert.Equalf(t, want, got, "streamlog file: want %q got %q", want, got)
 		}
 	}
 }
@@ -109,7 +110,5 @@ func TestFileLogRedacted(t *testing.T) {
 	want := "\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 1\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\"\"\t\n\t\t\t''\t''\t0001-01-01 00:00:00.000000\t0001-01-01 00:00:00.000000\t0.000000\t\t\"test 2\"\t\"[REDACTED]\"\t1\t\"[REDACTED]\"\tmysql\t0.000000\t0.000000\t0\t0\t0\t\"\"\t\"\"\t\n"
 	contents, _ := os.ReadFile(logPath)
 	got := string(contents)
-	if want != string(got) {
-		t.Errorf("streamlog file: want %q got %q", want, got)
-	}
+	assert.Equalf(t, want, got, "streamlog file: want %q got %q", want, got)
 }

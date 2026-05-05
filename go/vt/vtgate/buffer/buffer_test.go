@@ -142,14 +142,12 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 		t.Fatal(err)
 	}
 	// Start counter must have been increased.
-	if got, want := starts.Counts()[statsKeyJoined], int64(1); got != want {
-		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
-	}
+	got, want := starts.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "buffering start was not tracked: got = %v, want = %v", got, want)
 
 	// Subsequent requests with errors not related to the failover are not buffered.
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr); err != nil || retryDone != nil {
-		t.Fatalf("requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
-	}
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
 
 	// Subsequent requests are buffered (if their error is nil or caused by the failover).
 	stopped2 := issueRequest(t.Context(), t, b, nil)
@@ -174,33 +172,27 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	}
 	// Failover time should have been be published.
 	durations := failoverDurationSumMs.Counts()
-	if _, ok := durations[statsKeyJoined]; !ok {
-		t.Fatalf("a failover time must have been recorded: %v", durations)
-	}
+	_, ok := durations[statsKeyJoined]
+	require.Truef(t, ok, "a failover time must have been recorded: %v", durations)
 	// Recorded max buffer usage should be 3 now.
-	if got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(3); got != want {
-		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
-	}
+	got, want = lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(3)
+	require.Equalf(t, want, got, "wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 	// Stop counter should have been increased.
-	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1); got != want {
-		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
-	}
+	got, want = stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1)
+	require.Equalf(t, want, got, "buffering stop was not tracked: got = %v, want = %v", got, want)
 	// Utilization in percentage has increased.
-	if got, want := utilizationSum.Counts()[statsKeyJoined], int64(30); got != want {
-		t.Fatalf("wrong buffer utilization: got = %v, want = %v", got, want)
-	}
+	got, want = utilizationSum.Counts()[statsKeyJoined], int64(30)
+	require.Equalf(t, want, got, "wrong buffer utilization: got = %v, want = %v", got, want)
 	// Drain will reset the state to "idle" eventually.
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
 	}
 
 	// Second failover: Buffering is skipped because last failover is too recent.
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("subsequent failovers must be skipped due to -buffer-min-time-between-failovers setting. err: %v retryDone: %v", err, retryDone)
-	}
-	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
-		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
-	}
+	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "subsequent failovers must be skipped due to -buffer-min-time-between-failovers setting. err: %v retryDone: %v", err, retryDone)
+	got, want = requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1)
+	require.Equalf(t, want, got, "skipped request was not tracked: got = %v, want = %v", got, want)
 
 	// Second failover is buffered if enough time has passed.
 	now = now.Add(cfg.MinTimeBetweenFailovers)
@@ -209,13 +201,11 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 		t.Fatal(err)
 	}
 	// Recorded max buffer usage should be 1 for the second failover.
-	if got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(1); got != want {
-		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
-	}
+	got, want = lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 	// Start counter must have been increased for the second failover.
-	if got, want := starts.Counts()[statsKeyJoined], int64(2); got != want {
-		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
-	}
+	got, want = starts.Counts()[statsKeyJoined], int64(2)
+	require.Equalf(t, want, got, "buffering start was not tracked: got = %v, want = %v", got, want)
 	// Stop buffering.
 	fail(b, oldPrimary, keyspace, shard, now)
 
@@ -230,13 +220,11 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	}
 
 	// Stop counter must have been increased for the second failover.
-	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(2); got != want {
-		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
-	}
+	got, want = stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(2)
+	require.Equalf(t, want, got, "buffering stop was not tracked: got = %v, want = %v", got, want)
 	// Utilization in percentage has increased.
-	if got, want := utilizationSum.Counts()[statsKeyJoined], int64(40); got != want {
-		t.Fatalf("wrong buffer utilization: got = %v, want = %v", got, want)
-	}
+	got, want = utilizationSum.Counts()[statsKeyJoined], int64(40)
+	require.Equalf(t, want, got, "wrong buffer utilization: got = %v, want = %v", got, want)
 }
 
 // TestDryRun tests the case when only the dry-run mode is enabled globally.
@@ -253,9 +241,8 @@ func testDryRun1(t *testing.T, fail failover) {
 	b := New(cfg)
 
 	// Request does not get buffered.
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("requests must not be buffered during dry-run. err: %v retryDone: %v", err, retryDone)
-	}
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests must not be buffered during dry-run. err: %v retryDone: %v", err, retryDone)
 	// But the internal state changes though.
 	if err := waitForState(b, stateBuffering); err != nil {
 		t.Fatal(err)
@@ -263,12 +250,10 @@ func testDryRun1(t *testing.T, fail failover) {
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := starts.Counts()[statsKeyJoined], int64(1); got != want {
-		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
-	}
-	if got, want := lastRequestsDryRunMax.Counts()[statsKeyJoined], int64(1); got != want {
-		t.Fatalf("dry-run request count did not increase: got = %v, want = %v", got, want)
-	}
+	got, want := starts.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "buffering start was not tracked: got = %v, want = %v", got, want)
+	got, want = lastRequestsDryRunMax.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "dry-run request count did not increase: got = %v, want = %v", got, want)
 
 	// End of failover is tracked as well.
 	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
@@ -276,12 +261,10 @@ func testDryRun1(t *testing.T, fail failover) {
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1); got != want {
-		t.Fatalf("buffering stop was not tracked: got = %v, want = %v", got, want)
-	}
-	if got, want := utilizationDryRunSum.Counts()[statsKeyJoined], int64(10); got != want {
-		t.Fatalf("wrong buffer utilization: got = %v, want = %v", got, want)
-	}
+	got, want = stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1)
+	require.Equalf(t, want, got, "buffering stop was not tracked: got = %v, want = %v", got, want)
+	got, want = utilizationDryRunSum.Counts()[statsKeyJoined], int64(10)
+	require.Equalf(t, want, got, "wrong buffer utilization: got = %v, want = %v", got, want)
 }
 
 // TestPassthrough tests the case when no failover is in progress and
@@ -299,12 +282,10 @@ func testPassthrough1(t *testing.T, fail failover) {
 
 	b := New(cfg)
 
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil); err != nil || retryDone != nil {
-		t.Fatalf("requests with no error must never be buffered. err: %v retryDone: %v", err, retryDone)
-	}
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr); err != nil || retryDone != nil {
-		t.Fatalf("requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
-	}
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil)
+	require.Truef(t, err == nil && retryDone == nil, "requests with no error must never be buffered. err: %v retryDone: %v", err, retryDone)
+	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
 
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
 		t.Fatal(err)
@@ -338,18 +319,15 @@ func testLastReparentTooRecentBufferingSkipped1(t *testing.T, fail failover) {
 	now = now.Add(1 * time.Second)
 	fail(b, newPrimary, keyspace, shard, now)
 
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
-	}
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(1); got != want {
-		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
-	}
-	if got, want := requestsBuffered.Counts()[statsKeyJoined], int64(0); got != want {
-		t.Fatalf("no request should have been tracked as buffered: got = %v, want = %v", got, want)
-	}
+	got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(1)
+	require.Equalf(t, want, got, "skipped request was not tracked: got = %v, want = %v", got, want)
+	got, want = requestsBuffered.Counts()[statsKeyJoined], int64(0)
+	require.Equalf(t, want, got, "no request should have been tracked as buffered: got = %v, want = %v", got, want)
 }
 
 // TestLastReparentTooRecentBuffering explicitly tests that the "too recent"
@@ -398,12 +376,10 @@ func testLastReparentTooRecentBuffering1(t *testing.T, fail failover) {
 		t.Fatal(err)
 	}
 
-	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(0); got != want {
-		t.Fatalf("request should not have been skipped: got = %v, want = %v", got, want)
-	}
-	if got, want := requestsBuffered.Counts()[statsKeyJoined], int64(1); got != want {
-		t.Fatalf("request should have been tracked as buffered: got = %v, want = %v", got, want)
-	}
+	got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(0)
+	require.Equalf(t, want, got, "request should not have been skipped: got = %v, want = %v", got, want)
+	got, want = requestsBuffered.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "request should have been tracked as buffered: got = %v, want = %v", got, want)
 }
 
 // TestPassthroughDuringDrain tests the behavior of requests while the buffer is
@@ -430,17 +406,14 @@ func testPassthroughDuringDrain1(t *testing.T, fail failover) {
 	// Stop buffering and trigger drain.
 	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 
-	if got, want := b.getOrCreateBuffer(keyspace, shard).testGetState(), stateDraining; got != want {
-		t.Fatalf("wrong expected state. got = %v, want = %v", got, want)
-	}
+	gotState, wantState := b.getOrCreateBuffer(keyspace, shard).testGetState(), stateDraining
+	require.Equalf(t, wantState, gotState, "wrong expected state. got = %v, want = %v", gotState, wantState)
 
 	// Requests during the drain will be passed through and not buffered.
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil); err != nil || retryDone != nil {
-		t.Fatalf("requests with no error must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
-	}
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("requests with failover errors must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
-	}
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil)
+	require.Truef(t, err == nil && retryDone == nil, "requests with no error must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
+	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests with failover errors must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
 
 	// Finish draining by telling the buffer that the retry is done.
 	close(markRetryDone)
@@ -470,25 +443,21 @@ func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, fail failover) {
 	b := New(cfg)
 
 	ignoredKeyspace := "ignored_ks"
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), ignoredKeyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("requests for ignored keyspaces must not be buffered. err: %v retryDone: %v", err, retryDone)
-	}
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), ignoredKeyspace, shard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests for ignored keyspaces must not be buffered. err: %v retryDone: %v", err, retryDone)
 	statsKeyJoined := strings.Join([]string{ignoredKeyspace, shard, skippedDisabled}, ".")
-	if got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1); got != want {
-		t.Fatalf("request was not skipped as disabled: got = %v, want = %v", got, want)
-	}
+	got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "request was not skipped as disabled: got = %v, want = %v", got, want)
 
 	ignoredShard := "ff-"
-	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, ignoredShard, nil, failoverErr); err != nil || retryDone != nil {
-		t.Fatalf("requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
-	}
+	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, ignoredShard, nil, failoverErr)
+	require.Truef(t, err == nil && retryDone == nil, "requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
 		t.Fatal(err)
 	}
 	statsKeyJoined = strings.Join([]string{keyspace, ignoredShard, skippedDisabled}, ".")
-	if got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1); got != want {
-		t.Fatalf("request was not skipped as disabled: got = %v, want = %v", got, want)
-	}
+	got, want = requestsSkipped.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "request was not skipped as disabled: got = %v, want = %v", got, want)
 }
 
 // TestRequestCanceled_ExplicitEnd stops the buffering because the we see the
@@ -547,9 +516,8 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, fail failover) {
 		t.Fatal(err)
 	}
 	// Recorded max buffer usage stay at 2 although the second request was canceled.
-	if got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(2); got != want {
-		t.Fatalf("wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
-	}
+	got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(2)
+	require.Equalf(t, want, got, "wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
 
 	if explicitEnd {
 		fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
@@ -662,15 +630,11 @@ func testEvictionNotPossible1(t *testing.T, fail failover) {
 	// Newer requests of the second failover cannot evict anything because
 	// they have no entries buffered.
 	retryDone, bufferErr := b.WaitForFailoverEnd(t.Context(), keyspace, shard2, nil, failoverErr)
-	if bufferErr == nil || retryDone != nil {
-		t.Fatalf("buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
-	}
-	if got, want := vterrors.Code(bufferErr), vtrpcpb.Code_UNAVAILABLE; got != want {
-		t.Fatalf("wrong error code for evicted buffered request. got = %v, want = %v", got, want)
-	}
-	if got, want := bufferErr.Error(), bufferFullError.Error(); !strings.Contains(got, want) {
-		t.Fatalf("evicted buffered request should return a different error message. got = %v, want substring = %v", got, want)
-	}
+	require.Truef(t, bufferErr != nil && retryDone == nil, "buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
+	gotCode, wantCode := vterrors.Code(bufferErr), vtrpcpb.Code_UNAVAILABLE
+	require.Equalf(t, wantCode, gotCode, "wrong error code for evicted buffered request. got = %v, want = %v", gotCode, wantCode)
+	gotMsg, wantMsg := bufferErr.Error(), bufferFullError.Error()
+	require.Containsf(t, gotMsg, wantMsg, "evicted buffered request should return a different error message. got = %v, want substring = %v", gotMsg, wantMsg)
 
 	// End of failover. Stop buffering.
 	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
@@ -686,9 +650,8 @@ func testEvictionNotPossible1(t *testing.T, fail failover) {
 		t.Fatal(err)
 	}
 	statsKeyJoined := strings.Join([]string{keyspace, shard2, string(skippedBufferFull)}, ".")
-	if got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1); got != want {
-		t.Fatalf("skipped request was not tracked: got = %v, want = %v", got, want)
-	}
+	got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1)
+	require.Equalf(t, want, got, "skipped request was not tracked: got = %v, want = %v", got, want)
 }
 
 func TestWindow(t *testing.T) {
@@ -755,9 +718,8 @@ func testWindow1(t *testing.T, fail failover) {
 	}
 
 	// Verify that the window was not exceeded.
-	if got, want := requestsEvicted.Counts()[statsKeyJoinedWindowExceeded], int64(1); got != want {
-		t.Fatalf("second or third request should not have exceed its buffering window. got = %v, want = %v", got, want)
-	}
+	got, want := requestsEvicted.Counts()[statsKeyJoinedWindowExceeded], int64(1)
+	require.Equalf(t, want, got, "second or third request should not have exceed its buffering window. got = %v, want = %v", got, want)
 
 	// Reduce the window again.
 	cfg.Window = 100 * time.Millisecond

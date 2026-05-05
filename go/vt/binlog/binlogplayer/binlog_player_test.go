@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -154,9 +155,8 @@ func TestApplyEventsFail(t *testing.T) {
 	dbClient.Wait()
 
 	want := "error in processing binlog event failed query BEGIN, err: err"
-	if err := errfunc(); err == nil || err.Error() != want {
-		t.Errorf("ApplyBinlogEvents err: %v, want %v", err, want)
-	}
+	err := errfunc()
+	require.EqualErrorf(t, err, want, "ApplyBinlogEvents err: %v, want %v", err, want)
 }
 
 var settingsFields []*querypb.Field = []*querypb.Field{
@@ -404,9 +404,7 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if got != want {
-		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
-	}
+	assert.Equalf(t, want, got, "CreateVReplication() =\n%v, want\n%v", got, want)
 }
 
 func TestCreateVReplicationTables(t *testing.T) {
@@ -426,9 +424,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if got != want {
-		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
-	}
+	assert.Equalf(t, want, got, "CreateVReplication() =\n%v, want\n%v", got, want)
 }
 
 func TestUpdateVReplicationPos(t *testing.T) {
@@ -438,9 +434,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0, 0, false)
-	if got != want {
-		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "updateVReplicationPos() = %#v, want %#v", got, want)
 }
 
 func TestUpdateVReplicationTimestamp(t *testing.T) {
@@ -450,25 +444,19 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828, 0, false)
-	if got != want {
-		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "updateVReplicationPos() = %#v, want %#v", got, want)
 }
 
 func TestReadVReplicationPos(t *testing.T) {
 	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)
-	if got != want {
-		t.Errorf("ReadVReplicationPos(482821) = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "ReadVReplicationPos(482821) = %#v, want %#v", got, want)
 }
 
 func TestReadVReplicationStatus(t *testing.T) {
 	want := "select pos, state, message from _vt.vreplication where id=482821"
 	got := ReadVReplicationStatus(482821)
-	if got != want {
-		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
 }
 
 func TestEncodeString(t *testing.T) {

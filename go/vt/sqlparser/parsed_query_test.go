@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,9 +38,7 @@ func TestNewParsedQuery(t *testing.T) {
 		Query:         "select * from a where id = :id",
 		bindLocations: []BindLocation{{Offset: 27, Length: 3}},
 	}
-	if !reflect.DeepEqual(pq, want) {
-		t.Errorf("GenerateParsedQuery: %+v, want %+v", pq, want)
-	}
+	assert.Equalf(t, want, pq, "GenerateParsedQuery")
 }
 
 func TestGenerateQuery(t *testing.T) {

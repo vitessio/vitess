@@ -118,11 +118,10 @@ func TestMigrateUnsharded(t *testing.T) {
 	ksWorkflow := defaultSourceKs + ".e1"
 
 	t.Run("migrate from external cluster", func(t *testing.T) {
-		if output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
+		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", defaultSourceKs, "--workflow", "e1",
-			"create", "--source-keyspace", "rating", "--mount-name", "ext1", "--all-tables", "--cells=extcell1", "--tablet-types=primary,replica"); err != nil {
-			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-		}
+			"create", "--source-keyspace", "rating", "--mount-name", "ext1", "--all-tables", "--cells=extcell1", "--tablet-types=primary,replica")
+		require.NoError(t, err, "Migrate command failed with output: %s", output)
 		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", defaultSourceKs+":0", 1)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "rating", 2)

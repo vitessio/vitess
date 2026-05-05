@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/testfiles"
@@ -95,12 +96,10 @@ func TestZk2Topo(t *testing.T) {
 
 func TestHasObservers(t *testing.T) {
 	s1, s2, ok := hasObservers("s1:p1,s2:p2")
-	if ok {
-		t.Errorf("hasObservers(s1:p1,s2:p2): got unexpected %v %v %v", s1, s2, ok)
-	}
+	assert.Falsef(t, ok, "hasObservers(s1:p1,s2:p2): got unexpected %v %v %v", s1, s2, ok)
 
 	s1, s2, ok = hasObservers("s1:p1,s2:p2|o1:p1,o2:p2")
 	if !ok || s1 != "s1:p1,s2:p2" || s2 != "o1:p1,o2:p2" {
-		t.Errorf("hasObservers(s1:p1,s2:p2|o1:p1,o2:p2): got unexpected %v %v %v", s1, s2, ok)
+		assert.Failf(t, "hasObservers mismatch", "hasObservers(s1:p1,s2:p2|o1:p1,o2:p2): got unexpected %v %v %v", s1, s2, ok)
 	}
 }

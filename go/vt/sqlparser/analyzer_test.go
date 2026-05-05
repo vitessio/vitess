@@ -88,7 +88,7 @@ func TestPreview(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		if got := Preview(tcase.sql); got != tcase.want {
-			t.Errorf("Preview(%s): %v, want %v", tcase.sql, got, tcase.want)
+			assert.Equalf(t, tcase.want, got, "Preview(%s): %v, want %v", tcase.sql, got, tcase.want)
 		}
 	}
 }
@@ -111,7 +111,7 @@ func TestIsDML(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		if got := IsDML(tcase.sql); got != tcase.want {
-			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
+			assert.Equalf(t, tcase.want, got, "IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
 		}
 	}
 }
@@ -271,7 +271,7 @@ func TestTableFromStatement(t *testing.T) {
 			got = String(name)
 		}
 		if got != tc.out {
-			t.Errorf("TableFromStatement('%s'): %s, want %s", tc.in, got, tc.out)
+			assert.Equalf(t, tc.out, got, "TableFromStatement('%s'): %s, want %s", tc.in, got, tc.out)
 		}
 	}
 }
@@ -299,7 +299,7 @@ func TestGetTableName(t *testing.T) {
 		}
 		out := GetTableName(tree.(*Select).From[0].(*AliasedTableExpr).Expr)
 		if out.String() != tc.out {
-			t.Errorf("GetTableName('%s'): %s, want %s", tc.in, out, tc.out)
+			assert.Equalf(t, tc.out, out.String(), "GetTableName('%s'): %s, want %s", tc.in, out, tc.out)
 		}
 	}
 }
@@ -317,7 +317,7 @@ func TestIsColName(t *testing.T) {
 	for _, tc := range testcases {
 		out := IsColName(tc.in)
 		if out != tc.out {
-			t.Errorf("IsColName(%T): %v, want %v", tc.in, out, tc.out)
+			assert.Equalf(t, tc.out, out, "IsColName(%T): %v, want %v", tc.in, out, tc.out)
 		}
 	}
 }
@@ -335,7 +335,7 @@ func TestIsNull(t *testing.T) {
 	for _, tc := range testcases {
 		out := IsNull(tc.in)
 		if out != tc.out {
-			t.Errorf("IsNull(%T): %v, want %v", tc.in, out, tc.out)
+			assert.Equalf(t, tc.out, out, "IsNull(%T): %v, want %v", tc.in, out, tc.out)
 		}
 	}
 }

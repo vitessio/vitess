@@ -505,7 +505,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timedout waiting for checkMySQL to finish")
+			require.Fail(t, "Timedout waiting for checkMySQL to finish")
 		default:
 			if sm.isCheckMySQLRunning() == 0 {
 				return

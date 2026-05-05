@@ -19,6 +19,7 @@ package engine
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -635,17 +636,13 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 
 	_, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 	want := "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute err: %v, want %v", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "Execute err: %v, want %v", err, want)
 
 	fp.rewind()
 	err = ms.TryStreamExecute(t.Context(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		return nil
 	})
-	if err == nil || err.Error() != want {
-		t.Errorf("StreamExecute err: %v, want %v", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "StreamExecute err: %v, want %v", err, want)
 }
 
 func TestMemorySortStreamAsync(t *testing.T) {

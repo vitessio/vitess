@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/nsf/jsondiff"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
@@ -149,7 +150,7 @@ func TestDeferredOptimization(t *testing.T) {
 
 			compare, s := jsondiff.Compare(tcase.Plan, []byte(out), &opts)
 			if compare != jsondiff.FullMatch {
-				t.Errorf("Plan does not match for %s\n%s", tcase.Query, s)
+				assert.Failf(t, "plan mismatch", "Plan does not match for %s\n%s", tcase.Query, s)
 				fmt.Println(out)
 			}
 		})

@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -79,24 +80,22 @@ func testVectors(NewFunc func([32]byte) *Digest, vectors []string, t *testing.T)
 		input[i] = byte(i)
 
 		expected, err := hex.DecodeString(v)
-		if err != nil {
-			t.Fatalf("Failed to decode test vector: %v error:  %v", v, err)
-		}
+		require.NoErrorf(t, err, "Failed to decode test vector: %v error:  %v", v, err)
 
 		_, _ = h.Write(input[:i])
 		if sum := h.Sum(nil); !bytes.Equal(sum, expected[:]) {
-			t.Errorf("Test %d: hash mismatch: got: %v want: %v", i, hex.EncodeToString(sum), hex.EncodeToString(expected))
+			assert.Failf(t, "hash mismatch", "Test %d: hash mismatch: got: %v want: %v", i, hex.EncodeToString(sum), hex.EncodeToString(expected))
 		}
 		h.Reset()
 
 		switch h.Size() {
 		case Size:
 			if sum := Sum(input[:i], key); !bytes.Equal(sum[:], expected) {
-				t.Errorf("Test %d: Sum mismatch: got: %v want: %v", i, hex.EncodeToString(sum[:]), hex.EncodeToString(expected))
+				assert.Failf(t, "Sum mismatch", "Test %d: Sum mismatch: got: %v want: %v", i, hex.EncodeToString(sum[:]), hex.EncodeToString(expected))
 			}
 		case Size128:
 			if sum := Sum128(input[:i], key); !bytes.Equal(sum[:], expected) {
-				t.Errorf("Test %d: Sum mismatch: got: %v want: %v", i, hex.EncodeToString(sum[:]), hex.EncodeToString(expected))
+				assert.Failf(t, "Sum mismatch", "Test %d: Sum mismatch: got: %v want: %v", i, hex.EncodeToString(sum[:]), hex.EncodeToString(expected))
 			}
 		}
 	}

@@ -109,7 +109,7 @@ func TestParseVersionString(t *testing.T) {
 	for _, testcase := range testcases {
 		f, v, err := ParseVersionString(testcase.versionString)
 		if v != testcase.version || f != testcase.flavor || err != nil {
-			t.Errorf("ParseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
+			assert.Failf(t, "ParseVersionString failed", "ParseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
 		}
 	}
 }

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
@@ -52,7 +53,7 @@ func mysqlconn(t *testing.T) *mysql.Conn {
 	}
 	if strings.HasPrefix(conn.ServerVersion, "8.0.27") {
 		conn.Close()
-		t.Fatalf("MySQL 8.0.27 is UNSUPPORTED for integration testing because of a behavior regression; " +
+		require.Failf(t, "unsupported version", "MySQL 8.0.27 is UNSUPPORTED for integration testing because of a behavior regression; "+
 			"please update to 8.0.28, or rollback to a previous 8.0 version. See: MySQL bug #33117410.")
 	}
 	return conn

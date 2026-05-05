@@ -19,7 +19,6 @@ package grpcclient
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -51,9 +50,7 @@ func TestDialErrors(t *testing.T) {
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
 		gconn.Close()
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("DialContext(%s, FailFast=true): %v, must contain %s", address, err, wantErr)
-		}
+		require.ErrorContainsf(t, err, wantErr, "DialContext(%s, FailFast=true): %v, must contain %s", address, err, wantErr)
 	}
 
 	wantErr = "DeadlineExceeded"
@@ -69,9 +66,7 @@ func TestDialErrors(t *testing.T) {
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
 		gconn.Close()
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("DialContext(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
-		}
+		require.ErrorContainsf(t, err, wantErr, "DialContext(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
 	}
 }
 

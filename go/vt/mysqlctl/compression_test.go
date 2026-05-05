@@ -181,13 +181,9 @@ func TestValidateCompressionEngineName(t *testing.T) {
 		t.Run(fmt.Sprintf("Test #%d", i+1), func(t *testing.T) {
 			err := validateExternalCompressionEngineName(tt.engineName)
 			if tt.errStr == "" {
-				if err != nil {
-					t.Errorf("Expected result \"%v\", got \"%v\"", "<nil>", err)
-				}
+				assert.NoErrorf(t, err, "Expected result \"%v\", got \"%v\"", "<nil>", err)
 			} else {
-				if !strings.Contains(fmt.Sprintf("%v", err), tt.errStr) {
-					t.Errorf("Expected result \"%v\", got \"%v\"", tt.errStr, err)
-				}
+				assert.Containsf(t, fmt.Sprintf("%v", err), tt.errStr, "Expected result \"%v\", got \"%v\"", tt.errStr, err)
 			}
 		})
 	}

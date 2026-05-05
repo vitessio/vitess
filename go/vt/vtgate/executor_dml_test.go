@@ -1887,7 +1887,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 	}}
 	assertQueries(t, sbc, wantQueries)
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
 	}
 	assert.EqualValues(t, 2, session.LastInsertId)
 }
@@ -2119,7 +2119,7 @@ func TestInsertPartialFail2(t *testing.T) {
 
 	want := "reverted partial DML execution failure"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
+		assert.Failf(t, "insert first DML fail", "insert first DML fail: %v, must start with %s", err, want)
 	}
 
 	assert.True(t, safeSession.InTransaction())
@@ -2375,9 +2375,7 @@ func TestInsertBadAutoInc(t *testing.T) {
 	}
 	_, err := executorExec(ctx, executor, session, "insert into bad_auto(v, name) values (1, 'myname')", nil)
 	want := "table bad_auto not found"
-	if err == nil || err.Error() != want {
-		t.Errorf("bad auto inc err: %v, want %v", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "bad auto inc err: %v, want %v", err, want)
 }
 
 func TestKeyDestRangeQuery(t *testing.T) {

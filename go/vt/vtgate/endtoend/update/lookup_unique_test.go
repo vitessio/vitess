@@ -21,6 +21,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/internal/flag"
@@ -193,9 +194,8 @@ func TestUpdateUnownedLookupVindexValidValue(t *testing.T) {
 	utils.Exec(t, conn, "UPDATE t2 SET t1_id = 1 WHERE id = 2")
 
 	qr := utils.Exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) INT64(1)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) INT64(1)]]`
+	assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 }
 
 func TestUpdateUnownedLookupVindexInvalidValue(t *testing.T) {
@@ -216,9 +216,8 @@ func TestUpdateUnownedLookupVindexInvalidValue(t *testing.T) {
 	require.EqualError(t, err, `values [INT64(5)] for column [t1_id] does not map to keyspace ids (errno 1105) (sqlstate HY000) during query: UPDATE t2 SET t1_id = 5 WHERE id = 2`)
 
 	qr := utils.Exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) INT64(2)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) INT64(2)]]`
+	assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 }
 
 func TestUpdateUnownedLookupVindexToNull(t *testing.T) {
@@ -238,7 +237,6 @@ func TestUpdateUnownedLookupVindexToNull(t *testing.T) {
 	utils.Exec(t, conn, "UPDATE t2 SET t1_id = NULL WHERE id = 2")
 
 	qr := utils.Exec(t, conn, "select id, sharding_key, t1_id from t2 WHERE id = 2")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) NULL]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(2) INT64(1) NULL]]`
+	assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 }

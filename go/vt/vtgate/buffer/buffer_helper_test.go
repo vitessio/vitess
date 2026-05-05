@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -194,10 +196,7 @@ func checkVariables(t *testing.T) {
 		}
 		drained := requestsDrained.Counts()[k]
 
-		if buffered != evicted+drained {
-			t.Fatalf("buffered == evicted + drained is violated: %v != %v + %v", buffered, evicted, drained)
-		} else {
-			t.Logf("buffered == evicted + drained: %v == %v + %v", buffered, evicted, drained)
-		}
+		require.Equalf(t, evicted+drained, buffered, "buffered == evicted + drained is violated: %v != %v + %v", buffered, evicted, drained)
+		t.Logf("buffered == evicted + drained: %v == %v + %v", buffered, evicted, drained)
 	}
 }

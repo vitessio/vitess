@@ -44,9 +44,8 @@ func TestVariables(t *testing.T) {
 	// Create new buffer which will the flags.
 	NewConfigFromFlags()
 
-	if got, want := bufferSizeStat.Get(), int64(23); got != want {
-		t.Fatalf("BufferSize variable not set during initilization: got = %v, want = %v", got, want)
-	}
+	got, want := bufferSizeStat.Get(), int64(23)
+	require.Equalf(t, want, got, "BufferSize variable not set during initilization: got = %v, want = %v", got, want)
 }
 
 func TestVariablesAreInitialized(t *testing.T) {
@@ -87,9 +86,8 @@ func TestVariablesAreInitialized(t *testing.T) {
 			// The request passed through above was registered as skipped.
 			wantValue = 1
 		}
-		if err := checkEntry(tc.counter, tc.statsKey, wantValue); err != nil {
-			t.Fatalf("variable: %v not correctly initialized: %v", tc.desc, err)
-		}
+		err := checkEntry(tc.counter, tc.statsKey, wantValue)
+		require.NoErrorf(t, err, "variable: %v not correctly initialized: %v", tc.desc, err)
 	}
 }
 

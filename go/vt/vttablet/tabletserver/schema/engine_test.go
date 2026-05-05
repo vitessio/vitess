@@ -25,7 +25,6 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -726,9 +725,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	db.AddRejectedQuery(mysql.BaseShowTables, errors.New(want))
 	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
 	err := se.Open()
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, want %s", err, want)
-	}
+	require.ErrorContainsf(t, err, want, "se.Open: %v, want %s", err, want)
 }
 
 // TestOpenFailedDueToLoadTableErr tests that schema engine load should fail for test_table and

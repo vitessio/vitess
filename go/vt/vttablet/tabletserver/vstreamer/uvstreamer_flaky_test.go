@@ -289,7 +289,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	defer muAllEvents.Unlock()
 	if len(allEvents) != numExpectedEvents {
 		printAllEvents(fmt.Sprintf("Received %d events, expected %d", len(allEvents), numExpectedEvents))
-		t.Fatalf("Received %d events, expected %d", len(allEvents), numExpectedEvents)
+		require.Failf(t, "wrong event count", "Received %d events, expected %d", len(allEvents), numExpectedEvents)
 	} else {
 		log.Info(fmt.Sprintf("Successfully received %d events", numExpectedEvents))
 	}
@@ -326,7 +326,7 @@ func validateReceivedEvents(t *testing.T) {
 		want := env.RemoveAnyDeprecatedDisplayWidths(expectedEvents[i])
 		if !strings.HasPrefix(got, want) {
 			printAllEvents("Events not received in the right order")
-			t.Fatalf("Event %d did not match, want %s, got %s", i, want, got)
+			require.Failf(t, "event mismatch", "Event %d did not match, want %s, got %s", i, want, got)
 		}
 	}
 }

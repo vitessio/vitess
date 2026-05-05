@@ -18,11 +18,11 @@ package vreplication
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/safehtml/template"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -124,9 +124,7 @@ func TestStatusHtml(t *testing.T) {
 	tpl := template.Must(template.New("test").Parse(vreplicationTemplate))
 	buf := bytes.NewBuffer(nil)
 	require.NoError(t, tpl.Execute(buf, testStats.status()))
-	if strings.Contains(buf.String(), wantOut) {
-		t.Errorf("output: %v, want %v", buf, wantOut)
-	}
+	assert.NotContainsf(t, buf.String(), wantOut, "output: %v, want %v", buf, wantOut)
 }
 
 func TestVReplicationStats(t *testing.T) {

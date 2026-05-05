@@ -166,9 +166,7 @@ func TestMustSendDDL(t *testing.T) {
 	for _, tcase := range testcases {
 		q := mysql.Query{SQL: tcase.sql, Database: tcase.db}
 		got := mustSendDDL(q, "mydb", filter, sqlparser.NewTestParser())
-		if got != tcase.output {
-			t.Errorf("%v: %v, want %v", q, got, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, got, "%v: %v, want %v", q, got, tcase.output)
 	}
 }
 

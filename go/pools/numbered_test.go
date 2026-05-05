@@ -54,9 +54,7 @@ func TestNumberedGeneral(t *testing.T) {
 	require.Error(t, err)
 	assert.Truef(t, strings.HasPrefix(err.Error(), "ended at") && strings.HasSuffix(err.Error(), "(test)"), "want prefix 'ended at' and suffix '(test)', got %q", err.Error())
 
-	if p.Size() != 0 {
-		t.Errorf("want 0, got %v", p.Size())
-	}
+	assert.Equalf(t, int64(0), p.Size(), "want 0, got %v", p.Size())
 	p.WaitForEmpty()
 }
 

@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -275,7 +276,7 @@ func waitForResult(t *testing.T, client *framework.QueryClient, rowCount int, ti
 	for {
 		select {
 		case <-wait:
-			t.Errorf("all views are not dropped within the time")
+			assert.Fail(t, "all views are not dropped within the time")
 			return
 		case <-time.After(1 * time.Second):
 			qr, err := client.Execute(qSelAllRows, nil)

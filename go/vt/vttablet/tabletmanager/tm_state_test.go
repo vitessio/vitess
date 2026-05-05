@@ -210,17 +210,17 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(rightKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 
 	keyRange, err := key.ParseShardingSpec("0")
 	if err != nil || len(keyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
 	}
 
 	// Shard not in the SrvKeyspace, ServedType not in SrvKeyspace

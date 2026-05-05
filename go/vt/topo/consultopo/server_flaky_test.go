@@ -99,9 +99,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 		cfg.Token = authToken
 	}
 	c, err := api.NewClient(cfg)
-	if err != nil {
-		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
-	}
+	require.NoErrorf(t, err, "api.NewClient(%v) failed", serverAddr)
 
 	// Wait until we can list "/", or timeout.
 	start := time.Now()
@@ -314,9 +312,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 
 		// Create the server on the new root.
 		_, err := topo.OpenServer("consul", serverAddr, path.Join("globalRoot", topo.GlobalCell))
-		if err == nil {
-			t.Fatal("Expected OpenServer() to return an error due to bad config, got nil")
-		}
+		require.Error(t, err, "Expected OpenServer() to return an error due to bad config, got nil")
 	}
 
 	// check bad token causes error
@@ -337,9 +333,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 		})
 
 		want := "Failed request: ACL not found"
-		if err == nil || err.Error() != want {
-			t.Errorf("Expected CreateCellInfo to fail: got  %v, want %s", err, want)
-		}
+		require.EqualErrorf(t, err, want, "Expected CreateCellInfo to fail: got  %v, want %s", err, want)
 	}
 }
 

@@ -22,6 +22,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -170,14 +172,12 @@ func TestDelete(t *testing.T) {
 	exec(t, conn, "insert into del_test_b(id, val1, val2) values(1,'a',1), (2,'a',1), (3,'a',1), (4,'d',3), (5,'f',4)")
 
 	qr := exec(t, conn, "delete a.*, b.* from del_test_a a, del_test_b b where a.id = b.id and b.val1 = 'a' and a.val1 = 'a'")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got, want := fmt.Sprintf("%v", qr.Rows), `[]`
+	assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 
 	qr = exec(t, conn, "select * from del_test_a")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(3) VARBINARY("b") INT64(1)] [INT64(4) VARBINARY("c") INT64(3)] [INT64(5) VARBINARY("c") INT64(4)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got, want = fmt.Sprintf("%v", qr.Rows), `[[INT64(3) VARBINARY("b") INT64(1)] [INT64(4) VARBINARY("c") INT64(3)] [INT64(5) VARBINARY("c") INT64(4)]]`
+	assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

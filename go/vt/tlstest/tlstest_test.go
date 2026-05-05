@@ -106,11 +106,9 @@ func testClientServer(t *testing.T, combineCerts bool) {
 
 	result := make([]byte, 1)
 	if n, err := serverConn.Read(result); (err != nil && err != io.EOF) || n != 1 {
-		t.Fatalf("Read failed: %v %v", n, err)
+		require.Failf(t, "Read failed", "%v %v", n, err)
 	}
-	if result[0] != 42 {
-		t.Fatalf("Read returned wrong result: %v", result)
-	}
+	require.Equalf(t, byte(42), result[0], "Read returned wrong result: %v", result)
 	serverConn.Close()
 
 	if err := clientEG.Wait(); err != nil {

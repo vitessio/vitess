@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,9 +29,8 @@ func TestVerifyFlags(t *testing.T) {
 		fs := pflag.NewFlagSet("vtgate_buffer_test", pflag.ContinueOnError)
 		registerFlags(fs)
 
-		if err := fs.Parse(args); err != nil {
-			t.Errorf("failed to parse args %v: %s", args, err)
-		}
+		err := fs.Parse(args)
+		assert.NoErrorf(t, err, "failed to parse args %v", args)
 	}
 	resetFlagsForTesting := func() {
 		// Set all flags to their default value.

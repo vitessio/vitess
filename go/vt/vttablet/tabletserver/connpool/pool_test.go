@@ -41,9 +41,7 @@ func TestConnPoolGet(t *testing.T) {
 	defer connPool.Close()
 	dbConn, err := connPool.Get(t.Context(), nil)
 	require.NoError(t, err)
-	if dbConn == nil {
-		t.Fatalf("db conn should not be nil")
-	}
+	require.NotNil(t, dbConn, "db conn should not be nil")
 	dbConn.Recycle()
 }
 
@@ -81,9 +79,7 @@ func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 	defer connPool.Close()
 	dbConn, err := connPool.Get(ctx, nil)
 	require.NoError(t, err)
-	if dbConn == nil {
-		t.Fatalf("db conn should not be nil")
-	}
+	require.NotNil(t, dbConn, "db conn should not be nil")
 	dbConn.Recycle()
 }
 
@@ -101,13 +97,9 @@ func TestConnPoolGetAppDebug(t *testing.T) {
 	defer connPool.Close()
 	dbConn, err := connPool.Get(ctx, nil)
 	require.NoError(t, err)
-	if dbConn == nil {
-		t.Fatalf("db conn should not be nil")
-	}
+	require.NotNil(t, dbConn, "db conn should not be nil")
 	dbConn.Recycle()
-	if !dbConn.Conn.IsClosed() {
-		t.Fatalf("db conn should be closed after recycle")
-	}
+	require.True(t, dbConn.Conn.IsClosed(), "db conn should be closed after recycle")
 }
 
 func TestConnPoolSetCapacity(t *testing.T) {
@@ -123,9 +115,7 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	})
 	err := connPool.SetCapacity(t.Context(), 10)
 	assert.NoError(t, err)
-	if connPool.Capacity() != 10 {
-		t.Fatalf("capacity should be 10")
-	}
+	require.EqualValuesf(t, 10, connPool.Capacity(), "capacity should be 10")
 }
 
 // TestConnPoolMaxIdleCount tests the max idle count for the pool.
@@ -184,15 +174,13 @@ func TestConnPoolStatJSON(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	connPool := newPool()
-	if connPool.StatsJSON() != "{}" {
-		t.Fatalf("pool is closed, stats json should be empty; was: %q", connPool.StatsJSON())
-	}
+	require.Equalf(t, "{}", connPool.StatsJSON(), "pool is closed, stats json should be empty; was: %q", connPool.StatsJSON())
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
 	statsJSON := connPool.StatsJSON()
 	if statsJSON == "" || statsJSON == "{}" {
-		t.Fatalf("stats json should not be empty")
+		require.Fail(t, "stats json should not be empty")
 	}
 }
 

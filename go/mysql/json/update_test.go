@@ -41,21 +41,15 @@ func TestObjectDelSet(t *testing.T) {
 	v, err := p.Parse(`{"fo\no": "bar", "x": [1,2,3]}`)
 	require.NoError(t, err)
 	o, ok := v.Object()
-	if !ok {
-		t.Fatalf("cannot obtain object")
-	}
+	require.True(t, ok, "cannot obtain object")
 
 	// Delete x
 	o.Del("x")
-	if o.Len() != 1 {
-		t.Fatalf("unexpected number of items left; got %d; want %d", o.Len(), 1)
-	}
+	require.Equalf(t, 1, o.Len(), "unexpected number of items left; got %d; want %d", o.Len(), 1)
 
 	// Try deleting non-existing value
 	o.Del("xxx")
-	if o.Len() != 1 {
-		t.Fatalf("unexpected number of items left; got %d; want %d", o.Len(), 1)
-	}
+	require.Equalf(t, 1, o.Len(), "unexpected number of items left; got %d; want %d", o.Len(), 1)
 
 	// Set new value
 	vNew := MustParse(`{"foo":[1,2,3]}`)
@@ -63,15 +57,11 @@ func TestObjectDelSet(t *testing.T) {
 
 	// Delete item with escaped key
 	o.Del("fo\no")
-	if o.Len() != 1 {
-		t.Fatalf("unexpected number of items left; got %d; want %d", o.Len(), 1)
-	}
+	require.Equalf(t, 1, o.Len(), "unexpected number of items left; got %d; want %d", o.Len(), 1)
 
 	str := o.String()
 	strExpected := `{"new_key": {"foo": [1, 2, 3]}}`
-	if str != strExpected {
-		t.Fatalf("unexpected string representation for o: got %q; want %q", str, strExpected)
-	}
+	require.Equalf(t, strExpected, str, "unexpected string representation for o: got %q; want %q", str, strExpected)
 
 	// Set and Del function as no-op on nil value
 	o = nil
@@ -89,9 +79,7 @@ func TestValueDelSet(t *testing.T) {
 	// Delete xx
 	o.Del("xx")
 	n := o.Len()
-	if n != 1 {
-		t.Fatalf("unexpected number of items left; got %d; want %d", n, 1)
-	}
+	require.Equalf(t, 1, n, "unexpected number of items left; got %d; want %d", n, 1)
 
 	// Try deleting non-existing value in the array
 	va := o.Get("x")
@@ -100,7 +88,5 @@ func TestValueDelSet(t *testing.T) {
 	va.DelArrayItem(1)
 
 	a, _ := va.Array()
-	if len(a) != 2 {
-		t.Fatalf("unexpected number of items left in the array; got %d; want %d", len(a), 2)
-	}
+	require.Lenf(t, a, 2, "unexpected number of items left in the array; got %d; want %d", len(a), 2)
 }

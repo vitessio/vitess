@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -115,7 +116,7 @@ func TestVStream(t *testing.T) {
 			continue
 		}
 		if len(events) != 5 {
-			t.Errorf("Unexpected event length: %v", events)
+			assert.Failf(t, "Unexpected event length", "%v", events)
 			continue
 		}
 		wantFields := &binlogdatapb.FieldEvent{
@@ -145,7 +146,7 @@ func TestVStream(t *testing.T) {
 			})
 		}
 		if !proto.Equal(filteredFields, wantFields) {
-			t.Errorf("FieldEvent:\n%v, want\n%v", filteredFields, wantFields)
+			assert.Failf(t, "FieldEvent mismatch", "%v, want\n%v", filteredFields, wantFields)
 		}
 		wantRows := &binlogdatapb.RowEvent{
 			TableName: "ks.vstream_test",
@@ -161,7 +162,7 @@ func TestVStream(t *testing.T) {
 		}
 		gotRows := events[2].RowEvent
 		if !proto.Equal(gotRows, wantRows) {
-			t.Errorf("RowEvent:\n%v, want\n%v", gotRows, wantRows)
+			assert.Failf(t, "RowEvent mismatch", "%v, want\n%v", gotRows, wantRows)
 		}
 	}
 	cancel()
@@ -247,7 +248,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 				t.Logf("TestVStreamCopyBasic was successful")
 				return
 			} else if numExpectedEvents < len(evs) {
-				t.Fatalf("len(events)=%v are not expected\n", len(evs))
+				require.Failf(t, "unexpected number of events", "len(events)=%v are not expected\n", len(evs))
 			}
 		case io.EOF:
 			log.Info("stream ended\n")

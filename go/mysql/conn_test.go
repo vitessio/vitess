@@ -82,7 +82,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 
@@ -98,7 +98,7 @@ func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 	cConn.startWriterBuffering()
@@ -114,7 +114,7 @@ func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 
@@ -140,7 +140,7 @@ func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 
 	received, err := read()
 	if err != nil || !bytes.Equal(data, received) {
-		t.Fatalf("ReadPacket failed: %v %v", received, err)
+		require.Failf(t, "ReadPacket failed", "ReadPacket failed: %v %v", received, err)
 	}
 	wg.Wait()
 }
@@ -784,7 +784,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		_, _, isInt := readLenEncInt(bytes, 0)
 		isEOF := cConn.isEOFPacket(bytes)
 		if (isInt && isEOF) || (!isInt && !isEOF) {
-			t.Fatalf("0xfe bytestring is EOF xor Int. Bytes %v", bytes)
+			require.Failf(t, "0xfe bytestring should be EOF xor Int", "0xfe bytestring is EOF xor Int. Bytes %v", bytes)
 		}
 	}
 }

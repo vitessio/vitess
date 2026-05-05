@@ -377,7 +377,7 @@ func TestFlushLock(t *testing.T) {
 	for cnt.Load() != 2 {
 		select {
 		case <-timeout:
-			t.Fatalf("test timeout waiting for select query to complete")
+			require.Fail(t, "test timeout waiting for select query to complete")
 		default:
 		}
 	}

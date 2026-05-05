@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -160,7 +161,7 @@ func expectUpdateCount(t *testing.T, wantCount int64) int64 {
 			return gotCount
 		}
 		if i == 9 {
-			t.Fatalf("update count: %d, want %d", gotCount, wantCount)
+			require.Failf(t, "update count mismatch", "update count: %d, want %d", gotCount, wantCount)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -265,9 +266,8 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 			}
 			env.TabletEnv.Config().RowStreamer.MaxInnoDBTrxHistLen = tt.fields.maxInnoDBTrxHistLen
 			env.TabletEnv.Config().RowStreamer.MaxMySQLReplLagSecs = tt.fields.maxMySQLReplLagSecs
-			if err := uvs.vse.waitForMySQL(ctx, uvs.cp, tableName); (err != nil) != tt.wantErr {
-				t.Errorf("vstreamer.waitForMySQL() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			err := uvs.vse.waitForMySQL(ctx, uvs.cp, tableName)
+			assert.Equalf(t, tt.wantErr, err != nil, "vstreamer.waitForMySQL() error = %v, wantErr %v", err, tt.wantErr)
 			if tt.shouldWait {
 				expectedWaits++
 			}

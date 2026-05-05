@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -105,7 +106,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 		schema.WriteString(")")
 
 		if _, err := conn.ExecuteFetch(schema.String(), -1, false); err != nil {
-			t.Fatalf("failed to initialize temporary table: %v (sql=%s)", err, schema.String())
+			require.Failf(t, "failed to initialize temporary table", "failed to initialize temporary table: %v (sql=%s)", err, schema.String())
 		}
 
 		if len(env.Row) > 0 {
@@ -128,7 +129,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 			rowsql.WriteString(")")
 
 			if _, err := conn.ExecuteFetch(rowsql.String(), -1, false); err != nil {
-				t.Fatalf("failed to insert data into temporary table: %v (sql=%s)", err, rowsql.String())
+				require.Failf(t, "failed to insert data into temporary table", "failed to insert data into temporary table: %v (sql=%s)", err, rowsql.String())
 			}
 		}
 
@@ -198,7 +199,7 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 	}
 
 	if err := compareResult(localResult, remoteResult, cmp); err != nil {
-		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
+		assert.Failf(t, "compareResult failed", "%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", err, localQuery, debugSimplify, env.Row)
 	}
 }
 

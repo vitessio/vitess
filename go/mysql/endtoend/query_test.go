@@ -67,7 +67,7 @@ func TestQueries(t *testing.T) {
 	require.NoError(t, err, "insert failed: %v", err)
 
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
+		assert.Failf(t, "unexpected insert result", "unexpected result for insert: %v", result)
 	}
 
 	// And re-read what we inserted.
@@ -157,7 +157,7 @@ func TestLargeQueries(t *testing.T) {
 			require.NoError(t, err, "ExecuteFetch failed: %v", err)
 
 			if len(result.Rows) != 1 || len(result.Rows[0]) != 1 || result.Rows[0][0].IsNull() {
-				t.Fatalf("ExecuteFetch on large query returned poorly-formed result. " +
+				require.Fail(t, "ExecuteFetch on large query returned poorly-formed result. "+
 					"Expected single row single column string.")
 			}
 			require.Equal(t, expectedString, result.Rows[0][0].ToString(), "Result row was incorrect. Suppressing large string")

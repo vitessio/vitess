@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -169,5 +170,5 @@ func assertContainsOneOf(t *testing.T, conn *mysql.Conn, query string, expected 
 		}
 	}
 
-	t.Errorf("%s\n did not match any of %v", got, expected)
+	assert.Failf(t, "no match", "%s\n did not match any of %v", got, expected)
 }

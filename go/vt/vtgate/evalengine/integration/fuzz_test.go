@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -245,7 +246,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 
 		if fail := compareWithMySQL(astExpr); fail != nil {
 			failures = append(failures, fail)
-			t.Errorf("mismatch: %v", fail.Error())
+			assert.Failf(t, "mismatch", "%v", fail.Error())
 		}
 
 		if time.Since(start) > fuzzMaxTime {

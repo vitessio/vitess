@@ -43,9 +43,7 @@ func compareTimingCounts(t *testing.T, op string, delta int64, before, after map
 	t.Helper()
 	countBefore := before[op]
 	countAfter := after[op]
-	if countAfter-countBefore != delta {
-		t.Errorf("Expected %s to increase by %d, got %d (%d => %d)", op, delta, countAfter-countBefore, countBefore, countAfter)
-	}
+	assert.Equalf(t, delta, countAfter-countBefore, "Expected %s to increase by %d, got %d (%d => %d)", op, delta, countAfter-countBefore, countBefore, countAfter)
 }
 
 func TestDBConnExec(t *testing.T) {
@@ -145,7 +143,7 @@ func TestDBConnExecLost(t *testing.T) {
 	require.NoError(t, err)
 	expectedResult.Fields = nil
 	if !expectedResult.Equal(result) {
-		t.Errorf("Exec: %v, want %v", expectedResult, result)
+		assert.Failf(t, "Exec result mismatch", "Exec: %v, want %v", expectedResult, result)
 	}
 
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
@@ -212,7 +210,7 @@ func TestDBConnDeadline(t *testing.T) {
 	require.NoError(t, err)
 	expectedResult.Fields = nil
 	if !expectedResult.Equal(result) {
-		t.Errorf("Exec: %v, want %v", expectedResult, result)
+		assert.Failf(t, "Exec result mismatch", "Exec: %v, want %v", expectedResult, result)
 	}
 
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
@@ -224,7 +222,7 @@ func TestDBConnDeadline(t *testing.T) {
 	require.NoError(t, err)
 	expectedResult.Fields = nil
 	if !expectedResult.Equal(result) {
-		t.Errorf("Exec: %v, want %v", expectedResult, result)
+		assert.Failf(t, "Exec result mismatch", "Exec: %v, want %v", expectedResult, result)
 	}
 
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())

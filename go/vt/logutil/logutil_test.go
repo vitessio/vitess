@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,9 +38,8 @@ func TestParsing(t *testing.T) {
 		ts, err := parseCreatedTimestamp(filepath)
 		require.NoError(t, err)
 
-		if want := time.Date(2013, 8, 6, 15, 10, 0o6, 0, time.Now().Location()); ts != want {
-			t.Errorf("timestamp: want %v, got %v", want, ts)
-		}
+		want := time.Date(2013, 8, 6, 15, 10, 0o6, 0, time.Now().Location())
+		assert.Equalf(t, want, ts, "timestamp: want %v, got %v", want, ts)
 	}
 }
 
@@ -72,13 +72,11 @@ func TestPurgeByCtime(t *testing.T) {
 	left, err := filepath.Glob(path.Join(logDir, "zkocc.*"))
 	require.NoError(t, err)
 
-	if len(left) != 3 {
-		// 131006 is current
-		// 151006 is within 30 min
-		// symlink remains
-		// the rest should be removed.
-		t.Errorf("wrong number of files remain: want %v, got %v", 3, len(left))
-	}
+	// 131006 is current
+	// 151006 is within 30 min
+	// symlink remains
+	// the rest should be removed.
+	assert.Lenf(t, left, 3, "wrong number of files remain: want %v, got %v", 3, len(left))
 }
 
 func TestPurgeByMtime(t *testing.T) {
@@ -124,11 +122,9 @@ func TestPurgeByMtime(t *testing.T) {
 	left, err := filepath.Glob(path.Join(logDir, "vtadam.*"))
 	require.NoError(t, err)
 
-	if len(left) != 3 {
-		// 1. 113000 is within 1 hour
-		// 2. 100000 is current (vtadam.INFO)
-		// 3. vtadam.INFO symlink remains
-		// rest are removed
-		t.Errorf("wrong number of files remain: want %v, got %v", 3, len(left))
-	}
+	// 1. 113000 is within 1 hour
+	// 2. 100000 is current (vtadam.INFO)
+	// 3. vtadam.INFO symlink remains
+	// rest are removed
+	assert.Lenf(t, left, 3, "wrong number of files remain: want %v, got %v", 3, len(left))
 }

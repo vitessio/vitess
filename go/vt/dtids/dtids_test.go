@@ -19,6 +19,7 @@ package dtids
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -38,40 +39,28 @@ func TestDTID(t *testing.T) {
 	}
 	dtid := New(in)
 	want := "aa:0:1"
-	if dtid != want {
-		t.Errorf("generateDTID: %s, want %s", dtid, want)
-	}
+	assert.Equalf(t, want, dtid, "generateDTID: %s, want %s", dtid, want)
 	out, err := ShardSession(dtid)
 	require.NoError(t, err)
 	if !proto.Equal(in, out) {
-		t.Errorf("ShardSession: %+v, want %+v", out, in)
+		assert.Failf(t, "ShardSession", "%+v, want %+v", out, in)
 	}
 	_, err = ShardSession("badParts")
 	want = "invalid parts in dtid: badParts"
-	if err == nil || err.Error() != want {
-		t.Errorf("ShardSession(\"badParts\"): %v, want %s", err, want)
-	}
+	require.EqualErrorf(t, err, want, "ShardSession(\"badParts\"): %v, want %s", err, want)
 	_, err = ShardSession("a:b:badid")
 	want = "invalid transaction id in dtid: a:b:badid"
-	if err == nil || err.Error() != want {
-		t.Errorf("ShardSession(\"a:b:badid\"): %v, want %s", err, want)
-	}
+	require.EqualErrorf(t, err, want, "ShardSession(\"a:b:badid\"): %v, want %s", err, want)
 }
 
 func TestTransactionID(t *testing.T) {
 	out, err := TransactionID("aa:0:1")
 	require.NoError(t, err)
-	if out != 1 {
-		t.Errorf("TransactionID(aa:0:1): %d, want 1", out)
-	}
+	assert.Equalf(t, int64(1), out, "TransactionID(aa:0:1): %d, want 1", out)
 	_, err = TransactionID("badParts")
 	want := "invalid parts in dtid: badParts"
-	if err == nil || err.Error() != want {
-		t.Errorf("TransactionID(\"badParts\"): %v, want %s", err, want)
-	}
+	require.EqualErrorf(t, err, want, "TransactionID(\"badParts\"): %v, want %s", err, want)
 	_, err = TransactionID("a:b:badid")
 	want = "invalid transaction id in dtid: a:b:badid"
-	if err == nil || err.Error() != want {
-		t.Errorf("TransactionID(\"a:b:badid\"): %v, want %s", err, want)
-	}
+	require.EqualErrorf(t, err, want, "TransactionID(\"a:b:badid\"): %v, want %s", err, want)
 }

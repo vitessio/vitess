@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -342,7 +343,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 		conn, err := txPool.GetAndLock(id, "for query")
 		if err == nil { //
 			conn.ReleaseString("fail")
-			t.Errorf("expected to get an error")
+			assert.Fail(t, "expected to get an error")
 			return
 		}
 

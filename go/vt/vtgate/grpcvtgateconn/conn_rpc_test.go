@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -150,9 +151,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	// run the test suite
 	_, err = conn.Session("", nil).Execute(t.Context(), "select * from t", nil, false)
 	want := "rpc error: code = Unauthenticated desc = username and password must be provided"
-	if err == nil || err.Error() != want {
-		t.Errorf("expected auth failure:\n%v, want\n%s", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "expected auth failure:\n%v, want\n%s", err, want)
 	// and clean up again
 	client.Close()
 }

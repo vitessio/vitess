@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
@@ -174,9 +175,8 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 				}
 				return nil
 			}
-			if err := test(); (err != nil) != tt.wantErr {
-				t.Errorf("ParseAndValidateCreateOptions() error = %v, wantErr %t", err, tt.wantErr)
-			}
+			err := test()
+			assert.Falsef(t, (err != nil) != tt.wantErr, "ParseAndValidateCreateOptions() error = %v, wantErr %t", err, tt.wantErr)
 			if tt.checkFunc != nil {
 				tt.checkFunc()
 			}

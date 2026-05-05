@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -312,7 +313,7 @@ func TestCloseWhileStuckWriting(t *testing.T) {
 	case <-ctx.Done():
 		db.Close()
 	case <-time.After(1000 * time.Second):
-		t.Fatalf("Timed out waiting for heartbeat writer to close")
+		require.Fail(t, "Timed out waiting for heartbeat writer to close")
 	}
 }
 

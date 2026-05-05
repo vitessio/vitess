@@ -58,7 +58,7 @@ func TestServer(t *testing.T) {
 	select {
 	case <-readyCh:
 	case serveStop := <-time.After(time.Millisecond * 500):
-		t.Errorf("server did not start within %s", serveStop.Sub(serveStart))
+		assert.Failf(t, "server did not start", "server did not start within %s", serveStop.Sub(serveStart))
 		return
 	}
 	close(readyCh)
@@ -98,7 +98,7 @@ func TestLameduck(t *testing.T) {
 	select {
 	case <-readyCh:
 	case serveStop := <-time.After(time.Millisecond * 500):
-		t.Errorf("server did not start within %s", serveStop.Sub(serveStart))
+		assert.Failf(t, "server did not start", "server did not start within %s", serveStop.Sub(serveStart))
 		return
 	}
 

@@ -923,7 +923,7 @@ func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val stri
 		}
 		select {
 		case <-tmr.C:
-			t.Fatalf("query %s did not return expected value of %s", query, val)
+			require.Failf(t, "unexpected query result", "query %s did not return expected value of %s", query, val)
 		default:
 			time.Sleep(50 * time.Millisecond)
 		}

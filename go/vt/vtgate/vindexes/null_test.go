@@ -17,9 +17,9 @@ limitations under the License.
 package vindexes
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -109,20 +109,13 @@ func TestNullMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestNullVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
 	ksids := [][]byte{{0}, {1}}
 	got, err := null.Verify(t.Context(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []bool{true, false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("null.Verify: %v, want %v", got, want)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false}, got, "null.Verify")
 }

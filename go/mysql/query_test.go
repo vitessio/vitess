@@ -90,9 +90,9 @@ func TestComInitDB(t *testing.T) {
 		require.NoError(t, err)
 	}
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComInitDB {
-		t.Fatalf("sConn.ReadPacket - ComInitDB failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComInitDB failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComInitDB failed: %v", data)
+	require.Equalf(t, byte(ComInitDB), data[0], "sConn.ReadPacket - ComInitDB failed: %v", data)
 	db := sConn.parseComInitDB(data)
 	assert.Equal(t, "my_db", db, "parseComInitDB returned unexpected data: %v", db)
 }
@@ -110,9 +110,9 @@ func TestComSetOption(t *testing.T) {
 		require.NoError(t, err)
 	}
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComSetOption {
-		t.Fatalf("sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComSetOption failed: %v", data)
+	require.Equalf(t, byte(ComSetOption), data[0], "sConn.ReadPacket - ComSetOption failed: %v", data)
 	operation, ok := sConn.parseComSetOption(data)
 	require.True(t, ok, "parseComSetOption failed unexpectedly")
 	assert.Equal(t, uint16(1), operation, "parseComSetOption returned unexpected data: %v", operation)
@@ -214,9 +214,8 @@ func TestComStmtSendLongData(t *testing.T) {
 
 	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 {
-		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComStmtClose failed: %v", data)
 	stmtID, paramID, chunkData, ok := sConn.parseComStmtSendLongData(data)
 	require.True(t, ok, "parseComStmtSendLongData failed")
 	require.Equal(t, uint16(1), paramID, "Received incorrect ParamID, want %v, got %v:", paramID, 1)
@@ -339,9 +338,8 @@ func TestComStmtClose(t *testing.T) {
 
 	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 {
-		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
-	}
+	require.NoErrorf(t, err, "sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
+	require.NotEmptyf(t, data, "sConn.ReadPacket - ComStmtClose failed: %v", data)
 	stmtID, ok := sConn.parseComStmtClose(data)
 	require.True(t, ok, "parseComStmtClose failed")
 	require.Equal(t, prepare.StatementID, stmtID, "Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
@@ -679,7 +677,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		}
 
 		if gotWarnings != warningCount {
-			t.Errorf("ExecuteFetch(%v) expected %v warnings got %v", query, warningCount, gotWarnings)
+			assert.Failf(t, "ExecuteFetch warnings mismatch", "ExecuteFetch(%v) expected %v warnings got %v", query, warningCount, gotWarnings)
 			return
 		}
 
@@ -732,7 +730,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 				t.Logf("========== Got      RowsAffected = %v", got.RowsAffected)
 				t.Logf("========== Expected RowsAffected = %v", expected.RowsAffected)
 			}
-			t.Errorf("\nExecuteStreamFetch(%v) returned:\n%+v\nBut was expecting:\n%+v\n", query, got, &expected)
+			assert.Failf(t, "ExecuteStreamFetch result mismatch", "\nExecuteStreamFetch(%v) returned:\n%+v\nBut was expecting:\n%+v\n", query, got, &expected)
 		}
 	})
 

@@ -128,7 +128,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 				assert.Failf(t, "ReadPacket returned an error packet", "%v", err)
 			default:
 				// Very unexpected.
-				t.Errorf("ReadPacket returned a weird packet: %v", data)
+				assert.Failf(t, "weird packet", "ReadPacket returned a weird packet: %v", data)
 			}
 		}
 	})
@@ -148,7 +148,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 	require.NoError(t, err, "insert failed: %v", err)
 
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
+		assert.Failf(t, "unexpected insert result", "unexpected result for insert: %v", result)
 	}
 	if _, err := dConn.ExecuteFetch("drop table replicationError", 0, false); err != nil {
 		require.NoError(t, err)
@@ -184,19 +184,19 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 	require.NoError(t, err, "insert failed: %v", err)
 
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
+		assert.Failf(t, "unexpected insert result", "unexpected result for insert: %v", result)
 	}
 	result, err = dConn.ExecuteFetch("update replication set name='nicer name' where id=10", 0, false)
 	require.NoError(t, err, "update failed: %v", err)
 
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for update: %v", result)
+		assert.Failf(t, "unexpected update result", "unexpected result for update: %v", result)
 	}
 	result, err = dConn.ExecuteFetch("delete from replication where id=10", 0, false)
 	require.NoError(t, err, "delete failed: %v", err)
 
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for delete: %v", result)
+		assert.Failf(t, "unexpected delete result", "unexpected result for delete: %v", result)
 	}
 
 	// Get the new events from the binlogs.
@@ -259,12 +259,12 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 				len(tableMap.Types) != 2 ||
 				tableMap.CanBeNull.Bit(0) ||
 				!tableMap.CanBeNull.Bit(1) {
-				t.Errorf("got wrong TableMap: %v", tableMap)
+				assert.Failf(t, "wrong TableMap", "got wrong TableMap: %v", tableMap)
 			}
 			gotTableMapEvent = true
 		case be.IsWriteRows():
 			if got := be.TableID(f); got != tableID {
-				t.Fatalf("WriteRows event got table ID %v but was expecting %v", got, tableID)
+				require.Failf(t, "wrong table ID", "WriteRows event got table ID %v but was expecting %v", got, tableID)
 			}
 			wr, err := be.Rows(f, tableMap)
 			require.NoError(t, err)
@@ -273,13 +273,13 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 			values, _ := wr.StringValuesForTests(tableMap, 0)
 			t.Logf("Got WriteRows event data: %v %v", wr, values)
 			if expected := []string{"10", "nice name"}; !reflect.DeepEqual(values, expected) {
-				t.Fatalf("StringValues returned %v, expected %v", values, expected)
+				require.Failf(t, "unexpected StringValues", "StringValues returned %v, expected %v", values, expected)
 			}
 
 			gotInsert = true
 		case be.IsUpdateRows():
 			if got := be.TableID(f); got != tableID {
-				t.Fatalf("UpdateRows event got table ID %v but was expecting %v", got, tableID)
+				require.Failf(t, "wrong table ID", "UpdateRows event got table ID %v but was expecting %v", got, tableID)
 			}
 			ur, err := be.Rows(f, tableMap)
 			require.NoError(t, err)
@@ -288,20 +288,20 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 			values, _ := ur.StringIdentifiesForTests(tableMap, 0)
 			t.Logf("Got UpdateRows event identify: %v %v", ur, values)
 			if expected := []string{"10", "nice name"}; !reflect.DeepEqual(values, expected) {
-				t.Fatalf("StringIdentifies returned %v, expected %v", values, expected)
+				require.Failf(t, "unexpected StringIdentifies", "StringIdentifies returned %v, expected %v", values, expected)
 			}
 
 			// Check it has 2 values rows, and first value is '10', second value is 'nicer name'.
 			values, _ = ur.StringValuesForTests(tableMap, 0)
 			t.Logf("Got UpdateRows event data: %v %v", ur, values)
 			if expected := []string{"10", "nicer name"}; !reflect.DeepEqual(values, expected) {
-				t.Fatalf("StringValues returned %v, expected %v", values, expected)
+				require.Failf(t, "unexpected StringValues", "StringValues returned %v, expected %v", values, expected)
 			}
 
 			gotUpdate = true
 		case be.IsDeleteRows():
 			if got := be.TableID(f); got != tableID {
-				t.Fatalf("DeleteRows event got table ID %v but was expecting %v", got, tableID)
+				require.Failf(t, "wrong table ID", "DeleteRows event got table ID %v but was expecting %v", got, tableID)
 			}
 			dr, err := be.Rows(f, tableMap)
 			require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 			values, _ := dr.StringIdentifiesForTests(tableMap, 0)
 			t.Logf("Got DeleteRows event identify: %v %v", dr, values)
 			if expected := []string{"10", "nicer name"}; !reflect.DeepEqual(values, expected) {
-				t.Fatalf("StringIdentifies returned %v, expected %v", values, expected)
+				require.Failf(t, "unexpected StringIdentifies", "StringIdentifies returned %v, expected %v", values, expected)
 			}
 
 			gotDelete = true
@@ -915,7 +915,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	require.NoError(t, err, "insert failed: %v", err)
 
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
+		assert.Failf(t, "unexpected insert result", "unexpected result for insert: %v", result)
 	}
 
 	// Get the new events from the binlogs.
@@ -943,11 +943,11 @@ func TestRowReplicationTypes(t *testing.T) {
 				tableMap.Name != "replicationtypes" ||
 				len(tableMap.Types) != len(testcases)+1 ||
 				tableMap.CanBeNull.Bit(0) {
-				t.Errorf("got wrong TableMap: %v", tableMap)
+				assert.Failf(t, "wrong TableMap", "got wrong TableMap: %v", tableMap)
 			}
 		case be.IsWriteRows():
 			if got := be.TableID(f); got != tableID {
-				t.Fatalf("WriteRows event got table ID %v but was expecting %v", got, tableID)
+				require.Failf(t, "wrong table ID", "WriteRows event got table ID %v but was expecting %v", got, tableID)
 			}
 			wr, err := be.Rows(f, tableMap)
 			require.NoError(t, err)
@@ -957,7 +957,7 @@ func TestRowReplicationTypes(t *testing.T) {
 			require.NoError(t, err)
 			t.Logf("Got WriteRows event data: %v %v", wr, values)
 			if len(values) != len(testcases)+1 {
-				t.Fatalf("Got wrong length %v for values, was expecting %v", len(values), len(testcases)+1)
+				require.Failf(t, "wrong values length", "Got wrong length %v for values, was expecting %v", len(values), len(testcases)+1)
 			}
 
 		default:
@@ -996,7 +996,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	require.NoError(t, err, "insert '%v' failed: %v", sql.String(), err)
 
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
+		assert.Failf(t, "unexpected insert result", "unexpected result for insert: %v", result)
 	}
 	t.Logf("Insert after getting event is: %v", sql.String())
 

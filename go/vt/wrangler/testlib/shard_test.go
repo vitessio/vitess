@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -79,13 +80,11 @@ func TestDeleteShardCleanup(t *testing.T) {
 
 	// Make sure all tablets are gone.
 	for _, ft := range []*FakeTablet{primary, replica, remoteReplica} {
-		if _, err := ts.GetTablet(ctx, ft.Tablet.Alias); !topo.IsErrType(err, topo.NoNode) {
-			t.Errorf("tablet %v is still in topo: %v", ft.Tablet.Alias, err)
-		}
+		_, err := ts.GetTablet(ctx, ft.Tablet.Alias)
+		assert.Truef(t, topo.IsErrType(err, topo.NoNode), "tablet %v is still in topo: %v", ft.Tablet.Alias, err)
 	}
 
 	// Make sure the shard is gone.
-	if _, err := ts.GetShard(ctx, primary.Tablet.Keyspace, primary.Tablet.Shard); !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("shard %v/%v is still in topo: %v", primary.Tablet.Keyspace, primary.Tablet.Shard, err)
-	}
+	_, err = ts.GetShard(ctx, primary.Tablet.Keyspace, primary.Tablet.Shard)
+	assert.Truef(t, topo.IsErrType(err, topo.NoNode), "shard %v/%v is still in topo: %v", primary.Tablet.Keyspace, primary.Tablet.Shard, err)
 }

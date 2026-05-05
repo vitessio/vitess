@@ -105,19 +105,16 @@ func TestShardReplicationStatuses(t *testing.T) {
 	require.NoError(t, err)
 
 	// check result (make primary first in the array)
-	if len(ti) != 2 || len(rs) != 2 {
-		t.Fatalf("ShardReplicationStatuses returned wrong results: %v %v", ti, rs)
-	}
+	require.Falsef(t, len(ti) != 2 || len(rs) != 2, "ShardReplicationStatuses returned wrong results: %v %v", ti, rs)
 	if topoproto.TabletAliasEqual(ti[0].Alias, replica.Tablet.Alias) {
 		ti[0], ti[1] = ti[1], ti[0]
 		rs[0], rs[1] = rs[1], rs[0]
 	}
-	if !topoproto.TabletAliasEqual(ti[0].Alias, primary.Tablet.Alias) ||
+	require.Falsef(t, !topoproto.TabletAliasEqual(ti[0].Alias, primary.Tablet.Alias) ||
 		!topoproto.TabletAliasEqual(ti[1].Alias, replica.Tablet.Alias) ||
 		rs[0].SourceHost != "" ||
-		rs[1].SourceHost != primary.Tablet.Hostname {
-		t.Fatalf("ShardReplicationStatuses returend wrong results: %v %v", ti, rs)
-	}
+		rs[1].SourceHost != primary.Tablet.Hostname,
+		"ShardReplicationStatuses returend wrong results: %v %v", ti, rs)
 }
 
 func TestReparentTablet(t *testing.T) {

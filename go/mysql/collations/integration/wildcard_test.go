@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -117,7 +118,7 @@ func TestRemoteWildcardMatches(t *testing.T) {
 					require.NoError(t, err)
 				}
 				if localResult != remoteResult {
-					t.Errorf("expected %q LIKE %q = %v (got %v)", tc.in, tc.pat, remoteResult, localResult)
+					assert.Failf(t, "wildcard mismatch", "expected %q LIKE %q = %v (got %v)", tc.in, tc.pat, remoteResult, localResult)
 
 					printDebugData(t, []string{
 						"wildcmp",

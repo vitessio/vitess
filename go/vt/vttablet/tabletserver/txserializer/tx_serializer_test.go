@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -52,22 +54,17 @@ func TestTxSerializer_NoHotRow(t *testing.T) {
 	resetVariables(txs)
 
 	done, waited, err := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err != nil {
-		t.Error(err)
-	}
-	if waited {
-		t.Error("non-parallel tx must never wait")
-	}
+	assert.NoError(t, err)
+	assert.False(t, waited, "non-parallel tx must never wait")
 	done()
 
 	// No hot row was recoded.
 	if err := testHTTPHandler(txs, 0, false); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	// No transaction had to wait.
-	if got, want := txs.waits.Counts()["t1"], int64(0); got != want {
-		t.Errorf("wrong Waits variable: got = %v, want = %v", got, want)
-	}
+	got, want := txs.waits.Counts()["t1"], int64(0)
+	assert.Equalf(t, want, got, "wrong Waits variable: got = %v, want = %v", got, want)
 }
 
 func TestTxSerializerRedactDebugUI(t *testing.T) {
@@ -80,22 +77,17 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 	txs.redactUIQuery = true
 
 	done, waited, err := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err != nil {
-		t.Error(err)
-	}
-	if waited {
-		t.Error("non-parallel tx must never wait")
-	}
+	assert.NoError(t, err)
+	assert.False(t, waited, "non-parallel tx must never wait")
 	done()
 
 	// No hot row was recoded.
 	if err := testHTTPHandler(txs, 0, true); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	// No transaction had to wait.
-	if got, want := txs.waits.Counts()["t1"], int64(0); got != want {
-		t.Errorf("wrong Waits variable: got = %v, want = %v", got, want)
-	}
+	got, want := txs.waits.Counts()["t1"], int64(0)
+	assert.Equalf(t, want, got, "wrong Waits variable: got = %v, want = %v", got, want)
 }
 
 func TestKeySanitization(t *testing.T) {
@@ -105,16 +97,12 @@ func TestKeySanitization(t *testing.T) {
 	key := "t1 where c1='foo'"
 	want := "t1 ... [REDACTED]"
 	got := txs.sanitizeKey(key)
-	if got != want {
-		t.Errorf("key sanitization error: got = %v, want = %v", got, want)
-	}
+	assert.Equalf(t, want, got, "key sanitization error: got = %v, want = %v", got, want)
 	// without a where clause
 	key = "t1"
 	want = "t1"
 	got = txs.sanitizeKey(key)
-	if got != want {
-		t.Errorf("key sanitization error: got = %v, want = %v", got, want)
-	}
+	assert.Equalf(t, want, got, "key sanitization error: got = %v, want = %v", got, want)
 }
 
 func TestTxSerializer(t *testing.T) {
@@ -127,63 +115,48 @@ func TestTxSerializer(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err1 != nil {
-		t.Error(err1)
-	}
-	if waited1 {
-		t.Errorf("tx1 must never wait: %v", waited1)
-	}
+	assert.NoError(t, err1)
+	assert.Falsef(t, waited1, "tx1 must never wait: %v", waited1)
 
 	// tx2 (gets queued and must wait).
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
 		done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
-		if err2 != nil {
-			t.Error(err2)
-		}
-		if !waited2 {
-			t.Errorf("tx2 must wait: %v", waited2)
-		}
-		if got, want := txs.waits.Counts()["t1"], int64(1); got != want {
-			t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-		}
+		assert.NoError(t, err2)
+		assert.Truef(t, waited2, "tx2 must wait: %v", waited2)
+		got, want := txs.waits.Counts()["t1"], int64(1)
+		assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
 
 		done2()
 	})
 	// Wait until tx2 is waiting before we try tx3.
 	if err := waitForPending(txs, "t1 where1", 2); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 
 	// tx3 (gets rejected because it would exceed the local queue).
 	_, _, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if got, want := vterrors.Code(err3), vtrpcpb.Code_RESOURCE_EXHAUSTED; got != want {
-		t.Errorf("wrong error code: got = %v, want = %v", got, want)
-	}
-	if got, want := err3.Error(), "hot row protection: too many queued transactions (2 >= 2) for the same row (table + WHERE clause: 't1 where1')"; got != want {
-		t.Errorf("transaction rejected with wrong error: got = %v, want = %v", got, want)
-	}
+	gotCode, wantCode := vterrors.Code(err3), vtrpcpb.Code_RESOURCE_EXHAUSTED
+	assert.Equalf(t, wantCode, gotCode, "wrong error code: got = %v, want = %v", gotCode, wantCode)
+	wantMsg := "hot row protection: too many queued transactions (2 >= 2) for the same row (table + WHERE clause: 't1 where1')"
+	assert.EqualErrorf(t, err3, wantMsg, "transaction rejected with wrong error: got = %v, want = %v", err3, wantMsg)
 
 	done1()
 	// tx2 must have been unblocked.
 	wg.Wait()
 
-	if txs.queues["t1 where1"] != nil {
-		t.Error("queue object was not deleted after last transaction")
-	}
+	assert.Nil(t, txs.queues["t1 where1"], "queue object was not deleted after last transaction")
 
 	// 2 transactions were recorded.
 	if err := testHTTPHandler(txs, 2, false); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	// 1 of them had to wait.
-	if got, want := txs.waits.Counts()["t1"], int64(1); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
+	got, want := txs.waits.Counts()["t1"], int64(1)
+	assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
 	// 1 (the third one) was rejected because the queue was exceeded.
-	if got, want := txs.queueExceeded.Counts()["t1"], int64(1); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
+	got, want = txs.queueExceeded.Counts()["t1"], int64(1)
+	assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
 }
 
 func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
@@ -197,42 +170,29 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err1 != nil {
-		t.Error(err1)
-	}
-	if waited1 {
-		t.Errorf("tx1 must never wait: %v", waited1)
-	}
+	assert.NoError(t, err1)
+	assert.Falsef(t, waited1, "tx1 must never wait: %v", waited1)
 
 	// tx2.
 	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err2 != nil {
-		t.Error(err1)
-	}
-	if waited2 {
-		t.Errorf("tx2 must not wait: %v", waited1)
-	}
+	assert.NoError(t, err2)
+	assert.Falsef(t, waited2, "tx2 must not wait: %v", waited1)
 
 	// tx3 (gets queued and must wait).
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
 		done3, waited3, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
-		if err3 != nil {
-			t.Error(err3)
-		}
-		if !waited3 {
-			t.Errorf("tx3 must wait: %v", waited2)
-		}
-		if got, want := txs.waits.Counts()["t1"], int64(1); got != want {
-			t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-		}
+		assert.NoError(t, err3)
+		assert.Truef(t, waited3, "tx3 must wait: %v", waited2)
+		got, want := txs.waits.Counts()["t1"], int64(1)
+		assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
 
 		done3()
 	})
 
 	// Wait until tx3 is waiting before we finish tx2 and unblock tx3.
 	if err := waitForPending(txs, "t1 where1", 3); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	// Finish tx2 before tx1 to test that the "finish-order" does not matter.
 	// Unblocks tx3.
@@ -242,18 +202,15 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 	// Finish tx1 to delete the queue object.
 	done1()
 
-	if txs.queues["t1 where1"] != nil {
-		t.Error("queue object was not deleted after last transaction")
-	}
+	assert.Nil(t, txs.queues["t1 where1"], "queue object was not deleted after last transaction")
 
 	// 3 transactions were recorded.
 	if err := testHTTPHandler(txs, 3, false); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	// 1 of them had to wait.
-	if got, want := txs.waits.Counts()["t1"], int64(1); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
+	got, want := txs.waits.Counts()["t1"], int64(1)
+	assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
 }
 
 func waitForPending(txs *TxSerializer, key string, i int) error {
@@ -320,20 +277,12 @@ func TestTxSerializerCancel(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err1 != nil {
-		t.Error(err1)
-	}
-	if waited1 {
-		t.Errorf("tx1 must never wait: %v", waited1)
-	}
+	assert.NoError(t, err1)
+	assert.Falsef(t, waited1, "tx1 must never wait: %v", waited1)
 	// tx2.
 	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err2 != nil {
-		t.Error(err2)
-	}
-	if waited2 {
-		t.Errorf("tx2 must not wait: %v", waited2)
-	}
+	assert.NoError(t, err2)
+	assert.Falsef(t, waited2, "tx2 must not wait: %v", waited2)
 
 	// tx3 (gets queued and must wait).
 	ctx3, cancel3 := context.WithCancel(t.Context())
@@ -341,25 +290,21 @@ func TestTxSerializerCancel(t *testing.T) {
 	wg.Go(func() {
 		_, _, err3 := txs.Wait(ctx3, "t1 where1", "t1")
 		if err3 != context.Canceled {
-			t.Error(err3)
+			assert.NoError(t, err3)
 		}
 
 		txDone <- 3
 	})
 	// Wait until tx3 is waiting before we try tx4.
 	if err := waitForPending(txs, "t1 where1", 3); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 
 	// tx4 (gets queued and must wait as well).
 	wg.Go(func() {
 		done4, waited4, err4 := txs.Wait(t.Context(), "t1 where1", "t1")
-		if err4 != nil {
-			t.Error(err4)
-		}
-		if !waited4 {
-			t.Errorf("tx4 must have waited: %v", waited4)
-		}
+		assert.NoError(t, err4)
+		assert.Truef(t, waited4, "tx4 must have waited: %v", waited4)
 
 		txDone <- 4
 
@@ -367,36 +312,31 @@ func TestTxSerializerCancel(t *testing.T) {
 	})
 	// Wait until tx4 is waiting before we start to cancel tx3.
 	if err := waitForPending(txs, "t1 where1", 4); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 
 	// Cancel tx3.
 	cancel3()
-	if got := <-txDone; got != 3 {
-		t.Errorf("tx3 should have been unblocked after the cancel: %v", got)
-	}
+	gotTx := <-txDone
+	assert.Equalf(t, 3, gotTx, "tx3 should have been unblocked after the cancel: %v", gotTx)
 	// Finish tx1.
 	done1()
 	// Wait for tx4.
-	if got := <-txDone; got != 4 {
-		t.Errorf("wrong tx was unblocked after tx1: %v", got)
-	}
+	gotTx = <-txDone
+	assert.Equalf(t, 4, gotTx, "wrong tx was unblocked after tx1: %v", gotTx)
 	wg.Wait()
 	// Finish tx2 (the last transaction) which will delete the queue object.
 	done2()
 
-	if txs.queues["t1 where1"] != nil {
-		t.Error("queue object was not deleted after last transaction")
-	}
+	assert.Nil(t, txs.queues["t1 where1"], "queue object was not deleted after last transaction")
 
 	// 4 total transactions get recorded.
 	if err := testHTTPHandler(txs, 4, false); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	// 2 of them had to wait.
-	if got, want := txs.waits.Counts()["t1"], int64(2); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
+	got, want := txs.waits.Counts()["t1"], int64(2)
+	assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
 }
 
 // TestTxSerializerDryRun verifies that the dry-run mode does not serialize
@@ -412,57 +352,38 @@ func TestTxSerializerDryRun(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err1 != nil {
-		t.Error(err1)
-	}
-	if waited1 {
-		t.Errorf("first transaction must never wait: %v", waited1)
-	}
+	assert.NoError(t, err1)
+	assert.Falsef(t, waited1, "first transaction must never wait: %v", waited1)
 
 	// tx2 (would wait and exceed the local queue).
 	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err2 != nil {
-		t.Error(err2)
-	}
-	if waited2 {
-		t.Errorf("second transaction must never wait in dry-run mode: %v", waited2)
-	}
-	if got, want := txs.waitsDryRun.Counts()["t1"], int64(1); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
-	if got, want := txs.queueExceededDryRun.Counts()["t1"], int64(1); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
+	assert.NoError(t, err2)
+	assert.Falsef(t, waited2, "second transaction must never wait in dry-run mode: %v", waited2)
+	got64, want64 := txs.waitsDryRun.Counts()["t1"], int64(1)
+	assert.Equalf(t, want64, got64, "variable not incremented: got = %v, want = %v", got64, want64)
+	got64, want64 = txs.queueExceededDryRun.Counts()["t1"], int64(1)
+	assert.Equalf(t, want64, got64, "variable not incremented: got = %v, want = %v", got64, want64)
 
 	// tx3 (would wait and exceed the global queue).
 	done3, waited3, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err3 != nil {
-		t.Error(err3)
-	}
-	if waited3 {
-		t.Errorf("any transaction must never wait in dry-run mode: %v", waited3)
-	}
-	if got, want := txs.waitsDryRun.Counts()["t1"], int64(2); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
-	if got, want := txs.globalQueueExceededDryRun.Get(), int64(1); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
+	assert.NoError(t, err3)
+	assert.Falsef(t, waited3, "any transaction must never wait in dry-run mode: %v", waited3)
+	got64, want64 = txs.waitsDryRun.Counts()["t1"], int64(2)
+	assert.Equalf(t, want64, got64, "variable not incremented: got = %v, want = %v", got64, want64)
+	got64, want64 = txs.globalQueueExceededDryRun.Get(), int64(1)
+	assert.Equalf(t, want64, got64, "variable not incremented: got = %v, want = %v", got64, want64)
 
-	if got, want := txs.Pending("t1 where1"), 3; got != want {
-		t.Errorf("wrong number of pending transactions: got = %v, want = %v", got, want)
-	}
+	gotPending, wantPending := txs.Pending("t1 where1"), 3
+	assert.Equalf(t, wantPending, gotPending, "wrong number of pending transactions: got = %v, want = %v", gotPending, wantPending)
 
 	done1()
 	done2()
 	done3()
 
-	if txs.queues["t1 where1"] != nil {
-		t.Error("queue object was not deleted after last transaction")
-	}
+	assert.Nil(t, txs.queues["t1 where1"], "queue object was not deleted after last transaction")
 
 	if err := testHTTPHandler(txs, 3, false); err != nil {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 }
 
@@ -481,33 +402,22 @@ func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 
 	// tx1.
 	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if err1 != nil {
-		t.Error(err1)
-	}
-	if waited1 {
-		t.Errorf("first transaction must never wait: %v", waited1)
-	}
+	assert.NoError(t, err1)
+	assert.Falsef(t, waited1, "first transaction must never wait: %v", waited1)
 
 	// tx2.
 	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where2", "t1")
-	if err2 != nil {
-		t.Error(err2)
-	}
-	if waited2 {
-		t.Errorf("second transaction for different row range must not wait: %v", waited2)
-	}
+	assert.NoError(t, err2)
+	assert.Falsef(t, waited2, "second transaction for different row range must not wait: %v", waited2)
 
 	// tx3 (same row range as tx1).
 	_, _, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
-	if got, want := vterrors.Code(err3), vtrpcpb.Code_RESOURCE_EXHAUSTED; got != want {
-		t.Errorf("wrong error code: got = %v, want = %v", got, want)
-	}
-	if got, want := err3.Error(), "hot row protection: too many queued transactions (2 >= 1)"; got != want {
-		t.Errorf("transaction rejected with wrong error: got = %v, want = %v", got, want)
-	}
-	if got, want := txs.globalQueueExceeded.Get(), int64(1); got != want {
-		t.Errorf("variable not incremented: got = %v, want = %v", got, want)
-	}
+	gotCode, wantCode := vterrors.Code(err3), vtrpcpb.Code_RESOURCE_EXHAUSTED
+	assert.Equalf(t, wantCode, gotCode, "wrong error code: got = %v, want = %v", gotCode, wantCode)
+	wantMsg := "hot row protection: too many queued transactions (2 >= 1)"
+	assert.EqualErrorf(t, err3, wantMsg, "transaction rejected with wrong error: got = %v, want = %v", err3, wantMsg)
+	got, want := txs.globalQueueExceeded.Get(), int64(1)
+	assert.Equalf(t, want, got, "variable not incremented: got = %v, want = %v", got, want)
 
 	done1()
 	done2()
@@ -519,9 +429,8 @@ func TestTxSerializerPending(t *testing.T) {
 	cfg.HotRowProtection.MaxGlobalQueueSize = 1
 	cfg.HotRowProtection.MaxConcurrency = 1
 	txs := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TxSerializerTest"))
-	if got, want := txs.Pending("t1 where1"), 0; got != want {
-		t.Errorf("there should be no pending transaction: got = %v, want = %v", got, want)
-	}
+	got, want := txs.Pending("t1 where1"), 0
+	assert.Equalf(t, want, got, "there should be no pending transaction: got = %v, want = %v", got, want)
 }
 
 func BenchmarkTxSerializer_NoHotRow(b *testing.B) {

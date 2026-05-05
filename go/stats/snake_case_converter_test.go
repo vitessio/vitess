@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestToSnakeCase(t *testing.T) {
@@ -38,20 +40,19 @@ func TestToSnakeCase(t *testing.T) {
 	}
 
 	for _, tt := range snakeCaseTest {
-		if got, want := GetSnakeName(tt.input), tt.output; got != want {
-			t.Errorf("want '%s', got '%s'", want, got)
-		}
+		got, want := GetSnakeName(tt.input), tt.output
+		assert.Equalf(t, want, got, "want '%s', got '%s'", want, got)
 	}
 }
 
 func TestSnakeMemoize(t *testing.T) {
 	key := "TestMemoize"
-	if _, ok := snakeMemoizer.Load(key); ok {
-		t.Errorf("expected key %q to not be memoized yet", key)
-	}
+	_, ok := snakeMemoizer.Load(key)
+	assert.Falsef(t, ok, "expected key %q to not be memoized yet", key)
 	toSnakeCase(key)
-	if val, ok := snakeMemoizer.Load(key); !ok || val.(string) != "test_memoize" {
-		t.Errorf("want 'test_memoize', got '%v'", val)
+	val, ok := snakeMemoizer.Load(key)
+	if !ok || val.(string) != "test_memoize" {
+		assert.Failf(t, "memoized value mismatch", "want 'test_memoize', got '%v'", val)
 	}
 }
 

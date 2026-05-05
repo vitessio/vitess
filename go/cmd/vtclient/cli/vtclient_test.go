@@ -19,7 +19,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -140,17 +139,11 @@ func TestVtclient(t *testing.T) {
 		Main.SetContext(t.Context())
 		results, err := _run(Main, args)
 		if q.errMsg != "" {
-			if got, want := err.Error(), q.errMsg; !strings.Contains(got, want) {
-				t.Fatalf("vtclient %v returned wrong error: got = %v, want contains = %v", os.Args[1:], got, want)
-			}
+			require.ErrorContainsf(t, err, q.errMsg, "vtclient %v returned wrong error", os.Args[1:])
 			return
 		}
 
-		if err != nil {
-			t.Fatalf("vtclient %v failed: %v", args[1:], err)
-		}
-		if got, want := results.rowsAffected, q.rowsAffected; got != want {
-			t.Fatalf("wrong rows affected for query: %v got = %v, want = %v", os.Args[1:], got, want)
-		}
+		require.NoErrorf(t, err, "vtclient %v failed", args[1:])
+		require.Equalf(t, q.rowsAffected, results.rowsAffected, "wrong rows affected for query: %v", os.Args[1:])
 	}
 }

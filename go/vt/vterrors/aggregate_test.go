@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -62,10 +64,8 @@ func TestAggregateVtGateErrorCodes(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		out := aggregateCodes(tc.input)
-		if out != tc.expected {
-			t.Errorf("AggregateVtGateErrorCodes(%v) = %v \nwant: %v",
-				tc.input, out, tc.expected)
-		}
+		assert.Equalf(t, tc.expected, out, "AggregateVtGateErrorCodes(%v) = %v \nwant: %v",
+			tc.input, out, tc.expected)
 	}
 }
 
@@ -95,7 +95,7 @@ func TestAggregateVtGateErrors(t *testing.T) {
 	for _, tc := range testcases {
 		out := Aggregate(tc.input)
 		if !Equals(out, tc.expected) {
-			t.Errorf("AggregateVtGateErrors(%+v) = %+v \nwant: %+v",
+			assert.Failf(t, "Aggregate mismatch", "AggregateVtGateErrors(%+v) = %+v \nwant: %+v",
 				tc.input, out, tc.expected)
 		}
 	}

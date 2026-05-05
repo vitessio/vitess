@@ -30,6 +30,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -140,7 +141,7 @@ func (u *uca900CollationTest) Test(t *testing.T, result *sqltypes.Result) {
 		require.NoError(t, err)
 		utf8Input := parseUtf32cp(rowBytes)
 		if utf8Input == nil {
-			t.Errorf("[%s] failed to parse UTF32-encoded codepoint: %s (%s)", u.collation, row[0], row[2].ToString())
+			assert.Failf(t, "failed to parse UTF32 codepoint", "[%s] failed to parse UTF32-encoded codepoint: %s (%s)", u.collation, row[0], row[2].ToString())
 			errors++
 			continue
 		}
@@ -148,14 +149,14 @@ func (u *uca900CollationTest) Test(t *testing.T, result *sqltypes.Result) {
 		require.NoError(t, err)
 		expectedWeightString := parseWeightString(rowBytes)
 		if expectedWeightString == nil {
-			t.Errorf("[%s] failed to parse weight string: %s (%s)", u.collation, row[1], row[2].ToString())
+			assert.Failf(t, "failed to parse weight string", "[%s] failed to parse weight string: %s (%s)", u.collation, row[1], row[2].ToString())
 			errors++
 			continue
 		}
 
 		weightString := colldata.Lookup(coll).WeightString(make([]byte, 0, 128), utf8Input, 0)
 		if !bytes.Equal(weightString, expectedWeightString) {
-			t.Errorf("[%s] mismatch for %s (%v): \n\twant: %v\n\tgot:  %v", u.collation, row[2].ToString(), utf8Input, expectedWeightString, weightString)
+			assert.Failf(t, "weight string mismatch", "[%s] mismatch for %s (%v): \n\twant: %v\n\tgot:  %v", u.collation, row[2].ToString(), utf8Input, expectedWeightString, weightString)
 			errors++
 		}
 		checked++

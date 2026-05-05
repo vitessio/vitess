@@ -25,7 +25,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -165,9 +164,8 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
 		require.NoError(t, err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file %s: %v", innodbLogFile, err)
-	}
+	err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm)
+	require.NoErrorf(t, err, "failed to write file %s: %v", innodbLogFile, err)
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
 		require.NoError(t, err)
 	}
@@ -223,12 +221,8 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 			Name: innodbLogFile,
 		},
 	}
-	if !reflect.DeepEqual(result, expected) {
-		t.Fatalf("got wrong list of FileEntry %v, expected %v", result, expected)
-	}
-	if totalSize <= 0 {
-		t.Fatalf("backup size should be > 0, got %v", totalSize)
-	}
+	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
+	require.Greaterf(t, totalSize, int64(0), "backup size should be > 0, got %v", totalSize)
 }
 
 func TestFindFilesToBackupWithRedoLog(t *testing.T) {
@@ -244,9 +238,8 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 	rocksdbDir := path.Join(dataDir, ".rocksdb")
 	sdiOnlyDir := path.Join(dataDir, "sdi_dir")
 	for _, s := range []string{innodbDataDir, innodbLogDir, dataDbDir, extraDir, outsideDbDir, rocksdbDir, sdiOnlyDir} {
-		if err := os.MkdirAll(s, os.ModePerm); err != nil {
-			t.Fatalf("failed to create directory %v: %v", s, err)
-		}
+		err := os.MkdirAll(s, os.ModePerm)
+		require.NoErrorf(t, err, "failed to create directory %v: %v", s, err)
 	}
 
 	cnf := &Mycnf{
@@ -261,9 +254,8 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
 		require.NoError(t, err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file %s: %v", innodbLogFile, err)
-	}
+	err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm)
+	require.NoErrorf(t, err, "failed to write file %s: %v", innodbLogFile, err)
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
 		require.NoError(t, err)
 	}
@@ -313,12 +305,8 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 			Name: innodbLogFile,
 		},
 	}
-	if !reflect.DeepEqual(result, expected) {
-		t.Fatalf("got wrong list of FileEntry %v, expected %v", result, expected)
-	}
-	if totalSize <= 0 {
-		t.Fatalf("backup size should be > 0, got %v", totalSize)
-	}
+	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
+	require.Greaterf(t, totalSize, int64(0), "backup size should be > 0, got %v", totalSize)
 }
 
 // TestRestoreEmitsStats tests that Restore emits stats.

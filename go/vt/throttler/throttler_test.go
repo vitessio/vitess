@@ -284,7 +284,7 @@ func TestThreadFinished(t *testing.T) {
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("max rate was not propapgated to threadThrottler[0] in time: %v", throttlerImpl.threadThrottlers[0].getMaxRate())
+			require.Failf(t, "max rate not propagated", "max rate was not propapgated to threadThrottler[0] in time: %v", throttlerImpl.threadThrottlers[0].getMaxRate())
 		default:
 			// Timer not up yet. Try again.
 		}

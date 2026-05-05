@@ -153,9 +153,7 @@ func TestQueryRules(t *testing.T) {
 	}
 	err = framework.Server.SetQueryRules("endtoend", rules)
 	want := "Rule source identifier endtoend is not valid"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %s", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
 
 	framework.Server.RegisterQueryRuleSource("endtoend")
 	defer framework.Server.UnRegisterQueryRuleSource("endtoend")
@@ -178,23 +176,17 @@ func TestQueryRules(t *testing.T) {
 			"Action": "FAIL"
 		}]
 	}`)
-	if rulesJSON != want {
-		t.Errorf("/debug/query_rules:\n%v, want\n%s", rulesJSON, want)
-	}
+	assert.Equalf(t, want, rulesJSON, "/debug/query_rules:\n%v, want\n%s", rulesJSON, want)
 
 	client := framework.NewClient()
 	query := "select * from vitess_test where intval=:asdfg"
 	bv := map[string]*querypb.BindVariable{"asdfg": sqltypes.Int64BindVariable(1)}
 	_, err = client.Execute(query, bv)
 	want = "disallowed due to rule: disallow bindvar 'asdfg' (CallerID: dev)"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %s", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
 	_, err = client.StreamExecute(query, bv)
 	want = "disallowed due to rule: disallow bindvar 'asdfg' (CallerID: dev)"
-	if err == nil || err.Error() != want {
-		t.Errorf("Error: %v, want %s", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
 
 	err = framework.Server.SetQueryRules("endtoend", nil)
 	if err != nil {

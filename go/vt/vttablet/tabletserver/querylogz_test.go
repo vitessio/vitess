@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -155,7 +157,5 @@ func TestQuerylogzHandler(t *testing.T) {
 func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *tabletenv.LogStats, page []byte) {
 	t.Helper()
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
-	if !matcher.Match(page) {
-		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
-	}
+	require.Truef(t, matcher.Match(page), "querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
 }

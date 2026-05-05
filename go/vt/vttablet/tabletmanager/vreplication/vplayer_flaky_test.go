@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/nsf/jsondiff"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
@@ -2474,9 +2475,8 @@ func TestPlayerIdleUpdate(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"/update _vt.vreplication set pos=",
 	))
-	if duration := time.Since(start); duration < idleTimeout {
-		t.Errorf("duration: %v, must be at least %v", duration, idleTimeout)
-	}
+	duration := time.Since(start)
+	assert.GreaterOrEqualf(t, duration, idleTimeout, "duration: %v, must be at least %v", duration, idleTimeout)
 }
 
 func TestPlayerSplitTransaction(t *testing.T) {
@@ -4112,9 +4112,7 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 	}
 	qr, err := exec(t.Context(), query)
 	require.NoError(t, err)
-	if len(values) != len(qr.Rows) {
-		t.Fatalf("row counts don't match: %d, want %d", len(qr.Rows), len(values))
-	}
+	require.Lenf(t, qr.Rows, len(values), "row counts don't match: %d, want %d", len(qr.Rows), len(values))
 	for i, row := range values {
 		require.Len(t, row, len(qr.Rows[i]), "Too few columns, \nrow: %d, \nresult: %d:%v, \nwant: %d:%v", i, len(qr.Rows[i]), qr.Rows[i], len(row), row)
 		require.Equal(t, qr.Rows[i][0].ToString(), row[0], "Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])

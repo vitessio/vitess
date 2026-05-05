@@ -786,9 +786,7 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 	}
 	_, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	want := "more than one target for source table t"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
-	}
+	assert.ErrorContainsf(t, err, want, "buildReplicatorPlan err: %v, must contain: %v", err, want)
 }
 
 func TestBuildPlayerPlanExclude(t *testing.T) {

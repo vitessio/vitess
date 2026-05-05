@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -163,9 +164,7 @@ func compareVitessAndMySQLResults(t *testing.T, vtRes sql.Result, mysqlRes sql.R
 	require.NoError(t, err)
 	mysqlRa, err := mysqlRes.RowsAffected()
 	require.NoError(t, err)
-	if mysqlRa != vtRa {
-		t.Errorf("Vitess and MySQL don't agree on the rows affected. Vitess rows affected - %v, MySQL rows affected - %v", vtRa, mysqlRa)
-	}
+	assert.Equalf(t, mysqlRa, vtRa, "Vitess and MySQL don't agree on the rows affected. Vitess rows affected - %v, MySQL rows affected - %v", vtRa, mysqlRa)
 }
 
 // compareVitessAndMySQLErrors compares Vitess and MySQL errors and reports if one errors and the other doesn't.

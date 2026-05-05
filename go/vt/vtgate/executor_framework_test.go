@@ -373,7 +373,7 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 			continue
 		}
 		if len(wantQueries) < idx {
-			t.Errorf("got more queries than expected")
+			assert.Fail(t, "got more queries than expected")
 		}
 		got := query.Sql
 		expected := wantQueries[idx].Sql
@@ -416,7 +416,7 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 func testCommitCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
 	t.Helper()
 	if got, want := sbc.CommitCount.Load(), int64(want); got != want {
-		t.Errorf("%s.CommitCount: %d, want %d\n", sbcName, got, want)
+		assert.Failf(t, "commit count mismatch", "%s.CommitCount: %d, want %d\n", sbcName, got, want)
 	}
 }
 
@@ -424,7 +424,7 @@ func testNonZeroDuration(t *testing.T, what, d string) {
 	t.Helper()
 	time, _ := strconv.ParseFloat(d, 64)
 	if time == 0 {
-		t.Errorf("querylog %s want non-zero duration got %s (%v)", what, d, time)
+		assert.Failf(t, "zero duration", "querylog %s want non-zero duration got %s (%v)", what, d, time)
 	}
 }
 

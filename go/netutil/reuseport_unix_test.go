@@ -22,6 +22,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 )
 
@@ -51,7 +52,5 @@ func TestListenReusePort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if val != 1 {
-		t.Fatalf("SO_REUSEPORT not set: got %d, want 1", val)
-	}
+	require.Equalf(t, 1, val, "SO_REUSEPORT not set: got %d, want 1", val)
 }

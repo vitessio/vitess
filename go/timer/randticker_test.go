@@ -19,6 +19,8 @@ package timer
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -34,7 +36,7 @@ func TestTick(t *testing.T) {
 		diff := start.Add(testDuration).Sub(end)
 		tolerance := testVariance + 20*time.Millisecond
 		if diff < -tolerance || diff > tolerance {
-			t.Errorf("start: %v, end: %v, diff %v. Want <%v tolerenace", start, end, diff, tolerance)
+			assert.Failf(t, "tick out of tolerance", "start: %v, end: %v, diff %v. Want <%v tolerenace", start, end, diff, tolerance)
 		}
 	}
 	tkr.Stop()

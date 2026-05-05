@@ -295,7 +295,7 @@ func waitForVReplicationToCatchup(t *testing.T, vttablet *cluster.VttabletProces
 			time.Sleep(waitDuration)
 			duration -= waitDuration
 			if duration <= 0 {
-				t.Fatalf("waitForVReplicationToCatchup timed out, query: %v, result: %v", query, qr)
+				require.Failf(t, "vreplication catchup timeout", "waitForVReplicationToCatchup timed out, query: %v, result: %v", query, qr)
 			}
 		}
 	}

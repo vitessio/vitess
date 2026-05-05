@@ -168,9 +168,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	qr, err := f(ctx, sc, nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 0 {
-		t.Errorf("want 0, got %v", qr.RowsAffected)
-	}
+	assert.Equalf(t, uint64(0), qr.RowsAffected, "want 0, got %v", qr.RowsAffected)
 
 	// single shard
 	s.Reset()
@@ -180,13 +178,10 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	_, err = f(ctx, sc, []string{"0"})
 	want := fmt.Sprintf("target: %v.0.replica: INVALID_ARGUMENT error", name)
 	// Verify server error string.
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
+	assert.EqualErrorf(t, err, want, "want %s, got %v", want, err)
 	// Ensure that we tried only once.
-	if execCount := sbc.ExecCount.Load(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	execCount := sbc.ExecCount.Load()
+	assert.Equalf(t, int64(1), execCount, "want 1, got %v", execCount)
 
 	// two shards
 	s.Reset()
@@ -201,12 +196,10 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	want = fmt.Sprintf("target: %v.0.replica: INVALID_ARGUMENT error\ntarget: %v.1.replica: INVALID_ARGUMENT error", name, name)
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
-	if execCount := sbc0.ExecCount.Load(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	execCount0 := sbc0.ExecCount.Load()
+	assert.Equalf(t, int64(1), execCount0, "want 1, got %v", execCount0)
+	execCount1 := sbc1.ExecCount.Load()
+	assert.Equalf(t, int64(1), execCount1, "want 1, got %v", execCount1)
 
 	// two shards with different errors
 	s.Reset()
@@ -222,12 +215,10 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	// We should only surface the higher priority error code
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
-	if execCount := sbc0.ExecCount.Load(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	execCount0 = sbc0.ExecCount.Load()
+	assert.Equalf(t, int64(1), execCount0, "want 1, got %v", execCount0)
+	execCount1 = sbc1.ExecCount.Load()
+	assert.Equalf(t, int64(1), execCount1, "want 1, got %v", execCount1)
 
 	// duplicate shards
 	s.Reset()
@@ -236,9 +227,8 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	sbc = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	_, _ = f(ctx, sc, []string{"0", "0"})
 	// Ensure that we executed only once.
-	if execCount := sbc.ExecCount.Load(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
+	execCount = sbc.ExecCount.Load()
+	assert.Equalf(t, int64(1), execCount, "want 1, got %v", execCount)
 
 	// no errors
 	s.Reset()
@@ -248,18 +238,12 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	sbc1 = hc.AddTestTablet("aa", "1", 1, name, "1", topodatapb.TabletType_REPLICA, true, 1, nil)
 	qr, err = f(ctx, sc, []string{"0", "1"})
 	require.NoError(t, err)
-	if execCount := sbc0.ExecCount.Load(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
-		t.Errorf("want 1, got %v", execCount)
-	}
-	if qr.RowsAffected != 0 {
-		t.Errorf("want 0, got %v", qr.RowsAffected)
-	}
-	if len(qr.Rows) != 2 {
-		t.Errorf("want 2, got %v", len(qr.Rows))
-	}
+	execCount0 = sbc0.ExecCount.Load()
+	assert.Equalf(t, int64(1), execCount0, "want 1, got %v", execCount0)
+	execCount1 = sbc1.ExecCount.Load()
+	assert.Equalf(t, int64(1), execCount1, "want 1, got %v", execCount1)
+	assert.Equalf(t, uint64(0), qr.RowsAffected, "want 0, got %v", qr.RowsAffected)
+	assert.Lenf(t, qr.Rows, 2, "want 2, got %v", len(qr.Rows))
 }
 
 func TestMaxMemoryRows(t *testing.T) {
@@ -433,19 +417,19 @@ func TestMultiExecs(t *testing.T) {
 	_, err := sc.ExecuteMultiShard(ctx, nil, rss, queries, session, false, false, &observer, false)
 	require.NoError(t, vterrors.Aggregate(err))
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
-		t.Fatalf("didn't get expected query")
+		require.Fail(t, "didn't get expected query")
 	}
 	wantVars0 := map[string]*querypb.BindVariable{
 		"bv0": queries[0].BindVariables["bv0"],
 	}
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
-		t.Errorf("got %v, want %v", sbc0.Queries[0].BindVariables, wantVars0)
+		assert.Failf(t, "BindVariables mismatch", "got %v, want %v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
 	wantVars1 := map[string]*querypb.BindVariable{
 		"bv1": queries[1].BindVariables["bv1"],
 	}
 	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
+		assert.Failf(t, "BindVariables mismatch", "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	}
 	assert.ElementsMatch(t, results, observer.recorded)
 
@@ -484,10 +468,10 @@ func TestMultiExecs(t *testing.T) {
 		return nil
 	}, &observer, false)
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
+		assert.Failf(t, "BindVariables mismatch", "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
 	}
 	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
-		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
+		assert.Failf(t, "BindVariables mismatch", "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	}
 	assert.ElementsMatch(t, results, observer.recorded)
 }
@@ -556,34 +540,18 @@ func TestAppendResult(t *testing.T) {
 	// test one empty result
 	qr.AppendResult(innerqr1)
 	qr.AppendResult(innerqr2)
-	if len(qr.Fields) != 1 {
-		t.Errorf("want 1, got %v", len(qr.Fields))
-	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("want 1, got %v", qr.RowsAffected)
-	}
-	if qr.InsertID != 1 {
-		t.Errorf("want 1, got %v", qr.InsertID)
-	}
-	if len(qr.Rows) != 1 {
-		t.Errorf("want 1, got %v", len(qr.Rows))
-	}
+	assert.Lenf(t, qr.Fields, 1, "want 1, got %v", len(qr.Fields))
+	assert.Equalf(t, uint64(1), qr.RowsAffected, "want 1, got %v", qr.RowsAffected)
+	assert.Equalf(t, uint64(1), qr.InsertID, "want 1, got %v", qr.InsertID)
+	assert.Lenf(t, qr.Rows, 1, "want 1, got %v", len(qr.Rows))
 	// test two valid results
 	qr = new(sqltypes.Result)
 	qr.AppendResult(innerqr2)
 	qr.AppendResult(innerqr2)
-	if len(qr.Fields) != 1 {
-		t.Errorf("want 1, got %v", len(qr.Fields))
-	}
-	if qr.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.RowsAffected)
-	}
-	if qr.InsertID != 1 {
-		t.Errorf("want 1, got %v", qr.InsertID)
-	}
-	if len(qr.Rows) != 2 {
-		t.Errorf("want 2, got %v", len(qr.Rows))
-	}
+	assert.Lenf(t, qr.Fields, 1, "want 1, got %v", len(qr.Fields))
+	assert.Equalf(t, uint64(2), qr.RowsAffected, "want 2, got %v", qr.RowsAffected)
+	assert.Equalf(t, uint64(1), qr.InsertID, "want 1, got %v", qr.InsertID)
+	assert.Lenf(t, qr.Rows, 2, "want 2, got %v", len(qr.Rows))
 }
 
 func TestReservePrequeries(t *testing.T) {

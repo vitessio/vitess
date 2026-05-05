@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -81,6 +83,6 @@ func TestAddKeyspace(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "select id, name from vt_user")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("name1")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 }

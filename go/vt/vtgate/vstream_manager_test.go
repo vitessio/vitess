@@ -435,7 +435,7 @@ func TestVStreamChunks(t *testing.T) {
 		switch events[0].Type {
 		case binlogdatapb.VEventType_ROW:
 			if doneCounting {
-				t.Errorf("Unexpected event, only expecting DDL: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, only expecting DDL: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			rowEncountered = true
@@ -443,20 +443,20 @@ func TestVStreamChunks(t *testing.T) {
 
 		case binlogdatapb.VEventType_COMMIT:
 			if !rowEncountered {
-				t.Errorf("Unexpected event, COMMIT after non-rows: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, COMMIT after non-rows: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			doneCounting = true
 
 		case binlogdatapb.VEventType_DDL:
 			if !doneCounting && rowEncountered {
-				t.Errorf("Unexpected event, DDL during ROW events: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, DDL during ROW events: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			ddlCount += 1
 
 		default:
-			t.Errorf("Unexpected event: %v", events[0])
+			assert.Failf(t, "unexpected event", "Unexpected event: %v", events[0])
 			return fmt.Errorf("unexpected event: %v", events[0])
 		}
 
@@ -1772,9 +1772,7 @@ func TestResolveVStreamParams(t *testing.T) {
 	for _, tcase := range testcases {
 		vgtid, filter, flags, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
 		if tcase.err != "" {
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
-			}
+			assert.ErrorContainsf(t, err, tcase.err, "resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
 			continue
 		}
 		require.NoError(t, err, tcase.input)
@@ -1818,7 +1816,7 @@ func TestResolveVStreamParams(t *testing.T) {
 		vgtid, _, _, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, input, nil, nil)
 		require.NoError(t, err, tcase.input)
 		if got, expectTestVStreamShardNumber := len(vgtid.ShardGtids), 8; expectTestVStreamShardNumber >= got {
-			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
+			assert.Failf(t, "too few shards", "len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
 		}
 		for _, s := range vgtid.ShardGtids {
 			require.Equal(t, tcase.input.Gtid, s.Gtid)

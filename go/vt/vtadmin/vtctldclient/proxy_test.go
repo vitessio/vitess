@@ -194,7 +194,7 @@ func TestRedial(t *testing.T) {
 		currentVtctld = server2
 		nextAddr = listener1.Addr().String()
 	default:
-		t.Fatalf("invalid proxy host %s", proxyHost)
+		require.Failf(t, "invalid proxy host", "invalid proxy host %s", proxyHost)
 	}
 
 	// Shut down the vtctld we're connected to, then await re-resolution.

@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -43,7 +44,7 @@ func TestVtgateProcess(t *testing.T) {
 	_ = utils.Exec(t, conn, "begin")
 	qr := utils.Exec(t, conn, "select id, email from customer")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("email1")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 }
 

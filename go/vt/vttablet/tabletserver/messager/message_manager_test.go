@@ -155,7 +155,7 @@ func TestReceiverCancel(t *testing.T) {
 		}
 		return
 	}
-	t.Errorf("receivers were not cleared: %d", len(mm.receivers))
+	assert.Failf(t, "receivers not cleared", "receivers were not cleared: %d", len(mm.receivers))
 }
 
 func TestMessageManagerState(t *testing.T) {
@@ -219,7 +219,7 @@ func TestMessageManagerSend(t *testing.T) {
 		Fields: testFields,
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, want)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, want)
 	}
 	// Set the channel to verify call to Postpone.
 	// Make it buffered so the thread doesn't block on repeated calls.
@@ -233,13 +233,12 @@ func TestMessageManagerSend(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, want)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, want)
 	}
 
 	// Ensure Postpone got called.
-	if got, want := <-ch, "postpone"; got != want {
-		t.Errorf("Postpone: %s, want %v", got, want)
-	}
+	got, want2 := <-ch, "postpone"
+	assert.Equalf(t, want2, got, "Postpone: %s, want %v", got, want2)
 
 	// Verify item has been removed from cache.
 	// Need to obtain lock to prevent data race.
@@ -331,9 +330,8 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	// postponeCount should be 1. Verify for two iterations.
-	if got, want := tsv.postponeCount.Load(), int64(1); got != want {
-		t.Errorf("tsv.postponeCount: %d, want %d", got, want)
-	}
+	got, want := tsv.postponeCount.Load(), int64(1)
+	assert.Equalf(t, want, got, "tsv.postponeCount: %d, want %d", got, want)
 
 	// Receive on this channel will allow the next postpone to go through.
 	<-ch
@@ -342,9 +340,8 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
 	}
-	if got, want := tsv.postponeCount.Load(), int64(1); got != want {
-		t.Errorf("tsv.postponeCount: %d, want %d", got, want)
-	}
+	got, want = tsv.postponeCount.Load(), int64(1)
+	assert.Equalf(t, want, got, "tsv.postponeCount: %d, want %d", got, want)
 	<-ch
 }
 
@@ -373,9 +370,8 @@ func TestMessageManagerSendError(t *testing.T) {
 	<-ch
 
 	// Ensure Postpone got called.
-	if got, want := <-postponech, "postpone"; got != want {
-		t.Errorf("Postpone: %s, want %v", got, want)
-	}
+	got, want := <-postponech, "postpone"
+	assert.Equalf(t, want, got, "Postpone: %s, want %v", got, want)
 }
 
 func TestMessageManagerFieldSendError(t *testing.T) {
@@ -418,7 +414,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, row1)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, row1)
 	}
 	mm.mu.Lock()
 	mm.cache.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2"), sqltypes.NULL}})
@@ -435,7 +431,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %+v, want %+v", got, row1)
+		assert.Failf(t, "unexpected result", "Received: %+v, want %+v", got, row1)
 	}
 }
 
@@ -484,7 +480,7 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, want)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, want)
 	}
 }
 
@@ -572,7 +568,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, want)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, want)
 	}
 }
 
@@ -624,9 +620,7 @@ func TestMessageManagerPoller(t *testing.T) {
 				break
 			}
 		}
-		if !found {
-			t.Errorf("row: %v not found in %v", gotrow, want)
-		}
+		assert.Truef(t, found, "row: %v not found in %v", gotrow, want)
 	}
 
 	// If there are no receivers, nothing should fire.
@@ -634,7 +628,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	runtime.Gosched()
 	select {
 	case row := <-r1.ch:
-		t.Errorf("Expecting no value, got: %v", row)
+		assert.Failf(t, "unexpected value", "Expecting no value, got: %v", row)
 	default:
 	}
 }
@@ -678,7 +672,7 @@ func TestMessagesPending1(t *testing.T) {
 		<-r1.ch
 	}
 	if d := time.Since(start); d > 15*time.Second {
-		t.Errorf("pending work trigger did not happen. Duration: %v", d)
+		assert.Failf(t, "pending work trigger missed", "pending work trigger did not happen. Duration: %v", d)
 	}
 }
 
@@ -711,7 +705,7 @@ func TestMessagesPending2(t *testing.T) {
 		<-r1.ch
 	}
 	if d := time.Since(start); d > 15*time.Second {
-		t.Errorf("pending work trigger did not happen. Duration: %v", d)
+		assert.Failf(t, "pending work trigger missed", "pending work trigger did not happen. Duration: %v", d)
 	}
 }
 
@@ -728,9 +722,8 @@ func TestMessageManagerPurge(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	// Ensure Purge got called.
-	if got, want := <-ch, "purge"; got != want {
-		t.Errorf("Purge: %s, want %v", got, want)
-	}
+	got, want := <-ch, "purge"
+	assert.Equalf(t, want, got, "Purge: %s, want %v", got, want)
 }
 
 func TestMMGenerate(t *testing.T) {
@@ -739,14 +732,12 @@ func TestMMGenerate(t *testing.T) {
 	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})
 	wantQuery := "update foo set time_acked = :time_acked, time_next = null where id in ::ids and time_acked is null"
-	if query != wantQuery {
-		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
-	}
+	assert.Equalf(t, wantQuery, query, "GenerateAckQuery query: %s, want %s", query, wantQuery)
 	bvv, _ := sqltypes.BindVariableToValue(bv["time_acked"])
 	gotAcked, _ := bvv.ToCastInt64()
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
-		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
+		assert.Failf(t, "acked too old", "gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
 	}
 	gotids := bv["ids"]
 	wantids := sqltypes.TestBindVariable([]any{[]byte{'1'}, []byte{'2'}})
@@ -754,17 +745,15 @@ func TestMMGenerate(t *testing.T) {
 
 	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
 	wantQuery = "update foo set time_next = :time_now + :wait_time + IF(FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter) < :min_backoff, :min_backoff, FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter)), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
-	if query != wantQuery {
-		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
-	}
+	assert.Equalf(t, wantQuery, query, "GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	if _, ok := bv["time_now"]; !ok {
-		t.Errorf("time_now is absent in %v", bv)
+		assert.Failf(t, "missing time_now", "time_now is absent in %v", bv)
 	} else {
 		// time_now cannot be compared.
 		delete(bv, "time_now")
 	}
 	if _, ok := bv["jitter"]; !ok {
-		t.Errorf("jitter is absent in %v", bv)
+		assert.Failf(t, "missing jitter", "jitter is absent in %v", bv)
 	} else {
 		// jitter cannot be compared.
 		delete(bv, "jitter")
@@ -778,14 +767,12 @@ func TestMMGenerate(t *testing.T) {
 
 	query, bv = mm.GeneratePurgeQuery(3)
 	wantQuery = "delete from foo where time_acked < :time_acked limit 500"
-	if query != wantQuery {
-		t.Errorf("GeneratePurgeQuery query: %s, want %s", query, wantQuery)
-	}
+	assert.Equalf(t, wantQuery, query, "GeneratePurgeQuery query: %s, want %s", query, wantQuery)
 	wantbv = map[string]*querypb.BindVariable{
 		"time_acked": sqltypes.Int64BindVariable(3),
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
-		t.Errorf("gotid: %v, want %v", bv, wantbv)
+		assert.Failf(t, "bv mismatch", "gotid: %v, want %v", bv, wantbv)
 	}
 }
 
@@ -798,17 +785,15 @@ func TestMMGenerateWithBackoff(t *testing.T) {
 
 	query, bv := mm.GeneratePostponeQuery([]string{"1", "2"})
 	wantQuery := "update foo set time_next = :time_now + :wait_time + IF(FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter) < :min_backoff, :min_backoff, IF(FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter) > :max_backoff, :max_backoff, FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter))), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
-	if query != wantQuery {
-		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
-	}
+	assert.Equalf(t, wantQuery, query, "GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	if _, ok := bv["time_now"]; !ok {
-		t.Errorf("time_now is absent in %v", bv)
+		assert.Failf(t, "missing time_now", "time_now is absent in %v", bv)
 	} else {
 		// time_now cannot be compared.
 		delete(bv, "time_now")
 	}
 	if _, ok := bv["jitter"]; !ok {
-		t.Errorf("jitter is absent in %v", bv)
+		assert.Failf(t, "missing jitter", "jitter is absent in %v", bv)
 	} else {
 		// jitter cannot be compared.
 		delete(bv, "jitter")
@@ -820,7 +805,7 @@ func TestMMGenerateWithBackoff(t *testing.T) {
 		"ids":         wantids,
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
-		t.Errorf("gotid: %v, want %v", bv, wantbv)
+		assert.Failf(t, "bv mismatch", "gotid: %v, want %v", bv, wantbv)
 	}
 }
 

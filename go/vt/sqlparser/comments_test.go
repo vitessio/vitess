@@ -319,7 +319,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 					case *DropView:
 						comments = s.Comments
 					default:
-						t.Errorf("Unexpected statement type %+v", s)
+						assert.Failf(t, "unexpected statement type", "Unexpected statement type %+v", s)
 					}
 
 					vals := comments.Directives()

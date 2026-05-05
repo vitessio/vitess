@@ -539,9 +539,8 @@ func TestERSForInitialization(t *testing.T) {
 	}
 	// Wait for mysql processes to start
 	for _, proc := range mysqlCtlProcessList {
-		if err := proc.Wait(); err != nil {
-			t.Fatalf("Error starting mysql: %s", err.Error())
-		}
+		err := proc.Wait()
+		require.NoError(t, err, "Error starting mysql")
 	}
 
 	for _, tablet := range tablets {

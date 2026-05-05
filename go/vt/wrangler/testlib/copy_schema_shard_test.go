@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -169,12 +170,12 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 
 	// Check call count on destinationPrimaryDb
 	if count := destinationPrimaryDb.GetQueryCalledNum(createDb); count != 1 {
-		t.Errorf("CopySchemaShard did not create the db exactly once. Query count: %v", count)
+		assert.Failf(t, "CopySchemaShard did not create the db exactly once", "Query count: %v", count)
 	}
 	if count := destinationPrimaryDb.GetQueryCalledNum(createTable); count != 1 {
-		t.Errorf("CopySchemaShard did not create the table exactly once. Query count: %v", count)
+		assert.Failf(t, "CopySchemaShard did not create the table exactly once", "Query count: %v", count)
 	}
 	if count := destinationPrimaryDb.GetQueryCalledNum(createTableView); count != 1 {
-		t.Errorf("CopySchemaShard did not create the table view exactly once. Query count: %v", count)
+		assert.Failf(t, "CopySchemaShard did not create the table view exactly once", "Query count: %v", count)
 	}
 }

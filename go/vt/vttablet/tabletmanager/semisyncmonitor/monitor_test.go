@@ -1064,7 +1064,7 @@ func TestDeadlockOnClose(t *testing.T) {
 		buf := make([]byte, 1<<16) // 64 KB buffer size
 		stackSize := runtime.Stack(buf, true)
 		log.Error("Stack trace:\n" + string(buf[:stackSize]))
-		t.Fatalf("Deadlock occurred while closing the monitor")
+		require.Fail(t, "Deadlock occurred while closing the monitor")
 	}
 }
 
@@ -1169,7 +1169,7 @@ func waitUntilWritingStopped(t *testing.T, m *Monitor) {
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("Timed out waiting for writing to stop: %v", ctx.Err())
+			require.Failf(t, "writing did not stop", "Timed out waiting for writing to stop: %v", ctx.Err())
 		case <-tick.C:
 			m.mu.Lock()
 			if !m.isWriting.Load() {

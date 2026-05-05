@@ -319,7 +319,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 	// We expect the problem to be resolved in less than 30 seconds.
 	select {
 	case <-time.After(30 * time.Second):
-		t.Errorf("Timed out waiting for semi-sync to be unblocked")
+		assert.Fail(t, "Timed out waiting for semi-sync to be unblocked")
 	case <-ch:
 		log.Error("Woohoo, write finished!")
 	}

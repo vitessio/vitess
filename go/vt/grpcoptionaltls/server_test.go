@@ -100,9 +100,7 @@ func TestOptionalTLS(t *testing.T) {
 		c := pb.NewGreeterClient(conn)
 		resp, err := c.SayHello(ctx, &pb.HelloRequest{Name: "Vittes"})
 		require.NoError(t, err)
-		if resp.Message != "Hello Vittes" {
-			t.Fatalf("unexpected reply %s", resp.Message)
-		}
+		require.Equalf(t, "Hello Vittes", resp.Message, "unexpected reply %s", resp.Message)
 	}
 
 	t.Run("Plain2TLS", func(t *testing.T) {

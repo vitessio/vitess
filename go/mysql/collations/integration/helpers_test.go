@@ -133,7 +133,7 @@ func verifyWeightString(t *testing.T, local colldata.Collation, remote *remote.C
 			"--collation", local.Name(),
 			"--input", hex.EncodeToString(text),
 		})
-		t.Fatalf("WEIGHT_STRING mismatch with collation %s (charset %s)\ninput:\n%s\nremote:\n%s\nlocal:\n%s\ngolden:\n%#v\n",
+		require.Failf(t, "WEIGHT_STRING mismatch", "WEIGHT_STRING mismatch with collation %s (charset %s)\ninput:\n%s\nremote:\n%s\nlocal:\n%s\ngolden:\n%#v\n",
 			local.Name(), local.Charset().Name(), hex.Dump(text), hex.Dump(remoteResult), hex.Dump(localResult), text)
 	}
 }

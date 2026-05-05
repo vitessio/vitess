@@ -19,11 +19,11 @@ package vdiff
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -330,11 +330,11 @@ func TestPerformVDiffAction(t *testing.T) {
 			}
 			vdiffenv.dbClient.Wait()
 			if tt.wantErr != nil && !vterrors.Equals(err, tt.wantErr) {
-				t.Errorf("Engine.PerformVDiffAction() error = %v, wantErr %v", err, tt.wantErr)
+				assert.Failf(t, "PerformVDiffAction error mismatch", "Engine.PerformVDiffAction() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Engine.PerformVDiffAction() = %v, want %v", got, tt.want)
+			if tt.want != nil {
+				assert.Equalf(t, tt.want, got, "Engine.PerformVDiffAction() = %v, want %v", got, tt.want)
 			}
 			if tt.postFunc != nil {
 				err := tt.postFunc()

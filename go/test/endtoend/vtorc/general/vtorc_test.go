@@ -58,7 +58,7 @@ func TestPrimaryElection(t *testing.T) {
 
 	for _, vttablet := range shard0.Vttablets {
 		if vttablet.Type == "rdonly" && primary.Alias == vttablet.Alias {
-			t.Errorf("Rdonly tablet promoted as primary - %v", primary.Alias)
+			assert.Failf(t, "rdonly promoted", "Rdonly tablet promoted as primary - %v", primary.Alias)
 		}
 	}
 

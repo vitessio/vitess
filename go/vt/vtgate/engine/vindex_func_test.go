@@ -18,9 +18,9 @@ package engine
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -224,29 +224,21 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 	}}
 	i := 0
 	err := vf.TryStreamExecute(t.Context(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
-		if !reflect.DeepEqual(qr, want[i]) {
-			t.Errorf("callback(%d):\n%v, want\n%v", i, qr, want[i])
-		}
+		assert.Equalf(t, want[i], qr, "callback(%d):\n%v, want\n%v", i, qr, want[i])
 		i++
 		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestVindexFuncGetFields(t *testing.T) {
 	vf := testVindexFunc(&uvindex{matchid: true})
 	got, err := vf.GetFields(t.Context(), nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
-	}
+	assert.Equalf(t, want, got, "Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
 }
 
 func TestFieldOrder(t *testing.T) {
@@ -254,17 +246,13 @@ func TestFieldOrder(t *testing.T) {
 	vf.Fields = sqltypes.MakeTestFields("keyspace_id|id|keyspace_id", "varbinary|varbinary|varbinary")
 	vf.Cols = []int{1, 0, 1}
 	got, err := vf.TryExecute(t.Context(), &noopVCursor{}, nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := sqltypes.MakeTestResult(
 		vf.Fields,
 		"foo|1|foo",
 		"bar|1|bar",
 	)
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
-	}
+	assert.Equalf(t, want, got, "Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
 }
 
 func testVindexFunc(v vindexes.SingleColumn) *VindexFunc {

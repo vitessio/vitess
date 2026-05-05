@@ -1431,7 +1431,7 @@ func TestOther(t *testing.T) {
 		}
 		cancel()
 		if evs, ok := <-ch; ok {
-			t.Fatalf("unexpected evs: %v", evs)
+			require.Failf(t, "unexpected evs", "%v", evs)
 		}
 	}
 	customRun("gtid")
@@ -1794,9 +1794,7 @@ func TestDDLDropColumn(t *testing.T) {
 	defer close(ch)
 	err := vstream(ctx, t, pos, nil, nil, ch, false)
 	want := "cannot determine table columns"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	assert.ErrorContains(t, err, want, "err: %v, must contain %s", err, want)
 }
 
 func TestUnsentDDL(t *testing.T) {
@@ -2455,9 +2453,7 @@ func TestNoFutureGTID(t *testing.T) {
 	defer close(ch)
 	err = vstream(ctx, t, future, nil, nil, ch, false)
 	want := vterrors.GTIDSetMismatch
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	assert.ErrorContains(t, err, want, "err: %v, must contain %s", err, want)
 }
 
 func TestFilteredMultipleWhere(t *testing.T) {

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -295,6 +296,6 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	got := fmt.Sprintf("%v", qr.Rows)
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+		assert.Failf(t, "query mismatch", "Query: %s (-want +got):\n%s", query, diff)
 	}
 }
