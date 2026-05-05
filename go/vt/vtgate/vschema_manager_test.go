@@ -1112,18 +1112,27 @@ func TestRoutingRulesAuthoritativeAfterSchemaTracker(t *testing.T) {
 		},
 	}
 
+	checkRule := func(t *testing.T, rr *vindexes.RoutingRule, wantAuthoritative bool, wantCols []vindexes.Column, label string) {
+		t.Helper()
+		require.NotNil(t, rr, label)
+		require.Len(t, rr.Tables, 1, label)
+		tbl := rr.Tables[0]
+		assert.Equal(t, wantAuthoritative, tbl.ColumnListAuthoritative, "%s authoritative state", label)
+		if !wantAuthoritative {
+			// When the rule is non-authoritative the routing rule's BaseTable is
+			// still a placeholder; columns aren't expected.
+			return
+		}
+		require.Len(t, tbl.Columns, len(wantCols), "%s column count", label)
+		for i, want := range wantCols {
+			assert.Equal(t, want.Name.String(), tbl.Columns[i].Name.String(),
+				"%s column[%d] name", label, i)
+		}
+	}
 	check := func(t *testing.T, vs *vindexes.VSchema, wantAColAuthoritative, wantBColAuthoritative bool) {
 		t.Helper()
-		rrA := vs.RoutingRules["table_a"]
-		require.NotNil(t, rrA)
-		require.Len(t, rrA.Tables, 1)
-		assert.Equal(t, wantAColAuthoritative, rrA.Tables[0].ColumnListAuthoritative,
-			"routing rule for table_a authoritative state")
-		rrB := vs.RoutingRules["table_b"]
-		require.NotNil(t, rrB)
-		require.Len(t, rrB.Tables, 1)
-		assert.Equal(t, wantBColAuthoritative, rrB.Tables[0].ColumnListAuthoritative,
-			"routing rule for table_b authoritative state")
+		checkRule(t, vs.RoutingRules["table_a"], wantAColAuthoritative, colsA, "routing rule for table_a")
+		checkRule(t, vs.RoutingRules["table_b"], wantBColAuthoritative, colsB, "routing rule for table_b")
 	}
 
 	t.Run("tracker populated when VSchemaUpdate fires", func(t *testing.T) {

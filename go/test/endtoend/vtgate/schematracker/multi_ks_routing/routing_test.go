@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -44,6 +45,9 @@ var (
 	//go:embed schema_b.sql
 	schemaB string
 
+	//go:embed vschema.json
+	emptyVSchema string
+
 	//go:embed routing_rules.json
 	routingRules string
 )
@@ -61,13 +65,16 @@ func TestMain(m *testing.M) {
 		}
 
 		// Two unsharded keyspaces, each with a single table on the tablet but
-		// EMPTY vschema (the schema tracker is the only source of column info).
-		ka := &cluster.Keyspace{Name: ksA, SchemaSQL: schemaA}
+		// an explicit empty vschema (the schema tracker is the only source of
+		// column info). The vschema is set explicitly rather than left to a
+		// default so the test always pins down the routing-rules-only +
+		// schema-tracker scenario regardless of vtctld defaults.
+		ka := &cluster.Keyspace{Name: ksA, SchemaSQL: schemaA, VSchema: emptyVSchema}
 		if err := clusterInstance.StartUnshardedKeyspace(*ka, 0, false, cell); err != nil {
 			fmt.Println(err)
 			return 1
 		}
-		kb := &cluster.Keyspace{Name: ksB, SchemaSQL: schemaB}
+		kb := &cluster.Keyspace{Name: ksB, SchemaSQL: schemaB, VSchema: emptyVSchema}
 		if err := clusterInstance.StartUnshardedKeyspace(*kb, 0, false, cell); err != nil {
 			fmt.Println(err)
 			return 1
@@ -85,6 +92,10 @@ func TestMain(m *testing.M) {
 		// vtgate runs with --schema-change-signal=true by default; the schema
 		// tracker is what populates columns for ks_a.table_a and ks_b.table_b.
 		if err := clusterInstance.StartVtgate(); err != nil {
+			fmt.Println(err)
+			return 1
+		}
+		if err := clusterInstance.WaitForVTGateAndVTTablets(time.Minute); err != nil {
 			fmt.Println(err)
 			return 1
 		}
