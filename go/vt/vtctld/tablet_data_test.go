@@ -116,7 +116,7 @@ func TestTabletData(t *testing.T) {
 	defer ts.Close()
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(t.Context(), "ks", &topodatapb.Keyspace{}); err != nil {
 		require.NoError(t, err)
 	}
 
@@ -142,7 +142,7 @@ func TestTabletData(t *testing.T) {
 	}()
 
 	// Start streaming and wait for the first result.
-	requestCtx, requestCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	requestCtx, requestCancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer requestCancel()
 	result, err := thc.Get(requestCtx, tablet1.Tablet.Alias)
 	close(stop)

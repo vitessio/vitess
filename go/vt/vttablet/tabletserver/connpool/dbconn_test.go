@@ -69,9 +69,9 @@ func TestDBConnExec(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -133,9 +133,9 @@ func TestDBConnExecLost(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -188,10 +188,10 @@ func TestDBConnDeadline(t *testing.T) {
 	defer connPool.Close()
 
 	db.SetConnDelay(100 * time.Millisecond)
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(50*time.Millisecond))
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(50*time.Millisecond))
 	defer cancel()
 
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -205,7 +205,7 @@ func TestDBConnDeadline(t *testing.T) {
 
 	startCounts = mysqlTimings.Counts()
 
-	ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	ctx, cancel = context.WithDeadline(t.Context(), time.Now().Add(10*time.Second))
 	defer cancel()
 
 	result, err := dbConn.Exec(ctx, sql, 1, false)
@@ -220,7 +220,7 @@ func TestDBConnDeadline(t *testing.T) {
 	startCounts = mysqlTimings.Counts()
 
 	// Test with just the Background context (with no deadline)
-	result, err = dbConn.Exec(context.Background(), sql, 1, false)
+	result, err = dbConn.Exec(t.Context(), sql, 1, false)
 	require.NoError(t, err)
 	expectedResult.Fields = nil
 	if !expectedResult.Equal(result) {
@@ -237,7 +237,7 @@ func TestDBConnKill(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -255,7 +255,7 @@ func TestDBConnKill(t *testing.T) {
 	err = dbConn.Kill("test kill", 0)
 	require.NoError(t, err)
 
-	err = dbConn.Reconnect(context.Background())
+	err = dbConn.Reconnect(t.Context())
 	require.NoError(t, err)
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
@@ -272,7 +272,7 @@ func TestDBKillWithContext(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -307,7 +307,7 @@ func TestDBConnCtxError(t *testing.T) {
 	}
 
 	t.Run("context cancel - non-tx exec", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		go func() {
 			time.Sleep(10 * time.Millisecond)
 			cancel()
@@ -318,7 +318,7 @@ func TestDBConnCtxError(t *testing.T) {
 	})
 
 	t.Run("context deadline - non-tx exec", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 		defer cancel()
 		testContextError(t, ctx, exec,
 			"(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded",
@@ -326,7 +326,7 @@ func TestDBConnCtxError(t *testing.T) {
 	})
 
 	t.Run("context cancel - tx exec", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		go func() {
 			time.Sleep(10 * time.Millisecond)
 			cancel()
@@ -337,7 +337,7 @@ func TestDBConnCtxError(t *testing.T) {
 	})
 
 	t.Run("context deadline - tx exec", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 		defer cancel()
 		testContextError(t, ctx, execOnce,
 			"(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded",
@@ -365,7 +365,7 @@ func TestDBConnStreamCtxError(t *testing.T) {
 	}
 
 	t.Run("context cancel - non-tx exec", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		go func() {
 			time.Sleep(10 * time.Millisecond)
 			cancel()
@@ -376,7 +376,7 @@ func TestDBConnStreamCtxError(t *testing.T) {
 	})
 
 	t.Run("context deadline - non-tx exec", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 		defer cancel()
 		testContextError(t, ctx, exec,
 			"(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded",
@@ -384,7 +384,7 @@ func TestDBConnStreamCtxError(t *testing.T) {
 	})
 
 	t.Run("context cancel - tx exec", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		go func() {
 			time.Sleep(10 * time.Millisecond)
 			cancel()
@@ -395,7 +395,7 @@ func TestDBConnStreamCtxError(t *testing.T) {
 	})
 
 	t.Run("context deadline - tx exec", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 		defer cancel()
 		testContextError(t, ctx, execOnce,
 			"(errno 3024) (sqlstate HY000): Query execution was interrupted, maximum statement execution time exceeded",
@@ -441,7 +441,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := NewConn(context.Background(), params, connPool.dbaPool, nil, tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestDBNoPoolConnKill"))
+	dbConn, err := NewConn(t.Context(), params, connPool.dbaPool, nil, tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestDBNoPoolConnKill"))
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -462,7 +462,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	err = dbConn.Kill("test kill", 0)
 	require.NoError(t, err)
 
-	err = dbConn.Reconnect(context.Background())
+	err = dbConn.Reconnect(t.Context())
 	require.NoError(t, err)
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
@@ -489,9 +489,9 @@ func TestDBConnStream(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(10*time.Second))
 	defer cancel()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
@@ -530,7 +530,7 @@ func TestDBConnStream(t *testing.T) {
 func TestDBConnKillCall(t *testing.T) {
 	t.Run("stream exec", func(t *testing.T) {
 		testKill(t, func(ctx context.Context, query string, dbconn *Conn) error {
-			return dbconn.Stream(context.Background(), query,
+			return dbconn.Stream(t.Context(), query,
 				func(r *sqltypes.Result) error { return nil },
 				alloc, 10, querypb.ExecuteOptions_ALL)
 		})
@@ -538,7 +538,7 @@ func TestDBConnKillCall(t *testing.T) {
 
 	t.Run("exec", func(t *testing.T) {
 		testKill(t, func(ctx context.Context, query string, dbconn *Conn) error {
-			_, err := dbconn.Exec(context.Background(), query, 1, false)
+			_, err := dbconn.Exec(t.Context(), query, 1, false)
 			return err
 		})
 	})
@@ -565,7 +565,7 @@ func testKill(t *testing.T, exec func(context.Context, string, *Conn) error) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	require.NoError(t, err)
 	defer dbConn.Close()
 
@@ -574,7 +574,7 @@ func testKill(t *testing.T, exec func(context.Context, string, *Conn) error) {
 		dbConn.Kill("kill connection called", 0)
 	}()
 
-	err = exec(context.Background(), sql, dbConn)
+	err = exec(t.Context(), sql, dbConn)
 	assert.ErrorContains(t, err, "kill connection called")
 }
 
@@ -587,7 +587,7 @@ func TestDBConnReconnect(t *testing.T) {
 	connPool.Open(params, params, params)
 	defer connPool.Close()
 
-	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	dbConn, err := newPooledConn(t.Context(), connPool, params)
 	require.NoError(t, err)
 	defer dbConn.Close()
 
@@ -598,7 +598,7 @@ func TestDBConnReconnect(t *testing.T) {
 	query := "select 1"
 	db.AddQuery(query, &sqltypes.Result{})
 
-	_, err = dbConn.Exec(context.Background(), query, 1, false)
+	_, err = dbConn.Exec(t.Context(), query, 1, false)
 	require.NoError(t, err)
 	require.NotEqual(t, oldConnID, dbConn.conn.ID())
 }
@@ -613,7 +613,7 @@ func TestDBConnReApplySetting(t *testing.T) {
 	connPool.Open(params, params, params)
 	defer connPool.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dbConn, err := newPooledConn(ctx, connPool, params)
 	require.NoError(t, err)
 	defer dbConn.Close()

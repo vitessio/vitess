@@ -549,7 +549,7 @@ type fakeBackupRestoreEnv struct {
 }
 
 func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	sqldb := fakesqldb.New(t)
@@ -1009,7 +1009,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			Logger: logutil.NewMemoryLogger(),
 		}
 
-		err := ExecuteBackupInitSQL(context.Background(), params)
+		err := ExecuteBackupInitSQL(t.Context(), params)
 		require.NoError(t, err)
 		assert.False(t, superReadOnlyDuringQueries, "super_read_only should be disabled during query execution")
 		assert.True(t, mysqld.SuperReadOnly.Load(), "super_read_only should be reset to true after queries complete")
@@ -1036,7 +1036,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			Logger: logutil.NewMemoryLogger(),
 		}
 
-		err := ExecuteBackupInitSQL(context.Background(), params)
+		err := ExecuteBackupInitSQL(t.Context(), params)
 		require.NoError(t, err)
 		assert.False(t, mysqld.SuperReadOnly.Load(), "super_read_only should remain false")
 	})
@@ -1064,7 +1064,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			Logger: logger,
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel() // Cancel immediately to simulate parent context cancellation
 
 		err := ExecuteBackupInitSQL(ctx, params)
@@ -1093,7 +1093,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				tc.params.Mysqld = mysqld
 			}
 
-			ctx := context.Background()
+			ctx := t.Context()
 			err := ExecuteBackupInitSQL(ctx, tc.params)
 
 			if tc.wantErr {

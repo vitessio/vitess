@@ -17,7 +17,6 @@ limitations under the License.
 package filelogger
 
 import (
-	"context"
 	"os"
 	"path"
 	"testing"
@@ -38,7 +37,7 @@ func TestFileLog(t *testing.T) {
 	defer logger.Stop()
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	log1 := &tabletenv.LogStats{
 		Ctx:         ctx,
@@ -82,7 +81,7 @@ func TestFileLogRedacted(t *testing.T) {
 	defer logger.Stop()
 	require.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	log1 := &tabletenv.LogStats{
 		Ctx:         ctx,

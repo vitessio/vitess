@@ -50,7 +50,7 @@ func TestHealthStreamerClosed(t *testing.T) {
 	}
 	blpFunc = testBlpFunc
 	hs := newHealthStreamer(env, alias, &schema.Engine{})
-	err := hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+	err := hs.Stream(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 		return nil
 	})
 	assert.Contains(t, err.Error(), "tabletserver is shutdown")

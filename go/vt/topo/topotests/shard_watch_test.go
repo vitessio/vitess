@@ -34,7 +34,7 @@ import (
 
 // waitForInitialShard waits for the initial Shard to appear.
 func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) (current *topo.WatchShardData, changes <-chan *topo.WatchShardData, cancel context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	start := time.Now()
 	var err error
 	for {
@@ -69,7 +69,7 @@ func TestWatchShard(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "0"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
@@ -180,7 +180,7 @@ func TestWatchShardCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
 	shard := "0"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()

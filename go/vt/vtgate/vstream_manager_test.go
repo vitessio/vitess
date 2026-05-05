@@ -89,7 +89,7 @@ func TestVStreamSkew(t *testing.T) {
 	for idx, tcase := range tcases {
 		t.Run("", func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 
 				ks := fmt.Sprintf("TestVStreamSkew-%d", idx)
@@ -1770,7 +1770,7 @@ func TestResolveVStreamParams(t *testing.T) {
 		}},
 	}
 	for _, tcase := range testcases {
-		vgtid, filter, flags, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
+		vgtid, filter, flags, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
 		if tcase.err != "" {
 			if err == nil || !strings.Contains(err.Error(), tcase.err) {
 				t.Errorf("resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
@@ -1815,7 +1815,7 @@ func TestResolveVStreamParams(t *testing.T) {
 		input := &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{tcase.input},
 		}
-		vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
+		vgtid, _, _, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, input, nil, nil)
 		require.NoError(t, err, tcase.input)
 		if got, expectTestVStreamShardNumber := len(vgtid.ShardGtids), 8; expectTestVStreamShardNumber >= got {
 			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
@@ -1835,7 +1835,7 @@ func TestResolveVStreamParams(t *testing.T) {
 					Gtid:     "current",
 				}},
 			}
-			_, _, flags2, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, vgtid, nil, flags)
+			_, _, flags2, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, vgtid, nil, flags)
 			require.NoError(t, err)
 			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
 		})

@@ -60,7 +60,7 @@ type testMaterializerEnv struct {
 
 func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, sources, targets []string) (*testMaterializerEnv, context.Context) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	env := &testMaterializerEnv{
 		ms:       ms,
 		sources:  sources,

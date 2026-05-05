@@ -102,25 +102,21 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 }
 
 func TestBasic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	fromTS, toTS := createSetup(ctx, t)
 
 	// check keyspace copy
 	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 	keyspaces, err := toTS.GetKeyspaces(ctx)
 	require.NoError(t, err)
-	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
-		t.Fatalf("unexpected keyspaces: %v", keyspaces)
-	}
+	require.Truef(t, len(keyspaces) == 1 && keyspaces[0] == "test_keyspace", "unexpected keyspaces: %v", keyspaces)
 	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 
 	// check shard copy
 	CopyShards(ctx, fromTS, toTS)
 	shards, err := toTS.GetShardNames(ctx, "test_keyspace")
 	require.NoError(t, err)
-	if len(shards) != 1 || shards[0] != "0" {
-		t.Fatalf("unexpected shards: %v", shards)
-	}
+	require.Truef(t, len(shards) == 1 && shards[0] == "0", "unexpected shards: %v", shards)
 	CopyShards(ctx, fromTS, toTS)
 
 	// check ShardReplication copy
@@ -129,24 +125,18 @@ func TestBasic(t *testing.T) {
 	CopyShardReplications(ctx, fromTS, toTS)
 	sr, err := toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	require.NoError(t, err)
-	if len(sr.Nodes) != 2 {
-		t.Fatalf("unexpected ShardReplication: %v", sr)
-	}
+	require.Lenf(t, sr.Nodes, 2, "unexpected ShardReplication: %v", sr)
 
 	// check ShardReplications is idempotent
 	CopyShardReplications(ctx, fromTS, toTS)
 	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
 	require.NoError(t, err)
-	if len(sr.Nodes) != 2 {
-		t.Fatalf("unexpected ShardReplication after second copy: %v", sr)
-	}
+	require.Lenf(t, sr.Nodes, 2, "unexpected ShardReplication after second copy: %v", sr)
 
 	// check tablet copy
 	CopyTablets(ctx, fromTS, toTS)
 	tablets, err := toTS.GetTabletAliasesByCell(ctx, "test_cell")
 	require.NoError(t, err)
-	if len(tablets) != 2 || tablets[0].Uid != 123 || tablets[1].Uid != 234 {
-		t.Fatalf("unexpected tablets: %v", tablets)
-	}
+	require.Truef(t, len(tablets) == 2 && tablets[0].Uid == 123 && tablets[1].Uid == 234, "unexpected tablets: %v", tablets)
 	CopyTablets(ctx, fromTS, toTS)
 }

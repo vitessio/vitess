@@ -489,7 +489,7 @@ func testReshardV2Workflow(t *testing.T) {
 	// in order to confirm that no writes are lost in either the customer
 	// table or the customer_name and enterprise_customer materializations
 	// against it during the Reshard and all of the traffic switches.
-	dataGenCtx, dataGenCancel := context.WithCancel(context.Background())
+	dataGenCtx, dataGenCancel := context.WithCancel(t.Context())
 	defer dataGenCancel()
 	dataGenConn, dataGenCloseConn := getVTGateConn()
 	defer dataGenCloseConn()

@@ -17,7 +17,6 @@ limitations under the License.
 package helpers
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,14 +25,12 @@ import (
 )
 
 func TestBasicCompare(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	fromTS, toTS := createSetup(ctx, t)
 
 	// check compare keyspace compare
 	err := CompareKeyspaces(ctx, fromTS, toTS)
-	if err == nil {
-		t.Fatalf("Compare keyspaces is not failing when topos are not in sync")
-	}
+	require.Error(t, err, "Compare keyspaces is not failing when topos are not in sync")
 
 	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 
@@ -42,9 +39,7 @@ func TestBasicCompare(t *testing.T) {
 
 	// check shard copy
 	err = CompareShards(ctx, fromTS, toTS)
-	if err == nil {
-		t.Fatalf("Compare shards is not failing when topos are not in sync")
-	}
+	require.Error(t, err, "Compare shards is not failing when topos are not in sync")
 
 	CopyShards(ctx, fromTS, toTS)
 
@@ -53,9 +48,7 @@ func TestBasicCompare(t *testing.T) {
 
 	// check ShardReplication compare
 	err = CompareShardReplications(ctx, fromTS, toTS)
-	if err == nil {
-		t.Fatalf("Compare shard replications is not failing when topos are not in sync")
-	}
+	require.Error(t, err, "Compare shard replications is not failing when topos are not in sync")
 
 	CopyShardReplications(ctx, fromTS, toTS)
 
@@ -64,9 +57,7 @@ func TestBasicCompare(t *testing.T) {
 
 	// check tablet compare
 	err = CompareTablets(ctx, fromTS, toTS)
-	if err == nil {
-		t.Fatalf("Compare tablets is not failing when topos are not in sync")
-	}
+	require.Error(t, err, "Compare tablets is not failing when topos are not in sync")
 
 	CopyTablets(ctx, fromTS, toTS)
 
@@ -74,9 +65,7 @@ func TestBasicCompare(t *testing.T) {
 	require.NoError(t, err)
 
 	err = CompareRoutingRules(ctx, fromTS, toTS)
-	if err == nil {
-		t.Fatalf("Compare routing rules is not failing when topos are not in sync")
-	}
+	require.Error(t, err, "Compare routing rules is not failing when topos are not in sync")
 
 	CopyRoutingRules(ctx, fromTS, toTS)
 

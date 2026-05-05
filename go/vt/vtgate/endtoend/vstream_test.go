@@ -63,7 +63,7 @@ func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mys
 }
 
 func TestVStream(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
@@ -168,7 +168,7 @@ func TestVStream(t *testing.T) {
 }
 
 func TestVStreamCopyBasic(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
@@ -264,7 +264,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 // - If the keyspace contains wildcards and the shard is not specified, the copy operation should be performed on all shards of all matching keyspaces.
 // - If the keyspace is specified and the shard is not specified, the copy operation should be performed on all shards of the specified keyspace.
 func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -385,7 +385,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 }
 
 func TestVStreamCopyResume(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
@@ -615,7 +615,7 @@ func TestVStreamCopyResume(t *testing.T) {
 }
 
 func TestVStreamCurrent(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
@@ -669,7 +669,7 @@ func TestVStreamCurrent(t *testing.T) {
 }
 
 func TestVStreamSharded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
@@ -773,7 +773,7 @@ func TestVStreamSharded(t *testing.T) {
 // TestVStreamCopyTransactions tests that we are properly wrapping
 // ROW events in the stream with BEGIN and COMMIT events.
 func TestVStreamCopyTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	keyspace := "ks"
 	shards := []string{"-80", "80-"}

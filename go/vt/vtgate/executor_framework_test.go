@@ -128,7 +128,7 @@ func init() {
 
 func createExecutorEnvCallback(t testing.TB, eConfig ExecutorConfig, eachShard func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn)) (executor *Executor, ctx context.Context) {
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 
@@ -214,7 +214,7 @@ func createExecutorEnvWithConfig(t testing.TB, eConfig ExecutorConfig) (executor
 
 func createCustomExecutor(t testing.TB, vschema string, mysqlVersion string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 
@@ -264,7 +264,7 @@ func createExecutorConfigWithNormalizer() ExecutorConfig {
 
 func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 

@@ -17,7 +17,6 @@ limitations under the License.
 package integration
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -43,7 +42,7 @@ func init() {
 }
 
 func mysqlconn(t *testing.T) *mysql.Conn {
-	conn, err := mysql.Connect(context.Background(), &connParams)
+	conn, err := mysql.Connect(t.Context(), &connParams)
 	if err != nil {
 		t.Fatal(err)
 	}

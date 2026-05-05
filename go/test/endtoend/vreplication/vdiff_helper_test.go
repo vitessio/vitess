@@ -214,7 +214,7 @@ type vdiffResult struct {
 // execVDiffWithRetry will ignore transient errors that can occur during workflow state changes.
 func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, error) {
 	log.Info(fmt.Sprintf("Executing vdiff with retry with args: %+v", args))
-	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout*3)
+	ctx, cancel := context.WithTimeout(t.Context(), vdiffRetryTimeout*3)
 	defer cancel()
 	vdiffResultCh := make(chan vdiffResult)
 	go func() {

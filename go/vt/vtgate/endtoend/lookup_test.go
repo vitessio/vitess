@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -32,7 +31,7 @@ import (
 )
 
 func TestConsistentLookup(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)
@@ -169,7 +168,7 @@ func TestConsistentLookup(t *testing.T) {
 }
 
 func TestConsistentLookupMultiInsert(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)
@@ -226,7 +225,7 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 }
 
 func TestLookupMultiInsertIgnore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)
@@ -266,7 +265,7 @@ func TestLookupMultiInsertIgnore(t *testing.T) {
 }
 
 func TestConsistentLookupMultiInsertIgnore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)

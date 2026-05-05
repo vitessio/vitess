@@ -517,7 +517,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
+	env.SchemaEngine.Reload(t.Context())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -824,7 +824,7 @@ func testPlayerCopyTables(t *testing.T) {
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 5)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	type logTestCase struct {
 		name string
@@ -1875,7 +1875,7 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 func testCopyTablesWithInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	conn, err := env.Mysqld.GetDbaConnection(context.Background())
+	conn, err := env.Mysqld.GetDbaConnection(t.Context())
 	require.NoError(t, err)
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
@@ -1984,7 +1984,7 @@ func testCopyInvisibleColumns(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
+	env.SchemaEngine.Reload(t.Context())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{

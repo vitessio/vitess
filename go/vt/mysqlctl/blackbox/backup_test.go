@@ -349,7 +349,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
 	// Cancel the context deliberately
-	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
+	cancelledCtx, cancelCtx := context.WithCancel(t.Context())
 	cancelCtx()
 
 	backupResult, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{

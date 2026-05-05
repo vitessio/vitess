@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -101,7 +100,7 @@ func TestShouldOptimizePlan(t *testing.T) {
 
 // TestDeferredOptimization tests plan output with deferred optimization.
 func TestDeferredOptimization(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	env := vtenv.NewTestEnv()
 	cfg := &evalengine.Config{
 		Environment: env,

@@ -179,11 +179,11 @@ func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schem
 		assert.Equalf(t, eval, comp, "bad evaluation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, eval, comp)
 		assert.Equalf(t, expected.Collation(), res.Collation(), "bad collation from compiler:\nSQL:  %s\nEval: %s\nComp: %s", query, colldata.Lookup(expected.Collation()).Name(), colldata.Lookup(res.Collation()).Name())
 	case vmErr == nil:
-		t.Errorf("failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
+		assert.Failf(t, "failed evaluation from evalengine", "failed evaluation from evalengine:\nSQL:  %s\nError: %s", query, evalErr)
 	case evalErr == nil:
-		t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
+		assert.Failf(t, "failed evaluation from compiler", "failed evaluation from compiler:\nSQL:  %s\nError: %s", query, vmErr)
 	case evalErr.Error() != vmErr.Error():
-		t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
+		assert.Failf(t, "error mismatch", "error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
 	}
 }
 
@@ -832,19 +832,15 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			env := evalengine.NewExpressionEnv(context.Background(), nil, evalengine.NewEmptyVCursor(venv, tz))
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, tz))
 			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 123456000, tz))
 			env.Row = tc.values
 
 			expected, err := env.EvaluateAST(converted)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if expected.String() != tc.result {
-				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
-			}
-			if tc.collation != collations.Unknown && tc.collation != expected.Collation() {
-				t.Fatalf("bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
+			require.NoError(t, err)
+			require.Equalf(t, tc.result, expected.String(), "bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
+			if tc.collation != collations.Unknown {
+				require.Equalf(t, tc.collation, expected.Collation(), "bad collation evaluation from eval engine: got %d, want %d", expected.Collation(), tc.collation)
 			}
 
 			if tc.typeWanted.Type() != sqltypes.Unknown {
@@ -856,15 +852,11 @@ func TestCompilerSingle(t *testing.T) {
 			// re-run the same evaluation multiple times to ensure results are always consistent
 			for i := range 8 {
 				res, err := env.Evaluate(converted)
-				if err != nil {
-					t.Fatal(err)
-				}
+				require.NoError(t, err)
 
-				if res.String() != tc.result {
-					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
-				}
-				if tc.collation != collations.Unknown && tc.collation != res.Collation() {
-					t.Fatalf("bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
+				assert.Equalf(t, tc.result, res.String(), "bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
+				if tc.collation != collations.Unknown {
+					require.Equalf(t, tc.collation, res.Collation(), "bad collation evaluation from compiler: got %d, want %d", res.Collation(), tc.collation)
 				}
 			}
 		})
@@ -928,23 +920,14 @@ func TestBindVarLiteral(t *testing.T) {
 			}
 
 			expected, err := env.EvaluateAST(converted)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if expected.String() != result {
-				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), result)
-			}
+			require.NoError(t, err)
+			require.Equalf(t, result, expected.String(), "bad evaluation from eval engine: got %s, want %s", expected.String(), result)
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
 			for i := range 8 {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if res.String() != result {
-					t.Errorf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, result, i)
-				}
+				require.NoError(t, err)
+				assert.Equalf(t, result, res.String(), "bad evaluation from compiler: got %s, want %s (iteration %d)", res, result, i)
 			}
 		})
 	}
@@ -1079,25 +1062,16 @@ func TestCompilerNonConstant(t *testing.T) {
 			var prev string
 			for range 1000 {
 				expected, err := env.EvaluateAST(converted)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if expected.String() == prev {
-					t.Fatalf("constant evaluation from eval engine: got %s multiple times", expected.String())
-				}
+				require.NoError(t, err)
+				require.NotEqualf(t, prev, expected.String(), "constant evaluation from eval engine: got %s multiple times", expected.String())
 				prev = expected.String()
 			}
 
 			// re-run the same evaluation multiple times to ensure results are always consistent
 			for range 1000 {
 				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if res.String() == prev {
-					t.Fatalf("constant evaluation from eval engine: got %s multiple times", res.String())
-				}
+				require.NoError(t, err)
+				require.NotEqualf(t, prev, res.String(), "constant evaluation from eval engine: got %s multiple times", res.String())
 				prev = res.String()
 			}
 		})

@@ -219,7 +219,7 @@ func TestCreateDbaTCPUser(t *testing.T) {
 	}()
 
 	// Ensure that the vt_dba_tcp user was created and can connect through TCP/IP connection.
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:  "127.0.0.1",
 		Uname: "vt_dba_tcp",
@@ -249,7 +249,7 @@ func TestCanGetKeyspaces(t *testing.T) {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	assertGetKeyspaces(ctx, t, clusterInstance)
 }
@@ -264,7 +264,7 @@ func TestGatewayInitialTabletTimeout(t *testing.T) {
 	defer cluster.TearDown()
 
 	// Verify the cluster is functional by getting keyspaces
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	assertGetKeyspaces(ctx, t, cluster)
 }
@@ -291,7 +291,7 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	assertGetKeyspaces(ctx, t, cluster)
 }
@@ -432,7 +432,7 @@ func execOnCluster(cluster vttest.LocalCluster, keyspace string, f func(*mysql.C
 func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected columnVindex) {
 	server := fmt.Sprintf("localhost:%v", cluster.GrpcPort())
 	args := []string{"GetVSchema", expected.keyspace}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
 		var keyspace vschemapb.Keyspace

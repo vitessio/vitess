@@ -382,7 +382,7 @@ func TestGetSemiSyncStats(t *testing.T) {
 			}()
 
 			db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), tt.res)
-			conn, err := m.appPool.Get(context.Background())
+			conn, err := m.appPool.Get(t.Context())
 			require.NoError(t, err)
 			defer conn.Recycle()
 
@@ -944,7 +944,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	m.Open()
 
 	// When everything is unblocked, then this should return without blocking.
-	err := m.WaitUntilSemiSyncUnblocked(context.Background())
+	err := m.WaitUntilSemiSyncUnblocked(t.Context())
 	require.NoError(t, err)
 
 	// Now we set the monitor to be blocked by changing the state.
@@ -960,7 +960,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	// Start a cancellable context and use that to wait.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	wg.Add(1)
 	var ctxErr error
@@ -975,7 +975,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	// Start another go routine, also waiting for semi-sync being unblocked, but not using the cancellable context.
 	wg.Go(func() {
-		err := m.WaitUntilSemiSyncUnblocked(context.Background())
+		err := m.WaitUntilSemiSyncUnblocked(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -994,7 +994,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	// Now we set the monitor to be unblocked by changing the state
 	handler.semisyncBlocked.Store(false)
 
-	err = m.WaitUntilSemiSyncUnblocked(context.Background())
+	err = m.WaitUntilSemiSyncUnblocked(t.Context())
 	require.NoError(t, err)
 	// This should unblock the second wait.
 	wg.Wait()
@@ -1007,7 +1007,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	// Also verify that if the monitor is closed, we don't wait.
 	m.Close()
-	err = m.WaitUntilSemiSyncUnblocked(context.Background())
+	err = m.WaitUntilSemiSyncUnblocked(t.Context())
 	require.NoError(t, err)
 	require.True(t, m.isClosed())
 }
@@ -1119,7 +1119,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 
 	// Initially writes aren't blocked and the wait returns immediately.
 	require.False(t, m.AllWritesBlocked())
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	err := m.WaitUntilSemiSyncUnblocked(ctx)
 	require.NoError(t, err)
@@ -1134,7 +1134,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 	// Start a waiter.
 	var waitFinished atomic.Bool
 	go func() {
-		err := m.WaitUntilSemiSyncUnblocked(context.Background())
+		err := m.WaitUntilSemiSyncUnblocked(t.Context())
 		require.NoError(t, err)
 		waitFinished.Store(true)
 	}()
@@ -1161,7 +1161,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 // in the next check of stillBlocked.
 func waitUntilWritingStopped(t *testing.T, m *Monitor) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()

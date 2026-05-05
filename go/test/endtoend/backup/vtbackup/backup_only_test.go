@@ -256,7 +256,7 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 		extraArgs = append(extraArgs, "--disable-redo-log")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	if !initialBackup && disableRedoLog {

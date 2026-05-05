@@ -249,7 +249,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 }
 
 func TestVReplicationTimeUpdated(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
 		"create table t1(id int, val varchar(128), primary key(id))",
@@ -1343,7 +1343,7 @@ func TestUnicode(t *testing.T) {
 	}}
 
 	// We need a latin1 connection.
-	conn, err := env.Mysqld.GetDbaConnection(context.Background())
+	conn, err := env.Mysqld.GetDbaConnection(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2140,7 +2140,7 @@ func TestPlayerDDL(t *testing.T) {
 }
 
 func TestGTIDCompress(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	defer deleteTablet(addTablet(100))
 	err := env.Mysqld.ExecuteSuperQuery(ctx, "insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state,db_name, options) values (1, '', '', '', 0,0,0,0,'Stopped','', '{}')")
 	require.NoError(t, err)
@@ -2976,7 +2976,7 @@ func TestTimestamp(t *testing.T) {
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
-	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select now()")
+	qr, err := env.Mysqld.FetchSuperQuery(t.Context(), "select now()")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3230,7 +3230,7 @@ func TestVReplicationLogs(t *testing.T) {
 	for _, want := range expected {
 		t.Run("", func(t *testing.T) {
 			insertLog(vdbc, LogMessage, 1, binlogdatapb.VReplicationWorkflowState_Running.String(), "message1")
-			qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
+			qr, err := env.Mysqld.FetchSuperQuery(t.Context(), query)
 			require.NoError(t, err)
 			require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
 		})
@@ -3330,11 +3330,11 @@ func TestPlayerInvalidDates(t *testing.T) {
 	execStatements(t, []string{"set sql_mode=''", "insert into src1 values(1, '0000-00-00')", "set sql_mode='STRICT_TRANS_TABLES'"})
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
+	if err := env.Mysqld.ExecuteSuperQuery(t.Context(), "SET @@global.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')"); err != nil {
 		fmt.Fprintf(os.Stderr, "%v", err)
 	}
 	defer func() {
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
+		if err := env.Mysqld.ExecuteSuperQuery(t.Context(), "SET @@global.sql_mode=REPLACE(@@global.sql_mode, ',NO_ZERO_DATE,NO_ZERO_IN_DATE','')"); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 		}
 	}()
@@ -4047,7 +4047,7 @@ func TestPlayerStalls(t *testing.T) {
 				"update t1 set val1 = 'yyy' where id = 10",
 			},
 			preFunc: func() {
-				dbc, err := env.Mysqld.GetAllPrivsConnection(context.Background())
+				dbc, err := env.Mysqld.GetAllPrivsConnection(t.Context())
 				require.NoError(t, err)
 				_, err = dbc.ExecuteFetch("begin", 1, false)
 				require.NoError(t, err)
@@ -4110,7 +4110,7 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 	} else {
 		query = fmt.Sprintf("select * from %s where id=%d", table, id)
 	}
-	qr, err := exec(context.Background(), query)
+	qr, err := exec(t.Context(), query)
 	require.NoError(t, err)
 	if len(values) != len(qr.Rows) {
 		t.Fatalf("row counts don't match: %d, want %d", len(qr.Rows), len(values))

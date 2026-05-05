@@ -89,7 +89,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	defer execStatements(t, []string{
@@ -103,7 +103,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 		"create table t2a(id21 int, id22 int, primary key(id21))",
 		"create table t2b(id21 int, id22 int, primary key(id21))",
 	})
-	engine.se.Reload(context.Background())
+	engine.se.Reload(t.Context())
 
 	getUVStreamer := func(filter *binlogdatapb.Filter, tablePKs []*binlogdatapb.TableLastPK) *uvstreamer {
 		uvs := &uvstreamer{
@@ -174,7 +174,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	defer execStatements(t, []string{
@@ -187,7 +187,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	defer func() { uvstreamerTestMode = false }()
 	initialize(t)
 
-	if err := engine.se.Reload(context.Background()); err != nil {
+	if err := engine.se.Reload(t.Context()); err != nil {
 		t.Fatal("Error reloading schema")
 	}
 
@@ -377,7 +377,7 @@ func initTables(t *testing.T, tables []string) {
 		positions[table+"BulkInsert"] = primaryPosition(t)
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
-			ctx := context.Background()
+			ctx := t.Context()
 			if tableName == "t1" {
 				idx := 1
 				id := numInitialRows + 1
@@ -399,7 +399,7 @@ func initTables(t *testing.T, tables []string) {
 		}
 	}
 	callbacks["LASTPK.*t2.*complete"] = func() {
-		ctx := context.Background()
+		ctx := t.Context()
 		idx := 1
 		id := numInitialRows + 100
 		table := "t1"

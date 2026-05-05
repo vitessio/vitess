@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -97,13 +96,13 @@ func TestStreamConsolidation(t *testing.T) {
 
 	defaultPoolSize := framework.Server.StreamPoolSize()
 
-	err = framework.Server.SetStreamPoolSize(context.Background(), 4)
+	err = framework.Server.SetStreamPoolSize(t.Context(), 4)
 	require.NoError(t, err)
 
 	framework.Server.SetStreamConsolidationBlocking(true)
 
 	defer func() {
-		_ = framework.Server.SetStreamPoolSize(context.Background(), defaultPoolSize)
+		_ = framework.Server.SetStreamPoolSize(t.Context(), defaultPoolSize)
 		framework.Server.SetStreamConsolidationBlocking(false)
 	}()
 

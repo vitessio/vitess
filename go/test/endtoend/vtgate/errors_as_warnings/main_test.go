@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -103,11 +102,11 @@ func TestScatterErrsAsWarns(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("test kills primary on source shard, but query will be on target shard so it will be skipped")
 	}
-	oltp, err := mysql.Connect(context.Background(), &vtParams)
+	oltp, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer oltp.Close()
 
-	olap, err := mysql.Connect(context.Background(), &vtParams)
+	olap, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer olap.Close()
 

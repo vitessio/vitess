@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -35,7 +34,7 @@ import (
 // executing it, then kills the connection (using another
 // connection). We make sure we get the right error code.
 func TestKill(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +82,7 @@ func TestKill(t *testing.T) {
 // connection from the server side, then waits a bit, and tries to
 // execute a command. We make sure we get the right error code.
 func TestKill2006(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +108,7 @@ func TestKill2006(t *testing.T) {
 
 // TestDupEntry tests a duplicate key is properly raised.
 func TestDupEntry(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +130,7 @@ func TestClientFoundRows(t *testing.T) {
 	params := connParams
 	params.EnableClientFoundRows()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +153,7 @@ func TestClientFoundRows(t *testing.T) {
 }
 
 func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
-	ctx := context.Background()
+	ctx := t.Context()
 	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF
 
 	conn, err := mysql.Connect(ctx, &connParams)
@@ -269,7 +268,7 @@ func TestTLS(t *testing.T) {
 	require.True(t, strings.Contains(output, "Cipher in use is"), "cannot connect via SSL: %v", output)
 
 	// Now connect with our client.
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		t.Fatal(err)
@@ -287,7 +286,7 @@ func TestTLS(t *testing.T) {
 
 func TestReplicationStatus(t *testing.T) {
 	params := connParams
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		t.Fatal(err)
@@ -299,7 +298,7 @@ func TestReplicationStatus(t *testing.T) {
 }
 
 func TestSessionTrackGTIDs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	params := connParams
 	params.Flags |= mysql.CapabilityClientSessionTrack
 	conn, err := mysql.Connect(ctx, &params)
@@ -319,7 +318,7 @@ func TestSessionTrackGTIDs(t *testing.T) {
 }
 
 func TestCachingSha2Password(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// connect as an existing user to create a user account with caching_sha2_password
 	params := connParams
@@ -360,7 +359,7 @@ func TestCachingSha2Password(t *testing.T) {
 func TestClientInfo(t *testing.T) {
 	const infoPrepared = "Statement prepared"
 
-	ctx := context.Background()
+	ctx := t.Context()
 	params := connParams
 	params.EnableQueryInfo = true
 	conn, err := mysql.Connect(ctx, &params)
@@ -376,7 +375,7 @@ func TestClientInfo(t *testing.T) {
 
 func TestBaseShowTables(t *testing.T) {
 	params := connParams
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -391,7 +390,7 @@ func TestBaseShowTables(t *testing.T) {
 func TestBaseShowTablesFilePos(t *testing.T) {
 	params := connParams
 	params.Flavor = "FilePos"
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -405,7 +404,7 @@ func TestBaseShowTablesFilePos(t *testing.T) {
 
 // TestMaxRows tests the maxRows parameter of ExecuteFetch.
 func TestMaxRows(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &connParams)
+	conn, err := mysql.Connect(t.Context(), &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

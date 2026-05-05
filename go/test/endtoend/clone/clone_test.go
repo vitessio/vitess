@@ -302,7 +302,7 @@ func createMysqldForTablet(tablet *cluster.Vttablet) *mysqlctl.Mysqld {
 
 // TestCloneRemote tests MySQL CLONE INSTANCE functionality
 func TestCloneRemote(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 6*time.Minute)
 	defer cancel()
 
 	// Connect to donor and insert test data

@@ -1266,7 +1266,7 @@ const (
 
 func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
 	// Stream for a while to ensure heartbeats are sent.
-	ctx, cancel := context.WithTimeout(context.Background(), vstreamHeartbeatsTestContextTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), vstreamHeartbeatsTestContextTimeout)
 	defer cancel()
 
 	numRowEvents = make(map[string]int)
@@ -1400,7 +1400,7 @@ func TestVStreamHeartbeats(t *testing.T) {
 // It also confirms that we use the proper collation for the VStream filter when
 // using VARCHAR fields.
 func TestVStreamPushdownFilters(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 	setSidecarDBName("_vt")
 	config := *mainClusterConfig
@@ -1431,7 +1431,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	require.NoError(t, err)
 
 	// Coordinate go-routines.
-	streamCtx, streamCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	streamCtx, streamCancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer streamCancel()
 	done := make(chan struct{})
 

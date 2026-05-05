@@ -19,7 +19,6 @@ limitations under the License.
 package integration
 
 import (
-	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -263,7 +262,7 @@ func TestMySQL(t *testing.T) {
 	require.NoError(t, err)
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
-			ctx := callerid.NewContext(context.Background(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{
+			ctx := callerid.NewContext(t.Context(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{
 				Username: "vt_dba",
 			})
 			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{env: venv})

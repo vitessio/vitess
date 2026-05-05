@@ -142,7 +142,7 @@ func TestReceiverCancel(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(0)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go cancel()
 	_ = mm.Subscribe(ctx, r1.rcv)
 
@@ -190,7 +190,7 @@ func TestMessageManagerAdd(t *testing.T) {
 
 	r1 := newTestReceiver(0)
 	go func() { <-r1.ch }()
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 
 	if !mm.Add(row1) {
 		t.Error("Add(1 receiver): false, want true")
@@ -213,7 +213,7 @@ func TestMessageManagerSend(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 
 	want := &sqltypes.Result{
 		Fields: testFields,
@@ -267,7 +267,7 @@ func TestMessageManagerSend(t *testing.T) {
 
 	// Test that mm stops sending to a canceled receiver.
 	r2 := newTestReceiver(1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	mm.Subscribe(ctx, r2.rcv)
 	<-r2.ch
 
@@ -307,7 +307,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 	<-r1.ch
 
 	// Set the channel to verify call to Postpone.
@@ -322,7 +322,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 
 	// Set up a second subscriber, add a message.
 	r2 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r2.rcv)
+	mm.Subscribe(t.Context(), r2.rcv)
 	<-r2.ch
 
 	// Wait.
@@ -353,7 +353,7 @@ func TestMessageManagerSendError(t *testing.T) {
 	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), semaphore.NewWeighted(1))
 	mm.Open()
 	defer mm.Close()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ch := make(chan *sqltypes.Result)
 	go func() { <-ch }()
@@ -382,7 +382,7 @@ func TestMessageManagerFieldSendError(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), semaphore.NewWeighted(1))
 	mm.Open()
 	defer mm.Close()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ch := make(chan *sqltypes.Result)
 	go func() { <-ch }()
@@ -404,7 +404,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 	<-r1.ch
 
 	row1 := &MessageRow{
@@ -474,7 +474,7 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 	<-r1.ch
 
 	want := &sqltypes.Result{
@@ -499,7 +499,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 	<-r1.ch
 
 	for {
@@ -595,7 +595,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	r1 := newTestReceiver(1)
 	mm.Subscribe(ctx, r1.rcv)
 	<-r1.ch
@@ -653,7 +653,7 @@ func TestMessagesPending1(t *testing.T) {
 
 	r1 := newTestReceiver(0)
 	go func() { <-r1.ch }()
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
 	// Make sure the first message is enqueued.
@@ -702,7 +702,7 @@ func TestMessagesPending2(t *testing.T) {
 
 	r1 := newTestReceiver(0)
 	go func() { <-r1.ch }()
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 
 	// Now, let's pull more than 1 item. It should
 	// trigger the poller every time cache gets empty.

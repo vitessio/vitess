@@ -49,7 +49,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -124,7 +124,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -195,7 +195,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -206,7 +206,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
+	err := topotools.RebuildKeyspace(t.Context(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
 	require.NoError(t, err)
 	// Now we're restarting mysql on a different port, 3301->3303
 	// but without updating the Tablet record in topology.
@@ -276,7 +276,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -287,7 +287,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
+	err := topotools.RebuildKeyspace(t.Context(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
 	require.NoError(t, err)
 	// On the elected primary, we will respond to
 	// TabletActionReplicaWasPromoted, so we need a MysqlDaemon
@@ -350,7 +350,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -361,7 +361,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	goodReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
+	err := topotools.RebuildKeyspace(t.Context(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
 	require.NoError(t, err)
 	// On the elected primary, we will respond to
 	// TabletActionReplicaWasPromoted.
@@ -435,7 +435,7 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 	flag.Set("disable-active-reparents", "true")
 	defer flag.Set("disable-active-reparents", "false")
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -450,14 +450,14 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 	defer newPrimary.StopActionLoop(t)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
+	err := topotools.RebuildKeyspace(t.Context(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1"}, false)
 	assert.NoError(t, err, "RebuildKeyspaceLocked failed: %v", err)
 
 	// Reparent to new primary
 	ti, err := ts.GetTablet(ctx, newPrimary.Tablet.Alias)
 	require.NoError(t, err)
 
-	if err := wr.TabletExternallyReparented(context.Background(), ti.Alias); err != nil {
+	if err := wr.TabletExternallyReparented(t.Context(), ti.Alias); err != nil {
 		require.NoError(t, err)
 	}
 
@@ -482,7 +482,7 @@ func TestRPCTabletExternallyReparentedDemotesPrimaryToConfiguredTabletType(t *te
 	// PrimaryAlias in the shard record is updated asynchronously, so we should wait for it to succeed.
 	waitForShardPrimary(t, wr, newPrimary.Tablet)
 
-	shardInfo, err := ts.GetShard(context.Background(), newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard)
+	shardInfo, err := ts.GetShard(t.Context(), newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard)
 	assert.NoError(t, err)
 
 	assert.True(t, topoproto.TabletAliasEqual(newPrimary.Tablet.Alias, shardInfo.PrimaryAlias))

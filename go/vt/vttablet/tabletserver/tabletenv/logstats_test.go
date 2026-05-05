@@ -17,7 +17,6 @@ limitations under the License.
 package tabletenv
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -37,7 +36,7 @@ import (
 )
 
 func TestLogStats(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", streamlog.QueryLogConfig{})
+	logStats := NewLogStats(t.Context(), "test", streamlog.QueryLogConfig{})
 	logStats.AddRewrittenSQL("sql1", time.Now())
 
 	require.Contains(t, logStats.RewrittenSQL(), "sql1", "RewrittenSQL should contains sql: sql1")
@@ -54,7 +53,7 @@ func testFormat(stats *LogStats, params url.Values) string {
 }
 
 func TestLogStatsFormat(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", streamlog.NewQueryLogConfigForTest())
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	logStats.OriginalSQL = "sql"
@@ -121,7 +120,7 @@ func TestLogStatsFormat(t *testing.T) {
 }
 
 func TestLogStatsFilter(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", streamlog.NewQueryLogConfigForTest())
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	logStats.OriginalSQL = "sql /* LOG_THIS_QUERY */"
@@ -147,7 +146,7 @@ func TestLogStatsFilter(t *testing.T) {
 }
 
 func TestLogStatsFormatQuerySources(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", streamlog.NewQueryLogConfigForTest())
 	require.Equalf(t, "none", logStats.FmtQuerySources(), "should return none since log stats does not have any query source")
 
 	logStats.QuerySources |= QuerySourceMySQL
@@ -162,13 +161,13 @@ func TestLogStatsContextHTML(t *testing.T) {
 	callInfo := &fakecallinfo.FakeCallInfo{
 		Html: testconversions.MakeHTMLForTest(html),
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callinfo.NewContext(t.Context(), callInfo)
 	logStats := NewLogStats(ctx, "test", streamlog.NewQueryLogConfigForTest())
 	require.Equalf(t, html, logStats.ContextHTML().String(), "expect to get html: %s, but got: %s", html, logStats.ContextHTML().String())
 }
 
 func TestLogStatsErrorStr(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", streamlog.NewQueryLogConfigForTest())
 	require.Emptyf(t, logStats.ErrorStr(), "should not get error in stats, but got: %s", logStats.ErrorStr())
 	errStr := "unknown error"
 	logStats.Error = errors.New(errStr)
@@ -176,7 +175,7 @@ func TestLogStatsErrorStr(t *testing.T) {
 }
 
 func TestLogStatsCallInfo(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", streamlog.NewQueryLogConfigForTest())
 	caller, user := logStats.CallInfo()
 	require.Empty(t, caller, "caller should be empty")
 	require.Empty(t, user, "username should be empty")
@@ -188,7 +187,7 @@ func TestLogStatsCallInfo(t *testing.T) {
 		Method: "FakeExecute",
 		User:   username,
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callinfo.NewContext(t.Context(), callInfo)
 	logStats = NewLogStats(ctx, "test", streamlog.NewQueryLogConfigForTest())
 	caller, user = logStats.CallInfo()
 	wantCaller := remoteAddr + ":FakeExecute(fakeRPC)"
@@ -198,7 +197,7 @@ func TestLogStatsCallInfo(t *testing.T) {
 
 // TestLogStatsErrorsOnly tests that LogStats only logs errors when the query log mode is set to errors only for VTTablet.
 func TestLogStatsErrorsOnly(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", streamlog.NewQueryLogConfigForTest())
 	logStats.Config.Mode = streamlog.QueryLogModeError
 
 	// no error, should not log

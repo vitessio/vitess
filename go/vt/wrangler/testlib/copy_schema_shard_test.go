@@ -55,14 +55,14 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	vp := NewVtctlPipe(ctx, t, ts)
 	defer vp.Close()
 
-	if err := ts.CreateKeyspace(context.Background(), "ks", &topodatapb.Keyspace{}); err != nil {
+	if err := ts.CreateKeyspace(t.Context(), "ks", &topodatapb.Keyspace{}); err != nil {
 		require.NoError(t, err)
 	}
 

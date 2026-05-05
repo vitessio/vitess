@@ -17,7 +17,6 @@ limitations under the License.
 package newfeaturetest
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -204,7 +203,7 @@ func TestErrorsInTransaction(t *testing.T) {
 	// tablets[0] is the primary tablet in the beginning.
 	utils.ConfirmReplication(t, tablets[primary], []*cluster.Vttablet{tablets[1], tablets[2]})
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	_, err = conn.ExecuteFetch("delete from vt_insert_test", 0, false)

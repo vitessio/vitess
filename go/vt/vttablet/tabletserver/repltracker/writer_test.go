@@ -89,7 +89,7 @@ func TestWriteHeartbeatOpen(t *testing.T) {
 		assert.Nil(t, rateLimiter)
 	}
 	t.Run("open, heartbeats", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		defer cancel()
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
@@ -150,7 +150,7 @@ func TestWriteHeartbeatDisabled(t *testing.T) {
 	})
 	t.Run("request heartbeats, heartbeats", func(t *testing.T) {
 		tw.RequestHeartbeats()
-		ctx, cancel := context.WithTimeout(context.Background(), tw.onDemandDuration-time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), tw.onDemandDuration-time.Second)
 		defer cancel()
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
@@ -217,7 +217,7 @@ func TestWriteHeartbeatOnDemand(t *testing.T) {
 		assert.NotNil(t, rateLimiter)
 	}
 	t.Run("open, initial heartbeats", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), tw.onDemandDuration-time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), tw.onDemandDuration-time.Second)
 		defer cancel()
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
@@ -303,7 +303,7 @@ func TestCloseWhileStuckWriting(t *testing.T) {
 	startedWaitWg.Wait()
 	// Even if the write is blocked, we should be able to disable writes without waiting indefinitely.
 	// This is what we call, when we try to Close the heartbeat writer.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go func() {
 		tw.disableWrites()
 		cancel()

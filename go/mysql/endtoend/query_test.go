@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"math/rand/v2"
 	"testing"
@@ -48,7 +47,7 @@ func columnSize(cs collations.ID, size uint32) uint32 {
 
 // Test the SQL query part of the API.
 func TestQueries(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +134,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestLargeQueries(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +228,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 }
 
 func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF
 
@@ -266,7 +265,7 @@ func TestWarningsNoDeprecateEOF(t *testing.T) {
 }
 
 func TestSysInfo(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()

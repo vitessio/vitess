@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -35,7 +34,7 @@ import (
 
 func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := tabletenv.NewLogStats(context.Background(), "Execute", streamlog.NewQueryLogConfigForTest())
+	logStats := tabletenv.NewLogStats(t.Context(), "Execute", streamlog.NewQueryLogConfigForTest())
 	logStats.PlanType = planbuilder.PlanSelect.String()
 	logStats.OriginalSQL = "select name, 'inject <script>alert();</script>' from test_table limit 1000"
 	logStats.RowsAffected = 1000
@@ -46,7 +45,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.TransactionID = 131
 	logStats.ReservedID = 313
 	logStats.Ctx = callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
 		callerid.NewImmediateCallerID("immediate-caller"),
 	)

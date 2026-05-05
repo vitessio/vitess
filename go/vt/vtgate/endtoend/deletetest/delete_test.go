@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -160,7 +159,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDelete(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)

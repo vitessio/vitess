@@ -40,7 +40,7 @@ import (
 // waitForInitialSrvKeyspace waits for the initial SrvKeyspace to
 // appear, and match the provided srvKeyspace.
 func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) (current *topo.WatchSrvKeyspaceData, changes <-chan *topo.WatchSrvKeyspaceData, cancel context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	start := time.Now()
 	var err error
 	for {
@@ -76,7 +76,7 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 func TestWatchSrvKeyspace(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
@@ -173,7 +173,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()

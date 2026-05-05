@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -60,7 +59,7 @@ func TestSelectUnsharded(t *testing.T) {
 		shards:  []string{"0"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -192,7 +191,7 @@ func TestInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
 					},
 				}
 			}
-			_, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+			_, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 			require.NoError(t, err)
 			vc.ExpectLog(t, tc.expectedLog)
 		})
@@ -214,7 +213,7 @@ func TestSelectScatter(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -252,7 +251,7 @@ func TestSelectEqualUnique(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
@@ -288,7 +287,7 @@ func TestSelectNone(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.Empty(t, vc.log)
 	expectResult(t, result, &sqltypes.Result{})
@@ -303,7 +302,7 @@ func TestSelectNone(t *testing.T) {
 
 	// test with special no-routes handling
 	sel.NoRoutesSpecialHandling = true
-	result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
@@ -346,7 +345,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		shardForKsid: []string{"-20", "20-"},
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyRange(-)`, sqltypes.Int64BindVariable(1)),
@@ -397,7 +396,7 @@ func TestSelectEqual(t *testing.T) {
 			defaultSelectResult,
 		},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
@@ -438,7 +437,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
@@ -459,7 +458,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	sel.NoRoutesSpecialHandling = true
 	vc.Rewind()
 
-	result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
@@ -505,7 +504,7 @@ func TestINUnique(t *testing.T) {
 		shardForKsid: []string{"-20", "-20", "20-"},
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations ks [%v %v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
@@ -570,7 +569,7 @@ func TestINNonUnique(t *testing.T) {
 			defaultSelectResult,
 		},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}, {Type: sqltypes.Int64, Value: []byte("2")}, {Type: sqltypes.Int64, Value: []byte("4")}}}),
@@ -618,7 +617,7 @@ func TestMultiEqual(t *testing.T) {
 		shardForKsid: []string{"-20", "-20", "20-"},
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations ks [%v %v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),
@@ -662,7 +661,7 @@ func TestSelectLike(t *testing.T) {
 	// md5("a") = 0cc175b9c0f1b6a831c399e269772661
 	// keyspace id prefix for "a" is 0x0c
 	vc.shardForKsid = []string{"-0c80", "0c80-0d"}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	// range 0c-0d hits 2 shards ks.-0c80 ks.0c80-0d;
@@ -693,7 +692,7 @@ func TestSelectLike(t *testing.T) {
 	// keyspace id prefix for "ab" is 0x0c92
 	// adding one byte to the prefix just hit one shard
 	vc.shardForKsid = []string{"0c80-0d"}
-	result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -730,7 +729,7 @@ func TestSelectNext(t *testing.T) {
 		shards:  []string{"-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -762,7 +761,7 @@ func TestSelectDBA(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
@@ -794,7 +793,7 @@ func TestSelectReference(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
@@ -832,7 +831,7 @@ func TestRouteGetFields(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
@@ -856,7 +855,7 @@ func TestRouteGetFields(t *testing.T) {
 
 	// test with special no-routes handling
 	sel.NoRoutesSpecialHandling = true
-	result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+	result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute select from, toc from lkp where from in ::from from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: sqltypes.Int64, Value: []byte("1")}}}),
@@ -912,7 +911,7 @@ func TestRouteSort(t *testing.T) {
 			),
 		},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -928,7 +927,7 @@ func TestRouteSort(t *testing.T) {
 
 	sel.OrderBy[0].Desc = true
 	vc.Rewind()
-	result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantResult = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -956,7 +955,7 @@ func TestRouteSort(t *testing.T) {
 			),
 		},
 	}
-	_, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `cannot compare strings, collation is unknown or unsupported (collation ID: 0)`)
 }
 
@@ -996,7 +995,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 	var wantResult *sqltypes.Result
 	var err error
 	t.Run("Sort using Weight Strings", func(t *testing.T) {
-		result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err)
 		wantResult = sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -1015,7 +1014,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 	t.Run("Descending ordering using weighted strings", func(t *testing.T) {
 		sel.OrderBy[0].Desc = true
 		vc.Rewind()
-		result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err)
 		wantResult = sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -1053,7 +1052,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 				),
 			},
 		}
-		_, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		_, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.EqualError(t, err, `cannot compare strings, collation is unknown or unsupported (collation ID: 0)`)
 	})
 }
@@ -1097,7 +1096,7 @@ func TestRouteSortCollation(t *testing.T) {
 	var wantResult *sqltypes.Result
 	var err error
 	t.Run("Sort using Collation", func(t *testing.T) {
-		result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err)
 		wantResult = sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -1116,7 +1115,7 @@ func TestRouteSortCollation(t *testing.T) {
 	t.Run("Descending ordering using Collation", func(t *testing.T) {
 		sel.OrderBy[0].Desc = true
 		vc.Rewind()
-		result, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err)
 		wantResult = sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
@@ -1153,7 +1152,7 @@ func TestRouteSortCollation(t *testing.T) {
 				),
 			},
 		}
-		_, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		_, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.EqualError(t, err, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)")
 	})
 
@@ -1179,7 +1178,7 @@ func TestRouteSortCollation(t *testing.T) {
 				),
 			},
 		}
-		_, err = sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		_, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.EqualError(t, err, "cannot compare strings, collation is unknown or unsupported (collation ID: 1111)")
 	})
 }
@@ -1214,7 +1213,7 @@ func TestRouteSortTruncate(t *testing.T) {
 			),
 		},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -1259,7 +1258,7 @@ func TestRouteSortWithSingleShard(t *testing.T) {
 			result,
 		},
 	}
-	res, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	res, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantResult := result
 	// we need the results to be unsorted here.
@@ -1344,7 +1343,7 @@ func TestRouteStreamTruncate(t *testing.T) {
 			),
 		},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -1422,7 +1421,7 @@ func TestParamsFail(t *testing.T) {
 	)
 
 	vc := &loggingVCursor{shardErr: errors.New("shard error")}
-	_, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `shard error`)
 
 	vc.Rewind()
@@ -1444,7 +1443,7 @@ func TestExecFail(t *testing.T) {
 		)
 
 		vc := &loggingVCursor{shards: []string{"0"}, resultErr: vterrors.NewErrorf(vtrpcpb.Code_CANCELED, vterrors.QueryInterrupted, "query timeout")}
-		_, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		_, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.EqualError(t, err, `query timeout`)
 		assert.Empty(t, vc.warnings)
 
@@ -1472,7 +1471,7 @@ func TestExecFail(t *testing.T) {
 				errors.New("result error -20"),
 			},
 		}
-		_, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		_, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.EqualError(t, err, `result error -20`)
 		vc.ExpectWarnings(t, nil)
 		vc.ExpectLog(t, []string{
@@ -1502,7 +1501,7 @@ func TestExecFail(t *testing.T) {
 				nil,
 			},
 		}
-		result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+		result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -1544,7 +1543,7 @@ func TestSelectEqualUniqueMultiColumnVindex(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -1581,7 +1580,7 @@ func TestSelectEqualMultiColumnVindex(t *testing.T) {
 	sel.Vindex = vindex
 	sel.Values = []evalengine.Expr{evalengine.NewLiteralInt(32)}
 
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(32)]] Destinations:DestinationKeyRange(20-21)`,
@@ -1627,7 +1626,7 @@ func TestINMultiColumnVindex(t *testing.T) {
 		shardForKsid: []string{"-20", "20-", "20-", "20-"},
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
@@ -1670,7 +1669,7 @@ func TestINMixedMultiColumnComparision(t *testing.T) {
 		shardForKsid: []string{"-20", "20-"},
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(3)] [INT64(1) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe)`,
@@ -1713,7 +1712,7 @@ func TestMultiEqualMultiCol(t *testing.T) {
 		shardForKsid: []string{"-20", "40-"},
 		results:      []*sqltypes.Result{defaultSelectResult},
 	}
-	result, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)] [INT64(3) INT64(4)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f),DestinationKeyspaceID(03d2fd8867d50d2dfe)`,
@@ -1824,7 +1823,7 @@ func TestSelectTupleMultiCol(t *testing.T) {
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err := sel.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{"vals": tupleBV}, false)
+	_, err := sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{"vals": tupleBV}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol user [[INT64(1) VARCHAR("a")] [INT64(4) VARCHAR("b")]] Destinations:DestinationKeyspaceID(166b40b461),DestinationKeyspaceID(d2fd886762)`,

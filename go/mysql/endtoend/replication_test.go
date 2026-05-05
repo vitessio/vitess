@@ -18,7 +18,6 @@ package endtoend
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -41,7 +40,7 @@ import (
 // connectForReplication is a helper method to connect for replication
 // from the current binlog position.
 func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFormat) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
@@ -135,7 +134,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 	})
 
 	// Connect and create a table.
-	ctx := context.Background()
+	ctx := t.Context()
 	dConn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +170,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 	defer conn.Close()
 
 	// Create a table, insert some data in it.
-	ctx := context.Background()
+	ctx := t.Context()
 	dConn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)
@@ -874,7 +873,7 @@ func TestRowReplicationTypes(t *testing.T) {
 		}}...)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dConn, err := mysql.Connect(ctx, &connParams)
 	if err != nil {
 		t.Fatal(err)

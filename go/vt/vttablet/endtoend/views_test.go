@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -38,7 +37,7 @@ func TestCreateViewDDL(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -94,7 +93,7 @@ func TestAlterViewDDL(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -151,7 +150,7 @@ func TestDropViewDDL(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -203,7 +202,7 @@ func TestViewDDLWithInfrSchema(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -239,7 +238,7 @@ func TestViewAndTableUnique(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 

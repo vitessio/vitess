@@ -228,7 +228,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
 	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
-	_, err = executorExecSession(context.Background(), executor, session, "commit", nil)
+	_, err = executorExecSession(t.Context(), executor, session, "commit", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{TargetString: "@primary", SessionUUID: "suuid"}
 	assert.Truef(t, proto.Equal(session.Session, wantSession), "begin: %v, want %v", session.Session, wantSession)
@@ -1664,7 +1664,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := buildPlanKey(context.Background(), vc, sql, "")
+		h := buildPlanKey(t.Context(), vc, sql, "")
 		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
 	assert.Truef(t, plan != nil, "plan not found for query: %s", sql)
@@ -1831,7 +1831,7 @@ func TestGetPlanPriority(t *testing.T) {
 
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 
-			plan, _, _, err := r.fetchOrCreatePlan(context.Background(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+			plan, _, _, err := r.fetchOrCreatePlan(t.Context(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
@@ -2029,7 +2029,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 		"delete from main1 where id=1",
 	}
 	for _, query := range testMaxPayloadSizeExceeded {
-		_, err := executorExecSession(context.Background(), executor, session, query, nil)
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
 		require.NotNil(t, err)
 		assert.EqualError(t, err, "query payload size above threshold")
 	}
@@ -2042,14 +2042,14 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 		"delete /*vt+ IGNORE_MAX_PAYLOAD_SIZE=1 */ from main1 where id=1",
 	}
 	for _, query := range testMaxPayloadSizeOverride {
-		_, err := executorExecSession(context.Background(), executor, session, query, nil)
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
 		assert.Equal(t, nil, err, "err should be nil")
 	}
 	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 
 	maxPayloadSize = 1000
 	for _, query := range testMaxPayloadSizeExceeded {
-		_, err := executorExecSession(context.Background(), executor, session, query, nil)
+		_, err := executorExecSession(t.Context(), executor, session, query, nil)
 		assert.Equal(t, nil, err, "err should be nil")
 	}
 	assert.Equal(t, warningCount+4, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
@@ -2065,7 +2065,7 @@ func TestOlapSelectDatabase(t *testing.T) {
 		cbInvoked = true
 		return nil
 	}
-	err := executor.StreamExecute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, cb)
+	err := executor.StreamExecute(t.Context(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, cb)
 	assert.NoError(t, err)
 	assert.True(t, cbInvoked)
 }
@@ -2076,7 +2076,7 @@ func TestExecutorClearsWarnings(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{Code: 234, Message: "oh noes"}},
 	})
-	_, err := executorExecSession(context.Background(), executor, session, "select 42", nil)
+	_, err := executorExecSession(t.Context(), executor, session, "select 42", nil)
 	require.NoError(t, err)
 	require.Empty(t, session.Warnings)
 }
@@ -2256,7 +2256,7 @@ func TestExecutorAnalyze(t *testing.T) {
 			sbc2.ExecCount.Store(0)
 			sbclookup.ExecCount.Store(0)
 
-			_, err := executorExec(context.Background(), executor, &vtgatepb.Session{TargetString: tc.targetStr}, stmt, nil)
+			_, err := executorExec(t.Context(), executor, &vtgatepb.Session{TargetString: tc.targetStr}, stmt, nil)
 			require.NoError(t, err)
 
 			utils.MustMatch(t, tc.wantCnts, cnts{
@@ -2408,7 +2408,7 @@ func TestExecutorOtherAdmin(t *testing.T) {
 			sbc2.ExecCount.Store(0)
 			sbclookup.ExecCount.Store(0)
 
-			_, err := executorExec(context.Background(), executor, &vtgatepb.Session{TargetString: tc.targetStr}, stmt, nil)
+			_, err := executorExec(t.Context(), executor, &vtgatepb.Session{TargetString: tc.targetStr}, stmt, nil)
 			if tc.hasNoKeyspaceErr {
 				assert.Error(t, err, econtext.ErrNoKeyspace.Error())
 			} else if tc.hasDestinationShardErr {
@@ -2658,7 +2658,7 @@ func TestExecutorCallProc(t *testing.T) {
 			sbc2.ExecCount.Store(0)
 			sbcUnsharded.ExecCount.Store(0)
 
-			_, err := executorExec(context.Background(), executor, &vtgatepb.Session{TargetString: tc.targetStr}, "CALL proc()", nil)
+			_, err := executorExec(t.Context(), executor, &vtgatepb.Session{TargetString: tc.targetStr}, "CALL proc()", nil)
 			if tc.hasNoKeyspaceErr {
 				assert.EqualError(t, err, econtext.ErrNoKeyspace.Error())
 			} else if tc.unshardedOnlyErr {
@@ -2795,7 +2795,7 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
 	t.Run("prepare statement", func(t *testing.T) {
-		_, err := executorExecSession(context.Background(), executor, session, "prepare prep_user from 'select * from user where id = ?'", nil)
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_user from 'select * from user where id = ?'", nil)
 		require.NoError(t, err)
 
 		prepData := session.PrepareStatement["prep_user"]
@@ -2805,9 +2805,9 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	})
 
 	t.Run("prepare statement using user defined variable", func(t *testing.T) {
-		_, err := executorExecSession(context.Background(), executor, session, "set @udv_query = 'select * from user where id in (?,?,?)'", nil)
+		_, err := executorExecSession(t.Context(), executor, session, "set @udv_query = 'select * from user where id in (?,?,?)'", nil)
 		require.NoError(t, err)
-		_, err = executorExecSession(context.Background(), executor, session, "prepare prep_user2 from @udv_query", nil)
+		_, err = executorExecSession(t.Context(), executor, session, "prepare prep_user2 from @udv_query", nil)
 		require.NoError(t, err)
 
 		prepData := session.PrepareStatement["prep_user2"]
@@ -2817,7 +2817,7 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	})
 
 	t.Run("syntax error on prepared query", func(t *testing.T) {
-		_, err := executorExecSession(context.Background(), executor, session, "prepare prep_user2 from 'select'", nil)
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_user2 from 'select'", nil)
 		require.Error(t, err)
 
 		// prepared statement is cleared from the session.
@@ -2825,7 +2825,7 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	})
 
 	t.Run("user defined variable does not exists on prepared query", func(t *testing.T) {
-		_, err := executorExecSession(context.Background(), executor, session, "prepare prep_user from @foo", nil)
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_user from @foo", nil)
 		require.Error(t, err)
 
 		// prepared statement is cleared from the session.
@@ -2833,7 +2833,7 @@ func TestExecutorPrepareExecute(t *testing.T) {
 	})
 
 	t.Run("empty prepared query", func(t *testing.T) {
-		_, err := executorExecSession(context.Background(), executor, session, "prepare prep_user from ''", nil)
+		_, err := executorExecSession(t.Context(), executor, session, "prepare prep_user from ''", nil)
 		require.Error(t, err)
 	})
 }
@@ -2927,7 +2927,7 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	err = executor.StreamExecute(ctx, nil, "TestExecute", session, "invalid statement", nil, fn)
 	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
-	_, _, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement")
+	_, _, err = executor.Prepare(t.Context(), "TestExecute", session, "invalid statement")
 	assert.EqualError(t, err, "[BUG] unrecognized p [TRUNCATED]")
 }
 
@@ -2976,7 +2976,7 @@ func TestExecutorFlushStmt(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.query+tc.targetStr, func(t *testing.T) {
-			_, err := executorExec(context.Background(), executor, &vtgatepb.Session{TargetString: tc.targetStr}, tc.query, nil)
+			_, err := executorExec(t.Context(), executor, &vtgatepb.Session{TargetString: tc.targetStr}, tc.query, nil)
 			if tc.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -3023,7 +3023,7 @@ func TestExecutorKillStmt(t *testing.T) {
 		allowKillStmt = !tc.disallow
 		t.Run("execute:"+tc.query+tc.errStr, func(t *testing.T) {
 			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
-			_, err := executor.Execute(context.Background(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, false)
+			_, err := executor.Execute(t.Context(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, false)
 			if tc.errStr != "" {
 				require.ErrorContains(t, err, tc.errStr)
 			} else {
@@ -3033,7 +3033,7 @@ func TestExecutorKillStmt(t *testing.T) {
 		})
 		t.Run("stream:"+tc.query+tc.errStr, func(t *testing.T) {
 			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
-			err := executor.StreamExecute(context.Background(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, func(result *sqltypes.Result) error {
+			err := executor.StreamExecute(t.Context(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, func(result *sqltypes.Result) error {
 				return nil
 			})
 			if tc.errStr != "" {
@@ -3411,7 +3411,7 @@ func TestExecutorShowShards(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			e := &Executor{
 				resolver: NewResolver(srvtopo.NewResolver(tt.srvTopoServer, nil, localCell), nil, "", nil),
 			}

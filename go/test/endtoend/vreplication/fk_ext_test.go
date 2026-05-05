@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"strings"
@@ -111,7 +110,7 @@ func TestFKExt(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	lg = &SimpleLoadGenerator{}
-	lg.Init(context.Background(), vc)
+	lg.Init(t.Context(), vc)
 	lg.SetDBStrategy("vtgate", fkextConfig.sourceKeyspaceName)
 	if lg.Load() != nil {
 		t.Fatal("Load failed")

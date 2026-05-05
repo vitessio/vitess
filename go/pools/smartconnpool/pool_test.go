@@ -124,7 +124,7 @@ func newConnector(state *TestState) Connector[*TestConn] {
 func TestOpen(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -247,7 +247,7 @@ func TestOpen(t *testing.T) {
 func TestShrinking(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -411,7 +411,7 @@ func TestShrinking(t *testing.T) {
 func TestClosing(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -481,7 +481,7 @@ func TestReopen(t *testing.T) {
 	var state TestState
 	var refreshed atomic.Bool
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:        5,
 		IdleTimeout:     time.Second,
@@ -547,7 +547,7 @@ func TestReopen(t *testing.T) {
 func TestUserClosing(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -567,7 +567,7 @@ func TestUserClosing(t *testing.T) {
 
 	ch := make(chan error)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		defer cancel()
 
 		err := p.CloseWithContext(ctx)
@@ -577,7 +577,7 @@ func TestUserClosing(t *testing.T) {
 
 	select {
 	case <-time.After(5 * time.Second):
-		t.Fatalf("Pool did not shutdown after 5s")
+		require.Fail(t, "Pool did not shutdown after 5s")
 	case err := <-ch:
 		require.Error(t, err)
 		t.Logf("Shutdown error: %v", err)
@@ -596,7 +596,7 @@ func TestConnReopen(t *testing.T) {
 
 	defer p.Close()
 
-	conn, err := p.Get(context.Background(), nil)
+	conn, err := p.Get(t.Context(), nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, state.lastID.Load())
 	assert.EqualValues(t, 1, p.Active())
@@ -626,7 +626,7 @@ func TestIdleTimeout(t *testing.T) {
 	testTimeout := func(t *testing.T, setting *Setting) {
 		var state TestState
 
-		ctx := context.Background()
+		ctx := t.Context()
 		p := NewPool(&Config[*TestConn]{
 			Capacity:    5,
 			IdleTimeout: 10 * time.Millisecond,
@@ -662,7 +662,7 @@ func TestIdleTimeout(t *testing.T) {
 			select {
 			case <-closed:
 			default:
-				t.Fatalf("Connections remain open after 1 second")
+				require.Fail(t, "Connections remain open after 1 second")
 			}
 		}
 		// At least 5 connections should have been closed by now.
@@ -684,7 +684,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 	var state TestState
 	connector := newConnector(&state)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    1,
 		IdleTimeout: 10 * time.Millisecond,
@@ -705,7 +705,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 		for p.Active() != 0 {
 			select {
 			case <-timeout:
-				t.Errorf("Timed out waiting for resource to be closed by idle timeout")
+				assert.Fail(t, "Timed out waiting for resource to be closed by idle timeout")
 			default:
 			}
 		}
@@ -717,7 +717,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 func TestMaxLifetime(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    1,
 		IdleTimeout: 10 * time.Second,
@@ -805,7 +805,7 @@ func TestMaxIdleCount(t *testing.T) {
 	testMaxIdleCount := func(t *testing.T, setting *Setting, maxIdleCount int64, expClosedConn int) {
 		var state TestState
 
-		ctx := context.Background()
+		ctx := t.Context()
 		p := NewPool(&Config[*TestConn]{
 			Capacity:     5,
 			MaxIdleCount: maxIdleCount,
@@ -848,7 +848,7 @@ func TestCreateFail(t *testing.T) {
 	var state TestState
 	state.chaos.failConnect.Store(true)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -878,7 +878,7 @@ func TestCreateFailOnPut(t *testing.T) {
 	var state TestState
 	connector := newConnector(&state)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -905,7 +905,7 @@ func TestSlowCreateFail(t *testing.T) {
 	var state TestState
 	state.chaos.delayConnect = 10 * time.Millisecond
 
-	ctx := context.Background()
+	ctx := t.Context()
 	ch := make(chan *Pooled[*TestConn])
 
 	for _, setting := range []*Setting{nil, sFoo} {
@@ -949,7 +949,7 @@ func TestSlowCreateFail(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    1,
 		IdleTimeout: time.Second,
@@ -987,7 +987,7 @@ func TestExpired(t *testing.T) {
 
 	for _, setting := range []*Setting{nil, sFoo} {
 		// expired context
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
+		ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-1*time.Second))
 		_, err := p.Get(ctx, setting)
 		cancel()
 		require.EqualError(t, err, "connection pool context already expired")
@@ -997,7 +997,7 @@ func TestExpired(t *testing.T) {
 func TestMultiSettings(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -1061,7 +1061,7 @@ func TestMultiSettings(t *testing.T) {
 func TestMultiSettingsWithReset(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -1115,7 +1115,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 func TestApplySettingsFailure(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -1178,7 +1178,7 @@ func TestApplySettingsFailure(t *testing.T) {
 func TestGetSpike(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    5,
 		IdleTimeout: time.Second,
@@ -1212,7 +1212,7 @@ func TestGetSpike(t *testing.T) {
 	for range 2000 {
 		wg := sync.WaitGroup{}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
 
 		errs := make(chan error, 80)
@@ -1230,7 +1230,7 @@ func TestGetSpike(t *testing.T) {
 		wg.Wait()
 
 		if len(errs) > 0 {
-			t.Errorf("Error getting connection: %v", <-errs)
+			assert.Failf(t, "Error getting connection", "Error getting connection: %v", <-errs)
 		}
 
 		close(errs)
@@ -1240,7 +1240,7 @@ func TestGetSpike(t *testing.T) {
 // TestCloseDuringWaitForConn confirms that we do not get hung when the pool gets
 // closed while we are waiting for a connection from it.
 func TestCloseDuringWaitForConn(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	goRoutineCnt := 50
 	getTimeout := 2000 * time.Millisecond
 
@@ -1410,7 +1410,7 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
 	var state TestState
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity:    10,
 		IdleTimeout: 50 * time.Millisecond,

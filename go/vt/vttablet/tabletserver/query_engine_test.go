@@ -24,8 +24,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
-	"reflect"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -83,10 +81,7 @@ func TestStrictMode(t *testing.T) {
 	)
 	qe = NewQueryEngine(env, se)
 	err := qe.Open()
-	wantErr := "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("Open: %v, want %s", err, wantErr)
-	}
+	assert.EqualError(t, err, "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got ''", "Open")
 	qe.Close()
 
 	// Test that we succeed if the enforcement flag is off.
@@ -107,7 +102,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	_, err := qe.GetPlan(ctx, logStats, "", false, false)
 	require.EqualError(t, err, "Query was empty")
@@ -166,12 +161,9 @@ func TestGetMessageStreamPlan(t *testing.T) {
 			Role:      tableacl.WRITER,
 		}},
 	}
-	if !reflect.DeepEqual(plan.Plan, wantPlan) {
-		t.Errorf("GetMessageStreamPlan(msg): %v, want %v", plan.Plan, wantPlan)
-	}
-	if plan.Rules == nil || plan.Authorized == nil {
-		t.Errorf("GetMessageStreamPlan(msg): Rules or ACLResult are nil. Rules: %v, Authorized: %v", plan.Rules, plan.Authorized)
-	}
+	assert.Equalf(t, wantPlan, plan.Plan, "GetMessageStreamPlan(msg)")
+	assert.NotNilf(t, plan.Rules, "GetMessageStreamPlan(msg): Rules is nil")
+	assert.NotNilf(t, plan.Authorized, "GetMessageStreamPlan(msg): Authorized is nil")
 }
 
 func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
@@ -195,7 +187,7 @@ func TestQueryPlanCache(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	initialHits := qe.queryEnginePlanCacheHits.Get()
@@ -236,7 +228,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, false)
@@ -261,7 +253,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false)
@@ -285,7 +277,7 @@ func TestStreamQueryPlanCache(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
@@ -309,7 +301,7 @@ func TestNoStreamQueryPlanCache(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, true)
 	require.NoError(t, err)
@@ -333,7 +325,7 @@ func TestNoStreamQueryPlanCacheDirective(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	firstPlan, err := qe.GetStreamPlan(ctx, logStats, firstQuery, false)
 	require.NoError(t, err)
@@ -353,7 +345,7 @@ func TestStatsURL(t *testing.T) {
 	qe.Open()
 	defer qe.Close()
 	// warm up cache
-	ctx := context.Background()
+	ctx := t.Context()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 	qe.GetPlan(ctx, logStats, query, false, false)
 
@@ -395,13 +387,9 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 	defer qe.Close()
 
 	r1, ok := qe.consolidator.Create(sql)
-	if !ok {
-		t.Errorf("expected first consolidator ok")
-	}
+	assert.True(t, ok, "expected first consolidator ok")
 	r2, ok := qe.consolidator.Create(sql)
-	if ok {
-		t.Errorf("expected second consolidator not ok")
-	}
+	assert.False(t, ok, "expected second consolidator not ok")
 
 	r1.Broadcast()
 	r2.Wait()
@@ -420,22 +408,15 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	qe := runConsolidatedQuery(t, sql)
 
 	qe.handleHTTPConsolidations(unRedactedResponse, request)
-	if !strings.Contains(unRedactedResponse.Body.String(), sql) {
-		t.Fatalf("Response is missing the consolidated query: %v %v", sql, unRedactedResponse.Body.String())
-	}
+	require.Containsf(t, unRedactedResponse.Body.String(), sql, "Response is missing the consolidated query: %v %v", sql, unRedactedResponse.Body.String())
 
 	// Now with the redaction on
 	qe.redactUIQuery = true
 	redactedResponse := httptest.NewRecorder()
 	qe.handleHTTPConsolidations(redactedResponse, request)
 
-	if strings.Contains(redactedResponse.Body.String(), "secret") {
-		t.Fatalf("Response contains unredacted consolidated query: %v %v", sql, redactedResponse.Body.String())
-	}
-
-	if !strings.Contains(redactedResponse.Body.String(), redactedSQL) {
-		t.Fatalf("Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
-	}
+	require.NotContainsf(t, redactedResponse.Body.String(), "secret", "Response contains unredacted consolidated query: %v %v", sql, redactedResponse.Body.String())
+	require.Containsf(t, redactedResponse.Body.String(), redactedSQL, "Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
 }
 
 func BenchmarkPlanCacheThroughput(b *testing.B) {
@@ -596,7 +577,7 @@ func TestPlanCachePollution(t *testing.T) {
 
 	runner := func(totalQueries uint64, stats *Stats, sample func() string) {
 		for range totalQueries {
-			ctx := context.Background()
+			ctx := t.Context()
 			logStats := tabletenv.NewLogStats(ctx, "GetPlanStats", streamlog.NewQueryLogConfigForTest())
 			query := sample()
 

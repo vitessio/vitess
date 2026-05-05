@@ -133,7 +133,7 @@ func TestStress(t *testing.T) {
 	for p := range P {
 		tid := int32(p + 1)
 		wg.Go(func() error {
-			ctx := context.Background()
+			ctx := t.Context()
 			for !stop.Load() {
 				conn, err := pool.get(ctx)
 				if err != nil {

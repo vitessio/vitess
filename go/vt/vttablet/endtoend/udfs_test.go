@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -43,7 +42,7 @@ func TestUDFs(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -104,7 +103,7 @@ func TestUDF_RPC(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 

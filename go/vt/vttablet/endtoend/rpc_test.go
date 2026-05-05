@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -195,7 +194,7 @@ func TestGetSchemaRPC(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			client := framework.NewClient()
 			client.UpdateContext(callerid.NewContext(
-				context.Background(),
+				t.Context(),
 				&vtrpcpb.CallerID{},
 				&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -252,7 +251,7 @@ func TestGetSchemaRPCWithViewsDisabled(t *testing.T) {
 
 	client := framework.NewClient()
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 

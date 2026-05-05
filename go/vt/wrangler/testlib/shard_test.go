@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"context"
 	"testing"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -46,7 +45,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 	remoteReplica := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, primary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
+	err := topotools.RebuildKeyspace(t.Context(), logutil.NewConsoleLogger(), ts, primary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
 	require.NoError(t, err)
 
 	// Delete the ShardReplication record in cell2

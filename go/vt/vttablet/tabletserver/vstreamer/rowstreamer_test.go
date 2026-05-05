@@ -47,7 +47,7 @@ func TestRowStreamerQuery(t *testing.T) {
 	})
 	// We need to StreamRows, to get an initialized RowStreamer.
 	// Note that the query passed into StreamRows is overwritten while running the test.
-	err := engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		type testCase struct {
 			directives      string
 			sendQuerySuffix string
@@ -264,7 +264,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 	})
 	defer engine.Close()
 	// We need a latin1 connection.
-	conn, err := env.Mysqld.GetDbaConnection(context.Background())
+	conn, err := env.Mysqld.GetDbaConnection(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// Skip fields.
 		if len(rows.Rows) == 0 {
 			return nil
@@ -558,7 +558,7 @@ func TestStreamRowsCancel(t *testing.T) {
 		"drop table t1",
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	var options binlogdatapb.VStreamOptions
@@ -710,7 +710,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 		options.ConfigOverrides["vstream-dynamic-packet-size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
 		options.ConfigOverrides["vstream-packet-size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
 
-		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		err := engine.StreamRows(t.Context(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {
 				if rows.Gtid == "" {
 					ch <- errors.New("stream gtid is empty")
@@ -752,7 +752,7 @@ func expectStreamError(t *testing.T, query string, want string) {
 	ch := make(chan error)
 	go func() {
 		defer close(ch)
-		err := engine.StreamRows(context.Background(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		err := engine.StreamRows(t.Context(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			return nil
 		}, nil)
 		require.EqualError(t, err, want, "Got incorrect error")

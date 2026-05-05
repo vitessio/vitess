@@ -527,7 +527,7 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 			for i := 0; i < testcase.numberOfReadErrors; i++ {
 				fakeConn.AddGetError(true)
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
 			if testcase.expectedError != "" {
 				require.EqualError(t, err, testcase.expectedError)
@@ -544,7 +544,7 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 			require.Equal(t, testcase.expectedTabletType, ti.Type)
 
 			// assert that next change type succeeds irrespective of previous failures
-			err = tm.tmState.ChangeTabletType(context.Background(), topodatapb.TabletType_REPLICA, DBActionNone)
+			err = tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_REPLICA, DBActionNone)
 			require.NoError(t, err)
 		})
 	}

@@ -17,7 +17,6 @@ limitations under the License.
 package connpool
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -40,7 +39,7 @@ func TestConnPoolGet(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := connPool.Get(context.Background(), nil)
+	dbConn, err := connPool.Get(t.Context(), nil)
 	require.NoError(t, err)
 	if dbConn == nil {
 		t.Fatalf("db conn should not be nil")
@@ -61,10 +60,10 @@ func TestConnPoolTimeout(t *testing.T) {
 	params := dbconfigs.New(db.ConnParams())
 	connPool.Open(params, params, params)
 	defer connPool.Close()
-	dbConn, err := connPool.Get(context.Background(), nil)
+	dbConn, err := connPool.Get(t.Context(), nil)
 	require.NoError(t, err)
 	defer dbConn.Recycle()
-	_, err = connPool.Get(context.Background(), nil)
+	_, err = connPool.Get(t.Context(), nil)
 	assert.EqualError(t, err, "connection pool timed out")
 }
 
@@ -77,7 +76,7 @@ func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 	connPool.Open(params, params, debugConn)
 	im := callerid.NewImmediateCallerID("")
 	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
-	ctx := context.Background()
+	ctx := t.Context()
 	ctx = callerid.NewContext(ctx, ecid, im)
 	defer connPool.Close()
 	dbConn, err := connPool.Get(ctx, nil)
@@ -91,7 +90,7 @@ func TestConnPoolGetEmptyDebugConfig(t *testing.T) {
 func TestConnPoolGetAppDebug(t *testing.T) {
 	db := fakesqldb.New(t)
 	debugConn := dbconfigs.New(db.ConnParamsWithUname("debugUsername"))
-	ctx := context.Background()
+	ctx := t.Context()
 	im := callerid.NewImmediateCallerID("debugUsername")
 	ecid := callerid.NewEffectiveCallerID("p", "c", "sc")
 	ctx = callerid.NewContext(ctx, ecid, im)
@@ -120,9 +119,9 @@ func TestConnPoolSetCapacity(t *testing.T) {
 	defer connPool.Close()
 
 	assert.Panics(t, func() {
-		_ = connPool.SetCapacity(context.Background(), -10)
+		_ = connPool.SetCapacity(t.Context(), -10)
 	})
-	err := connPool.SetCapacity(context.Background(), 10)
+	err := connPool.SetCapacity(t.Context(), 10)
 	assert.NoError(t, err)
 	if connPool.Capacity() != 10 {
 		t.Fatalf("capacity should be 10")
@@ -150,7 +149,7 @@ func TestConnPoolMaxIdleCount(t *testing.T) {
 
 	var conns []*PooledConn
 	for range 3 {
-		conn, err := connPool.Get(context.Background(), nil)
+		conn, err := connPool.Get(t.Context(), nil)
 		require.NoError(t, err)
 		conns = append(conns, conn)
 	}
@@ -170,12 +169,12 @@ func TestConnPoolMaxIdleCount(t *testing.T) {
 	// changing the pool capacity will affect the idle count allowed for that pool.
 	// If setting the capacity to lower value than max idle count.
 
-	err := connPool.SetCapacity(context.Background(), 4)
+	err := connPool.SetCapacity(t.Context(), 4)
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, connPool.Capacity(), "pool capacity should be 4")
 	assert.EqualValues(t, 2, connPool.IdleCount(), "pool idle count should be 2")
 
-	err = connPool.SetCapacity(context.Background(), 1)
+	err = connPool.SetCapacity(t.Context(), 1)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, connPool.Capacity(), "pool capacity should be 1")
 	assert.EqualValues(t, 1, connPool.IdleCount(), "pool idle count should be changed to 1")
@@ -219,7 +218,7 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	assert.EqualValues(t, 0, connPool.Active(), "pool active connections should be 0")
 	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")
 
-	dbConn, _ := connPool.Get(context.Background(), nil)
+	dbConn, _ := connPool.Get(t.Context(), nil)
 	assert.EqualValues(t, 99, connPool.Available(), "pool available connections should be 99")
 	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
 	assert.EqualValues(t, 1, connPool.InUse(), "pool inUse connections should be 1")
@@ -246,7 +245,7 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 0, connPool.Metrics.DiffSettingCount(), "pool different settings count should be 0")
 	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
 
-	dbConn, err := connPool.Get(context.Background(), nil)
+	dbConn, err := connPool.Get(t.Context(), nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
@@ -267,7 +266,7 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 
 	db.AddQuery("a", &sqltypes.Result{})
 	sa := smartconnpool.NewSetting("a", "")
-	dbConn, err = connPool.Get(context.Background(), sa)
+	dbConn, err = connPool.Get(t.Context(), sa)
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 1, connPool.Active(), "pool active connections should be 1")
@@ -295,7 +294,7 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	// Step 1
 	var conns []*PooledConn
 	for range capacity {
-		dbConn, err = connPool.Get(context.Background(), sa)
+		dbConn, err = connPool.Get(t.Context(), sa)
 		require.NoError(t, err)
 		conns = append(conns, dbConn)
 	}
@@ -320,7 +319,7 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	assert.EqualValues(t, 0, connPool.Metrics.ResetSettingCount(), "pool reset settings count should be 0")
 
 	// Step 3
-	dbConn, err = connPool.Get(context.Background(), nil)
+	dbConn, err = connPool.Get(t.Context(), nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
@@ -334,7 +333,7 @@ func TestConnPoolStateWithSettings(t *testing.T) {
 	// Step 4
 	db.AddQuery("b", &sqltypes.Result{})
 	sb := smartconnpool.NewSetting("b", "")
-	dbConn, err = connPool.Get(context.Background(), sb)
+	dbConn, err = connPool.Get(t.Context(), sb)
 	require.NoError(t, err)
 	assert.EqualValues(t, 4, connPool.Available(), "pool available connections should be 4")
 	assert.EqualValues(t, 5, connPool.Active(), "pool active connections should be 5")
@@ -360,7 +359,7 @@ func TestPoolGetConnTime(t *testing.T) {
 	assert.Zero(t, getTimeMap["PoolTest.GetWithSettings"])
 	assert.Zero(t, getTimeMap["PoolTest.GetWithoutSettings"])
 
-	dbConn, err := connPool.Get(context.Background(), nil)
+	dbConn, err := connPool.Get(t.Context(), nil)
 	require.NoError(t, err)
 	defer dbConn.Recycle()
 
@@ -370,7 +369,7 @@ func TestPoolGetConnTime(t *testing.T) {
 
 	db.AddQuery("b", &sqltypes.Result{})
 	sb := smartconnpool.NewSetting("b", "")
-	dbConn, err = connPool.Get(context.Background(), sb)
+	dbConn, err = connPool.Get(t.Context(), sb)
 	require.NoError(t, err)
 	defer dbConn.Recycle()
 

@@ -17,7 +17,6 @@ limitations under the License.
 package zk2topo
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path"
@@ -73,7 +72,7 @@ func TestZk2Topo(t *testing.T) {
 		// We retry creating the cell info until we no longer get a connection error.
 		timeout := time.After(15 * time.Second)
 		for {
-			err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+			err = ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 				ServerAddress: serverAddr,
 				Root:          cellRoot,
 			})
@@ -82,7 +81,7 @@ func TestZk2Topo(t *testing.T) {
 			}
 			select {
 			case <-timeout:
-				require.NoError(t, err)
+				require.FailNowf(t, "timed out waiting for ZK to be ready", "last error: %v", err)
 				return nil
 			default:
 				require.ErrorContainsf(t, err, "could not connect to a server", "Received an error that isn't a connection error")

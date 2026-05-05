@@ -191,11 +191,11 @@ func (env *testMaterializerEnv) addTablet(t *testing.T, id int, keyspace, shard 
 		},
 	}
 	env.tablets[id] = tablet
-	if err := env.ws.ts.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.ws.ts.InitTablet(t.Context(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		_, err := env.ws.ts.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
+		_, err := env.ws.ts.UpdateShardFields(t.Context(), keyspace, shard, func(si *topo.ShardInfo) error {
 			si.PrimaryAlias = tablet.Alias
 			si.IsPrimaryServing = true
 			return nil

@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -843,7 +842,7 @@ func TestDDLTargeted(t *testing.T) {
 // TestTabletTargeting tests tablet-specific routing with USE keyspace:shard@tablet-alias syntax.
 // When shard is specified, tablet-specific routing bypasses vindex-based shard resolution.
 func TestTabletTargeting(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

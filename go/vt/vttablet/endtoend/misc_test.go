@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -176,7 +175,7 @@ func TestTrailingComment(t *testing.T) {
 }
 
 func TestSchemaReload(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -185,7 +184,7 @@ func TestSchemaReload(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table vitess_temp", 10, false)
 
-	framework.Server.ReloadSchema(context.Background())
+	framework.Server.ReloadSchema(t.Context())
 	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
 	for range 10 {
@@ -205,7 +204,7 @@ func TestSchemaReload(t *testing.T) {
 }
 
 func TestSidecarTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -221,9 +220,9 @@ func TestSidecarTables(t *testing.T) {
 }
 
 func TestConsolidation(t *testing.T) {
-	defer framework.Server.SetPoolSize(context.Background(), framework.Server.PoolSize())
+	defer framework.Server.SetPoolSize(t.Context(), framework.Server.PoolSize())
 
-	err := framework.Server.SetPoolSize(context.Background(), 1)
+	err := framework.Server.SetPoolSize(t.Context(), 1)
 	require.NoError(t, err)
 
 	const tag = "Waits/Histograms/Consolidations/Count"
@@ -353,7 +352,7 @@ func TestHealth(t *testing.T) {
 func TestStreamHealth(t *testing.T) {
 	var health *querypb.StreamHealthResponse
 	framework.Server.BroadcastHealth()
-	if err := framework.Server.StreamHealth(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+	if err := framework.Server.StreamHealth(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 		health = shr
 		return io.EOF
 	}); err != nil {
@@ -641,7 +640,7 @@ func TestAppDebugRequest(t *testing.T) {
 
 	// Set vt_appdebug
 	ctx := callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "vt_appdebug"})
 
@@ -818,7 +817,7 @@ func TestHexAndBitBindVar(t *testing.T) {
 
 // Test will validate drop view ddls.
 func TestShowTablesWithSizes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -970,7 +969,7 @@ func newTestSchemaEngine(connParams *mysql.ConnParams) *schema.Engine {
 }
 
 func TestEngineReload(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -1137,7 +1136,7 @@ func TestEngineReload(t *testing.T) {
 }
 
 func TestUpdateTableIndexMetrics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()

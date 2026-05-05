@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -460,7 +459,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
 	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
+		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %v, want %v", got, want)
 	}
 
 	txResult := &sqltypes.Result{
@@ -506,7 +505,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 		}},
 	}
 	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
+		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %v, want %v", got, want)
 	}
 
 	txResult = &sqltypes.Result{
@@ -526,7 +525,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
+		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %v, want %v", got, want)
 	}
 
 	txResult = &sqltypes.Result{
@@ -546,7 +545,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
 	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
+		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %v, want %v", got, want)
 	}
 }
 
@@ -582,9 +581,7 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 			Shard:    "shard01",
 		}},
 	}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReadAllTransactions:\n%s, want\n%s", jsonStr(got), jsonStr(want))
-	}
+	assert.Equalf(t, want, got, "ReadAllTransactions:\n%s, want\n%s", jsonStr(got), jsonStr(want))
 }
 
 // TestTransactionNotifier tests that the transaction notifier is called

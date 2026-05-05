@@ -17,7 +17,6 @@ limitations under the License.
 package consultopo
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -113,7 +112,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			require.NoError(t, err)
+			require.FailNowf(t, "timed out waiting for Consul to become ready", "last error: %v", err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -159,7 +158,7 @@ func TestConsulTopo(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create the CellInfo.
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
@@ -214,7 +213,7 @@ func TestConsulTopoWithChecks(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create the CellInfo.
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
@@ -272,7 +271,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create the CellInfo.
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
@@ -332,7 +331,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 		require.NoError(t, err)
 
 		// Attempt to Create the CellInfo.
-		err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		err = ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: serverAddr,
 			Root:          path.Join("globalRoot", test.LocalCellName),
 		})

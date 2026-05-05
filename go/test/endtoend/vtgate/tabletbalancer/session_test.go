@@ -17,7 +17,6 @@ limitations under the License.
 package tabletbalancer
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -133,7 +132,7 @@ func setupCluster(t *testing.T) (*cluster.VtgateProcess, mysql.ConnParams, []*cl
 	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -179,7 +178,7 @@ func createSessionConnections(t *testing.T, vtParams *mysql.ConnParams, numConne
 
 	// Try up to 50 times to get numConnections with different server IDs
 	for range 50 {
-		conn, err := mysql.Connect(context.Background(), vtParams)
+		conn, err := mysql.Connect(t.Context(), vtParams)
 		require.NoError(t, err)
 
 		_, err = conn.ExecuteFetch("USE @replica", 1, false)

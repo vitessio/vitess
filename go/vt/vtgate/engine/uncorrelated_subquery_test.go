@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -62,7 +61,7 @@ func TestPulloutSubqueryValueGood(t *testing.T) {
 		Outer:          ufp,
 	}
 
-	result, err := ps.TryExecute(context.Background(), &noopVCursor{}, bindVars, false)
+	result, err := ps.TryExecute(t.Context(), &noopVCursor{}, bindVars, false)
 	require.NoError(t, err)
 	sfp.ExpectLog(t, []string{fmt.Sprintf(`Execute aa: %v false`, sqltypes.Int64BindVariable(1))})
 	ufp.ExpectLog(t, []string{fmt.Sprintf(`Execute aa: %v sq: %v false`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(1))})
@@ -87,7 +86,7 @@ func TestPulloutSubqueryValueNone(t *testing.T) {
 		Outer:          ufp,
 	}
 
-	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
+	if _, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
@@ -112,7 +111,7 @@ func TestPulloutSubqueryValueBadRows(t *testing.T) {
 		Subquery:       sfp,
 	}
 
-	_, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	require.EqualError(t, err, "subquery returned more than one row")
 }
 
@@ -137,7 +136,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 		Outer:          ufp,
 	}
 
-	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
+	if _, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
@@ -147,7 +146,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 	sfp.rewind()
 	ufp.rewind()
 	ps.Opcode = PulloutNotIn
-	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
+	if _, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
@@ -173,7 +172,7 @@ func TestPulloutSubqueryInNone(t *testing.T) {
 		Outer:          ufp,
 	}
 
-	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
+	if _, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
@@ -199,7 +198,7 @@ func TestPulloutSubqueryExists(t *testing.T) {
 		Outer:     ufp,
 	}
 
-	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
+	if _, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
@@ -224,7 +223,7 @@ func TestPulloutSubqueryExistsNone(t *testing.T) {
 		Outer:     ufp,
 	}
 
-	if _, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
+	if _, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false); err != nil {
 		t.Error(err)
 	}
 	sfp.ExpectLog(t, []string{`Execute  false`})
@@ -241,7 +240,7 @@ func TestPulloutSubqueryError(t *testing.T) {
 		Subquery:       sfp,
 	}
 
-	_, err := ps.TryExecute(context.Background(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
+	_, err := ps.TryExecute(t.Context(), &noopVCursor{}, make(map[string]*querypb.BindVariable), false)
 	require.EqualError(t, err, "err")
 }
 
@@ -295,7 +294,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 		Outer:          ufp,
 	}
 
-	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {
+	if _, err := ps.GetFields(t.Context(), nil, bindVars); err != nil {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
@@ -305,7 +304,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 
 	ufp.rewind()
 	ps.Opcode = PulloutIn
-	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {
+	if _, err := ps.GetFields(t.Context(), nil, bindVars); err != nil {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
@@ -315,7 +314,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 
 	ufp.rewind()
 	ps.Opcode = PulloutNotIn
-	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {
+	if _, err := ps.GetFields(t.Context(), nil, bindVars); err != nil {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{
@@ -325,7 +324,7 @@ func TestPulloutSubqueryGetFields(t *testing.T) {
 
 	ufp.rewind()
 	ps.Opcode = PulloutExists
-	if _, err := ps.GetFields(context.Background(), nil, bindVars); err != nil {
+	if _, err := ps.GetFields(t.Context(), nil, bindVars); err != nil {
 		t.Error(err)
 	}
 	ufp.ExpectLog(t, []string{

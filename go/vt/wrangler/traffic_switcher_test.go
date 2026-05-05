@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -76,7 +75,7 @@ const (
 // TestTableMigrate tests table mode migrations.
 // This has to be kept in sync with TestShardMigrate.
 func TestTableMigrateMainflow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -494,7 +493,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 // TestShardMigrate tests table mode migrations.
 // This has to be kept in sync with TestTableMigrate.
 func TestShardMigrateMainflow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.close(t)
 
@@ -793,7 +792,7 @@ func TestTableMigrateOneToManyKeepAllArtifacts(t *testing.T) {
 }
 
 func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.close(t)
 
@@ -994,7 +993,7 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 
 func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	var err error
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.close(t)
 
@@ -1113,7 +1112,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 // TestMigrateFailJournal tests that cancel doesn't get called after point of no return.
 // No need to test this for shard migrate because code paths are the same.
 func TestMigrateFailJournal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1212,7 +1211,7 @@ func TestMigrateFailJournal(t *testing.T) {
 }
 
 func TestTableMigrateJournalExists(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1290,7 +1289,7 @@ func TestTableMigrateJournalExists(t *testing.T) {
 }
 
 func TestShardMigrateJournalExists(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -1352,7 +1351,7 @@ func TestShardMigrateJournalExists(t *testing.T) {
 }
 
 func TestTableMigrateCancel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1406,7 +1405,7 @@ func TestTableMigrateCancel(t *testing.T) {
 }
 
 func TestTableMigrateCancelDryRun(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1466,7 +1465,7 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 }
 
 func TestTableMigrateNoReverse(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1569,7 +1568,7 @@ func TestTableMigrateNoReverse(t *testing.T) {
 }
 
 func TestMigrateFrozen(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1611,7 +1610,7 @@ func TestMigrateFrozen(t *testing.T) {
 }
 
 func TestMigrateNoStreamsFound(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1627,7 +1626,7 @@ func TestMigrateNoStreamsFound(t *testing.T) {
 }
 
 func TestMigrateDistinctSources(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1659,7 +1658,7 @@ func TestMigrateDistinctSources(t *testing.T) {
 }
 
 func TestMigrateMismatchedTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1689,7 +1688,7 @@ func TestMigrateMismatchedTables(t *testing.T) {
 }
 
 func TestTableMigrateAllShardsNotPresent(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1704,7 +1703,7 @@ func TestTableMigrateAllShardsNotPresent(t *testing.T) {
 }
 
 func TestMigrateNoTableWildcards(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.close(t)
 
@@ -1807,7 +1806,7 @@ func TestReverseVReplicationUpdateQuery(t *testing.T) {
 }
 
 func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -2160,7 +2159,7 @@ func TestIsPartialMoveTables(t *testing.T) {
 // fails -- specifically at the point where we try and create the
 // workflow streams.
 func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.close(t)
 
@@ -2191,7 +2190,7 @@ func TestNoOrphanedRoutingRulesOnFailedCreate(t *testing.T) {
 
 func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	got, err := topotools.GetRoutingRules(ctx, wr.ts)
 	if err != nil {
 		t.Fatal(err)
@@ -2210,7 +2209,7 @@ func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {
 
 func checkCellRouting(t *testing.T, wr *Wrangler, cell string, want map[string][]string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	svs, err := wr.ts.GetSrvVSchema(ctx, cell)
 	if err != nil {
 		t.Fatal(err)
@@ -2226,7 +2225,7 @@ func checkCellRouting(t *testing.T, wr *Wrangler, cell string, want map[string][
 
 func checkDenyList(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	splits := strings.Split(keyspaceShard, ":")
 	si, err := ts.GetShard(ctx, splits[0], splits[1])
 	if err != nil {
@@ -2244,7 +2243,7 @@ func checkDenyList(t *testing.T, ts *topo.Server, keyspaceShard string, want []s
 
 func checkServedTypes(t *testing.T, ts *topo.Server, keyspaceShard string, want int) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	splits := strings.Split(keyspaceShard, ":")
 	si, err := ts.GetShard(ctx, splits[0], splits[1])
 	if err != nil {
@@ -2261,7 +2260,7 @@ func checkServedTypes(t *testing.T, ts *topo.Server, keyspaceShard string, want 
 
 func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspaceShard, cell string, want int) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	splits := strings.Split(keyspaceShard, ":")
 	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, splits[0])
 	if err != nil {
@@ -2283,7 +2282,7 @@ outer:
 
 func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	splits := strings.Split(keyspaceShard, ":")
 	si, err := ts.GetShard(ctx, splits[0], splits[1])
 	if err != nil {

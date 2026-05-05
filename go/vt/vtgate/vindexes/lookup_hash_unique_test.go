@@ -17,7 +17,6 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -88,7 +87,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{numRows: 1}
 
-	got, err := lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lhu.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.ShardDestination{
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
@@ -97,7 +96,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	assert.Equal(t, want, got, "Map()")
 
 	vc.numRows = 0
-	got, err = lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err = lhu.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want = []key.ShardDestination{
 		key.DestinationNone{},
@@ -106,7 +105,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	assert.Equal(t, want, got, "Map()")
 
 	vc.numRows = 2
-	_, err = lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	_, err = lhu.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	assert.EqualError(t, err, "LookupHash.Map: unexpected multiple results from vindex t: INT64(1)", "lhu(query fail)")
 
 	// Test conversion fail.
@@ -114,7 +113,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 		sqltypes.MakeTestFields("b|a", "bigint|varbinary"),
 		"1|notint",
 	)
-	got, err = lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	got, err = lhu.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
 	want = []key.ShardDestination{
 		key.DestinationNone{},
@@ -123,7 +122,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	_, err = lhu.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	assert.EqualError(t, err, "lookup.Map: execute failed", "lhu(query fail)")
 	vc.mustFail = false
 }
@@ -132,7 +131,7 @@ func TestLookupHashUniqueMapWriteOnly(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", true)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lhu.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lhu.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.ShardDestination{
 		key.DestinationKeyRange{
@@ -151,16 +150,16 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 
 	// The check doesn't actually happen. But we give correct values
 	// to avoid confusion.
-	got, err := lhu.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
+	got, err := lhu.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
 	require.NoError(t, err)
 	assert.Equal(t, []bool{true, true}, got, "lhu.Verify(match)")
 
 	vc.numRows = 0
-	got, err = lhu.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	got, err = lhu.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	require.NoError(t, err)
 	assert.Equal(t, []bool{false}, got, "lhu.Verify(mismatch)")
 
-	_, err = lhu.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
+	_, err = lhu.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
 	assert.EqualError(t, err, "lookup.Verify.vunhash: invalid keyspace id: 626f677573", "lhu.Verify(bogus)")
 }
 
@@ -168,7 +167,7 @@ func TestLookupHashUniqueVerifyWriteOnly(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", true)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lhu.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")})
+	got, err := lhu.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")})
 	require.NoError(t, err)
 	assert.Equal(t, []bool{true}, got, "lhu.Verify")
 	assert.Empty(t, vc.queries, "vc.queries length")
@@ -178,11 +177,11 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{}
 
-	err := lhu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	err := lhu.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	require.NoError(t, err)
 	assert.Len(t, vc.queries, 1, "vc.queries length")
 
-	err = lhu.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
+	err = lhu.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
 	assert.EqualError(t, err, "lookup.Create.vunhash: invalid keyspace id: 626f677573", "lhu.Create(bogus)")
 }
 
@@ -190,11 +189,11 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{}
 
-	err := lhu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lhu.(Lookup).Delete(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	require.NoError(t, err)
 	assert.Len(t, vc.queries, 1, "vc.queries length")
 
-	err = lhu.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("bogus"))
+	err = lhu.(Lookup).Delete(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("bogus"))
 	assert.EqualError(t, err, "lookup.Delete.vunhash: invalid keyspace id: 626f677573", "lhu.Delete(bogus)")
 }
 
@@ -202,7 +201,7 @@ func TestLookupHashUniqueUpdate(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", false /* writeOnly */)
 	vc := &vcursor{}
 
-	err := lhu.(Lookup).Update(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
+	err := lhu.(Lookup).Update(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	assert.Len(t, vc.queries, 2, "vc.queries length")
 }

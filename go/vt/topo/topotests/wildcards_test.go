@@ -20,10 +20,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-
-	"github.com/stretchr/testify/assert"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -34,24 +35,20 @@ type topoLayout struct {
 }
 
 func (l *topoLayout) initTopo(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, keyspace := range l.keyspaces {
-		if err := ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil {
-			t.Fatalf("CreateKeyspace(%v) failed: %v", keyspace, err)
-		}
+		require.NoErrorf(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}), "CreateKeyspace(%v) failed", keyspace)
 	}
 
 	for keyspace, shards := range l.shards {
 		for _, shard := range shards {
-			if err := ts.CreateShard(ctx, keyspace, shard); err != nil {
-				t.Fatalf("CreateShard(%v, %v) failed: %v", keyspace, shard, err)
-			}
+			require.NoErrorf(t, ts.CreateShard(ctx, keyspace, shard), "CreateShard(%v, %v) failed", keyspace, shard)
 		}
 	}
 }
 
 func validateKeyspaceWildcard(t *testing.T, l *topoLayout, param string, expected []string) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	defer ts.Close()
@@ -65,14 +62,11 @@ func validateKeyspaceWildcard(t *testing.T, l *topoLayout, param string, expecte
 		return
 	}
 
-	if len(r) != len(expected) {
-		t.Errorf("got wrong result: %v", r)
+	if !assert.Equalf(t, len(expected), len(r), "got wrong result: %v", r) {
 		return
 	}
 	for i, e := range expected {
-		if r[i] != e {
-			t.Errorf("got wrong result[%v]: %v", i, r)
-		}
+		assert.Equalf(t, e, r[i], "got wrong result[%v]: %v", i, r)
 	}
 }
 
@@ -89,7 +83,7 @@ func TestResolveKeyspaceWildcard(t *testing.T) {
 }
 
 func validateShardWildcard(t *testing.T, l *topoLayout, param string, expected []topo.KeyspaceShard) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	defer ts.Close()
@@ -103,14 +97,11 @@ func validateShardWildcard(t *testing.T, l *topoLayout, param string, expected [
 		return
 	}
 
-	if len(r) != len(expected) {
-		t.Errorf("got wrong result: %v", r)
+	if !assert.Equalf(t, len(expected), len(r), "got wrong result: %v", r) {
 		return
 	}
 	for i, e := range expected {
-		if r[i] != e {
-			t.Errorf("got wrong result[%v]: %v", i, r)
-		}
+		assert.Equalf(t, e, r[i], "got wrong result[%v]: %v", i, r)
 	}
 }
 
@@ -187,7 +178,7 @@ func TestResolveShardWildcard(t *testing.T) {
 }
 
 func validateWildcards(t *testing.T, l *topoLayout, param string, expected []string) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx)
 	defer ts.Close()
@@ -201,14 +192,11 @@ func validateWildcards(t *testing.T, l *topoLayout, param string, expected []str
 		return
 	}
 
-	if len(r) != len(expected) {
-		t.Errorf("got wrong result: %v\nexpected: %v", r, expected)
+	if !assert.Equalf(t, len(expected), len(r), "got wrong result: %v\nexpected: %v", r, expected) {
 		return
 	}
 	for i, e := range expected {
-		if r[i] != e {
-			t.Errorf("got wrong result[%v]: %v", i, r)
-		}
+		assert.Equalf(t, e, r[i], "got wrong result[%v]: %v", i, r)
 	}
 }
 

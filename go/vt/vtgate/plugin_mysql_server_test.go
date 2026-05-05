@@ -122,9 +122,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	// Use tmp file to reserve a path, remove it immediately, we only care about
 	// name in this context
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
@@ -138,7 +136,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 		Pass:       "password1",
 	}
 
-	c, err := mysql.Connect(context.Background(), params)
+	c, err := mysql.Connect(t.Context(), params)
 	assert.NoError(t, err)
 	c.Close()
 }
@@ -151,9 +149,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 	// First let's create a file. In this way, we simulate
 	// having a stale socket on disk that needs to be cleaned up.
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
 	require.NoError(t, err)
@@ -166,7 +162,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 		Pass:       "password1",
 	}
 
-	c, err := mysql.Connect(context.Background(), params)
+	c, err := mysql.Connect(t.Context(), params)
 	assert.NoError(t, err)
 	c.Close()
 }
@@ -177,9 +173,7 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	authServer := newTestAuthServerStatic()
 
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
@@ -188,9 +182,8 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	go l.Accept()
 	_, err = newMysqlUnixSocket(unixSocket.Name(), authServer, th)
 	want := "listen unix"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, want prefix %s", err, want)
-	}
+	require.Error(t, err)
+	assert.Truef(t, strings.HasPrefix(err.Error(), want), "Error: %v, want prefix %s", err, want)
 }
 
 func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
@@ -217,65 +210,65 @@ var newFromStringOK = func(ctx context.Context, spanContext, label string) (trac
 
 func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		t.Fatalf("we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
-		return trace.NoopSpan{}, context.Background(), nil
+		require.Failf(t, "unexpected call", "we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
+		return trace.NoopSpan{}, t.Context(), nil
 	}
 }
 
 func newFromStringError(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		return trace.NoopSpan{}, context.Background(), errors.New("")
+		return trace.NoopSpan{}, t.Context(), errors.New("")
 	}
 }
 
 func newFromStringExpect(t *testing.T, expected string) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 		assert.Equal(t, expected, parentSpan)
-		return trace.NoopSpan{}, context.Background(), nil
+		return trace.NoopSpan{}, t.Context(), nil
 	}
 }
 
 func newSpanFail(t *testing.T) func(ctx context.Context, label string) (trace.Span, context.Context) {
 	return func(ctx context.Context, label string) (trace.Span, context.Context) {
-		t.Fatalf("we provided a span context but newFromString was not used as expected")
-		return trace.NoopSpan{}, context.Background()
+		require.Fail(t, "we provided a span context but newFromString was not used as expected")
+		return trace.NoopSpan{}, t.Context()
 	}
 }
 
 func TestNoSpanContextPassed(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanTestable(t.Context(), "sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextNoPassedInButExistsInString(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanTestable(t.Context(), "SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextPassedIn(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
 	assert.NoError(t, err)
 }
 
 func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
 		newSpanFail(t),
 		newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextWithMultipleLeadingComments(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*//*vt+ SCATTER_ERRORS_AS_WARNINGS */ SELECT col1 FROM TABLE", "someLabel",
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*//*vt+ SCATTER_ERRORS_AS_WARNINGS */ SELECT col1 FROM TABLE", "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextNotParsable(t *testing.T) {
 	hasRun := false
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
 		func(c context.Context, s string) (trace.Span, context.Context) {
 			hasRun = true
-			return trace.NoopSpan{}, context.Background()
+			return trace.NoopSpan{}, t.Context()
 		},
 		newFromStringError(t))
 	assert.NoError(t, err)
@@ -284,7 +277,7 @@ func TestSpanContextNotParsable(t *testing.T) {
 
 func TestStartSpanFromPrepare_NoSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "SELECT 1"}
-	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Empty(t, *prepare.SpanContext)
@@ -292,7 +285,7 @@ func TestStartSpanFromPrepare_NoSpanContext(t *testing.T) {
 
 func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
-	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
@@ -302,7 +295,7 @@ func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
 func TestStartSpanFromPrepare_CachesSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=456*/SELECT 1"}
 	// First call extracts and caches the span context.
-	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "456"))
 	assert.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
@@ -310,7 +303,7 @@ func TestStartSpanFromPrepare_CachesSpanContext(t *testing.T) {
 
 	// Second call reuses the cached span context (PrepareStmt is not re-parsed).
 	prepare.PrepareStmt = "modified query that would not match"
-	_, _, err = startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err = startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "456"))
 	assert.NoError(t, err)
 }
@@ -319,14 +312,14 @@ func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
 	newFromStringCalls := 0
 	newSpanCalls := 0
-	_, _, err := startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		func(c context.Context, s string) (trace.Span, context.Context) {
 			newSpanCalls++
-			return trace.NoopSpan{}, context.Background()
+			return trace.NoopSpan{}, t.Context()
 		},
 		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 			newFromStringCalls++
-			return trace.NoopSpan{}, context.Background(), errors.New("parse error")
+			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
 		})
 	assert.NoError(t, err)
 	assert.Equal(t, 1, newFromStringCalls, "newFromString should be called on first execution")
@@ -339,14 +332,14 @@ func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
 	// Second execution should not call newFromString again.
 	newFromStringCalls = 0
 	newSpanCalls = 0
-	_, _, err = startSpanFromPrepareTestable(context.Background(), prepare, "someLabel",
+	_, _, err = startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		func(c context.Context, s string) (trace.Span, context.Context) {
 			newSpanCalls++
-			return trace.NoopSpan{}, context.Background()
+			return trace.NoopSpan{}, t.Context()
 		},
 		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 			newFromStringCalls++
-			return trace.NoopSpan{}, context.Background(), errors.New("parse error")
+			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
 		})
 	assert.NoError(t, err)
 	assert.Equal(t, 0, newFromStringCalls, "newFromString should not be called after cached failure")
@@ -362,18 +355,14 @@ func TestDefaultWorkloadEmpty(t *testing.T) {
 	vh := &vtgateHandler{}
 	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLTP)
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_OLTP {
-		t.Fatalf("Expected default workload OLTP")
-	}
+	require.Equal(t, querypb.ExecuteOptions_OLTP, sess.Options.Workload, "Expected default workload OLTP")
 }
 
 func TestDefaultWorkloadOLAP(t *testing.T) {
 	vh := &vtgateHandler{}
 	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_OLAP {
-		t.Fatalf("Expected default workload OLAP")
-	}
+	require.Equal(t, querypb.ExecuteOptions_OLAP, sess.Options.Workload, "Expected default workload OLAP")
 }
 
 func TestInitTLSConfigWithoutServerCA(t *testing.T) {
@@ -405,18 +394,14 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 		}
 
 		serverConfig := srv.tcpListener.TLSConfig.Load()
-		if serverConfig == nil {
-			t.Fatalf("init tls config shouldn't create nil server config")
-		}
+		require.NotNil(t, serverConfig, "init tls config shouldn't create nil server config")
 
 		srv.sigChan <- syscall.SIGHUP
 
 		// wait for signal handler
 		synctest.Wait()
 
-		if srv.tcpListener.TLSConfig.Load() == serverConfig {
-			t.Fatalf("init tls config should have been recreated after SIGHUP")
-		}
+		require.NotEqual(t, serverConfig, srv.tcpListener.TLSConfig.Load(), "init tls config should have been recreated after SIGHUP")
 	})
 }
 
@@ -429,7 +414,7 @@ func TestKillMethods(t *testing.T) {
 	err := vh.KillQuery(12345)
 	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
-	err = vh.KillConnection(context.Background(), 12345)
+	err = vh.KillConnection(t.Context(), 12345)
 	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
 	// add a connection
@@ -440,7 +425,7 @@ func TestKillMethods(t *testing.T) {
 	// connection exists
 
 	// updating context.
-	cancelCtx, cancelFunc := context.WithCancel(context.Background())
+	cancelCtx, cancelFunc := context.WithCancel(t.Context())
 	mysqlConn.UpdateCancelCtx(cancelFunc)
 
 	// kill query
@@ -449,11 +434,11 @@ func TestKillMethods(t *testing.T) {
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 
 	// updating context.
-	cancelCtx, cancelFunc = context.WithCancel(context.Background())
+	cancelCtx, cancelFunc = context.WithCancel(t.Context())
 	mysqlConn.UpdateCancelCtx(cancelFunc)
 
 	// kill connection
-	err = vh.KillConnection(context.Background(), 1)
+	err = vh.KillConnection(t.Context(), 1)
 	assert.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 	require.True(t, mysqlConn.IsMarkedForClose())

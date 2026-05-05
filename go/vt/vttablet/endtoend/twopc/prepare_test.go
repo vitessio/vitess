@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -31,7 +30,7 @@ import (
 // The transaction updates to failed state.
 func TestCommitPreparedFailNonRetryable(t *testing.T) {
 	dbaConnector := framework.Server.Config().DB.DbaWithDB()
-	conn, err := dbaConnector.Connect(context.Background())
+	conn, err := dbaConnector.Connect(t.Context())
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -93,7 +92,7 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	dbaConnector := framework.Server.Config().DB.DbaWithDB()
-	conn, err := dbaConnector.Connect(context.Background())
+	conn, err := dbaConnector.Connect(t.Context())
 	require.NoError(t, err)
 	defer conn.Close()
 

@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -697,7 +696,7 @@ func TestManualTwopcz(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Execute("delete from vitess_test where intval=4", nil)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()

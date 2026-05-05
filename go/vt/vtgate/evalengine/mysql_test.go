@@ -25,6 +25,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -64,9 +67,7 @@ var errKnownBadQuery = errors.New("this query is known to give bad results in My
 
 func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	stmt, err := sqlparser.NewTestParser().Parse(query)
-	if err != nil {
-		t.Fatalf("failed to parse '%s': %v", query, err)
-	}
+	require.NoErrorf(t, err, "failed to parse '%s': %v", query, err)
 
 	cfg := &Config{
 		Collation:         collations.CollationUtf8mb4ID,
@@ -133,20 +134,20 @@ func TestMySQLGolden(t *testing.T) {
 				}
 				if err != nil {
 					if tc.Error == "" {
-						t.Errorf("query %d: %s\nmysql val:  %s\nvitess err: %s", testcount, tc.Query, tc.Value, err.Error())
+						assert.Failf(t, "vitess error", "query %d: %s\nmysql val:  %s\nvitess err: %s", testcount, tc.Query, tc.Value, err.Error())
 					} else if !strings.HasPrefix(tc.Error, err.Error()) {
-						t.Errorf("query %d: %s\nmysql err:  %s\nvitess err: %s", testcount, tc.Query, tc.Error, err.Error())
+						assert.Failf(t, "error mismatch", "query %d: %s\nmysql err:  %s\nvitess err: %s", testcount, tc.Query, tc.Error, err.Error())
 					} else {
 						ok++
 					}
 					continue
 				}
 				if tc.Error != "" {
-					t.Errorf("query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value(collations.MySQL8().DefaultConnectionCharset()))
+					assert.Failf(t, "expected error", "query %d: %s\nmysql err:  %s\nvitess val: %s", testcount, tc.Query, tc.Error, eval.Value(collations.MySQL8().DefaultConnectionCharset()))
 					continue
 				}
 				if eval.String() != tc.Value {
-					t.Errorf("query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value(collations.MySQL8().DefaultConnectionCharset()))
+					assert.Failf(t, "value mismatch", "query %d: %s\nmysql val:  %s\nvitess val: %s", testcount, tc.Query, tc.Value, eval.Value(collations.MySQL8().DefaultConnectionCharset()))
 					continue
 				}
 				ok++

@@ -332,7 +332,7 @@ func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGat
 	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
+	conn, err := vtgateconn.DialProtocol(t.Context(), "test", "")
 	require.NoError(t, err)
 	session := conn.Session("connection_ks@rdonly", testExecuteOptions)
 
@@ -358,7 +358,7 @@ func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGat
 
 // RunErrorTests runs all the tests that expect errors
 func RunErrorTests(t *testing.T, fakeServer vtgateservice.VTGateService) {
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
+	conn, err := vtgateconn.DialProtocol(t.Context(), "test", "")
 	require.NoError(t, err)
 	session := conn.Session("connection_ks@rdonly", testExecuteOptions)
 
@@ -817,7 +817,7 @@ func RunSessionTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservic
 	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
+	conn, err := vtgateconn.DialProtocol(t.Context(), "test", "")
 	require.NoError(t, err)
 	session := conn.Session("connection_ks", nil)
 	session.SessionPb().Autocommit = false

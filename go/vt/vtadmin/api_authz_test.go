@@ -19,7 +19,6 @@ limitations under the License.
 package vtadmin_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -78,7 +77,7 @@ func TestApplySchema(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ApplySchema(ctx, &vtadminpb.ApplySchemaRequest{
@@ -95,7 +94,7 @@ func TestApplySchema(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ApplySchema(ctx, &vtadminpb.ApplySchemaRequest{
@@ -143,7 +142,7 @@ func TestCancelSchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CancelSchemaMigration(ctx, &vtadminpb.CancelSchemaMigrationRequest{
@@ -160,7 +159,7 @@ func TestCancelSchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CancelSchemaMigration(ctx, &vtadminpb.CancelSchemaMigrationRequest{
@@ -208,7 +207,7 @@ func TestCleanupSchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CleanupSchemaMigration(ctx, &vtadminpb.CleanupSchemaMigrationRequest{
@@ -225,7 +224,7 @@ func TestCleanupSchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CleanupSchemaMigration(ctx, &vtadminpb.CleanupSchemaMigrationRequest{
@@ -273,7 +272,7 @@ func TestCompleteSchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CompleteSchemaMigration(ctx, &vtadminpb.CompleteSchemaMigrationRequest{
@@ -290,7 +289,7 @@ func TestCompleteSchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CompleteSchemaMigration(ctx, &vtadminpb.CompleteSchemaMigrationRequest{
@@ -338,7 +337,7 @@ func TestCreateKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CreateKeyspace(ctx, &vtadminpb.CreateKeyspaceRequest{
@@ -355,7 +354,7 @@ func TestCreateKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CreateKeyspace(ctx, &vtadminpb.CreateKeyspaceRequest{
@@ -403,7 +402,7 @@ func TestCreateShard(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CreateShard(ctx, &vtadminpb.CreateShardRequest{
@@ -421,7 +420,7 @@ func TestCreateShard(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.CreateShard(ctx, &vtadminpb.CreateShardRequest{
@@ -470,7 +469,7 @@ func TestDeleteKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteKeyspace(ctx, &vtadminpb.DeleteKeyspaceRequest{
@@ -487,7 +486,7 @@ func TestDeleteKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteKeyspace(ctx, &vtadminpb.DeleteKeyspaceRequest{
@@ -535,7 +534,7 @@ func TestDeleteShards(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteShards(ctx, &vtadminpb.DeleteShardsRequest{
@@ -557,7 +556,7 @@ func TestDeleteShards(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteShards(ctx, &vtadminpb.DeleteShardsRequest{
@@ -610,7 +609,7 @@ func TestDeleteTablet(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteTablet(ctx, &vtadminpb.DeleteTabletRequest{
@@ -628,7 +627,7 @@ func TestDeleteTablet(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.DeleteTablet(ctx, &vtadminpb.DeleteTabletRequest{
@@ -677,7 +676,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
@@ -695,7 +694,7 @@ func TestEmergencyFailoverShard(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{
@@ -750,7 +749,7 @@ func TestFindSchema(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
@@ -771,7 +770,7 @@ func TestFindSchema(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
@@ -791,7 +790,7 @@ func TestFindSchema(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
@@ -843,7 +842,7 @@ func TestGetBackups(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
@@ -855,7 +854,7 @@ func TestGetBackups(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
@@ -867,7 +866,7 @@ func TestGetBackups(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetBackups(ctx, &vtadminpb.GetBackupsRequest{})
@@ -916,7 +915,7 @@ func TestGetCellInfos(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
@@ -930,7 +929,7 @@ func TestGetCellInfos(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
@@ -944,7 +943,7 @@ func TestGetCellInfos(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetCellInfos(ctx, &vtadminpb.GetCellInfosRequest{
@@ -995,7 +994,7 @@ func TestGetCellsAliases(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
@@ -1007,7 +1006,7 @@ func TestGetCellsAliases(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
@@ -1019,7 +1018,7 @@ func TestGetCellsAliases(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetCellsAliases(ctx, &vtadminpb.GetCellsAliasesRequest{})
@@ -1062,7 +1061,7 @@ func TestGetClusters(t *testing.T) {
 		t.Parallel()
 
 		var actor *rbac.Actor
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
@@ -1073,7 +1072,7 @@ func TestGetClusters(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
@@ -1084,7 +1083,7 @@ func TestGetClusters(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
@@ -1133,7 +1132,7 @@ func TestGetGates(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
@@ -1152,7 +1151,7 @@ func TestGetGates(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
@@ -1172,7 +1171,7 @@ func TestGetGates(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
@@ -1216,7 +1215,7 @@ func TestGetKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetKeyspace(ctx, &vtadminpb.GetKeyspaceRequest{
@@ -1231,7 +1230,7 @@ func TestGetKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetKeyspace(ctx, &vtadminpb.GetKeyspaceRequest{
@@ -1283,7 +1282,7 @@ func TestGetKeyspaces(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
@@ -1295,7 +1294,7 @@ func TestGetKeyspaces(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
@@ -1314,7 +1313,7 @@ func TestGetKeyspaces(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetKeyspaces(ctx, &vtadminpb.GetKeyspacesRequest{})
@@ -1370,7 +1369,7 @@ func TestGetSchemaMigrations(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{})
@@ -1382,7 +1381,7 @@ func TestGetSchemaMigrations(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{})
@@ -1394,7 +1393,7 @@ func TestGetSchemaMigrations(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{})
@@ -1437,7 +1436,7 @@ func TestGetSchema(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
@@ -1460,7 +1459,7 @@ func TestGetSchema(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
@@ -1513,7 +1512,7 @@ func TestGetSchemas(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
@@ -1532,7 +1531,7 @@ func TestGetSchemas(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
@@ -1558,7 +1557,7 @@ func TestGetSchemas(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{})
@@ -1614,7 +1613,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
@@ -1626,7 +1625,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
@@ -1645,7 +1644,7 @@ func TestGetShardReplicationPositions(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetShardReplicationPositions(ctx, &vtadminpb.GetShardReplicationPositionsRequest{})
@@ -1695,7 +1694,7 @@ func TestGetSrvVSchema(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSrvVSchema(ctx, &vtadminpb.GetSrvVSchemaRequest{
@@ -1710,7 +1709,7 @@ func TestGetSrvVSchema(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSrvVSchema(ctx, &vtadminpb.GetSrvVSchemaRequest{
@@ -1762,7 +1761,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
@@ -1774,7 +1773,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
@@ -1793,7 +1792,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetSrvVSchemas(ctx, &vtadminpb.GetSrvVSchemasRequest{})
@@ -1843,7 +1842,7 @@ func TestGetTablet(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetTablet(ctx, &vtadminpb.GetTabletRequest{
@@ -1860,7 +1859,7 @@ func TestGetTablet(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetTablet(ctx, &vtadminpb.GetTabletRequest{
@@ -1914,7 +1913,7 @@ func TestGetTablets(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
@@ -1926,7 +1925,7 @@ func TestGetTablets(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
@@ -1945,7 +1944,7 @@ func TestGetTablets(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetTablets(ctx, &vtadminpb.GetTabletsRequest{})
@@ -1995,7 +1994,7 @@ func TestGetVSchema(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetVSchema(ctx, &vtadminpb.GetVSchemaRequest{
@@ -2010,7 +2009,7 @@ func TestGetVSchema(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetVSchema(ctx, &vtadminpb.GetVSchemaRequest{
@@ -2062,7 +2061,7 @@ func TestGetVSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
@@ -2074,7 +2073,7 @@ func TestGetVSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
@@ -2093,7 +2092,7 @@ func TestGetVSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetVSchemas(ctx, &vtadminpb.GetVSchemasRequest{})
@@ -2149,7 +2148,7 @@ func TestGetVtctlds(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
@@ -2168,7 +2167,7 @@ func TestGetVtctlds(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
@@ -2188,7 +2187,7 @@ func TestGetVtctlds(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
@@ -2232,7 +2231,7 @@ func TestGetWorkflow(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetWorkflow(ctx, &vtadminpb.GetWorkflowRequest{
@@ -2248,7 +2247,7 @@ func TestGetWorkflow(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetWorkflow(ctx, &vtadminpb.GetWorkflowRequest{
@@ -2301,7 +2300,7 @@ func TestGetWorkflows(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
@@ -2313,7 +2312,7 @@ func TestGetWorkflows(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
@@ -2325,7 +2324,7 @@ func TestGetWorkflows(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.GetWorkflows(ctx, &vtadminpb.GetWorkflowsRequest{})
@@ -2368,7 +2367,7 @@ func TestLaunchSchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.LaunchSchemaMigration(ctx, &vtadminpb.LaunchSchemaMigrationRequest{
@@ -2385,7 +2384,7 @@ func TestLaunchSchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.LaunchSchemaMigration(ctx, &vtadminpb.LaunchSchemaMigrationRequest{
@@ -2433,7 +2432,7 @@ func TestPingTablet(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.PingTablet(ctx, &vtadminpb.PingTabletRequest{
@@ -2450,7 +2449,7 @@ func TestPingTablet(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.PingTablet(ctx, &vtadminpb.PingTabletRequest{
@@ -2498,7 +2497,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
@@ -2516,7 +2515,7 @@ func TestPlannedFailoverShard(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{
@@ -2565,7 +2564,7 @@ func TestRefreshState(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RefreshState(ctx, &vtadminpb.RefreshStateRequest{
@@ -2582,7 +2581,7 @@ func TestRefreshState(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RefreshState(ctx, &vtadminpb.RefreshStateRequest{
@@ -2630,7 +2629,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RefreshTabletReplicationSource(ctx, &vtadminpb.RefreshTabletReplicationSourceRequest{
@@ -2647,7 +2646,7 @@ func TestRefreshTabletReplicationSource(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RefreshTabletReplicationSource(ctx, &vtadminpb.RefreshTabletReplicationSourceRequest{
@@ -2701,7 +2700,7 @@ func TestReloadSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "unauthorized"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
@@ -2718,7 +2717,7 @@ func TestReloadSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
@@ -2734,7 +2733,7 @@ func TestReloadSchemas(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed-all"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, _ := api.ReloadSchemas(ctx, &vtadminpb.ReloadSchemasRequest{
@@ -2781,7 +2780,7 @@ func TestRetrySchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RetrySchemaMigration(ctx, &vtadminpb.RetrySchemaMigrationRequest{
@@ -2798,7 +2797,7 @@ func TestRetrySchemaMigration(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RetrySchemaMigration(ctx, &vtadminpb.RetrySchemaMigrationRequest{
@@ -2846,7 +2845,7 @@ func TestRunHealthCheck(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RunHealthCheck(ctx, &vtadminpb.RunHealthCheckRequest{
@@ -2863,7 +2862,7 @@ func TestRunHealthCheck(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.RunHealthCheck(ctx, &vtadminpb.RunHealthCheckRequest{
@@ -2911,7 +2910,7 @@ func TestSetReadOnly(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.SetReadOnly(ctx, &vtadminpb.SetReadOnlyRequest{
@@ -2928,7 +2927,7 @@ func TestSetReadOnly(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.SetReadOnly(ctx, &vtadminpb.SetReadOnlyRequest{
@@ -2976,7 +2975,7 @@ func TestSetReadWrite(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.SetReadWrite(ctx, &vtadminpb.SetReadWriteRequest{
@@ -2993,7 +2992,7 @@ func TestSetReadWrite(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.SetReadWrite(ctx, &vtadminpb.SetReadWriteRequest{
@@ -3041,7 +3040,7 @@ func TestStartReplication(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
@@ -3058,7 +3057,7 @@ func TestStartReplication(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.StartReplication(ctx, &vtadminpb.StartReplicationRequest{
@@ -3106,7 +3105,7 @@ func TestStopReplication(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
@@ -3123,7 +3122,7 @@ func TestStopReplication(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.StopReplication(ctx, &vtadminpb.StopReplicationRequest{
@@ -3171,7 +3170,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.TabletExternallyPromoted(ctx, &vtadminpb.TabletExternallyPromotedRequest{
@@ -3188,7 +3187,7 @@ func TestTabletExternallyPromoted(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.TabletExternallyPromoted(ctx, &vtadminpb.TabletExternallyPromotedRequest{
@@ -3236,13 +3235,14 @@ func TestVTExplain(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
 			Cluster:  "test",
 			Keyspace: "test",
-			Sql:      "select id from t1;"})
+			Sql:      "select id from t1;",
+		})
 		require.NoError(t, err)
 		assert.Nil(t, resp, "actor %+v should not be permitted to VTExplain", actor)
 	})
@@ -3258,13 +3258,14 @@ func TestVTExplain(t *testing.T) {
 		})
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.VTExplain(ctx, &vtadminpb.VTExplainRequest{
 			Cluster:  "test",
 			Keyspace: "test",
-			Sql:      "select id from t1;"})
+			Sql:      "select id from t1;",
+		})
 		require.NoError(t, err)
 		assert.NotNil(t, resp, "actor %+v should be permitted to VTExplain", actor)
 	})
@@ -3304,7 +3305,7 @@ func TestValidateKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
@@ -3319,7 +3320,7 @@ func TestValidateKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateKeyspace(ctx, &vtadminpb.ValidateKeyspaceRequest{
@@ -3365,7 +3366,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
@@ -3380,7 +3381,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateSchemaKeyspace(ctx, &vtadminpb.ValidateSchemaKeyspaceRequest{
@@ -3426,7 +3427,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "other"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
@@ -3441,7 +3442,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 		t.Parallel()
 
 		actor := &rbac.Actor{Name: "allowed"}
-		ctx := context.Background()
+		ctx := t.Context()
 		ctx = rbac.NewContext(ctx, actor)
 
 		resp, err := api.ValidateVersionKeyspace(ctx, &vtadminpb.ValidateVersionKeyspaceRequest{
@@ -3553,7 +3554,8 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 					Response: &vtctldatapb.GetCellsAliasesResponse{
 						Aliases: map[string]*topodatapb.CellsAlias{
 							"zone": {
-								Cells: []string{"zone1"}},
+								Cells: []string{"zone1"},
+							},
 						},
 					},
 				},
@@ -3660,7 +3662,8 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 									Name: "testworkflow",
 								},
 							},
-						}},
+						},
+					},
 				},
 				LaunchSchemaMigrationResults: map[string]struct {
 					Response *vtctldatapb.LaunchSchemaMigrationResponse
@@ -3690,7 +3693,8 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				}{
 					"test": {
 						Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
-							Events: []*logutilpb.Event{{}, {}, {}}},
+							Events: []*logutilpb.Event{{}, {}, {}},
+						},
 					},
 				},
 				ReparentTabletResults: map[string]struct {
@@ -3831,7 +3835,8 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 					Response: &vtctldatapb.GetCellsAliasesResponse{
 						Aliases: map[string]*topodatapb.CellsAlias{
 							"other": {
-								Cells: []string{"other1"}},
+								Cells: []string{"other1"},
+							},
 						},
 					},
 				},
@@ -3903,7 +3908,8 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 									Name: "otherks_workflow",
 								},
 							},
-						}},
+						},
+					},
 				},
 				ShardReplicationPositionsResults: map[string]struct {
 					Response *vtctldatapb.ShardReplicationPositionsResponse
@@ -3919,7 +3925,8 @@ func testClusters(t testing.TB) []*cluster.Cluster {
 				}{
 					"otherks": {
 						Response: &vtctldatapb.ReloadSchemaKeyspaceResponse{
-							Events: []*logutilpb.Event{{}}},
+							Events: []*logutilpb.Event{{}},
+						},
 					},
 				},
 			},

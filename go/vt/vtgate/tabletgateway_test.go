@@ -349,7 +349,7 @@ func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vt
 
 // TestWithRetry tests the functionality of withRetry function in different circumstances.
 func TestWithRetry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	tg := NewTabletGateway(ctx, discovery.NewFakeHealthCheck(nil), &econtext.FakeTopoServer{}, "cell")
 	tg.kev = discovery.NewKeyspaceEventWatcher(ctx, tg.srvTopoServer, tg.hc, tg.localCell)
 	defer func() {

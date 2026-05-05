@@ -17,7 +17,6 @@ limitations under the License.
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -138,7 +137,7 @@ func TestVtclient(t *testing.T) {
 		err := Main.ParseFlags(args)
 		require.NoError(t, err)
 
-		Main.SetContext(context.Background())
+		Main.SetContext(t.Context())
 		results, err := _run(Main, args)
 		if q.errMsg != "" {
 			if got, want := err.Error(), q.errMsg; !strings.Contains(got, want) {

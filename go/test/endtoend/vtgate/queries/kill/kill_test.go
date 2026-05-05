@@ -17,7 +17,6 @@ limitations under the License.
 package kill
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -31,7 +30,7 @@ import (
 
 // TestKillConnection kills its own connection and checks the error message received.
 func TestKillOwnConnection(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -45,11 +44,11 @@ func TestKillOwnConnection(t *testing.T) {
 
 // TestKillDifferentConnection kills different connection and check relevant error messages.
 func TestKillDifferentConnection(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	killConn, err := mysql.Connect(context.Background(), &vtParams)
+	killConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
 
@@ -68,7 +67,7 @@ func TestKillDifferentConnection(t *testing.T) {
 
 // TestKillOwnQuery kills the kill statement itself
 func TestKillOwnQuery(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -83,11 +82,11 @@ func TestKillDifferentConnectionQuery(t *testing.T) {
 	setupData(t, false)
 	defer dropData(t)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	killConn, err := mysql.Connect(context.Background(), &vtParams)
+	killConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
 
@@ -148,14 +147,14 @@ func TestKillOnHungQuery(t *testing.T) {
 }
 
 func testHungQuery(t *testing.T, execFunc func(*mysql.Conn) error, killFunc func(*mysql.Conn, *mysql.Conn), errMsgs ...string) {
-	killConn, err := mysql.Connect(context.Background(), &vtParams)
+	killConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
 
 	utils.Exec(t, killConn, "begin")
 	utils.Exec(t, killConn, "insert into test(id, msg, extra) values (1, 'a', 'e')")
 
-	hungConn, err := mysql.Connect(context.Background(), &vtParams)
+	hungConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer hungConn.Close()
 
@@ -199,12 +198,12 @@ func TestKillStmtOnHugeData(t *testing.T) {
 }
 
 func testHugeData(t *testing.T, workload string, execFunc func(*mysql.Conn) error, killFunc func(*mysql.Conn, *mysql.Conn), errMsgs ...string) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, "set workload = "+workload)
 
-	killConn, err := mysql.Connect(context.Background(), &vtParams)
+	killConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
 	utils.Exec(t, killConn, "set workload = "+workload)

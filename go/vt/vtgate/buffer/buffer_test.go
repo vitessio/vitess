@@ -31,8 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"github.com/stretchr/testify/require"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -139,7 +137,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	fail(b, oldPrimary, keyspace, shard, now)
 
 	// First request with failover error starts buffering.
-	stopped := issueRequest(context.Background(), t, b, failoverErr)
+	stopped := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -149,13 +147,13 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	}
 
 	// Subsequent requests with errors not related to the failover are not buffered.
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, nonFailoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 
 	// Subsequent requests are buffered (if their error is nil or caused by the failover).
-	stopped2 := issueRequest(context.Background(), t, b, nil)
-	stopped3 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped2 := issueRequest(t.Context(), t, b, nil)
+	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 3); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +195,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	}
 
 	// Second failover: Buffering is skipped because last failover is too recent.
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("subsequent failovers must be skipped due to -buffer-min-time-between-failovers setting. err: %v retryDone: %v", err, retryDone)
 	}
 	if got, want := requestsSkipped.Counts()[statsKeyJoinedLastFailoverTooRecent], int64(1); got != want {
@@ -206,7 +204,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 
 	// Second failover is buffered if enough time has passed.
 	now = now.Add(cfg.MinTimeBetweenFailovers)
-	stopped4 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped4 := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +253,7 @@ func testDryRun1(t *testing.T, fail failover) {
 	b := New(cfg)
 
 	// Request does not get buffered.
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests must not be buffered during dry-run. err: %v retryDone: %v", err, retryDone)
 	}
 	// But the internal state changes though.
@@ -301,10 +299,10 @@ func testPassthrough1(t *testing.T, fail failover) {
 
 	b := New(cfg)
 
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, nil); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil); err != nil || retryDone != nil {
 		t.Fatalf("requests with no error must never be buffered. err: %v retryDone: %v", err, retryDone)
 	}
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, nonFailoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 
@@ -340,7 +338,7 @@ func testLastReparentTooRecentBufferingSkipped1(t *testing.T, fail failover) {
 	now = now.Add(1 * time.Second)
 	fail(b, newPrimary, keyspace, shard, now)
 
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
@@ -384,7 +382,7 @@ func testLastReparentTooRecentBuffering1(t *testing.T, fail failover) {
 	// through a failover with non-zero QPS.
 	now = now.Add(cfg.MinTimeBetweenFailovers)
 	// We're seeing errors first.
-	stopped := issueRequest(context.Background(), t, b, failoverErr)
+	stopped := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -424,7 +422,7 @@ func testPassthroughDuringDrain1(t *testing.T, fail failover) {
 
 	// Buffer one request.
 	markRetryDone := make(chan struct{})
-	stopped := issueRequestAndBlockRetry(context.Background(), t, b, failoverErr, markRetryDone)
+	stopped := issueRequestAndBlockRetry(t.Context(), t, b, failoverErr, markRetryDone)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -437,10 +435,10 @@ func testPassthroughDuringDrain1(t *testing.T, fail failover) {
 	}
 
 	// Requests during the drain will be passed through and not buffered.
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, nil); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil); err != nil || retryDone != nil {
 		t.Fatalf("requests with no error must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
 	}
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests with failover errors must not be buffered during a drain. err: %v retryDone: %v", err, retryDone)
 	}
 
@@ -472,7 +470,7 @@ func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, fail failover) {
 	b := New(cfg)
 
 	ignoredKeyspace := "ignored_ks"
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), ignoredKeyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), ignoredKeyspace, shard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests for ignored keyspaces must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 	statsKeyJoined := strings.Join([]string{ignoredKeyspace, shard, skippedDisabled}, ".")
@@ -481,7 +479,7 @@ func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, fail failover) {
 	}
 
 	ignoredShard := "ff-"
-	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, ignoredShard, nil, failoverErr); err != nil || retryDone != nil {
+	if retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, ignoredShard, nil, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
 	}
 	if err := waitForPoolSlots(b, cfg.Size); err != nil {
@@ -529,11 +527,11 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, fail failover) {
 	b := New(cfg)
 
 	// Buffer 2 requests. The second will be canceled and the first will be drained.
-	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
-	ctx2, cancel2 := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(t.Context())
 	stopped2 := issueRequest(ctx2, t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 2); err != nil {
 		t.Fatal(err)
@@ -595,7 +593,7 @@ func testEviction1(t *testing.T, fail failover) {
 	cfg.Size = 2
 	b := New(cfg)
 
-	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
 	// This wait is important because each request gets inserted asynchronously
 	// in the buffer. Usually, they end up in the correct order (1, 2), but there
 	// is a chance that it's reversed (2, 1). This wait ensures that 1 goes into
@@ -603,13 +601,13 @@ func testEviction1(t *testing.T, fail failover) {
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
-	stopped2 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped2 := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 2); err != nil {
 		t.Fatal(err)
 	}
 
 	// Third request will evict the oldest.
-	stopped3 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
 
 	// Evicted request will see an error from the buffer.
 	if err := isEvictedError(<-stopped1); err != nil {
@@ -656,14 +654,14 @@ func testEvictionNotPossible1(t *testing.T, fail failover) {
 
 	// Make the buffer full (applies to all failovers).
 	// Also triggers buffering for the first shard.
-	stoppedFirstFailover := issueRequest(context.Background(), t, b, failoverErr)
+	stoppedFirstFailover := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
 
 	// Newer requests of the second failover cannot evict anything because
 	// they have no entries buffered.
-	retryDone, bufferErr := b.WaitForFailoverEnd(context.Background(), keyspace, shard2, nil, failoverErr)
+	retryDone, bufferErr := b.WaitForFailoverEnd(t.Context(), keyspace, shard2, nil, failoverErr)
 	if bufferErr == nil || retryDone != nil {
 		t.Fatalf("buffer should have returned an error because it's full: err: %v retryDone: %v", bufferErr, retryDone)
 	}
@@ -714,7 +712,7 @@ func testWindow1(t *testing.T, fail failover) {
 
 	// Buffer one request.
 	t.Logf("first request exceeds its window")
-	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
 
 	// Let it go out of the buffering window and expire.
 	if err := <-stopped1; err != nil {
@@ -738,14 +736,14 @@ func testWindow1(t *testing.T, fail failover) {
 	// This time the request does not go out of window and gets evicted by a third
 	// request instead.
 	t.Logf("second request does not exceed its window")
-	stopped2 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped2 := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}
 
 	// Third request will evict the second one.
 	t.Logf("third request evicts the second request")
-	stopped3 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
 
 	// Evicted request will see an error from the buffer.
 	if err := isEvictedError(<-stopped2); err != nil {
@@ -766,7 +764,7 @@ func testWindow1(t *testing.T, fail failover) {
 
 	// Fourth request evicts the third
 	t.Logf("fourth request exceeds its window (and evicts the third)")
-	stopped4 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped4 := issueRequest(t.Context(), t, b, failoverErr)
 	if err := isEvictedError(<-stopped3); err != nil {
 		t.Fatal(err)
 	}
@@ -807,7 +805,7 @@ func testShutdown1(t *testing.T, fail failover) {
 	b := New(cfg)
 
 	// Buffer one request.
-	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
+	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
 	if err := waitForRequestsInFlight(b, 1); err != nil {
 		t.Fatal(err)
 	}

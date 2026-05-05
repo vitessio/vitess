@@ -18,7 +18,6 @@ package migration
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"os"
 	"path"
@@ -187,7 +186,7 @@ func TestMigration(t *testing.T) {
 		Host: clusterInstance.Hostname,
 		Port: clusterInstance.VtgateMySQLPort,
 	}
-	conn, err := mysql.Connect(context.Background(), vtParams)
+	conn, err := mysql.Connect(t.Context(), vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -263,7 +262,7 @@ func populate(t *testing.T, socket, sql string) {
 		UnixSocket: socket,
 		Uname:      "vt_app",
 	}
-	conn, err := mysql.Connect(context.Background(), params)
+	conn, err := mysql.Connect(t.Context(), params)
 	require.NoError(t, err)
 	defer conn.Close()
 	lines := strings.SplitSeq(sql, "\n")

@@ -112,7 +112,7 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 
 	initialCount := getVarValue[float64](t, "CommitUnresolved", clusterInstance.VtgateProcess.GetVars)
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
@@ -156,12 +156,12 @@ func TestVTGate2PCCommitMetricOnFailure(t *testing.T) {
 func TestVTTablet2PCMetrics(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
 	conn := vtgateConn.Session("", nil)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	ctx = callerid.NewContext(ctx, callerid.NewEffectiveCallerID("MMCommitted_FailNow", "", ""), nil)
 	defer cancel()
 
@@ -210,7 +210,7 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 func TestVTTablet2PCMetricsFailCommitPrepared(t *testing.T) {
 	defer cleanup(t)
 
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "dt_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "dt_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 

@@ -17,7 +17,6 @@ limitations under the License.
 package messager
 
 import (
-	"context"
 	"reflect"
 	"sync"
 	"testing"
@@ -114,9 +113,9 @@ func TestSubscribe(t *testing.T) {
 	f1, ch1 := newEngineReceiver()
 	f2, ch2 := newEngineReceiver()
 	// Each receiver is subscribed to different managers.
-	engine.Subscribe(context.Background(), "t1", f1)
+	engine.Subscribe(t.Context(), "t1", f1)
 	<-ch1
-	engine.Subscribe(context.Background(), "t2", f2)
+	engine.Subscribe(t.Context(), "t2", f2)
 	<-ch2
 	engine.managers["t1"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
 	engine.managers["t2"].Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
@@ -125,14 +124,14 @@ func TestSubscribe(t *testing.T) {
 
 	// Error case.
 	want := "message table t3 not found"
-	_, err := engine.Subscribe(context.Background(), "t3", f1)
+	_, err := engine.Subscribe(t.Context(), "t3", f1)
 	if err == nil || err.Error() != want {
 		t.Errorf("Subscribe: %v, want %s", err, want)
 	}
 
 	// After close, Subscribe should return a closed channel.
 	engine.Close()
-	_, err = engine.Subscribe(context.Background(), "t1", nil)
+	_, err = engine.Subscribe(t.Context(), "t1", nil)
 	if got, want := vterrors.Code(err), vtrpcpb.Code_UNAVAILABLE; got != want {
 		t.Errorf("Subscribed on closed engine error code: %v, want %v", got, want)
 	}

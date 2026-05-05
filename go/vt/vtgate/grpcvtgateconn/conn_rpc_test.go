@@ -17,7 +17,6 @@ limitations under the License.
 package grpcvtgateconn
 
 import (
-	"context"
 	"io"
 	"net"
 	"os"
@@ -48,7 +47,7 @@ func TestGRPCVTGateConn(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create a Go RPC client connecting to the server
-	ctx := context.Background()
+	ctx := t.Context()
 	client, err := dial(ctx, listener.Addr().String())
 	require.NoError(t, err)
 	RegisterTestDialProtocol(client)
@@ -95,7 +94,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a Go RPC client connecting to the server
-	ctx := context.Background()
+	ctx := t.Context()
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
 
@@ -132,7 +131,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	require.NoError(t, f.Close())
 
 	// Create a Go RPC client connecting to the server
-	ctx = context.Background()
+	ctx = t.Context()
 	fs = pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
 
@@ -147,9 +146,9 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	client, err = dial(ctx, listener.Addr().String())
 	require.NoError(t, err)
 	RegisterTestDialProtocol(client)
-	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "")
+	conn, _ := vtgateconn.DialProtocol(t.Context(), "test", "")
 	// run the test suite
-	_, err = conn.Session("", nil).Execute(context.Background(), "select * from t", nil, false)
+	_, err = conn.Session("", nil).Execute(t.Context(), "select * from t", nil, false)
 	want := "rpc error: code = Unauthenticated desc = username and password must be provided"
 	if err == nil || err.Error() != want {
 		t.Errorf("expected auth failure:\n%v, want\n%s", err, want)

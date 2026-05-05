@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -178,7 +177,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestUpdateUnownedLookupVindexValidValue(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)
@@ -200,7 +199,7 @@ func TestUpdateUnownedLookupVindexValidValue(t *testing.T) {
 }
 
 func TestUpdateUnownedLookupVindexInvalidValue(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +222,7 @@ func TestUpdateUnownedLookupVindexInvalidValue(t *testing.T) {
 }
 
 func TestUpdateUnownedLookupVindexToNull(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)

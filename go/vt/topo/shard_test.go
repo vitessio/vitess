@@ -163,7 +163,7 @@ func TestUpdateSourcePrimaryDeniedTables(t *testing.T) {
 
 func TestUpdateSourceDeniedTables(t *testing.T) {
 	si := NewShardInfo("ks", "sh", &topodatapb.Shard{}, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 	ctxWithLock := lockedKeyspaceContext("ks")
 
 	type testCase struct {

@@ -42,7 +42,7 @@ import (
 )
 
 func TestParseAndValidateCreateOptions(t *testing.T) {
-	common.SetCommandCtx(context.Background())
+	common.SetCommandCtx(t.Context())
 	ctx, cancel := context.WithTimeout(common.GetCommandCtx(), 60*time.Second)
 	defer cancel()
 	cells := []string{"zone1", "zone2", "zone3"}

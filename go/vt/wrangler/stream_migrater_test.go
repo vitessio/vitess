@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -37,7 +36,7 @@ var (
 )
 
 func TestStreamMigrateMainflow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -192,7 +191,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 }
 
 func TestStreamMigrateTwoStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -363,7 +362,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 }
 
 func TestStreamMigrateOneToMany(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -496,7 +495,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 }
 
 func TestStreamMigrateManyToOne(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// Interesting tidbit: you cannot create a shard "0" for an already sharded keyspace.
 	tme := newTestShardMigrater(ctx, t, []string{"-80", "80-"}, []string{"-"})
 	defer tme.stopTablets(t)
@@ -634,7 +633,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 }
 
 func TestStreamMigrateSyncSuccess(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -828,7 +827,7 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 }
 
 func TestStreamMigrateSyncFail(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -950,7 +949,7 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 }
 
 func TestStreamMigrateCancel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -1057,7 +1056,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 }
 
 func TestStreamMigrateStoppedStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -1116,7 +1115,7 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 }
 
 func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -1183,7 +1182,7 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 }
 
 func TestStreamMigrateStillCopying(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -1246,7 +1245,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 }
 
 func TestStreamMigrateEmptyWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -1308,7 +1307,7 @@ func TestStreamMigrateEmptyWorkflow(t *testing.T) {
 }
 
 func TestStreamMigrateDupWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tme := newTestShardMigrater(ctx, t, []string{"0"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
@@ -1370,7 +1369,7 @@ func TestStreamMigrateDupWorkflow(t *testing.T) {
 }
 
 func TestStreamMigrateStreamsMismatch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// Interesting tidbit: you cannot create a shard "0" for an already sharded keyspace.
 	tme := newTestShardMigrater(ctx, t, []string{"-80", "80-"}, []string{"-"})
 	defer tme.stopTablets(t)

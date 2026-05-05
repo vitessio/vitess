@@ -36,7 +36,7 @@ import (
 )
 
 func TestFindTablet(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -47,7 +47,7 @@ func TestFindTablet(t *testing.T) {
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
+	err := topotools.RebuildKeyspace(t.Context(), logutil.NewConsoleLogger(), ts, oldPrimary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
 	require.NoError(t, err)
 
 	// make sure we can find the tablets

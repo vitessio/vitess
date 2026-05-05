@@ -257,7 +257,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 func TestCachedConnClient(t *testing.T) {
 	t.Parallel()
 
-	testCtx, testCancel := context.WithCancel(context.Background())
+	testCtx, testCancel := context.WithCancel(t.Context())
 	wg := sync.WaitGroup{}
 	procs := 0
 
@@ -324,7 +324,7 @@ func TestCachedConnClient(t *testing.T) {
 
 					tablet := tablets[rand.IntN(len(tablets))]
 					start := time.Now()
-					_, closer, err := client.dialer.dial(context.Background(), tablet)
+					_, closer, err := client.dialer.dial(t.Context(), tablet)
 					if err != nil {
 						dialErrors.Add(1)
 						continue
@@ -384,7 +384,7 @@ func TestCachedConnClient_evictions(t *testing.T) {
 
 	client := NewCachedConnClient(len(tablets) - 1)
 	for i := 0; i < len(tablets)-1; i++ {
-		_, closer, err := client.dialer.dial(context.Background(), tablets[i])
+		_, closer, err := client.dialer.dial(t.Context(), tablets[i])
 		t.Logf("holding connection open to %d", tablets[i].Alias.Uid)
 		require.NoError(t, err)
 

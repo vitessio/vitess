@@ -118,7 +118,7 @@ func TestExternalCompressors(t *testing.T) {
 					t.Skip("Command not available in this host:", err)
 				}
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 			defer cancel()
 			compressor, err := newExternalCompressor(ctx, tt.compress, &compressed, logger)
 			require.NoError(t, err)

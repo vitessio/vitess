@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -48,7 +47,7 @@ func (tc *testConn) IsKilled() bool {
 func TestQueryList(t *testing.T) {
 	ql := NewQueryList("test", sqlparser.NewTestParser())
 	connID := int64(1)
-	qd := NewQueryDetail(context.Background(), &testConn{id: connID})
+	qd := NewQueryDetail(t.Context(), &testConn{id: connID})
 	err := ql.Add(qd)
 	require.NoError(t, err)
 
@@ -57,7 +56,7 @@ func TestQueryList(t *testing.T) {
 	}
 
 	conn2ID := int64(2)
-	qd2 := NewQueryDetail(context.Background(), &testConn{id: conn2ID})
+	qd2 := NewQueryDetail(t.Context(), &testConn{id: conn2ID})
 	err = ql.Add(qd2)
 	require.NoError(t, err)
 
@@ -75,12 +74,12 @@ func TestQueryList(t *testing.T) {
 func TestQueryListChangeConnIDInMiddle(t *testing.T) {
 	ql := NewQueryList("test", sqlparser.NewTestParser())
 	connID := int64(1)
-	qd1 := NewQueryDetail(context.Background(), &testConn{id: connID})
+	qd1 := NewQueryDetail(t.Context(), &testConn{id: connID})
 	err := ql.Add(qd1)
 	require.NoError(t, err)
 
 	conn := &testConn{id: connID}
-	qd2 := NewQueryDetail(context.Background(), conn)
+	qd2 := NewQueryDetail(t.Context(), conn)
 	err = ql.Add(qd2)
 	require.NoError(t, err)
 
@@ -100,7 +99,7 @@ func TestQueryListChangeConnIDInMiddle(t *testing.T) {
 func TestClusterAction(t *testing.T) {
 	ql := NewQueryList("test", sqlparser.NewTestParser())
 	connID := int64(1)
-	qd1 := NewQueryDetail(context.Background(), &testConn{id: connID})
+	qd1 := NewQueryDetail(t.Context(), &testConn{id: connID})
 
 	ql.SetClusterAction(ClusterActionInProgress)
 	ql.SetClusterAction(ClusterActionNoQueries)

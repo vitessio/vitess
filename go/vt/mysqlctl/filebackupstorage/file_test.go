@@ -17,7 +17,6 @@ limitations under the License.
 package filebackupstorage
 
 import (
-	"context"
 	"io"
 	"testing"
 
@@ -42,7 +41,7 @@ func setupFileBackupStorage(t *testing.T) backupstorage.BackupStorage {
 
 func TestListBackups(t *testing.T) {
 	fbs := setupFileBackupStorage(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// verify we have no entry now
 	dir := "keyspace/shard"
@@ -105,7 +104,7 @@ func TestListBackups(t *testing.T) {
 
 func TestFileContents(t *testing.T) {
 	fbs := setupFileBackupStorage(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	dir := "keyspace/shard"
 	name := "cell-0001-2015-01-14-10-00-00"

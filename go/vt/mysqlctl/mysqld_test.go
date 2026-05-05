@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"context"
 	"os"
 	"strconv"
 	"strings"
@@ -224,7 +223,7 @@ func TestRunMysqlUpgrade(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err = testMysqld.RunMysqlUpgrade(ctx)
 	assert.NoError(t, err)
 
@@ -245,7 +244,7 @@ func TestGetDbaConnection(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	conn, err := testMysqld.GetDbaConnection(ctx)
 	assert.NoError(t, err)
@@ -264,7 +263,7 @@ func TestGetVersionString(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	str, err := testMysqld.GetVersionString(ctx)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, str)
@@ -292,7 +291,7 @@ func TestGetVersionComment(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := testMysqld.GetVersionComment(ctx)
 	assert.ErrorContains(t, err, "unexpected result length")
 
@@ -305,7 +304,7 @@ func TestGetVersionComment(t *testing.T) {
 }
 
 func TestHostMetrics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cnf := &Mycnf{
 		DataDir: os.TempDir(),
 	}

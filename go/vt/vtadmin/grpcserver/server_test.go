@@ -17,7 +17,6 @@ limitations under the License.
 package grpcserver
 
 import (
-	"context"
 	"net"
 	"testing"
 	"time"
@@ -70,7 +69,7 @@ func TestServer(t *testing.T) {
 	defer conn.Close()
 
 	healthclient := healthpb.NewHealthClient(conn)
-	resp, err := healthclient.Check(context.Background(), &healthpb.HealthCheckRequest{Service: "grpc.health.v1.Health"})
+	resp, err := healthclient.Check(t.Context(), &healthpb.HealthCheckRequest{Service: "grpc.health.v1.Health"})
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
 }

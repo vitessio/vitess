@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -74,7 +73,7 @@ func (tc testCase) run(t *testing.T) {
 		fields[i] = &querypb.Field{Type: value.Type()}
 	}
 	venv := vtenv.NewTestEnv()
-	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(venv, time.UTC))
+	env := NewExpressionEnv(t.Context(), tc.bv, NewEmptyVCursor(venv, time.UTC))
 	env.Row = tc.row
 	ast := &astCompiler{
 		cfg: &Config{

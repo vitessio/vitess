@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -48,7 +47,7 @@ func TestInsertUnsharded(t *testing.T) {
 		InsertID: 4,
 	}}
 
-	result, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,11 +59,11 @@ func TestInsertUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `shard_error`)
 
 	vc = &loggingVCursor{}
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `VT09022: Destination does not have exactly one shard: []`)
 }
 
@@ -104,7 +103,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		{InsertID: 1},
 	}
 
-	result, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +156,7 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 		{InsertID: 1},
 	}
 
-	result, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +218,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +257,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +300,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +366,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{
 		"_id_1": sqltypes.TestBindVariable([]int{1, 2}),
 	}, false)
 	if err != nil {
@@ -416,7 +415,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +460,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -527,7 +526,7 @@ func TestInsertShardedFail(t *testing.T) {
 	vc := &loggingVCursor{}
 
 	// The lookup will fail to map to a keyspace id.
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `VT09023: could not map [INT64(1)] to a keyspace id`)
 }
 
@@ -604,7 +603,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 		{InsertID: 1},
 	}
 
-	result, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -719,7 +718,7 @@ func TestInsertShardedOwned(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -813,7 +812,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -900,7 +899,7 @@ func TestInsertShardedGeo(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20"}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1052,7 +1051,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		ksid0,
 	}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1163,7 +1162,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		ksid0,
 	}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1286,7 +1285,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		nonemptyResult,
 		nonemptyResult,
 	}
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1394,7 +1393,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		{},
 		nonemptyResult,
 	}
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{
 		"v1": sqltypes.StringBindVariable("a"), "v2": sqltypes.StringBindVariable("b"), "v3": sqltypes.StringBindVariable("c"),
 	}, false)
 	if err != nil {
@@ -1479,7 +1478,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 
 	vc := newTestVCursor("-20", "20-")
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `values [[INT64(2)]] for column [c3] does not map to keyspace ids`)
 }
 
@@ -1589,7 +1588,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		nonemptyResult,
 	}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1671,7 +1670,7 @@ func TestInsertShardedUnownedReverseMapSuccess(t *testing.T) {
 
 	vc := newTestVCursor("-20", "20-")
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 }
 
@@ -1721,7 +1720,7 @@ func TestInsertSelectSimple(t *testing.T) {
 			"b|2"),
 	}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -1741,7 +1740,7 @@ func TestInsertSelectSimple(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err = ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -1832,7 +1831,7 @@ func TestInsertSelectOwned(t *testing.T) {
 			"b|2"),
 	}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -1859,7 +1858,7 @@ func TestInsertSelectOwned(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err = ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -1962,7 +1961,7 @@ func TestInsertSelectGenerate(t *testing.T) {
 		{InsertID: 1},
 	}
 
-	result, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -2067,7 +2066,7 @@ func TestStreamingInsertSelectGenerate(t *testing.T) {
 	}
 
 	var output *sqltypes.Result
-	err := ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err := ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		output = result
 		return nil
 	})
@@ -2171,7 +2170,7 @@ func TestInsertSelectGenerateNotProvided(t *testing.T) {
 		{InsertID: 1},
 	}
 
-	result, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -2269,7 +2268,7 @@ func TestStreamingInsertSelectGenerateNotProvided(t *testing.T) {
 	}
 
 	var output *sqltypes.Result
-	err := ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err := ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		output = result
 		return nil
 	})
@@ -2353,7 +2352,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|tocol", "int64|int64"), "1|1", "3|2", "2|3"),
 	}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -2381,7 +2380,7 @@ func TestInsertSelectUnowned(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err = ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -2486,7 +2485,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
 	}
 
-	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// the select query
@@ -2499,7 +2498,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err = ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -2517,7 +2516,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	ins.Input = uRoute
 
 	vc.Rewind()
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// the select query
@@ -2530,7 +2529,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err = ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -2556,7 +2555,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	)
 
 	vc.Rewind()
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// the select query
@@ -2569,7 +2568,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err = ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -2587,7 +2586,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	ins.Input = uRoute
 
 	vc.Rewind()
-	_, err = ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// the select query
@@ -2600,7 +2599,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 	})
 
 	vc.Rewind()
-	err = ins.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err = ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)

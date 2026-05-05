@@ -190,47 +190,47 @@ func TestGoRoutineLeakPrevention(t *testing.T) {
 		cc: &grpc.ClientConn{},
 		c:  mqc,
 	}
-	_ = qc.StreamExecute(context.Background(), nil, nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
+	_ = qc.StreamExecute(t.Context(), nil, nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.BeginStreamExecute(context.Background(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.BeginStreamExecute(t.Context(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveBeginStreamExecute(context.Background(), nil, nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveBeginStreamExecute(t.Context(), nil, nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveStreamExecute(context.Background(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveStreamExecute(t.Context(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.VStream(context.Background(), &binlogdatapb.VStreamRequest{}, func(events []*binlogdatapb.VEvent) error {
+	_ = qc.VStream(t.Context(), &binlogdatapb.VStreamRequest{}, func(events []*binlogdatapb.VEvent) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.VStreamRows(context.Background(), &binlogdatapb.VStreamRowsRequest{}, func(response *binlogdatapb.VStreamRowsResponse) error {
+	_ = qc.VStreamRows(t.Context(), &binlogdatapb.VStreamRowsRequest{}, func(response *binlogdatapb.VStreamRowsResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.VStreamResults(context.Background(), nil, "", func(response *binlogdatapb.VStreamResultsResponse) error {
+	_ = qc.VStreamResults(t.Context(), nil, "", func(response *binlogdatapb.VStreamResultsResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.VStreamTables(context.Background(), &binlogdatapb.VStreamTablesRequest{}, func(response *binlogdatapb.VStreamTablesResponse) error {
+	_ = qc.VStreamTables(t.Context(), &binlogdatapb.VStreamTablesRequest{}, func(response *binlogdatapb.VStreamTablesResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.GetSchema(context.Background(), nil, querypb.SchemaTableType_TABLES, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+	_ = qc.GetSchema(t.Context(), nil, querypb.SchemaTableType_TABLES, nil, func(schemaRes *querypb.GetSchemaResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())

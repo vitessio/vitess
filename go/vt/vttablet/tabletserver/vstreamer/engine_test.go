@@ -252,7 +252,7 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 
 	for _, tt := range tests {
 		tt.fields.cp = dbconfigs.New(testDB.ConnParams())
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 		t.Run(tt.name, func(t *testing.T) {
 			uvs := &uvstreamer{

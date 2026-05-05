@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -2087,7 +2086,7 @@ func TestInsertPartialFail1(t *testing.T) {
 	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 
 	_, err := executor.Execute(
-		context.Background(),
+		t.Context(),
 		nil,
 		"TestExecute",
 		econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true}),
@@ -2109,7 +2108,7 @@ func TestInsertPartialFail2(t *testing.T) {
 
 	safeSession := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executor.Execute(
-		context.Background(),
+		t.Context(),
 		nil,
 		"TestExecute",
 		safeSession,
@@ -2989,10 +2988,10 @@ func TestInsertSelectFromDual(t *testing.T) {
 			// set result for dual query.
 			sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("1|2|myname", "int64|int64|varchar"), "1|2|myname")})
 
-			_, err := executorExecSession(context.Background(), executor, session, wQuery, nil)
+			_, err := executorExecSession(t.Context(), executor, session, wQuery, nil)
 			require.NoError(t, err)
 
-			_, err = executorExecSession(context.Background(), executor, session, query, nil)
+			_, err = executorExecSession(t.Context(), executor, session, query, nil)
 			require.NoError(t, err)
 
 			assertQueries(t, sbc1, wantQueries)
@@ -3051,10 +3050,10 @@ func TestInsertSelectFromTable(t *testing.T) {
 		sbc2.Queries = nil
 		sbclookup.Queries = nil
 		wQuery := "set @@workload = " + workload
-		_, err := executorExecSession(context.Background(), executor, session, wQuery, nil)
+		_, err := executorExecSession(t.Context(), executor, session, wQuery, nil)
 		require.NoError(t, err)
 
-		_, err = executorExecSession(context.Background(), executor, session, query, nil)
+		_, err = executorExecSession(t.Context(), executor, session, query, nil)
 		require.NoError(t, err)
 
 		assertQueries(t, sbc1, wantQueries)

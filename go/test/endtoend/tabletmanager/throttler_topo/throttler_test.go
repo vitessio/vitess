@@ -16,7 +16,6 @@ limitations under the License.
 package throttler
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -205,7 +204,7 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()

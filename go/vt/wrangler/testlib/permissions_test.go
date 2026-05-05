@@ -46,7 +46,7 @@ func TestPermissions(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())

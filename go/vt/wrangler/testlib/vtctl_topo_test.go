@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"context"
 	"os"
 	"path"
 	"strings"
@@ -57,10 +56,10 @@ func TestVtctlTopoCommands(t *testing.T) {
 	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-	if err := ts.CreateKeyspace(context.Background(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {
+	if err := ts.CreateKeyspace(t.Context(), "ks1", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_NORMAL}); err != nil {
 		require.NoError(t, err)
 	}
-	if err := ts.CreateKeyspace(context.Background(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
+	if err := ts.CreateKeyspace(t.Context(), "ks2", &topodatapb.Keyspace{KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT}); err != nil {
 		require.NoError(t, err)
 	}
 	vp := NewVtctlPipe(ctx, t, ts)
@@ -92,7 +91,7 @@ keyspace_type:SNAPSHOT
 	// Test TopoCp from disk to topo.
 	_, err = vp.RunAndOutput([]string{"TopoCp", "--to_topo", ksFile, "/keyspaces/ks3/Keyspace"})
 	require.NoError(t, err)
-	ks3, err := ts.GetKeyspace(context.Background(), "ks3")
+	ks3, err := ts.GetKeyspace(t.Context(), "ks3")
 	require.NoError(t, err)
 	if !proto.Equal(ks3.Keyspace, expected) {
 		t.Fatalf("copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)

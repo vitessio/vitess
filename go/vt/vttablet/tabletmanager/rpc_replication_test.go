@@ -66,7 +66,7 @@ func TestWaitForGrantsToHaveApplied(t *testing.T) {
 	tm := &TabletManager{
 		_waitForGrantsComplete: make(chan struct{}),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	err := tm.waitForGrantsToHaveApplied(ctx)
 	require.ErrorContains(t, err, "deadline exceeded")
@@ -74,7 +74,7 @@ func TestWaitForGrantsToHaveApplied(t *testing.T) {
 	err = tm.waitForDBAGrants(nil, 0)
 	require.NoError(t, err)
 
-	secondContext, secondCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	secondContext, secondCancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer secondCancel()
 	err = tm.waitForGrantsToHaveApplied(secondContext)
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	}
 
 	go func() {
-		tm.demotePrimary(context.Background(), false /* revertPartialFailure */, false /* force */)
+		tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
 	}()
 	// We make IsServing stall by making it wait on a channel.
 	// This should cause the demote primary operation to be stalled.
@@ -143,7 +143,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 // TestDemotePrimaryWaitingForSemiSyncUnblock tests that demote primary unblocks if the primary is blocked on semi-sync ACKs
 // and doesn't issue the set super read-only query until all writes waiting on semi-sync ACKs have gone through.
 func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -208,7 +208,7 @@ func TestDemotePrimaryWaitingForSemiSyncUnblock(t *testing.T) {
 // TestDemotePrimaryWithSemiSyncProgressDetection tests that demote primary proceeds
 // without blocking when transactions are making progress (ackedTrxs increasing between checks).
 func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -268,7 +268,7 @@ func TestDemotePrimaryWithSemiSyncProgressDetection(t *testing.T) {
 // TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks tests that demote primary
 // proceeds immediately when waiting sessions drops to 0 between the two checks.
 func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
@@ -326,7 +326,7 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 // if able to change the state of the tablet to Primary if there
 // is a mismatch with the tablet record.
 func TestUndoDemotePrimaryStateChange(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)

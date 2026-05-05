@@ -140,7 +140,7 @@ func TestConsistentLookupMap(t *testing.T) {
 func TestConsistentLookupMapWriteOnly(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", true)
 
-	got, err := lookup.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookup.Map(t.Context(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.ShardDestination{
 		key.DestinationKeyRange{
@@ -180,7 +180,7 @@ func TestConsistentLookupUniqueMap(t *testing.T) {
 func TestConsistentLookupUniqueMapWriteOnly(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup_unique", true)
 
-	got, err := lookup.Map(context.Background(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookup.Map(t.Context(), nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.ShardDestination{
 		key.DestinationKeyRange{
@@ -435,7 +435,7 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 	vc.AddResult(&sqltypes.Result{}, nil)
 	vc.AddResult(&sqltypes.Result{}, nil)
 
-	if err := lookup.(Lookup).Update(context.Background(), vc, []sqltypes.Value{
+	if err := lookup.(Lookup).Update(t.Context(), vc, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 	}, []byte("test"), []sqltypes.Value{
@@ -469,7 +469,7 @@ func TestConsistentLookupUpdateBecauseComparableTypes(t *testing.T) {
 			literal, err := sqltypes.NewValue(val.typ, []byte(val.val))
 			require.NoError(t, err)
 
-			err = lookup.(Lookup).Update(context.Background(), vc, []sqltypes.Value{literal, literal}, []byte("test"), []sqltypes.Value{literal, literal})
+			err = lookup.(Lookup).Update(t.Context(), vc, []sqltypes.Value{literal, literal}, []byte("test"), []sqltypes.Value{literal, literal})
 			require.NoError(t, err)
 			vc.verifyLog(t, []string{})
 			vc.log = nil

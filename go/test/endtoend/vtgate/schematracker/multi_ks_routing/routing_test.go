@@ -17,7 +17,6 @@ limitations under the License.
 package multiksrouting
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -124,7 +123,7 @@ func TestMain(m *testing.M) {
 //
 // All four should plan and return the seeded rows.
 func TestRoutedTableColumnsAreAuthoritativeForStarExpansion(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

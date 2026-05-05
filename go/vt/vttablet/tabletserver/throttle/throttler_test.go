@@ -350,7 +350,7 @@ func TestInitThrottler(t *testing.T) {
 }
 
 func TestApplyThrottlerConfig(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	timeNow := time.Now()
@@ -437,7 +437,7 @@ func TestApplyThrottlerConfig(t *testing.T) {
 // TestApplyThrottlerConfigMetricThresholds applies a specific 'lag' metric threshold,
 // and validates that it overrides the default threshold.
 func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	throttler := newTestThrottler()
@@ -529,7 +529,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 
 // TestApplyThrottlerConfigAppCheckedMetrics applies different metrics to the "test" app and checks the result
 func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	throttler := newTestThrottler()
@@ -1272,7 +1272,7 @@ func TestIsAppExempted(t *testing.T) {
 // On a replica tablet, that list is expect to probe the tablet itself.
 // On the PRIMARY, the list includes all shard tablets, including the PRIMARY itself.
 func TestRefreshInventory(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1393,7 +1393,7 @@ func runThrottler(t *testing.T, ctx context.Context, throttler *Throttler, timeo
 // TestRace merely lets the throttler run with aggressive intervals for a few seconds, so as to detect race conditions.
 // This is relevant to `go test -race`
 func TestRace(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1403,7 +1403,7 @@ func TestRace(t *testing.T) {
 
 // TestProbes enables a throttler for a few seconds, and afterwards expects to find probes and metrics.
 func TestProbesWhileOperating(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1695,7 +1695,7 @@ func TestProbesWhileOperating(t *testing.T) {
 
 // TestProbesPostDisable runs the throttler for some time, and then investigates the internal throttler maps and values.
 func TestProbesPostDisable(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1733,7 +1733,7 @@ func TestProbesPostDisable(t *testing.T) {
 }
 
 func TestDormant(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1789,7 +1789,7 @@ func TestDormant(t *testing.T) {
 }
 
 func TestChecks(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -2041,7 +2041,7 @@ func TestChecks(t *testing.T) {
 }
 
 func TestReplica(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

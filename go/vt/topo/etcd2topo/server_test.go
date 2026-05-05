@@ -69,13 +69,11 @@ func startEtcd(t *testing.T, port int) (string, *exec.Cmd) {
 		Endpoints:   []string{clientAddr},
 		DialTimeout: 5 * time.Second,
 	})
-	if err != nil {
-		t.Fatalf("newCellClient(%v) failed: %v", clientAddr, err)
-	}
+	require.NoErrorf(t, err, "newCellClient(%v) failed", clientAddr)
 	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	start := time.Now()
 	for {
@@ -83,7 +81,7 @@ func startEtcd(t *testing.T, port int) (string, *exec.Cmd) {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start etcd daemon in time")
+			require.FailNow(t, "Failed to start etcd daemon in time")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -154,14 +152,14 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 		}
 		t.Logf("error establishing client for etcd tls test: %v", err)
 		if time.Since(start) > 60*time.Second {
-			t.Fatalf("failed to start client for etcd tls test in time")
+			require.FailNow(t, "failed to start client for etcd tls test in time")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	start = time.Now()
 	for {
@@ -169,7 +167,7 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 			break
 		}
 		if time.Since(start) > 60*time.Second {
-			t.Fatalf("failed to start etcd daemon in time")
+			require.FailNow(t, "failed to start etcd daemon in time")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -199,16 +197,14 @@ func TestEtcd2TLS(t *testing.T) {
 	require.NoError(t, err)
 	defer server.Close()
 
-	testCtx := context.Background()
+	testCtx := t.Context()
 	testKey := "testkey"
 	testVal := "testval"
 	_, err = server.Create(testCtx, testKey, []byte(testVal))
 	require.NoError(t, err)
 	val, _, err := server.Get(testCtx, testKey)
 	require.NoError(t, err)
-	if string(val) != testVal {
-		t.Fatalf("Value returned doesn't match %s, err: %v", testVal, err)
-	}
+	require.Equalf(t, testVal, string(val), "Value returned doesn't match %s, err: %v", testVal, err)
 }
 
 func TestEtcd2Topo(t *testing.T) {
@@ -226,7 +222,7 @@ func TestEtcd2Topo(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create the CellInfo.
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: clientAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
@@ -252,7 +248,7 @@ func TestEtcd2Topo(t *testing.T) {
 // correctly when etcd2 is used along with the normal vtctldclient <-> vtctld client/server
 // path.
 func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cells := []string{"cell1", "cell2"}
 	root := "/vitess"
 	// Start three etcd instances in the background. One will serve the global topo data
@@ -366,7 +362,7 @@ func TestEtcd2TopoServerClosed(t *testing.T) {
 	require.NoError(t, err, "OpenServer() failed: %v", err)
 
 	// Create the CellInfo first.
-	ctx := context.Background()
+	ctx := t.Context()
 	err = ts.CreateCellInfo(ctx, "test_cell", &topodatapb.CellInfo{
 		ServerAddress: clientAddr,
 		Root:          path.Join(testRoot, "test_cell"),
@@ -426,7 +422,7 @@ func TestEtcd2TopoServerClosed(t *testing.T) {
 // Note TTL granularity is in seconds, even though the API uses time.Duration.
 // So we have to wait a long time in these tests.
 func testKeyspaceLock(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+	ctx := t.Context()
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
 		require.NoError(t, err)

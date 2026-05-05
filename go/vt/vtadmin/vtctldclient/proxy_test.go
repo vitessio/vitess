@@ -83,7 +83,7 @@ func TestDial(t *testing.T) {
 		Hostname: listener.Addr().String(),
 	})
 
-	proxy, err := New(context.Background(), &Config{
+	proxy, err := New(t.Context(), &Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "test",
 			Name: "testcluster",
@@ -97,7 +97,7 @@ func TestDial(t *testing.T) {
 
 	defer proxy.Close() // prevents grpc-core from logging a bunch of "connection errors" after deferred listener.Close() above.
 
-	resp, err := proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	resp, err := proxy.GetKeyspace(t.Context(), &vtctldatapb.GetKeyspaceRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, listener.Addr().String(), resp.Keyspace.Name)
 }
@@ -160,7 +160,7 @@ func TestRedial(t *testing.T) {
 		Hostname: listener2.Addr().String(),
 	})
 
-	proxy, err := New(context.Background(), &Config{
+	proxy, err := New(t.Context(), &Config{
 		Cluster: &vtadminpb.Cluster{
 			Id:   "test",
 			Name: "testcluster",
@@ -181,7 +181,7 @@ func TestRedial(t *testing.T) {
 	var nextAddr string
 
 	// Check for a successful connection to whichever vtctld we discover first.
-	resp, err := proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	resp, err := proxy.GetKeyspace(t.Context(), &vtctldatapb.GetKeyspaceRequest{})
 	require.NoError(t, err)
 
 	proxyHost := resp.Keyspace.Name
@@ -229,7 +229,7 @@ func TestRedial(t *testing.T) {
 	}
 
 	// Finally, check that we discover + establish a new connection to the remaining vtctld.
-	resp, err = proxy.GetKeyspace(context.Background(), &vtctldatapb.GetKeyspaceRequest{})
+	resp, err = proxy.GetKeyspace(t.Context(), &vtctldatapb.GetKeyspaceRequest{})
 	require.NoError(t, err)
 	assert.Equal(t, nextAddr, resp.Keyspace.Name)
 }
@@ -301,7 +301,7 @@ func TestDialSecureDialOptionError(t *testing.T) {
 	}
 
 	// This should fail during New() -> dial() -> grpcclientcommon.SecureDialOption() -> line 116
-	proxy, err := New(context.Background(), cfg)
+	proxy, err := New(t.Context(), cfg)
 
 	// Verify that the error comes from TLS configuration
 	assert.Error(t, err, "New should fail with invalid TLS files")

@@ -41,7 +41,7 @@ func TestDialErrors(t *testing.T) {
 	}
 	wantErr := "Unavailable"
 	for _, address := range addresses {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		gconn, err := DialContext(ctx, address, true, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			cancel()
@@ -58,14 +58,14 @@ func TestDialErrors(t *testing.T) {
 
 	wantErr = "DeadlineExceeded"
 	for _, address := range addresses {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		gconn, err := DialContext(ctx, address, false, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		cancel()
 		if err != nil {
 			t.Fatal(err)
 		}
 		vtg := vtgateservicepb.NewVitessClient(gconn)
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel = context.WithTimeout(t.Context(), 10*time.Millisecond)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
 		gconn.Close()

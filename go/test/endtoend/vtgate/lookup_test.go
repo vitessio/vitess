@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -47,7 +46,7 @@ func TestLookupUniqueWithAutocommit(t *testing.T) {
 	defer closer()
 
 	// conn2 is to check entries in the lookup table
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.Nil(t, err)
 	defer conn2.Close()
 
@@ -107,7 +106,7 @@ func TestConsistentLookup(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.Nil(t, err)
 	defer conn2.Close()
 
@@ -414,7 +413,7 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.Nil(t, err)
 	defer conn2.Close()
 
@@ -460,7 +459,7 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.Nil(t, err)
 	defer conn2.Close()
 

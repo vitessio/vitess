@@ -46,7 +46,7 @@ import (
 func TestTxEngineClose(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	cfg.TxPool.Size = 10
@@ -824,7 +824,7 @@ func TestCheckReceivedError(t *testing.T) {
 			if tc.expQuery != "" {
 				db.AddQuery(tc.expQuery, &sqltypes.Result{})
 			}
-			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr, "")
+			nonRetryable := te.checkErrorAndMarkFailed(t.Context(), "aa", tc.receivedErr, "")
 			require.NotEqual(t, tc.retryable, nonRetryable)
 			if !tc.retryable {
 				require.Equal(t, errPrepFailed, te.preparedPool.reserved["aa"])
@@ -950,7 +950,7 @@ func TestPrepareTx(t *testing.T) {
 			te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 			te.AcceptReadWrite()
 			db.ResetQueryLog()
-			failed, err := te.prepareTx(context.Background(), tt.preparedTx)
+			failed, err := te.prepareTx(t.Context(), tt.preparedTx)
 			require.EqualValues(t, tt.requireFailure, failed)
 			if tt.errWanted != "" {
 				require.ErrorContains(t, err, tt.errWanted)

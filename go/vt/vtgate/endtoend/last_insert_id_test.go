@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -32,7 +31,7 @@ func TestLastInsertId(t *testing.T) {
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, "ks", "t1_last_insert_id", cluster.VTProcess().ReadVSchema))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -58,7 +57,7 @@ func TestLastInsertIdWithRollback(t *testing.T) {
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, "ks", "t1_last_insert_id", cluster.VTProcess().ReadVSchema))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

@@ -183,11 +183,11 @@ func TestUpdateWithFK(t *testing.T) {
 
 // TestVstreamForFKBinLog tests that dml queries with fks are written with child row first approach in the binary logs.
 func TestVstreamForFKBinLog(t *testing.T) {
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "fk_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)

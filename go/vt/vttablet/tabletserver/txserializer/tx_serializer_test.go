@@ -51,7 +51,7 @@ func TestTxSerializer_NoHotRow(t *testing.T) {
 	txs := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TxSerializerTest"))
 	resetVariables(txs)
 
-	done, waited, err := txs.Wait(context.Background(), "t1 where1", "t1")
+	done, waited, err := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -79,7 +79,7 @@ func TestTxSerializerRedactDebugUI(t *testing.T) {
 	resetVariables(txs)
 	txs.redactUIQuery = true
 
-	done, waited, err := txs.Wait(context.Background(), "t1 where1", "t1")
+	done, waited, err := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err != nil {
 		t.Error(err)
 	}
@@ -126,7 +126,7 @@ func TestTxSerializer(t *testing.T) {
 	resetVariables(txs)
 
 	// tx1.
-	done1, waited1, err1 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err1 != nil {
 		t.Error(err1)
 	}
@@ -137,7 +137,7 @@ func TestTxSerializer(t *testing.T) {
 	// tx2 (gets queued and must wait).
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
-		done2, waited2, err2 := txs.Wait(context.Background(), "t1 where1", "t1")
+		done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
 		if err2 != nil {
 			t.Error(err2)
 		}
@@ -156,7 +156,7 @@ func TestTxSerializer(t *testing.T) {
 	}
 
 	// tx3 (gets rejected because it would exceed the local queue).
-	_, _, err3 := txs.Wait(context.Background(), "t1 where1", "t1")
+	_, _, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if got, want := vterrors.Code(err3), vtrpcpb.Code_RESOURCE_EXHAUSTED; got != want {
 		t.Errorf("wrong error code: got = %v, want = %v", got, want)
 	}
@@ -196,7 +196,7 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 	resetVariables(txs)
 
 	// tx1.
-	done1, waited1, err1 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err1 != nil {
 		t.Error(err1)
 	}
@@ -205,7 +205,7 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 	}
 
 	// tx2.
-	done2, waited2, err2 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err2 != nil {
 		t.Error(err1)
 	}
@@ -216,7 +216,7 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 	// tx3 (gets queued and must wait).
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
-		done3, waited3, err3 := txs.Wait(context.Background(), "t1 where1", "t1")
+		done3, waited3, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
 		if err3 != nil {
 			t.Error(err3)
 		}
@@ -319,7 +319,7 @@ func TestTxSerializerCancel(t *testing.T) {
 	txDone := make(chan int)
 
 	// tx1.
-	done1, waited1, err1 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err1 != nil {
 		t.Error(err1)
 	}
@@ -327,7 +327,7 @@ func TestTxSerializerCancel(t *testing.T) {
 		t.Errorf("tx1 must never wait: %v", waited1)
 	}
 	// tx2.
-	done2, waited2, err2 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err2 != nil {
 		t.Error(err2)
 	}
@@ -336,7 +336,7 @@ func TestTxSerializerCancel(t *testing.T) {
 	}
 
 	// tx3 (gets queued and must wait).
-	ctx3, cancel3 := context.WithCancel(context.Background())
+	ctx3, cancel3 := context.WithCancel(t.Context())
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
 		_, _, err3 := txs.Wait(ctx3, "t1 where1", "t1")
@@ -353,7 +353,7 @@ func TestTxSerializerCancel(t *testing.T) {
 
 	// tx4 (gets queued and must wait as well).
 	wg.Go(func() {
-		done4, waited4, err4 := txs.Wait(context.Background(), "t1 where1", "t1")
+		done4, waited4, err4 := txs.Wait(t.Context(), "t1 where1", "t1")
 		if err4 != nil {
 			t.Error(err4)
 		}
@@ -411,7 +411,7 @@ func TestTxSerializerDryRun(t *testing.T) {
 	resetVariables(txs)
 
 	// tx1.
-	done1, waited1, err1 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err1 != nil {
 		t.Error(err1)
 	}
@@ -420,7 +420,7 @@ func TestTxSerializerDryRun(t *testing.T) {
 	}
 
 	// tx2 (would wait and exceed the local queue).
-	done2, waited2, err2 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err2 != nil {
 		t.Error(err2)
 	}
@@ -435,7 +435,7 @@ func TestTxSerializerDryRun(t *testing.T) {
 	}
 
 	// tx3 (would wait and exceed the global queue).
-	done3, waited3, err3 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done3, waited3, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err3 != nil {
 		t.Error(err3)
 	}
@@ -480,7 +480,7 @@ func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 	txs := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TxSerializerTest"))
 
 	// tx1.
-	done1, waited1, err1 := txs.Wait(context.Background(), "t1 where1", "t1")
+	done1, waited1, err1 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if err1 != nil {
 		t.Error(err1)
 	}
@@ -489,7 +489,7 @@ func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 	}
 
 	// tx2.
-	done2, waited2, err2 := txs.Wait(context.Background(), "t1 where2", "t1")
+	done2, waited2, err2 := txs.Wait(t.Context(), "t1 where2", "t1")
 	if err2 != nil {
 		t.Error(err2)
 	}
@@ -498,7 +498,7 @@ func TestTxSerializerGlobalQueueOverflow(t *testing.T) {
 	}
 
 	// tx3 (same row range as tx1).
-	_, _, err3 := txs.Wait(context.Background(), "t1 where1", "t1")
+	_, _, err3 := txs.Wait(t.Context(), "t1 where1", "t1")
 	if got, want := vterrors.Code(err3), vtrpcpb.Code_RESOURCE_EXHAUSTED; got != want {
 		t.Errorf("wrong error code: got = %v, want = %v", got, want)
 	}

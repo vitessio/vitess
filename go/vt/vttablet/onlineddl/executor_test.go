@@ -268,7 +268,7 @@ func TestInitDBConnectionLockWaitTimeout(t *testing.T) {
 	defer db.Close()
 	params := db.ConnParams()
 	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
-	conn, err := dbconnpool.NewDBConnection(context.Background(), connector)
+	conn, err := dbconnpool.NewDBConnection(t.Context(), connector)
 	require.NoError(t, err)
 	defer conn.Close()
 

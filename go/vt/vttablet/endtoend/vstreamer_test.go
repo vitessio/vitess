@@ -65,7 +65,7 @@ func TestSchemaVersioning(t *testing.T) {
 	defer tsv.EnableHistorian(true)
 	defer tsv.SetTracking(true)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	wg := sync.WaitGroup{}
 	tsv.EnableHistorian(true)
@@ -224,7 +224,7 @@ func TestSchemaVersioning(t *testing.T) {
 	require.NoError(t, err)
 
 	log.Info("\n\n\n=============================================== PAST EVENTS WITH TRACK VERSIONS START HERE ======================\n\n\n")
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
 	errCh := make(chan error, 1)
@@ -304,7 +304,7 @@ func TestSchemaVersioning(t *testing.T) {
 
 	log.Info("\n\n\n=============================================== PAST EVENTS WITHOUT TRACK VERSIONS START HERE ======================\n\n\n")
 	tsv.EnableHistorian(false)
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
 	noHistorianErrCh := make(chan error, 1)

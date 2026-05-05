@@ -17,7 +17,6 @@ limitations under the License.
 package newfeaturetest
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -171,7 +170,7 @@ func TestERSWithWriteInPromoteReplica(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Drop a table so that when sidecardb changes are checked, we run a DML query.
-	utils.RunSQLs(context.Background(), t, []string{
+	utils.RunSQLs(t.Context(), t, []string{
 		"set sql_log_bin=0",
 		`SET @@global.super_read_only=0`,
 		`DROP TABLE _vt.heartbeat`,
@@ -202,8 +201,8 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 	// We simulate start of external reparent or a PRS where the healthcheck update from the tablet gets lost in transit
 	// to vtgate by just setting the primary read only. This is also why we needed to shutdown all VTOrcs, so that they don't
 	// fix this.
-	utils.RunSQL(context.Background(), t, "set global read_only=1", shards[0].Vttablets[0])
-	utils.RunSQL(context.Background(), t, "set global read_only=1", shards[1].Vttablets[0])
+	utils.RunSQL(t.Context(), t, "set global read_only=1", shards[0].Vttablets[0])
+	utils.RunSQL(t.Context(), t, "set global read_only=1", shards[1].Vttablets[0])
 
 	wg := sync.WaitGroup{}
 	rowCount := 10
@@ -215,7 +214,7 @@ func TestBufferingWithMultipleDisruptions(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			conn, err := mysql.Connect(context.Background(), &vtParams)
+			conn, err := mysql.Connect(t.Context(), &vtParams)
 			if err != nil {
 				return
 			}
@@ -260,7 +259,7 @@ func TestSemiSyncBlockDueToDisruption(t *testing.T) {
 		if idx == 0 {
 			continue
 		}
-		utils.RunSQLs(context.Background(), t, []string{
+		utils.RunSQLs(t.Context(), t, []string{
 			"stop slave;",
 			"change master to MASTER_HEARTBEAT_PERIOD = 0;",
 			"start slave;",

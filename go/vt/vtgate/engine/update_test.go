@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -52,7 +51,7 @@ func TestUpdateUnsharded(t *testing.T) {
 	}
 
 	vc := newTestVCursor("0")
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -61,11 +60,11 @@ func TestUpdateUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `shard_error`)
 
 	vc = &loggingVCursor{}
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `Keyspace 'ks' does not have exactly one shard: []`)
 }
 
@@ -87,7 +86,7 @@ func TestUpdateEqual(t *testing.T) {
 	}
 
 	vc := newTestVCursor("-20", "20-")
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
@@ -96,7 +95,7 @@ func TestUpdateEqual(t *testing.T) {
 
 	// Failure case
 	upd.Values = []evalengine.Expr{evalengine.NewBindVar("aa", evalengine.Type{})}
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `query arguments missing for aa`)
 }
 
@@ -118,7 +117,7 @@ func TestUpdateEqualMultiCol(t *testing.T) {
 	}
 
 	vc := newTestVCursor("-20", "20-")
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -144,7 +143,7 @@ func TestUpdateScatter(t *testing.T) {
 	}
 
 	vc := newTestVCursor("-20", "20-")
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -170,7 +169,7 @@ func TestUpdateScatter(t *testing.T) {
 	}
 
 	vc = newTestVCursor("-20", "20-")
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -201,7 +200,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 	}
 
 	vc := newTestVCursor("0")
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
@@ -254,7 +253,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
@@ -275,7 +274,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	// No rows changing
 	vc = newTestVCursor("-20", "20-")
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
@@ -298,7 +297,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
@@ -334,7 +333,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`, sqltypes.Int64BindVariable(1)),
@@ -390,7 +389,7 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -407,7 +406,7 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 	// No rows changing
 	vc.Rewind()
 	vc.results = nil
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -430,7 +429,7 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 	vc.Rewind()
 	vc.results = results
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -459,7 +458,7 @@ func TestUpdateEqualMultiColChangedVindex(t *testing.T) {
 	vc.Rewind()
 	vc.results = results
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(2)]] Destinations:DestinationKeyspaceID(0106e7ea22ce92708f)`,
@@ -517,7 +516,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -536,7 +535,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	// No rows changing
 	vc = newTestVCursor("-20", "20-")
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -561,7 +560,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
@@ -605,7 +604,7 @@ func TestUpdateIn(t *testing.T) {
 	}
 
 	vc := newTestVCursor("-20", "20-")
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)),
@@ -630,7 +629,7 @@ func TestUpdateInStreamExecute(t *testing.T) {
 	}}
 
 	vc := newTestVCursor("-20", "20-")
-	err := upd.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+	err := upd.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -657,7 +656,7 @@ func TestUpdateInMultiCol(t *testing.T) {
 	}}
 
 	vc := newTestVCursor("-20", "20-")
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(1) INT64(4)] [INT64(2) INT64(3)] [INT64(2) INT64(4)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(01d2fd8867d50d2dfe),DestinationKeyspaceID(024eb190c9a2fa169c),DestinationKeyspaceID(02d2fd8867d50d2dfe)`,
@@ -714,7 +713,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)),
@@ -741,7 +740,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	// No rows changing
 	vc = newTestVCursor("-20", "20-")
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)),
@@ -765,7 +764,7 @@ func TestUpdateInChangedVindex(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)),
@@ -839,7 +838,7 @@ func TestUpdateInChangedVindexMultiCol(t *testing.T) {
 	vc := newTestVCursor("-20", "20-")
 	vc.results = results
 
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol sharded [[INT64(1) INT64(3)] [INT64(2) INT64(3)]] Destinations:DestinationKeyspaceID(014eb190c9a2fa169c),DestinationKeyspaceID(024eb190c9a2fa169c)`,
@@ -877,7 +876,7 @@ func TestUpdateEqualSubshard(t *testing.T) {
 
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
@@ -887,7 +886,7 @@ func TestUpdateEqualSubshard(t *testing.T) {
 	vc.Rewind()
 	// as it is single shard so autocommit should be allowed.
 	vc.shardForKsid = []string{"-20"}
-	_, err = upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinationsMultiCol ks [[INT64(1)]] Destinations:DestinationKeyRange(01-02)`,
@@ -914,7 +913,7 @@ func TestUpdateMultiEqual(t *testing.T) {
 
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(70bb023c810ca87a)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(5)),
@@ -948,7 +947,7 @@ func TestUpdateInUnique(t *testing.T) {
 	}
 	vc := newTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"-20", "20-"}
-	_, err := upd.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{"__vals": tupleBV}, false)
+	_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{"__vals": tupleBV}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations sharded [%v %v %v] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2), sqltypes.Int64BindVariable(4)),

@@ -17,7 +17,6 @@ limitations under the License.
 package buffer
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -54,7 +53,7 @@ func TestVariablesAreInitialized(t *testing.T) {
 	// Create a new buffer and make a call which will create the shardBuffer object.
 	// After that, the variables should be initialized for that shard.
 	b := New(NewDefaultConfig())
-	_, err := b.WaitForFailoverEnd(context.Background(), "init_test", "0", nil, nil)
+	_, err := b.WaitForFailoverEnd(t.Context(), "init_test", "0", nil, nil)
 	require.NoError(t, err)
 
 	statsKey := []string{"init_test", "0"}

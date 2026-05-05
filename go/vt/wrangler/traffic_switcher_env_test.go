@@ -735,7 +735,7 @@ func (tme *testMigraterEnv) startTablets(t *testing.T) {
 	for _, primary := range allPrimarys {
 		primaryFound := false
 		for range 10 {
-			si, err := tme.wr.ts.GetShard(context.Background(), primary.Tablet.Keyspace, primary.Tablet.Shard)
+			si, err := tme.wr.ts.GetShard(t.Context(), primary.Tablet.Keyspace, primary.Tablet.Shard)
 			if err != nil {
 				t.Fatal(err)
 			}

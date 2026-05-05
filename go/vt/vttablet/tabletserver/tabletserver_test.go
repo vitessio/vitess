@@ -467,7 +467,7 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 }
 
 func TestTabletServerBeginFail(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TxPool.Size = 1
@@ -476,7 +476,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	defer db.Close()
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	ctx, cancel = context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	ctx, cancel = context.WithTimeout(t.Context(), 1*time.Nanosecond)
 	defer cancel()
 	tsv.Begin(ctx, nil, &target, nil)
 	_, err := tsv.Begin(ctx, nil, &target, nil)
@@ -679,7 +679,7 @@ func TestTabletServerWithNilTarget(t *testing.T) {
 
 	// Finally be sure that we return an error now as expected when NOT
 	// using a local context but passing a nil target.
-	nonLocalCtx := context.Background()
+	nonLocalCtx := t.Context()
 	_, err = tsv.Begin(nonLocalCtx, nil, target, nil)
 	require.True(t, errors.Is(err, ErrNoTarget))
 	_, err = tsv.resolveTargetType(nonLocalCtx, target)
@@ -2236,7 +2236,7 @@ func TestConfigChanges(t *testing.T) {
 	newSize := 10
 	newDuration := time.Duration(10 * time.Millisecond)
 
-	err := tsv.SetPoolSize(context.Background(), newSize)
+	err := tsv.SetPoolSize(t.Context(), newSize)
 	require.NoError(t, err)
 
 	if val := tsv.PoolSize(); val != newSize {
@@ -2246,7 +2246,7 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.qe.connPool.Capacity: %d, want %d", val, newSize)
 	}
 
-	err = tsv.SetStreamPoolSize(context.Background(), newSize)
+	err = tsv.SetStreamPoolSize(t.Context(), newSize)
 	require.NoError(t, err)
 
 	if val := tsv.StreamPoolSize(); val != newSize {
@@ -2256,7 +2256,7 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.qe.streamConnPool.Capacity: %d, want %d", val, newSize)
 	}
 
-	err = tsv.SetTxPoolSize(context.Background(), newSize)
+	err = tsv.SetTxPoolSize(t.Context(), newSize)
 	require.NoError(t, err)
 
 	if val := tsv.TxPoolSize(); val != newSize {

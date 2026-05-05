@@ -205,7 +205,7 @@ func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
 }
 
 func TestPrimaryKeyEquivalentColumns(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		table     string
@@ -318,7 +318,7 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 //  2. We store the secondary key definitions for step 3
 //  3. We add the secondary keys back after the rows are copied
 func TestDeferSecondaryKeys(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 	filter := &binlogdatapb.Filter{
@@ -749,7 +749,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	vr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_MoveTables)
 	getCurrentDDL := func(tableName string) string {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
-		sd, err := env.Mysqld.GetSchema(context.Background(), dbName, req)
+		sd, err := env.Mysqld.GetSchema(t.Context(), dbName, req)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(sd.TableDefinitions))
 		return removeVersionDifferences(sd.TableDefinitions[0].Schema)
@@ -819,7 +819,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 // the rows_copied does not reset to zero but continues along from where
 // it left off.
 func TestResumingFromPreviousWorkflowKeepingRowsCopied(t *testing.T) {
-	_, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
