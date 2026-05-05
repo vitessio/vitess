@@ -60,9 +60,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 
 	// Ask for a not-yet-created keyspace
 	_, err := rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
-	if !topo.IsErrType(err, topo.NoNode) {
-		require.NoError(t, err)
-	}
+	require.Truef(t, topo.IsErrType(err, topo.NoNode), "expected topo.NoNode error, got: %v", err)
 
 	// Wait until the cached error expires.
 	time.Sleep(srvTopoCacheRefresh + 10*time.Millisecond)
@@ -448,9 +446,8 @@ func TestWatchSrvVSchema(t *testing.T) {
 
 	// WatchSrvVSchema won't return until it gets the initial value,
 	// which is not there, so we should get watchErr=topo.ErrNoNode.
-	if _, err := get(); !topo.IsErrType(err, topo.NoNode) {
-		require.NoError(t, err)
-	}
+	_, err := get()
+	require.Truef(t, topo.IsErrType(err, topo.NoNode), "expected topo.NoNode error, got: %v", err)
 
 	// Save a value, wait for it.
 	newValue := &vschemapb.SrvVSchema{

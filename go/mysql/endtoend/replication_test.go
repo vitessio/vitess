@@ -126,7 +126,7 @@ func TestReplicationConnectionClosing(t *testing.T) {
 				// What we expect, keep going.
 			case mysql.ErrPacket:
 				err := mysql.ParseErrorPacket(data)
-				assert.NoError(t, err)
+				assert.Failf(t, "ReadPacket returned an error packet", "%v", err)
 			default:
 				// Very unexpected.
 				t.Errorf("ReadPacket returned a weird packet: %v", data)
