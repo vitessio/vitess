@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -76,11 +77,11 @@ var (
 const flagSetName = "throttler_demo"
 
 func registerDemoFlags(fs *pflag.FlagSet) {
-	fs.Int64Var(&rate, "rate", rate, "maximum rate of the throttled demo server at the start")
-	fs.DurationVar(&duration, "duration", duration, "total duration the demo runs")
-	fs.DurationVar(&lagUpdateInterval, "lag_update_interval", lagUpdateInterval, "interval at which the current replication lag will be broadcast to the throttler")
-	fs.DurationVar(&replicaDegrationInterval, "replica_degration_interval", replicaDegrationInterval, "simulate a throughput degration of the replica every X interval (i.e. the replica applies transactions at a slower rate for -reparent_duration and the replication lag might go up)")
-	fs.DurationVar(&replicaDegrationDuration, "replica_degration_duration", replicaDegrationDuration, "duration a simulated degration should take")
+	utils.SetFlagInt64Var(fs, &rate, "rate", rate, "maximum rate of the throttled demo server at the start")
+	utils.SetFlagDurationVar(fs, &duration, "duration", duration, "total duration the demo runs")
+	utils.SetFlagDurationVar(fs, &lagUpdateInterval, "lag-update-interval", lagUpdateInterval, "interval at which the current replication lag will be broadcast to the throttler")
+	utils.SetFlagDurationVar(fs, &replicaDegrationInterval, "replica-degration-interval", replicaDegrationInterval, "simulate a throughput degration of the replica every X interval (i.e. the replica applies transactions at a slower rate for --reparent-duration and the replication lag might go up)")
+	utils.SetFlagDurationVar(fs, &replicaDegrationDuration, "replica-degration-duration", replicaDegrationDuration, "duration a simulated degration should take")
 }
 
 // primary simulates an *unthrottled* MySQL primary which replicates every

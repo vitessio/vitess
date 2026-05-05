@@ -213,6 +213,33 @@ func TestManager_UpdateConfiguration_ZeroValues(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestManager_Throttlers(t *testing.T) {
+	f := &managerTestFixture{}
+	err := f.setUp()
+	require.NoError(t, err)
+	defer f.tearDown()
+
+	got := f.m.Throttlers()
+	want := []string{"t1", "t2"}
+	assert.Equal(t, want, got, "Throttlers() should return sorted names of all registered throttlers")
+}
+
+func TestManager_Log(t *testing.T) {
+	f := &managerTestFixture{}
+	err := f.setUp()
+	require.NoError(t, err)
+	defer f.tearDown()
+
+	// log() on an existing throttler with no activity returns an empty (non-nil) slice.
+	results, err := f.m.log("t1")
+	require.NoError(t, err)
+	assert.Empty(t, results, "freshly created throttler should have no log entries")
+
+	// log() on an unknown throttler should return an error.
+	_, err = f.m.log("unknown")
+	require.Error(t, err, "log() should return an error for an unregistered throttler")
+}
+
 func checkConfig(m *managerImpl, throttlers []string, updatedThrottlers []string, targetLag int64, ignoreNSlowestReplicas int32) error {
 	// Sort list of throttler names because they came from a randomized Go map.
 	sort.Strings(updatedThrottlers)
