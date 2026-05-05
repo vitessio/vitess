@@ -420,7 +420,7 @@ func setReplicationSource(ctx context.Context, replica *topodatapb.Tablet, prima
 func shardPrimary(keyspace string, shard string) (primary *topodatapb.Tablet, err error) {
 	query := `SELECT
 		info
-	FROM 
+	FROM
 		vitess_tablet
 	WHERE
 		keyspace = ? AND shard = ?
