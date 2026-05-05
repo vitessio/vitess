@@ -1039,11 +1039,7 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 func (se *Engine) TableCount() int {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	count := len(se.tables)
-	if _, ok := se.tables["dual"]; ok {
-		count--
-	}
-	return count
+	return len(se.tables)
 }
 
 // GetSchema returns the current schema. The Tables are a
@@ -1141,9 +1137,7 @@ func (se *Engine) SetTableForTests(table *Table) {
 func (se *Engine) ResetTablesForTests() {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	se.tables = map[string]*Table{
-		"dual": NewTable("dual", NoType),
-	}
+	se.tables = map[string]*Table{}
 }
 
 func (se *Engine) GetDBConnector() dbconfigs.Connector {
