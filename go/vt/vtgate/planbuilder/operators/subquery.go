@@ -267,6 +267,14 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 				}
 			}
 		}
+		// For EXISTS / NOT EXISTS, the meaningful substitution is replacing the whole
+		// ExistsExpr with the has-values argument. This preserves any surrounding
+		// expression context (OR, AND, etc.) in rhsPred.
+		if _, isExists := node.(*sqlparser.ExistsExpr); isExists &&
+			(sq.FilterType == opcode.PulloutExists || sq.FilterType == opcode.PulloutNotExists) {
+			cursor.Replace(sqlparser.NewArgument(hasValuesArg()))
+			return
+		}
 		if _, ok := node.(*sqlparser.Subquery); !ok {
 			return
 		}
@@ -285,11 +293,11 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	switch sq.FilterType {
 	case opcode.PulloutExists:
 		sq.addLimit()
-		predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
+		predicates = append(predicates, rhsPred)
 	case opcode.PulloutNotExists:
 		sq.addLimit()
 		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
-		predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
+		predicates = append(predicates, rhsPred)
 	case opcode.PulloutIn:
 		// Because we replace the comparison expression with an AND expression, it might be the top level construct there.
 		// In this case, it is better to send the two sides of the AND expression separately in the predicates because it can
