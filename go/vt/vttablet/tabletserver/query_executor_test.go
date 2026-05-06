@@ -1195,9 +1195,7 @@ func TestQueryExecutorTableAclUserTableNamedDual(t *testing.T) {
 			Readers:              []string{username},
 		}},
 	}
-	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
-	}
+	require.NoErrorf(t, tableacl.InitFromProto(config), "unable to load tableacl config")
 
 	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
 	defer tsv.StopService()
@@ -1208,9 +1206,7 @@ func TestQueryExecutorTableAclUserTableNamedDual(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err := qre.Execute()
 	require.Error(t, err, "ACL should deny access to user table `dual`")
-	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
-		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
-	}
+	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 	assert.EqualError(t, err, `Select command denied to user 'basic_username' for table 'dual' (ACL check error)`)
 }
 
