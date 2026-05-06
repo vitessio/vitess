@@ -72,22 +72,16 @@ func TestResult(t *testing.T) {
 		}},
 	}
 	p3converted := ResultToProto3(sqlResult)
-	if !proto.Equal(p3converted, p3Result) {
-		assert.Failf(t, "P3 mismatch", "P3:\n%v, want\n%v", p3converted, p3Result)
-	}
+	assert.True(t, proto.Equal(p3converted, p3Result), "P3:\n%v, want\n%v", p3converted, p3Result)
 
 	reverse := Proto3ToResult(p3Result)
-	if !reverse.Equal(sqlResult) {
-		assert.Failf(t, "reverse mismatch", "reverse:\n%#v, want\n%#v", reverse, sqlResult)
-	}
+	assert.True(t, reverse.Equal(sqlResult), "reverse:\n%#v, want\n%#v", reverse, sqlResult)
 
 	// Test custom fields.
 	fields[1].Type = VarBinary
 	sqlResult.Rows[0][1] = TestValue(VarBinary, "1")
 	reverse = CustomProto3ToResult(fields, p3Result)
-	if !reverse.Equal(sqlResult) {
-		assert.Failf(t, "reverse mismatch", "reverse:\n%#v, want\n%#v", reverse, sqlResult)
-	}
+	assert.True(t, reverse.Equal(sqlResult), "reverse:\n%#v, want\n%#v", reverse, sqlResult)
 }
 
 func TestResults(t *testing.T) {
@@ -152,14 +146,10 @@ func TestResults(t *testing.T) {
 		}},
 	}}
 	p3converted := ResultsToProto3(sqlResults)
-	if !Proto3ResultsEqual(p3converted, p3Results) {
-		assert.Failf(t, "P3 mismatch", "P3:\n%v, want\n%v", p3converted, p3Results)
-	}
+	assert.True(t, Proto3ResultsEqual(p3converted, p3Results), "P3:\n%v, want\n%v", p3converted, p3Results)
 
 	reverse := Proto3ToResults(p3Results)
-	if !ResultsEqual(reverse, sqlResults) {
-		assert.Failf(t, "reverse mismatch", "reverse:\n%#v, want\n%#v", reverse, sqlResults)
-	}
+	assert.True(t, ResultsEqual(reverse, sqlResults), "reverse:\n%#v, want\n%#v", reverse, sqlResults)
 }
 
 func TestQueryReponses(t *testing.T) {
@@ -251,14 +241,10 @@ func TestQueryReponses(t *testing.T) {
 		},
 	}
 	p3converted := QueryResponsesToProto3(queryResponses)
-	if !Proto3QueryResponsesEqual(p3converted, p3ResultWithError) {
-		assert.Failf(t, "P3 mismatch", "P3:\n%v, want\n%v", p3converted, p3ResultWithError)
-	}
+	assert.True(t, Proto3QueryResponsesEqual(p3converted, p3ResultWithError), "P3:\n%v, want\n%v", p3converted, p3ResultWithError)
 
 	reverse := Proto3ToQueryReponses(p3ResultWithError)
-	if !QueryResponsesEqual(reverse, queryResponses) {
-		assert.Failf(t, "reverse mismatch", "reverse:\n%#v, want\n%#v", reverse, queryResponses)
-	}
+	assert.True(t, QueryResponsesEqual(reverse, queryResponses), "reverse:\n%#v, want\n%#v", reverse, queryResponses)
 }
 
 func TestProto3ValuesEqual(t *testing.T) {

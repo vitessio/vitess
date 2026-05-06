@@ -530,9 +530,7 @@ func TestMMCommitFlow(t *testing.T) {
 	info, err = client.ReadTransaction("aa")
 	require.NoError(t, err)
 	wantInfo = &querypb.TransactionMetadata{}
-	if !proto.Equal(info, wantInfo) {
-		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %#v, want %#v", info, wantInfo)
-	}
+	assert.True(t, proto.Equal(info, wantInfo), "ReadTransaction: %#v, want %#v", info, wantInfo)
 }
 
 func TestMMRollbackFlow(t *testing.T) {
@@ -575,9 +573,7 @@ func TestMMRollbackFlow(t *testing.T) {
 			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}
-	if !proto.Equal(info, wantInfo) {
-		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %#v, want %#v", info, wantInfo)
-	}
+	assert.True(t, proto.Equal(info, wantInfo), "ReadTransaction: %#v, want %#v", info, wantInfo)
 
 	err = client.ConcludeTransaction("aa")
 	require.NoError(t, err)

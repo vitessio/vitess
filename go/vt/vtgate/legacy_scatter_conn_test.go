@@ -19,7 +19,6 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sync"
 	"testing"
 
@@ -422,15 +421,11 @@ func TestMultiExecs(t *testing.T) {
 	wantVars0 := map[string]*querypb.BindVariable{
 		"bv0": queries[0].BindVariables["bv0"],
 	}
-	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
-		assert.Failf(t, "BindVariables mismatch", "got %v, want %v", sbc0.Queries[0].BindVariables, wantVars0)
-	}
+	assert.Equal(t, wantVars0, sbc0.Queries[0].BindVariables, "got %v, want %v", sbc0.Queries[0].BindVariables, wantVars0)
 	wantVars1 := map[string]*querypb.BindVariable{
 		"bv1": queries[1].BindVariables["bv1"],
 	}
-	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
-		assert.Failf(t, "BindVariables mismatch", "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
-	}
+	assert.Equal(t, wantVars1, sbc1.Queries[0].BindVariables, "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	assert.ElementsMatch(t, results, observer.recorded)
 
 	sbc0.Queries = nil
@@ -467,12 +462,8 @@ func TestMultiExecs(t *testing.T) {
 	_ = sc.StreamExecuteMulti(ctx, nil, "query", rss, bvs, session, false /* autocommit */, func(*sqltypes.Result) error {
 		return nil
 	}, &observer, false)
-	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
-		assert.Failf(t, "BindVariables mismatch", "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
-	}
-	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
-		assert.Failf(t, "BindVariables mismatch", "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
-	}
+	assert.Equal(t, wantVars0, sbc0.Queries[0].BindVariables, "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars0)
+	assert.Equal(t, wantVars1, sbc1.Queries[0].BindVariables, "got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
 	assert.ElementsMatch(t, results, observer.recorded)
 }
 

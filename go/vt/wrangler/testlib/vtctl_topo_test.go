@@ -81,16 +81,12 @@ keyspace_type:SNAPSHOT
 	if err = got.UnmarshalVT(contents); err != nil {
 		require.NoError(t, err)
 	}
-	if !proto.Equal(got, expected) {
-		require.Failf(t, "bad proto data", "bad proto data: Got %v expected %v", got, expected)
-	}
+	require.True(t, proto.Equal(got, expected), "bad proto data: Got %v expected %v", got, expected)
 
 	// Test TopoCp from disk to topo.
 	_, err = vp.RunAndOutput([]string{"TopoCp", "--to_topo", ksFile, "/keyspaces/ks3/Keyspace"})
 	require.NoError(t, err)
 	ks3, err := ts.GetKeyspace(t.Context(), "ks3")
 	require.NoError(t, err)
-	if !proto.Equal(ks3.Keyspace, expected) {
-		require.Failf(t, "copy data to topo failed", "copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
-	}
+	require.True(t, proto.Equal(ks3.Keyspace, expected), "copy data to topo failed, got %v expected %v", ks3.Keyspace, expected)
 }

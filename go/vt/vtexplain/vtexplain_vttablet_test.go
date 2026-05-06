@@ -158,13 +158,9 @@ create table test_partitioned (
 	got, _ := json.Marshal(t1.Fields)
 	assert.Equal(t, wantCols, string(got))
 
-	if !t1.HasPrimary() || len(t1.PKColumns) != 1 || t1.PKColumns[0] != 0 {
-		assert.Failf(t, "unexpected primary key", "expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
-	}
+	assert.True(t, t1.HasPrimary() && len(t1.PKColumns) == 1 && t1.PKColumns[0] == 0, "expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
 	pkCol := t1.GetPKColumn(0)
-	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64 charset:33 flags:32800` {
-		assert.Failf(t, "unexpected pk column", "expected pkCol[0] == id, got %v", pkCol)
-	}
+	assert.True(t, pkCol != nil && pkCol.String() == `name:"id" type:UINT64 charset:33 flags:32800`, "expected pkCol[0] == id, got %v", pkCol)
 
 	t2 := tables["t2"]
 	require.NotNil(t, t2, "table t2 wasn't parsed properly")

@@ -47,16 +47,12 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 		select {
 		case vschema := <-watch:
 			_, ok = vschema.Keyspaces[ks].Vindexes[name]
-			if !ok {
-				assert.Failf(t, "vschema missing vindex", "updated vschema did not contain %s", name)
-			}
+			assert.True(t, ok, "updated vschema did not contain %s", name)
 		default:
 			time.Sleep(time.Millisecond)
 		}
 	}
-	if !ok {
-		assert.Fail(t, "vschema was not updated as expected")
-	}
+	assert.True(t, ok, "vschema was not updated as expected")
 
 	// Wait up to 100ms until the vindex manager gets notified of the update
 	for range 10 {
@@ -393,9 +389,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	require.NoError(t, err)
 
-	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
-		require.Fail(t, "vschema did not drop the sequene 'test_seq'")
-	}
+	require.True(t, waitForNewerVSchema(ctx, executor, ts, 5*time.Second), "vschema did not drop the sequene 'test_seq'")
 
 	// Should fail dropping a non-existing test sequence
 	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
@@ -427,9 +421,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	require.NoError(t, err)
-	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
-		require.Fail(t, "vschema did not update with auto_increment for 'test_table'")
-	}
+	require.True(t, waitForNewerVSchema(ctx, executor, ts, 5*time.Second), "vschema did not update with auto_increment for 'test_table'")
 	ts = executor.VSchema().GetCreated()
 
 	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
@@ -441,9 +433,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	require.NoError(t, err)
 
-	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
-		require.Fail(t, "vschema did not drop the auto_increment for 'test_table'")
-	}
+	require.True(t, waitForNewerVSchema(ctx, executor, ts, 5*time.Second), "vschema did not drop the auto_increment for 'test_table'")
 	if executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement != nil {
 		assert.Fail(t, "auto increment should be nil after drop")
 	}

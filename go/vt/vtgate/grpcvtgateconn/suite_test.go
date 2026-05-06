@@ -76,9 +76,7 @@ func (f *fakeVTGateService) checkCallerID(ctx context.Context, name string) {
 	if ef == nil {
 		assert.Failf(f.t, "missing effective caller id", "no effective caller id for %v", name)
 	} else {
-		if !proto.Equal(ef, testCallerID) {
-			assert.Failf(f.t, "invalid effective caller id", "invalid effective caller id for %v: got %v expected %v", name, ef, testCallerID)
-		}
+		assert.True(f.t, proto.Equal(ef, testCallerID), "invalid effective caller id for %v: got %v expected %v", name, ef, testCallerID)
 	}
 }
 
@@ -408,9 +406,7 @@ func testExecute(t *testing.T, session *vtgateconn.VTGateSession, request string
 	execCase := execMap[request]
 	qr, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables, false)
 	require.NoError(t, err)
-	if !qr.Equal(execCase.result) {
-		assert.Failf(t, "unexpected Execute result", "Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
-	}
+	assert.True(t, qr.Equal(execCase.result), "Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 
 	_, err = session.Execute(ctx, "none", nil, false)
 	want := "no match for: none"
@@ -466,9 +462,7 @@ func testExecuteBatch(t *testing.T, session *vtgateconn.VTGateSession) {
 	execCase := execMap["request1"]
 	qr, err := session.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]*querypb.BindVariable{execCase.execQuery.BindVariables})
 	require.NoError(t, err)
-	if !qr[0].QueryResult.Equal(execCase.result) {
-		assert.Failf(t, "unexpected ExecuteBatch result", "Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
-	}
+	assert.True(t, qr[0].QueryResult.Equal(execCase.result), "Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 
 	_, err = session.ExecuteBatch(ctx, []string{"none"}, nil)
 	want := "no match for: none"
@@ -515,9 +509,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
 	wantResult.InsertIDChanged = false
-	if !qr.Equal(&wantResult) {
-		assert.Failf(t, "unexpected StreamExecute result", "Unexpected result from StreamExecute: got %+v want %+v", qr, wantResult)
-	}
+	assert.True(t, qr.Equal(&wantResult), "Unexpected result from StreamExecute: got %+v want %+v", qr, wantResult)
 
 	stream, err = session.StreamExecute(ctx, "none", nil)
 	require.NoError(t, err)
@@ -601,9 +593,7 @@ func testStreamExecuteError(t *testing.T, session *vtgateconn.VTGateSession, fak
 	qr, err := stream.Recv()
 	require.NoError(t, err)
 
-	if !qr.Equal(&streamResultFields) {
-		assert.Failf(t, "unexpected StreamExecute result", "Unexpected result from StreamExecute: got %#v want %#v", qr, &streamResultFields)
-	}
+	assert.True(t, qr.Equal(&streamResultFields), "Unexpected result from StreamExecute: got %#v want %#v", qr, &streamResultFields)
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).

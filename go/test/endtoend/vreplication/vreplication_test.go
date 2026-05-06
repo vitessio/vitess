@@ -1513,17 +1513,13 @@ func materializeMerchantOrders(t *testing.T) {
 func checkVtgateHealth(t *testing.T, cell *Cell) {
 	for _, vtgate := range cell.Vtgates {
 		vtgateHealthURL := strings.ReplaceAll(vtgate.VerifyURL, "vars", "health")
-		if !checkHealth(t, vtgateHealthURL) {
-			assert.Fail(t, "Vtgate not healthy: ", vtgateHealthURL)
-		}
+		assert.True(t, checkHealth(t, vtgateHealthURL), "Vtgate not healthy: ", vtgateHealthURL)
 	}
 }
 
 func checkTabletHealth(t *testing.T, tablet *Tablet) {
 	vttabletHealthURL := strings.ReplaceAll(tablet.Vttablet.VerifyURL, "debug/vars", "healthz")
-	if !checkHealth(t, vttabletHealthURL) {
-		assert.Fail(t, "Vttablet not healthy: ", vttabletHealthURL)
-	}
+	assert.True(t, checkHealth(t, vttabletHealthURL), "Vttablet not healthy: ", vttabletHealthURL)
 }
 
 func iterateTablets(t *testing.T, cluster *VitessCluster, f func(t *testing.T, tablet *Tablet)) {
@@ -1625,9 +1621,7 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, ignoreErrors bool) {
 	if err := vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
 		"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes); err != nil {
-		if !ignoreErrors {
-			require.Failf(t, "MoveTables command failed", "MoveTables %s command failed with %+v\n", action, err)
-		}
+		require.True(t, ignoreErrors, "MoveTables %s command failed with %+v\n", action, err)
 	}
 }
 

@@ -178,9 +178,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 		for {
 			select {
 			case allevs, ok := <-ch:
-				if !ok {
-					require.FailNow(t, "expectLog: not ok, stream ended early")
-				}
+				require.True(t, ok, "expectLog: not ok, stream ended early")
 				for _, ev := range allevs {
 					// Ignore spurious heartbeats that can happen on slow machines.
 					if ev.Throttled || ev.Type == binlogdatapb.VEventType_HEARTBEAT {

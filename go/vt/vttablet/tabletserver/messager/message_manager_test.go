@@ -765,9 +765,7 @@ func TestMMGenerate(t *testing.T) {
 	wantbv = map[string]*querypb.BindVariable{
 		"time_acked": sqltypes.Int64BindVariable(3),
 	}
-	if !reflect.DeepEqual(bv, wantbv) {
-		assert.Failf(t, "bv mismatch", "gotid: %v, want %v", bv, wantbv)
-	}
+	assert.Equal(t, wantbv, bv, "gotid: %v, want %v", bv, wantbv)
 }
 
 func TestMMGenerateWithBackoff(t *testing.T) {
@@ -798,9 +796,7 @@ func TestMMGenerateWithBackoff(t *testing.T) {
 		"max_backoff": sqltypes.Int64BindVariable(4e9),
 		"ids":         wantids,
 	}
-	if !reflect.DeepEqual(bv, wantbv) {
-		assert.Failf(t, "bv mismatch", "gotid: %v, want %v", bv, wantbv)
-	}
+	assert.Equal(t, wantbv, bv, "gotid: %v, want %v", bv, wantbv)
 }
 
 type fakeTabletServer struct {

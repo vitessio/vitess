@@ -21,7 +21,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -279,9 +278,7 @@ func TestBindInSelect(t *testing.T) {
 	wantMaria.Fields[0].Type = sqltypes.Int32
 	wantMaria.Rows[0][0] = sqltypes.NewInt32(1)
 
-	if !qr.Equal(want57) && !qr.Equal(want80) && !qr.Equal(wantMaria) {
-		assert.Failf(t, "unexpected Execute result", "Execute:\n%v, want\n%v,\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want57), prettyPrint(*want80), prettyPrint(*wantMaria))
-	}
+	assert.True(t, qr.Equal(want57) || qr.Equal(want80) || qr.Equal(wantMaria), "Execute:\n%v, want\n%v,\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want57), prettyPrint(*want80), prettyPrint(*wantMaria))
 
 	// String bind var.
 	qr, err = client.Execute(
@@ -305,9 +302,7 @@ func TestBindInSelect(t *testing.T) {
 	}
 	// MariaDB 10.3 has different behavior.
 	qr.Fields[0].Decimals = 0
-	if !qr.Equal(want) {
-		assert.Failf(t, "unexpected Execute result", "Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
-	}
+	assert.True(t, qr.Equal(want), "Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 
 	// Binary bind var.
 	qr, err = client.Execute(
@@ -331,9 +326,7 @@ func TestBindInSelect(t *testing.T) {
 	}
 	// MariaDB 10.3 has different behavior.
 	qr.Fields[0].Decimals = 0
-	if !qr.Equal(want) {
-		assert.Failf(t, "unexpected Execute result", "Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
-	}
+	assert.True(t, qr.Equal(want), "Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 }
 
 func TestHealth(t *testing.T) {
@@ -353,9 +346,7 @@ func TestStreamHealth(t *testing.T) {
 		return io.EOF
 	})
 	require.NoError(t, err)
-	if !proto.Equal(health.Target, framework.Target) {
-		assert.Failf(t, "unexpected Health target", "Health: %+v, want %+v", health.Target, framework.Target)
-	}
+	assert.True(t, proto.Equal(health.Target, framework.Target), "Health: %+v, want %+v", health.Target, framework.Target)
 }
 
 func TestQueryStats(t *testing.T) {
@@ -502,9 +493,7 @@ func TestDBAStatements(t *testing.T) {
 	qr, err := client.Execute("show variables like 'version'", nil)
 	require.NoError(t, err)
 	wantCol := sqltypes.NewVarChar("version")
-	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
-		assert.Failf(t, "unexpected Execute result", "Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
-	}
+	assert.Equal(t, wantCol, qr.Rows[0][0], "Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
 
 	qr, err = client.Execute("describe vitess_a", nil)
 	require.NoError(t, err)

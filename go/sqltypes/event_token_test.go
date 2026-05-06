@@ -74,8 +74,6 @@ func TestEventTokenMinimum(t *testing.T) {
 			assert.Failf(t, "unexpected non-nil result", "expected nil result for Minimum(%v, %v) but got: %v", tcase.ev1, tcase.ev2, got)
 			continue
 		}
-		if !proto.Equal(got, tcase.expected) {
-			assert.Failf(t, "Minimum mismatch", "got %v but expected %v for Minimum(%v, %v)", got, tcase.expected, tcase.ev1, tcase.ev2)
-		}
+		assert.True(t, proto.Equal(got, tcase.expected), "got %v but expected %v for Minimum(%v, %v)", got, tcase.expected, tcase.ev1, tcase.ev2)
 	}
 }

@@ -96,9 +96,7 @@ func TestBuildBindVariables(t *testing.T) {
 		} else {
 			assert.ErrorContains(t, err, tcase.err)
 		}
-		if !BindVariablesEqual(bindVars, tcase.out) {
-			assert.Failf(t, "bind vars mismatch", "MapToBindVars(%v): %v, want %s", tcase.in, bindVars, tcase.out)
-		}
+		assert.True(t, BindVariablesEqual(bindVars, tcase.out), "MapToBindVars(%v): %v, want %s", tcase.in, bindVars, tcase.out)
 	}
 }
 

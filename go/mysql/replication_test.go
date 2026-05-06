@@ -44,9 +44,8 @@ func TestComBinlogDump(t *testing.T) {
 	require.Error(t, err)
 
 	// Write ComBinlogDump packet, read it, compare.
-	if err := cConn.WriteComBinlogDump(0x01020304, "moofarm", 0x05060708, 0x090a); err != nil {
-		require.NoError(t, err)
-	}
+	err = cConn.WriteComBinlogDump(0x01020304, "moofarm", 0x05060708, 0x090a)
+	require.NoError(t, err, "WriteComBinlogDump failed")
 
 	data, err := sConn.ReadPacket()
 	require.NoError(t, err, "sConn.ReadPacket - ComBinlogDump failed: %v", err)
@@ -63,9 +62,8 @@ func TestComBinlogDump(t *testing.T) {
 	sConn.sequence = 0
 
 	// Write ComBinlogDump packet with no filename, read it, compare.
-	if err := cConn.WriteComBinlogDump(0x01020304, "", 0x05060708, 0x090a); err != nil {
-		require.NoError(t, err)
-	}
+	err = cConn.WriteComBinlogDump(0x01020304, "", 0x05060708, 0x090a)
+	require.NoError(t, err, "WriteComBinlogDump failed")
 
 	data, err = sConn.ReadPacket()
 	require.NoError(t, err, "sConn.ReadPacket - ComBinlogDump failed: %v", err)
@@ -461,9 +459,8 @@ func TestSendSemiSyncAck(t *testing.T) {
 	// Write ComBinlogDumpGTID packet, read it, compare.
 	logName := "moofarm"
 	logPos := uint64(1852)
-	if err := cConn.SendSemiSyncAck(logName, logPos); err != nil {
-		require.NoError(t, err)
-	}
+	err := cConn.SendSemiSyncAck(logName, logPos)
+	require.NoError(t, err, "SendSemiSyncAck failed")
 
 	data, err := sConn.ReadPacket()
 	require.NoError(t, err, "sConn.ReadPacket - SendSemiSyncAck failed: %v", err)

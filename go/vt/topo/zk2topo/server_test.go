@@ -99,7 +99,5 @@ func TestHasObservers(t *testing.T) {
 	assert.Falsef(t, ok, "hasObservers(s1:p1,s2:p2): got unexpected %v %v %v", s1, s2, ok)
 
 	s1, s2, ok = hasObservers("s1:p1,s2:p2|o1:p1,o2:p2")
-	if !ok || s1 != "s1:p1,s2:p2" || s2 != "o1:p1,o2:p2" {
-		assert.Failf(t, "hasObservers mismatch", "hasObservers(s1:p1,s2:p2|o1:p1,o2:p2): got unexpected %v %v %v", s1, s2, ok)
-	}
+	assert.True(t, ok && s1 == "s1:p1,s2:p2" && s2 == "o1:p1,o2:p2", "hasObservers(s1:p1,s2:p2|o1:p1,o2:p2): got unexpected %v %v %v", s1, s2, ok)
 }

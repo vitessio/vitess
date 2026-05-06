@@ -101,9 +101,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 	for {
 		wd, ok := <-changes
-		if !ok {
-			require.Fail(t, "watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if wd.Err != nil {
 			if strings.Contains(wd.Err.Error(), "error unpacking SrvKeyspace object") {
 				break
@@ -153,9 +151,7 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	}
 	for {
 		wd, ok := <-changes
-		if !ok {
-			require.Fail(t, "watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if topo.IsErrType(wd.Err, topo.NoNode) {
 			break
 		}
@@ -197,9 +193,7 @@ func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	cancel()
 	for {
 		wd, ok := <-changes
-		if !ok {
-			require.Fail(t, "watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if topo.IsErrType(wd.Err, topo.Interrupted) {
 			break
 		}

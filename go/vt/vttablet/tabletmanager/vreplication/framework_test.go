@@ -505,14 +505,10 @@ func (bts *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 
 func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {
 	t.Helper()
-	if !proto.Equal(tablet, globalFBC.lastTablet) {
-		assert.Failf(t, "tablet mismatch", "Request tablet: %v, want %v", globalFBC.lastTablet, tablet)
-	}
+	assert.True(t, proto.Equal(tablet, globalFBC.lastTablet), "Request tablet: %v, want %v", globalFBC.lastTablet, tablet)
 	assert.Equalf(t, pos, globalFBC.lastPos, "Request pos: %v, want %v", globalFBC.lastPos, pos)
 	assert.Equalf(t, tables, globalFBC.lastTables, "Request tables: %v, want %v", globalFBC.lastTables, tables)
-	if !proto.Equal(kr, globalFBC.lastKeyRange) {
-		assert.Failf(t, "key range mismatch", "Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
-	}
+	assert.True(t, proto.Equal(kr, globalFBC.lastKeyRange), "Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
 }
 
 // --------------------------------------
@@ -1225,9 +1221,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 				}
 			}
 
-			if !match {
-				assert.Failf(t, "log mismatch", "log:\n%v, does not match log %d:\n%q", got, i, log)
-			}
+			assert.True(t, match, "log:\n%v, does not match log %d:\n%q", got, i, log)
 		case <-time.After(5 * time.Second):
 			assert.Failf(t, "no logs received", "no logs received, expecting %s", log)
 			failed = true

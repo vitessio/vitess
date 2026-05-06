@@ -140,13 +140,11 @@ func TestMessage(t *testing.T) {
 	// epoch could be 0 or 1, depending on how fast the row is updated
 	switch epoch {
 	case 0:
-		if !(start-1e9 < next && next < (start+jitter)) {
-			assert.Failf(t, "next out of range", "next: %d. must be within 1s of start: %d", next/1e9, (start+jitter)/1e9)
-		}
+		assert.True(t, start-1e9 < next && next < (start+jitter),
+			"next: %d. must be within 1s of start: %d", next/1e9, (start+jitter)/1e9)
 	case 1:
-		if !(start < next && next < (start+jitter)+3e9) {
-			assert.Failf(t, "next out of range", "next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
-		}
+		assert.True(t, start < next && next < (start+jitter)+3e9,
+			"next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
 	default:
 		assert.Failf(t, "unexpected epoch", "epoch: %d, must be 0 or 1", epoch)
 	}
@@ -160,13 +158,11 @@ func TestMessage(t *testing.T) {
 	// epoch could be 1 or 2, depending on how fast the row is updated
 	switch epoch {
 	case 1:
-		if !(start < next && next < (start+jitter)+3e9) {
-			assert.Failf(t, "next out of range", "next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
-		}
+		assert.True(t, start < next && next < (start+jitter)+3e9,
+			"next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
 	case 2:
-		if !(start+2e9 < next && next < (start+jitter)+6e9) {
-			assert.Failf(t, "next out of range", "next: %d. must be about 3s after start: %d", next/1e9, (start+jitter)/1e9)
-		}
+		assert.True(t, start+2e9 < next && next < (start+jitter)+6e9,
+			"next: %d. must be about 3s after start: %d", next/1e9, (start+jitter)/1e9)
 	default:
 		assert.Failf(t, "unexpected epoch", "epoch: %d, must be 1 or 2", epoch)
 	}

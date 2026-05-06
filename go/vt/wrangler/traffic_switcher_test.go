@@ -19,7 +19,6 @@ package wrangler
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -2072,9 +2071,7 @@ func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {
 	ctx := t.Context()
 	got, err := topotools.GetRoutingRules(ctx, wr.ts)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(got, want) {
-		assert.Failf(t, "routing rules mismatch", "rules:\n%v, want\n%v", got, want)
-	}
+	assert.Equal(t, want, got, "rules:\n%v, want\n%v", got, want)
 	cells, err := wr.ts.GetCellInfoNames(ctx)
 	require.NoError(t, err)
 	for _, cell := range cells {
@@ -2091,9 +2088,7 @@ func checkCellRouting(t *testing.T, wr *Wrangler, cell string, want map[string][
 	for _, rr := range svs.RoutingRules.Rules {
 		got[rr.FromTable] = append(got[rr.FromTable], rr.ToTables...)
 	}
-	if !reflect.DeepEqual(got, want) {
-		require.Failf(t, "routing rules mismatch", "ERROR: routing rules don't match for cell %s:got\n%v, want\n%v", cell, got, want)
-	}
+	require.Equal(t, want, got, "ERROR: routing rules don't match for cell %s:got\n%v, want\n%v", cell, got, want)
 }
 
 func checkDenyList(t *testing.T, ts *topo.Server, keyspaceShard string, want []string) {
@@ -2107,9 +2102,7 @@ func checkDenyList(t *testing.T, ts *topo.Server, keyspaceShard string, want []s
 	if tc != nil {
 		got = tc.DeniedTables
 	}
-	if !reflect.DeepEqual(got, want) {
-		assert.Failf(t, "denied tables mismatch", "Denied tables for %v: %v, want %v", keyspaceShard, got, want)
-	}
+	assert.Equal(t, want, got, "Denied tables for %v: %v, want %v", keyspaceShard, got, want)
 }
 
 func checkServedTypes(t *testing.T, ts *topo.Server, keyspaceShard string, want int) {

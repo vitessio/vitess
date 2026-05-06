@@ -458,9 +458,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	got, err := txe.ReadTransaction("aa")
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
-	if !proto.Equal(got, want) {
-		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %v, want %v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "ReadTransaction: %v, want %v", got, want)
 
 	txResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -504,9 +502,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}
-	if !proto.Equal(got, want) {
-		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %v, want %v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "ReadTransaction: %v, want %v", got, want)
 
 	txResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -524,9 +520,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	want.State = querypb.TransactionState_COMMIT
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %v, want %v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "ReadTransaction: %v, want %v", got, want)
 
 	txResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -544,9 +538,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		assert.Failf(t, "ReadTransaction mismatch", "ReadTransaction: %v, want %v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "ReadTransaction: %v, want %v", got, want)
 }
 
 func TestExecutorReadAllTransactions(t *testing.T) {

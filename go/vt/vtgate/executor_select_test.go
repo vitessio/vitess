@@ -1407,9 +1407,7 @@ func TestStreamSelectEqual(t *testing.T) {
 	result, err := executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestSelectKeyRange(t *testing.T) {
@@ -1546,9 +1544,7 @@ func TestStreamSelectIN(t *testing.T) {
 	result, err := executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	sql = "select id from user where id in (1, 3)"
 	result, err = executorStream(ctx, executor, sql)
@@ -1561,17 +1557,13 @@ func TestStreamSelectIN(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	sql = "select id from user where name = 'foo'"
 	result, err = executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantResult = sandboxconn.StreamRowResult
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewVarChar("foo")})
 	require.NoError(t, err)
@@ -2503,9 +2495,7 @@ func TestSimpleJoin(t *testing.T) {
 			},
 		},
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
 }
@@ -2566,9 +2556,7 @@ func TestSimpleJoinStream(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
 }
@@ -2686,9 +2674,7 @@ func TestLeftJoin(t *testing.T) {
 			},
 		},
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: \n%+v, want \n%+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: \n%+v, want \n%+v", result, wantResult)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 left join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
 
@@ -2727,9 +2713,7 @@ func TestLeftJoinStream(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestEmptyJoin(t *testing.T) {
@@ -2768,9 +2752,7 @@ func TestEmptyJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestEmptyJoinStream(t *testing.T) {
@@ -2806,9 +2788,7 @@ func TestEmptyJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestEmptyJoinRecursive(t *testing.T) {
@@ -2853,9 +2833,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestEmptyJoinRecursiveStream(t *testing.T) {
@@ -2897,9 +2875,7 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestCrossShardDerivedTable(t *testing.T) {

@@ -1417,9 +1417,7 @@ func TestCompareSorter(t *testing.T) {
 			sorted := sorter.Sorted()
 			assert.Equal(t, len(want), len(sorted))
 			for i := 0; i < len(want); i++ {
-				if !sqltypes.RowEqual(want[i], sorted[i]) {
-					require.Failf(t, "row not sorted", "row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
-				}
+				require.True(t, sqltypes.RowEqual(want[i], sorted[i]), "row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
 			}
 		})
 	}

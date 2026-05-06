@@ -2196,9 +2196,7 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 		lv := newLookupVindex(env.ws)
 		_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
 		require.NoError(t, err)
-		if !proto.Equal(got, tcase.out) {
-			assert.Failf(t, tcase.description, "got:\n%v, want\n%v", got, tcase.out)
-		}
+		assert.True(t, proto.Equal(got, tcase.out), "got:\n%v, want\n%v", got, tcase.out)
 	}
 }
 
@@ -2558,9 +2556,7 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 	lv := newLookupVindex(env.ws)
 	_, got, _, _, err := lv.prepareCreate(ctx, "keyspace", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		assert.Failf(t, "same keyspace", "got:\n%v, want\n%v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "got:\n%v, want\n%v", got, want)
 }
 
 func TestCreateCustomizedVindex(t *testing.T) {
@@ -2686,9 +2682,7 @@ func TestCreateCustomizedVindex(t *testing.T) {
 	lv := newLookupVindex(env.ws)
 	_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		assert.Failf(t, "customize create lookup error same", "got:\n%v, want\n%v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "got:\n%v, want\n%v", got, want)
 }
 
 func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
@@ -2806,9 +2800,7 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 	lv := newLookupVindex(env.ws)
 	ms, ks, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
 	require.NoError(t, err)
-	if !proto.Equal(wantKs, ks) {
-		assert.Failf(t, "unexpected keyspace value", "got:\n%v, want\n%v", ks, wantKs)
-	}
+	assert.True(t, proto.Equal(wantKs, ks), "got:\n%v, want\n%v", ks, wantKs)
 	require.NotNil(t, ms)
 	require.GreaterOrEqual(t, len(ms.TableSettings), 1)
 	require.Equal(t, wantQuery, ms.TableSettings[0].SourceExpression, "unexpected query")

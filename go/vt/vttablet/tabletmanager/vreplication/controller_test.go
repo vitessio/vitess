@@ -486,9 +486,7 @@ func TestControllerTabletPickerErrors(t *testing.T) {
 
 				require.True(t, foundExpectedErr, "Expected error containing %q in history, but last message was: %s", tc.expectedErrSubstr, lastMsg)
 
-				if !tc.expectRetry {
-					require.FailNow(t, "Expected controller to fail immediately, but it kept retrying. Last error: %s", lastMsg)
-				}
+				require.True(t, tc.expectRetry, "Expected controller to fail immediately, but it kept retrying. Last error: %s", lastMsg)
 			}
 		})
 	}

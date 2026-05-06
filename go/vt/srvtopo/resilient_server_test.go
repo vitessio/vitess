@@ -98,9 +98,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	got, err = rs.GetSrvKeyspace(t.Context(), "test_cell", "test_ks")
 	require.NoError(t, err)
-	if !proto.Equal(want, got) {
-		require.Failf(t, "GetSrvKeyspace mismatch", "GetSrvKeyspace() = %+v, want %+v", got, want)
-	}
+	require.True(t, proto.Equal(want, got), "GetSrvKeyspace() = %+v, want %+v", got, want)
 
 	// make sure the HTML template works
 	funcs := map[string]any{}
@@ -586,9 +584,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	// Check that we only checked the topo service 1 or 2 times during the
 	// period where we got the cached error.
 	cachedReqs, ok := counts.Counts()[cachedCategory]
-	if !ok || cachedReqs > 2 {
-		assert.Failf(t, "too many cached requests", "expected <= 2 cached requests got %v", cachedReqs)
-	}
+	assert.True(t, ok && cachedReqs <= 2, "expected <= 2 cached requests got %v", cachedReqs)
 
 	// Clear the error and wait until the cached error state expires
 	factory.SetError(nil)
@@ -610,9 +606,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	assert.Equalf(t, wantNames, names, "GetSrvKeyspaceNames got %v want %v", names, wantNames)
 
 	errorReqs, ok := counts.Counts()[errorCategory]
-	if !ok || errorReqs == 0 {
-		assert.Failf(t, "no error requests", "expected non-zero error requests got %v", errorReqs)
-	}
+	assert.True(t, ok && errorReqs != 0, "expected non-zero error requests got %v", errorReqs)
 
 	// Force another error and lock the topo. Then wait for the TTL to
 	// expire and verify that the context timeout unblocks the request.

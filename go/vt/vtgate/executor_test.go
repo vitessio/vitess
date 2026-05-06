@@ -493,9 +493,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "commit", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@primary"}
-	if !proto.Equal(session.Session, wantSession) {
-		assert.Failf(t, "session mismatch", "autocommit=1: %v, want %v", session.Session, wantSession)
-	}
+	assert.True(t, proto.Equal(session.Session, wantSession), "autocommit=1: %v, want %v", session.Session, wantSession)
 	got, want = sbclookup.CommitCount.Load(), startCount+1
 	assert.Equalf(t, want, got, "Commit count: %d, want %d", got, want)
 	_ = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
@@ -512,9 +510,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, "set autocommit=1", nil)
 	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@primary"}
-	if !proto.Equal(session.Session, wantSession) {
-		assert.Failf(t, "session mismatch", "autocommit=1: %v, want %v", session.Session, wantSession)
-	}
+	assert.True(t, proto.Equal(session.Session, wantSession), "autocommit=1: %v, want %v", session.Session, wantSession)
 	got, want = sbclookup.CommitCount.Load(), startCount+1
 	assert.Equalf(t, want, got, "Commit count: %d, want %d", got, want)
 }
@@ -1208,9 +1204,7 @@ func TestExecutorComment(t *testing.T) {
 	for _, stmt := range stmts {
 		gotResult, err := executorExec(ctx, executor, &vtgatepb.Session{TargetString: KsTestUnsharded}, stmt, nil)
 		require.NoError(t, err)
-		if !gotResult.Equal(wantResult) {
-			assert.Failf(t, "result mismatch", "Exec %s: %v, want %v", stmt, gotResult, wantResult)
-		}
+		assert.True(t, gotResult.Equal(wantResult), "Exec %s: %v, want %v", stmt, gotResult, wantResult)
 	}
 }
 
@@ -1438,9 +1432,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	vschema, vindex = waitForVindex(t, ks, "test_vindex2", vschemaUpdates, executor)
 	assert.Equalf(t, "hash", vindex.Type, "vindex type %s not hash", vindex.Type)
 	keyspace, ok := vschema.Keyspaces[ks]
-	if !ok || !keyspace.Sharded {
-		assert.Fail(t, "keyspace should have been created with Sharded=true")
-	}
+	assert.True(t, ok && keyspace.Sharded, "keyspace should have been created with Sharded=true")
 
 	// No queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
@@ -1577,10 +1569,7 @@ func TestVSchemaStats(t *testing.T) {
 		require.NoError(t, err)
 	}
 	result := wr.String()
-	if !strings.Contains(result, "<td>TestXBadSharding</td>") ||
-		!strings.Contains(result, "<td>TestUnsharded</td>") {
-		assert.Failf(t, "invalid html result", "invalid html result: %v", result)
-	}
+	assert.True(t, strings.Contains(result, "<td>TestXBadSharding</td>") && strings.Contains(result, "<td>TestUnsharded</td>"), "invalid html result: %v", result)
 }
 
 var pv = querypb.ExecuteOptions_Gen4
@@ -1958,12 +1947,10 @@ func TestDebugVSchema(t *testing.T) {
 	v := make(map[string]any)
 	err := json.Unmarshal(resp.Body.Bytes(), &v)
 	require.NoErrorf(t, err, "Unmarshal on %s failed: %v", resp.Body.String(), err)
-	if _, ok := v["routing_rules"]; !ok {
-		assert.Failf(t, "routing rules missing", "routing rules missing: %v", resp.Body.String())
-	}
-	if _, ok := v["keyspaces"]; !ok {
-		assert.Failf(t, "keyspaces missing", "keyspaces missing: %v", resp.Body.String())
-	}
+	_, ok := v["routing_rules"]
+	assert.True(t, ok, "routing rules missing: %v", resp.Body.String())
+	_, ok = v["keyspaces"]
+	assert.True(t, ok, "keyspaces missing: %v", resp.Body.String())
 }
 
 func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {

@@ -1884,9 +1884,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbc, wantQueries)
-	if !result.Equal(wantResult) {
-		assert.Failf(t, "result mismatch", "result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 	assert.EqualValues(t, 2, session.LastInsertId)
 }
 

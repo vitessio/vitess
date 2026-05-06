@@ -131,9 +131,7 @@ func TestVStream(t *testing.T) {
 				Type: field.Type,
 			})
 		}
-		if !proto.Equal(filteredFields, wantFields) {
-			assert.Failf(t, "FieldEvent mismatch", "%v, want\n%v", filteredFields, wantFields)
-		}
+		assert.True(t, proto.Equal(filteredFields, wantFields), "%v, want\n%v", filteredFields, wantFields)
 		wantRows := &binlogdatapb.RowEvent{
 			TableName: "ks.vstream_test",
 			Keyspace:  "ks",
@@ -147,9 +145,7 @@ func TestVStream(t *testing.T) {
 			Flags: 1, // foreign_key_checks are enabled by default.
 		}
 		gotRows := events[2].RowEvent
-		if !proto.Equal(gotRows, wantRows) {
-			assert.Failf(t, "RowEvent mismatch", "%v, want\n%v", gotRows, wantRows)
-		}
+		assert.True(t, proto.Equal(gotRows, wantRows), "%v, want\n%v", gotRows, wantRows)
 	}
 	cancel()
 }

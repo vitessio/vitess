@@ -48,9 +48,7 @@ func TestEncLenInt(t *testing.T) {
 	}
 	for _, test := range tests {
 		// Check lenEncIntSize first.
-		if got := lenEncIntSize(test.value); got != len(test.encoded) {
-			assert.Failf(t, "lenEncIntSize mismatch", "lenEncIntSize returned %v but expected %v for %x", got, len(test.encoded), test.value)
-		}
+		assert.Equal(t, len(test.encoded), lenEncIntSize(test.value), "lenEncIntSize returned unexpected value for %x", test.value)
 
 		// Check successful encoding.
 		data := make([]byte, len(test.encoded))
@@ -66,9 +64,7 @@ func TestEncLenInt(t *testing.T) {
 
 		// Check successful decoding.
 		got, pos, ok := readLenEncInt(test.encoded, 0)
-		if !ok || got != test.value || pos != len(test.encoded) {
-			assert.Failf(t, "readLenEncInt mismatch", "readLenEncInt returned %x/%v/%v but expected %x/%v/%v", got, pos, ok, test.value, len(test.encoded), true)
-		}
+		assert.True(t, ok && got == test.value && pos == len(test.encoded), "readLenEncInt returned %x/%v/%v but expected %x/%v/%v", got, pos, ok, test.value, len(test.encoded), true)
 
 		// Check failed decoding.
 		_, _, ok = readLenEncInt(test.encoded[:len(test.encoded)-1], 0)
@@ -81,18 +77,12 @@ func TestEncUint16(t *testing.T) {
 
 	val16 := uint16(0xabcd)
 
-	if got := writeUint16(data, 2, val16); got != 4 {
-		assert.Failf(t, "writeUint16 mismatch", "writeUint16 returned %v but expected 4", got)
-	}
+	assert.Equal(t, 4, writeUint16(data, 2, val16), "writeUint16 returned unexpected value")
 
-	if data[2] != 0xcd || data[3] != 0xab {
-		assert.Failf(t, "writeUint16 bad result", "writeUint16 returned bad result: %v", data)
-	}
+	assert.True(t, data[2] == 0xcd && data[3] == 0xab, "writeUint16 returned bad result: %v", data)
 
 	got16, pos, ok := readUint16(data, 2)
-	if !ok || got16 != val16 || pos != 4 {
-		assert.Failf(t, "readUint16 mismatch", "readUint16 returned %v/%v/%v but expected %v/%v/%v", got16, pos, ok, val16, 4, true)
-	}
+	assert.True(t, ok && got16 == val16 && pos == 4, "readUint16 returned %v/%v/%v but expected %v/%v/%v", got16, pos, ok, val16, 4, true)
 
 	_, _, ok = readUint16(data, 9)
 	assert.False(t, ok, "readUint16 returned ok=true for shorter value")
@@ -101,23 +91,18 @@ func TestEncUint16(t *testing.T) {
 func TestEncBytes(t *testing.T) {
 	data := make([]byte, 10)
 
-	if got := writeByte(data, 5, 0xab); got != 6 || data[5] != 0xab {
-		assert.Failf(t, "writeByte bad result", "writeByte returned bad result: %v %v", got, data[5])
-	}
+	wgot := writeByte(data, 5, 0xab)
+	assert.True(t, wgot == 6 && data[5] == 0xab, "writeByte returned bad result: %v %v", wgot, data[5])
 
 	got, pos, ok := readByte(data, 5)
-	if !ok || got != 0xab || pos != 6 {
-		assert.Failf(t, "readByte mismatch", "readByte returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, 0xab, 6, true)
-	}
+	assert.True(t, ok && got == 0xab && pos == 6, "readByte returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, 0xab, 6, true)
 
 	_, _, ok = readByte(data, 10)
 	assert.False(t, ok, "readByte returned ok=true for shorter value")
 
 	b, pos, ok := readBytes(data, 5, 2)
 	expected := []byte{0xab, 0x00}
-	if !ok || !bytes.Equal(b, expected) || pos != 7 {
-		assert.Failf(t, "readBytes mismatch", "readBytes returned %v/%v/%v but expected %v/%v/%v", b, pos, ok, expected, 7, true)
-	}
+	assert.True(t, ok && bytes.Equal(b, expected) && pos == 7, "readBytes returned %v/%v/%v but expected %v/%v/%v", b, pos, ok, expected, 7, true)
 
 	_, _, ok = readBytes(data, 9, 2)
 	assert.False(t, ok, "readBytes returned ok=true for shorter value")
@@ -128,18 +113,12 @@ func TestEncUint32(t *testing.T) {
 
 	val32 := uint32(0xabcdef10)
 
-	if got := writeUint32(data, 2, val32); got != 6 {
-		assert.Failf(t, "writeUint32 mismatch", "writeUint32 returned %v but expected 6", got)
-	}
+	assert.Equal(t, 6, writeUint32(data, 2, val32), "writeUint32 returned unexpected value")
 
-	if data[2] != 0x10 || data[3] != 0xef || data[4] != 0xcd || data[5] != 0xab {
-		assert.Failf(t, "writeUint32 bad result", "writeUint32 returned bad result: %v", data)
-	}
+	assert.True(t, data[2] == 0x10 && data[3] == 0xef && data[4] == 0xcd && data[5] == 0xab, "writeUint32 returned bad result: %v", data)
 
 	got32, pos, ok := readUint32(data, 2)
-	if !ok || got32 != val32 || pos != 6 {
-		assert.Failf(t, "readUint32 mismatch", "readUint32 returned %v/%v/%v but expected %v/%v/%v", got32, pos, ok, val32, 6, true)
-	}
+	assert.True(t, ok && got32 == val32 && pos == 6, "readUint32 returned %v/%v/%v but expected %v/%v/%v", got32, pos, ok, val32, 6, true)
 
 	_, _, ok = readUint32(data, 7)
 	assert.False(t, ok, "readUint32 returned ok=true for shorter value")
@@ -150,19 +129,13 @@ func TestEncUint64(t *testing.T) {
 
 	val64 := uint64(0xabcdef1011121314)
 
-	if got := writeUint64(data, 1, val64); got != 9 {
-		assert.Failf(t, "writeUint64 mismatch", "writeUint64 returned %v but expected 9", got)
-	}
+	assert.Equal(t, 9, writeUint64(data, 1, val64), "writeUint64 returned unexpected value")
 
-	if data[1] != 0x14 || data[2] != 0x13 || data[3] != 0x12 || data[4] != 0x11 ||
-		data[5] != 0x10 || data[6] != 0xef || data[7] != 0xcd || data[8] != 0xab {
-		assert.Failf(t, "writeUint64 bad result", "writeUint64 returned bad result: %v", data)
-	}
+	assert.True(t, data[1] == 0x14 && data[2] == 0x13 && data[3] == 0x12 && data[4] == 0x11 &&
+		data[5] == 0x10 && data[6] == 0xef && data[7] == 0xcd && data[8] == 0xab, "writeUint64 returned bad result: %v", data)
 
 	got64, pos, ok := readUint64(data, 1)
-	if !ok || got64 != val64 || pos != 9 {
-		assert.Failf(t, "readUint64 mismatch", "readUint64 returned %v/%v/%v but expected %v/%v/%v", got64, pos, ok, val64, 6, true)
-	}
+	assert.True(t, ok && got64 == val64 && pos == 9, "readUint64 returned %v/%v/%v but expected %v/%v/%v", got64, pos, ok, val64, 6, true)
 
 	_, _, ok = readUint64(data, 7)
 	assert.False(t, ok, "readUint64 returned ok=true for shorter value")
@@ -198,19 +171,13 @@ func TestEncString(t *testing.T) {
 		// len encoded tests.
 
 		// Check lenEncStringSize first.
-		if got := lenEncStringSize(test.value); got != len(test.lenEncoded) {
-			assert.Failf(t, "lenEncStringSize mismatch", "lenEncStringSize returned %v but expected %v for %v", got, len(test.lenEncoded), test.value)
-		}
+		assert.Equal(t, len(test.lenEncoded), lenEncStringSize(test.value), "lenEncStringSize returned unexpected value for %v", test.value)
 
 		// Check lenNullString
-		if got := lenNullString(test.value); got != len(test.nullEncoded) {
-			assert.Failf(t, "lenNullString mismatch", "lenNullString returned %v but expected %v for %v", got, len(test.nullEncoded), test.value)
-		}
+		assert.Equal(t, len(test.nullEncoded), lenNullString(test.value), "lenNullString returned unexpected value for %v", test.value)
 
 		// Check lenEOFString
-		if got := lenEOFString(test.value); got != len(test.eofEncoded) {
-			assert.Failf(t, "lenEOFString mismatch", "lenNullString returned %v but expected %v for %v", got, len(test.eofEncoded), test.value)
-		}
+		assert.Equal(t, len(test.eofEncoded), lenEOFString(test.value), "lenEOFString returned unexpected value for %v", test.value)
 
 		// Check successful encoding.
 		data := make([]byte, len(test.lenEncoded))
@@ -226,9 +193,7 @@ func TestEncString(t *testing.T) {
 
 		// Check successful decoding as string.
 		got, pos, ok := readLenEncString(test.lenEncoded, 0)
-		if !ok || got != test.value || pos != len(test.lenEncoded) {
-			assert.Failf(t, "readLenEncString mismatch", "readLenEncString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.lenEncoded), true)
-		}
+		assert.True(t, ok && got == test.value && pos == len(test.lenEncoded), "readLenEncString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.lenEncoded), true)
 
 		// Check failed decoding with shorter data.
 		_, _, ok = readLenEncString(test.lenEncoded[:len(test.lenEncoded)-1], 0)
@@ -240,9 +205,7 @@ func TestEncString(t *testing.T) {
 
 		// Check successful skipping as string.
 		pos, ok = skipLenEncString(test.lenEncoded, 0)
-		if !ok || pos != len(test.lenEncoded) {
-			assert.Failf(t, "skipLenEncString mismatch", "skipLenEncString returned %v/%v but expected %v/%v", pos, ok, len(test.lenEncoded), true)
-		}
+		assert.True(t, ok && pos == len(test.lenEncoded), "skipLenEncString returned %v/%v but expected %v/%v", pos, ok, len(test.lenEncoded), true)
 
 		// Check failed skipping with shorter data.
 		_, ok = skipLenEncString(test.lenEncoded[:len(test.lenEncoded)-1], 0)
@@ -254,9 +217,7 @@ func TestEncString(t *testing.T) {
 
 		// Check successful decoding as bytes.
 		gotb, pos, ok := readLenEncStringAsBytes(test.lenEncoded, 0)
-		if !ok || string(gotb) != test.value || pos != len(test.lenEncoded) {
-			assert.Failf(t, "readLenEncStringAsBytes mismatch", "readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotb, pos, ok, test.value, len(test.lenEncoded), true)
-		}
+		assert.True(t, ok && string(gotb) == test.value && pos == len(test.lenEncoded), "readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotb, pos, ok, test.value, len(test.lenEncoded), true)
 
 		// Check failed decoding as bytes with shorter data.
 		_, _, ok = readLenEncStringAsBytes(test.lenEncoded[:len(test.lenEncoded)-1], 0)
@@ -268,9 +229,7 @@ func TestEncString(t *testing.T) {
 
 		// Check successful decoding as bytes.
 		gotbcopy, posCopy, ok := readLenEncStringAsBytesCopy(test.lenEncoded, 0)
-		if !ok || string(gotb) != test.value || pos != len(test.lenEncoded) {
-			assert.Failf(t, "readLenEncStringAsBytesCopy mismatch", "readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotbcopy, posCopy, ok, test.value, len(test.lenEncoded), true)
-		}
+		assert.True(t, ok && string(gotb) == test.value && pos == len(test.lenEncoded), "readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotbcopy, posCopy, ok, test.value, len(test.lenEncoded), true)
 
 		// Check failed decoding as bytes with shorter data.
 		_, _, ok = readLenEncStringAsBytesCopy(test.lenEncoded[:len(test.lenEncoded)-1], 0)
@@ -290,9 +249,7 @@ func TestEncString(t *testing.T) {
 
 		// Check successful decoding.
 		got, pos, ok = readNullString(test.nullEncoded, 0)
-		if !ok || got != test.value || pos != len(test.nullEncoded) {
-			assert.Failf(t, "readNullString mismatch", "readNullString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.nullEncoded), true)
-		}
+		assert.True(t, ok && got == test.value && pos == len(test.nullEncoded), "readNullString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.nullEncoded), true)
 
 		// Check failed decoding with shorter data.
 		_, _, ok = readNullString(test.nullEncoded[:len(test.nullEncoded)-1], 0)
@@ -308,9 +265,7 @@ func TestEncString(t *testing.T) {
 
 		// Check successful decoding.
 		got, pos, ok = readEOFString(test.eofEncoded, 0)
-		if !ok || got != test.value || pos != len(test.eofEncoded) {
-			assert.Failf(t, "readEOFString mismatch", "readEOFString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.eofEncoded), true)
-		}
+		assert.True(t, ok && got == test.value && pos == len(test.eofEncoded), "readEOFString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.eofEncoded), true)
 	}
 }
 

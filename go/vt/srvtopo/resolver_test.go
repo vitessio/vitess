@@ -245,8 +245,6 @@ func TestResolveDestinations(t *testing.T) {
 			continue
 		}
 		assert.Equalf(t, len(rss), len(values), "%v: len(values) != len(rss): %v != %v", testCase.name, len(values), len(rss))
-		if !ValuesEqual(values, testCase.expectedValues) {
-			assert.Failf(t, testCase.name, "values != testCase.expectedValues: got values=%v", values)
-		}
+		assert.True(t, ValuesEqual(values, testCase.expectedValues), "values != testCase.expectedValues: got values=%v", values)
 	}
 }

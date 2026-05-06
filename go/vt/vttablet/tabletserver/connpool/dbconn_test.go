@@ -142,9 +142,7 @@ func TestDBConnExecLost(t *testing.T) {
 	result, err := dbConn.Exec(ctx, sql, 1, false)
 	require.NoError(t, err)
 	expectedResult.Fields = nil
-	if !expectedResult.Equal(result) {
-		assert.Failf(t, "Exec result mismatch", "Exec: %v, want %v", expectedResult, result)
-	}
+	assert.True(t, expectedResult.Equal(result), "Exec: %v, want %v", expectedResult, result)
 
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 
@@ -209,9 +207,7 @@ func TestDBConnDeadline(t *testing.T) {
 	result, err := dbConn.Exec(ctx, sql, 1, false)
 	require.NoError(t, err)
 	expectedResult.Fields = nil
-	if !expectedResult.Equal(result) {
-		assert.Failf(t, "Exec result mismatch", "Exec: %v, want %v", expectedResult, result)
-	}
+	assert.True(t, expectedResult.Equal(result), "Exec: %v, want %v", expectedResult, result)
 
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 
@@ -221,9 +217,7 @@ func TestDBConnDeadline(t *testing.T) {
 	result, err = dbConn.Exec(t.Context(), sql, 1, false)
 	require.NoError(t, err)
 	expectedResult.Fields = nil
-	if !expectedResult.Equal(result) {
-		assert.Failf(t, "Exec result mismatch", "Exec: %v, want %v", expectedResult, result)
-	}
+	assert.True(t, expectedResult.Equal(result), "Exec: %v, want %v", expectedResult, result)
 
 	compareTimingCounts(t, "PoolTest.Exec", 1, startCounts, mysqlTimings.Counts())
 }

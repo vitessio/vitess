@@ -78,7 +78,5 @@ func TestVrLog(t *testing.T) {
 		s = "Timed out"
 	}
 	prefix := "Error: Type not specified"
-	if !strings.HasPrefix(s, prefix) {
-		require.Failf(t, "incorrect type", "Incorrect Type for uninitialized stat, got %v", s)
-	}
+	require.True(t, strings.HasPrefix(s, prefix), "Incorrect Type for uninitialized stat, got %v", s)
 }

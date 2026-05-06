@@ -250,28 +250,20 @@ func TestJSONOutput(t *testing.T) {
 	require.NoError(t, err, "error unmarshaling json")
 
 	array, ok := data.([]any)
-	if !ok || len(array) != 1 {
-		assert.Failf(t, "unexpected top-level array", "expected single-element top-level array, got:\n%s", explainJSON)
-	}
+	assert.True(t, ok && len(array) == 1, "expected single-element top-level array, got:\n%s", explainJSON)
 
 	explain, ok := array[0].(map[string]any)
-	if !ok {
-		assert.Failf(t, "unexpected explain", "expected explain map, got:\n%s", explainJSON)
-	}
+	assert.True(t, ok, "expected explain map, got:\n%s", explainJSON)
 
 	if explain["SQL"] != sql {
 		assert.Failf(t, "unexpected SQL", "expected SQL, got:\n%s", explainJSON)
 	}
 
 	plans, ok := explain["Plans"].([]any)
-	if !ok || len(plans) != 1 {
-		assert.Failf(t, "unexpected plans", "expected single-element plans array, got:\n%s", explainJSON)
-	}
+	assert.True(t, ok && len(plans) == 1, "expected single-element plans array, got:\n%s", explainJSON)
 
 	actions, ok := explain["TabletActions"].(map[string]any)
-	if !ok {
-		assert.Failf(t, "unexpected TabletActions", "expected TabletActions map, got:\n%s", explainJSON)
-	}
+	assert.True(t, ok, "expected TabletActions map, got:\n%s", explainJSON)
 
 	actionsJSON, err := json.MarshalIndent(actions, "", "    ")
 	require.NoError(t, err, "error in json marshal")
