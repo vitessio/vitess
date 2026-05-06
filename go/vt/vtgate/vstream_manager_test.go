@@ -297,6 +297,14 @@ func TestVStreamEvents(t *testing.T) {
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
 	require.ElementsMatch(t, []*binlogdatapb.VStreamResponse{want1, want2}, receivedEvents)
+
+	// Confirm that the VStream request sent to the tablet had NoTimeouts=true so that the
+	// MAX_EXECUTION_TIME query hint is not added to copy/sync queries (see issue #20039).
+	require.NotEmpty(t, sbc0.VStreamRequests)
+	for _, req := range sbc0.VStreamRequests {
+		require.NotNil(t, req.Options)
+		require.True(t, req.Options.NoTimeouts, "expected VStream request Options.NoTimeouts to be true")
+	}
 }
 
 func BenchmarkVStreamEvents(b *testing.B) {
