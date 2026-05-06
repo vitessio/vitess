@@ -231,60 +231,60 @@ func TestCastBindVars(t *testing.T) {
 		{
 			typ:   sqltypes.Decimal,
 			binds: map[string]*querypb.BindVariable{"arg": sqltypes.DecimalBindVariable("50")},
-			out:   "select CAST(50 AS DECIMAL(0, 0)) from ",
+			out:   "select CAST(50 AS DECIMAL(0, 0)) from dual",
 		},
 		{
 			typ:   sqltypes.Uint32,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Uint32, Value: sqltypes.NewUint32(42).Raw()}},
-			out:   "select CAST(42 AS UNSIGNED) from ",
+			out:   "select CAST(42 AS UNSIGNED) from dual",
 		},
 		{
 			typ:   sqltypes.Float64,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Float64, Value: sqltypes.NewFloat64(42.42).Raw()}},
-			out:   "select CAST(42.42 AS DOUBLE) from ",
+			out:   "select CAST(42.42 AS DOUBLE) from dual",
 		},
 		{
 			typ:   sqltypes.Float32,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Float32, Value: sqltypes.NewFloat32(42).Raw()}},
-			out:   "select CAST(42 AS FLOAT) from ",
+			out:   "select CAST(42 AS FLOAT) from dual",
 		},
 		{
 			typ:   sqltypes.Date,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Date, Value: sqltypes.NewDate("2021-10-30").Raw()}},
-			out:   "select CAST('2021-10-30' AS DATE) from ",
+			out:   "select CAST('2021-10-30' AS DATE) from dual",
 		},
 		{
 			typ:   sqltypes.Time,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Time, Value: sqltypes.NewTime("12:00:00").Raw()}},
-			out:   "select CAST('12:00:00' AS TIME) from ",
+			out:   "select CAST('12:00:00' AS TIME) from dual",
 		},
 		{
 			typ:   sqltypes.Time,
 			size:  6,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Time, Value: sqltypes.NewTime("12:00:00").Raw()}},
-			out:   "select CAST('12:00:00' AS TIME(6)) from ",
+			out:   "select CAST('12:00:00' AS TIME(6)) from dual",
 		},
 		{
 			typ:   sqltypes.Timestamp,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Timestamp, Value: sqltypes.NewTimestamp("2021-10-22 12:00:00").Raw()}},
-			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME) from ",
+			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME) from dual",
 		},
 		{
 			typ:   sqltypes.Timestamp,
 			size:  6,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Timestamp, Value: sqltypes.NewTimestamp("2021-10-22 12:00:00").Raw()}},
-			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME(6)) from ",
+			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME(6)) from dual",
 		},
 		{
 			typ:   sqltypes.Datetime,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Datetime, Value: sqltypes.NewDatetime("2021-10-22 12:00:00").Raw()}},
-			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME) from ",
+			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME) from dual",
 		},
 		{
 			typ:   sqltypes.Datetime,
 			size:  6,
 			binds: map[string]*querypb.BindVariable{"arg": {Type: sqltypes.Datetime, Value: sqltypes.NewDatetime("2021-10-22 12:00:00").Raw()}},
-			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME(6)) from ",
+			out:   "select CAST('2021-10-22 12:00:00' AS DATETIME(6)) from dual",
 		},
 	}
 

@@ -401,8 +401,7 @@ func (se *Engine) getMismatchedTableNames(ctx context.Context, conn *connpool.Co
 		if se.tables[tableName].Type == View {
 			continue
 		}
-		// Explicitly ignore dual because schema-engine stores this in its list of tables.
-		if !tablesFound[tableName] && tableName != "dual" {
+		if !tablesFound[tableName] {
 			tablesMismatched[tableName] = true
 		}
 	}
