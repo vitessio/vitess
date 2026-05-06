@@ -10,6 +10,8 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+    - **[VStream](#minor-changes-vstream)**
+        - [Query timeouts disabled during VTGate VStream copy/sync](#vstream-copy-no-timeouts)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
 
@@ -36,6 +38,16 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+### <a id="minor-changes-vstream"/>VStream</a>
+
+#### <a id="vstream-copy-no-timeouts"/>Query timeouts disabled during VTGate VStream copy/sync</a>
+
+VTGate VStream copy and sync queries no longer include the `MAX_EXECUTION_TIME` query hint. Previously, these queries could timeout during large table copies, forcing VStream clients to resume from the last checkpoint. This caused problems for clients that do not support resume well, or at all, leading to extended copy times or failures.
+
+With this change, VStream sets `NoTimeouts = true` for all requests during the copy and sync phases, including catchup and fast-forward operations. This improves reliability for VStream consumers copying large tables.
+
+See [#20040](https://github.com/vitessio/vitess/pull/20040) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
