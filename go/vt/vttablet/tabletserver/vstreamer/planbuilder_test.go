@@ -689,7 +689,7 @@ func TestPlanBuilder(t *testing.T) {
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select 1"},
-		outErr:  `unsupported missing FROM clause: select 1`,
+		outErr:  `unsupported missing FROM clause: select 1 from dual`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select 1 from dual"},
