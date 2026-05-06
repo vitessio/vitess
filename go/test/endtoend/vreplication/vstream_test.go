@@ -21,7 +21,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -211,6 +214,24 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	// subtract 10 from the total rows found in the 3 tables.
 	wantTotalRows := insertedRows1 + insertedRows2 + insertedRows3 - 10
 	assert.Equal(t, wantTotalRows, numRowEvents)
+
+	// Confirm that the copy phase queries used by the VStream did NOT include the MAX_EXECUTION_TIME
+	// query hint. Adding the hint forces unnecessary copy resume cycles for VStream clients that may
+	// not support resume well, or at all (see issue #20039).
+	logFiles := path.Join(vc.ClusterConfig.tmpDir, "*-vttablet-stderr.txt")
+	totalCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | wc -l", logFiles)
+	totalOut, err := exec.Command("bash", "-c", totalCmd).Output()
+	require.NoError(t, err)
+	totalCount, err := strconv.Atoi(strings.TrimSpace(string(totalOut)))
+	require.NoError(t, err)
+	require.Greater(t, totalCount, 0, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
+
+	withHintCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
+	withHintOut, err := exec.Command("bash", "-c", withHintCmd).Output()
+	require.NoError(t, err)
+	withHintCount, err := strconv.Atoi(strings.TrimSpace(string(withHintOut)))
+	require.NoError(t, err)
+	require.Zero(t, withHintCount, "expected no VStream copy/sync queries to include MAX_EXECUTION_TIME hint")
 }
 
 // TestVStreamLaggingDDLRowEvents confirms that when the schema historian is enabled via the --track-schema-versions flag, we don't

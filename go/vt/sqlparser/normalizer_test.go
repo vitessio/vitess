@@ -764,8 +764,8 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
 		expected: "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
 	}, {
-		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
-		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM `dual`, user)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM `dual`, `user`)",
 	}, {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
 		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",

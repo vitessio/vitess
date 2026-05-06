@@ -39,20 +39,15 @@ func gen4SelectStmtPlanner(
 ) (*planResult, error) {
 	sel, isSel := stmt.(*sqlparser.Select)
 	if isSel {
-		// handle dual table for processing at vtgate.
+		// SELECT statements with no FROM clause (constant projections, lock
+		// functions, `SELECT 1 FROM DUAL`, …) are evaluated entirely at vtgate
+		// and do not read from any real or virtual table.
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil {
 			return nil, err
 		}
 		if p != nil {
-			used := "dual"
-			keyspace, ksErr := vschema.SelectedKeyspace()
-			if ksErr == nil {
-				// we are just getting the ks to log the correct table use.
-				// no need to fail this if we can't find the default keyspace
-				used = keyspace.Name + ".dual"
-			}
-			return newPlanResult(p, used), nil
+			return newPlanResult(p), nil
 		}
 
 		if sel.SQLCalcFoundRows && sel.Limit != nil {
@@ -264,16 +259,7 @@ func isOnlyDual(sel *sqlparser.Select) bool {
 		}
 	}
 
-	if len(sel.From) > 1 {
-		return false
-	}
-	table, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return false
-	}
-	tableName, ok := table.Expr.(sqlparser.TableName)
-
-	return ok && tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty()
+	return len(sel.From) == 0
 }
 
 func shouldRetryAfterPredicateRewriting(plan engine.Primitive) bool {

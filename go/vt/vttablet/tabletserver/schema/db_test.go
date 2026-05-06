@@ -273,23 +273,8 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			isServingPrimary:   true,
 			expectedTableNames: []string{"t2"},
 		}, {
-			name: "DualGetsIgnored",
-			tables: map[string]*Table{
-				"dual": NewTable("dual", NoType),
-				"t2": {
-					Name:       sqlparser.NewIdentifierCS("t2"),
-					Type:       NoType,
-					CreateTime: 31234,
-				},
-			},
-			dbData: sqltypes.MakeTestResult(queryFields,
-				"t2|31234"),
-			isServingPrimary:   true,
-			expectedTableNames: []string{},
-		}, {
 			name: "AllProblems",
 			tables: map[string]*Table{
-				"dual": NewTable("dual", NoType),
 				"t2": {
 					Name:       sqlparser.NewIdentifierCS("t2"),
 					Type:       NoType,

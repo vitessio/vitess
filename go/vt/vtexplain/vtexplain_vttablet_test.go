@@ -90,6 +90,38 @@ create table t2 (
 	require.NoError(t, err)
 }
 
+// TestAnalyzeWhereFromlessSelect guards against a panic in analyzeWhere
+// for FROM-less SELECTs with an IN predicate in the WHERE clause. After
+// DUAL became a reserved keyword, queries like `SELECT … WHERE x IN (…)`
+// (and equivalently `SELECT … FROM DUAL WHERE x IN (…)`) parse to From: nil,
+// and the previous unconditional selStmt.From[0] indexing panicked.
+func TestAnalyzeWhereFromlessSelect(t *testing.T) {
+	tablet := &explainTablet{collationEnv: collations.MySQL8()}
+	parser := sqlparser.NewTestParser()
+
+	tests := []string{
+		"SELECT 1 WHERE id IN (1, 2, 3)",
+		"SELECT 1 FROM DUAL WHERE id IN (1, 2)",
+	}
+	for _, query := range tests {
+		t.Run(query, func(t *testing.T) {
+			stmt, err := parser.Parse(query)
+			require.NoError(t, err)
+			sel, ok := stmt.(*sqlparser.Select)
+			require.True(t, ok, "expected *sqlparser.Select, got %T", stmt)
+			require.Empty(t, sel.From, "FROM-less SELECT should parse to From: nil")
+
+			require.NotPanics(t, func() {
+				inColName, inVal, rowCount, _, err := tablet.analyzeWhere(sel, nil)
+				require.NoError(t, err)
+				assert.Equal(t, "id", inColName)
+				assert.Len(t, inVal, len(sel.Where.Expr.(*sqlparser.ComparisonExpr).Right.(sqlparser.ValTuple)))
+				assert.Equal(t, 1, rowCount)
+			})
+		})
+	}
+}
+
 func TestParseSchema(t *testing.T) {
 	testSchema := `
 create table t1 (

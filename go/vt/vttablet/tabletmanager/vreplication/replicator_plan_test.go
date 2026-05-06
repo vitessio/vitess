@@ -607,6 +607,24 @@ func TestBuildPlayerPlan(t *testing.T) {
 		},
 		err: "failed to build table replication plan for t1 table: unsupported multi-table usage in query: select * from t1, t2",
 	}, {
+		// no FROM clause
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select 1",
+			}},
+		},
+		err: "failed to build table replication plan for t1 table: unsupported select from dual in query: select 1",
+	}, {
+		// FROM DUAL (virtual dual, no real table)
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select 1 from dual",
+			}},
+		},
+		err: "failed to build table replication plan for t1 table: unsupported select from dual in query: select 1 from dual",
+	}, {
 		// no join
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
