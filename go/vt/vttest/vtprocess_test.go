@@ -57,6 +57,6 @@ func TestWaitTerminateAfterPrematureExit(t *testing.T) {
 	case err := <-done:
 		require.NoError(t, err)
 	case <-time.After(2 * time.Second):
-		t.Fatal("WaitTerminate hung after a premature exit during WaitStart")
+		require.Fail(t, "WaitTerminate hung after a premature exit during WaitStart")
 	}
 }
