@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -594,8 +595,11 @@ func newAsyncChecker(t *testing.T) *AsyncChecker {
 	}
 }
 
-func (ac *AsyncChecker) check() {
-	ac.ch <- true
+func (ac *AsyncChecker) check(ctx context.Context) {
+	select {
+	case ac.ch <- true:
+	case <-ctx.Done():
+	}
 }
 
 func (ac *AsyncChecker) shouldNotify(timeout time.Duration, message string) {
@@ -630,17 +634,19 @@ func TestTransactionWatcherSignal(t *testing.T) {
 	require.NoError(t, err)
 
 	ch := newAsyncChecker(t)
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	streamErrCh := make(chan error, 1)
+	defer func() {
+		cancel()
+		require.NoError(t, <-streamErrCh)
+	}()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		streamErrCh <- client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			if shr.RealtimeStats.TxUnresolved {
-				ch.check()
+				ch.check(ctx)
 			}
 			return nil
 		})
-		if !assert.NoError(t, err) {
-			return
-		}
 	}()
 
 	err = client.CreateTransaction("aa", []*querypb.Target{

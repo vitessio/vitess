@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -51,18 +50,14 @@ func TestCommitPreparedFailNonRetryable(t *testing.T) {
 	_, err = client2.BeginExecute(`select * from _vt.redo_state where dtid = 'bb' for update`, nil, nil)
 	require.NoError(t, err)
 
-	ch := make(chan any)
+	errCh := make(chan error, 1)
 	go func() {
-		err := client.CommitPrepared("bb")
-		ch <- nil
-		if !assert.ErrorContains(t, err, "commit_prepared") {
-			return
-		}
+		errCh <- client.CommitPrepared("bb")
 	}()
 	time.Sleep(1500 * time.Millisecond)
 
 	client2.Release()
-	<-ch
+	require.ErrorContains(t, <-errCh, "commit_prepared")
 
 	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = 'bb'", nil)
 	require.NoError(t, err)
@@ -86,13 +81,9 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	_, err = client2.BeginExecute(`select * from _vt.redo_state where dtid = _binary'aa' for update`, nil, nil)
 	require.NoError(t, err)
 
-	ch := make(chan any)
+	errCh := make(chan error, 1)
 	go func() {
-		err := client.CommitPrepared("aa")
-		ch <- nil
-		if !assert.ErrorContains(t, err, "commit_prepared") {
-			return
-		}
+		errCh <- client.CommitPrepared("aa")
 	}()
 	time.Sleep(100 * time.Millisecond)
 
@@ -105,7 +96,7 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	require.NoError(t, err)
 
 	client2.Release()
-	<-ch
+	require.ErrorContains(t, <-errCh, "commit_prepared")
 
 	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = _binary'aa'", nil)
 	require.NoError(t, err)

@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -24,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -50,17 +50,22 @@ func TestUDFs(t *testing.T) {
 	copySOFile(t, client)
 
 	ch := make(chan any)
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	streamErrCh := make(chan error, 1)
+	defer func() {
+		cancel()
+		require.NoError(t, <-streamErrCh)
+	}()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		streamErrCh <- client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			if shr.RealtimeStats.UdfsChanged {
-				ch <- true
+				select {
+				case ch <- true:
+				case <-ctx.Done():
+				}
 			}
 			return nil
 		})
-		if !assert.NoError(t, err) {
-			return
-		}
 	}()
 
 	// create a user defined function directly on mysql as it is not supported by vitess parser.

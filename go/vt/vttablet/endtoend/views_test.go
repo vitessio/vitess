@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -43,18 +44,23 @@ func TestCreateViewDDL(t *testing.T) {
 		&querypb.VTGateCallerID{Username: "dev"}))
 
 	ch := make(chan any)
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	streamErrCh := make(chan error, 1)
+	defer func() {
+		cancel()
+		require.NoError(t, <-streamErrCh)
+	}()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		streamErrCh <- client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			views := shr.RealtimeStats.ViewSchemaChanged
 			if len(views) != 0 && views[0] == "vitess_view" {
-				ch <- true
+				select {
+				case ch <- true:
+				case <-ctx.Done():
+				}
 			}
 			return nil
 		})
-		if !assert.NoError(t, err) {
-			return
-		}
 	}()
 
 	defer func() {
@@ -101,18 +107,23 @@ func TestAlterViewDDL(t *testing.T) {
 		&querypb.VTGateCallerID{Username: "dev"}))
 
 	ch := make(chan any)
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	streamErrCh := make(chan error, 1)
+	defer func() {
+		cancel()
+		require.NoError(t, <-streamErrCh)
+	}()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		streamErrCh <- client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			views := shr.RealtimeStats.ViewSchemaChanged
 			if len(views) != 0 && views[0] == "vitess_view" {
-				ch <- true
+				select {
+				case ch <- true:
+				case <-ctx.Done():
+				}
 			}
 			return nil
 		})
-		if !assert.NoError(t, err) {
-			return
-		}
 	}()
 
 	defer func() {
