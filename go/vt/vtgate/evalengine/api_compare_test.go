@@ -1281,7 +1281,8 @@ func TestNullsafeCompareCollate(t *testing.T) {
 				require.Error(t, err)
 			}
 			if !vterrors.Equals(err, tcase.err) {
-				assert.Failf(t, "NullsafeCompare error mismatch", "NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+				// vterrors.Print panics on nil; only call when the assertion fails.
+				assert.Fail(t, "NullsafeCompare error mismatch", "NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
 			}
 			if tcase.err != nil {
 				return

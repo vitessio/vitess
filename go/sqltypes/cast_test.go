@@ -111,7 +111,8 @@ func TestCast(t *testing.T) {
 	for _, tcase := range tcases {
 		got, err := Cast(tcase.v, tcase.typ)
 		if !vterrors.Equals(err, tcase.err) {
-			assert.Failf(t, "Cast error mismatch", "Cast(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
+			// vterrors.Print panics on nil; only call when the assertion fails.
+			assert.Fail(t, "Cast error mismatch", "Cast(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
 		}
 		if tcase.err != nil {
 			continue

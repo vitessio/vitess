@@ -94,9 +94,7 @@ func TestAggregateVtGateErrors(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		out := Aggregate(tc.input)
-		if !Equals(out, tc.expected) {
-			assert.Failf(t, "Aggregate mismatch", "AggregateVtGateErrors(%+v) = %+v \nwant: %+v",
-				tc.input, out, tc.expected)
-		}
+		assert.True(t, Equals(out, tc.expected), "AggregateVtGateErrors(%+v) = %+v \nwant: %+v",
+			tc.input, out, tc.expected)
 	}
 }

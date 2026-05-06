@@ -103,9 +103,8 @@ func TestJSONExtract(t *testing.T) {
 			assert.Failf(t, "failed to match", "failed to match '%s'->'%s': %v", tc.J, tc.JP, err)
 			continue
 		}
-		if !slices.Equal(tc.Expected, matched) {
-			assert.Failf(t, "unexpected match result", "'%s'->'%s' = %v (expected %v)", tc.J, tc.JP, matched, tc.Expected)
-		}
+		// slices.Equal treats nil and empty slices as equal; assert.Equal would not.
+		assert.True(t, slices.Equal(tc.Expected, matched), "'%s'->'%s' = %v (expected %v)", tc.J, tc.JP, matched, tc.Expected)
 	}
 }
 

@@ -53,9 +53,7 @@ func TestFromVtRPCError(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		got := FromVTRPC(tcase.in)
-		if !Equals(got, tcase.want) {
-			assert.Failf(t, "FromVTRPC mismatch", "FromVtRPCError(%v): [%v], want [%v]", tcase.in, got, tcase.want)
-		}
+		assert.True(t, Equals(got, tcase.want), "FromVtRPCError(%v): [%v], want [%v]", tcase.in, got, tcase.want)
 	}
 }
 
@@ -75,8 +73,6 @@ func TestVtRPCErrorFromVtError(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		got := ToVTRPC(tcase.in)
-		if !proto.Equal(got, tcase.want) {
-			assert.Failf(t, "ToVTRPC mismatch", "VtRPCErrorFromVtError(%v): %v, want %v", tcase.in, got, tcase.want)
-		}
+		assert.True(t, proto.Equal(got, tcase.want), "VtRPCErrorFromVtError(%v): %v, want %v", tcase.in, got, tcase.want)
 	}
 }

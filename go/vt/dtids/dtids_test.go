@@ -42,9 +42,7 @@ func TestDTID(t *testing.T) {
 	assert.Equalf(t, want, dtid, "generateDTID: %s, want %s", dtid, want)
 	out, err := ShardSession(dtid)
 	require.NoError(t, err)
-	if !proto.Equal(in, out) {
-		assert.Failf(t, "ShardSession", "%+v, want %+v", out, in)
-	}
+	assert.True(t, proto.Equal(in, out), "%+v, want %+v", out, in)
 	_, err = ShardSession("badParts")
 	want = "invalid parts in dtid: badParts"
 	require.EqualErrorf(t, err, want, "ShardSession(\"badParts\"): %v, want %s", err, want)
