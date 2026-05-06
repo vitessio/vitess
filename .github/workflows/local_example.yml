@@ -63,6 +63,7 @@ jobs:
 
     - name: Build bootstrap images
       if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 15
       uses: ./.github/actions/build-bootstrap
 
     - name: Set up Go
@@ -74,20 +75,24 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Get dependencies
       if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 5
       run: |
         go mod download
 
     - name: Run make minimaltools
       if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 5
       run: |
         make minimaltools
 
     - name: Build
       if: steps.changes.outputs.examples == 'true'
+      timeout-minutes: 10
       run: |
         make build
 

@@ -7209,5 +7209,55 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "UPDATE: IN subquery in SET that merges into the outer route",
+    "query": "update user set col = (1 in (select id from (select * from user) as t where id = 5)) where id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (1 in (select id from (select * from user) as t where id = 5)) where id = 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update `user` set col = 1 in (select id from (select * from `user`) as t where id = 5) where id = 5",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UPDATE: NOT IN subquery in SET that merges into the outer route",
+    "query": "update user set col = (1 not in (select id from (select * from user) as t where id = 5)) where id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (1 not in (select id from (select * from user) as t where id = 5)) where id = 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update `user` set col = 1 not in (select id from (select * from `user`) as t where id = 5) where id = 5",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

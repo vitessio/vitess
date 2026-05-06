@@ -76,16 +76,19 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 8
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         sudo apt-get -qq update
 

@@ -42,7 +42,6 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -80,10 +79,10 @@ func TestMain(m *testing.M) {
 
 		// Set extra args for twopc
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			vtutils.GetFlagVariantForTests("--grpc-use-effective-callerid"),
+			"--grpc-use-effective-callerid",
 		)
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-			vtutils.GetFlagVariantForTests("--twopc-abandon-age"), "1",
+			"--twopc-abandon-age", "1",
 			"--queryserver-config-transaction-cap", "3",
 			"--queryserver-config-transaction-timeout", "400s",
 			"--queryserver-config-query-timeout", "9000s",

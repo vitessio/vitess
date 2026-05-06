@@ -138,7 +138,7 @@ func TestMigration(t *testing.T) {
 	defer clusterInstance.Teardown()
 
 	tabletConfig := func(vt *cluster.VttabletProcess) {
-		vt.ExtraArgs = append(vt.ExtraArgs, "--tablet_config", yamlFile)
+		vt.ExtraArgs = append(vt.ExtraArgs, "--tablet-config", yamlFile)
 	}
 	createKeyspace(t, commerce, []string{"0"}, tabletConfig)
 	err := clusterInstance.VtctldClientProcess.ExecuteCommand("RebuildKeyspaceGraph", "commerce")

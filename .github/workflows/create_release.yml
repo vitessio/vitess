@@ -35,9 +35,11 @@ jobs:
         cache: 'false'
 
     - name: Tune the OS
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Get dependencies
+      timeout-minutes: 5
       run: |
         sudo apt-get update
         sudo apt-get install -y make ruby ruby-dev

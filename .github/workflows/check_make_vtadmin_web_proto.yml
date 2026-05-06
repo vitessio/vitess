@@ -33,6 +33,7 @@ jobs:
         persist-credentials: 'false'
 
     - name: Tune the OS
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Check for changes in relevant files

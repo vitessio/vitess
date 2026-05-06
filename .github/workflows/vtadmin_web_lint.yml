@@ -40,6 +40,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Tune the OS
+        timeout-minutes: 5
         uses: ./.github/actions/tune-os
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
@@ -48,6 +49,7 @@ jobs:
           node-version: '22.13.1'
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: cd ./web/vtadmin && npm ci
 
       # Using "if: always()" means each step will run, even if a previous

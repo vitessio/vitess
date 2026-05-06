@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -163,7 +162,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, defaultSourceKs, defaultTarg
 	if action != workflowActionComplete && tabletTypes != "" {
 		args = append(args, "--tablet-types", tabletTypes)
 	}
-	args = append(args, "--action_timeout=10m") // At this point something is up so fail the test
+	args = append(args, "--action-timeout=10m") // At this point something is up so fail the test
 	t.Logf("Executing workflow command: vtctldclient %s", strings.Join(args, " "))
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
 	lastOutput = output
@@ -195,13 +194,13 @@ func tstWorkflowReverseWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "primary", ""))
 }
 
-// tstWorkflowSwitchReadsAndWrites tests that switching traffic w/o any user provided --tablet_types
+// tstWorkflowSwitchReadsAndWrites tests that switching traffic w/o any user provided --tablet-types
 // value switches all traffic
 func tstWorkflowSwitchReadsAndWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "", ""))
 }
 
-// tstWorkflowReversesReadsAndWrites tests that ReverseTraffic w/o any user provided --tablet_types
+// tstWorkflowReversesReadsAndWrites tests that ReverseTraffic w/o any user provided --tablet-types
 // value switches all traffic in reverse
 func tstWorkflowReverseReadsAndWrites(t *testing.T) {
 	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "", ""))
@@ -988,7 +987,7 @@ func createAdditionalTargetShards(t *testing.T, shards string) {
 }
 
 func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
-	err := vc.VtctldClient.ExecuteCommand("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy")+"=online",
+	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy"+"=online",
 		"--sql", sql, keyspace)
 	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 }
