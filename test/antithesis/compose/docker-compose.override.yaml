@@ -1,9 +1,20 @@
+x-vitess-build: &vitess-build
+  build:
+    context: ../../..
+    dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
+
+x-vttablet-override: &vttablet-override
+  <<: *vitess-build
+  ports:
+    - "15999"
+    - "3306"
+
 services:
   antithesis-client:
     build:
       context: ./antithesis-client
       dockerfile: Dockerfile
-    # for quick local development  
+    # for quick local development
     # volumes:
     #   - ./antithesis-client/crud:/opt/antithesis/test/v1/crud
     #   - ./antithesis-client/bank-test:/opt/antithesis/test/v1/bank-test
@@ -17,14 +28,10 @@ services:
       - "3306"
 
   vtorc:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
+    <<: *vitess-build
 
   vtctld:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
+    <<: *vitess-build
     ports:
       - "15999"
 
@@ -33,73 +40,28 @@ services:
       - "15999"
 
   vttablet101:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet102:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet104:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet201:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet202:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet204:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet301:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet302:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet304:
-    build:
-      context: ../../..
-      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
