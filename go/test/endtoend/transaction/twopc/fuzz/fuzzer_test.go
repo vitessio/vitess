@@ -159,7 +159,7 @@ func TestTwoPCFuzzTest(t *testing.T) {
 // verifyTransactionsWereAtomic verifies that the invariants of test are held.
 // It checks the heuristics to ensure that the transactions run were atomic.
 func (fz *fuzzer) verifyTransactionsWereAtomic(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	for updateSetIdx, updateSet := range fz.updateRowsVals {
 		// All the three values of the update set must be equal.
@@ -307,7 +307,7 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 // generateAndExecuteTransaction generates the queries of the transaction and then executes them.
 func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 	// Create a connection to the vtgate to run transactions.
-	ctx, cancel := context.WithTimeout(context.Background(), vtgateQueryTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), vtgateQueryTimeout)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

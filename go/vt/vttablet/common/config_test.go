@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -141,14 +142,11 @@ func TestNewVReplicationConfig(t *testing.T) {
 				require.EqualValuesf(t, tt.config, got.Overrides,
 					"NewVReplicationConfig() overrides got = %v, want %v", got.Overrides, tt.config)
 			}
-			if tt.wantErr > 0 && err == nil || tt.wantErr == 0 && err != nil {
-				t.Errorf("NewVReplicationConfig() got num errors = %v, want %v", err, tt.wantErr)
-			}
+			assert.Falsef(t, tt.wantErr > 0 && err == nil || tt.wantErr == 0 && err != nil,
+				"NewVReplicationConfig() got num errors = %v, want %v", err, tt.wantErr)
 			if tt.wantErr > 0 && err != nil {
 				errors := strings.Split(err.Error(), ", ")
-				if len(errors) != tt.wantErr {
-					t.Errorf("NewVReplicationConfig() got num errors = %v, want %v", len(errors), tt.wantErr)
-				}
+				assert.Lenf(t, errors, tt.wantErr, "NewVReplicationConfig() got num errors = %v, want %v", len(errors), tt.wantErr)
 			}
 			if tt.want == nil {
 				require.EqualValuesf(t, DefaultVReplicationConfig.Map(), got.Map(),

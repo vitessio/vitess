@@ -185,7 +185,7 @@ func TestVSchema(t *testing.T) {
 // TestVSchemaSQLAPIConcurrency tests that we prevent lost writes when we have
 // concurrent vschema changes being made via the SQL API.
 func TestVSchemaSQLAPIConcurrency(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

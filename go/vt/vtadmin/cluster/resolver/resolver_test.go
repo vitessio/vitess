@@ -72,7 +72,7 @@ func (cc *mockClientConn) close() {
 func (cc *mockClientConn) assertUpdateWithin(t testing.TB, timeout time.Duration, expected grpcresolver.State, msgAndArgs ...any) bool {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
 
 	select {

@@ -65,7 +65,7 @@ func TestSelectNext(t *testing.T) {
 
 	// Autocommit
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
-	_, err := executorExecSession(context.Background(), executor, session, query, bv)
+	_, err := executorExecSession(t.Context(), executor, session, query, bv)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
@@ -76,7 +76,7 @@ func TestSelectNext(t *testing.T) {
 	// Txn
 	session = econtext.NewAutocommitSession(&vtgatepb.Session{})
 	session.Session.InTransaction = true
-	_, err = executorExecSession(context.Background(), executor, session, query, bv)
+	_, err = executorExecSession(t.Context(), executor, session, query, bv)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
@@ -87,7 +87,7 @@ func TestSelectNext(t *testing.T) {
 	// Reserve
 	session = econtext.NewAutocommitSession(&vtgatepb.Session{})
 	session.Session.InReservedConn = true
-	_, err = executorExecSession(context.Background(), executor, session, query, bv)
+	_, err = executorExecSession(t.Context(), executor, session, query, bv)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
@@ -99,7 +99,7 @@ func TestSelectNext(t *testing.T) {
 	session = econtext.NewAutocommitSession(&vtgatepb.Session{})
 	session.Session.InReservedConn = true
 	session.Session.InTransaction = true
-	_, err = executorExecSession(context.Background(), executor, session, query, bv)
+	_, err = executorExecSession(t.Context(), executor, session, query, bv)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
@@ -111,7 +111,7 @@ func TestSelectDBA(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
 	query := "select * from INFORMATION_SCHEMA.foo"
-	_, err := executor.Execute(context.Background(), nil, "TestSelectDBA",
+	_, err := executor.Execute(t.Context(), nil, "TestSelectDBA",
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 		false)
@@ -121,7 +121,7 @@ func TestSelectDBA(t *testing.T) {
 
 	sbc1.Queries = nil
 	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES ist WHERE ist.table_schema = 'performance_schema' AND ist.table_name = 'foo'"
-	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
+	_, err = executor.Execute(t.Context(), nil, "TestSelectDBA",
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 		false)
@@ -137,7 +137,7 @@ func TestSelectDBA(t *testing.T) {
 
 	sbc1.Queries = nil
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks' and table_name = 'user'"
-	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
+	_, err = executor.Execute(t.Context(), nil, "TestSelectDBA",
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 		false)
@@ -153,7 +153,7 @@ func TestSelectDBA(t *testing.T) {
 
 	sbc1.Queries = nil
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks'"
-	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
+	_, err = executor.Execute(t.Context(), nil, "TestSelectDBA",
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 		false)
@@ -185,10 +185,10 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 		}},
 	}})
 
-	_, err := executorExecSession(context.Background(), executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executorExecSession(t.Context(), executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
-	_, err = executorExecSession(context.Background(), executor, session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{})
+	_, err = executorExecSession(t.Context(), executor, session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.True(t, session.InReservedConn())
 
@@ -218,11 +218,11 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 		}},
 	}})
 
-	_, err := executorExecSession(context.Background(), executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
+	_, err := executorExecSession(t.Context(), executor, session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	require.True(t, session.InReservedConn())
 
-	_, err = executorExecSession(context.Background(), executor, session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{})
+	_, err = executorExecSession(t.Context(), executor, session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{
@@ -239,7 +239,7 @@ func TestDeniedSystemVariablesWithSetVarHint(t *testing.T) {
 	executor.vConfig.DeniedSystemVariables = map[string]struct{}{"unique_checks": {}}
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
-	_, err := executorExecSession(context.Background(), executor, session, "select /*+ SET_VAR(unique_checks=0) */ 1 from user", map[string]*querypb.BindVariable{})
+	_, err := executorExecSession(t.Context(), executor, session, "select /*+ SET_VAR(unique_checks=0) */ 1 from user", map[string]*querypb.BindVariable{})
 	require.Error(t, err)
 	assert.Equal(t, "VT12001: unsupported: system setting: unique_checks", err.Error())
 	assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
@@ -252,10 +252,10 @@ func TestSetSystemVariablesTx(t *testing.T) {
 
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
-	_, err := executor.Execute(context.Background(), nil, "TestBegin", session, "begin", map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestBegin", session, "begin", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
-	_, err = executor.Execute(context.Background(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.NotZero(t, session.ShardSessions)
 
@@ -270,14 +270,14 @@ func TestSetSystemVariablesTx(t *testing.T) {
 		}},
 	}})
 
-	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 
-	_, err = executor.Execute(context.Background(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
-	_, err = executor.Execute(context.Background(), nil, "TestCommit", session, "commit", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestCommit", session, "commit", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 
@@ -308,10 +308,10 @@ func TestSetSystemVariables(t *testing.T) {
 			sqltypes.NewVarChar("only_full_group_by"),
 		}},
 	}})
-	_, err := executor.Execute(context.Background(), nil, "TestSetStmt", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@sql_mode = only_full_group_by", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
-	_, err = executor.Execute(context.Background(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries := []*querypb.BoundQuery{
@@ -323,7 +323,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	// Execute a select with a comment that needs a query hint
 
-	_, err = executor.Execute(context.Background(), nil, "TestSelect", session, "select /* comment */ 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select /* comment */ 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
@@ -340,7 +340,7 @@ func TestSetSystemVariables(t *testing.T) {
 			sqltypes.NewVarChar("0"),
 		}},
 	}})
-	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session, "set @@sql_safe_updates = 0", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@sql_safe_updates = 0", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
@@ -349,7 +349,7 @@ func TestSetSystemVariables(t *testing.T) {
 	utils.MustMatch(t, wantQueries, lookup.Queries)
 	lookup.Queries = nil
 
-	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session, "set @var = @@sql_mode", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @var = @@sql_mode", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	require.Nil(t, lookup.Queries)
@@ -363,7 +363,7 @@ func TestSetSystemVariables(t *testing.T) {
 			sqltypes.NewVarChar("4"),
 		}},
 	}})
-	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session, "set @x = @@sql_mode, @y = @@max_tmp_tables", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @x = @@sql_mode, @y = @@max_tmp_tables", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
@@ -386,11 +386,11 @@ func TestSetSystemVariables(t *testing.T) {
 			sqltypes.NewVarChar("1"),
 		}},
 	}})
-	_, err = executor.Execute(context.Background(), nil, "TestSetStmt", session, "set @@max_tmp_tables = 1", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@max_tmp_tables = 1", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.True(t, session.InReservedConn())
 
-	_, err = executor.Execute(context.Background(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select 1 from information_schema.table", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	wantQueries = []*querypb.BoundQuery{
@@ -434,11 +434,11 @@ func TestSetSystemVariablesWithSetVarInvalidSQLMode(t *testing.T) {
 		}},
 	}})
 
-	_, err := executor.Execute(context.Background(), nil, "TestSetStmt", session, "set @@sql_mode = ''", map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestSetStmt", session, "set @@sql_mode = ''", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	require.False(t, session.InReservedConn())
 
-	_, err = executor.Execute(context.Background(), nil, "TestSelect", session, "select age, city from user group by age", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select age, city from user group by age", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, '' new"},
@@ -446,7 +446,7 @@ func TestSetSystemVariablesWithSetVarInvalidSQLMode(t *testing.T) {
 	}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
-	_, err = executor.Execute(context.Background(), nil, "TestSelect", session, "select age, city+1 from user group by age", map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelect", session, "select age, city+1 from user group by age", map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, '' new"},
@@ -462,11 +462,11 @@ func TestSelectVindexFunc(t *testing.T) {
 
 	query := "select * from hash_index where id = 1"
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
-	_, err := executor.Execute(context.Background(), nil, "TestSelectVindexFunc", session, query, nil, false)
+	_, err := executor.Execute(t.Context(), nil, "TestSelectVindexFunc", session, query, nil, false)
 	require.ErrorContains(t, err, "VT09005: no database selected")
 
 	session.TargetString = KsTestSharded
-	_, err = executor.Execute(context.Background(), nil, "TestSelectVindexFunc", session, query, nil, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelectVindexFunc", session, query, nil, false)
 	require.NoError(t, err)
 }
 
@@ -476,7 +476,7 @@ func TestCreateTableValidTimestamp(t *testing.T) {
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor", SystemVariables: map[string]string{"sql_mode": "ALLOW_INVALID_DATES"}})
 
 	query := "create table aa(t timestamp default 0)"
-	_, err := executor.Execute(context.Background(), nil, "TestSelect", session, query, map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestSelect", session, query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	assert.True(t, session.InReservedConn())
 
@@ -492,7 +492,7 @@ func TestGen4SelectDBA(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
 	query := "select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
-	_, err := executor.Execute(context.Background(), nil, "TestSelectDBA",
+	_, err := executor.Execute(t.Context(), nil, "TestSelectDBA",
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 		false)
@@ -503,7 +503,7 @@ func TestGen4SelectDBA(t *testing.T) {
 
 	sbc1.Queries = nil
 	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES ist WHERE ist.table_schema = 'performance_schema' AND ist.table_name = 'foo'"
-	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
+	_, err = executor.Execute(t.Context(), nil, "TestSelectDBA",
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 		false)
@@ -521,7 +521,7 @@ func TestGen4SelectDBA(t *testing.T) {
 
 	sbc1.Queries = nil
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks' and table_name = 'user'"
-	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA",
+	_, err = executor.Execute(t.Context(), nil, "TestSelectDBA",
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 		false)
@@ -540,7 +540,7 @@ func TestGen4SelectDBA(t *testing.T) {
 
 	sbc1.Queries = nil
 	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks'"
-	_, err = executor.Execute(context.Background(), nil, "TestSelectDBA", econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), query, map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelectDBA", econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select :vtg1 /* INT64 */ from information_schema.table_constraints where `constraint_schema` = :__vtschemaname /* VARCHAR */",
@@ -554,7 +554,7 @@ func TestGen4SelectDBA(t *testing.T) {
 
 	sbc1.Queries = nil
 	query = "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
-	_, err = executorExecSession(context.Background(), executor,
+	_, err = executorExecSession(t.Context(), executor,
 		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "information_schema"}),
 		query, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
@@ -638,7 +638,7 @@ func TestStreamUnsharded(t *testing.T) {
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		diff := cmp.Diff(wantResult, result)
-		t.Errorf("result: %+v, want %+v\ndiff: %s", result, wantResult, diff)
+		assert.Failf(t, "result mismatch", "result: %+v, want %+v\ndiff: %s", result, wantResult, diff)
 	}
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", sql, 1)
 }
@@ -668,7 +668,7 @@ func TestStreamBuffering(t *testing.T) {
 	}
 
 	err := executor.StreamExecute(
-		context.Background(),
+		t.Context(),
 		nil,
 		"TestStreamBuffering",
 		econtext.NewSafeSession(session),
@@ -745,7 +745,7 @@ func TestStreamLimitOffset(t *testing.T) {
 		TargetString: "@primary",
 	}
 	err := executor.StreamExecute(
-		context.Background(),
+		t.Context(),
 		nil,
 		"TestStreamLimitOffset",
 		econtext.NewSafeSession(session),
@@ -1101,7 +1101,7 @@ func TestSelectDatabase(t *testing.T) {
 		TargetString: "TestExecutor@primary",
 	}
 
-	result, err := executorExec(context.Background(), executor, session, sql, map[string]*querypb.BindVariable{})
+	result, err := executorExec(t.Context(), executor, session, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "database()", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset())},
@@ -1235,7 +1235,7 @@ func TestSelectEqual(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 
@@ -1247,10 +1247,10 @@ func TestSelectEqual(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
+		assert.Failf(t, "wrong ExecCount", "sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+		assert.Failf(t, "sbc1.Queries not nil", "sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 	sbc2.Queries = nil
 
@@ -1262,10 +1262,10 @@ func TestSelectEqual(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
 	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
-		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
+		assert.Failf(t, "wrong ExecCount", "sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {
-		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+		assert.Failf(t, "sbc1.Queries not nil", "sbc1.Queries: %+v, want nil\n", sbc1.Queries)
 	}
 	sbc2.Queries = nil
 
@@ -1337,7 +1337,7 @@ func TestSelectComments(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 }
@@ -1358,7 +1358,7 @@ func TestSelectNormalize(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 
@@ -1391,7 +1391,7 @@ func TestSelectCaseSensitivity(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 }
@@ -1403,9 +1403,7 @@ func TestStreamSelectEqual(t *testing.T) {
 	result, err := executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestSelectKeyRange(t *testing.T) {
@@ -1422,7 +1420,7 @@ func TestSelectKeyRange(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 }
@@ -1441,7 +1439,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 	sbc1.Queries = nil
 }
@@ -1461,7 +1459,7 @@ func TestSelectIN(t *testing.T) {
 	}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+		assert.Failf(t, "sbc2.Queries not nil", "sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
 
 	// Constants in IN clause are just numbers, not bind variables.
@@ -1542,9 +1540,7 @@ func TestStreamSelectIN(t *testing.T) {
 	result, err := executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	sql = "select id from user where id in (1, 3)"
 	result, err = executorStream(ctx, executor, sql)
@@ -1557,17 +1553,13 @@ func TestStreamSelectIN(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	sql = "select id from user where name = 'foo'"
 	result, err = executorStream(ctx, executor, sql)
 	require.NoError(t, err)
 	wantResult = sandboxconn.StreamRowResult
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	vars, err := sqltypes.BuildBindVariable([]any{sqltypes.NewVarChar("foo")})
 	require.NoError(t, err)
@@ -1727,14 +1719,12 @@ func TestSelectScatterPartial(t *testing.T) {
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(ctx, executor, session, "select id from `user`", nil)
 	wantErr := "TestExecutor.40-60.primary"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("want error %v, got %v", wantErr, err)
-	}
+	assert.ErrorContainsf(t, err, wantErr, "want error %v, got %v", wantErr, err)
 	if vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED {
-		t.Errorf("want error code Code_RESOURCE_EXHAUSTED, but got %v", vterrors.Code(err))
+		assert.Failf(t, "wrong error code", "want error code Code_RESOURCE_EXHAUSTED, but got %v", vterrors.Code(err))
 	}
 	if results != nil {
-		t.Errorf("want nil results, got %v", results)
+		assert.Failf(t, "results not nil", "want nil results, got %v", results)
 	}
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from `user`", 8)
 
@@ -1742,7 +1732,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	results, err = executorExec(ctx, executor, session, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
 	require.NoError(t, err)
 	if results == nil || len(results.Rows) != 7 {
-		t.Errorf("want 7 results, got %v", results)
+		assert.Failf(t, "wrong number of results", "want 7 results, got %v", results)
 	}
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
@@ -2501,9 +2491,7 @@ func TestSimpleJoin(t *testing.T) {
 			},
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
 }
@@ -2564,9 +2552,7 @@ func TestSimpleJoinStream(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select u1.id, u2.id from `user` as u1 join `user` as u2 where u1.id = 1 and u2.id = 3", 2)
 }
@@ -2684,9 +2670,7 @@ func TestLeftJoin(t *testing.T) {
 			},
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: \n%+v, want \n%+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: \n%+v, want \n%+v", result, wantResult)
 	testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select u1.id, u2.id from `user` as u1 left join `user` as u2 on u2.id = u1.col where u1.id = 1", 2)
 }
 
@@ -2725,9 +2709,7 @@ func TestLeftJoinStream(t *testing.T) {
 		},
 		RowsAffected: 0,
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestEmptyJoin(t *testing.T) {
@@ -2766,9 +2748,7 @@ func TestEmptyJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestEmptyJoinStream(t *testing.T) {
@@ -2804,9 +2784,7 @@ func TestEmptyJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestEmptyJoinRecursive(t *testing.T) {
@@ -2851,9 +2829,7 @@ func TestEmptyJoinRecursive(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestEmptyJoinRecursiveStream(t *testing.T) {
@@ -2895,9 +2871,7 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestCrossShardDerivedTable(t *testing.T) {
@@ -3649,7 +3623,7 @@ func TestGen4SelectStraightJoin(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select u.id from user u straight_join user2 u2 on u.id = u2.id"
-	_, err := executor.Execute(context.Background(), nil,
+	_, err := executor.Execute(t.Context(), nil,
 		"TestGen4SelectStraightJoin",
 		session,
 		query, map[string]*querypb.BindVariable{},
@@ -3670,7 +3644,7 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where cola = 1 and colb = 2"
-	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColumnVindex", session, query, map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestGen4MultiColumnVindex", session, query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -3687,7 +3661,7 @@ func TestGen4MultiColumnVindexEqual(t *testing.T) {
 	sbc1.Queries = nil
 
 	query = "select * from user_region where cola = 17984 and colb = 1"
-	_, err = executor.Execute(context.Background(), nil, "TestGen4MultiColumnVindex", session, query, map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestGen4MultiColumnVindex", session, query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
@@ -3707,7 +3681,7 @@ func TestGen4MultiColumnVindexIn(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where cola IN (1,17984) and colb IN (2,3,4)"
-	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColumnVindex", session, query, map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestGen4MultiColumnVindex", session, query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	bv1, _ := sqltypes.BuildBindVariable([]int64{1})
 	bv2, _ := sqltypes.BuildBindVariable([]int64{17984})
@@ -3744,7 +3718,7 @@ func TestGen4MultiColMixedColComparision(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where colb = 2 and cola IN (1,17984)"
-	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColMixedColComparision", session, query, map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestGen4MultiColMixedColComparision", session, query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	bvtg1 := sqltypes.Int64BindVariable(2)
 	bvtg2, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
@@ -3779,7 +3753,7 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where colb = 2 and cola IN (1,17984) and cola = 1"
-	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColBestVindexSel", session, query, map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestGen4MultiColBestVindexSel", session, query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	bvtg2, _ := sqltypes.BuildBindVariable([]int64{1, 17984})
 	wantQueries := []*querypb.BoundQuery{
@@ -3799,7 +3773,7 @@ func TestGen4MultiColBestVindexSel(t *testing.T) {
 	sbc1.Queries = nil
 
 	query = "select * from user_region where colb in (10,20) and cola IN (1,17984) and cola = 1 and colb = 2"
-	_, err = executor.Execute(context.Background(), nil, "TestGen4MultiColBestVindexSel", session, query, map[string]*querypb.BindVariable{}, false)
+	_, err = executor.Execute(t.Context(), nil, "TestGen4MultiColBestVindexSel", session, query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{10, 20})
@@ -3823,7 +3797,7 @@ func TestGen4MultiColMultiEqual(t *testing.T) {
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	query := "select * from user_region where (cola,colb) in ((17984,2),(17984,3))"
-	_, err := executor.Execute(context.Background(), nil, "TestGen4MultiColMultiEqual", session, query, map[string]*querypb.BindVariable{}, false)
+	_, err := executor.Execute(t.Context(), nil, "TestGen4MultiColMultiEqual", session, query, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
@@ -3990,7 +3964,7 @@ func TestRegionRange(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(strconv.Itoa(tcase.regionID), func(t *testing.T) {
 			sql := fmt.Sprintf("select * from user_region where cola = %d", tcase.regionID)
-			_, err := executor.Execute(context.Background(), nil, "TestRegionRange", econtext.NewAutocommitSession(&vtgatepb.Session{}), sql, nil, false)
+			_, err := executor.Execute(t.Context(), nil, "TestRegionRange", econtext.NewAutocommitSession(&vtgatepb.Session{}), sql, nil, false)
 			require.NoError(t, err)
 			count := 0
 			for _, sbc := range conns {
@@ -4415,7 +4389,7 @@ func TestSelectAggregationRandom(t *testing.T) {
 	defer executor.Close()
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
-	rs, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil, false)
+	rs, err := executor.Execute(t.Context(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, `[[DECIMAL(10) DECIMAL(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
 }
@@ -4424,7 +4398,7 @@ func TestSelectDateTypes(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
-	qr, err := executor.Execute(context.Background(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", nil, false)
+	qr, err := executor.Execute(t.Context(), nil, "TestSelectDateTypes", session, "select '2020-01-01' + interval month(date_sub(FROM_UNIXTIME(1234), interval 1 month))-1 month", nil, false)
 	require.NoError(t, err)
 	require.Equal(t, sqltypes.Char, qr.Fields[0].Type)
 	require.Equal(t, `[[CHAR("2020-12-01")]]`, fmt.Sprintf("%v", qr.Rows))
@@ -4434,11 +4408,11 @@ func TestSelectHexAndBit(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
-	qr, err := executor.Execute(context.Background(), nil, "TestSelectHexAndBit", session, "select 0b1001, b'1001', 0x9, x'09'", nil, false)
+	qr, err := executor.Execute(t.Context(), nil, "TestSelectHexAndBit", session, "select 0b1001, b'1001', 0x9, x'09'", nil, false)
 	require.NoError(t, err)
 	require.Equal(t, `[[VARBINARY("\t") VARBINARY("\t") VARBINARY("\t") VARBINARY("\t")]]`, fmt.Sprintf("%v", qr.Rows))
 
-	qr, err = executor.Execute(context.Background(), nil, "TestSelectHexAndBit", session, "select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil, false)
+	qr, err = executor.Execute(t.Context(), nil, "TestSelectHexAndBit", session, "select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil, false)
 	require.NoError(t, err)
 	require.Equal(t, `[[INT64(10) INT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
 }
@@ -4449,14 +4423,14 @@ func TestSelectCFC(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
-	_, err := executor.Execute(context.Background(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil, false)
+	_, err := executor.Execute(t.Context(), nil, "TestSelectCFC", session, "select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil, false)
 	require.NoError(t, err)
 
 	timeout := time.After(30 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			t.Fatal("not able to cache a plan within 30 seconds.")
+			require.Fail(t, "not able to cache a plan within 30 seconds.")
 		case <-time.After(5 * time.Millisecond):
 			// should be able to find cache entry before the timeout.
 			cacheItems := executor.debugCacheEntries()
@@ -4477,7 +4451,7 @@ func TestSelectView(t *testing.T) {
 
 	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
 
-	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view", nil, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelectView", session, "select * from user_details_view", nil, false)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
@@ -4486,7 +4460,7 @@ func TestSelectView(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc.Queries)
 
 	sbc.Queries = nil
-	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view where id = 2", nil, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelectView", session, "select * from user_details_view where id = 2", nil, false)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
 		Sql: "select id, col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = :id /* INT64 */ and `user`.id = user_extra.user_id) as user_details_view",
@@ -4497,7 +4471,7 @@ func TestSelectView(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc.Queries)
 
 	sbc.Queries = nil
-	_, err = executor.Execute(context.Background(), nil, "TestSelectView", session, "select * from user_details_view where id in (1,2,3,4,5)", nil, false)
+	_, err = executor.Execute(t.Context(), nil, "TestSelectView", session, "select * from user_details_view where id in (1,2,3,4,5)", nil, false)
 	require.NoError(t, err)
 	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3, 4, 5})
 	bvals, _ := sqltypes.BuildBindVariable([]int64{1, 2})
@@ -4633,7 +4607,7 @@ func waitUntilQueryCount(t *testing.T, tab *sandboxconn.SandboxConn, count int) 
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timed out waiting for tablet %v query count to reach %v", topoproto.TabletAliasString(tab.Tablet().Alias), count)
+			require.Failf(t, "timeout waiting for query count", "Timed out waiting for tablet %v query count to reach %v", topoproto.TabletAliasString(tab.Tablet().Alias), count)
 		default:
 			time.Sleep(10 * time.Millisecond)
 			if len(tab.GetQueries()) == count {
@@ -4698,32 +4672,32 @@ func TestSysVarGlobalAndSession(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("reserve_execute", "uint64")),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.innodb_lock_wait_timeout", "uint64"), "20"),
 	})
-	qr, err := executorExecSession(context.Background(), executor, session,
+	qr, err := executorExecSession(t.Context(), executor, session,
 		"select @@innodb_lock_wait_timeout", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))
 
-	qr, err = executorExecSession(context.Background(), executor, session,
+	qr, err = executorExecSession(t.Context(), executor, session,
 		"select @@global.innodb_lock_wait_timeout", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))
 
-	_, err = executorExecSession(context.Background(), executor, session,
+	_, err = executorExecSession(t.Context(), executor, session,
 		"set @@global.innodb_lock_wait_timeout = 120", nil)
 	require.NoError(t, err)
 	require.Empty(t, session.SystemVariables["innodb_lock_wait_timeout"])
 
-	_, err = executorExecSession(context.Background(), executor, session,
+	_, err = executorExecSession(t.Context(), executor, session,
 		"set @@innodb_lock_wait_timeout = 40", nil)
 	require.NoError(t, err)
 	require.EqualValues(t, "40", session.SystemVariables["innodb_lock_wait_timeout"])
 
-	qr, err = executorExecSession(context.Background(), executor, session,
+	qr, err = executorExecSession(t.Context(), executor, session,
 		"select @@innodb_lock_wait_timeout", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[INT64(40)]]`, fmt.Sprintf("%v", qr.Rows))
 
-	qr, err = executorExecSession(context.Background(), executor, session,
+	qr, err = executorExecSession(t.Context(), executor, session,
 		"select @@global.innodb_lock_wait_timeout", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[UINT64(20)]]`, fmt.Sprintf("%v", qr.Rows))

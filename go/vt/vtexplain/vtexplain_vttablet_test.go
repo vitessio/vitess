@@ -161,9 +161,7 @@ create table test_partitioned (
 `
 	env := vtenv.NewTestEnv()
 	ddls, err := parseSchema(testSchema, &Options{StrictDDL: false}, env.Parser())
-	if err != nil {
-		t.Fatalf("parseSchema: %v", err)
-	}
+	require.NoError(t, err)
 	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, Cell)
@@ -192,13 +190,9 @@ create table test_partitioned (
 	got, _ := json.Marshal(t1.Fields)
 	assert.Equal(t, wantCols, string(got))
 
-	if !t1.HasPrimary() || len(t1.PKColumns) != 1 || t1.PKColumns[0] != 0 {
-		t.Errorf("expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
-	}
+	assert.True(t, t1.HasPrimary() && len(t1.PKColumns) == 1 && t1.PKColumns[0] == 0, "expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
 	pkCol := t1.GetPKColumn(0)
-	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64 charset:33 flags:32800` {
-		t.Errorf("expected pkCol[0] == id, got %v", pkCol)
-	}
+	assert.True(t, pkCol != nil && pkCol.String() == `name:"id" type:UINT64 charset:33 flags:32800`, "expected pkCol[0] == id, got %v", pkCol)
 
 	t2 := tables["t2"]
 	require.NotNil(t, t2, "table t2 wasn't parsed properly")
@@ -208,7 +202,7 @@ create table test_partitioned (
 	assert.Equal(t, wantCols, string(got))
 
 	if t2.HasPrimary() || len(t2.PKColumns) != 0 {
-		t.Errorf("expected !HasPrimary && t2.PKColumns == [] got %v", t2.PKColumns)
+		assert.Failf(t, "unexpected primary key", "expected !HasPrimary && t2.PKColumns == [] got %v", t2.PKColumns)
 	}
 
 	t5 := tables["t5"]
@@ -217,7 +211,7 @@ create table test_partitioned (
 	assert.Equal(t, wantCols, string(got))
 
 	if t5.HasPrimary() || len(t5.PKColumns) != 0 {
-		t.Errorf("expected !HasPrimary && t5.PKColumns == [] got %v", t5.PKColumns)
+		assert.Failf(t, "unexpected primary key", "expected !HasPrimary && t5.PKColumns == [] got %v", t5.PKColumns)
 	}
 
 	seq := tables["t1_seq"]

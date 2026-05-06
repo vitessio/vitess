@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
@@ -64,13 +65,16 @@ func waitForVDiff2ToCompleteWithTimeout(t *testing.T, ksWorkflow, cells, uuid st
 	var jsonStr string
 	first := true
 	previousProgress := vdiff2.ProgressReport{}
-	ch := make(chan bool)
+	ch := make(chan bool, 1)
 	go func() {
+		defer func() { ch <- true }()
 		for {
 			time.Sleep(vdiffStatusCheckInterval)
 			_, jsonStr = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
 			info = getVDiffInfo(jsonStr)
-			require.NotNil(t, info)
+			if !assert.NotNil(t, info) {
+				return
+			}
 			if info.State == "completed" {
 				if !completedAtMin.IsZero() {
 					ca := info.CompletedAt
@@ -79,7 +83,6 @@ func waitForVDiff2ToCompleteWithTimeout(t *testing.T, ksWorkflow, cells, uuid st
 						continue
 					}
 				}
-				ch <- true
 				return
 			} else if info.State == "started" { // Test the progress report
 				// The ETA should always be in the future -- when we're able to estimate
@@ -102,7 +105,9 @@ func waitForVDiff2ToCompleteWithTimeout(t *testing.T, ksWorkflow, cells, uuid st
 				*/
 
 				if !first {
-					require.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage)
+					if !assert.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage) {
+						return
+					}
 				}
 				previousProgress.Percentage = info.Progress.Percentage
 				first = false
@@ -214,7 +219,7 @@ type vdiffResult struct {
 // execVDiffWithRetry will ignore transient errors that can occur during workflow state changes.
 func execVDiffWithRetry(t *testing.T, expectError bool, args []string) (string, error) {
 	log.Info(fmt.Sprintf("Executing vdiff with retry with args: %+v", args))
-	ctx, cancel := context.WithTimeout(context.Background(), vdiffRetryTimeout*3)
+	ctx, cancel := context.WithTimeout(t.Context(), vdiffRetryTimeout*3)
 	defer cancel()
 	vdiffResultCh := make(chan vdiffResult)
 	go func() {

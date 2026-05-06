@@ -19,12 +19,13 @@ package endtoend
 import (
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+	"vitess.io/vitess/go/test/utils"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
 func getAndSetup(t *testing.T) *framework.QueryClient {
@@ -37,9 +38,7 @@ func getAndSetup(t *testing.T) *framework.QueryClient {
 			"eid": sqltypes.Int64BindVariable(-9223372036854775808),
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	return client
 }
@@ -56,16 +55,12 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
 		nil,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
 		nil,
 		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -105,13 +100,9 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 	defer cleanup(client)
 
 	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, &querypb.ExecuteOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -137,13 +128,9 @@ func TestMetadataNoExecOptions(t *testing.T) {
 	defer cleanup(client)
 
 	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{

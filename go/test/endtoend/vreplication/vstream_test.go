@@ -126,7 +126,9 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 					if ev.Type == binlogdatapb.VEventType_ROW {
 						if !copyPhaseCompleted.Load() {
 							escapedTableNameParts := strings.Split(ev.RowEvent.TableName, ".")
-							require.Len(t, escapedTableNameParts, 2)
+							if !assert.Len(t, escapedTableNameParts, 2) {
+								return
+							}
 							copiedTables.Insert(escapedTableNameParts[1])
 						}
 						numRowEvents++
@@ -612,13 +614,17 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	go func() {
 		var reader vtgateconn.VStreamReader
 		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		connect := false
 		numErrors := 0
 		for {
 			if connect { // if vtgate returns a transient error try reconnecting from the last seen vgtid
 				reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-				require.NoError(t, err)
+				if !assert.NoError(t, err) {
+					return
+				}
 				connect = false
 			}
 			evs, err := reader.Recv()
@@ -756,7 +762,9 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEven
 	go func() {
 		var reader vtgateconn.VStreamReader
 		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		for {
 			evs, err := reader.Recv()
 
@@ -1287,7 +1295,7 @@ const (
 
 func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (numRowEvents map[string]int, numFieldEvents map[string]int) {
 	// Stream for a while to ensure heartbeats are sent.
-	ctx, cancel := context.WithTimeout(context.Background(), vstreamHeartbeatsTestContextTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), vstreamHeartbeatsTestContextTimeout)
 	defer cancel()
 
 	numRowEvents = make(map[string]int)
@@ -1421,7 +1429,7 @@ func TestVStreamHeartbeats(t *testing.T) {
 // It also confirms that we use the proper collation for the VStream filter when
 // using VARCHAR fields.
 func TestVStreamPushdownFilters(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer cancel()
 	setSidecarDBName("_vt")
 	config := *mainClusterConfig
@@ -1452,7 +1460,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	require.NoError(t, err)
 
 	// Coordinate go-routines.
-	streamCtx, streamCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	streamCtx, streamCancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer streamCancel()
 	done := make(chan struct{})
 
@@ -1461,6 +1469,9 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	createdPauls := startingPauls
 	createdNonPauls := 0
 	go func() {
+		var closeOnce sync.Once
+		closeDone := func() { closeOnce.Do(func() { close(done) }) }
+		defer closeDone()
 		id := 1
 		for {
 			select {
@@ -1468,12 +1479,13 @@ func TestVStreamPushdownFilters(t *testing.T) {
 				// Give the VStream a little catch-up time before telling it to stop
 				// via the done channel.
 				time.Sleep(10 * time.Second)
-				close(done)
 				return
 			default:
 				if id%10 == 0 {
 					_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.customer (name) values ('paÜl')", ks), 1, false)
-					require.NoError(t, err)
+					if !assert.NoError(t, err) {
+						return
+					}
 					createdPauls++
 				} else {
 					insertRow(ks, "customer", id)

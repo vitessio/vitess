@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"context"
 	"errors"
 	"math"
 	"testing"
@@ -412,7 +411,7 @@ func TestBuildProgressReport(t *testing.T) {
 // TestVDiffCreate performs some basic tests of the VDiffCreate function
 // to ensure that it behaves as expected given a specific request.
 func TestVDiffCreate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	workflowName := "wf1"
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "source",
@@ -467,7 +466,7 @@ func TestVDiffCreate(t *testing.T) {
 }
 
 func TestVDiffResume(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "sourceks",
 		ShardNames:   []string{"0"},
@@ -564,7 +563,7 @@ func TestVDiffResume(t *testing.T) {
 }
 
 func TestVDiffStop(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "sourceks",
 		ShardNames:   []string{"0"},
@@ -661,7 +660,7 @@ func TestVDiffStop(t *testing.T) {
 }
 
 func TestVDiffDelete(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "sourceks",
 		ShardNames:   []string{"0"},

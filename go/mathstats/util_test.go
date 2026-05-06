@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // aeq returns true if expect and got are equal to 8 significant
@@ -39,6 +41,6 @@ func testFunc(t *testing.T, name string, f func(float64) float64, vals map[float
 		} else {
 			label = fmt.Sprintf("%s(%v)", name, x)
 		}
-		t.Errorf("want %s=%v, got %v", label, want, got)
+		assert.Failf(t, "value mismatch", "want %s=%v, got %v", label, want, got)
 	}
 }

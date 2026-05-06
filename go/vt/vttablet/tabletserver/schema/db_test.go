@@ -97,7 +97,7 @@ func TestGenerateFullQuery(t *testing.T) {
 func TestGetCreateStatement(t *testing.T) {
 	db := fakesqldb.New(t)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetCreateStatement")
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	// Success view
@@ -106,7 +106,7 @@ func TestGetCreateStatement(t *testing.T) {
 		sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("lead|%v|utf8mb4|utf8mb4_0900_ai_ci", createStatement),
 	))
-	got, err := getCreateStatement(context.Background(), conn, "`lead`")
+	got, err := getCreateStatement(t.Context(), conn, "`lead`")
 	require.NoError(t, err)
 	require.Equal(t, createStatement, got)
 	require.NoError(t, db.LastError())
@@ -117,7 +117,7 @@ func TestGetCreateStatement(t *testing.T) {
 		sqltypes.MakeTestFields(" Table | Create Table", "varchar|varchar"),
 		fmt.Sprintf("area|%v", createStatement),
 	))
-	got, err = getCreateStatement(context.Background(), conn, "area")
+	got, err = getCreateStatement(t.Context(), conn, "area")
 	require.NoError(t, err)
 	require.Equal(t, createStatement, got)
 	require.NoError(t, db.LastError())
@@ -125,7 +125,7 @@ func TestGetCreateStatement(t *testing.T) {
 	// Failure
 	errMessage := "ERROR 1146 (42S02): Table 'ks.v1' doesn't exist"
 	db.AddRejectedQuery("show create table v1", errors.New(errMessage))
-	got, err = getCreateStatement(context.Background(), conn, "v1")
+	got, err = getCreateStatement(t.Context(), conn, "v1")
 	require.ErrorContains(t, err, errMessage)
 	require.Equal(t, "", got)
 }
@@ -133,7 +133,7 @@ func TestGetCreateStatement(t *testing.T) {
 func TestGetChangedViewNames(t *testing.T) {
 	db := fakesqldb.New(t)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetChangedViewNames")
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	// Success
@@ -144,14 +144,14 @@ func TestGetChangedViewNames(t *testing.T) {
 		"v1",
 		"v2",
 	))
-	got, err := getChangedViewNames(context.Background(), conn, true)
+	got, err := getChangedViewNames(t.Context(), conn, true)
 	require.NoError(t, err)
 	require.Len(t, got, 3)
 	require.ElementsMatch(t, maps.Keys(got), []string{"v1", "v2", "lead"})
 	require.NoError(t, db.LastError())
 
 	// Not serving primary
-	got, err = getChangedViewNames(context.Background(), conn, false)
+	got, err = getChangedViewNames(t.Context(), conn, false)
 	require.NoError(t, err)
 	require.Len(t, got, 0)
 	require.NoError(t, db.LastError())
@@ -159,7 +159,7 @@ func TestGetChangedViewNames(t *testing.T) {
 	// Failure
 	errMessage := "ERROR 1146 (42S02): Table '_vt.views' doesn't exist"
 	db.AddRejectedQuery(query, errors.New(errMessage))
-	got, err = getChangedViewNames(context.Background(), conn, true)
+	got, err = getChangedViewNames(t.Context(), conn, true)
 	require.ErrorContains(t, err, errMessage)
 	require.Nil(t, got)
 }
@@ -167,7 +167,7 @@ func TestGetChangedViewNames(t *testing.T) {
 func TestGetViewDefinition(t *testing.T) {
 	db := fakesqldb.New(t)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestGetViewDefinition")
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	viewsBV, err := sqltypes.BuildBindVariable([]string{"v1", "lead"})
@@ -325,7 +325,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			if tc.dbError != "" {
@@ -336,7 +336,7 @@ func TestGetMismatchedTableNames(t *testing.T) {
 			se := &Engine{
 				tables: tc.tables,
 			}
-			mismatchedTableNames, err := se.getMismatchedTableNames(context.Background(), conn, tc.isServingPrimary)
+			mismatchedTableNames, err := se.getMismatchedTableNames(t.Context(), conn, tc.isServingPrimary)
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 			} else {
@@ -446,7 +446,7 @@ func TestReloadTablesInDB(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -457,7 +457,7 @@ func TestReloadTablesInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadTablesDataInDB(context.Background(), conn, tc.tablesToReload, tc.tablesToDelete, sqlparser.NewTestParser())
+			err = reloadTablesDataInDB(t.Context(), conn, tc.tablesToReload, tc.tablesToDelete, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return
@@ -579,7 +579,7 @@ func TestReloadViewsInDB(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -590,7 +590,7 @@ func TestReloadViewsInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadViewsDataInDB(context.Background(), conn, tc.viewsToReload, tc.viewsToDelete, sqlparser.NewTestParser())
+			err = reloadViewsDataInDB(t.Context(), conn, tc.viewsToReload, tc.viewsToDelete, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return
@@ -870,7 +870,7 @@ func TestReloadDataInDB(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tc.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			// Add queries with the expected results and errors.
@@ -881,7 +881,7 @@ func TestReloadDataInDB(t *testing.T) {
 				db.AddRejectedQuery(query, errorToThrow)
 			}
 
-			err = reloadDataInDB(context.Background(), conn, tc.altered, tc.created, tc.dropped, false, sqlparser.NewTestParser())
+			err = reloadDataInDB(t.Context(), conn, tc.altered, tc.created, tc.dropped, false, sqlparser.NewTestParser())
 			if tc.expectedError != "" {
 				require.ErrorContains(t, err, tc.expectedError)
 				return
