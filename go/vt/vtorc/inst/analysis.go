@@ -105,6 +105,7 @@ type DetectionAnalysis struct {
 	PrimaryTimeStamp                          time.Time
 	AnalyzedKeyspace                          string
 	AnalyzedShard                             string
+	AnalyzedCell                              string
 	AnalyzedKeyspaceEmergencyReparentDisabled bool
 	AnalyzedShardEmergencyReparentDisabled    bool
 	// ShardPrimaryTermTimestamp is the primary term start time stored in the shard record.
