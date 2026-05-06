@@ -399,7 +399,7 @@ func analyzeSelectFrom(query string, parser *sqlparser.Parser) (sel *sqlparser.S
 		return nil, "", errors.New("unsupported distinct clause")
 	}
 	if len(sel.From) == 0 {
-		return nil, "", errors.New("unsupported missing FROM clause")
+		return nil, "", errors.New("unsupported select from dual")
 	}
 	if len(sel.From) > 1 {
 		return nil, "", errors.New("unsupported multi-table usage")

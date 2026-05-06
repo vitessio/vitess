@@ -614,7 +614,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select 1",
 			}},
 		},
-		err: "failed to build table replication plan for t1 table: unsupported missing FROM clause in query: select 1",
+		err: "failed to build table replication plan for t1 table: unsupported select from dual in query: select 1",
 	}, {
 		// FROM DUAL (virtual dual, no real table)
 		input: &binlogdatapb.Filter{
@@ -623,7 +623,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Filter: "select 1 from dual",
 			}},
 		},
-		err: "failed to build table replication plan for t1 table: unsupported missing FROM clause in query: select 1 from dual",
+		err: "failed to build table replication plan for t1 table: unsupported select from dual in query: select 1 from dual",
 	}, {
 		// no join
 		input: &binlogdatapb.Filter{
