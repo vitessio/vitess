@@ -49,6 +49,9 @@ services:
       - "3306"
 
   vttablet104:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
@@ -70,6 +73,9 @@ services:
       - "3306"
 
   vttablet204:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
@@ -91,6 +97,9 @@ services:
       - "3306"
 
   vttablet304:
+    build:
+      context: ../../..
+      dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
     ports:
       - "15999"
       - "3306"
