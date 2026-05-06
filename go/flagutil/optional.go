@@ -47,11 +47,57 @@ type OptionalFlagValue[T any] struct {
 	stringer func(T) string
 }
 
-// OptionalFloat64 is preserved for backward compatibility.
-type OptionalFloat64 = OptionalFlagValue[float64]
+// OptionalFloat64 is a concrete optional flag type for float64 values.
+// A zero-value OptionalFloat64 is safe — Set(), String(), Type(), and IsSet()
+// all work correctly without calling a constructor.
+type OptionalFloat64 struct {
+	val float64
+	set bool
+}
 
-// OptionalString is preserved for backward compatibility.
-type OptionalString = OptionalFlagValue[string]
+func (o *OptionalFloat64) Set(s string) error {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return numError(err)
+	}
+	o.val = v
+	o.set = true
+	return nil
+}
+
+func (o *OptionalFloat64) String() string {
+	return strconv.FormatFloat(o.val, 'g', -1, 64)
+}
+
+func (o *OptionalFloat64) Type() string { return "float64" }
+
+func (o *OptionalFloat64) IsSet() bool { return o.set }
+
+// Get returns the underlying float64 value.
+func (o *OptionalFloat64) Get() float64 { return o.val }
+
+// OptionalString is a concrete optional flag type for string values.
+// A zero-value OptionalString is safe — Set(), String(), Type(), and IsSet()
+// all work correctly without calling a constructor.
+type OptionalString struct {
+	val string
+	set bool
+}
+
+func (o *OptionalString) Set(s string) error {
+	o.val = s
+	o.set = true
+	return nil
+}
+
+func (o *OptionalString) String() string { return o.val }
+
+func (o *OptionalString) Type() string { return "string" }
+
+func (o *OptionalString) IsSet() bool { return o.set }
+
+// Get returns the underlying string value.
+func (o *OptionalString) Get() string { return o.val }
 
 var (
 	_ OptionalFlag = (*OptionalFloat64)(nil)
@@ -111,42 +157,14 @@ func (f *OptionalFlagValue[T]) IsSet() bool {
 	return f.set
 }
 
-// NewOptionalFloat64 returns an *OptionalFloat64 with the specified value as its
-// starting value.
+// NewOptionalFloat64 returns an *OptionalFloat64 with the specified default value.
 func NewOptionalFloat64(val float64) *OptionalFloat64 {
-	f, err := NewOptionalFlag(
-		val,
-		"float64",
-		func(s string) (float64, error) {
-			v, err := strconv.ParseFloat(s, 64)
-			if err != nil {
-				return 0, numError(err)
-			}
-			return v, nil
-		},
-		func(v float64) string {
-			return strconv.FormatFloat(v, 'g', -1, 64)
-		},
-	)
-	if err != nil {
-		panic(err) // unreachable: parse is always non-nil
-	}
-	return f
+	return &OptionalFloat64{val: val}
 }
 
-// NewOptionalString returns an *OptionalString with the specified value as its
-// starting value.
+// NewOptionalString returns an *OptionalString with the specified default value.
 func NewOptionalString(val string) *OptionalString {
-	f, err := NewOptionalFlag(
-		val,
-		"string",
-		func(s string) (string, error) { return s, nil },
-		func(v string) string { return v },
-	)
-	if err != nil {
-		panic(err) // unreachable: parse is always non-nil
-	}
-	return f
+	return &OptionalString{val: val}
 }
 
 // lifted directly from package flag to make the behavior of numeric parsing
