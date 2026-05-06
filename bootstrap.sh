@@ -189,7 +189,7 @@ install_zookeeper() {
 	# SHA512 checksum for Zookeeper 3.9.5 from Apache archives.
 	local sha512="baa1c21dda4d57238fca751e4fa2bbf1daff9a28612b125e497dccd5c188ee6449e2f79947e474c2dd4d19992789d4d36b27b1ba2feb80c2b0c45e7df0e22aa8"
 
-	"${VTROOT}/tools/wget-retry" -q "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
+	"${VTROOT}/tools/wget-retry" -q "https://dlcdn.apache.org/zookeeper/${zk}/${file}"
 	verify_sha512 "$dist/$file" "$sha512"
 	tar -xzf "$dist/$file"
 	mkdir -p "$dist"/lib
