@@ -125,10 +125,10 @@ func TestNamedLocking(t *testing.T) {
 	secondCallerAcquired := false
 	go func() {
 		_, unlock, err := ts.LockName(t.Context(), lockName, action)
-		defer unlock(&err)
 		if !assert.NoError(t, err) {
 			return
 		}
+		defer unlock(&err)
 		secondCallerAcquired = true
 	}()
 
@@ -189,10 +189,10 @@ func TestShardLocking(t *testing.T) {
 	secondThreadLockAcquired := false
 	go func() {
 		_, unlock, err := ts.LockShard(t.Context(), KeyspaceName, "0", "TestShardLocking")
-		defer unlock(&err)
 		if !assert.NoError(t, err) {
 			return
 		}
+		defer unlock(&err)
 		secondThreadLockAcquired = true
 	}()
 
@@ -230,10 +230,10 @@ func TestKeyspaceLocking(t *testing.T) {
 	secondThreadLockAcquired := false
 	go func() {
 		_, unlock, err := ts.LockKeyspace(t.Context(), KeyspaceName, "TestKeyspaceLocking")
-		defer unlock(&err)
 		if !assert.NoError(t, err) {
 			return
 		}
+		defer unlock(&err)
 		secondThreadLockAcquired = true
 	}()
 
