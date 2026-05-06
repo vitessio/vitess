@@ -62,7 +62,7 @@ func TestHTTP(t *testing.T) {
 	defer func() {
 		l.Close()
 		// Wait for HTTPServe to return; ignore errClosed-style errors triggered by l.Close().
-		<-serveErrCh
+		assert.NoError(t, <-serveErrCh)
 	}()
 
 	logger := New[*logMessage]("logger", 1)

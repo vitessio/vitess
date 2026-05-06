@@ -229,7 +229,7 @@ func TestEncString(t *testing.T) {
 
 		// Check successful decoding as bytes.
 		gotbcopy, posCopy, ok := readLenEncStringAsBytesCopy(test.lenEncoded, 0)
-		assert.True(t, ok && string(gotb) == test.value && pos == len(test.lenEncoded), "readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotbcopy, posCopy, ok, test.value, len(test.lenEncoded), true)
+		assert.True(t, ok && string(gotbcopy) == test.value && posCopy == len(test.lenEncoded), "readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotbcopy, posCopy, ok, test.value, len(test.lenEncoded), true)
 
 		// Check failed decoding as bytes with shorter data.
 		_, _, ok = readLenEncStringAsBytesCopy(test.lenEncoded[:len(test.lenEncoded)-1], 0)
