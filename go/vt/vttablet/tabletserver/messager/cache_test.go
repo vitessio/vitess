@@ -20,52 +20,43 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestMessagerCacheOrder(t *testing.T) {
 	mc := newCache(10)
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		Priority: 1,
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
-	if !mc.Add(&MessageRow{
+	}), "Add returned false")
+	require.True(t, mc.Add(&MessageRow{
 		Priority: 1,
 		TimeNext: 2,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row02")},
-	}) {
-		t.Fatal("Add returned false")
-	}
-	if !mc.Add(&MessageRow{
+	}), "Add returned false")
+	require.True(t, mc.Add(&MessageRow{
 		Priority: 2,
 		TimeNext: 2,
 		Epoch:    1,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row12")},
-	}) {
-		t.Fatal("Add returned false")
-	}
-	if !mc.Add(&MessageRow{
+	}), "Add returned false")
+	require.True(t, mc.Add(&MessageRow{
 		Priority: 2,
 		TimeNext: 1,
 		Epoch:    1,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row11")},
-	}) {
-		t.Fatal("Add returned false")
-	}
-	if !mc.Add(&MessageRow{
+	}), "Add returned false")
+	require.True(t, mc.Add(&MessageRow{
 		Priority: 1,
 		TimeNext: 3,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row03")},
-	}) {
-		t.Fatal("Add returned false")
-	}
+	}), "Add returned false")
 	var rows []string
 	for range 5 {
 		rows = append(rows, mc.Pop().Row[0].ToString())
@@ -82,83 +73,67 @@ func TestMessagerCacheOrder(t *testing.T) {
 
 func TestMessagerCacheDupKey(t *testing.T) {
 	mc := newCache(10)
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
-	if !mc.Add(&MessageRow{
+	}), "Add returned false")
+	assert.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Error("Add(dup): returned false, want true")
-	}
+	}), "Add(dup): returned false, want true")
 	_ = mc.Pop()
-	if !mc.Add(&MessageRow{
+	assert.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Error("Add(dup): returned false, want true")
-	}
+	}), "Add(dup): returned false, want true")
 	mc.Discard([]string{"row01"})
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
+	}), "Add returned false")
 }
 
 func TestMessagerCacheDiscard(t *testing.T) {
 	mc := newCache(10)
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
+	}), "Add returned false")
 	mc.Discard([]string{"row01"})
 	if row := mc.Pop(); row != nil {
 		assert.Failf(t, "Pop", "want nil, got %v", row.Row[0])
 	}
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
+	}), "Add returned false")
 	if row := mc.Pop(); row == nil || row.Row[0].ToString() != "row01" {
 		assert.Failf(t, "Pop", "want row01, got %v", row)
 	}
 
 	// Add will be a no-op.
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
+	}), "Add returned false")
 	if row := mc.Pop(); row != nil {
 		assert.Failf(t, "Pop", "want nil, got %v", row.Row[0])
 	}
 	mc.Discard([]string{"row01"})
 
 	// Now we can add.
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
+	}), "Add returned false")
 	if row := mc.Pop(); row == nil || row.Row[0].ToString() != "row01" {
 		assert.Failf(t, "Pop", "want row01, got %v", row)
 	}
@@ -166,49 +141,39 @@ func TestMessagerCacheDiscard(t *testing.T) {
 
 func TestMessagerCacheFull(t *testing.T) {
 	mc := newCache(2)
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
-	if !mc.Add(&MessageRow{
+	}), "Add returned false")
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row02")},
-	}) {
-		t.Fatal("Add returned false")
-	}
-	if mc.Add(&MessageRow{
+	}), "Add returned false")
+	assert.False(t, mc.Add(&MessageRow{
 		TimeNext: 2,
 		Epoch:    1,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row12")},
-	}) {
-		t.Error("Add(full): returned true, want false")
-	}
+	}), "Add(full): returned true, want false")
 }
 
 func TestMessagerCacheEmpty(t *testing.T) {
 	mc := newCache(2)
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
+	}), "Add returned false")
 	mc.Clear()
 	if row := mc.Pop(); row != nil {
 		assert.Failf(t, "Pop(empty)", "%v, want nil", row)
 	}
-	if !mc.Add(&MessageRow{
+	require.True(t, mc.Add(&MessageRow{
 		TimeNext: 1,
 		Epoch:    0,
 		Row:      []sqltypes.Value{sqltypes.NewVarBinary("row01")},
-	}) {
-		t.Fatal("Add returned false")
-	}
+	}), "Add returned false")
 	if row := mc.Pop(); row == nil {
 		assert.Failf(t, "Pop(non-empty)", "nil, want %v", row)
 	}

@@ -99,9 +99,7 @@ func TestNewBinlogPlayerKeyRange(t *testing.T) {
 	dbClient.Wait()
 	expectFBCRequest(t, fbc, wantTablet, testPos, nil, &topodatapb.KeyRange{End: []byte{0x80}})
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 func TestNewBinlogPlayerTables(t *testing.T) {
@@ -132,9 +130,7 @@ func TestNewBinlogPlayerTables(t *testing.T) {
 	dbClient.Wait()
 	expectFBCRequest(t, fbc, wantTablet, testPos, wantTables, nil)
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestApplyEventsFail ensures the error is recorded in the vreplication table if there's a failure.
@@ -205,9 +201,7 @@ func TestStopPosEqual(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestStopPosLess ensures player stops if stopPos<pos.
@@ -244,9 +238,7 @@ func TestStopPosLess(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestStopPosGreater ensures player stops if stopPos>pos.
@@ -287,9 +279,7 @@ func TestStopPosGreater(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestContextCancel ensures player does not record error or stop if context is canceled.
@@ -333,9 +323,7 @@ func TestContextCancel(t *testing.T) {
 	// Wait for Apply to return,
 	// and call dbClient.Wait to ensure
 	// no new statements were issued.
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 
 	dbClient.Wait()
 }
@@ -361,9 +349,7 @@ func TestRetryOnDeadlock(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // applyEvents starts a goroutine to apply events, and returns an error function.

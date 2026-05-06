@@ -78,9 +78,7 @@ func TestJoinExecute(t *testing.T) {
 		},
 	}
 	r, err := jn.TryExecute(t.Context(), &noopVCursor{}, bv, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute %v true`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10)})),
 	})
@@ -105,9 +103,7 @@ func TestJoinExecute(t *testing.T) {
 	rightPrim.rewind()
 	jn.Opcode = LeftJoin
 	r, err = jn.TryExecute(t.Context(), &noopVCursor{}, bv, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute %v true`, printBindVars(map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(10)})),
 	})
@@ -376,9 +372,7 @@ func TestJoinStreamExecute(t *testing.T) {
 		},
 	}
 	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`StreamExecute  true`,
 	})
@@ -405,9 +399,7 @@ func TestJoinStreamExecute(t *testing.T) {
 	rightPrim.rewind()
 	jn.Opcode = LeftJoin
 	r, err = wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`StreamExecute  true`,
 	})
@@ -464,9 +456,7 @@ func TestGetFields(t *testing.T) {
 		},
 	}
 	r, err := jn.GetFields(t.Context(), nil, map[string]*querypb.BindVariable{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		`GetFields `,
 		`Execute  true`,

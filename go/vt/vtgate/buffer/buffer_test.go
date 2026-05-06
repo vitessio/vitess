@@ -138,9 +138,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 
 	// First request with failover error starts buffering.
 	stopped := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 	// Start counter must have been increased.
 	got, want := starts.Counts()[statsKeyJoined], int64(1)
 	require.Equalf(t, want, got, "buffering start was not tracked: got = %v, want = %v", got, want)
@@ -152,9 +150,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	// Subsequent requests are buffered (if their error is nil or caused by the failover).
 	stopped2 := issueRequest(t.Context(), t, b, nil)
 	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 3); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 3))
 
 	// Mimic the failover end.
 	now = now.Add(1 * time.Second)
@@ -184,9 +180,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	got, want = utilizationSum.Counts()[statsKeyJoined], int64(30)
 	require.Equalf(t, want, got, "wrong buffer utilization: got = %v, want = %v", got, want)
 	// Drain will reset the state to "idle" eventually.
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
 
 	// Second failover: Buffering is skipped because last failover is too recent.
 	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
@@ -197,9 +191,7 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	// Second failover is buffered if enough time has passed.
 	now = now.Add(cfg.MinTimeBetweenFailovers)
 	stopped4 := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 	// Recorded max buffer usage should be 1 for the second failover.
 	got, want = lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(1)
 	require.Equalf(t, want, got, "wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
@@ -212,12 +204,8 @@ func testBuffering1WithOptions(t *testing.T, fail failover, concurrency int) {
 	if err := <-stopped4; err != nil {
 		require.NoError(t, err)
 	}
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForPoolSlots(b, cfg.Size); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 
 	// Stop counter must have been increased for the second failover.
 	got, want = stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(2)
@@ -244,12 +232,8 @@ func testDryRun1(t *testing.T, fail failover) {
 	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
 	require.Truef(t, err == nil && retryDone == nil, "requests must not be buffered during dry-run. err: %v retryDone: %v", err, retryDone)
 	// But the internal state changes though.
-	if err := waitForState(b, stateBuffering); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForPoolSlots(b, cfg.Size); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateBuffering))
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 	got, want := starts.Counts()[statsKeyJoined], int64(1)
 	require.Equalf(t, want, got, "buffering start was not tracked: got = %v, want = %v", got, want)
 	got, want = lastRequestsDryRunMax.Counts()[statsKeyJoined], int64(1)
@@ -258,9 +242,7 @@ func testDryRun1(t *testing.T, fail failover) {
 	// End of failover is tracked as well.
 	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
 	got, want = stops.Counts()[statsKeyJoinedFailoverEndDetected], int64(1)
 	require.Equalf(t, want, got, "buffering stop was not tracked: got = %v, want = %v", got, want)
 	got, want = utilizationDryRunSum.Counts()[statsKeyJoined], int64(10)
@@ -287,9 +269,7 @@ func testPassthrough1(t *testing.T, fail failover) {
 	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nonFailoverErr)
 	require.Truef(t, err == nil && retryDone == nil, "requests with non-failover errors must never be buffered. err: %v retryDone: %v", err, retryDone)
 
-	if err := waitForPoolSlots(b, cfg.Size); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 }
 
 // TestLastReparentTooRecentBufferingSkipped tests that buffering is skipped if
@@ -321,9 +301,7 @@ func testLastReparentTooRecentBufferingSkipped1(t *testing.T, fail failover) {
 
 	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
 	require.Truef(t, err == nil && retryDone == nil, "requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
-	if err := waitForPoolSlots(b, cfg.Size); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 	got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(1)
 	require.Equalf(t, want, got, "skipped request was not tracked: got = %v, want = %v", got, want)
 	got, want = requestsBuffered.Counts()[statsKeyJoined], int64(0)
@@ -361,9 +339,7 @@ func testLastReparentTooRecentBuffering1(t *testing.T, fail failover) {
 	now = now.Add(cfg.MinTimeBetweenFailovers)
 	// We're seeing errors first.
 	stopped := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 	// And then the failover end.
 	fail(b, newPrimary, keyspace, shard, now)
 
@@ -372,9 +348,7 @@ func testLastReparentTooRecentBuffering1(t *testing.T, fail failover) {
 		require.NoError(t, err)
 	}
 	// Drain will reset the state to "idle" eventually.
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
 
 	got, want := requestsSkipped.Counts()[statsKeyJoinedLastReparentTooRecent], int64(0)
 	require.Equalf(t, want, got, "request should not have been skipped: got = %v, want = %v", got, want)
@@ -399,9 +373,7 @@ func testPassthroughDuringDrain1(t *testing.T, fail failover) {
 	// Buffer one request.
 	markRetryDone := make(chan struct{})
 	stopped := issueRequestAndBlockRetry(t.Context(), t, b, failoverErr, markRetryDone)
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 
 	// Stop buffering and trigger drain.
 	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
@@ -420,12 +392,8 @@ func testPassthroughDuringDrain1(t *testing.T, fail failover) {
 	<-stopped
 
 	// Wait for the drain to complete to avoid races with other tests.
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForPoolSlots(b, cfg.Size); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 }
 
 // TestPassthroughIgnoredKeyspaceOrShard tests that the explicit whitelisting
@@ -452,9 +420,7 @@ func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, fail failover) {
 	ignoredShard := "ff-"
 	retryDone, err = b.WaitForFailoverEnd(t.Context(), keyspace, ignoredShard, nil, failoverErr)
 	require.Truef(t, err == nil && retryDone == nil, "requests for ignored shards must not be buffered. err: %v retryDone: %v", err, retryDone)
-	if err := waitForPoolSlots(b, cfg.Size); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 	statsKeyJoined = strings.Join([]string{keyspace, ignoredShard, skippedDisabled}, ".")
 	got, want = requestsSkipped.Counts()[statsKeyJoined], int64(1)
 	require.Equalf(t, want, got, "request was not skipped as disabled: got = %v, want = %v", got, want)
@@ -497,24 +463,16 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, fail failover) {
 
 	// Buffer 2 requests. The second will be canceled and the first will be drained.
 	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 	ctx2, cancel2 := context.WithCancel(t.Context())
 	stopped2 := issueRequest(ctx2, t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 2); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 2))
 
 	// Cancel second request before buffering stops.
 	cancel2()
 	// Canceled request will see an error from the buffer.
-	if err := isCanceledError(<-stopped2); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, isCanceledError(<-stopped2))
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 	// Recorded max buffer usage stay at 2 although the second request was canceled.
 	got, want := lastRequestsInFlightMax.Counts()[statsKeyJoined], int64(2)
 	require.Equalf(t, want, got, "wrong value for BufferRequestsInFlightMax: got = %v, want = %v", got, want)
@@ -524,9 +482,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, fail failover) {
 	}
 
 	// Failover will end eventually.
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
 	// First request must have been drained without an error.
 	if err := <-stopped1; err != nil {
 		require.NoError(t, err)
@@ -537,12 +493,8 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, fail failover) {
 	if !explicitEnd {
 		fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 	}
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForPoolSlots(b, cfg.Size); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 }
 
 func TestEviction(t *testing.T) {
@@ -566,21 +518,15 @@ func testEviction1(t *testing.T, fail failover) {
 	// in the buffer. Usually, they end up in the correct order (1, 2), but there
 	// is a chance that it's reversed (2, 1). This wait ensures that 1 goes into
 	// the buffer first.
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 	stopped2 := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 2); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 2))
 
 	// Third request will evict the oldest.
 	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
 
 	// Evicted request will see an error from the buffer.
-	if err := isEvictedError(<-stopped1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, isEvictedError(<-stopped1))
 
 	// End of failover. Stop buffering.
 	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
@@ -591,12 +537,8 @@ func testEviction1(t *testing.T, fail failover) {
 	if err := <-stopped3; err != nil {
 		require.NoError(t, err)
 	}
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForPoolSlots(b, 2); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, 2))
 }
 
 // TestEvictionNotPossible tests the case that the buffer is a) fully in use
@@ -623,9 +565,7 @@ func testEvictionNotPossible1(t *testing.T, fail failover) {
 	// Make the buffer full (applies to all failovers).
 	// Also triggers buffering for the first shard.
 	stoppedFirstFailover := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 
 	// Newer requests of the second failover cannot evict anything because
 	// they have no entries buffered.
@@ -643,12 +583,8 @@ func testEvictionNotPossible1(t *testing.T, fail failover) {
 		require.NoError(t, err)
 	}
 	// Wait for the failover end to avoid races.
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForPoolSlots(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, 1))
 	statsKeyJoined := strings.Join([]string{keyspace, shard2, string(skippedBufferFull)}, ".")
 	got, want := requestsSkipped.Counts()[statsKeyJoined], int64(1)
 	require.Equalf(t, want, got, "skipped request was not tracked: got = %v, want = %v", got, want)
@@ -682,9 +618,7 @@ func testWindow1(t *testing.T, fail failover) {
 		require.NoError(t, err)
 	}
 	// Verify that the window was actually exceeded.
-	if err := waitForRequestsExceededWindow(1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsExceededWindow(1))
 
 	// Increase the window and buffer a request again
 	// (queue becomes not empty a second time).
@@ -700,22 +634,16 @@ func testWindow1(t *testing.T, fail failover) {
 	// request instead.
 	t.Logf("second request does not exceed its window")
 	stopped2 := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 
 	// Third request will evict the second one.
 	t.Logf("third request evicts the second request")
 	stopped3 := issueRequest(t.Context(), t, b, failoverErr)
 
 	// Evicted request will see an error from the buffer.
-	if err := isEvictedError(<-stopped2); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, isEvictedError(<-stopped2))
 	// Block until the third request is buffered. Avoids data race with *window.
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 
 	// Verify that the window was not exceeded.
 	got, want := requestsEvicted.Counts()[statsKeyJoinedWindowExceeded], int64(1)
@@ -727,29 +655,21 @@ func testWindow1(t *testing.T, fail failover) {
 	// Fourth request evicts the third
 	t.Logf("fourth request exceeds its window (and evicts the third)")
 	stopped4 := issueRequest(t.Context(), t, b, failoverErr)
-	if err := isEvictedError(<-stopped3); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, isEvictedError(<-stopped3))
 
 	// Fourth request will exceed its window and finish early.
 	if err := <-stopped4; err != nil {
 		require.NoError(t, err)
 	}
 	// Verify that the window was actually exceeded.
-	if err := waitForRequestsExceededWindow(2); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsExceededWindow(2))
 
 	// At this point the buffer is empty but buffering is still active.
 	// Simulate that the buffering stops because the max duration (10m) was reached.
 	b.getOrCreateBuffer(keyspace, shard).stopBufferingDueToMaxDuration()
 	// Wait for the failover end to avoid races.
-	if err := waitForState(b, stateIdle); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForPoolSlots(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForState(b, stateIdle))
+	require.NoError(t, waitForPoolSlots(b, 1))
 }
 
 // TestShutdown tests that Buffer.Shutdown() unblocks any pending bufferings
@@ -768,9 +688,7 @@ func testShutdown1(t *testing.T, fail failover) {
 
 	// Buffer one request.
 	stopped1 := issueRequest(t.Context(), t, b, failoverErr)
-	if err := waitForRequestsInFlight(b, 1); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForRequestsInFlight(b, 1))
 
 	// Shutdown buffer and unblock buffered request immediately.
 	b.Shutdown()
@@ -780,9 +698,7 @@ func testShutdown1(t *testing.T, fail failover) {
 		require.NoError(t, err)
 	}
 
-	if err := waitForPoolSlots(b, cfg.Size); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 }
 
 func TestShutdown_WaitForFailoverEndAfterShutdownIsNoop(t *testing.T) {

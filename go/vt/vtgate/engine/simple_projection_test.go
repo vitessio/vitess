@@ -54,9 +54,7 @@ func TestSubqueryExecute(t *testing.T) {
 	}
 
 	r, err := sq.TryExecute(t.Context(), &noopVCursor{}, bv, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	prim.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(1)),
 	})
@@ -104,9 +102,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 	}
 
 	r, err := wrapStreamExecute(sq, &noopVCursor{}, bv, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	prim.ExpectLog(t, []string{
 		fmt.Sprintf(`StreamExecute a: %v true`, sqltypes.Int64BindVariable(1)),
 	})
@@ -154,9 +150,7 @@ func TestSubqueryGetFields(t *testing.T) {
 	}
 
 	r, err := sq.GetFields(t.Context(), nil, bv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	prim.ExpectLog(t, []string{
 		fmt.Sprintf(`GetFields a: %v`, sqltypes.Int64BindVariable(1)),
 		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(1)),
@@ -201,9 +195,7 @@ func TestSubqueryGetFieldsNamesOnly(t *testing.T) {
 	}
 
 	r, err := sq.GetFields(t.Context(), nil, bv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	prim.ExpectLog(t, []string{
 		`GetFields a: type:INT64 value:"1"`,
 		`Execute a: type:INT64 value:"1" true`,

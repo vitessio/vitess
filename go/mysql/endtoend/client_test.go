@@ -36,16 +36,12 @@ import (
 func TestKill(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Create the kill connection first. It sometimes takes longer
 	// than 10s
 	killConn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer killConn.Close()
 
 	errChan := make(chan error)
@@ -84,15 +80,11 @@ func TestKill(t *testing.T) {
 func TestKill2006(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Kill the connection from the server side.
 	killConn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer killConn.Close()
 
 	if _, err := killConn.ExecuteFetch(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
@@ -110,9 +102,7 @@ func TestKill2006(t *testing.T) {
 func TestDupEntry(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	if _, err := conn.ExecuteFetch("create table dup_entry(id int, name int, primary key(id), unique index(name))", 0, false); err != nil {
@@ -132,9 +122,7 @@ func TestClientFoundRows(t *testing.T) {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	if _, err := conn.ExecuteFetch("create table found_rows(id int, val int, primary key(id))", 0, false); err != nil {
@@ -247,9 +235,7 @@ func TestMultiResultNoDeprecateEOF(t *testing.T) {
 
 func expectNoError(t *testing.T, err error) {
 	t.Helper()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 }
 
 func expectFlag(t *testing.T, msg string, flag, want bool) {
@@ -270,9 +256,7 @@ func TestTLS(t *testing.T) {
 	// Now connect with our client.
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	result, err := conn.ExecuteFetch("SHOW STATUS LIKE 'Ssl_cipher'", 10, true)
@@ -288,9 +272,7 @@ func TestReplicationStatus(t *testing.T) {
 	params := connParams
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &params)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	status, err := conn.ShowReplicationStatus()

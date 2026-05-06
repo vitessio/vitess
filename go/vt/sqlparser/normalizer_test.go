@@ -555,9 +555,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 func TestGetBindVars(t *testing.T) {
 	parser := NewTestParser()
 	stmt, err := parser.Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := getBindvars(stmt)
 	want := map[string]struct{}{
 		"v1": {},

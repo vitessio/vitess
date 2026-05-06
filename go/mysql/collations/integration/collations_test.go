@@ -51,9 +51,7 @@ func init() {
 
 func getSQLQueries(t *testing.T, testfile string) []string {
 	tf, err := os.Open(testfile)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer tf.Close()
 
 	var chunks []string
@@ -62,9 +60,7 @@ func getSQLQueries(t *testing.T, testfile string) []string {
 	addchunk := func() {
 		if curchunk.Len() > 0 {
 			stmts, err := sqlparser.NewTestParser().SplitStatementToPieces(curchunk.String())
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			chunks = append(chunks, stmts...)
 			curchunk.Reset()
 		}

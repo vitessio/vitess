@@ -4458,7 +4458,7 @@ func TestSelectCFC(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatal("not able to cache a plan within 30 seconds.")
+			require.Fail(t, "not able to cache a plan within 30 seconds.")
 		case <-time.After(5 * time.Millisecond):
 			// should be able to find cache entry before the timeout.
 			cacheItems := executor.debugCacheEntries()

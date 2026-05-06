@@ -606,7 +606,7 @@ func TestTransactionNotifier(t *testing.T) {
 	}
 	select {
 	case <-notifyCh:
-		t.Error("unresolved transaction notifier call unexpected")
+		assert.Fail(t, "unresolved transaction notifier call unexpected")
 	case <-time.After(1 * time.Second):
 	}
 
@@ -617,7 +617,7 @@ func TestTransactionNotifier(t *testing.T) {
 	select {
 	case <-notifyCh:
 	case <-time.After(1 * time.Second):
-		t.Error("unresolved transaction notifier expected but not received")
+		assert.Fail(t, "unresolved transaction notifier expected but not received")
 	}
 }
 

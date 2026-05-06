@@ -66,9 +66,7 @@ func TestStrictMode(t *testing.T) {
 	qe := NewQueryEngine(env, se)
 	qe.se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	qe.se.Open()
-	if err := qe.Open(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, qe.Open())
 	qe.Close()
 
 	// Check that we fail if STRICT_TRANS_TABLES or STRICT_ALL_TABLES is not set.
@@ -87,9 +85,7 @@ func TestStrictMode(t *testing.T) {
 	// Test that we succeed if the enforcement flag is off.
 	cfg.EnforceStrictTransTables = false
 	qe = NewQueryEngine(env, se)
-	if err := qe.Open(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, qe.Open())
 	qe.Close()
 }
 
@@ -150,9 +146,7 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	defer qe.Close()
 
 	plan, err := qe.GetMessageStreamPlan("msg")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantPlan := &planbuilder.Plan{
 		PlanID: planbuilder.PlanMessageStream,
 		Table:  qe.schema.Load().tables["msg"],

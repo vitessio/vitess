@@ -48,9 +48,7 @@ func TestInsertUnsharded(t *testing.T) {
 	}}
 
 	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: dummy_insert {} true true`,
@@ -104,9 +102,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 	}
 
 	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Fetch two sequence value.
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
@@ -157,9 +153,7 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 	}
 
 	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Fetch two sequence value.
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
@@ -219,9 +213,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Based on shardForKsid, values returned will be 20-.
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -258,9 +250,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
@@ -301,9 +291,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
@@ -369,9 +357,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{
 		"_id_1": sqltypes.TestBindVariable([]int{1, 2}),
 	}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Based on shardForKsid, values returned will be 20-.
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -416,9 +402,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
@@ -461,9 +445,7 @@ func TestInsertShardWithONDuplicateKey(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Based on shardForKsid, values returned will be 20-, -20, 20-.
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
@@ -604,9 +586,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 	}
 
 	result, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks2 [] Destinations:DestinationAnyShard()`,
 		fmt.Sprintf(`ExecuteStandalone dummy_generate n: %v ks2 -20`, sqltypes.Int64BindVariable(1)),
@@ -719,9 +699,7 @@ func TestInsertShardedOwned(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`Execute insert into lkp2(from1, from2, toc) values(:from1_0, :from2_0, :toc_0), (:from1_1, :from2_1, :toc_1), (:from1_2, :from2_2, :toc_2) ` +
 			fmt.Sprintf(`from1_0: %v from1_1: %v from1_2: %v `, sqltypes.Int64BindVariable(4), sqltypes.Int64BindVariable(5), sqltypes.Int64BindVariable(6)) +
@@ -813,9 +791,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.20-: prefix(:_id_0 /* INT64 */, :_c3_0 /* NULL_TYPE */) ` +
@@ -900,9 +876,7 @@ func TestInsertShardedGeo(t *testing.T) {
 	vc.shardForKsid = []string{"20-", "-20"}
 
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`Execute insert into id_idx(id, keyspace_id) values(:id_0, :keyspace_id_0), (:id_1, :keyspace_id_1) ` +
 			fmt.Sprintf(`id_0: %v id_1: %v `, sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(1)) +
@@ -1052,9 +1026,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 	}
 
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`Execute select from1, toc from prim where from1 in ::from1 ` +
 			fmt.Sprintf(`from1: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}, {Type: querypb.Type_INT64, Value: []byte("3")}, {Type: querypb.Type_INT64, Value: []byte("4")}}}),
@@ -1163,9 +1135,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 	}
 
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute select from from lkp1 where from = :from and toc = :toc from:  toc: %v false`, &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}),
 		`ResolveDestinations sharded [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
@@ -1286,9 +1256,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		nonemptyResult,
 	}
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Perform verification for each colvindex.
 		// Note that only first column of each colvindex is used.
@@ -1396,9 +1364,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{
 		"v1": sqltypes.StringBindVariable("a"), "v2": sqltypes.StringBindVariable("b"), "v3": sqltypes.StringBindVariable("c"),
 	}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// Perform verification for each colvindex.
 		// Note that only first column of each colvindex is used.
@@ -1589,9 +1555,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 	}
 
 	_, err := ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [value:"0" value:"1" value:"2"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(4eb190c9a2fa169c)`,
 		`ExecuteMultiShard sharded.20-: ` +

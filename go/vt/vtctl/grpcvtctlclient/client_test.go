@@ -87,16 +87,11 @@ func TestVtctlAuthClient(t *testing.T) {
         }`
 
 	f, err := os.CreateTemp("", "static_auth_creds.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(f.Name())
-	if _, err := io.WriteString(f, authJSON); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
+	_, err = io.WriteString(f, authJSON)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
 
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)

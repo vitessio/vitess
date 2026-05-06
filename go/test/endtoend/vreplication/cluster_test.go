@@ -537,9 +537,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	require.NotNil(t, tablet.DbServer)
 	tablet.DbServer.InitMysql = true
 	proc, err := tablet.DbServer.StartProcess()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	require.NoError(t, err)
 	require.NotNil(t, proc)
 	tablet.Name = fmt.Sprintf("%s-%d", cell.Name, tabletID)
 	vttablet.Name = tablet.Name

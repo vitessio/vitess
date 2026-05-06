@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -80,7 +81,7 @@ func TestStreamResults(t *testing.T) {
 		}
 	}()
 	for err := range ch {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	require.Equal(t, int64(2), engine.resultStreamerNumPackets.Get())
 	require.Equal(t, int64(2), engine.resultStreamerNumRows.Get())

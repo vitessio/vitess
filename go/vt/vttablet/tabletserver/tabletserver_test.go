@@ -69,9 +69,7 @@ func TestTabletServerHealthz(t *testing.T) {
 	defer db.Close()
 
 	req, err := http.NewRequest("GET", "/healthz", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(tsv.healthzHandler)
@@ -95,9 +93,7 @@ func TestTabletServerHealthzNotConnected(t *testing.T) {
 	tsv.sm.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, StateNotConnected, "test disconnected")
 
 	req, err := http.NewRequest("GET", "/healthz", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(tsv.healthzHandler)
@@ -174,7 +170,7 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	// but it must wait for the unprepared (txid2) to become non-busy.
 	select {
 	case <-ch:
-		t.Fatal("ch should not fire")
+		require.Fail(t, "ch should not fire")
 	case <-time.After(100 * time.Millisecond):
 	}
 	require.EqualValues(t, 1, tsv.te.txPool.scp.active.Size(), "tsv.te.txPool.scp.active.Size()")
@@ -974,7 +970,7 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	case stats := <-ch:
 		assert.Equalf(t, wantSQL, stats.OriginalSQL, "logstats: SQL want %s got %s", wantSQL, stats.OriginalSQL)
 	default:
-		t.Fatal("stats are empty")
+		require.Fail(t, "stats are empty")
 	}
 }
 
@@ -1109,8 +1105,8 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
-			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2); err != nil {
-				t.Fatal(err)
+			if !assert.NoError(t, waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2)) {
+				return
 			}
 		})
 
@@ -1465,9 +1461,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	// tx3.
 	wg.Go(func() {
 		// Wait until tx1 and tx2 are pending to make the test deterministic.
-		if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2))
 
 		state3, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil)
 		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
@@ -1509,9 +1503,7 @@ func TestMessageStream(t *testing.T) {
 		return io.EOF
 	})
 	require.NoError(t, err)
-	if !called {
-		t.Fatal("callback was not called for MessageStream")
-	}
+	require.True(t, called, "callback was not called for MessageStream")
 }
 
 func TestCheckMySQLGauge(t *testing.T) {
@@ -1532,7 +1524,7 @@ func TestCheckMySQLGauge(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatal("Timedout waiting for CheckMySQL to finish")
+			require.Fail(t, "Timedout waiting for CheckMySQL to finish")
 		default:
 			if tsv.checkMysqlGaugeFunc.Get() == 0 {
 				return

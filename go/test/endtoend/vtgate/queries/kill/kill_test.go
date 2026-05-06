@@ -111,7 +111,7 @@ func TestKillDifferentConnectionQuery(t *testing.T) {
 			_, err = utils.ExecAllowError(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
 			require.NoError(t, err)
 		case <-time.After(5 * time.Second):
-			t.Fatal("test did not complete in 5 seconds.")
+			require.Fail(t, "test did not complete in 5 seconds.")
 		}
 	}
 }
@@ -239,7 +239,7 @@ func runQueryInGoRoutineAndCheckError(t *testing.T, conn *mysql.Conn, killConn *
 		case <-time.After(20 * time.Millisecond):
 			killFunc(conn, killConn)
 		case <-totalTime:
-			t.Fatal("test did not complete in 5 seconds.")
+			require.Fail(t, "test did not complete in 5 seconds.")
 		}
 	}
 }

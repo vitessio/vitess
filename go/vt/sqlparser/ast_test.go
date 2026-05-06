@@ -312,27 +312,21 @@ func TestIsImpossible(t *testing.T) {
 		Left:     NewIntLiteral("1"),
 		Right:    NewIntLiteral("1"),
 	}
-	if !f.IsImpossible() {
-		t.Error("IsImpossible: false, want true")
-	}
+	assert.True(t, f.IsImpossible(), "IsImpossible: false, want true")
 
 	f = ComparisonExpr{
 		Operator: EqualOp,
 		Left:     NewIntLiteral("1"),
 		Right:    NewIntLiteral("1"),
 	}
-	if f.IsImpossible() {
-		t.Error("IsImpossible: true, want false")
-	}
+	assert.False(t, f.IsImpossible(), "IsImpossible: true, want false")
 
 	f = ComparisonExpr{
 		Operator: NotEqualOp,
 		Left:     NewIntLiteral("1"),
 		Right:    NewIntLiteral("2"),
 	}
-	if f.IsImpossible() {
-		t.Error("IsImpossible: true, want false")
-	}
+	assert.False(t, f.IsImpossible(), "IsImpossible: true, want false")
 }
 
 func TestReplaceExpr(t *testing.T) {
@@ -468,22 +462,16 @@ func TestReplaceExpr(t *testing.T) {
 
 func TestColNameEqual(t *testing.T) {
 	var c1, c2 *ColName
-	if c1.Equal(c2) {
-		t.Error("nil columns equal, want unequal")
-	}
+	assert.False(t, c1.Equal(c2), "nil columns equal, want unequal")
 	c1 = &ColName{
 		Name: NewIdentifierCI("aa"),
 	}
 	c2 = &ColName{
 		Name: NewIdentifierCI("bb"),
 	}
-	if c1.Equal(c2) {
-		t.Error("columns equal, want unequal")
-	}
+	assert.False(t, c1.Equal(c2), "columns equal, want unequal")
 	c2.Name = NewIdentifierCI("aa")
-	if !c1.Equal(c2) {
-		t.Error("columns unequal, want equal")
-	}
+	assert.True(t, c1.Equal(c2), "columns unequal, want equal")
 }
 
 func TestIdentifierCI(t *testing.T) {

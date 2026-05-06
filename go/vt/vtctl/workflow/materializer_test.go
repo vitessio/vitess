@@ -1293,18 +1293,16 @@ func TestCreateLookupVindexFull(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: &vschemapb.Keyspace{},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	})
+	require.NoError(t, err)
+	err = env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: sourceVSchema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectFetchAsAllPrivsQuery(200, "select 1 from `lookup` limit 1", &sqltypes.Result{})
@@ -1322,7 +1320,7 @@ func TestCreateLookupVindexFull(t *testing.T) {
 		Vindex:      specs,
 	}
 
-	_, err := env.ws.LookupVindexCreate(ctx, req)
+	_, err = env.ws.LookupVindexCreate(ctx, req)
 	require.NoError(t, err)
 
 	wantvschema := &vschemapb.Keyspace{
@@ -1469,18 +1467,16 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 			Schema: sourceSchema2,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: &vschemapb.Keyspace{},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	})
+	require.NoError(t, err)
+	err = env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: sourceVSchema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectFetchAsAllPrivsQuery(200, "select 1 from `lookup` limit 1", &sqltypes.Result{})
@@ -1502,7 +1498,7 @@ func TestCreateLookupVindexMultipleCreate(t *testing.T) {
 		Vindex:      specs,
 	}
 
-	_, err := env.ws.LookupVindexCreate(ctx, req)
+	_, err = env.ws.LookupVindexCreate(ctx, req)
 	require.NoError(t, err)
 
 	wantvschema := &vschemapb.Keyspace{
@@ -2186,18 +2182,16 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 				Schema: sourceSchema,
 			}},
 		}
-		if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name:     ms.TargetKeyspace,
 			Keyspace: &vschemapb.Keyspace{},
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		})
+		require.NoError(t, err)
+		err = env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name:     ms.SourceKeyspace,
 			Keyspace: tcase.sourceVSchema,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		})
+		require.NoError(t, err)
 
 		lv := newLookupVindex(env.ws)
 		_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
@@ -2233,12 +2227,11 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			},
 		},
 	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: sourcevs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	// withTable is a target vschema with a pre-existing table.
 	withTable := &vschemapb.Keyspace{
@@ -2434,12 +2427,11 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 				}},
 			}
 			specs.Vindexes["v"].Params["table"] = fmt.Sprintf("%s.%s", ms.TargetKeyspace, tcase.targetTable)
-			if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 				Name:     ms.TargetKeyspace,
 				Keyspace: tcase.targetVSchema,
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
+			require.NoError(t, err)
 
 			lv := newLookupVindex(env.ws)
 			_, _, got, cancelFunc, err := lv.prepareCreate(ctx, "workflow", ms.SourceKeyspace, specs, false)
@@ -2557,12 +2549,11 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	lv := newLookupVindex(env.ws)
 	_, got, _, _, err := lv.prepareCreate(ctx, "keyspace", ms.TargetKeyspace, specs, false)
@@ -2686,12 +2677,11 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	lv := newLookupVindex(env.ws)
 	_, got, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
@@ -2807,12 +2797,11 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	lv := newLookupVindex(env.ws)
 	ms, ks, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)
@@ -2890,12 +2879,11 @@ func TestStopAfterCopyFlag(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+	err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 
 	lv := newLookupVindex(env.ws)
 	ms1, _, _, _, err := lv.prepareCreate(ctx, "workflow", ms.TargetKeyspace, specs, false)

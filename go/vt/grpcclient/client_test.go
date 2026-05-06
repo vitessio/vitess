@@ -44,7 +44,7 @@ func TestDialErrors(t *testing.T) {
 		gconn, err := DialContext(ctx, address, true, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			cancel()
-			t.Fatal(err)
+			require.NoError(t, err)
 		}
 		vtg := vtgateservicepb.NewVitessClient(gconn)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
@@ -58,9 +58,7 @@ func TestDialErrors(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		gconn, err := DialContext(ctx, address, false, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		cancel()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		vtg := vtgateservicepb.NewVitessClient(gconn)
 		ctx, cancel = context.WithTimeout(t.Context(), 10*time.Millisecond)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})

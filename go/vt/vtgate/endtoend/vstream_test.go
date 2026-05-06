@@ -44,17 +44,11 @@ import (
 
 func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mysql.Conn, *mysql.Conn, func()) {
 	gconn, err := vtgateconn.Dial(ctx, grpcAddress)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	mconn, err := mysql.Connect(ctx, &mysqlParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	close := func() {
 		gconn.Close()
 		conn.Close()
@@ -71,9 +65,7 @@ func TestVStream(t *testing.T) {
 	defer closeConnections()
 
 	mpos, err := mconn.PrimaryPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: "ks",
@@ -88,14 +80,10 @@ func TestVStream(t *testing.T) {
 	}
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	_, err = conn.ExecuteFetch("insert into vstream_test(id,val) values(1,1), (4,4)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// We expect two events because the insert goes to two shards (-80 and 80-),
 	// and both of them are in the same mysql server.
 	// The row that goes to 80- will have events.
@@ -106,9 +94,7 @@ func TestVStream(t *testing.T) {
 	emptyEventSkipped := false
 	for range 2 {
 		events, err := reader.Recv()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		fmt.Printf("events: %v\n", events)
 		// An empty transaction has three events: begin, gtid and commit.
 		if len(events) == 3 && !emptyEventSkipped {
@@ -175,9 +161,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	defer closeConnections()
 
 	_, err := conn.ExecuteFetch("insert into t1_copy_basic(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	lastPK := sqltypes.Result{
 		Fields: []*querypb.Field{{Name: "id1", Type: querypb.Type_INT32}},
@@ -212,9 +196,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	numExpectedEvents := 2 /* num shards */ *(7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ +3 /* begin/vgtid/commit for completed table */ +1 /* copy operation completed */) + 1 /* fully copy operation completed */
 
 	expectedCompletedEvents := []*binlogdatapb.VEvent{
@@ -392,9 +374,7 @@ func TestVStreamCopyResume(t *testing.T) {
 	defer closeConnections()
 
 	_, err := conn.ExecuteFetch("insert into t1_copy_resume(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Any subsequent GTIDs will be part of the stream
 	mpos, err := mconn.PrimaryPosition()
@@ -445,9 +425,7 @@ func TestVStreamCopyResume(t *testing.T) {
 	}
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	require.NotNil(t, reader)
 
 	expectedRowCopyEvents := 5                       // id1 and id2 IN(5,6,7,8,9)
@@ -643,9 +621,7 @@ func TestVStreamCurrent(t *testing.T) {
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	numExpectedEvents := 4 // vgtid+other per shard for "current"
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent
@@ -695,15 +671,11 @@ func TestVStreamSharded(t *testing.T) {
 		}},
 	}
 	_, err := conn.ExecuteFetch("insert into t1_sharded(id1,id2) values(1,1), (4,4)", 1, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	flags := &vtgatepb.VStreamFlags{}
 	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	numExpectedEvents := 4
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent

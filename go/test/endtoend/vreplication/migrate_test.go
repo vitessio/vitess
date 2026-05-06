@@ -258,10 +258,9 @@ func TestMigrateSharded(t *testing.T) {
 func setupExtKeyspace(t *testing.T, vc *VitessCluster, ksName, cellName string) {
 	numReplicas := 1
 	shards := []string{"-80", "80-"}
-	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells[cellName]}, ksName, strings.Join(shards, ","),
-		customerVSchema, customerSchema, numReplicas, 0, 1200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells[cellName]}, ksName, strings.Join(shards, ","),
+		customerVSchema, customerSchema, numReplicas, 0, 1200, nil)
+	require.NoError(t, err)
 	vtgate := vc.Cells[cellName].Vtgates[0]
 	for _, shard := range shards {
 		err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shard)

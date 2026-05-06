@@ -791,9 +791,7 @@ readLoop:
 			}
 			if len(data) > 0 {
 				receivedPackets++
-				if data[0] == mysql.EOFPacket {
-					t.Fatal("Received unexpected EOF in blocking mode")
-				}
+				require.NotEqual(t, mysql.EOFPacket, data[0], "Received unexpected EOF in blocking mode")
 				t.Logf("Received packet %d: first byte=0x%02x, size=%d", receivedPackets, data[0], len(data))
 				// After receiving some packets, we can stop
 				if receivedPackets >= 3 {
@@ -808,7 +806,7 @@ readLoop:
 				t.Logf("Timeout after receiving %d packets - blocking mode works", receivedPackets)
 				break readLoop
 			}
-			t.Fatal("Timeout waiting for packets in blocking mode")
+			require.Fail(t, "Timeout waiting for packets in blocking mode")
 		}
 	}
 

@@ -112,7 +112,7 @@ func TestEngineOpenRetry(t *testing.T) {
 				return
 			}
 		}
-		t.Error("retrying did not become false")
+		assert.Fail(t, "retrying did not become false")
 	}()
 
 	// Open is idempotent.

@@ -184,26 +184,20 @@ func TestMessageManagerAdd(t *testing.T) {
 	row1 := &MessageRow{
 		Row: []sqltypes.Value{sqltypes.NewVarBinary("1")},
 	}
-	if mm.Add(row1) {
-		t.Error("Add(no receivers): true, want false")
-	}
+	assert.False(t, mm.Add(row1), "Add(no receivers): true, want false")
 
 	r1 := newTestReceiver(0)
 	go func() { <-r1.ch }()
 	mm.Subscribe(t.Context(), r1.rcv)
 
-	if !mm.Add(row1) {
-		t.Error("Add(1 receiver): false, want true")
-	}
+	assert.True(t, mm.Add(row1), "Add(1 receiver): false, want true")
 	// Make sure message is enqueued.
 	r1.WaitForCount(2)
 	// This will fill up the cache.
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 
 	// The third add has to fail.
-	if mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}}) {
-		t.Error("Add(cache full): true, want false")
-	}
+	assert.False(t, mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}}), "Add(cache full): true, want false")
 }
 
 func TestMessageManagerSend(t *testing.T) {

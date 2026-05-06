@@ -97,9 +97,7 @@ func TestTableACL(t *testing.T) {
 	for _, tcase := range execCases {
 		_, err := client.Execute(tcase.query, nil)
 		if tcase.err == "" {
-			if err != nil {
-				t.Error(err)
-			}
+			assert.NoError(t, err)
 			continue
 		}
 		assert.ErrorContains(t, err, tcase.err)
@@ -125,9 +123,7 @@ func TestTableACL(t *testing.T) {
 	for _, tcase := range streamCases {
 		_, err := client.StreamExecute(tcase.query, nil)
 		if tcase.err == "" {
-			if err != nil {
-				t.Error(err)
-			}
+			assert.NoError(t, err)
 			continue
 		}
 		assert.ErrorContains(t, err, tcase.err)
@@ -147,8 +143,7 @@ var rulesJSON = []byte(`[{
 func TestQueryRules(t *testing.T) {
 	rules := rules.New()
 	err := rules.UnmarshalJSON(rulesJSON)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	err = framework.Server.SetQueryRules("endtoend", rules)
@@ -158,8 +153,7 @@ func TestQueryRules(t *testing.T) {
 	framework.Server.RegisterQueryRuleSource("endtoend")
 	defer framework.Server.UnRegisterQueryRuleSource("endtoend")
 	err = framework.Server.SetQueryRules("endtoend", rules)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 
@@ -189,13 +183,11 @@ func TestQueryRules(t *testing.T) {
 	assert.EqualErrorf(t, err, want, "Error: %v, want %s", err, want)
 
 	err = framework.Server.SetQueryRules("endtoend", nil)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	_, err = client.Execute(query, bv)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 }

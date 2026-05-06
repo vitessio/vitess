@@ -216,12 +216,10 @@ func TestResharderOneRefTable(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     env.keyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.expectValidation()
 	env.expectNoRefStream()
@@ -272,12 +270,10 @@ func TestReshardStopFlags(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     env.keyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.expectValidation()
 	env.expectNoRefStream()
@@ -327,12 +323,10 @@ func TestResharderOneRefStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     env.keyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.expectValidation()
 
@@ -408,12 +402,10 @@ func TestResharderNoRefStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     env.keyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.expectValidation()
 
@@ -629,12 +621,10 @@ func TestResharderUnnamedStream(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     env.keyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.expectValidation()
 
@@ -681,12 +671,10 @@ func TestResharderMismatchedRefStreams(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     env.keyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.expectValidation()
 
@@ -802,12 +790,10 @@ func TestResharderMixedTablesOrder1(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     env.keyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.expectValidation()
 
@@ -873,12 +859,10 @@ func TestResharderMixedTablesOrder2(t *testing.T) {
 			},
 		},
 	}
-	if err := env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.wr.ts.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     env.keyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.expectValidation()
 

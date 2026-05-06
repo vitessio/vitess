@@ -861,9 +861,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 
 	ctx := t.Context()
 	qr, err := env.Mysqld.FetchSuperQuery(ctx, "SELECT count(*) as cnt from t1, t2 where t1.id11 = t2.id21")
-	if err != nil {
-		t.Fatal("Query failed")
-	}
+	require.NoError(t, err, "Query failed")
 	require.Equal(t, "[[INT64(10)]]", fmt.Sprintf("%v", qr.Rows))
 
 	filter := &binlogdatapb.Filter{
@@ -1084,9 +1082,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		}, nil)
 	}()
 	wg.Wait()
-	if errGoroutine != nil {
-		t.Fatal(errGoroutine.Error())
-	}
+	require.NoError(t, errGoroutine)
 }
 
 // TestFilteredVarBinary confirms that adding a filter using a varbinary column results in the correct set of events.

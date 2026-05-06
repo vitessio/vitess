@@ -86,7 +86,7 @@ func TestBinlogDumpEngine_CloseWaitsForStreams(t *testing.T) {
 	// Close should be blocked because stream is still registered
 	select {
 	case <-closeDone:
-		t.Fatal("Close should block until streams are unregistered")
+		require.Fail(t, "Close should block until streams are unregistered")
 	default:
 	}
 
@@ -132,7 +132,7 @@ func TestBinlogDumpEngine_UnregisterCancelsContext(t *testing.T) {
 	// it before Unregister cancelled the context.
 	select {
 	case <-callbackFired:
-		t.Fatal("AfterFunc callback should not fire after stop() was called")
+		require.Fail(t, "AfterFunc callback should not fire after stop() was called")
 	default:
 	}
 }

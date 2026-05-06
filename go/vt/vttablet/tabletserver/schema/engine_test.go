@@ -860,7 +860,7 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 	case <-finished:
 		return
 	case <-time.After(2 * time.Second):
-		t.Fatal("Could not stop the ticks after 2 seconds")
+		require.Fail(t, "Could not stop the ticks after 2 seconds")
 	}
 }
 

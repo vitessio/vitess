@@ -59,33 +59,23 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	require.NoError(t, err)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.NoError(t, err)
-	if resultMap["VtgateVSchemaCounts"] == nil {
-		t.Error("Vschema count should be present in variables")
-	}
+	assert.NotNil(t, resultMap["VtgateVSchemaCounts"], "Vschema count should be present in variables")
 	vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
 	if _, present := vschemaCountMap["Reload"]; !present {
-		t.Error("Reload count should be present in vschemacount")
+		assert.Fail(t, "Reload count should be present in vschemacount")
 	} else if object := reflect.ValueOf(vschemaCountMap["Reload"]); object.NumField() <= 0 {
-		t.Error("Reload count should be greater than 0")
+		assert.Fail(t, "Reload count should be greater than 0")
 	}
-	if _, present := vschemaCountMap["WatchError"]; present {
-		t.Error("There should not be any WatchError in VschemaCount")
-	}
-	if _, present := vschemaCountMap["Parsing"]; present {
-		t.Error("There should not be any Parsing in VschemaCount")
-	}
+	_, watchErrorPresent := vschemaCountMap["WatchError"]
+	assert.False(t, watchErrorPresent, "There should not be any WatchError in VschemaCount")
+	_, parsingPresent := vschemaCountMap["Parsing"]
+	assert.False(t, parsingPresent, "There should not be any Parsing in VschemaCount")
 
-	if resultMap["HealthcheckConnections"] == nil {
-		t.Error("HealthcheckConnections count should be present in variables")
-	}
+	assert.NotNil(t, resultMap["HealthcheckConnections"], "HealthcheckConnections count should be present in variables")
 
 	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
-	if len(healthCheckConnection) <= 0 {
-		t.Error("Atleast one healthy tablet needs to be present")
-	}
-	if !isPrimaryTabletPresent(healthCheckConnection) {
-		t.Error("Atleast one PRIMARY tablet needs to be present")
-	}
+	assert.NotEmpty(t, healthCheckConnection, "Atleast one healthy tablet needs to be present")
+	assert.True(t, isPrimaryTabletPresent(healthCheckConnection), "Atleast one PRIMARY tablet needs to be present")
 }
 
 func getMapFromJSON(JSON map[string]any, key string) map[string]any {

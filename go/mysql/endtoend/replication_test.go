@@ -42,9 +42,7 @@ import (
 func connectForReplication(t *testing.T, rbr bool) (*mysql.Conn, mysql.BinlogFormat) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Switch server to RBR if needed.
 	if rbr {
@@ -136,14 +134,11 @@ func TestReplicationConnectionClosing(t *testing.T) {
 	// Connect and create a table.
 	ctx := t.Context()
 	dConn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer dConn.Close()
 	createTable := "create table replicationError(id int, name varchar(128), primary key(id))"
-	if _, err := dConn.ExecuteFetch(createTable, 0, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = dConn.ExecuteFetch(createTable, 0, false)
+	require.NoError(t, err)
 	result, err := dConn.ExecuteFetch("insert into replicationError(id, name) values(10, 'nice name')", 0, false)
 	require.NoError(t, err, "insert failed: %v", err)
 
@@ -172,14 +167,11 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 	// Create a table, insert some data in it.
 	ctx := t.Context()
 	dConn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer dConn.Close()
 	createTable := "create table replication(id int, name varchar(128), primary key(id))"
-	if _, err := dConn.ExecuteFetch(createTable, 0, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = dConn.ExecuteFetch(createTable, 0, false)
+	require.NoError(t, err)
 	result, err := dConn.ExecuteFetch("insert into replication(id, name) values(10, 'nice name')", 0, false)
 	require.NoError(t, err, "insert failed: %v", err)
 
@@ -320,9 +312,8 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 	}
 
 	// Drop the table, we're done.
-	if _, err := dConn.ExecuteFetch("drop table replication", 0, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = dConn.ExecuteFetch("drop table replication", 0, false)
+	require.NoError(t, err)
 }
 
 // TestRowReplicationTypes creates a table with all
@@ -875,21 +866,17 @@ func TestRowReplicationTypes(t *testing.T) {
 
 	ctx := t.Context()
 	dConn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer dConn.Close()
 	// We have tests for zero dates, so we need to allow that for this session.
-	if _, err := dConn.ExecuteFetch("SET @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 0, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = dConn.ExecuteFetch("SET @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 0, false)
+	require.NoError(t, err)
 
 	// Set the connection time zone for execution of the
 	// statements to PST. That way we're sure to test the
 	// conversion for the TIMESTAMP types.
-	if _, err := dConn.ExecuteFetch("SET time_zone = '+08:00'", 0, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = dConn.ExecuteFetch("SET time_zone = '+08:00'", 0, false)
+	require.NoError(t, err)
 
 	// Create the table with all fields.
 	createTable := "create table replicationtypes(id int"
@@ -899,9 +886,8 @@ func TestRowReplicationTypes(t *testing.T) {
 	}
 	createTable += createTableSb912.String()
 	createTable += ", primary key(id))"
-	if _, err := dConn.ExecuteFetch(createTable, 0, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = dConn.ExecuteFetch(createTable, 0, false)
+	require.NoError(t, err)
 
 	// Insert the value with all fields.
 	insert := "insert into replicationtypes set id=1"
@@ -1017,9 +1003,8 @@ func TestRowReplicationTypes(t *testing.T) {
 	}
 
 	// Drop the table, we're done.
-	if _, err := dConn.ExecuteFetch("drop table replicationtypes", 0, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = dConn.ExecuteFetch("drop table replicationtypes", 0, false)
+	require.NoError(t, err)
 }
 
 // valuesForTests is a helper method to return the sqltypes.Value

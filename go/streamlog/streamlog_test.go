@@ -52,9 +52,7 @@ func testLogf(w io.Writer, params url.Values, m any) error {
 
 func TestHTTP(t *testing.T) {
 	l, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	addr := l.Addr().String()
 
 	serveErrCh := make(chan error, 1)
@@ -75,9 +73,7 @@ func TestHTTP(t *testing.T) {
 
 	// Subscribe.
 	resp, err := http.Get(fmt.Sprintf("http://%s/log", addr))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()
@@ -91,17 +87,13 @@ func TestHTTP(t *testing.T) {
 		msg := fmt.Sprint("msg", i)
 		logger.Send(&logMessage{msg})
 		val, err := body.ReadString('\n')
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		if i == 0 && val == "val1\n" {
 			// the value that was sent has been in the
 			// channels and was actually processed after the
 			// subscription took effect. This is fine.
 			val, err = body.ReadString('\n')
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 		}
 		assert.Equalf(t, msg+"\n", val, "want %q, got %q", msg, val)
 	}

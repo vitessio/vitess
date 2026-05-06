@@ -198,7 +198,7 @@ func TestSchemaReload(t *testing.T) {
 			return
 		}
 	}
-	t.Error("schema did not reload")
+	assert.Fail(t, "schema did not reload")
 }
 
 func TestSidecarTables(t *testing.T) {
@@ -246,7 +246,7 @@ func TestConsolidation(t *testing.T) {
 		}
 		t.Logf("Consolidation didn't succeed with sleep for %v, trying a longer sleep", sleep)
 	}
-	t.Error("DebugVars for consolidation not incremented")
+	assert.Fail(t, "DebugVars for consolidation not incremented")
 }
 
 func TestBindInSelect(t *testing.T) {
@@ -348,12 +348,11 @@ func TestHealth(t *testing.T) {
 func TestStreamHealth(t *testing.T) {
 	var health *querypb.StreamHealthResponse
 	framework.Server.BroadcastHealth()
-	if err := framework.Server.StreamHealth(t.Context(), func(shr *querypb.StreamHealthResponse) error {
+	err := framework.Server.StreamHealth(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 		health = shr
 		return io.EOF
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
+	require.NoError(t, err)
 	if !proto.Equal(health.Target, framework.Target) {
 		assert.Failf(t, "unexpected Health target", "Health: %+v, want %+v", health.Target, framework.Target)
 	}
@@ -366,9 +365,8 @@ func TestQueryStats(t *testing.T) {
 	start := time.Now()
 	query := "select /* query_stats */ eid from vitess_a where eid = :eid"
 	bv := map[string]*querypb.BindVariable{"eid": sqltypes.Int64BindVariable(1)}
-	if _, err := client.Execute(query, bv); err != nil {
-		t.Fatal(err)
-	}
+	_, err := client.Execute(query, bv)
+	require.NoError(t, err)
 	stat := framework.QueryStats()[query]
 	duration := int(time.Since(start))
 	if stat.Time <= 0 || stat.Time > duration {
@@ -486,12 +484,9 @@ func TestQueryStats(t *testing.T) {
 
 	// Ensure BeginExecute also updates the stats and strips comments.
 	query = "select /* begin_execute */ 1 /* trailing comment */"
-	if _, err := client.BeginExecute(query, bv, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := client.Rollback(); err != nil {
-		t.Fatal(err)
-	}
+	_, err = client.BeginExecute(query, bv, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
 	if _, ok := framework.QueryStats()[query]; ok {
 		assert.Failf(t, "query stats included trailing comments", "query stats included trailing comments for BeginExecute: %v", framework.QueryStats())
 	}
@@ -560,32 +555,23 @@ func (tl *testLogger) getLog(i int) string {
 
 func TestClientFoundRows(t *testing.T) {
 	client := framework.NewClient()
-	if _, err := client.Execute("insert into vitess_test(intval, charval) values(124, 'aa')", nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := client.Execute("insert into vitess_test(intval, charval) values(124, 'aa')", nil)
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_test where intval= 124", nil)
 
 	// CLIENT_FOUND_ROWS flag is off.
-	if err := client.Begin(false); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, client.Begin(false))
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(qr.Rows))
-	if err := client.Rollback(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, client.Rollback())
 
 	// CLIENT_FOUND_ROWS flag is on.
-	if err := client.Begin(true); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, client.Begin(true))
 	qr, err = client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, qr.RowsAffected)
-	if err := client.Rollback(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, client.Rollback())
 }
 
 func TestLastInsertId(t *testing.T) {
@@ -628,9 +614,8 @@ func TestAppDebugRequest(t *testing.T) {
 
 	// Insert with normal user works
 
-	if _, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+	require.NoError(t, err)
 
 	defer client.Execute("delete from vitess_test where intval= 124", nil)
 
@@ -646,7 +631,7 @@ func TestAppDebugRequest(t *testing.T) {
 
 	// Start a transaction. This test the other flow that a client can use to insert a value.
 	client.Begin(false)
-	_, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+	_, err = client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
 
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		assert.Failf(t, "unexpected error", "Error: %v, want prefix %s", err, want)

@@ -266,18 +266,14 @@ func TestStreamRowsUnicode(t *testing.T) {
 	defer engine.Close()
 	// We need a latin1 connection.
 	conn, err := env.Mysqld.GetDbaConnection(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
-	if _, err := conn.ExecuteFetch("set names latin1", 10000, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = conn.ExecuteFetch("set names latin1", 10000, false)
+	require.NoError(t, err)
 	// This will get "Mojibaked" into the utf8 column.
-	if _, err := conn.ExecuteFetch("insert into t1 values(1, '👍')", 10000, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = conn.ExecuteFetch("insert into t1 values(1, '👍')", 10000, false)
+	require.NoError(t, err)
 
 	err = engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// Skip fields.
@@ -298,9 +294,7 @@ func TestStreamRowsKeyRange(t *testing.T) {
 		t.Skip()
 	}
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -357,9 +351,7 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	engine.rowStreamerNumPackets.Reset()
 	engine.rowStreamerNumRows.Reset()
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -389,9 +381,7 @@ func TestStreamRowsFilterBetween(t *testing.T) {
 	engine.rowStreamerNumPackets.Reset()
 	engine.rowStreamerNumRows.Reset()
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -436,9 +426,7 @@ func TestStreamRowsFilterIn(t *testing.T) {
 	engine.rowStreamerNumPackets.Reset()
 	engine.rowStreamerNumRows.Reset()
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -466,9 +454,7 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 		t.Skip()
 	}
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -670,9 +656,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}
 
 	// Verify we received data
-	if !dataReceived {
-		t.Error("expected to receive data rows")
-	}
+	assert.True(t, dataReceived, "expected to receive data rows")
 
 	// This is the critical test: we should receive multiple heartbeats
 	// Without the fix (missing for loop), we would only get 1 heartbeat
@@ -738,7 +722,7 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 		}
 	}()
 	for err := range ch {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 }
 

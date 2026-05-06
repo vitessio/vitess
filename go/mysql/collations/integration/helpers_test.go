@@ -148,9 +148,7 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 func GoldenWeightString(t *testing.T, conn *mysql.Conn, collation string, input []byte) []byte {
 	coll := remote.NewCollation(conn, collation)
 	weightString := coll.WeightString(nil, input, 0)
-	if weightString == nil {
-		t.Fatal(coll.LastError())
-	}
+	require.NotNil(t, weightString, coll.LastError())
 	return weightString
 }
 

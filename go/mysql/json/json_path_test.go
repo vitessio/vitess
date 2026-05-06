@@ -112,18 +112,14 @@ func TestJSONExtract(t *testing.T) {
 func json(t *testing.T, raw string) *Value {
 	var p Parser
 	v, err := p.Parse(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return v
 }
 
 func path(t *testing.T, raw string) *Path {
 	var p PathParser
 	v, err := p.ParseBytes([]byte(raw))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return v
 }
 
@@ -218,9 +214,7 @@ func TestTransformations(t *testing.T) {
 		}
 
 		err := ApplyTransform(tc.T, doc, paths, values)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		result := string(doc.MarshalTo(nil))
 		assert.Equalf(t, tc.Expected, result, "bad transformation (%v)\nwant: %s\ngot:  %s", tc.T, tc.Expected, result)

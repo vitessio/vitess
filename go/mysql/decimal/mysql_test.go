@@ -186,9 +186,7 @@ func TestLargestForm(t *testing.T) {
 
 func testfile(t *testing.T, name string, out any) {
 	tf, err := os.Open(path.Join("testdata", name))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer tf.Close()
 	if err := json.NewDecoder(tf).Decode(out); err != nil {
 		require.NoError(t, err)
@@ -232,9 +230,7 @@ func TestVeryLargeDecimals(t *testing.T) {
 		for j := range 66 {
 			decimal := append(integral, bytes.Repeat([]byte{'9'}, j)...)
 			_, err := NewFromMySQL(decimal)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 		}
 	}
 }

@@ -99,7 +99,7 @@ func TestSnakeCaseConcurrent(t *testing.T) {
 	close(errChan)
 
 	for err := range errChan {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 }
 

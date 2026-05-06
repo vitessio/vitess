@@ -33,15 +33,11 @@ import (
 func TestConsistentLookup(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	// Simple insert.
@@ -170,15 +166,11 @@ func TestConsistentLookup(t *testing.T) {
 func TestConsistentLookupMultiInsert(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	exec(t, conn, "begin")
@@ -227,15 +219,11 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 func TestLookupMultiInsertIgnore(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	// DB should start out clean
@@ -267,15 +255,11 @@ func TestLookupMultiInsertIgnore(t *testing.T) {
 func TestConsistentLookupMultiInsertIgnore(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	// DB should start out clean
@@ -307,8 +291,6 @@ func TestConsistentLookupMultiInsertIgnore(t *testing.T) {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return qr
 }

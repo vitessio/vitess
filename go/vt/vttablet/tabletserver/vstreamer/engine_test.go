@@ -100,9 +100,7 @@ func TestUpdateVSchema(t *testing.T) {
 
 	startCount := expectUpdateCount(t, 1)
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	expectUpdateCount(t, startCount+1)
 
 	want := `{
@@ -147,9 +145,7 @@ func TestUpdateVSchema(t *testing.T) {
   "keyspace_routing_rules": null
 }`
 	b, err := json.MarshalIndent(engine.vschema(), "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := string(b)
 	require.Equal(t, want, got)
 }

@@ -293,8 +293,7 @@ func TestGetTableName(t *testing.T) {
 	parser := NewTestParser()
 	for _, tc := range testcases {
 		tree, err := parser.Parse(tc.in)
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			continue
 		}
 		out := GetTableName(tree.(*Select).From[0].(*AliasedTableExpr).Expr)

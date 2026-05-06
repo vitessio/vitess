@@ -1827,9 +1827,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	err := got.Keyspaces["ksa"].Error
 	err1 := got.Keyspaces["ksb"].Error
 	require.NoError(t, err)
-	if err1 != nil {
-		t.Error(err1)
-	}
+	assert.NoError(t, err1)
 	ksa := &Keyspace{
 		Name:    "ksa",
 		Sharded: true,
@@ -2395,9 +2393,7 @@ func TestSequence(t *testing.T) {
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
 	err1 := got.Keyspaces["unsharded"].Error
-	if err1 != nil {
-		t.Error(err1)
-	}
+	assert.NoError(t, err1)
 	ksu := &Keyspace{
 		Name: "unsharded",
 	}
@@ -2794,24 +2790,18 @@ func TestFindTableOrVindex(t *testing.T) {
 	assert.EqualErrorf(t, err, wantErr, "FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 
 	got, _, err := vschema.FindTableOrVindex("", "ta", topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	assert.Equalf(t, ta, got, "FindTableOrVindex(\"t1a\"): %+v, want %+v", got, ta)
 
 	_, vindex, err := vschema.FindTableOrVindex("", "stfu1", topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantVindex := &stFU{
 		name: "stfu1",
 	}
 	assert.Equalf(t, wantVindex, vindex, "FindTableOrVindex(\"stfu1\"): %+v, want %+v", vindex, wantVindex)
 
 	_, vindex, err = vschema.FindTableOrVindex("ksc", "ta", topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantVindex = &stFU{
 		name: "ta",
 	}
@@ -2822,30 +2812,22 @@ func TestFindTableOrVindex(t *testing.T) {
 	assert.EqualErrorf(t, err, wantErr, "FindTableOrVindex(\"\"): %v, want %s", err, wantErr)
 
 	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := ta
 	assert.Equalf(t, want, got, "FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 
 	got, _, err = vschema.FindTableOrVindex("", "unqualified", topodatapb.TabletType_REPLICA)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = t1
 	assert.Equalf(t, want, got, "FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 
 	got, _, err = vschema.FindTableOrVindex("newks", "qualified", topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = ta
 	assert.Equalf(t, want, got, "FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 
 	got, _, err = vschema.FindTableOrVindex("newks", "qualified", topodatapb.TabletType_REPLICA)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = t1
 	assert.Equalf(t, want, got, "FindTableOrVindex(unqualified): %+v, want %+v", got, want)
 
@@ -2960,9 +2942,7 @@ func TestVSchemaPBJSON(t *testing.T) {
 	}
 `
 	var got vschemapb.Keyspace
-	if err := json2.UnmarshalPB([]byte(in), &got); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, json2.UnmarshalPB([]byte(in), &got))
 	want := vschemapb.Keyspace{
 		Sharded:        true,
 		ForeignKeyMode: vschemapb.Keyspace_unmanaged,
@@ -3059,9 +3039,7 @@ func TestVSchemaJSON(t *testing.T) {
 		},
 	}
 	out, err := json.MarshalIndent(in, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := string(out)
 	want := `{
   "sharded": {

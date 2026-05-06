@@ -49,9 +49,7 @@ func columnSize(cs collations.ID, size uint32) uint32 {
 func TestQueries(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Try a simple error case.
 	_, err = conn.ExecuteFetch("select * from aa", 1000, true)
@@ -136,9 +134,7 @@ func TestQueries(t *testing.T) {
 func TestLargeQueries(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	randString := func(n int) string {

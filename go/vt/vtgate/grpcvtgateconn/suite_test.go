@@ -494,15 +494,13 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	stream, err := session.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var qr sqltypes.Result
 	for {
 		packet, err := stream.Recv()
 		if err != nil {
 			if err != io.EOF {
-				t.Error(err)
+				assert.NoError(t, err)
 			}
 			break
 		}
@@ -522,9 +520,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	}
 
 	stream, err = session.StreamExecute(ctx, "none", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, err = stream.Recv()
 	want := "no match for: none"
 	assert.ErrorContainsf(t, err, want, "none request: %v, want %v", err, want)
@@ -542,7 +538,7 @@ func testStreamExecuteMulti(t *testing.T, session *vtgateconn.VTGateSession) {
 		packet, newRes, err := stream.Recv()
 		if err != nil {
 			if err != io.EOF {
-				t.Error(err)
+				assert.NoError(t, err)
 			}
 			break
 		}
@@ -620,9 +616,7 @@ func testStreamExecutePanic(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	stream, err := session.StreamExecute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	_, err = stream.Recv()
 	require.Error(t, err, "Received packets instead of panic?")
 	expectPanic(t, err)

@@ -224,9 +224,7 @@ func startCluster(t *testing.T) string {
 	clusterInstance = cluster.NewCluster(cell, "localhost")
 
 	err := clusterInstance.StartTopo()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	createKeyspace(t, legacyCustomer, []string{"0"})
 	createKeyspace(t, legacyProduct, []string{"0"})
@@ -286,9 +284,7 @@ func waitForVReplicationToCatchup(t *testing.T, vttablet *cluster.VttabletProces
 		waitDuration := 100 * time.Millisecond
 		for {
 			qr, err := vttablet.QueryTablet(query, "", false)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			if len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
 				break
 			}

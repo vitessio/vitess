@@ -132,11 +132,10 @@ func TestEngineGenerate(t *testing.T) {
 	defer engine.Close()
 	engine.schemaChanged(nil, []*schema.Table{meTableT1}, nil, nil, true)
 
-	if _, err := engine.GetGenerator("t1"); err != nil {
-		t.Error(err)
-	}
+	_, err := engine.GetGenerator("t1")
+	assert.NoError(t, err)
 	want := "message table t2 not found in schema"
-	_, err := engine.GetGenerator("t2")
+	_, err = engine.GetGenerator("t2")
 	assert.EqualErrorf(t, err, want, "engine.GenerateAckQuery(invalid): %v, want %s", err, want)
 }
 

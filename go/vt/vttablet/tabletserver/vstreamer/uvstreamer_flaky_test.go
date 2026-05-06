@@ -188,9 +188,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	defer func() { uvstreamerTestMode = false }()
 	initialize(t)
 
-	if err := engine.se.Reload(t.Context()); err != nil {
-		t.Fatal("Error reloading schema")
-	}
+	require.NoError(t, engine.se.Reload(t.Context()), "Error reloading schema")
 
 	var rules []*binlogdatapb.Rule
 	var tablePKs []*binlogdatapb.TableLastPK
@@ -282,7 +280,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 	select {
 	case <-time.After(5 * time.Second):
 		printAllEvents("Timed out")
-		t.Fatal("Timed out waiting for events")
+		require.Fail(t, "Timed out waiting for events")
 	case <-ctx.Done():
 		log.Info("Received context.Done, ending test")
 	}

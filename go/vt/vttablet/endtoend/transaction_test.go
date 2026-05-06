@@ -225,7 +225,7 @@ func TestPrepareRollback(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatal(err.Error())
+		require.FailNow(t, err.Error())
 	}
 	err = client.RollbackPrepared("aa", 0)
 	require.NoError(t, err)
@@ -247,7 +247,7 @@ func TestPrepareCommit(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	err = client.CommitPrepared("aa")
 	require.NoError(t, err)
@@ -269,7 +269,7 @@ func TestPrepareReparentCommit(t *testing.T) {
 	err = client.Prepare("aa")
 	if err != nil {
 		client.RollbackPrepared("aa", 0)
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	// Rollback all transactions
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
@@ -604,7 +604,7 @@ func (ac *AsyncChecker) shouldNotify(timeout time.Duration, message string) {
 		// notified, all is well
 	case <-time.After(timeout):
 		// timed out waiting for notification
-		ac.t.Error(message)
+		assert.Fail(ac.t, message)
 	}
 }
 
@@ -612,7 +612,7 @@ func (ac *AsyncChecker) shouldNotNotify(timeout time.Duration, message string) {
 	select {
 	case <-ac.ch:
 		// notified - not expected
-		ac.t.Error(message)
+		assert.Fail(ac.t, message)
 	case <-time.After(timeout):
 		// timed out waiting for notification, which is expected
 	}

@@ -118,9 +118,7 @@ func TestControllerKeyRange(t *testing.T) {
 
 	defer setTabletTypesStr("replica")()
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
 		ct.Stop(true)
@@ -181,9 +179,7 @@ func TestControllerTables(t *testing.T) {
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 	defer setTabletTypesStr("replica")()
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
 		ct.Stop(true)
@@ -211,9 +207,7 @@ func TestControllerStopped(t *testing.T) {
 	}
 
 	ct, err := newController(t.Context(), params, nil, nil, nil, "", nil, nil, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer ct.Stop(true)
 
 	select {
@@ -253,9 +247,7 @@ func TestControllerOverrides(t *testing.T) {
 
 	defer setTabletTypesStr("rdonly")()
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
 		ct.Stop(true)
@@ -281,9 +273,7 @@ func TestControllerCanceledContext(t *testing.T) {
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, nil, nil, nil, "", nil)
 
 	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer ct.Stop(true)
 
 	select {
@@ -329,9 +319,7 @@ func TestControllerRetry(t *testing.T) {
 
 	defer setTabletTypesStr("rdonly")()
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer ct.Stop(true)
 
 	dbClient.Wait()
@@ -392,9 +380,7 @@ func TestControllerStopPosition(t *testing.T) {
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='context canceled' where id=1", testDMLResponse, nil)
 		ct.Stop(true)

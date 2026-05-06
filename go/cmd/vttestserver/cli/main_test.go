@@ -437,7 +437,7 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
 		var keyspace vschemapb.Keyspace
 		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
-			t.Error(err)
+			assert.NoError(t, err)
 		}
 
 		columnVindex := keyspace.Tables[expected.table].ColumnVindexes[0]

@@ -1423,7 +1423,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 	assert.EqualErrorf(t, err, wantErr, "create duplicate vindex: %v, want %s", err, wantErr)
 	select {
 	case <-vschemaUpdates:
-		t.Error("vschema should not be updated on error")
+		assert.Fail(t, "vschema should not be updated on error")
 	default:
 	}
 

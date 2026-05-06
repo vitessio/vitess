@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
@@ -46,15 +47,11 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 	stopStreams := func() {
@@ -170,9 +167,8 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	tme.expectCreateReverseVReplication()
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false); err != nil {
-		t.Fatal(err)
-	}
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
+	require.NoError(t, err)
 
 	checkServedTypes(t, tme.ts, "ks:-40", 0)
 	checkServedTypes(t, tme.ts, "ks:40-", 0)
@@ -186,9 +182,8 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	tme.expectDeleteReverseVReplication()
 	tme.expectDeleteTargetVReplication()
-	if _, err := tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", workflow.DropTable, false, false, false, false)
+	require.NoError(t, err)
 	verifyQueries(t, tme.allDBClients)
 }
 
@@ -200,14 +195,10 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -346,9 +337,8 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
 
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false); err != nil {
-		t.Fatal(err)
-	}
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
+	require.NoError(t, err)
 
 	checkServedTypes(t, tme.ts, "ks:-40", 0)
 	checkServedTypes(t, tme.ts, "ks:40-", 0)
@@ -371,14 +361,10 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -481,9 +467,8 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
 
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false); err != nil {
-		t.Fatal(err)
-	}
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
+	require.NoError(t, err)
 
 	checkServedTypes(t, tme.ts, "ks:0", 0)
 	checkServedTypes(t, tme.ts, "ks:-80", 3)
@@ -505,14 +490,10 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -619,9 +600,8 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
 
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false); err != nil {
-		t.Fatal(err)
-	}
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
+	require.NoError(t, err)
 
 	checkServedTypes(t, tme.ts, "ks:-80", 0)
 	checkServedTypes(t, tme.ts, "ks:80-", 0)
@@ -642,14 +622,10 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -811,9 +787,8 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectFrozenTargetVReplication()
 
-	if _, _, err := tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false); err != nil {
-		t.Fatal(err)
-	}
+	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, false)
+	require.NoError(t, err)
 
 	checkServedTypes(t, tme.ts, "ks:-40", 0)
 	checkServedTypes(t, tme.ts, "ks:40-", 0)
@@ -836,14 +811,10 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -956,14 +927,10 @@ func TestStreamMigrateCancel(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -1061,14 +1028,10 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -1118,14 +1081,10 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -1171,9 +1130,7 @@ func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
 	tme.expectCancelStreamMigrations()
 
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false, false, false, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	verifyQueries(t, tme.allDBClients)
 }
 
@@ -1185,14 +1142,10 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -1246,14 +1199,10 @@ func TestStreamMigrateEmptyWorkflow(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -1306,14 +1255,10 @@ func TestStreamMigrateDupWorkflow(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 
@@ -1367,14 +1312,10 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	// Migrate reads
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", rdOnly, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	tme.expectNoPreviousJournals()
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", replica, nil, workflow.DirectionForward, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	tme.expectCheckJournals()
 

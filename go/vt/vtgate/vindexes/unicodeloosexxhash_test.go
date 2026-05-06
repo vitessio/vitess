@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -128,9 +129,7 @@ func TestUnicodeLooseXXHashMap(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got, err := charVindexXXHash.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
-		if err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
 		out := string(got[0].(key.DestinationKeyspaceID))
 		assert.Equalf(t, tcase.out, out, "Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 	}
@@ -140,9 +139,7 @@ func TestUnicodeLooseXXHashVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
 	ksids := [][]byte{[]byte("B\xd2\x13a\bzL\a"), []byte("B\xd2\x13a\bzL\a"), []byte(" \xaf\x87\xfc6\xe3\xfdQ")}
 	got, err := charVindexXXHash.Verify(t.Context(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := []bool{true, true, false}
 	assert.Equalf(t, want, got, "UnicodeLooseXXHash.Verify: %v, want %v", got, want)
 }

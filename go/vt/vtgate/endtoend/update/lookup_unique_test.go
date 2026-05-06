@@ -180,9 +180,7 @@ func TestMain(m *testing.M) {
 func TestUpdateUnownedLookupVindexValidValue(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 
 	utils.Exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")
@@ -201,9 +199,7 @@ func TestUpdateUnownedLookupVindexValidValue(t *testing.T) {
 func TestUpdateUnownedLookupVindexInvalidValue(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 
 	utils.Exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")
@@ -223,9 +219,7 @@ func TestUpdateUnownedLookupVindexInvalidValue(t *testing.T) {
 func TestUpdateUnownedLookupVindexToNull(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
 
 	utils.Exec(t, conn, "insert into t1(id, sharding_key) values(1,1), (2,1), (3,2), (4,2)")

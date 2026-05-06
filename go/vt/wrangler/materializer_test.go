@@ -342,18 +342,14 @@ func TestCreateLookupVindexFull(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.TargetKeyspace,
 		Keyspace: &vschemapb.Keyspace{},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	}))
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: sourceVSchema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -431,12 +427,10 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 			},
 		},
 	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	testcases := []struct {
 		description  string
@@ -847,18 +841,14 @@ func TestCreateLookupVindexSourceVSchema(t *testing.T) {
 				Schema: sourceSchema,
 			}},
 		}
-		if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+		require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 			Name:     ms.TargetKeyspace,
 			Keyspace: &vschemapb.Keyspace{},
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+		}))
+		require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 			Name:     ms.SourceKeyspace,
 			Keyspace: tcase.sourceVSchema,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}))
 
 		_, got, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 		require.NoError(t, err)
@@ -890,12 +880,10 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			},
 		},
 	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: sourcevs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	// withTable is a target vschema with a pre-existing table.
 	withTable := &vschemapb.Keyspace{
@@ -1090,12 +1078,10 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			}},
 		}
 		specs.Vindexes["v"].Params["table"] = fmt.Sprintf("%s.%s", ms.TargetKeyspace, tcase.targetTable)
-		if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+		require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 			Name:     ms.TargetKeyspace,
 			Keyspace: tcase.targetVSchema,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}))
 
 		_, _, got, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 		if tcase.err != "" {
@@ -1206,12 +1192,10 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	_, got, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 	require.NoError(t, err)
@@ -1317,12 +1301,10 @@ func TestCreateCustomizedVindex(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	_, got, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 	require.NoError(t, err)
@@ -1433,12 +1415,10 @@ func TestCreateLookupVindexIgnoreNulls(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	ms, ks, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 	require.NoError(t, err)
@@ -1512,12 +1492,10 @@ func TestStopAfterCopyFlag(t *testing.T) {
 			Schema: sourceSchema,
 		}},
 	}
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     ms.SourceKeyspace,
 		Keyspace: vschema,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	ms1, _, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 	require.NoError(t, err)
@@ -1570,18 +1548,14 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 		},
 	}
-	if err := topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "sourceks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	}))
+	require.NoError(t, topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: &vschemapb.Keyspace{},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	testcases := []struct {
 		description string
@@ -1899,12 +1873,10 @@ func TestExternalizeVindex(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		// Resave the source schema for every iteration.
-		if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+		require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 			Name:     ms.SourceKeyspace,
 			Keyspace: sourceVSchema,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		}))
 		if tcase.vrResponse != nil {
 			validationQuery := "select id, state, message, source from _vt.vreplication where workflow='lkp_vdx' and db_name='vt_targetks'"
 			env.tmc.expectVRQuery(200, validationQuery, tcase.vrResponse)
@@ -2064,12 +2036,10 @@ func TestMaterializerOneToMany(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -2124,12 +2094,10 @@ func TestMaterializerManyToMany(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -2188,12 +2156,10 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -2327,12 +2293,10 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -2390,12 +2354,10 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -2465,12 +2427,10 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 		Sharded: true,
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Materialize(ctx, ms)
@@ -2686,12 +2646,10 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -2730,12 +2688,10 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -2774,12 +2730,10 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 		},
 	}
 
-	if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+	require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 		Name:     "targetks",
 		Keyspace: vs,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	}))
 
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, mzSelectFrozenQuery, &sqltypes.Result{})
@@ -3210,19 +3164,15 @@ func TestMaterializerSourceShardSelection(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			env, ctx := newTestMaterializerEnv(t, ms, tcase.sourceShards, tcase.targetShards)
-			if err := env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			require.NoError(t, env.topoServ.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 				Name:     "targetks",
 				Keyspace: tcase.targetVSchema,
-			}); err != nil {
-				t.Fatal(err)
-			}
+			}))
 			if tcase.sourceVSchema != nil {
-				if err := env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
+				require.NoError(t, env.topoServ.SaveVSchema(t.Context(), &topo.KeyspaceVSchemaInfo{
 					Name:     "sourceks",
 					Keyspace: tcase.sourceVSchema,
-				}); err != nil {
-					t.Fatal(err)
-				}
+				}))
 			}
 
 			for i, targetShard := range tcase.targetShards {

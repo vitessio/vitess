@@ -6689,9 +6689,7 @@ func loadQueries(t testing.TB, filename string) (queries []string) {
 	var read io.Reader
 	if strings.HasSuffix(filename, ".gz") {
 		gzread, err := gzip.NewReader(file)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		defer gzread.Close()
 		read = gzread
 	} else {

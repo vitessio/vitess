@@ -89,9 +89,7 @@ func TestAddNumeric(t *testing.T) {
 	for _, tcase := range tcases {
 		got, err := addNumericWithError(tcase.v1, tcase.v2)
 		if err != nil {
-			if tcase.err == nil {
-				t.Fatal(err)
-			}
+			require.NotNil(t, tcase.err, err)
 			require.EqualErrorf(t, err, tcase.err.Error(), "bad error message: got %q want %q", err, tcase.err)
 			continue
 		}

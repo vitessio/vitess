@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -247,7 +248,8 @@ func TestSchemaVersioning(t *testing.T) {
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
-			t.Fatal("Context Done() in send")
+			assert.Fail(t, "Context Done() in send")
+			return nil
 		}
 		return nil
 	}
@@ -327,7 +329,8 @@ func TestSchemaVersioning(t *testing.T) {
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
-			t.Fatal("Context Done() in send")
+			assert.Fail(t, "Context Done() in send")
+			return nil
 		}
 		return nil
 	}

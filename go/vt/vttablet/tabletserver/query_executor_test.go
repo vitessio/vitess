@@ -975,9 +975,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	defer tsv.StopService()
 
 	plan, err := tsv.qe.GetMessageStreamPlan("msg")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	callerID := &querypb.VTGateCallerID{
 		Username: "u1",
@@ -995,9 +993,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	err = qre.MessageStream(func(qr *sqltypes.Result) error {
 		return io.EOF
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	callerID = &querypb.VTGateCallerID{
 		Username: "u2",
@@ -1100,9 +1096,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
 	_, err = qre.Execute()
-	if err == nil {
-		t.Fatal("got: nil, want: error")
-	}
+	require.Error(t, err, "got: nil, want: error")
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 }
 
@@ -1210,9 +1204,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
-	if err != nil {
-		t.Fatal("qre.Execute: nil, want: error")
-	}
+	require.NoError(t, err, "qre.Execute: nil, want: error")
 }
 
 func TestQueryExecutorTableAclDryRun(t *testing.T) {

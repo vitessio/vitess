@@ -191,7 +191,7 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 	assert.EqualErrorf(t, err, wantErr, "create duplicate vindex: %v, want %s", err, wantErr)
 	select {
 	case <-vschemaUpdates:
-		t.Error("vschema should not be updated on error")
+		assert.Fail(t, "vschema should not be updated on error")
 	default:
 	}
 }
@@ -250,7 +250,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 	assert.EqualErrorf(t, err, wantErr, "drop vindex still defined: %v, want %s", err, wantErr)
 	select {
 	case <-vschemaUpdates:
-		t.Error("vschema should not be updated on error")
+		assert.Fail(t, "vschema should not be updated on error")
 	default:
 	}
 }
@@ -345,15 +345,13 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 
 	// Should be able to add autoincrement to table in sharded keyspace
 	stmt = "alter vschema on test_table add vindex hash_index (id)"
-	if _, err = executorExecSession(ctx, executor, session, stmt, nil); err != nil {
-		t.Error(err)
-	}
+	_, err = executorExecSession(ctx, executor, session, stmt, nil)
+	assert.NoError(t, err)
 	time.Sleep(10 * time.Millisecond)
 
 	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
-	if _, err = executorExecSession(ctx, executor, session, stmt, nil); err != nil {
-		t.Error(err)
-	}
+	_, err = executorExecSession(ctx, executor, session, stmt, nil)
+	assert.NoError(t, err)
 	time.Sleep(10 * time.Millisecond)
 
 	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}

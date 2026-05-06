@@ -29,8 +29,7 @@ import (
 func TestNewParsedQuery(t *testing.T) {
 	parser := NewTestParser()
 	stmt, err := parser.Parse("select * from a where id =:id")
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	pq := NewParsedQuery(stmt)

@@ -76,9 +76,7 @@ VReplication state: Open</br>
 
 func TestStatusHtml(t *testing.T) {
 	pos, err := replication.DecodePosition("MariaDB/1-2-3")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	blpStats := binlogplayer.NewStats()
 	defer blpStats.Stop()

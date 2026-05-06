@@ -296,9 +296,7 @@ func TestJSONOutput(t *testing.T) {
     }
 }`
 	diff := cmp.Diff(wantJSON, string(actionsJSON))
-	if diff != "" {
-		t.Error(diff)
-	}
+	assert.Empty(t, diff)
 }
 
 func testShardInfo(ks, start, end string, primaryServing bool, t *testing.T) *topo.ShardInfo {

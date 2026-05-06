@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -61,7 +62,7 @@ func TestAddKeyspace(t *testing.T) {
 	cell := clusterInstance.Cell
 	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 0, false, cell); err != nil {
 		log.Error(fmt.Sprintf("failed to AddKeyspace %v: %v", *testKeyspace, err))
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	// Restart vtgate process
 	_ = clusterInstance.VtgateProcess.TearDown()
@@ -74,9 +75,7 @@ func TestAddKeyspace(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "insert into vt_user(id, name) values(1,'name1')")

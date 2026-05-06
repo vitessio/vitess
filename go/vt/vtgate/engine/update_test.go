@@ -536,9 +536,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	vc = newTestVCursor("-20", "20-")
 
 	_, err = upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
 		// ResolveDestinations is hard-coded to return -20.

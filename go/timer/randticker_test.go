@@ -41,7 +41,5 @@ func TestTick(t *testing.T) {
 	}
 	tkr.Stop()
 	_, ok := <-tkr.C
-	if ok {
-		t.Error("Channel was not closed")
-	}
+	assert.False(t, ok, "Channel was not closed")
 }

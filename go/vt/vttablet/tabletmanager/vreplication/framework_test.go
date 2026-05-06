@@ -248,9 +248,7 @@ func resetBinlogClient() {
 func primaryPosition(t *testing.T) string {
 	t.Helper()
 	pos, err := env.Mysqld.PrimaryPosition(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return replication.EncodePosition(pos)
 }
 
@@ -258,7 +256,7 @@ func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(t.Context(), queries); err != nil {
 		log.Error("Error executing query: " + err.Error())
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	for _, query := range queries {
 		updateMockSchemaForQuery(query)

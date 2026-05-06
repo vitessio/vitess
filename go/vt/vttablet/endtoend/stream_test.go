@@ -36,8 +36,7 @@ import (
 
 func TestStreamUnion(t *testing.T) {
 	qr, err := framework.NewClient().StreamExecute("select 1 from dual union select 1 from dual", nil)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	assert.Equal(t, 1, len(qr.Rows))
@@ -88,9 +87,7 @@ func TestStreamConsolidation(t *testing.T) {
 
 	client := framework.NewClient()
 	err := populateStressQuery(client, RowCount, RowContent)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_stress", nil)
 
 	defaultPoolSize := framework.Server.StreamPoolSize()
@@ -135,15 +132,13 @@ func TestStreamConsolidation(t *testing.T) {
 func TestStreamBigData(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	defer client.Execute("delete from vitess_big", nil)
 
 	qr, err := client.StreamExecute("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	row10 := framework.RowsToStrings(qr)[10]
@@ -180,8 +175,7 @@ func TestStreamBigDataInTx(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Release()
 	err := populateBigData(client)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	defer func() {
@@ -189,8 +183,7 @@ func TestStreamBigDataInTx(t *testing.T) {
 	}()
 
 	qr, err := client.StreamBeginExecuteWithOptions("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil, nil, nil)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	row10 := framework.RowsToStrings(qr)[10]
@@ -226,8 +219,7 @@ func TestStreamBigDataInTx(t *testing.T) {
 func TestStreamTerminate(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
-	if err != nil {
-		t.Error(err)
+	if !assert.NoError(t, err) {
 		return
 	}
 	defer client.Execute("delete from vitess_big", nil)

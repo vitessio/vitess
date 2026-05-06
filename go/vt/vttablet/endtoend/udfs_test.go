@@ -92,7 +92,7 @@ func validateHealthStreamSignal(t *testing.T, client *framework.QueryClient, ch 
 	select {
 	case <-ch:
 	case <-time.After(30 * time.Second):
-		t.Fatal("timed out waiting for udf create signal")
+		require.Fail(t, "timed out waiting for udf create signal")
 	}
 
 	// validate the row in _vt.udfs.
@@ -138,7 +138,7 @@ func validateRPC(t *testing.T, client *framework.QueryClient, cond func(udfs []*
 		time.Sleep(1 * time.Second)
 		select {
 		case <-timeout:
-			t.Fatal("timed out waiting for updated udf")
+			require.Fail(t, "timed out waiting for updated udf")
 		default:
 			schemaDef, udfs, err := client.GetSchema(querypb.SchemaTableType_UDFS, "")
 			require.NoError(t, err)

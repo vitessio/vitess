@@ -79,9 +79,7 @@ func loadExpectedWeights(t *testing.T, weights string) map[rune][]uint16 {
 	result := make(map[rune][]uint16, len(meta.Weights))
 	for key, w := range meta.Weights {
 		cp, err := strconv.ParseInt(key[2:], 16, 32)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		result[rune(cp)] = w
 	}
 	return result

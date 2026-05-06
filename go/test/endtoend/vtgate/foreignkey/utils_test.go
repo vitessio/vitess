@@ -153,11 +153,11 @@ func compareVitessAndMySQLResults(t *testing.T, vtRes sql.Result, mysqlRes sql.R
 		return
 	}
 	if vtRes == nil {
-		t.Error("Vitess result is 'nil' while MySQL's is not.")
+		assert.Fail(t, "Vitess result is 'nil' while MySQL's is not.")
 		return
 	}
 	if mysqlRes == nil {
-		t.Error("MySQL result is 'nil' while Vitess' is not.")
+		assert.Fail(t, "MySQL result is 'nil' while Vitess' is not.")
 		return
 	}
 	vtRa, err := vtRes.RowsAffected()
@@ -173,7 +173,7 @@ func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error) {
 		return
 	}
 	out := fmt.Sprintf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
-	t.Error(out)
+	assert.Fail(t, out)
 }
 
 // ensureDatabaseState ensures that the database is either empty or not.

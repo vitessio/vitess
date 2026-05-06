@@ -195,9 +195,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(ft.FakeMysqlDaemon.DB(), exporter),
 		Env:                 vtenv.NewTestEnv(),
 	}
-	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, ft.TM.Start(ft.Tablet, nil))
 	ft.Tablet = ft.TM.Tablet()
 
 	// Register the gRPC server, and starts listening.

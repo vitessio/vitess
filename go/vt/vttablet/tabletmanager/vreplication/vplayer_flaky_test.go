@@ -1246,9 +1246,8 @@ func TestPlayerKeyspaceID(t *testing.T) {
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	err := env.SetVSchema(shardedVSchema)
+	require.NoError(t, err)
 	defer env.SetVSchema("{}")
 
 	filter := &binlogdatapb.Filter{
@@ -1345,19 +1344,15 @@ func TestUnicode(t *testing.T) {
 
 	// We need a latin1 connection.
 	conn, err := env.Mysqld.GetDbaConnection(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
-	if _, err := conn.ExecuteFetch("set names latin1", 10000, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = conn.ExecuteFetch("set names latin1", 10000, false)
+	require.NoError(t, err)
 
 	for _, tcases := range testcases {
-		if _, err := conn.ExecuteFetch(tcases.input, 10000, false); err != nil {
-			t.Error(err)
-		}
+		_, err := conn.ExecuteFetch(tcases.input, 10000, false)
+		assert.NoError(t, err)
 		expectDBClientQueries(t, tcases.output)
 		if tcases.table != "" {
 			customExpectData(t, tcases.table, tcases.data, func(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -2071,9 +2066,8 @@ func TestPlayerDDL(t *testing.T) {
 	pos2 := primaryPosition(t)
 	log.Error(fmt.Sprintf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v", pos0, pos1, pos2b, pos2)) // For debugging only: to check what are the positions when test works and if/when it fails
 	// Restart vreplication
-	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
-		t.Fatal(err)
-	}
+	_, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id))
+	require.NoError(t, err)
 	// It should stop at the next DDL
 	expectDBClientQueries(t, qh.Expect(
 		"/update.*'Running'",
@@ -2221,9 +2215,7 @@ func TestPlayerStopPos(t *testing.T) {
 	startPos := primaryPosition(t)
 	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	id := int32(qr.InsertID)
 	for q := range globalDBQueries {
 		if strings.HasPrefix(q, "insert into _vt.vreplication") {
@@ -2237,9 +2229,8 @@ func TestPlayerStopPos(t *testing.T) {
 	})
 	stopPos := primaryPosition(t)
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"/update.*'Running'",
 		// Second update is from vreplicator.
@@ -2262,9 +2253,8 @@ func TestPlayerStopPos(t *testing.T) {
 		"insert into no values(4, 'aaa')",
 	})
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"/update.*'Running'",
 		// Second update is from vreplicator.
@@ -2280,9 +2270,8 @@ func TestPlayerStopPos(t *testing.T) {
 
 	// Test stopping when position is already reached.
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"/update.*'Running'",
 		// Second update is from vreplicator.
@@ -2350,9 +2339,7 @@ func TestPlayerStopAtOther(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	id := int32(qr.InsertID)
 	for q := range globalDBQueries {
 		if strings.HasPrefix(q, "insert into _vt.vreplication") {
@@ -2360,28 +2347,23 @@ func TestPlayerStopAtOther(t *testing.T) {
 		}
 	}
 	defer func() {
-		if _, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", id)); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", id))
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
 	vconn := &realDBClient{nolog: true}
-	if err := vconn.Connect(); err != nil {
-		t.Error(err)
-	}
+	err = vconn.Connect()
+	assert.NoError(t, err)
 	defer vconn.Close()
 
 	// Insert the same row on the target and lock it.
-	if _, err := vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
-		t.Error(err)
-	}
+	_, err = vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1)
+	assert.NoError(t, err)
+	_, err = vconn.ExecuteFetch("begin", 1)
+	assert.NoError(t, err)
+	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
+	assert.NoError(t, err)
 
 	// Start a VReplication where the first transaction updates the locked row.
 	// It will cause the apply to wait, which will cause the other two events
@@ -2395,9 +2377,8 @@ func TestPlayerStopAtOther(t *testing.T) {
 	})
 	stopPos := primaryPosition(t)
 	query = binlogplayer.StartVReplicationUntil(id, stopPos)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 
 	// Wait for the begin. The update will be blocked.
 	expectDBClientQueries(t, qh.Expect(
@@ -2573,18 +2554,15 @@ func TestPlayerLockErrors(t *testing.T) {
 	))
 
 	vconn := &realDBClient{nolog: true}
-	if err := vconn.Connect(); err != nil {
-		t.Error(err)
-	}
+	err := vconn.Connect()
+	assert.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the second row.
-	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=2", 1); err != nil {
-		t.Error(err)
-	}
+	_, err = vconn.ExecuteFetch("begin", 1)
+	assert.NoError(t, err)
+	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=2", 1)
+	assert.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2658,18 +2636,15 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	))
 
 	vconn := &realDBClient{nolog: true}
-	if err := vconn.Connect(); err != nil {
-		t.Error(err)
-	}
+	err := vconn.Connect()
+	assert.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
-	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
-		t.Error(err)
-	}
+	_, err = vconn.ExecuteFetch("begin", 1)
+	assert.NoError(t, err)
+	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
+	assert.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2692,7 +2667,7 @@ func TestPlayerCancelOnLock(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Error("cancel is hung")
+		assert.Fail(t, "cancel is hung")
 	}
 }
 
@@ -2733,18 +2708,15 @@ func TestPlayerTransactions(t *testing.T) {
 	))
 
 	vconn := &realDBClient{nolog: true}
-	if err := vconn.Connect(); err != nil {
-		t.Error(err)
-	}
+	err := vconn.Connect()
+	assert.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
-	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-		t.Error(err)
-	}
-	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
-		t.Error(err)
-	}
+	_, err = vconn.ExecuteFetch("begin", 1)
+	assert.NoError(t, err)
+	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
+	assert.NoError(t, err)
 
 	// create one transaction
 	execStatements(t, []string{
@@ -2838,18 +2810,15 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 			))
 
 			vconn := &realDBClient{nolog: true}
-			if err := vconn.Connect(); err != nil {
-				t.Error(err)
-			}
+			err := vconn.Connect()
+			assert.NoError(t, err)
 			defer vconn.Close()
 
 			// Start a transaction and lock the row.
-			if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
-				t.Error(err)
-			}
-			if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
-				t.Error(err)
-			}
+			_, err = vconn.ExecuteFetch("begin", 1)
+			assert.NoError(t, err)
+			_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
+			assert.NoError(t, err)
 
 			// create one transaction
 			execStatements(t, []string{
@@ -2977,9 +2946,7 @@ func TestTimestamp(t *testing.T) {
 	defer cancel()
 
 	qr, err := env.Mysqld.FetchSuperQuery(t.Context(), "select now()")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want := qr.Rows[0][0].ToString()
 	t.Logf("want: %s", want)
 

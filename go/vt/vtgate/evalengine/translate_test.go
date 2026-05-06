@@ -120,9 +120,7 @@ func TestTranslateSimplification(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			stmt, err := venv.Parser().Parse("select " + tc.expression)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			fields := FieldResolver([]*querypb.Field{
 				{Name: "json", Type: sqltypes.TypeJSON, Charset: collations.CollationUtf8mb4ID},

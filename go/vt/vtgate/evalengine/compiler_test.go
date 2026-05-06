@@ -814,9 +814,7 @@ func TestCompilerSingle(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			fields := evalengine.FieldResolver(makeFields(tc.values))
 			cfg := &evalengine.Config{
@@ -828,9 +826,7 @@ func TestCompilerSingle(t *testing.T) {
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, tz))
 			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 123456000, tz))
@@ -892,9 +888,7 @@ func TestBindVarLiteral(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			tc.bindType(expr)
 
@@ -908,9 +902,7 @@ func TestBindVarLiteral(t *testing.T) {
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			result := `VARCHAR("ÿ")`
 
@@ -1043,9 +1035,7 @@ func TestCompilerNonConstant(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			cfg := &evalengine.Config{
 				Collation:         collations.CollationUtf8mb4ID,
@@ -1054,9 +1044,7 @@ func TestCompilerNonConstant(t *testing.T) {
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			env := evalengine.EmptyExpressionEnv(venv)
 			var prev string

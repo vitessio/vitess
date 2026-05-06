@@ -111,13 +111,9 @@ func TestMySQLGolden(t *testing.T) {
 			}
 
 			infile, err := os.Open(gld)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
-			if err := json.NewDecoder(infile).Decode(&testcases); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, json.NewDecoder(infile).Decode(&testcases))
 
 			var ok int
 

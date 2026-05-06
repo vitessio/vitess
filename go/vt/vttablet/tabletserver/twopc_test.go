@@ -40,16 +40,12 @@ func TestReadAllRedo(t *testing.T) {
 	tpc := tsv.te.twoPC
 
 	conn, err := tsv.qe.conns.Get(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Recycle()
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
 	prepared, failed, err := tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var want []*tx.PreparedTx
 	assert.Equalf(t, want, prepared, "ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
 	assert.Emptyf(t, failed, "ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
@@ -71,9 +67,7 @@ func TestReadAllRedo(t *testing.T) {
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01"},
@@ -105,9 +99,7 @@ func TestReadAllRedo(t *testing.T) {
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
@@ -145,9 +137,7 @@ func TestReadAllRedo(t *testing.T) {
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
@@ -207,9 +197,7 @@ func TestReadAllRedo(t *testing.T) {
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
@@ -242,16 +230,12 @@ func TestReadAllTransactions(t *testing.T) {
 	tpc := tsv.te.twoPC
 
 	conn, err := tsv.qe.conns.Get(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Recycle()
 
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{})
 	distributed, err := tpc.ReadAllTransactions(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var want []*tx.DistributedTx
 	assert.Equalf(t, want, distributed, "ReadAllTransactions: %s, want %s", jsonStr(distributed), jsonStr(want))
 
@@ -272,9 +256,7 @@ func TestReadAllTransactions(t *testing.T) {
 		}},
 	})
 	distributed, err = tpc.ReadAllTransactions(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
@@ -309,9 +291,7 @@ func TestReadAllTransactions(t *testing.T) {
 		}},
 	})
 	distributed, err = tpc.ReadAllTransactions(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
@@ -355,9 +335,7 @@ func TestReadAllTransactions(t *testing.T) {
 		}},
 	})
 	distributed, err = tpc.ReadAllTransactions(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",

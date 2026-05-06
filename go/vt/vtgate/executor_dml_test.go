@@ -547,9 +547,7 @@ func TestUpdateMultiOwned(t *testing.T) {
 		TargetString: "@primary",
 	}
 	_, err := executorExec(ctx, executor, session, "update user set a=1, b=2, f=4, e=3 where id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id, a, b, c, d, e, f, a = 1 and b = 2, e = 3 and f = 4 from `user` where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},

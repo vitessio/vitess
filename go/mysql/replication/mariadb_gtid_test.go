@@ -556,10 +556,10 @@ func TestMariaGTIDSetUnionNewDomain(t *testing.T) {
 	case MariadbGTIDSet:
 		// Enforce order of want. Results should be sorted by domain.
 		if g[0] != want[0] || g[1] != want[1] || g[2] != want[2] || g[3] != want[3] {
-			t.Error("Set was not sorted by domain when returned.")
+			assert.Fail(t, "Set was not sorted by domain when returned.")
 		}
 	default:
-		t.Error("Union result was not of type MariadbGTIDSet.")
+		assert.Fail(t, "Union result was not of type MariadbGTIDSet.")
 	}
 }
 

@@ -57,8 +57,7 @@ func TestAndOrPrecedence(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		tree, err := parser.Parse(tcase.input)
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			continue
 		}
 		expr := readable(tree.(*Select).Where.Expr)
@@ -80,8 +79,7 @@ func TestPlusStarPrecedence(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		tree, err := parser.Parse(tcase.input)
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			continue
 		}
 		expr := readable(tree.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr)
@@ -106,8 +104,7 @@ func TestIsPrecedence(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		tree, err := parser.Parse(tcase.input)
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			continue
 		}
 		expr := readable(tree.(*Select).Where.Expr)

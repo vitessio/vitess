@@ -693,9 +693,7 @@ func TestSelectLike(t *testing.T) {
 	// adding one byte to the prefix just hit one shard
 	vc.shardForKsid = []string{"0c80-0d"}
 	result, err = sel.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyRange(0c92-0c93)`, &querypb.BindVariable{Type: querypb.Type_VARCHAR, Value: []byte("ab%")}),
 		`ExecuteMultiShard ks.0c80-0d: dummy_select {} false false`,

@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -347,17 +348,13 @@ func execStatement(t *testing.T, query string) {
 	t.Helper()
 	// Use context.Background() because this helper is called from t.Cleanup,
 	// where t.Context() has already been cancelled.
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.Mysqld.ExecuteSuperQuery(context.Background(), query))
 }
 
 func execStatements(t *testing.T, queries []string) {
 	// Use context.Background() because this helper is called from t.Cleanup,
 	// where t.Context() has already been cancelled.
-	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.Mysqld.ExecuteSuperQueryList(context.Background(), queries))
 }
 
 func primaryPosition(t *testing.T) string {
@@ -366,18 +363,12 @@ func primaryPosition(t *testing.T) string {
 	// the flavor to FilePos. If so, we have to obtain the position
 	// in that flavor format.
 	connParam, err := engine.env.Config().DB.DbaWithDB().MysqlParams()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	conn, err := mysql.Connect(t.Context(), connParam)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 	pos, err := conn.PrimaryPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return replication.EncodePosition(pos)
 }
 
@@ -385,9 +376,7 @@ func setVSchema(t *testing.T, vschema string) {
 	t.Helper()
 
 	curCount := engine.vschemaUpdates.Get()
-	if err := env.SetVSchema(vschema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(vschema))
 	// Wait for curCount to go up.
 	updated := false
 	for range 10 {
@@ -399,7 +388,7 @@ func setVSchema(t *testing.T, vschema string) {
 	}
 	if !updated {
 		log.Info("vschema did not get updated")
-		t.Error("vschema did not get updated")
+		assert.Fail(t, "vschema did not get updated")
 	}
 }
 

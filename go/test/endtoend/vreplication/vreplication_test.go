@@ -104,12 +104,10 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	defer vc.TearDown()
 	defaultCell := vc.Cells[cell]
 
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+	require.NoError(t, err)
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil)
+	require.NoError(t, err)
 	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
@@ -238,12 +236,10 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		parallelInsertWorkers,
 	}
 
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+	require.NoError(t, err)
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil)
+	require.NoError(t, err)
 	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
@@ -429,12 +425,10 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	// to deal with CI resource constraints.
 	// This also makes it easier to confirm the behavior as we know exactly
 	// what tablets will be involved.
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+	require.NoError(t, err)
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil)
+	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
 
 	sourceTab = vc.getPrimaryTablet(t, defaultSourceKs, shard)
@@ -813,7 +807,7 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 	case <-ch:
 		return
 	case <-time.After(5 * time.Second):
-		t.Fatal("nothing streamed within timeout")
+		require.Fail(t, "nothing streamed within timeout")
 	}
 }
 
@@ -821,9 +815,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	t.Run("shardCustomer", func(t *testing.T) {
 		workflow := "p2c"
 		ksWorkflow := fmt.Sprintf("%s.%s", defaultTargetKs, workflow)
-		if _, err := vc.AddKeyspace(t, cells, defaultTargetKs, "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, defaultTargetKsOpts); err != nil {
-			t.Fatal(err)
-		}
+		_, err := vc.AddKeyspace(t, cells, defaultTargetKs, "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, defaultTargetKsOpts)
+		require.NoError(t, err)
 		// Assume we are operating on first cell
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces[defaultTargetKs]
@@ -1097,9 +1090,7 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 
 		for shard := range strings.SplitSeq("-80,80-", ",") {
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
-			if err == nil {
-				t.Fatal("GetShard merchant:-80 failed")
-			}
+			require.Error(t, err, "GetShard merchant:-80 failed")
 			assert.Contains(t, output, "node doesn't exist", "GetShard succeeded for dropped shard merchant:"+shard)
 		}
 
@@ -1267,9 +1258,8 @@ func shardMerchant(t *testing.T) {
 		targetKs := merchantKeyspace
 		tables := "merchant"
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400, defaultTargetKsOpts); err != nil {
-			t.Fatal(err)
-		}
+		_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400, defaultTargetKsOpts)
+		require.NoError(t, err)
 		moveTablesAction(t, "Create", cell, workflow, defaultSourceKs, targetKs, tables)
 		merchantKs := vc.Cells[defaultCell.Name].Keyspaces[merchantKeyspace]
 		merchantTab1 := merchantKs.Shards["-80"].Tablets["zone1-400"].Vttablet

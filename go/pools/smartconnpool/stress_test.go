@@ -157,7 +157,5 @@ func TestStress(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 	stop.Store(true)
-	if err := wg.Wait(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, wg.Wait())
 }

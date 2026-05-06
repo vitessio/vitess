@@ -149,8 +149,7 @@ func TestNewFromFloatRandom(t *testing.T) {
 		}
 		in := (rand.Float64() - 0.5) * math.MaxFloat64 * 2
 		want, err := NewFromString(strconv.FormatFloat(in, 'f', -1, 64))
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			continue
 		}
 		got := NewFromFloat(in)
@@ -167,9 +166,7 @@ func TestNewFromFloatQuick(t *testing.T) {
 		got := NewFromFloat(f)
 		return got.Equal(want)
 	}, &quick.Config{})
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestNewFromString(t *testing.T) {
@@ -345,16 +342,12 @@ func TestCopy(t *testing.T) {
 	origin := New(1, 0)
 	cpy := origin.Copy()
 
-	if cpy.Cmp(origin) != 0 {
-		t.Error("expecting copy and origin to be equals, but they are not")
-	}
+	assert.Equal(t, 0, cpy.Cmp(origin), "expecting copy and origin to be equals, but they are not")
 
 	// change value
 	cpy = cpy.Add(New(1, 0))
 
-	if cpy.Cmp(origin) == 0 {
-		t.Error("expecting copy and origin to have different values, but they are equal")
-	}
+	assert.NotEqual(t, 0, cpy.Cmp(origin), "expecting copy and origin to have different values, but they are equal")
 }
 
 func TestDecimal_RoundAndStringFixed(t *testing.T) {
@@ -409,15 +402,11 @@ func TestDecimal_RoundAndStringFixed(t *testing.T) {
 
 	for _, test := range tests {
 		d, err := NewFromString(test.input)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		// test Round
 		expected, err := NewFromString(test.expected)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		got := d.Round(test.places)
 		assert.True(t, got.Equal(expected))
 
@@ -757,9 +746,7 @@ func TestDecimal_IsInteger(t *testing.T) {
 		{"-32768.0123423562623600000", false},
 	} {
 		d, err := NewFromString(testCase.Dec)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		assert.Equal(t, testCase.IsInteger, d.isInteger())
 	}
 }
