@@ -30,7 +30,7 @@ The deprecated `--watch-replication-stream` VTTablet flag has been removed.
 
 **Impact**: VTTablet will fail to start if `--watch-replication-stream` is still passed.
 
-See [#20048](https://github.com/vitessio/vitess/pull/20048) for details.
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19204](https://github.com/vitessio/vitess/pull/19204) for the original deprecation.
 
 #### <a id="vtorc-snapshot-topology-removed"/>Snapshot Topology feature removed</a>
 
@@ -40,7 +40,7 @@ VTOrc's Snapshot Topology feature, [deprecated in v24](../../24.0/24.0.0/summary
 
 **Impact**: VTOrc will fail to start if `--snapshot-topology-interval` is still passed.
 
-See [#20048](https://github.com/vitessio/vitess/pull/20048) for details.
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19070](https://github.com/vitessio/vitess/pull/19070) for the original deprecation.
 
 #### <a id="vtorc-cell-required"/>VTOrc `--cell` flag is now required</a>
 
@@ -50,7 +50,7 @@ The `--cell` VTOrc flag, [introduced in v24](../../24.0/24.0.0/summary.md#vtorc-
 
 **Impact**: VTOrc will fail to start with a `FAILED_PRECONDITION` error if `--cell` is empty.
 
-See [#20048](https://github.com/vitessio/vitess/pull/20048) for details.
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19047](https://github.com/vitessio/vitess/pull/19047) for the original `--cell` flag introduction.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
