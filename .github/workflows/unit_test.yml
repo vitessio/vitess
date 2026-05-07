@@ -108,6 +108,7 @@ jobs:
               - 'tools/**'
               - 'config/**'
               - 'bootstrap.sh'
+              - '.github/actions/setup-mysql/**'
               - '.github/workflows/unit_test.yml'
 
       - name: Set up Go

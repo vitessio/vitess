@@ -50,6 +50,7 @@ jobs:
         token: ''
         filters: |
           changed_files:
+            - '.github/actions/setup-mysql/**'
             - .github/workflows/codecov.yml
             - 'go/**'
             - go.mod

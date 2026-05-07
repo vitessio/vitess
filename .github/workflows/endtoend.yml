@@ -48,6 +48,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/actions/setup-mysql/**'
             - '.github/workflows/endtoend.yml'
 
     - name: Set up Go

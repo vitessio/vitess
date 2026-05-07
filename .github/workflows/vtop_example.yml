@@ -56,6 +56,7 @@ jobs:
               - 'bootstrap.sh'
               - 'examples/**'
               - 'test/**'
+              - '.github/actions/setup-mysql/**'
               - '.github/workflows/vtop_example.yml'
 
       - name: Set up Go

@@ -65,6 +65,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/actions/setup-mysql/**'
             - '.github/workflows/upgrade_downgrade_test_backups_e2e.yml'
 
     - name: Tune the OS

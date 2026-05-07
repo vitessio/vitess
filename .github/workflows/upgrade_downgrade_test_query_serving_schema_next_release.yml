@@ -70,6 +70,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/actions/setup-mysql/**'
             - '.github/workflows/upgrade_downgrade_test_query_serving_schema_next_release.yml'
 
     - name: Tune the OS

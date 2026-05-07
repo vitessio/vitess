@@ -69,6 +69,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/actions/setup-mysql/**'
             - '.github/workflows/upgrade_downgrade_test_reparent_old_vtctl.yml'
 
     - name: Tune the OS
