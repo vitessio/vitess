@@ -79,14 +79,18 @@ jobs:
         timeout-minutes: 10
         run: |
           source build.env
-          make build
+          make NOVTADMINBUILD=1 build
 
       - name: Run replication-stalled disk-full e2e
         if: steps.changes.outputs.relevant == 'true'
         timeout-minutes: 20
         run: |
           # The test mounts a loopback ext4 filesystem and runs mkfs.ext4 on
-          # it; both require root. VT_TEST_DISK_FULL=1 is the explicit
+          # it; those steps shell out to `sudo` internally. The test process
+          # itself must run as a non-root user — Vitess binaries (vtctld,
+          # vttablet, ...) refuse to start as root with "running this as
+          # root makes no sense". The runner user has passwordless sudo on
+          # ubuntu-24.04 by default. VT_TEST_DISK_FULL=1 is the explicit
           # opt-in checked by the test's TestMain (in addition to the
           # //go:build linux gate that already prevents it from compiling on
           # macOS).
@@ -95,8 +99,6 @@ jobs:
           source build.env
           set -exo pipefail
 
-          # build.env prepended $PWD/bin to PATH; preserve via sudo -E.
-          # VT_TEST_DISK_FULL=1 is the explicit opt-in checked by the test.
-          sudo -E env VT_TEST_DISK_FULL=1 PATH="$PATH" \
+          VT_TEST_DISK_FULL=1 \
             go test -timeout 15m -count=1 -v \
             ./go/test/endtoend/vtorc/replicationstalleddiskfull/...
