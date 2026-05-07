@@ -1066,6 +1066,25 @@
     }
   },
   {
+    "comment": "VALUES statement as derived table",
+    "query": "select * from (values row(1, 1), row(2, 2)) as sub",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select * from (values row(1, 1), row(2, 2)) as sub",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select column_0, column_1 from (select 1 as column_0, 1 as column_1 from dual where 1 != 1 union all select 2, 2 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select column_0, column_1 from (select 1 as column_0, 1 as column_1 from dual union all select 2, 2 from dual) as sub"
+      }
+    }
+  },
+  {
     "comment": "derived table that contains literals merged with outer query",
     "query": "select 1 from (select 1 as x) ue left join user u on u.id = ue.x",
     "plan": {
