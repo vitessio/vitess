@@ -210,7 +210,17 @@ func (dte *DTExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("ROLLBACK_PREPARED", time.Now())
+
+	// Keep track of whether the redo log deletion was committed. That way we only rollback the prepared
+	// transaction if the redo log was successfully deleted.
+	redoDeleted := false
+
 	defer func() {
+		// If the redo record was not deleted, do not roll back the prepared transaction.
+		if !redoDeleted {
+			return
+		}
+
 		if preparedConn := dte.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
 			dte.te.txPool.RollbackAndRelease(dte.ctx, preparedConn)
 		}
@@ -218,9 +228,16 @@ func (dte *DTExecutor) RollbackPrepared(dtid string, originalID int64) error {
 			dte.te.Rollback(dte.ctx, originalID)
 		}
 	}()
-	return dte.inTransaction(func(conn *StatefulConnection) error {
+
+	err := dte.inTransaction(func(conn *StatefulConnection) error {
 		return dte.te.twoPC.DeleteRedo(dte.ctx, conn, dtid)
 	})
+	if err != nil {
+		return err
+	}
+
+	redoDeleted = true
+	return nil
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
