@@ -62,7 +62,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	if !dte.te.IsTwoPCAllowed() {
-		return vterrors.VT10002("two-pc is enabled, but semi-sync is not")
+		return vterrors.VT10002("2pc is enabled, but not currently allowed")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("PREPARE", time.Now())
 	dte.logStats.TransactionID = transactionID
@@ -227,6 +227,9 @@ func (dte *DTExecutor) RollbackPrepared(dtid string, originalID int64) error {
 func (dte *DTExecutor) CreateTransaction(dtid string, participants []*querypb.Target) error {
 	if !dte.te.twopcEnabled {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
+	}
+	if !dte.te.IsTwoPCAllowed() {
+		return vterrors.VT10002("2pc is enabled, but not currently allowed")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("CREATE_TRANSACTION", time.Now())
 	return dte.inTransaction(func(conn *StatefulConnection) error {

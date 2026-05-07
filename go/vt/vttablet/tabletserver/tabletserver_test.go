@@ -2578,6 +2578,31 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	require.NoError(t, err)
 }
 
+func TestWaitForPreparedTwoPCTransactionsDoesNotDrainCoordinatorDtState(t *testing.T) {
+	ctx := t.Context()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	require.True(t, tsv.te.preparedPool.IsEmpty(),
+		"prepared pool should be empty for the coordinator role")
+
+	db.AddQueryPattern(
+		`select count\(\*\) from _vt\.dt_state where time_created.*`,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("count(*)", "int64"),
+			"1",
+		),
+	)
+
+	waitCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+	err := tsv.WaitForPreparedTwoPCTransactions(waitCtx)
+	require.Error(t, err,
+		"WaitForPreparedTwoPCTransactions must not declare success while _vt.dt_state still "+
+			"has coordinator entries; otherwise SwitchWrites can disable the source primary "+
+			"with in-flight 2PC where this shard is the MM, stranding participant redo logs")
+}
+
 func setupTabletServerTest(t testing.TB, ctx context.Context, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	cfg := tabletenv.NewDefaultConfig()
 	return setupTabletServerTestCustom(t, ctx, cfg, keyspaceName, vtenv.NewTestEnv())

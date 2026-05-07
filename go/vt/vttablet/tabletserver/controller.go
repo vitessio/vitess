@@ -117,7 +117,7 @@ type Controller interface {
 	// RollbackPrepared rolls back the prepared transaction and removes the transaction log.
 	RollbackPrepared(ctx context.Context, target *querypb.Target, dtid string, originalID int64) error
 
-	// WaitForPreparedTwoPCTransactions waits for all prepared transactions to be resolved.
+	// WaitForPreparedTwoPCTransactions waits for all unresolved 2PC transactions on this tablet to be resolved.
 	WaitForPreparedTwoPCTransactions(ctx context.Context) error
 
 	// SetDemotePrimaryStalled sets the demote primary stalled field to the provided value in the state manager.

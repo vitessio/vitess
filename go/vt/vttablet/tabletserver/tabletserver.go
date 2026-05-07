@@ -771,9 +771,23 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 	)
 }
 
-// WaitForPreparedTwoPCTransactions waits for all the prepared transactions to complete.
+// hasUnresolvedTwoPCTransactions returns true if this tablet has any
+// unresolved 2PC transaction.
+func (tsv *TabletServer) hasUnresolvedTwoPCTransactions(ctx context.Context) bool {
+	if !tsv.te.preparedPool.IsEmpty() {
+		return true
+	}
+	count, err := tsv.te.twoPC.CountUnresolvedTransaction(ctx, time.Now())
+	if err != nil {
+		log.Error(fmt.Sprintf("Error reading unresolved transactions: %v", err))
+		return true
+	}
+	return count > 0
+}
+
+// WaitForPreparedTwoPCTransactions waits for all unresolved 2PC transactions on this tablet to be resolved.
 func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) error {
-	if tsv.te.preparedPool.IsEmpty() {
+	if !tsv.hasUnresolvedTwoPCTransactions(ctx) {
 		return nil
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -784,7 +798,7 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 			// Return an error if we run out of time.
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Prepared transactions have not been resolved yet")
 		case <-ticker.C:
-			if tsv.te.preparedPool.IsEmpty() {
+			if !tsv.hasUnresolvedTwoPCTransactions(ctx) {
 				return nil
 			}
 		}
