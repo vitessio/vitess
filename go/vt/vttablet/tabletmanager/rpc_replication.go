@@ -718,6 +718,8 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		} else {
 			return nil, err
 		}
+	} else {
+		log.Info("enabled super_read_only")
 	}
 
 	defer func() {
@@ -730,8 +732,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			}
 		}
 	}()
-
-	log.Info("enabled super_read_only")
 
 	log.Info("checking primary-side semi-sync state")
 	// If we haven't disabled the primary side semi-sync so far, do it now.
