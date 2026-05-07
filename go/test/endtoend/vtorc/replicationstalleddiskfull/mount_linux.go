@@ -37,22 +37,27 @@ import (
 // and chown the mount point back to the calling user so mysqld can write
 // to it. The CI runner has passwordless `sudo` for ubuntu-24.04 by default.
 //
-// Sized deliberately tight so the test fills the disk fast in CI. Floor
-// comes from what the Vitess cnf creates on first init, with our
-// EXTRA_MY_CNF overrides applied:
+// Sized so the *first* InnoDB autoextend attempt fails. Only the InnoDB
+// filesystem lives here — relay log + binlog are on the regular disk, so
+// the floor is just InnoDB artifacts created at mysql --initialize:
 //
-//	mysql.ibd, sys schema, ibdata1                 ~50 MB
+//	mysql.ibd, sys schema                          ~35 MB
+//	ibdata1 (initial)                              ~12 MB
 //	undo_001 + undo_002                            ~32 MB
 //	innodb_redo_log_capacity (we override to 8 MB)   8 MB
-//	first binlog + relay log files (capped at 16M)  ~10 MB
-//	misc init artifacts, slow log, error log        ~10 MB
+//	doublewrite buffer + scratch                    ~8 MB
 //	──────────────────────────────────────────────
-//	floor:                                         ~110 MB
+//	floor:                                         ~95 MB
 //
-// 256 MB image → ~145 MB headroom → ~145 1-MB BLOB inserts to wedge,
-// roughly 15–25 s of insert traffic. If a future Vitess cnf change pushes
-// the floor higher and mysqld fails to start in CI, bump this to 320 MB.
-const loopbackImageSizeMB = 256
+// innodb_autoextend_increment defaults to 64 MB. When the SQL thread fills
+// the initial 12 MB ibdata1, InnoDB tries to grow it by 64 MB. With ~65 MB
+// of headroom in a 160 MB image the first autoextend attempt fails —
+// MY-012814 lands in performance_schema.error_log, and InnoDB silently
+// retries (the wedge state our analysis is designed to detect).
+//
+// Bump to 192 MB if mysql --initialize ever fails to fit on 160 MB after a
+// future Vitess cnf change.
+const loopbackImageSizeMB = 160
 
 type mount struct {
 	imagePath string

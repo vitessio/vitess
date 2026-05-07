@@ -185,22 +185,23 @@ func TestMain(m *testing.M) {
 }
 
 // replicaCnf is the EXTRA_MY_CNF fragment we point the replica's mysqld at.
-// EXTRA_MY_CNF is loaded after the generated cnf so these directives win:
-// data, redo log, tmpdir, binlog and relay log all land on the small mount,
-// which is what triggers MY-012814 / MY-012820 once the disk fills.
+// EXTRA_MY_CNF is loaded after the generated cnf so these directives win.
 //
-// socket / pid-file / log-error stay at their generated $VTDATAROOT/vt_<uid>/
-// paths — mysqlctl finds the socket where it expects, error log stays
-// readable after the mount is unwound.
+// CRITICAL: only the InnoDB filesystem moves to the small mount. The relay
+// log and binlog stay at their generated $VTDATAROOT/vt_<uid>/ paths on the
+// regular disk. The whole point of the analysis is to catch the case where
+// InnoDB's filesystem hits ENOSPC while the relay log filesystem still has
+// space — InnoDB silently retries inside ha_commit_trans (Slave_*_Running
+// stay Yes) while the relay log never fails. If both filesystems are on
+// the same mount, the IO thread's relay-log write fails first with
+// ER_REPLICA_RELAY_LOG_WRITE_FAILURE → Slave_IO_Running flips to No, which
+// is the OTHER (already-detected) scenario.
 //
-// Sizing knobs (the floor; bigger if a future cnf change lands):
+// Sizing knobs:
 //   - innodb_redo_log_capacity = 8 MB (vs 100 MB default; valid on 8.0.30+,
 //     ignored on older versions)
 //   - innodb_buffer_pool_size  = 32 MB (memory only; doesn't change disk)
-//   - max_binlog_size, max_relay_log_size = 16 MB (vs 1 GB default) — keeps
-//     individual log files small so the "filling" pressure builds up evenly
-//     rather than the first relay-log file growing toward 1 GB
-//   - performance_schema = ON (required for our query)
+//   - performance_schema = ON (required for our detection query)
 func replicaCnf(dataDir, tmpDir string) string {
 	return fmt.Sprintf(`
 [mysqld]
@@ -208,15 +209,10 @@ datadir                   = %[1]s
 innodb_data_home_dir      = %[1]s
 innodb_log_group_home_dir = %[1]s
 tmpdir                    = %[2]s
-relay-log                 = %[1]s/vt-relay-bin
-relay-log-index           = %[1]s/vt-relay-bin.index
-log-bin                   = %[1]s/vt-bin
 
 innodb_redo_log_capacity = 8388608
 innodb_buffer_pool_size  = 33554432
 innodb_log_buffer_size   = 1048576
-max_binlog_size          = 16777216
-max_relay_log_size       = 16777216
 performance_schema       = ON
 `, dataDir, tmpDir)
 }

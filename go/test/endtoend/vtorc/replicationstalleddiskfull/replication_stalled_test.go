@@ -19,12 +19,18 @@ limitations under the License.
 package replicationstalleddiskfull
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"path"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 )
@@ -32,9 +38,14 @@ import (
 // TestReplicationStalledDiskFull asserts VTOrc surfaces the new analysis
 // when a replica's IO/SQL threads are still "Yes" but InnoDB is parked on
 // ENOSPC. The replica's mysqld is launched against a 256 MB ext4 loopback
-// mount; we then push 1 MB BLOB inserts at the primary until the replica's
-// disk is exhausted and the InnoDB applier wedges. VTOrc should detect
-// `ReplicationStalledDiskFull` for the replica only.
+// mount that holds *only* the InnoDB filesystem (datadir, redo log, undo,
+// tmpdir) — relay log + binlog stay on the regular disk so the IO thread
+// keeps running while InnoDB's tablespace extends silently fail.
+//
+// The test runs inserts in a goroutine and polls performance_schema.error_log
+// for the disk-full InnoDB messages (MY-012814 / MY-012820). Once they
+// appear we assert SHOW REPLICA STATUS still reports both threads as Yes
+// (the wedge state) and then poll vtorc's analysis API for the new code.
 func TestReplicationStalledDiskFull(t *testing.T) {
 	require.NotNil(t, primaryTablet)
 	require.NotNil(t, replicaTablet)
@@ -44,36 +55,56 @@ func TestReplicationStalledDiskFull(t *testing.T) {
 	utils.CheckReplication(t, &utils.VTOrcClusterInfo{ClusterInstance: clusterInstance},
 		primaryTablet, []*cluster.Vttablet{replicaTablet}, 30*time.Second)
 
-	// Create the filler table and push large rows until the replica's
-	// filesystem is exhausted. Each row is ~1 MiB; with ~150 MB of headroom
-	// after MySQL initialisation, ~150 inserts is more than enough.
-	_, err := utils.RunSQL(t, "CREATE TABLE filler (id INT AUTO_INCREMENT PRIMARY KEY, blob_col MEDIUMBLOB) ENGINE=InnoDB", primaryTablet, "vt_"+keyspaceName)
+	_, err := utils.RunSQL(t, "CREATE TABLE filler (id INT AUTO_INCREMENT PRIMARY KEY, blob_col MEDIUMBLOB) ENGINE=InnoDB",
+		primaryTablet, "vt_"+keyspaceName)
 	require.NoError(t, err, "create filler table")
 
-	// Insert in a tight loop until replica's mount has < 5 MB free or 90s
-	// elapses (whichever comes first).
-	deadline := time.Now().Add(90 * time.Second)
-	const lowWaterBytes = uint64(5 * 1024 * 1024)
-	for time.Now().Before(deadline) {
-		_, err := utils.RunSQL(t, "INSERT INTO filler (blob_col) VALUES (REPEAT('x', 1048576))", primaryTablet, "vt_"+keyspaceName)
-		if err != nil {
-			// Primary's own disk is fine, but in the unlikely event of an
-			// error keep the test honest by surfacing it.
-			t.Logf("INSERT failed: %v", err)
-			break
-		}
-		free, ferr := diskMount.freeBytes()
-		require.NoError(t, ferr)
-		if free < lowWaterBytes {
-			t.Logf("replica mount nearly full: %d bytes free", free)
-			break
-		}
-	}
+	// Drive inserts continuously in a goroutine so InnoDB keeps pressure on
+	// the small mount even after the disk is "full". InnoDB doesn't fail
+	// fast — it retries — and we need sustained writes to provoke the
+	// MY-012814 / MY-012820 log entries our analysis keys on.
+	//
+	// runSQLNoFail is used here instead of utils.RunSQL because the latter
+	// calls require.Nil from inside, which is unsafe from a goroutine.
+	insertCtx, stopInserts := context.WithCancel(context.Background())
+	defer stopInserts()
 
-	// Confirm the replica is in the wedge state we're targeting: both
-	// threads still "Yes", and the error log shows the InnoDB disk-full
-	// codes from the issue.
-	requireReplicaWedged(t)
+	var inserts atomic.Int64
+	go func() {
+		for insertCtx.Err() == nil {
+			_ = runSQLNoFail(insertCtx, "INSERT INTO filler (blob_col) VALUES (REPEAT('x', 1048576))",
+				primaryTablet, "vt_"+keyspaceName)
+			inserts.Add(1)
+		}
+	}()
+
+	// Poll error_log for the InnoDB disk-full codes. Up to 120s — InnoDB's
+	// dirty-page flush cadence + buffer pool size mean we may need a fair
+	// bit of cumulative writes before ibdata1 actually fails to extend.
+	require.Eventually(t, func() bool {
+		errLog, err := utils.RunSQL(t, `SELECT COUNT(*) AS c FROM performance_schema.error_log
+			WHERE prio = 'Error' AND subsystem = 'InnoDB'
+			  AND error_code IN ('MY-012814', 'MY-012820')`,
+			replicaTablet, "")
+		if err != nil || len(errLog.Rows) == 0 {
+			return false
+		}
+		count, _ := errLog.Named().Row().ToInt64("c")
+		return count > 0
+	}, 120*time.Second, 1*time.Second,
+		"replica's performance_schema.error_log never recorded MY-012814/MY-012820 (inserts so far: %d)", inserts.Load())
+
+	t.Logf("InnoDB ENOSPC observed after %d primary inserts", inserts.Load())
+
+	// Confirm we hit case 2 (silent InnoDB retry, IO thread unaffected) and
+	// not case 1 (relay log filesystem fails, IO thread stops). With relay
+	// log on the regular disk this should always be case 2.
+	res, err := utils.RunSQL(t, "SHOW REPLICA STATUS", replicaTablet, "")
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Rows, "SHOW REPLICA STATUS returned no rows")
+	row := res.Named().Row()
+	require.Equal(t, "Yes", row.AsString("Replica_IO_Running", ""), "Replica_IO_Running should be Yes")
+	require.Equal(t, "Yes", row.AsString("Replica_SQL_Running", ""), "Replica_SQL_Running should be Yes")
 
 	// Poll vtorc's analysis API until it surfaces the new code for the
 	// replica. Allow up to 60s for two discovery cycles + the analysis pass.
@@ -83,9 +114,9 @@ func TestReplicationStalledDiskFull(t *testing.T) {
 			return !strings.Contains(response, "ReplicationStalledDiskFull")
 		})
 
-	// Self-healing check: drop the filler on the primary, free space on the
-	// replica's mount (the relay log shrinks once the applier catches up),
-	// and confirm the analysis clears.
+	// Self-healing check: stop inserts, drop the filler on the primary, and
+	// verify the analysis clears once InnoDB resumes commits.
+	stopInserts()
 	_, err = utils.RunSQL(t, "DROP TABLE filler", primaryTablet, "vt_"+keyspaceName)
 	require.NoError(t, err)
 
@@ -96,28 +127,25 @@ func TestReplicationStalledDiskFull(t *testing.T) {
 		})
 }
 
-// requireReplicaWedged asserts the replica is in the precise state our new
-// analysis is designed to detect: IO+SQL threads both running, no last error,
-// and InnoDB has logged a disk-full event.
-func requireReplicaWedged(t *testing.T) {
-	t.Helper()
-
-	// Both threads should still be running — that's the whole point.
-	res, err := utils.RunSQL(t, "SHOW REPLICA STATUS", replicaTablet, "")
-	require.NoError(t, err)
-	require.NotEmpty(t, res.Rows, "SHOW REPLICA STATUS returned no rows")
-
-	row := res.Named().Row()
-	require.Equal(t, "Yes", row.AsString("Replica_IO_Running", ""), "Replica_IO_Running should be Yes")
-	require.Equal(t, "Yes", row.AsString("Replica_SQL_Running", ""), "Replica_SQL_Running should be Yes")
-
-	// performance_schema.error_log should have at least one of the two
-	// InnoDB disk-full codes we look for.
-	errLog, err := utils.RunSQL(t, `SELECT COUNT(*) AS c FROM performance_schema.error_log
-		WHERE prio = 'Error' AND subsystem = 'InnoDB'
-		  AND error_code IN ('MY-012814', 'MY-012820')`, replicaTablet, "")
-	require.NoError(t, err)
-	require.NotEmpty(t, errLog.Rows)
-	count, _ := errLog.Named().Row().ToInt64("c")
-	require.Greater(t, count, int64(0), "expected at least one MY-012814/MY-012820 entry in error_log")
+// runSQLNoFail executes a query against a tablet's mysqld without using
+// require.Nil; safe to call from a goroutine. Errors are returned for the
+// caller to inspect; the insert loop above swallows them because we only
+// care that *some* inserts land, not that every one succeeds.
+func runSQLNoFail(ctx context.Context, sql string, tablet *cluster.Vttablet, db string) error {
+	params := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
+	}
+	if db != "" {
+		params.DbName = db
+	}
+	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(cctx, &params)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.ExecuteFetch(sql, 1000, false)
+	return err
 }
