@@ -2235,7 +2235,7 @@
     }
   },
   {
-    "comment": "EXISTS inside CASE WHEN in SELECT projection on a reference table (regression test for #19544 - the OR in the CASE condition should not cause the outer query to lose all rows)",
+    "comment": "EXISTS inside CASE WHEN in SELECT projection on a reference table - the surrounding OR context (here `... OR true`) must be preserved so the outer query is not rewritten to `WHERE 1 != 1` and the CASE-with-`OR true` returns one row per input row",
     "query": "select case when (exists (select 1 from dual where exists (select 1 from dual where false)) || true) then 1 else 1 end as c_2 from ref_with_source as ref_0",
     "plan": {
       "Type": "Local",
