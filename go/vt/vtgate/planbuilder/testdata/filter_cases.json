@@ -2235,6 +2235,29 @@
     }
   },
   {
+    "comment": "EXISTS inside CASE WHEN in SELECT projection on a reference table (regression test for #19544 - the OR in the CASE condition should not cause the outer query to lose all rows)",
+    "query": "select case when (exists (select 1 from dual where exists (select 1 from dual where false)) || true) then 1 else 1 end as c_2 from ref_with_source as ref_0",
+    "plan": {
+      "Type": "Local",
+      "QueryType": "SELECT",
+      "Original": "select case when (exists (select 1 from dual where exists (select 1 from dual where false)) || true) then 1 else 1 end as c_2 from ref_with_source as ref_0",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "None",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select case when exists (select 1 from dual where 1 != 1) or true then 1 else 1 end as c_2 from ref_with_source as ref_0 where 1 != 1",
+        "Query": "select case when exists (select 1 from dual where exists (select 1 from dual where 0)) or true then 1 else 1 end as c_2 from ref_with_source as ref_0"
+      },
+      "TablesUsed": [
+        "main.source_of_ref",
+        "user.ref_with_source"
+      ]
+    }
+  },
+  {
     "comment": "two uncorrelated EXISTS in OR predicate",
     "query": "select id from user where col = 1 or exists (select 1 from user_extra where col = 5) or exists (select 1 from user_extra where col = 6)",
     "plan": {

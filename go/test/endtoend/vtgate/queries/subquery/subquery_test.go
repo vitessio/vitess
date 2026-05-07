@@ -105,6 +105,14 @@ func TestSubqueriesExists(t *testing.T) {
 	mcmp.AssertMatches(
 		`SELECT id2 FROM t1 WHERE id1 = 0 OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR NOT EXISTS (SELECT 1 FROM t1 WHERE id1 = 1) ORDER BY id2`,
 		`[[INT64(1)]]`)
+
+	// Regression test for https://github.com/vitessio/vitess/issues/19544.
+	// EXISTS inside a CASE WHEN in the SELECT projection used to make the planner
+	// rewrite the outer query to `WHERE 1 != 1`, returning an empty set instead
+	// of the row-per-input the CASE-with-`OR true` should produce.
+	mcmp.AssertMatches(
+		`SELECT CASE WHEN (EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR true) THEN 1 ELSE 1 END FROM t1 ORDER BY id1`,
+		`[[INT64(1)] [INT64(1)] [INT64(1)] [INT64(1)] [INT64(1)] [INT64(1)]]`)
 }
 
 func TestQueryAndSubQWithLimit(t *testing.T) {
