@@ -22,12 +22,20 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"syscall"
 )
 
 // loopbackMount creates a small ext4 loopback filesystem and mounts it. It
-// returns the mount path. Caller must call cleanup(). Requires root.
+// returns the mount path. Caller must call cleanup().
+//
+// The test process itself must run as a non-root user — Vitess's `vtctld`
+// and other binaries refuse to start as root (`servenv.Init: running this
+// as root makes no sense`). We therefore drop privileges by running each
+// privileged step (`mkfs.ext4`, `mount`, `chown`, `umount`) under `sudo`,
+// and chown the mount point back to the calling user so mysqld can write
+// to it. The CI runner has passwordless `sudo` for ubuntu-24.04 by default.
 //
 // Sized deliberately tight so the test fills the disk fast in CI. Floor
 // comes from what the Vitess cnf creates on first init, with our
@@ -58,20 +66,27 @@ func newLoopbackMount(rootDir string) (*mount, error) {
 		return nil, fmt.Errorf("mkdir mount dir: %w", err)
 	}
 
+	// dd writes to a path the calling user can write to; no sudo needed.
 	if err := runCmd("dd", "if=/dev/zero", "of="+imagePath, "bs=1M",
 		fmt.Sprintf("count=%d", loopbackImageSizeMB), "status=none"); err != nil {
 		return nil, fmt.Errorf("dd: %w", err)
 	}
-	if err := runCmd("mkfs.ext4", "-F", "-q", imagePath); err != nil {
+	if err := runCmd("sudo", "mkfs.ext4", "-F", "-q", imagePath); err != nil {
 		return nil, fmt.Errorf("mkfs.ext4: %w", err)
 	}
-	if err := runCmd("mount", "-o", "loop", imagePath, mountDir); err != nil {
+	if err := runCmd("sudo", "mount", "-o", "loop", imagePath, mountDir); err != nil {
 		return nil, fmt.Errorf("mount: %w", err)
 	}
-	// MySQL needs to write here as the unprivileged tablet user; the test
-	// itself runs as root so just open it up.
-	if err := os.Chmod(mountDir, 0o777); err != nil {
-		return nil, fmt.Errorf("chmod: %w", err)
+
+	// After mount, the mount point is owned by root. Hand it back to the
+	// calling user so mysqld (running as the same user) can write to it.
+	u, err := user.Current()
+	if err != nil {
+		return nil, fmt.Errorf("user.Current: %w", err)
+	}
+	owner := u.Uid + ":" + u.Gid
+	if err := runCmd("sudo", "chown", "-R", owner, mountDir); err != nil {
+		return nil, fmt.Errorf("chown: %w", err)
 	}
 
 	return &mount{imagePath: imagePath, mountDir: mountDir}, nil
@@ -79,7 +94,7 @@ func newLoopbackMount(rootDir string) (*mount, error) {
 
 func (m *mount) cleanup() {
 	// Lazy unmount tolerates lingering mysqld file handles after the test.
-	_ = exec.Command("umount", "-l", m.mountDir).Run()
+	_ = exec.Command("sudo", "umount", "-l", m.mountDir).Run()
 	_ = os.Remove(m.imagePath)
 	_ = os.Remove(m.mountDir)
 }

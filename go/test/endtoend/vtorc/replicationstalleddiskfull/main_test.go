@@ -46,16 +46,20 @@ var (
 
 // shouldSkip returns a non-empty reason string when the e2e cannot run on the
 // current host. Linux is enforced via the build tag; this checks the runtime
-// preconditions: must be root (loopback mount + mkfs require it) and must be
-// explicitly opted-in via VT_TEST_DISK_FULL=1 (a belt-and-braces guard so a
-// developer who happens to be root on Linux doesn't trigger the test by
-// accident).
+// preconditions: must NOT be root (Vitess binaries refuse to start as root)
+// but must have passwordless sudo available (loopback mount + mkfs.ext4
+// require it). Also requires VT_TEST_DISK_FULL=1 — an explicit opt-in so a
+// developer who happens to have passwordless sudo on Linux doesn't trigger
+// the test by accident.
 func shouldSkip() string {
 	if os.Getenv("VT_TEST_DISK_FULL") != "1" {
 		return "set VT_TEST_DISK_FULL=1 to run; this test mounts a loopback filesystem"
 	}
-	if os.Geteuid() != 0 {
-		return "must run as root (loopback mount + mkfs.ext4)"
+	if os.Geteuid() == 0 {
+		return "must run as a non-root user; Vitess binaries refuse to start as root"
+	}
+	if err := exec.Command("sudo", "-n", "true").Run(); err != nil {
+		return "passwordless sudo required (loopback mount + mkfs.ext4)"
 	}
 	if _, err := exec.LookPath("mkfs.ext4"); err != nil {
 		return "mkfs.ext4 not found in PATH"
