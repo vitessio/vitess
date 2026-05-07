@@ -114,4 +114,5 @@ message FullStatus {
   bool disk_stalled = 23;
   bool semi_sync_blocked = 24;
   topodata.TabletType tablet_type = 25;
+  bool replication_stalled_disk_full = 26;
 }

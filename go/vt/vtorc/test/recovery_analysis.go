@@ -83,6 +83,7 @@ type InfoForRecoveryAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	ReadOnly                                  uint
 	IsStalledDisk                             uint
+	ReplicationStalledDiskFull                uint
 }
 
 func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
@@ -151,6 +152,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["current_tablet_type"] = sqlutils.CellData{String: strconv.Itoa(currentType), Valid: true}
 	rowMap["tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
 	rowMap["is_disk_stalled"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.IsStalledDisk), 10), Valid: true}
+	rowMap["replication_stalled_disk_full"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.ReplicationStalledDiskFull), 10), Valid: true}
 	return rowMap
 }
 

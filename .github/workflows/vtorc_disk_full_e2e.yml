@@ -1,0 +1,94 @@
+name: VTOrc Disk-Full E2E
+
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: "**"
+  pull_request:
+    branches: "**"
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'VTOrc Disk-Full E2E')
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  test:
+    name: VTOrc replication-stalled disk-full
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: "false"
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: changes
+        with:
+          token: ""
+          filters: |
+            relevant:
+              - 'go/**/*.go'
+              - 'config/**'
+              - 'proto/*.proto'
+              - 'test/config.json'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Makefile'
+              - 'build.env'
+              - 'bootstrap.sh'
+              - '.github/workflows/vtorc_disk_full_e2e.yml'
+
+      - name: Set up Go
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+
+      - name: Tune the OS
+        if: steps.changes.outputs.relevant == 'true'
+        timeout-minutes: 5
+        uses: ./.github/actions/tune-os
+
+      - name: Setup MySQL
+        if: steps.changes.outputs.relevant == 'true'
+        timeout-minutes: 8
+        uses: ./.github/actions/setup-mysql
+        with:
+          flavor: mysql-8.4
+
+      - name: Get dependencies
+        if: steps.changes.outputs.relevant == 'true'
+        timeout-minutes: 10
+        run: |
+          # e2fsprogs ships mkfs.ext4; mount/util-linux is preinstalled.
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6 e2fsprogs
+          sudo service etcd stop
+          go mod download
+
+      - name: Run replication-stalled disk-full e2e
+        if: steps.changes.outputs.relevant == 'true'
+        timeout-minutes: 20
+        run: |
+          # The test mounts a loopback ext4 filesystem and runs mkfs.ext4 on
+          # it; both require root. VT_TEST_DISK_FULL=1 is the explicit
+          # opt-in checked by the test's TestMain (in addition to the
+          # //go:build linux gate that already prevents it from compiling on
+          # macOS).
+          export VTDATAROOT="/tmp/vtdataroot_diskfull"
+          mkdir -p "$VTDATAROOT"
+          source build.env
+          set -exo pipefail
+
+          # Use sudo -E to preserve env vars; pass VT_TEST_DISK_FULL=1.
+          sudo -E env VT_TEST_DISK_FULL=1 PATH="$PATH" \
+            go test -timeout 15m -count=1 -v \
+            ./go/test/endtoend/vtorc/replicationstalleddiskfull/...

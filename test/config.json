@@ -2320,6 +2320,18 @@
         "memory-check"
       ]
     },
+    "vtorc_replication_stalled_disk_full": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtorc/replicationstalleddiskfull"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": true,
+      "Shard": "vtorc_disk_full",
+      "Tags": [],
+      "Needs": []
+    },
     "vault": {
       "File": "unused.go",
       "Packages": [

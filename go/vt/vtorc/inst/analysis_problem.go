@@ -358,6 +358,16 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    ReplicationStalledDiskFull,
+			Description: "Replication threads are running but the applier has made no progress (disk full)",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStalledDiskFull
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    NotConnectedToPrimary,
 			Description: "Not connected to the primary",
 			Priority:    detectionAnalysisPriorityMedium,

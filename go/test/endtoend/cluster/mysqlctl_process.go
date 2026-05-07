@@ -48,6 +48,10 @@ type MysqlctlProcess struct {
 	ExtraArgs       []string
 	InitMysql       bool
 	SecureTransport bool
+	// ExtraMyCnfPath, when set, is appended to EXTRA_MY_CNF on the per-process
+	// env so its directives are loaded after the generated cnf and override it.
+	// Only this mysqlctl invocation sees it; other tablets' env is untouched.
+	ExtraMyCnfPath string
 }
 
 // InitDb executes mysqlctl command to add cell info
@@ -109,6 +113,7 @@ func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
+	var extraCnfPaths []string
 	if mysqlctl.InitMysql {
 		if mysqlctl.SecureTransport {
 			// Set up EXTRA_MY_CNF for ssl
@@ -145,7 +150,7 @@ ssl_key={{.ServerKey}}
 				return nil, err
 			}
 
-			tmpProcess.Env = append(tmpProcess.Env, "EXTRA_MY_CNF="+extraMyCNF)
+			extraCnfPaths = append(extraCnfPaths, extraMyCNF)
 			tmpProcess.Env = append(tmpProcess.Env, "VTDATAROOT="+os.Getenv("VTDATAROOT"))
 		}
 
@@ -157,6 +162,12 @@ ssl_key={{.ServerKey}}
 		}
 	} else {
 		tmpProcess.Args = append(tmpProcess.Args, "start")
+	}
+	if mysqlctl.ExtraMyCnfPath != "" {
+		extraCnfPaths = append(extraCnfPaths, mysqlctl.ExtraMyCnfPath)
+	}
+	if len(extraCnfPaths) > 0 {
+		tmpProcess.Env = append(tmpProcess.Env, "EXTRA_MY_CNF="+strings.Join(extraCnfPaths, ":"))
 	}
 	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
 	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)

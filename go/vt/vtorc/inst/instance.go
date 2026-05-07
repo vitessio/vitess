@@ -90,12 +90,13 @@ type Instance struct {
 	SemiSyncReplicaStatus              bool
 	SemiSyncBlocked                    bool
 
-	LastSeenTimestamp    string
-	IsLastCheckValid     bool
-	IsUpToDate           bool
-	IsRecentlyChecked    bool
-	SecondsSinceLastSeen sql.NullInt64
-	StalledDisk          bool
+	LastSeenTimestamp          string
+	IsLastCheckValid           bool
+	IsUpToDate                 bool
+	IsRecentlyChecked          bool
+	SecondsSinceLastSeen       sql.NullInt64
+	StalledDisk                bool
+	ReplicationStalledDiskFull bool
 
 	AllowTLS bool
 

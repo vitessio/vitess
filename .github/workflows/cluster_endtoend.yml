@@ -46,7 +46,8 @@ jobs:
             "docker_cluster",
             "5",
             "28",
-            "onlineddl_flow"
+            "onlineddl_flow",
+            "vtorc_disk_full"
           ]'
 
           # Build matrix

@@ -222,6 +222,9 @@ type FakeMysqlDaemon struct {
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
 
+	// ReplicationStalledDiskFull is the value returned by IsReplicationStalledDiskFull.
+	ReplicationStalledDiskFull bool
+
 	// GlobalReadLock is used to test if a lock has been acquired already or not
 	GlobalReadLock bool
 
@@ -865,6 +868,11 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus(ctx context.Context) (bool
 // IsSemiSyncBlocked is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
 	return false, nil
+}
+
+// IsReplicationStalledDiskFull is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) IsReplicationStalledDiskFull(ctx context.Context) (bool, error) {
+	return fmd.ReplicationStalledDiskFull, nil
 }
 
 // GetVersionString is part of the MysqlDaemon interface.

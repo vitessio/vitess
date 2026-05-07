@@ -478,6 +478,13 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		}
 
 		tablet.MysqlctlProcess = *mysqlctlProcess
+		// Apply mysqlctl customizations before StartProcess so per-tablet
+		// settings (e.g. ExtraMyCnfPath) take effect on the spawned mysqld.
+		for _, customizer := range customizers {
+			if f, ok := customizer.(func(*MysqlctlProcess)); ok {
+				f(&tablet.MysqlctlProcess)
+			}
+		}
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
 			log.Error(fmt.Sprintf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err))
@@ -513,9 +520,12 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		shard.Vttablets = append(shard.Vttablets, tablet)
 		// Apply customizations
 		for _, customizer := range customizers {
-			if f, ok := customizer.(func(*VttabletProcess)); ok {
+			switch f := customizer.(type) {
+			case func(*VttabletProcess):
 				f(tablet.VttabletProcess)
-			} else {
+			case func(*MysqlctlProcess):
+				// Already applied above, before StartProcess.
+			default:
 				return nil, fmt.Errorf("type mismatch on customizer: %T", customizer)
 			}
 		}
@@ -599,6 +609,11 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 				return err
 			}
 			tablet.MysqlctlProcess = *mysqlctlProcess
+			for _, customizer := range customizers {
+				if f, ok := customizer.(func(*MysqlctlProcess)); ok {
+					f(&tablet.MysqlctlProcess)
+				}
+			}
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				log.Error(fmt.Sprintf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err))
@@ -628,9 +643,12 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 			shard.Vttablets = append(shard.Vttablets, tablet)
 			// Apply customizations
 			for _, customizer := range customizers {
-				if f, ok := customizer.(func(*VttabletProcess)); ok {
+				switch f := customizer.(type) {
+				case func(*VttabletProcess):
 					f(tablet.VttabletProcess)
-				} else {
+				case func(*MysqlctlProcess):
+					// Already applied above, before StartProcess.
+				default:
 					return fmt.Errorf("type mismatch on customizer: %T", customizer)
 				}
 			}

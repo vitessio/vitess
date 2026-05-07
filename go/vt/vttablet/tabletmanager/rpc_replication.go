@@ -167,6 +167,16 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
+	// Detect a replica wedged by a full disk (IO/SQL threads "Yes" but applier
+	// is silently retrying inside ha_commit_trans). Tolerate failures: the check
+	// is best-effort and must not break FullStatus on older MySQL versions or
+	// when the dba user lacks SELECT on performance_schema.error_log.
+	replicationStalledDiskFull, err := tm.MysqlDaemon.IsReplicationStalledDiskFull(ctx)
+	if err != nil {
+		log.Warn(fmt.Sprintf("IsReplicationStalledDiskFull failed: %v", err))
+		replicationStalledDiskFull = false
+	}
+
 	return &replicationdatapb.FullStatus{
 		ServerId:                    serverID,
 		ServerUuid:                  serverUUID,
@@ -192,6 +202,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
 		TabletType:                  tm.Tablet().Type,
+		ReplicationStalledDiskFull:  replicationStalledDiskFull,
 	}, nil
 }
 

@@ -539,6 +539,7 @@ type FullStatus struct {
 	DiskStalled                 bool                   `protobuf:"varint,23,opt,name=disk_stalled,json=diskStalled,proto3" json:"disk_stalled,omitempty"`
 	SemiSyncBlocked             bool                   `protobuf:"varint,24,opt,name=semi_sync_blocked,json=semiSyncBlocked,proto3" json:"semi_sync_blocked,omitempty"`
 	TabletType                  topodata.TabletType    `protobuf:"varint,25,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	ReplicationStalledDiskFull  bool                   `protobuf:"varint,26,opt,name=replication_stalled_disk_full,json=replicationStalledDiskFull,proto3" json:"replication_stalled_disk_full,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -748,6 +749,13 @@ func (x *FullStatus) GetTabletType() topodata.TabletType {
 	return topodata.TabletType(0)
 }
 
+func (x *FullStatus) GetReplicationStalledDiskFull() bool {
+	if x != nil {
+		return x.ReplicationStalledDiskFull
+	}
+	return false
+}
+
 var File_replicationdata_proto protoreflect.FileDescriptor
 
 const file_replicationdata_proto_rawDesc = "" +
@@ -798,7 +806,8 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x12#\n" +
 	"\rfile_position\x18\x02 \x01(\tR\ffilePosition\x12\x1f\n" +
 	"\vserver_uuid\x18\x03 \x01(\tR\n" +
-	"serverUuid\"\xce\t\n" +
+	"serverUuid\"\x91\n" +
+	"\n" +
 	"\n" +
 	"FullStatus\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\rR\bserverId\x12\x1f\n" +
@@ -829,7 +838,8 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\fdisk_stalled\x18\x17 \x01(\bR\vdiskStalled\x12*\n" +
 	"\x11semi_sync_blocked\x18\x18 \x01(\bR\x0fsemiSyncBlocked\x125\n" +
 	"\vtablet_type\x18\x19 \x01(\x0e2\x14.topodata.TabletTypeR\n" +
-	"tabletType*;\n" +
+	"tabletType\x12A\n" +
+	"\x1dreplication_stalled_disk_full\x18\x1a \x01(\bR\x1areplicationStalledDiskFull*;\n" +
 	"\x13StopReplicationMode\x12\x12\n" +
 	"\x0eIOANDSQLTHREAD\x10\x00\x12\x10\n" +
 	"\fIOTHREADONLY\x10\x01B.Z,vitess.io/vitess/go/vt/proto/replicationdatab\x06proto3"

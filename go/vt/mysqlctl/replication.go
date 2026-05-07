@@ -27,10 +27,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
@@ -845,4 +848,70 @@ func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
 	}
 	value, err := res.Rows[0][0].ToCastInt64()
 	return value != 0, err
+}
+
+// replicationStalledDiskFullQuery detects a replica that is wedged because
+// InnoDB has reported "Disk is full" (error codes MY-012814 and MY-012820)
+// after the applier's last successful commit. In that state the IO and SQL
+// threads remain "Yes" but the applier silently retries failed writes inside
+// ha_commit_trans, so SHOW REPLICA STATUS looks healthy. The query is
+// stateless and self-healing: it returns no rows once the applier resumes.
+//
+// Requires MySQL 8.0.22+ (performance_schema.error_log).
+const replicationStalledDiskFullQuery = `SELECT 1
+  FROM performance_schema.error_log el
+ WHERE el.logged    >= NOW(6) - INTERVAL 1 HOUR
+   AND el.prio       = 'Error'
+   AND el.subsystem  = 'InnoDB'
+   AND el.error_code IN ('MY-012814', 'MY-012820')
+   AND el.logged > COALESCE(
+         (SELECT MAX(LAST_APPLIED_TRANSACTION_END_APPLY_TIMESTAMP)
+            FROM performance_schema.replication_applier_status_by_worker),
+         '1970-01-01')
+ LIMIT 1`
+
+// replicationStalledDiskFullPermWarned is set the first time
+// IsReplicationStalledDiskFull observes a permission-denied error so the
+// warning is logged once per process instead of on every poll.
+var replicationStalledDiskFullPermWarned atomic.Bool
+
+// IsReplicationStalledDiskFull returns true when the replica's applier appears
+// to be wedged by a full disk (see replicationStalledDiskFullQuery). On older
+// MySQL versions or other flavors that lack performance_schema.error_log it
+// returns (false, nil). A SELECT permission denied error is logged once and
+// also reported as (false, nil) so it cannot fail FullStatus discovery.
+func (mysqld *Mysqld) IsReplicationStalledDiskFull(ctx context.Context) (bool, error) {
+	versionStr, err := mysqld.GetVersionString(ctx)
+	if err != nil {
+		return false, err
+	}
+	if _, v, perr := ParseVersionString(versionStr); perr == nil {
+		versionStr = fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
+	}
+	capableOf := mysql.ServerVersionCapableOf(versionStr)
+	if capableOf == nil {
+		return false, nil
+	}
+	ok, err := capableOf(capabilities.PerformanceSchemaErrorLogTableCapability)
+	if err != nil || !ok {
+		return false, nil
+	}
+
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Recycle()
+
+	res, err := conn.Conn.ExecuteFetch(replicationStalledDiskFullQuery, 1, false)
+	if err != nil {
+		if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr.Num == sqlerror.ERTableAccessDenied {
+			if replicationStalledDiskFullPermWarned.CompareAndSwap(false, true) {
+				log.Warn(fmt.Sprintf("IsReplicationStalledDiskFull: SELECT denied on performance_schema.error_log; check is disabled until grants are fixed (%v)", err))
+			}
+			return false, nil
+		}
+		return false, err
+	}
+	return len(res.Rows) > 0, nil
 }

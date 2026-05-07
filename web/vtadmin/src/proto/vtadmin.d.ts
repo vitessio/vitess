@@ -51127,6 +51127,9 @@ export namespace replicationdata {
 
         /** FullStatus tablet_type */
         tablet_type?: (topodata.TabletType|null);
+
+        /** FullStatus replication_stalled_disk_full */
+        replication_stalled_disk_full?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -51212,6 +51215,9 @@ export namespace replicationdata {
 
         /** FullStatus tablet_type. */
         public tablet_type: topodata.TabletType;
+
+        /** FullStatus replication_stalled_disk_full. */
+        public replication_stalled_disk_full: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.

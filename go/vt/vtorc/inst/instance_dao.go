@@ -333,6 +333,8 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		instance.HeartbeatInterval = fs.ReplicationConfiguration.HeartbeatInterval
 	}
 
+	instance.ReplicationStalledDiskFull = fs.ReplicationStalledDiskFull
+
 	instanceFound = true
 
 	// -------------------------------------------------------------------------
@@ -935,6 +937,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"semi_sync_blocked",
 		"last_discovery_latency",
 		"is_disk_stalled",
+		"replication_stalled_disk_full",
 	}
 
 	values := make([]string, len(columns))
@@ -1015,6 +1018,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.SemiSyncBlocked)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 		args = append(args, instance.StalledDisk)
+		args = append(args, instance.ReplicationStalledDiskFull)
 	}
 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
