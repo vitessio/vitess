@@ -134,6 +134,23 @@ func TestScopingWDerivedTables(t *testing.T) {
 	}
 }
 
+func TestValuesStatementAsDerivedTable(t *testing.T) {
+	queries := []string{
+		"select * from (values row(1, 1)) as sub",
+		"select sub.column_0 from (values row(1, 1)) as sub",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+
+			_, err = Analyze(parse, "user", fakeSchemaInfo())
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestDerivedTablesOrderClause(t *testing.T) {
 	queries := []struct {
 		query                string
