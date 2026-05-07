@@ -69,11 +69,26 @@ func TestReplicationStalledDiskFull(t *testing.T) {
 	insertCtx, stopInserts := context.WithCancel(context.Background())
 	defer stopInserts()
 
-	var inserts atomic.Int64
+	var (
+		inserts      atomic.Int64
+		insertErrors atomic.Int64
+		lastErr      atomic.Pointer[string]
+	)
 	go func() {
 		for insertCtx.Err() == nil {
-			_ = runSQLNoFail(insertCtx, "INSERT INTO filler (blob_col) VALUES (REPEAT('x', 1048576))",
+			err := runSQLNoFail(insertCtx,
+				"INSERT INTO filler (blob_col) VALUES (REPEAT('x', 1048576))",
 				primaryTablet, "vt_"+keyspaceName)
+			if err != nil {
+				if insertCtx.Err() != nil {
+					return // shutting down
+				}
+				insertErrors.Add(1)
+				s := err.Error()
+				lastErr.Store(&s)
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
 			inserts.Add(1)
 		}
 	}()
@@ -81,20 +96,32 @@ func TestReplicationStalledDiskFull(t *testing.T) {
 	// Poll error_log for the InnoDB disk-full codes. Up to 120s — InnoDB's
 	// dirty-page flush cadence + buffer pool size mean we may need a fair
 	// bit of cumulative writes before ibdata1 actually fails to extend.
-	require.Eventually(t, func() bool {
+	deadline := time.Now().Add(120 * time.Second)
+	gotDiskFullEntry := false
+	for time.Now().Before(deadline) {
 		errLog, err := utils.RunSQL(t, `SELECT COUNT(*) AS c FROM performance_schema.error_log
 			WHERE prio = 'Error' AND subsystem = 'InnoDB'
 			  AND error_code IN ('MY-012814', 'MY-012820')`,
 			replicaTablet, "")
-		if err != nil || len(errLog.Rows) == 0 {
-			return false
+		if err == nil && len(errLog.Rows) > 0 {
+			if count, _ := errLog.Named().Row().ToInt64("c"); count > 0 {
+				gotDiskFullEntry = true
+				break
+			}
 		}
-		count, _ := errLog.Named().Row().ToInt64("c")
-		return count > 0
-	}, 120*time.Second, 1*time.Second,
-		"replica's performance_schema.error_log never recorded MY-012814/MY-012820 (inserts so far: %d)", inserts.Load())
-
-	t.Logf("InnoDB ENOSPC observed after %d primary inserts", inserts.Load())
+		time.Sleep(2 * time.Second)
+		t.Logf("waiting for InnoDB ENOSPC: inserts=%d, insertErrors=%d, free=%s",
+			inserts.Load(), insertErrors.Load(), formatBytes(diskMount))
+	}
+	if !gotDiskFullEntry {
+		var lastErrStr string
+		if p := lastErr.Load(); p != nil {
+			lastErrStr = *p
+		}
+		t.Fatalf("performance_schema.error_log never recorded MY-012814/MY-012820: inserts=%d insertErrors=%d lastErr=%q",
+			inserts.Load(), insertErrors.Load(), lastErrStr)
+	}
+	t.Logf("InnoDB ENOSPC observed after %d primary inserts (%d errors)", inserts.Load(), insertErrors.Load())
 
 	// Confirm we hit case 2 (silent InnoDB retry, IO thread unaffected) and
 	// not case 1 (relay log filesystem fails, IO thread stops). With relay
@@ -125,6 +152,20 @@ func TestReplicationStalledDiskFull(t *testing.T) {
 		func(_ int, response string) bool {
 			return strings.Contains(response, "ReplicationStalledDiskFull")
 		})
+}
+
+// formatBytes returns a short human-readable free-space figure for the
+// loopback mount, used in periodic diagnostic logs while we wait for the
+// InnoDB ENOSPC entry.
+func formatBytes(m *mount) string {
+	if m == nil {
+		return "?"
+	}
+	free, err := m.freeBytes()
+	if err != nil {
+		return "?"
+	}
+	return fmt.Sprintf("%d KiB", free/1024)
 }
 
 // runSQLNoFail executes a query against a tablet's mysqld without using
