@@ -67,6 +67,12 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 }
 
 func (r *earlyRewriter) handleDerivedTable(dt *sqlparser.DerivedTable) error {
+	values, isValuesStatement := dt.Select.(*sqlparser.ValuesStatement)
+	if isValuesStatement {
+		dt.Select = valuesStatementToTableStatement(values)
+		return nil
+	}
+
 	sel, ok := dt.Select.(*sqlparser.Select)
 	if !ok {
 		return nil
@@ -76,6 +82,56 @@ func (r *earlyRewriter) handleDerivedTable(dt *sqlparser.DerivedTable) error {
 		sel.OrderBy = nil
 	}
 	return nil
+}
+
+// valuesStatementToTableStatement rewrites VALUES into SELECT and UNION ALL. For example:
+//
+//	VALUES ROW(1, 2), ROW(3, 4)
+//
+// becomes:
+//
+//	SELECT 1 AS column_0, 2 AS column_1 UNION ALL SELECT 3, 4
+func valuesStatementToTableStatement(values *sqlparser.ValuesStatement) sqlparser.TableStatement {
+	if len(values.Rows) == 0 {
+		return values
+	}
+
+	stmt := valuesTupleToSelect(values.Rows[0], true)
+	stmt.Comments = values.Comments
+
+	var tableStatement sqlparser.TableStatement = stmt
+	for _, row := range values.Rows[1:] {
+		tableStatement = &sqlparser.Union{
+			Left:  tableStatement,
+			Right: valuesTupleToSelect(row, false),
+		}
+	}
+
+	tableStatement.SetWith(values.With)
+	tableStatement.SetOrderBy(values.Order)
+	tableStatement.SetLimit(values.Limit)
+
+	return tableStatement
+}
+
+// valuesTupleToSelect builds one SELECT for a VALUES tuple.
+func valuesTupleToSelect(tuple sqlparser.ValTuple, includeColumnAliases bool) *sqlparser.Select {
+	expressions := make([]sqlparser.SelectExpr, 0, len(tuple))
+	for i, expr := range tuple {
+		aliasedExpr := &sqlparser.AliasedExpr{Expr: expr}
+
+		if includeColumnAliases {
+			aliasedExpr.As = sqlparser.NewIdentifierCI(fmt.Sprintf("column_%d", i))
+		}
+
+		expressions = append(expressions, aliasedExpr)
+	}
+
+	return &sqlparser.Select{
+		SelectExprs: &sqlparser.SelectExprs{
+			Exprs: expressions,
+		},
+	}
 }
 
 func (r *earlyRewriter) up(cursor *sqlparser.Cursor) error {
