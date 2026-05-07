@@ -216,7 +216,7 @@ func (dte *DTExecutor) RollbackPrepared(dtid string, originalID int64) error {
 	redoDeleted := false
 
 	defer func() {
-		// If the redo record was not deleted, do not roll back the prepared transaction.
+		// If the redo log was not deleted, do not roll back the prepared transaction.
 		if !redoDeleted {
 			return
 		}
