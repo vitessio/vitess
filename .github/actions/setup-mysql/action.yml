@@ -22,12 +22,6 @@ runs:
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
-        # We have to install this old version of libaio1. See also:
-        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
-        wget http://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb && \
-          sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb && \
-          rm libaio1_0.3.112-13build1_amd64.deb
-
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
