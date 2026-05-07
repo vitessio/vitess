@@ -74,6 +74,13 @@ jobs:
           sudo service etcd stop
           go mod download
 
+      - name: Build Vitess binaries
+        if: steps.changes.outputs.relevant == 'true'
+        timeout-minutes: 10
+        run: |
+          source build.env
+          make build
+
       - name: Run replication-stalled disk-full e2e
         if: steps.changes.outputs.relevant == 'true'
         timeout-minutes: 20
@@ -88,7 +95,8 @@ jobs:
           source build.env
           set -exo pipefail
 
-          # Use sudo -E to preserve env vars; pass VT_TEST_DISK_FULL=1.
+          # build.env prepended $PWD/bin to PATH; preserve via sudo -E.
+          # VT_TEST_DISK_FULL=1 is the explicit opt-in checked by the test.
           sudo -E env VT_TEST_DISK_FULL=1 PATH="$PATH" \
             go test -timeout 15m -count=1 -v \
             ./go/test/endtoend/vtorc/replicationstalleddiskfull/...
