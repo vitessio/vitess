@@ -272,11 +272,6 @@ func ContinuousDiscovery() {
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
 	tabletTopoTick := OpenTabletDiscovery()
 	var recoveryEntrance int64
-	var snapshotTopologiesTick <-chan time.Time
-	if config.GetSnapshotTopologyInterval() > 0 {
-		log.Warn("--snapshot-topology-interval is deprecated and will be removed in v25+")
-		snapshotTopologiesTick = time.Tick(config.GetSnapshotTopologyInterval())
-	}
 
 	go func() {
 		_ = initMetrics()
@@ -316,8 +311,6 @@ func ContinuousDiscovery() {
 					CheckAndRecover()
 				}()
 			}()
-		case <-snapshotTopologiesTick:
-			go inst.SnapshotTopologies() //nolint:errcheck
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
 			if err := refreshAllInformation(ctx); err != nil {

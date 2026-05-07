@@ -74,7 +74,6 @@ Flags:
       --remote-operation-timeout duration                           time to wait for a remote operation (default 15s)
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --shutdown-wait-time duration                                 Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
-      --snapshot-topology-interval duration                         Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours
       --sqlite-data-file string                                     SQLite Datafile to use as VTOrc's database (default "file::memory:?mode=memory&cache=shared")
       --stats-backend string                                        The name of the registered push-based monitoring/stats backend to use
       --stats-combine-dimensions string                             List of dimensions to be combined into a single "all" value in exported stats vars
