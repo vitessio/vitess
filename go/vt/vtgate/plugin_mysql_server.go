@@ -330,11 +330,21 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), callback)
+		var deferredResult *sqltypes.Result
+		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			if len(result.Fields) == 0 {
+				deferredResult = result
+				return nil
+			}
+			return callback(result)
+		})
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
+		if deferredResult != nil {
+			return callback(deferredResult)
+		}
 		return nil
 	}
 	session, result, err := vh.vtg.Execute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
@@ -597,11 +607,21 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		var deferredResult *sqltypes.Result
+		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, func(result *sqltypes.Result) error {
+			if len(result.Fields) == 0 {
+				deferredResult = result
+				return nil
+			}
+			return callback(result)
+		})
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
+		if deferredResult != nil {
+			return callback(deferredResult)
+		}
 		return nil
 	}
 	_, qr, err := vh.vtg.Execute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true)
