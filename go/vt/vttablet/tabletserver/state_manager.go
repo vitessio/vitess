@@ -499,6 +499,9 @@ func (sm *stateManager) unservePrimary() error {
 }
 
 func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) error {
+	sm.markClusterAction(ClusterActionInProgress)
+	defer sm.markClusterAction(ClusterActionNotInProgress)
+
 	// We are likely transitioning from primary. We have to honor
 	// the shutdown grace period.
 	cancel := sm.terminateAllQueries(nil)
