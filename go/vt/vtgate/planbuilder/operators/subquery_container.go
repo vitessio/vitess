@@ -45,78 +45,7 @@ func (sqc *SubQueryContainer) Clone(inputs []Operator) Operator {
 		}
 		result.addInner(inner)
 	}
-	// SubQuery.Clone is a shallow struct copy, so each clone inherits a
-	// pointer to the *original* subqueryGroup. That breaks the contract of
-	// the group (Members reference the originals; merged/emitted/Original
-	// are shared mutable state) once both trees are alive at the same time.
-	// Rebuild groups from scratch on the cloned inners so each tree has its
-	// own coordinated state and its own predicate AST.
-	rewireSubqueryGroups(sqc.Inner, result.Inner)
 	return result
-}
-
-// rewireSubqueryGroups gives the cloned SubQueries fresh subqueryGroup
-// instances that reference the clones (rather than the originals) and own a
-// freshly-cloned predicate AST. After this runs, the original tree and the
-// cloned tree no longer share any group state, so leader election, merged
-// tracking, and predicate mutation cannot leak between them.
-func rewireSubqueryGroups(originals, clones []*SubQuery) {
-	if len(originals) != len(clones) {
-		panic("subquery clone size mismatch")
-	}
-
-	origToClone := make(map[*SubQuery]*SubQuery, len(originals))
-	for i, o := range originals {
-		origToClone[o] = clones[i]
-	}
-
-	newGroups := make(map[*subqueryGroup]*subqueryGroup)
-	for i, o := range originals {
-		og := o.group
-		if og == nil {
-			continue
-		}
-		ng, ok := newGroups[og]
-		if !ok {
-			ng = &subqueryGroup{
-				// Clone the shared predicate so merge's path-scoped Select
-				// inlining and the leader's bind-var rewrite operate on the
-				// cloned tree only.
-				Original: sqlparser.Clone(og.Original),
-				Members:  make([]*SubQuery, len(og.Members)),
-				merged:   make(map[*SubQuery]bool, len(og.merged)),
-				emitted:  og.emitted,
-			}
-			for j, m := range og.Members {
-				if cm, ok := origToClone[m]; ok {
-					ng.Members[j] = cm
-				} else {
-					// Member is no longer in this container's Inner (already
-					// merged out, for instance). Keep the original pointer as
-					// a placeholder; nothing on this clone references it for
-					// active settle / merge work.
-					ng.Members[j] = m
-				}
-			}
-			for m := range og.merged {
-				if cm, ok := origToClone[m]; ok {
-					ng.merged[cm] = true
-				} else {
-					ng.merged[m] = true
-				}
-			}
-			newGroups[og] = ng
-		}
-		clones[i].group = ng
-		clones[i].Original = ng.Original
-		// originalSubquery (and the path-based GetNodeFromPath lookups in
-		// settle / merge) must resolve against the cloned predicate, not the
-		// original — otherwise mutations on the clone (e.g. Select inlining
-		// during merge) would target nodes in the original tree.
-		if subqNode, ok := sqlparser.GetNodeFromPath(ng.Original, clones[i].path).(*sqlparser.Subquery); ok {
-			clones[i].originalSubquery = subqNode
-		}
-	}
 }
 
 func (sqc *SubQueryContainer) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {
