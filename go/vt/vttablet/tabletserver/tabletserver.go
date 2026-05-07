@@ -771,23 +771,25 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 	)
 }
 
-// hasUnresolvedTwoPCTransactions returns true if this tablet has any
-// unresolved 2PC transaction.
-func (tsv *TabletServer) hasUnresolvedTwoPCTransactions(ctx context.Context) bool {
+// hasUnresolvedTwoPCTransactions checks if this tablet has any unresolved 2PC transactions.
+func (tsv *TabletServer) hasUnresolvedTwoPCTransactions(ctx context.Context) (bool, error) {
 	if !tsv.te.preparedPool.IsEmpty() {
-		return true
+		return true, nil
 	}
-	count, err := tsv.te.twoPC.CountUnresolvedTransaction(ctx, time.Now())
+	if !tsv.te.twopcEnabled {
+		return false, nil
+	}
+	count, err := tsv.te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(365*24*time.Hour))
 	if err != nil {
-		log.Error(fmt.Sprintf("Error reading unresolved transactions: %v", err))
-		return true
+		return true, err
 	}
-	return count > 0
+	return count > 0, nil
 }
 
 // WaitForPreparedTwoPCTransactions waits for all unresolved 2PC transactions on this tablet to be resolved.
 func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) error {
-	if !tsv.hasUnresolvedTwoPCTransactions(ctx) {
+	hasUnresolved, lastErr := tsv.hasUnresolvedTwoPCTransactions(ctx)
+	if !hasUnresolved {
 		return nil
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -795,10 +797,18 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 	for {
 		select {
 		case <-ctx.Done():
+			if lastErr != nil {
+				log.Error(fmt.Sprintf("Error reading unresolved transactions during wait: %v", lastErr))
+			}
 			// Return an error if we run out of time.
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Prepared transactions have not been resolved yet")
 		case <-ticker.C:
-			if !tsv.hasUnresolvedTwoPCTransactions(ctx) {
+			var err error
+			hasUnresolved, err = tsv.hasUnresolvedTwoPCTransactions(ctx)
+			if err != nil {
+				lastErr = err
+			}
+			if !hasUnresolved {
 				return nil
 			}
 		}
