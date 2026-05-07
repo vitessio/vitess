@@ -2135,6 +2135,72 @@
     }
   },
   {
+    "comment": "scalar subqueries on both sides of comparison",
+    "query": "select id from user where (select 1 from user_extra) = (select 1 from music)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where (select 1 from user_extra) = (select 1 from music)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq2"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music where 1 != 1",
+            "Query": "select 1 from music"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user` where :__sq1 = :__sq2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "uncorrelated EXISTS in OR predicate",
     "query": "select id from user where col = 1 or exists (select 1 from user_extra)",
     "plan": {

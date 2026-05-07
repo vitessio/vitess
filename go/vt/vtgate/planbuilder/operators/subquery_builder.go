@@ -392,24 +392,31 @@ func createComparisonSubQuery(
 	outerID semantics.TableSet,
 	name string,
 ) *SubQuery {
-	subq, outside := semantics.GetSubqueryAndOtherSide(parent)
-	if outside == nil || subq != subFromOutside {
+	var outside sqlparser.Expr
+	filterType := opcode.PulloutValue
+	switch {
+	case parent.Left == subFromOutside:
+		outside = parent.Right
+	case parent.Right == subFromOutside:
+		outside = parent.Left
+		switch parent.Operator {
+		case sqlparser.InOp:
+			filterType = opcode.PulloutIn
+		case sqlparser.NotInOp:
+			filterType = opcode.PulloutNotIn
+		}
+	default:
 		panic("uh oh")
 	}
 
-	filterType := opcode.PulloutValue
-	switch parent.Operator {
-	case sqlparser.InOp:
-		filterType = opcode.PulloutIn
-	case sqlparser.NotInOp:
-		filterType = opcode.PulloutNotIn
-	}
-
-	subquery := createSubqueryFromPath(ctx, original, subq, path, outerID, parent, name, filterType, false)
+	subquery := createSubqueryFromPath(ctx, original, subFromOutside, path, outerID, parent, name, filterType, false)
 
 	// if we are comparing with a column from the inner subquery,
 	// we add this extra predicate to check if the two sides are mergable or not
-	if ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr); ok {
+	if _, ok := outside.(*sqlparser.Subquery); ok {
+		return subquery
+	}
+	if ae, ok := subFromOutside.Select.GetColumns()[0].(*sqlparser.AliasedExpr); ok {
 		subquery.OuterPredicate = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.EqualOp,
 			Left:     outside,
