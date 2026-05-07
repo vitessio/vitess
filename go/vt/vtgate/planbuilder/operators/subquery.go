@@ -55,6 +55,49 @@ type SubQuery struct {
 
 	// IsArgument is set to true if the subquery puts the
 	IsArgument bool
+
+	// path locates this subquery's owning *sqlparser.Subquery node within the
+	// shared predicate tree. Used by group-aware merge / settle to identify
+	// which Subquery node within group.Original belongs to this member.
+	path sqlparser.ASTPath
+
+	// group, when non-nil, links this SubQuery with sibling SubQueries that
+	// were extracted from the same predicate (e.g. multiple EXISTS / IN
+	// subqueries inside one OR predicate). All members in a group coordinate
+	// through the shared subqueryGroup so the predicate is emitted exactly
+	// once at settle and merges don't bake duplicates onto outer.Source.
+	group *subqueryGroup
+}
+
+// subqueryGroup owns the shared, mutable state for a set of SubQuery operators
+// extracted from the same WHERE/ON predicate. Members read and write the
+// predicate through this struct so that:
+//
+//   - merges can inline a member's subquery Select into the shared predicate
+//     without baking duplicate filters onto outer.Source, and
+//   - settle emits the predicate exactly once, with bind-var substitutions
+//     applied for any members that did not merge.
+type subqueryGroup struct {
+	// Original is the shared, mutable predicate. Merges replace the inner
+	// Select of an owning Subquery node within Original via path lookup.
+	Original sqlparser.Expr
+
+	// Members lists all SubQuery operators extracted from this predicate, in
+	// DFS discovery order. Used at settle time to enumerate which Subquery
+	// nodes need substitution and to elect a leader.
+	Members []*SubQuery
+
+	// merged tracks which members have been merged into the outer Route. The
+	// merged member's subquery Select has been inlined into Original and its
+	// SubQuery operator has been removed from the SubQueryContainer; settle
+	// must skip these when applying bind-var substitutions.
+	merged map[*SubQuery]bool
+
+	// emitted is set once the group's predicate has been added as a filter on
+	// the outer source (either by pushOrMergeSubQueryContainer when the whole
+	// group merged, or by settleFilterInGroup's leader). Subsequent attempts
+	// to emit are no-ops.
+	emitted bool
 }
 
 func (sq *SubQuery) planOffsets(ctx *plancontext.PlanningContext) Operator {
@@ -246,6 +289,16 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		return outer
 	}
 
+	if sq.group != nil {
+		return sq.settleFilterInGroup(ctx, outer)
+	}
+	return sq.settleFilterSingle(ctx, outer)
+}
+
+// settleFilterSingle handles the common case of a single SubQuery owning its
+// entire WHERE predicate: walk Original, substitute the owning Subquery /
+// ExistsExpr / ComparisonExpr with bind-var placeholders, and emit a Filter.
+func (sq *SubQuery) settleFilterSingle(ctx *plancontext.PlanningContext, outer Operator) Operator {
 	hasValuesArg := func() string {
 		s := ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
 		sq.HasValuesName = s
@@ -319,6 +372,160 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	return newFilter(outer, predicates...)
 }
 
+// settleFilterInGroup handles SubQueries that share a predicate with siblings
+// (e.g. multiple subqueries in one OR). Non-leader members add their inner
+// limit and return outer unchanged; the leader (last unmerged member in DFS
+// order) walks the shared predicate once, substitutes every unmerged member's
+// owning node with the right bind-var placeholder, and emits a single Filter.
+//
+// Coordination is via group.merged (which siblings the merge phase absorbed
+// into the outer Route, and so should be kept inline rather than substituted)
+// and group.emitted (set once the predicate has been emitted, either here or
+// by pushOrMergeSubQueryContainer when the entire group merged).
+func (sq *SubQuery) settleFilterInGroup(ctx *plancontext.PlanningContext, outer Operator) Operator {
+	g := sq.group
+
+	// Always attach a limit-1 to our inner subquery — applies to both leader
+	// and non-leader members. The engine reads it independently per SubQuery.
+	if sq.FilterType == opcode.PulloutExists || sq.FilterType == opcode.PulloutNotExists {
+		sq.addLimit()
+	}
+	if sq.FilterType == opcode.PulloutNotExists {
+		// Engine treats NOT EXISTS pullout the same as EXISTS pullout — the
+		// negation lives in the predicate (we keep the wrapping NotExpr).
+		sq.FilterType = opcode.PulloutExists
+	}
+	if sq.FilterType.NeedsListArg() || sq.FilterType == opcode.PulloutValue {
+		sq.SubqueryValueName = sq.ArgName
+	}
+
+	if g.emitted || !sq.isGroupLeader() {
+		return outer
+	}
+
+	// Leader path. Reserve HasValuesName for every still-alive (unmerged)
+	// member up front so that the single rewrite below can emit the correct
+	// bind var per owning subquery node, regardless of which member's settle
+	// runs first.
+	for _, m := range g.Members {
+		if g.merged[m] {
+			continue
+		}
+		if m.HasValuesName == "" &&
+			(m.FilterType == opcode.PulloutExists ||
+				m.FilterType == opcode.PulloutIn ||
+				m.FilterType == opcode.PulloutNotIn) {
+			m.HasValuesName = ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
+		}
+	}
+
+	// Build a Subquery* -> owning member map by resolving each unmerged
+	// member's path against the shared predicate. We use this map (rather
+	// than a counter) so the post callback can look up ownership directly,
+	// even when the rewrite produces new ExistsExpr instances.
+	ownerByNode := make(map[*sqlparser.Subquery]*SubQuery, len(g.Members))
+	for _, m := range g.Members {
+		if g.merged[m] {
+			continue
+		}
+		if subqNode, ok := sqlparser.GetNodeFromPath(g.Original, m.path).(*sqlparser.Subquery); ok {
+			ownerByNode[subqNode] = m
+		}
+	}
+
+	post := func(cursor *sqlparser.CopyOnWriteCursor) {
+		switch node := cursor.Node().(type) {
+		case *sqlparser.ComparisonExpr:
+			// IN / NOT IN: by post-order, the inner Subquery has already been
+			// replaced with a ListArg in the *Subquery branch below; we now
+			// wrap the whole comparison with the has-values guard.
+			listArg, ok := node.Right.(sqlparser.ListArg)
+			if !ok {
+				return
+			}
+			owner := findGroupMemberByArgName(g, listArg.String())
+			if owner == nil {
+				return
+			}
+			switch owner.FilterType {
+			case opcode.PulloutIn:
+				cursor.Replace(sqlparser.AndExpressions(sqlparser.NewArgument(owner.HasValuesName), node))
+			case opcode.PulloutNotIn:
+				cursor.Replace(&sqlparser.OrExpr{
+					Left:  sqlparser.NewNotExpr(sqlparser.NewArgument(owner.HasValuesName)),
+					Right: node,
+				})
+			}
+
+		case *sqlparser.ExistsExpr:
+			// For EXISTS / NOT EXISTS, replace the whole ExistsExpr with the
+			// has-values arg of the owning member. We deliberately skip
+			// replacing the inner Subquery (see the *Subquery branch) so
+			// node.Subquery still keys into ownerByNode here.
+			owner := ownerByNode[node.Subquery]
+			if owner == nil || owner.FilterType != opcode.PulloutExists {
+				return
+			}
+			cursor.Replace(sqlparser.NewArgument(owner.HasValuesName))
+
+		case *sqlparser.Subquery:
+			owner := ownerByNode[node]
+			if owner == nil {
+				return
+			}
+			if owner.FilterType == opcode.PulloutExists {
+				// Defer to the wrapping ExistsExpr post above.
+				return
+			}
+			if owner.FilterType.NeedsListArg() {
+				cursor.Replace(sqlparser.NewListArg(owner.ArgName))
+			} else {
+				cursor.Replace(sqlparser.NewArgument(owner.ArgName))
+			}
+		}
+	}
+
+	rhsPred := sqlparser.CopyOnRewrite(g.Original, dontEnterSubqueries, post, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+	g.emitted = true
+	return newFilter(outer, rhsPred)
+}
+
+// isGroupLeader reports whether this SubQuery is the last unmerged member of
+// its group in DFS extraction order. The leader emits the group's predicate
+// as a single Filter at settle time. Choosing the LAST in DFS order means
+// that by the time the leader settles, all earlier siblings have already
+// settled (settleSubqueries iterates op.Inner in append order, which is DFS),
+// so their bind values are bound by the operator chain wrapping our Filter.
+func (sq *SubQuery) isGroupLeader() bool {
+	g := sq.group
+	if g == nil {
+		return false
+	}
+	for i := len(g.Members) - 1; i >= 0; i-- {
+		m := g.Members[i]
+		if g.merged[m] {
+			continue
+		}
+		return m == sq
+	}
+	return false
+}
+
+// findGroupMemberByArgName returns the still-unmerged group member whose
+// reserved subquery argument name matches the given ListArg name, or nil if
+// no such member exists.
+func findGroupMemberByArgName(g *subqueryGroup, name string) *SubQuery {
+	for _, m := range g.Members {
+		if g.merged[m] {
+			continue
+		}
+		if m.ArgName == name {
+			return m
+		}
+	}
+	return nil
+}
+
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {
 	if _, ok := node.(*sqlparser.Subquery); ok {
 		return false
@@ -331,9 +538,27 @@ func (sq *SubQuery) isMerged(ctx *plancontext.PlanningContext) bool {
 	return ok
 }
 
+// predicate returns the predicate this SubQuery operates on. For grouped
+// SubQueries (multiple subqueries extracted from the same expression), this
+// is the shared, mutable predicate held on the group; for singletons it is
+// the SubQuery's own Original.
+func (sq *SubQuery) predicate() sqlparser.Expr {
+	if sq.group != nil {
+		return sq.group.Original
+	}
+	return sq.Original
+}
+
 // mapExpr rewrites all expressions according to the provided function
 func (sq *SubQuery) mapExpr(f func(expr sqlparser.Expr) sqlparser.Expr) {
 	sq.Predicates = slice.Map(sq.Predicates, f)
 	sq.Original = f(sq.Original)
 	sq.originalSubquery = f(sq.originalSubquery).(*sqlparser.Subquery)
+	if sq.group != nil {
+		// Keep the shared group predicate in lockstep with this member's view
+		// of it. All members run mapExpr through the same join-rewrite path;
+		// the first one updates the group, later members observe an already-
+		// rewritten Original (f is the same function, so reapplying it is a no-op).
+		sq.group.Original = sq.Original
+	}
 }

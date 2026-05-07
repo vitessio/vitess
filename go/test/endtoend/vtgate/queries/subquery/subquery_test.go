@@ -91,6 +91,20 @@ func TestSubqueriesExists(t *testing.T) {
 	mcmp.AssertMatches(
 		`SELECT id2 FROM t1 WHERE id1 = 0 OR NOT EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) ORDER BY id2`,
 		`[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+
+	// Two uncorrelated EXISTS in the same OR predicate. Both inner subqueries
+	// match no rows, so the predicate reduces to id1 = 0, returning [1].
+	mcmp.AssertMatches(
+		`SELECT id2 FROM t1 WHERE id1 = 0 OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 200) ORDER BY id2`,
+		`[[INT64(1)]]`)
+	// One inner matches, the other does not — predicate is true for every row.
+	mcmp.AssertMatches(
+		`SELECT id2 FROM t1 WHERE id1 = 0 OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR EXISTS (SELECT 1 FROM t1 WHERE id1 = 1) ORDER BY id2`,
+		`[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+	// Mixed EXISTS / NOT EXISTS in the same OR.
+	mcmp.AssertMatches(
+		`SELECT id2 FROM t1 WHERE id1 = 0 OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR NOT EXISTS (SELECT 1 FROM t1 WHERE id1 = 1) ORDER BY id2`,
+		`[[INT64(1)]]`)
 }
 
 func TestQueryAndSubQWithLimit(t *testing.T) {

@@ -480,6 +480,29 @@ func pushOrMergeSubQueryContainer(ctx *plancontext.PlanningContext, in *SubQuery
 		result = result.Merge(_result)
 	}
 
+	// For each group whose every member merged, no SubQuery operator is left
+	// in remaining to emit the shared predicate at settle. Emit it here as a
+	// single Filter on the merged outer source. Non-fully-merged groups have
+	// at least one surviving member that emits during settleFilterInGroup.
+	seenGroups := make(map[*subqueryGroup]bool)
+	for _, sq := range in.Inner {
+		if sq.group == nil || seenGroups[sq.group] {
+			continue
+		}
+		seenGroups[sq.group] = true
+		anyRemains := false
+		for _, m := range remaining {
+			if m.group == sq.group {
+				anyRemains = true
+				break
+			}
+		}
+		if !anyRemains && !sq.group.emitted && len(sq.group.merged) > 0 {
+			in.Outer = newFilter(in.Outer, sq.group.Original)
+			sq.group.emitted = true
+		}
+	}
+
 	if len(remaining) == 0 {
 		return in.Outer, result
 	}
@@ -513,7 +536,7 @@ func tryMergeSubqueriesRecursively(
 	exprs := subQuery.GetMergePredicates()
 	merger := &subqueryRouteMerger{
 		outer:    outer,
-		original: subQuery.Original,
+		original: subQuery.predicate(),
 		subq:     subQuery,
 	}
 	op := mergeSubqueryInputs(ctx, inner.Outer, outer, exprs, merger)
@@ -534,7 +557,14 @@ func tryMergeSubqueriesRecursively(
 		finalResult = finalResult.Merge(res)
 	}
 
-	op.Source = newFilter(outer.Source, subQuery.Original)
+	if subQuery.group != nil {
+		// Group member: defer predicate emission to settle. The leader will
+		// emit the merged predicate (with this member's owning Subquery
+		// inlined and any unmerged siblings replaced by bind vars) once.
+		subQuery.group.merged[subQuery] = true
+	} else {
+		op.Source = newFilter(outer.Source, subQuery.Original)
+	}
 	return op, finalResult.Merge(Rewrote("merge outer of two subqueries"))
 }
 
@@ -543,10 +573,12 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, NoRewrite
 	}
 	exprs := subQuery.GetMergePredicates()
-	sqlparser.RemoveKeyspace(subQuery.Original)
+	// For grouped subqueries the predicate is shared on the group; either way
+	// RemoveKeyspace mutates in place — predicate() handles both transparently.
+	sqlparser.RemoveKeyspace(subQuery.predicate())
 	merger := &subqueryRouteMerger{
 		outer:    outer,
-		original: subQuery.Original,
+		original: subQuery.predicate(),
 		subq:     subQuery,
 	}
 	op := mergeSubqueryInputs(ctx, inner, outer, exprs, merger)
@@ -554,7 +586,15 @@ func tryMergeSubqueryWithOuter(ctx *plancontext.PlanningContext, subQuery *SubQu
 		return outer, NoRewrite
 	}
 	if !subQuery.IsArgument {
-		op.Source = newFilter(outer.Source, subQuery.Original)
+		if subQuery.group != nil {
+			// Group member: don't bake the predicate onto outer.Source. The
+			// leader emits the merged predicate (with this member's owning
+			// Subquery inlined and any unmerged siblings replaced by bind
+			// vars) at settle time.
+			subQuery.group.merged[subQuery] = true
+		} else {
+			op.Source = newFilter(outer.Source, subQuery.Original)
+		}
 	}
 	if outer.Comments != nil {
 		op.Comments = outer.Comments
@@ -664,7 +704,10 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	var src Operator
 	if isSharded {
 		src = s.outer.Source
-		if !s.subq.IsArgument {
+		if !s.subq.IsArgument && s.subq.group == nil {
+			// Singleton: bake the predicate onto outer.Source. For grouped
+			// members we leave outer.Source alone — the leader emits the
+			// shared predicate once at settle time.
 			src = newFilter(s.outer.Source, s.original)
 		}
 	} else {
@@ -730,13 +773,38 @@ func (s *subqueryRouteMerger) rewriteASTExpression(ctx *plancontext.PlanningCont
 		ctx.SemTable.CopySemanticInfo(s.subq.originalSubquery.Select, subqStmt)
 		s.subq.originalSubquery.Select = subqStmt
 	} else {
-		sQuery := sqlparser.CopyOnRewrite(s.original, dontEnterSubqueries, func(cursor *sqlparser.CopyOnWriteCursor) {
-			if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
-				subq.Select = subqStmt
-				cursor.Replace(subq)
+		// Identify the *specific* Subquery node owned by this merging member.
+		// For singletons, this is just the (only) subquery in the predicate.
+		// For group members, multiple Subquery nodes share the predicate and
+		// we must replace only the one this merge corresponds to — otherwise
+		// we'd corrupt sibling nodes that haven't been (or won't be) merged.
+		var target *sqlparser.Subquery
+		if s.subq.group != nil && len(s.subq.path) > 0 {
+			if t, ok := sqlparser.GetNodeFromPath(s.original, s.subq.path).(*sqlparser.Subquery); ok {
+				target = t
 			}
+		}
+		sQuery := sqlparser.CopyOnRewrite(s.original, dontEnterSubqueries, func(cursor *sqlparser.CopyOnWriteCursor) {
+			subq, ok := cursor.Node().(*sqlparser.Subquery)
+			if !ok {
+				return
+			}
+			// In a group, only rewrite the owning Subquery; leave siblings intact.
+			if target != nil && subq != target {
+				return
+			}
+			subq.Select = subqStmt
+			cursor.Replace(subq)
 		}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
-		src = newFilter(s.outer.Source, sQuery)
+		if s.subq.group != nil {
+			// For groups, mutate the shared predicate in place so the leader
+			// sees the inlined Select at settle time. Don't add a Filter onto
+			// outer.Source — the leader emits the predicate exactly once.
+			s.subq.group.Original = sQuery
+			src = s.outer.Source
+		} else {
+			src = newFilter(s.outer.Source, sQuery)
+		}
 	}
 	return src
 }
