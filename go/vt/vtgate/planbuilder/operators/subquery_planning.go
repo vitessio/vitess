@@ -331,6 +331,17 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		return nil, nil
 	}
 
+	if inner.group != nil {
+		// Grouped subqueries share a predicate at the SubQueryContainer level;
+		// merging one of them into a join's RHS would remove it from the
+		// container without giving the surviving leader a way to inline its
+		// Select into the shared predicate (rewriteOriginalPushedToRHS produces
+		// a *new* expression and the path-keyed substitution would point at
+		// a different tree). Skip this optimization for grouped members; they
+		// fall back to the standard LHS-push or stay-in-container paths.
+		return nil, nil
+	}
+
 	newExpr := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
 	sqm := &subqueryRouteMerger{
 		outer:    outerRoute,
