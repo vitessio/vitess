@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -42,32 +43,26 @@ func initResolver(t *testing.T, ctx context.Context) *Resolver {
 
 	// Create sharded keyspace and shards.
 	if err := ts.CreateKeyspace(ctx, "sks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace(sks) failed: %v", err)
+		require.NoError(t, err)
 	}
 	shardKrArray, err := key.ParseShardingSpec("-20-40-60-80-a0-c0-e0-")
-	if err != nil {
-		t.Fatalf("key.ParseShardingSpec failed: %v", err)
-	}
+	require.NoError(t, err)
 	for _, kr := range shardKrArray {
 		shard := key.KeyRangeString(kr)
-		if err := ts.CreateShard(ctx, "sks", shard); err != nil {
-			t.Fatalf("CreateShard(\"%v\") failed: %v", shard, err)
-		}
+		require.NoErrorf(t, ts.CreateShard(ctx, "sks", shard), "CreateShard(%q) failed", shard)
 	}
 
 	// Create unsharded keyspace and shard.
 	if err := ts.CreateKeyspace(ctx, "uks", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace(uks) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateShard(ctx, "uks", "0"); err != nil {
-		t.Fatalf("CreateShard(0) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// And rebuild both.
 	for _, keyspace := range []string{"sks", "uks"} {
-		if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, keyspace, []string{cell}, false); err != nil {
-			t.Fatalf("RebuildKeyspace(%v) failed: %v", keyspace, err)
-		}
+		require.NoErrorf(t, topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), ts, keyspace, []string{cell}, false), "RebuildKeyspace(%v) failed", keyspace)
 	}
 
 	// Create snapshot keyspace and shard.
@@ -213,33 +208,31 @@ func TestResolveDestinations(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		ctx := context.Background()
+		ctx := t.Context()
 		rss, values, err := resolver.ResolveDestinations(ctx, testCase.keyspace, topodatapb.TabletType_REPLICA, testCase.ids, testCase.destinations)
 		if err != nil {
 			if testCase.errString == "" {
-				t.Errorf("%v: expected success but got error: %v", testCase.name, err)
+				assert.Failf(t, testCase.name, "expected success but got error: %v", err)
 			} else {
-				if err.Error() != testCase.errString {
-					t.Errorf("%v: expected error '%v' but got error: %v", testCase.name, testCase.errString, err)
-				}
+				assert.EqualErrorf(t, err, testCase.errString, "%v: expected error '%v' but got error: %v", testCase.name, testCase.errString, err)
 			}
 			continue
 		}
 
 		if testCase.errString != "" {
-			t.Errorf("%v: expected error '%v' but got success", testCase.name, testCase.errString)
+			assert.Failf(t, testCase.name, "expected error '%v' but got success", testCase.errString)
 			continue
 		}
 
 		// Check the ResolvedShard are correct.
 		if len(rss) != len(testCase.expectedShards) {
-			t.Errorf("%v: expected %v ResolvedShard, but got: %v", testCase.name, len(testCase.expectedShards), rss)
+			assert.Failf(t, testCase.name, "expected %v ResolvedShard, but got: %v", len(testCase.expectedShards), rss)
 			continue
 		}
 		badShards := false
 		for i, rs := range rss {
 			if rs.Target.Shard != testCase.expectedShards[i] {
-				t.Errorf("%v: expected rss[%v] to be '%v', but got: %v", testCase.name, i, testCase.expectedShards[i], rs.Target.Shard)
+				assert.Failf(t, testCase.name, "expected rss[%v] to be '%v', but got: %v", i, testCase.expectedShards[i], rs.Target.Shard)
 				badShards = true
 			}
 		}
@@ -251,11 +244,7 @@ func TestResolveDestinations(t *testing.T) {
 		if testCase.ids == nil {
 			continue
 		}
-		if len(values) != len(rss) {
-			t.Errorf("%v: len(values) != len(rss): %v != %v", testCase.name, len(values), len(rss))
-		}
-		if !ValuesEqual(values, testCase.expectedValues) {
-			t.Errorf("%v: values != testCase.expectedValues: got values=%v", testCase.name, values)
-		}
+		assert.Equalf(t, len(rss), len(values), "%v: len(values) != len(rss): %v != %v", testCase.name, len(values), len(rss))
+		assert.True(t, ValuesEqual(values, testCase.expectedValues), "values != testCase.expectedValues: got values=%v", values)
 	}
 }

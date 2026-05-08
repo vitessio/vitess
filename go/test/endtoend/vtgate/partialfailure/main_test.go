@@ -17,7 +17,6 @@ limitations under the License.
 package reservedconn
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"os"
@@ -94,7 +93,7 @@ func testAllModes(t *testing.T, stmts func(conn *mysql.Conn)) {
 
 	for _, tc := range tcases {
 		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
+			conn, err := mysql.Connect(t.Context(), &vtParams)
 			require.NoError(t, err)
 			defer conn.Close()
 

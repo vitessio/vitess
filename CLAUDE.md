@@ -75,6 +75,7 @@ To make sure tests are easy to read, we use `github.com/stretchr/testify/assert`
 - Use `assert.ErrorContains` / `require.ErrorContains` to check error messages
 - Use the `_test.go` suffix for mocks and test helpers that are only used by the current package's tests; if helpers or mocks need to be imported by other packages' tests or fuzz harnesses, put them in a normal reusable package such as `testlib` or `testutil`
 - CI timeouts must be generous (30s+) — GitHub Actions runners can be resource-starved with multi-second pauses; sub-second timeouts cause flakiness with no recourse but retry
+- Do not use t.Fatal or t.Error in tests, but instead require and assert
 
 ## :rotating_light: Error Handling Excellence
 

@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -99,9 +100,7 @@ func TestUpdateVSchema(t *testing.T) {
 
 	startCount := expectUpdateCount(t, 1)
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	expectUpdateCount(t, startCount+1)
 
 	want := `{
@@ -146,9 +145,7 @@ func TestUpdateVSchema(t *testing.T) {
   "keyspace_routing_rules": null
 }`
 	b, err := json.MarshalIndent(engine.vschema(), "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := string(b)
 	require.Equal(t, want, got)
 }
@@ -160,7 +157,7 @@ func expectUpdateCount(t *testing.T, wantCount int64) int64 {
 			return gotCount
 		}
 		if i == 9 {
-			t.Fatalf("update count: %d, want %d", gotCount, wantCount)
+			require.Failf(t, "update count mismatch", "update count: %d, want %d", gotCount, wantCount)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -252,7 +249,7 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 
 	for _, tt := range tests {
 		tt.fields.cp = dbconfigs.New(testDB.ConnParams())
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 		t.Run(tt.name, func(t *testing.T) {
 			uvs := &uvstreamer{
@@ -265,9 +262,8 @@ func TestVStreamerWaitForMySQL(t *testing.T) {
 			}
 			env.TabletEnv.Config().RowStreamer.MaxInnoDBTrxHistLen = tt.fields.maxInnoDBTrxHistLen
 			env.TabletEnv.Config().RowStreamer.MaxMySQLReplLagSecs = tt.fields.maxMySQLReplLagSecs
-			if err := uvs.vse.waitForMySQL(ctx, uvs.cp, tableName); (err != nil) != tt.wantErr {
-				t.Errorf("vstreamer.waitForMySQL() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			err := uvs.vse.waitForMySQL(ctx, uvs.cp, tableName)
+			assert.Equalf(t, tt.wantErr, err != nil, "vstreamer.waitForMySQL() error = %v, wantErr %v", err, tt.wantErr)
 			if tt.shouldWait {
 				expectedWaits++
 			}

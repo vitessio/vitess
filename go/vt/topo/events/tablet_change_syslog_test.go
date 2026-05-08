@@ -22,6 +22,8 @@ import (
 	"log/syslog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -40,10 +42,6 @@ func TestTabletChangeSyslog(t *testing.T) {
 	}
 	gotSev, gotMsg := tc.Syslog()
 
-	if gotSev != wantSev {
-		t.Errorf("wrong severity: got %v, want %v", gotSev, wantSev)
-	}
-	if gotMsg != wantMsg {
-		t.Errorf("wrong message: got %v, want %v", gotMsg, wantMsg)
-	}
+	assert.Equalf(t, wantSev, gotSev, "wrong severity: got %v, want %v", gotSev, wantSev)
+	assert.Equalf(t, wantMsg, gotMsg, "wrong message: got %v, want %v", gotMsg, wantMsg)
 }

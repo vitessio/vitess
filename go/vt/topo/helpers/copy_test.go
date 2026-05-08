@@ -40,10 +40,10 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 
 	// create a keyspace and a couple tablets
 	if err := fromTS.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("cannot create keyspace: %v", err)
+		require.NoError(t, err)
 	}
 	if err := fromTS.CreateShard(ctx, "test_keyspace", "0"); err != nil {
-		t.Fatalf("cannot create shard: %v", err)
+		require.NoError(t, err)
 	}
 	tablet1 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -64,7 +64,7 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 	}
 	tablet1.MysqlPort = 3306
 	if err := fromTS.CreateTablet(ctx, tablet1); err != nil {
-		t.Fatalf("cannot create primary tablet: %v", err)
+		require.NoError(t, err)
 	}
 	tablet2 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -95,70 +95,48 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 		}},
 	}
 	if err := fromTS.SaveRoutingRules(ctx, rr); err != nil {
-		t.Fatalf("cannot save routing rules: %v", err)
+		require.NoError(t, err)
 	}
 
 	return fromTS, toTS
 }
 
 func TestBasic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	fromTS, toTS := createSetup(ctx, t)
 
 	// check keyspace copy
 	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 	keyspaces, err := toTS.GetKeyspaces(ctx)
-	if err != nil {
-		t.Fatalf("toTS.GetKeyspaces failed: %v", err)
-	}
-	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
-		t.Fatalf("unexpected keyspaces: %v", keyspaces)
-	}
+	require.NoError(t, err)
+	require.Truef(t, len(keyspaces) == 1 && keyspaces[0] == "test_keyspace", "unexpected keyspaces: %v", keyspaces)
 	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
 
 	// check shard copy
 	CopyShards(ctx, fromTS, toTS)
 	shards, err := toTS.GetShardNames(ctx, "test_keyspace")
-	if err != nil {
-		t.Fatalf("toTS.GetShardNames failed: %v", err)
-	}
-	if len(shards) != 1 || shards[0] != "0" {
-		t.Fatalf("unexpected shards: %v", shards)
-	}
+	require.NoError(t, err)
+	require.Truef(t, len(shards) == 1 && shards[0] == "0", "unexpected shards: %v", shards)
 	CopyShards(ctx, fromTS, toTS)
 
 	// check ShardReplication copy
 	_, err = fromTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
-	if err != nil {
-		t.Fatalf("fromTS.GetShardReplication failed: %v", err)
-	}
+	require.NoError(t, err)
 	CopyShardReplications(ctx, fromTS, toTS)
 	sr, err := toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
-	if err != nil {
-		t.Fatalf("toTS.GetShardReplication failed: %v", err)
-	}
-	if len(sr.Nodes) != 2 {
-		t.Fatalf("unexpected ShardReplication: %v", sr)
-	}
+	require.NoError(t, err)
+	require.Lenf(t, sr.Nodes, 2, "unexpected ShardReplication: %v", sr)
 
 	// check ShardReplications is idempotent
 	CopyShardReplications(ctx, fromTS, toTS)
 	sr, err = toTS.GetShardReplication(ctx, "test_cell", "test_keyspace", "0")
-	if err != nil {
-		t.Fatalf("toTS.GetShardReplication failed: %v", err)
-	}
-	if len(sr.Nodes) != 2 {
-		t.Fatalf("unexpected ShardReplication after second copy: %v", sr)
-	}
+	require.NoError(t, err)
+	require.Lenf(t, sr.Nodes, 2, "unexpected ShardReplication after second copy: %v", sr)
 
 	// check tablet copy
 	CopyTablets(ctx, fromTS, toTS)
 	tablets, err := toTS.GetTabletAliasesByCell(ctx, "test_cell")
-	if err != nil {
-		t.Fatalf("toTS.GetTabletsByCell failed: %v", err)
-	}
-	if len(tablets) != 2 || tablets[0].Uid != 123 || tablets[1].Uid != 234 {
-		t.Fatalf("unexpected tablets: %v", tablets)
-	}
+	require.NoError(t, err)
+	require.Truef(t, len(tablets) == 2 && tablets[0].Uid == 123 && tablets[1].Uid == 234, "unexpected tablets: %v", tablets)
 	CopyTablets(ctx, fromTS, toTS)
 }

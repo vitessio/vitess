@@ -27,9 +27,7 @@ import (
 func assertEqualResults(t *testing.T, a, b *Result) {
 	t.Helper()
 	assert.Truef(t, a.Equal(b), "Results are not equal: \n%v\n%v", a, b)
-	if !a.Equal(b) {
-		t.Errorf("Results are not equal: %v %v", a, b)
-	}
+	assert.Truef(t, a.Equal(b), "Results are not equal: %v %v", a, b)
 }
 
 func TestRepair(t *testing.T) {
@@ -289,9 +287,7 @@ func TestStripMetaData(t *testing.T) {
 			assertEqualResults(t, out, tcase.expected)
 			if len(tcase.in.Fields) > 0 {
 				// check the out array is different than the in array.
-				if out.Fields[0] == inCopy.Fields[0] && tcase.includedFields != querypb.ExecuteOptions_ALL {
-					t.Errorf("StripMetaData modified original Field for %v", tcase.name)
-				}
+				assert.Falsef(t, out.Fields[0] == inCopy.Fields[0] && tcase.includedFields != querypb.ExecuteOptions_ALL, "StripMetaData modified original Field for %v", tcase.name)
 			}
 			// check we didn't change the original result.
 			assertEqualResults(t, tcase.in, inCopy)

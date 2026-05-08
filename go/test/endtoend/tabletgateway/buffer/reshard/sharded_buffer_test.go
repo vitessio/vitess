@@ -63,7 +63,7 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 	}
 
 	if duration <= 0 {
-		t.Fatalf("waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+		require.Failf(t, "lag timeout", "waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
 	}
 }
 

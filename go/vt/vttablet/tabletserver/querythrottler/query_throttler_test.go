@@ -230,7 +230,7 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 
 			// Create throttler with controlled config
 			iqt := &QueryThrottler{
-				ctx: context.Background(),
+				ctx: t.Context(),
 				cfg: &querythrottlerpb.Config{
 					Enabled: tt.enabled,
 					DryRun:  tt.dryRun,
@@ -259,7 +259,7 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 
 			// Test the enforcement
 			err := iqt.Throttle(
-				context.Background(),
+				t.Context(),
 				topodatapb.TabletType_REPLICA,
 				&sqlparser.ParsedQuery{Query: "SELECT * FROM test_table WHERE id = 1"},
 				12345,
