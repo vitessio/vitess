@@ -414,6 +414,10 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	defer stopAllCancel()
 
 	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
 		stopAllWg.Add(1)
 
 		go func(alias string, tablet *topodatapb.Tablet) {
