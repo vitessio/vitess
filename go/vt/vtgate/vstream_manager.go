@@ -750,6 +750,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				TablesToCopy: vs.flags.GetTablesToCopy(),
 			}
 		}
+		// Don't add query timeouts to the VStream queries used during a table copy/sync as it can unnecessarily
+		// cause copy resume cycles and in doing so adding additional operational complexity, chance for failure
+		// (not all clients support copy resume well if at all), and extended copy/sync execution time.
+		options.NoTimeouts = true
 
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
 		req := &binlogdatapb.VStreamRequest{

@@ -171,6 +171,10 @@ func (vtp *VtProcess) WaitStart() (err error) {
 
 		select {
 		case err := <-vtp.exit:
+			// Drop the exec.Cmd so a subsequent WaitTerminate() does not
+			// signal a dead pid and then block forever on the already-drained
+			// exit channel.
+			vtp.proc = nil
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtp.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)
@@ -178,7 +182,9 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	}
 
 	vtp.proc.Process.Kill()
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, <-vtp.exit)
+	exitErr := <-vtp.exit
+	vtp.proc = nil
+	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, exitErr)
 }
 
 const (

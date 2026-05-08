@@ -17,7 +17,6 @@ limitations under the License.
 package misc
 
 import (
-	"context"
 	"database/sql"
 	_ "embed"
 	"fmt"
@@ -784,7 +783,7 @@ func TestTimeZones(t *testing.T) {
 	}
 
 	// Connect to Vitess
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	for _, tc := range testCases {

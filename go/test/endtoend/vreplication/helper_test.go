@@ -82,7 +82,7 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 }
 
 func execQueryWithRetry(t *testing.T, conn *mysql.Conn, query string, timeout time.Duration) *sqltypes.Result {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
 	defer cancel()
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()
@@ -248,7 +248,7 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 }
 
 func waitForRowCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), defaultTimeout)
 	defer cancel()
 	ticker := time.NewTicker(defaultTick)
 	defer ticker.Stop()

@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctld
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -160,16 +159,16 @@ func TestAutoDetect(t *testing.T) {
 }
 
 func TestVersionString(t *testing.T) {
-	client, err := mysqlctlclient.New(context.Background(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
+	client, err := mysqlctlclient.New(t.Context(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
 	require.NoError(t, err)
-	version, err := client.VersionString(context.Background())
+	version, err := client.VersionString(t.Context())
 	require.NoError(t, err)
 	require.NotEmpty(t, version)
 }
 
 func TestReadBinlogFilesTimestamps(t *testing.T) {
-	client, err := mysqlctlclient.New(context.Background(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
+	client, err := mysqlctlclient.New(t.Context(), "unix", primaryTablet.MysqlctldProcess.SocketFile)
 	require.NoError(t, err)
-	_, err = client.ReadBinlogFilesTimestamps(context.Background(), &mysqlctl.ReadBinlogFilesTimestampsRequest{})
+	_, err = client.ReadBinlogFilesTimestamps(t.Context(), &mysqlctl.ReadBinlogFilesTimestampsRequest{})
 	require.ErrorContains(t, err, "empty binlog list in ReadBinlogFilesTimestampsRequest")
 }
