@@ -112,6 +112,7 @@ func ProcessUser(id string) *User {
 6. **Return structured errors** - Use error types for different handling
 7. **Never silently swallow errors** - When recovering from an error (e.g., restarting replication), always log the original error before the recovery attempt so operators can trace what happened
 8. **Log with context** - Include workflow name, recovery type, tablet alias, and other identifiers in log messages — a keyspace/tablet can have many concurrent workflows
+9. **Context error and status checking** - Always prefer using ctx.Err() over ctx.Done()
 
 ### Failure-Path Safety
 Multi-step operations must not leave the system in a half-applied state:

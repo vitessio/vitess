@@ -921,8 +921,11 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 // userTableFreeSpaceQuery selects DATA_FREE (bytes reclaimable via
 // OPTIMIZE) for every user base table in the current schema. Views are
 // excluded explicitly via table_type so we never publish a zero/NULL
-// DATA_FREE label for a view.
-const userTableFreeSpaceQuery = `select table_name, data_free from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'`
+// DATA_FREE label for a view. IFNULL guarantees a numeric column even
+// for the rare BASE TABLE rows (some non-InnoDB engines, partitioned
+// tables in transient states) where information_schema reports NULL,
+// so the per-row parse cannot leave a stale gauge value behind.
+const userTableFreeSpaceQuery = `select table_name, ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'`
 
 // updateUserTableFreeSpaceLocked publishes the SchemaTableDataFreeBytes
 // gauge for every user table when the feature is enabled, so operators
@@ -955,6 +958,10 @@ func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *conn
 		tableName := row[0].ToString()
 		dataFree, err := row[1].ToCastUint64()
 		if err != nil {
+			// IFNULL in the query already covers MySQL NULL; this branch
+			// is for any other parse failure. Set the gauge to 0 so we
+			// don't leave a stale reading from a prior reload.
+			se.tableDataFreeBytes.Set(tableName, 0)
 			continue
 		}
 		se.tableDataFreeBytes.Set(tableName, int64(dataFree))

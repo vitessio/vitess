@@ -656,7 +656,7 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	se.conns.Open(se.cp, se.cp, se.cp)
 	defer se.conns.Close()
 
-	dataFreeQuery := "select table_name, data_free from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
+	dataFreeQuery := "select table_name, ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
 
 	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("table_name|data_free", "varchar|uint64"),
@@ -694,7 +694,7 @@ func TestUpdateUserTableFreeSpaceIgnoresMaxTableCount(t *testing.T) {
 	SetMaxTableCount(1)
 	t.Cleanup(func() { SetMaxTableCount(originalMaxTableCount) })
 
-	dataFreeQuery := "select table_name, data_free from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
+	dataFreeQuery := "select table_name, ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
 	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("table_name|data_free", "varchar|uint64"),
 		"t_a|600",
