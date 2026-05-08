@@ -489,7 +489,7 @@ func testReshardV2Workflow(t *testing.T) {
 	// in order to confirm that no writes are lost in either the customer
 	// table or the customer_name and enterprise_customer materializations
 	// against it during the Reshard and all of the traffic switches.
-	dataGenCtx, dataGenCancel := context.WithCancel(context.Background())
+	dataGenCtx, dataGenCancel := context.WithCancel(t.Context())
 	defer dataGenCancel()
 	dataGenConn, dataGenCloseConn := getVTGateConn()
 	defer dataGenCloseConn()
@@ -802,10 +802,9 @@ func setupCluster(t *testing.T) *VitessCluster {
 }
 
 func setupTargetKeyspace(t *testing.T) {
-	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"], vc.Cells["zone2"]}, defaultTargetKs, "-80,80-",
-		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"], vc.Cells["zone2"]}, defaultTargetKs, "-80,80-",
+		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil)
+	require.NoError(t, err)
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[defaultTargetKs]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
@@ -821,10 +820,9 @@ func setupTargetKeyspace(t *testing.T) {
 func setupCustomer2Keyspace(t *testing.T) {
 	c2shards := []string{"-80", "80-"}
 	c2keyspace := "customer2"
-	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, c2keyspace, strings.Join(c2shards, ","),
-		customerVSchema, customerSchema, 0, 0, 1200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, c2keyspace, strings.Join(c2shards, ","),
+		customerVSchema, customerSchema, 0, 0, 1200, nil)
+	require.NoError(t, err)
 }
 
 func setupMinimalCluster(t *testing.T) *VitessCluster {
@@ -846,10 +844,9 @@ func setupMinimalCluster(t *testing.T) *VitessCluster {
 
 func setupMinimalTargetKeyspace(t *testing.T) map[string]*cluster.VttabletProcess {
 	tablets := make(map[string]*cluster.VttabletProcess)
-	if _, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, defaultTargetKs, "-80,80-",
-		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, []*Cell{vc.Cells["zone1"]}, defaultTargetKs, "-80,80-",
+		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, nil)
+	require.NoError(t, err)
 	defaultCell := vc.Cells[vc.CellNames[0]]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[defaultTargetKs]
 	targetTab1 = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet

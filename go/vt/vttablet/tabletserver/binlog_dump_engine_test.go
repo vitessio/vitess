@@ -39,7 +39,7 @@ func TestBinlogDumpEngine_RejectWhenClosed(t *testing.T) {
 	e := NewBinlogDumpEngine()
 
 	// Not opened - should reject
-	_, _, err := e.Register(context.Background())
+	_, _, err := e.Register(t.Context())
 	require.Error(t, err)
 
 	require.Contains(t, err.Error(), "closed")
@@ -49,7 +49,7 @@ func TestBinlogDumpEngine_CloseCancelsContexts(t *testing.T) {
 	e := NewBinlogDumpEngine()
 	e.Open()
 
-	ctx, idx, err := e.Register(context.Background())
+	ctx, idx, err := e.Register(t.Context())
 	require.NoError(t, err)
 
 	// Context should not be cancelled yet
@@ -74,7 +74,7 @@ func TestBinlogDumpEngine_CloseWaitsForStreams(t *testing.T) {
 	e := NewBinlogDumpEngine()
 	e.Open()
 
-	_, idx, err := e.Register(context.Background())
+	_, idx, err := e.Register(t.Context())
 	require.NoError(t, err)
 
 	closeDone := make(chan struct{})
@@ -86,7 +86,7 @@ func TestBinlogDumpEngine_CloseWaitsForStreams(t *testing.T) {
 	// Close should be blocked because stream is still registered
 	select {
 	case <-closeDone:
-		t.Fatal("Close should block until streams are unregistered")
+		require.Fail(t, "Close should block until streams are unregistered")
 	default:
 	}
 
@@ -109,7 +109,7 @@ func TestBinlogDumpEngine_UnregisterCancelsContext(t *testing.T) {
 	e.Open()
 	defer e.Close()
 
-	ctx, idx, err := e.Register(context.Background())
+	ctx, idx, err := e.Register(t.Context())
 	require.NoError(t, err)
 	require.NoError(t, ctx.Err())
 
@@ -132,7 +132,7 @@ func TestBinlogDumpEngine_UnregisterCancelsContext(t *testing.T) {
 	// it before Unregister cancelled the context.
 	select {
 	case <-callbackFired:
-		t.Fatal("AfterFunc callback should not fire after stop() was called")
+		require.Fail(t, "AfterFunc callback should not fire after stop() was called")
 	default:
 	}
 }
@@ -142,7 +142,7 @@ func TestBinlogDumpEngine_UnregisterFiresAfterFuncIfNotStopped(t *testing.T) {
 	e.Open()
 	defer e.Close()
 
-	ctx, idx, err := e.Register(context.Background())
+	ctx, idx, err := e.Register(t.Context())
 	require.NoError(t, err)
 
 	// Register an AfterFunc but do NOT call stop — simulates the case
@@ -170,7 +170,7 @@ func TestBinlogDumpEngine_RejectAfterClose(t *testing.T) {
 	e.Open()
 	e.Close()
 
-	_, _, err := e.Register(context.Background())
+	_, _, err := e.Register(t.Context())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "closed")
 }

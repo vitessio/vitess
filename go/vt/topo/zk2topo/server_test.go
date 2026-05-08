@@ -17,13 +17,13 @@ limitations under the License.
 package zk2topo
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/testfiles"
@@ -73,7 +73,7 @@ func TestZk2Topo(t *testing.T) {
 		// We retry creating the cell info until we no longer get a connection error.
 		timeout := time.After(15 * time.Second)
 		for {
-			err = ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+			err = ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 				ServerAddress: serverAddr,
 				Root:          cellRoot,
 			})
@@ -82,7 +82,7 @@ func TestZk2Topo(t *testing.T) {
 			}
 			select {
 			case <-timeout:
-				t.Fatalf("Timedout creating cell info - %v", err)
+				require.FailNowf(t, "timed out waiting for ZK to be ready", "last error: %v", err)
 				return nil
 			default:
 				require.ErrorContainsf(t, err, "could not connect to a server", "Received an error that isn't a connection error")
@@ -96,12 +96,8 @@ func TestZk2Topo(t *testing.T) {
 
 func TestHasObservers(t *testing.T) {
 	s1, s2, ok := hasObservers("s1:p1,s2:p2")
-	if ok {
-		t.Errorf("hasObservers(s1:p1,s2:p2): got unexpected %v %v %v", s1, s2, ok)
-	}
+	assert.Falsef(t, ok, "hasObservers(s1:p1,s2:p2): got unexpected %v %v %v", s1, s2, ok)
 
 	s1, s2, ok = hasObservers("s1:p1,s2:p2|o1:p1,o2:p2")
-	if !ok || s1 != "s1:p1,s2:p2" || s2 != "o1:p1,o2:p2" {
-		t.Errorf("hasObservers(s1:p1,s2:p2|o1:p1,o2:p2): got unexpected %v %v %v", s1, s2, ok)
-	}
+	assert.True(t, ok && s1 == "s1:p1,s2:p2" && s2 == "o1:p1,o2:p2", "hasObservers(s1:p1,s2:p2|o1:p1,o2:p2): got unexpected %v %v %v", s1, s2, ok)
 }

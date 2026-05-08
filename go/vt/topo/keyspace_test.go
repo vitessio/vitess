@@ -17,7 +17,6 @@ limitations under the License.
 package topo_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -32,7 +31,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 	cell2 := "zone-2"
 	keyspace := "ks"
 	keyspace2 := "ks2"
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name   string
 		setup  func(t *testing.T, ts *topo.Server, mtf *memorytopo.Factory)

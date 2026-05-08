@@ -66,9 +66,7 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 				unsigned = true
 			}
 			i2 := sqlparser.SQLTypeToQueryType(typ, unsigned)
-			if int(i2) == 0 {
-				t.Fatalf("%s %s", tbl, r.Field)
-			}
+			require.NotEqualf(t, 0, int(i2), "%s %s", tbl, r.Field)
 			var size, scale int64
 			var values string
 			switch i2 {

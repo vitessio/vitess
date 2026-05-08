@@ -32,7 +32,7 @@ import (
 )
 
 func TestDialDedicatedPool(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	client := NewClient()
 	tablet := &topodatapb.Tablet{
 		Hostname: "localhost",
@@ -102,7 +102,7 @@ func TestDialDedicatedPool(t *testing.T) {
 }
 
 func TestDialPool(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	client := NewClient()
 	tablet := &topodatapb.Tablet{
 		Hostname: "localhost",

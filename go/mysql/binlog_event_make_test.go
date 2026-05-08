@@ -101,9 +101,9 @@ func TestIntVarEvent(t *testing.T) {
 	require.True(t, event.IsIntVar(), "NewIntVarEvent().IsIntVar() is false")
 
 	name, value, err := event.IntVar(f)
-	if name != IntVarLastInsertID || value != 0x123456789abcdef0 || err != nil {
-		t.Fatalf("IntVar() returned %v/%v/%v", name, value, err)
-	}
+	require.NoError(t, err)
+	require.Equalf(t, byte(IntVarLastInsertID), name, "IntVar() returned %v/%v/%v", name, value, err)
+	require.Equalf(t, uint64(0x123456789abcdef0), value, "IntVar() returned %v/%v/%v", name, value, err)
 
 	event = NewIntVarEvent(f, s, IntVarInvalidInt, 0x123456789abcdef0)
 	require.True(t, event.IsValid(), "NewIntVarEvent().IsValid() is false")
@@ -119,27 +119,23 @@ func TestInvalidEvents(t *testing.T) {
 
 	// InvalidEvent
 	event := NewInvalidEvent()
-	if event.IsValid() {
-		t.Fatalf("NewInvalidEvent().IsValid() is true")
-	}
+	require.False(t, event.IsValid(), "NewInvalidEvent().IsValid() is true")
 
 	// InvalidFormatDescriptionEvent
 	event = NewInvalidFormatDescriptionEvent(f, s)
 	require.True(t, event.IsValid(), "NewInvalidFormatDescriptionEvent().IsValid() is false")
 	require.True(t, event.IsFormatDescription(), "NewInvalidFormatDescriptionEvent().IsFormatDescription() is false")
 
-	if _, err := event.Format(); err == nil {
-		t.Fatalf("NewInvalidFormatDescriptionEvent().Format() returned err=nil")
-	}
+	_, err := event.Format()
+	require.Error(t, err, "NewInvalidFormatDescriptionEvent().Format() returned err=nil")
 
 	// InvalidQueryEvent
 	event = NewInvalidQueryEvent(f, s)
 	require.True(t, event.IsValid(), "NewInvalidQueryEvent().IsValid() is false")
 	require.True(t, event.IsQuery(), "NewInvalidQueryEvent().IsQuery() is false")
 
-	if _, err := event.Query(f); err == nil {
-		t.Fatalf("NewInvalidQueryEvent().Query() returned err=nil")
-	}
+	_, err = event.Query(f)
+	require.Error(t, err, "NewInvalidQueryEvent().Query() returned err=nil")
 }
 
 func TestMariadDBGTIDEVent(t *testing.T) {
@@ -162,9 +158,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	mgtid, ok := gtid.(replication.MariadbGTID)
 	require.True(t, ok, "NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
 
-	if mgtid.Domain != 0 || mgtid.Server != 0x87654321 || mgtid.Sequence != 0x123456789abcdef0 {
-		t.Fatalf("NewMariaDBGTIDEvent().GTID() returned invalid GITD: %v", mgtid)
-	}
+	require.Truef(t, mgtid.Domain == 0 && mgtid.Server == 0x87654321 && mgtid.Sequence == 0x123456789abcdef0, "NewMariaDBGTIDEvent().GTID() returned invalid GITD: %v", mgtid)
 
 	// Without built-in begin.
 	event = NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, false)
@@ -181,9 +175,7 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 	mgtid, ok = gtid.(replication.MariadbGTID)
 	require.True(t, ok, "NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
 
-	if mgtid.Domain != 0 || mgtid.Server != 0x87654321 || mgtid.Sequence != 0x123456789abcdef0 {
-		t.Fatalf("NewMariaDBGTIDEvent().GTID() returned invalid GITD: %v", mgtid)
-	}
+	require.Truef(t, mgtid.Domain == 0 && mgtid.Server == 0x87654321 && mgtid.Sequence == 0x123456789abcdef0, "NewMariaDBGTIDEvent().GTID() returned invalid GITD: %v", mgtid)
 }
 
 func TestTableMapEvent(t *testing.T) {
@@ -345,13 +337,9 @@ func TestRowsEvent(t *testing.T) {
 	// Test the Rows we just created, to be sure.
 	// 1076895760 is 0x40302010.
 	identifies, _ := rows.StringIdentifiesForTests(tm, 0)
-	if expected := []string{"1076895760", "abc"}; !reflect.DeepEqual(identifies, expected) {
-		t.Fatalf("bad Rows identify, got %v expected %v", identifies, expected)
-	}
+	require.Equalf(t, []string{"1076895760", "abc"}, identifies, "bad Rows identify, got %v expected %v", identifies, []string{"1076895760", "abc"})
 	values, _ := rows.StringValuesForTests(tm, 0)
-	if expected := []string{"1076895760", "abcd"}; !reflect.DeepEqual(values, expected) {
-		t.Fatalf("bad Rows data, got %v expected %v", values, expected)
-	}
+	require.Equalf(t, []string{"1076895760", "abcd"}, values, "bad Rows data, got %v expected %v", values, []string{"1076895760", "abcd"})
 
 	event := NewUpdateRowsEvent(f, s, 0x102030405060, rows)
 	require.True(t, event.IsValid(), "NewRowsEvent().IsValid() is false")
@@ -476,13 +464,9 @@ func TestLargeRowsEvent(t *testing.T) {
 	for range colLen {
 		expected = append(expected, "1076895760")
 	}
-	if !reflect.DeepEqual(identifies, expected) {
-		t.Fatalf("bad Rows identify, got %v expected %v", identifies, expected)
-	}
+	require.Equalf(t, expected, identifies, "bad Rows identify, got %v expected %v", identifies, expected)
 	values, _ := rows.StringValuesForTests(tm, 0)
-	if !reflect.DeepEqual(values, expected) {
-		t.Fatalf("bad Rows data, got %v expected %v", values, expected)
-	}
+	require.Equalf(t, expected, values, "bad Rows data, got %v expected %v", values, expected)
 
 	event := NewUpdateRowsEvent(f, s, 0x102030405060, rows)
 	require.True(t, event.IsValid(), "NewRowsEvent().IsValid() is false")

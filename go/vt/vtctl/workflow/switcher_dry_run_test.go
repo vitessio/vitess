@@ -31,7 +31,7 @@ import (
 )
 
 func newTrafficSwitcherEnv(t *testing.T, tables []string, sourceKeyspaceName string, sourceShards []string, targetKeyspaceName string, targetShards []string, workflowName string) (*testEnv, *trafficSwitcher) {
-	ctx := context.Background()
+	ctx := t.Context()
 	schema := map[string]*tabletmanagerdatapb.SchemaDefinition{}
 	for _, tableName := range tables {
 		schema[tableName] = &tabletmanagerdatapb.SchemaDefinition{
@@ -62,7 +62,7 @@ func newTrafficSwitcherEnv(t *testing.T, tables []string, sourceKeyspaceName str
 }
 
 func TestDropTargetVReplicationStreams(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	env, ts := newTrafficSwitcherEnv(t, []string{"t1"}, "sourceks", []string{"0"}, "targetks", []string{"-80", "80-"}, "wf1")
@@ -85,7 +85,7 @@ func TestDropTargetVReplicationStreams(t *testing.T) {
 }
 
 func TestStartReverseVReplication(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	env, ts := newTrafficSwitcherEnv(t, []string{"t1"}, "sourceks", []string{"-80", "80-"}, "targetks", []string{"0"}, "wf1")
@@ -108,7 +108,7 @@ func TestStartReverseVReplication(t *testing.T) {
 }
 
 func TestRemoveSourceTables(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	env, ts := newTrafficSwitcherEnv(t, []string{"t1"}, "sourceks", []string{"-80", "80-"}, "targetks", []string{"0"}, "wf1")
@@ -142,7 +142,7 @@ func TestRemoveSourceTables(t *testing.T) {
 }
 
 func TestDropShards(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	env, ts := newTrafficSwitcherEnv(t, []string{"t1"}, "sourceks", []string{"-80", "80-"}, "targetks", []string{"0"}, "wf1")
@@ -171,7 +171,7 @@ func TestDropShards(t *testing.T) {
 }
 
 func TestDropSourceReverseVReplicationStreams(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	env, ts := newTrafficSwitcherEnv(t, []string{"t1"}, "sourceks", []string{"-80", "80-"}, "targetks", []string{"0"}, "wf1")
@@ -195,7 +195,7 @@ func TestDropSourceReverseVReplicationStreams(t *testing.T) {
 }
 
 func TestDropSourceDeniedTables(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	env, ts := newTrafficSwitcherEnv(t, []string{"t1", "t2"}, "sourceks", []string{"-80", "80-"}, "targetks", []string{"0"}, "wf1")
@@ -221,7 +221,7 @@ func TestDropSourceDeniedTables(t *testing.T) {
 }
 
 func TestDropTargetDeniedTables(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	env, ts := newTrafficSwitcherEnv(t, []string{"t1", "t2"}, "sourceks", []string{"0"}, "targetks", []string{"-80", "80-"}, "wf1")
@@ -247,7 +247,7 @@ func TestDropTargetDeniedTables(t *testing.T) {
 }
 
 func TestRemoveTargetTables(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	env, ts := newTrafficSwitcherEnv(t, []string{"t1", "t2"}, "sourceks", []string{"0"}, "targetks", []string{"-80", "80-"}, "wf1")
@@ -274,7 +274,7 @@ func TestRemoveTargetTables(t *testing.T) {
 }
 
 func TestSwitchKeyspaceReads(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	sourceKeyspaceName := "sourceks"
@@ -299,7 +299,7 @@ func TestSwitchKeyspaceReads(t *testing.T) {
 }
 
 func TestSwitchShardReads(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	sourceKeyspaceName := "sourceks"
@@ -335,7 +335,7 @@ func TestSwitchShardReads(t *testing.T) {
 }
 
 func TestChangeRouting(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	sourceKeyspaceName := "sourceks"
