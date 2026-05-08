@@ -257,7 +257,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, err
 	}
 	switch tabletType {
-	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL:
 	default:
 		return nil, fmt.Errorf("invalid init-tablet-type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
 	}
