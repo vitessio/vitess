@@ -18,10 +18,10 @@ package stats
 
 import (
 	"expvar"
-	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,9 +38,7 @@ func TestNoHook(t *testing.T) {
 	clearStats()
 	v := NewCounter("plainint", "help")
 	v.Add(1)
-	if v.String() != "1" {
-		t.Errorf("want 1, got %s", v.String())
-	}
+	assert.Equal(t, "1", v.String())
 }
 
 func TestString(t *testing.T) {
@@ -52,26 +50,16 @@ func TestString(t *testing.T) {
 		gotv = v.(*String)
 	})
 	v := NewString("String")
-	if gotname != "String" {
-		t.Errorf("want String, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "String", gotname)
+	assert.Same(t, v, gotv)
 	v.Set("a\"b")
-	if v.Get() != "a\"b" {
-		t.Errorf("want \"a\"b\", got %#v", gotv)
-	}
-	if v.String() != "\"a\\\"b\"" {
-		t.Errorf("want \"\"a\\\"b\"\", got %#v", gotv)
-	}
+	assert.Equal(t, "a\"b", v.Get())
+	assert.Equal(t, "\"a\\\"b\"", v.String())
 
 	f := StringFunc(func() string {
 		return "a"
 	})
-	if f.String() != "\"a\"" {
-		t.Errorf("want \"a\", got %v", f.String())
-	}
+	assert.Equal(t, "\"a\"", f.String())
 }
 
 type Mystr string
@@ -90,12 +78,8 @@ func TestPublish(t *testing.T) {
 	})
 	v := Mystr("abcd")
 	Publish("Mystr", &v)
-	if gotname != "Mystr" {
-		t.Errorf("want Mystr, got %s", gotname)
-	}
-	if gotv != &v {
-		t.Errorf("want %#v, got %#v", &v, gotv)
-	}
+	assert.Equal(t, "Mystr", gotname)
+	assert.Same(t, &v, gotv)
 }
 
 func f() string {
@@ -117,12 +101,8 @@ func TestPublishFunc(t *testing.T) {
 		gotv = v.(expvarFunc)
 	})
 	publish("Myfunc", expvarFunc(f))
-	if gotname != "Myfunc" {
-		t.Errorf("want Myfunc, got %s", gotname)
-	}
-	if gotv.String() != f() {
-		t.Errorf("want %v, got %#v", f(), gotv())
-	}
+	assert.Equal(t, "Myfunc", gotname)
+	assert.Equal(t, f(), gotv.String())
 }
 
 func TestDropVariable(t *testing.T) {
@@ -139,26 +119,16 @@ func TestStringMapToString(t *testing.T) {
 	expected2 := "{\"bbb\": \"222\", \"aaa\": \"111\"}"
 	got := stringMapToString(map[string]string{"aaa": "111", "bbb": "222"})
 
-	if got != expected1 && got != expected2 {
-		t.Errorf("expected %v or %v, got  %v", expected1, expected2, got)
-	}
+	assert.Truef(t, got == expected1 || got == expected2, "expected %v or %v, got  %v", expected1, expected2, got)
 }
 
 func TestParseCommonTags(t *testing.T) {
 	res := ParseCommonTags([]string{""})
-	if len(res) != 0 {
-		t.Errorf("expected empty result, got %v", res)
-	}
+	assert.Emptyf(t, res, "expected empty result, got %v", res)
 	res = ParseCommonTags([]string{"s", "a:b"})
-	expected1 := map[string]string{"a": "b"}
-	if !reflect.DeepEqual(expected1, res) {
-		t.Errorf("expected %v, got %v", expected1, res)
-	}
+	assert.Equal(t, map[string]string{"a": "b"}, res)
 	res = ParseCommonTags([]string{"a:b", "c:d"})
-	expected2 := map[string]string{"a": "b", "c": "d"}
-	if !reflect.DeepEqual(expected2, res) {
-		t.Errorf("expected %v, got %v", expected2, res)
-	}
+	assert.Equal(t, map[string]string{"a": "b", "c": "d"}, res)
 }
 
 func TestStringMapWithMultiLabels(t *testing.T) {
@@ -172,9 +142,8 @@ func TestStringMapWithMultiLabels(t *testing.T) {
 
 	want1 := `{"c1a.c1b": "1", "c2a.c2b": "1"}`
 	want2 := `{"c2a.c2b": "1", "c1a.c1b": "1"}`
-	if s := c.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := c.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 
 	m := c.StringMapFunc()
 	require.Len(t, m, 2)

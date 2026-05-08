@@ -19,6 +19,8 @@ package events
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/event"
 )
 
@@ -31,12 +33,8 @@ func TestUpdateInit(t *testing.T) {
 	ev := &testEvent{}
 	ev.Update("status")
 
-	if ev.Status != want {
-		t.Errorf("ev.Status = %#v, want %#v", ev.Status, want)
-	}
-	if ev.EventID == 0 {
-		t.Errorf("ev.EventID wasn't initialized")
-	}
+	assert.Equalf(t, want, ev.Status, "ev.Status = %#v, want %#v", ev.Status, want)
+	assert.NotZerof(t, ev.EventID, "ev.EventID wasn't initialized")
 }
 
 func TestUpdateEventID(t *testing.T) {
@@ -46,9 +44,7 @@ func TestUpdateEventID(t *testing.T) {
 
 	ev.Update("status")
 
-	if ev.EventID != want {
-		t.Errorf("ev.EventID = %v, want %v", ev.EventID, want)
-	}
+	assert.Equalf(t, want, ev.EventID, "ev.EventID = %v, want %v", ev.EventID, want)
 }
 
 func TestUpdateDispatch(t *testing.T) {
@@ -61,10 +57,6 @@ func TestUpdateDispatch(t *testing.T) {
 	ev := &testEvent{}
 	event.DispatchUpdate(ev, "status")
 
-	if ev.Status != want {
-		t.Errorf("ev.Status = %#v, want %#v", ev.Status, want)
-	}
-	if !triggered {
-		t.Errorf("listener wasn't triggered on Dispatch()")
-	}
+	assert.Equalf(t, want, ev.Status, "ev.Status = %#v, want %#v", ev.Status, want)
+	assert.Truef(t, triggered, "listener wasn't triggered on Dispatch()")
 }

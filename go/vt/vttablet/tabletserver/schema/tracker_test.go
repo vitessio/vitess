@@ -455,7 +455,7 @@ func TestTrackerRequestsOnlyGTIDAndDDL(t *testing.T) {
 
 func TestWaitWithContextStopsOnCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan bool, 1)
 
 		go func() {

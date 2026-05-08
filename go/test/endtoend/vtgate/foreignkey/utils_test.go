@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -152,20 +153,18 @@ func compareVitessAndMySQLResults(t *testing.T, vtRes sql.Result, mysqlRes sql.R
 		return
 	}
 	if vtRes == nil {
-		t.Error("Vitess result is 'nil' while MySQL's is not.")
+		assert.Fail(t, "Vitess result is 'nil' while MySQL's is not.")
 		return
 	}
 	if mysqlRes == nil {
-		t.Error("MySQL result is 'nil' while Vitess' is not.")
+		assert.Fail(t, "MySQL result is 'nil' while Vitess' is not.")
 		return
 	}
 	vtRa, err := vtRes.RowsAffected()
 	require.NoError(t, err)
 	mysqlRa, err := mysqlRes.RowsAffected()
 	require.NoError(t, err)
-	if mysqlRa != vtRa {
-		t.Errorf("Vitess and MySQL don't agree on the rows affected. Vitess rows affected - %v, MySQL rows affected - %v", vtRa, mysqlRa)
-	}
+	assert.Equalf(t, mysqlRa, vtRa, "Vitess and MySQL don't agree on the rows affected. Vitess rows affected - %v, MySQL rows affected - %v", vtRa, mysqlRa)
 }
 
 // compareVitessAndMySQLErrors compares Vitess and MySQL errors and reports if one errors and the other doesn't.
@@ -174,7 +173,7 @@ func compareVitessAndMySQLErrors(t *testing.T, vtErr, mysqlErr error) {
 		return
 	}
 	out := fmt.Sprintf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
-	t.Error(out)
+	assert.Fail(t, out)
 }
 
 // ensureDatabaseState ensures that the database is either empty or not.

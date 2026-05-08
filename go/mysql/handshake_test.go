@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"net"
 	"path"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,9 +64,7 @@ func TestClearTextClientAuth(t *testing.T) {
 
 	// Connection should fail, as server requires SSL for clear text auth.
 	_, err = Connect(ctx, params)
-	if err == nil || !strings.Contains(err.Error(), "Cannot use clear text authentication over non-SSL connections") {
-		t.Fatalf("unexpected connection error: %v", err)
-	}
+	require.ErrorContains(t, err, "Cannot use clear text authentication over non-SSL connections")
 
 	// Change server side to allow clear text without auth.
 	l.AllowClearTextWithoutTLS.Store(true)

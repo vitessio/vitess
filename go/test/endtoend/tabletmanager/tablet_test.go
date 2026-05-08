@@ -92,7 +92,7 @@ func TestGRPCErrorCode_UNAVAILABLE(t *testing.T) {
 
 	// confirm we get vtrpcpb.Code_UNAVAILABLE when calling FullStatus,
 	// because this will try and fail to connect to mysql
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel()
 	_, err = tmcFullStatus(ctx, tablet.GrpcPort)
 	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
@@ -124,7 +124,7 @@ func TestResetReplicationParameters(t *testing.T) {
 	require.Len(t, res.Rows, 1)
 
 	// Reset the replication parameters on the tablet
-	err = tmcResetReplicationParameters(context.Background(), tablet.GrpcPort)
+	err = tmcResetReplicationParameters(t.Context(), tablet.GrpcPort)
 	require.NoError(t, err)
 
 	// Recheck the replica status and this time is should be empty
