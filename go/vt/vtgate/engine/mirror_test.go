@@ -116,7 +116,7 @@ func TestMirror(t *testing.T) {
 		}()
 
 		want := vc.results[0]
-		res, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		res, err := mirror.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 		require.Equal(t, want, res)
 		require.NoError(t, err)
 
@@ -148,7 +148,7 @@ func TestMirror(t *testing.T) {
 		vc.results = nil
 		vc.resultErr = errors.New("return me")
 
-		ctx := context.Background()
+		ctx := t.Context()
 		res, err := mirror.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, true)
 		require.Nil(t, res)
 		require.Error(t, err)
@@ -183,7 +183,7 @@ func TestMirror(t *testing.T) {
 		mirrorVC.resultErr = errors.New("ignore me")
 
 		want := vc.results[0]
-		res, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		res, err := mirror.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 		require.Equal(t, res, want)
 		require.NoError(t, err)
 
@@ -236,7 +236,7 @@ func TestMirror(t *testing.T) {
 		}
 
 		want := vc.results[0]
-		res, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		res, err := mirror.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 		require.Equal(t, res, want)
 		require.NoError(t, err)
 
@@ -291,7 +291,7 @@ func TestMirror(t *testing.T) {
 		}
 
 		want := vc.results[0]
-		res, err := mirror.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		res, err := mirror.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 		require.Equal(t, res, want)
 		require.NoError(t, err)
 
@@ -321,7 +321,7 @@ func TestMirror(t *testing.T) {
 
 		want := vc.results[0]
 		err := mirror.TryStreamExecute(
-			context.Background(),
+			t.Context(),
 			vc,
 			map[string]*querypb.BindVariable{},
 			true,
@@ -362,7 +362,7 @@ func TestMirror(t *testing.T) {
 		vc.resultErr = errors.New("return me")
 
 		err := mirror.TryStreamExecute(
-			context.Background(),
+			t.Context(),
 			vc,
 			map[string]*querypb.BindVariable{},
 			true,
@@ -405,7 +405,7 @@ func TestMirror(t *testing.T) {
 
 		want := vc.results[0]
 		err := mirror.TryStreamExecute(
-			context.Background(),
+			t.Context(),
 			vc,
 			map[string]*querypb.BindVariable{},
 			true,
@@ -465,7 +465,7 @@ func TestMirror(t *testing.T) {
 
 		want := vc.results[0]
 		err := mirror.TryStreamExecute(
-			context.Background(),
+			t.Context(),
 			vc,
 			map[string]*querypb.BindVariable{},
 			true,
@@ -524,7 +524,7 @@ func TestMirror(t *testing.T) {
 
 		want := vc.results[0]
 		err := mirror.TryStreamExecute(
-			context.Background(),
+			t.Context(),
 			vc,
 			map[string]*querypb.BindVariable{},
 			true,

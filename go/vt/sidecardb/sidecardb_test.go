@@ -39,7 +39,7 @@ import (
 
 // TestInitErrors validates that the schema init error stats are being correctly set
 func TestInitErrors(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -123,7 +123,7 @@ func TestInitErrors(t *testing.T) {
 
 // Tests various non-error code paths in sidecardb
 func TestMiscSidecarDB(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	db := fakesqldb.New(t)
 	defer db.Close()

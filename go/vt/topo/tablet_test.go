@@ -642,7 +642,7 @@ func TestServerGetTabletMapAndList(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, cells...)
 			defer ts.Close()
@@ -701,7 +701,7 @@ func TestGetTabletsIndividuallyByCell(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ts := memorytopo.NewServer(ctx, cells...)
 			defer ts.Close()

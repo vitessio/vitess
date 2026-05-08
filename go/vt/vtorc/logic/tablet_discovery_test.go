@@ -17,7 +17,6 @@ limitations under the License.
 package logic
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -340,13 +339,13 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, cell1)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
 	require.NoError(t, err)
 
 	// Add tablets to the topo-server
 	tablets := []*topodatapb.Tablet{tab100, tab101, tab102}
 	for _, tablet := range tablets {
-		err := ts.CreateTablet(context.Background(), tablet)
+		err := ts.CreateTablet(t.Context(), tablet)
 		require.NoError(t, err)
 	}
 
@@ -376,7 +375,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		defer func() {
 			tab100.MysqlPort = startPort
 			tab100.MysqlHostname = startHostname
-			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+			_, err = ts.UpdateTabletFields(t.Context(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 				tablet.MysqlHostname = startHostname
 				tablet.MysqlPort = startPort
 				return nil
@@ -385,7 +384,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		// Let's assume tab100 shutdown. This would clear its tablet hostname and port.
 		tab100.MysqlPort = 0
 		tab100.MysqlHostname = ""
-		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+		_, err = ts.UpdateTabletFields(t.Context(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 			tablet.MysqlHostname = ""
 			tablet.MysqlPort = 0
 			return nil
@@ -399,13 +398,13 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		startTimeInitially := tab100.PrimaryTermStartTime.Seconds
 		defer func() {
 			tab100.PrimaryTermStartTime.Seconds = startTimeInitially
-			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+			_, err = ts.UpdateTabletFields(t.Context(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 				tablet.PrimaryTermStartTime.Seconds = startTimeInitially
 				return nil
 			})
 		}()
 		tab100.PrimaryTermStartTime.Seconds = 1000
-		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+		_, err = ts.UpdateTabletFields(t.Context(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 			tablet.PrimaryTermStartTime.Seconds = 1000
 			return nil
 		})
@@ -416,7 +415,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 
 	t.Run("change the port and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {
 		defer func() {
-			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+			_, err = ts.UpdateTabletFields(t.Context(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 				tablet.MysqlPort = 100
 				return nil
 			})
@@ -425,7 +424,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias *topodatapb.TabletAlias) {}, false, nil)
 		}()
 		// Let's assume tab100 restarted on a different pod. This would change its tablet hostname and port
-		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+		_, err = ts.UpdateTabletFields(t.Context(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
 			tablet.MysqlPort = 39293
 			return nil
 		})
@@ -438,7 +437,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 
 	t.Run("Replica becomes a drained tablet", func(t *testing.T) {
 		defer func() {
-			_, err = ts.UpdateTabletFields(context.Background(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
+			_, err = ts.UpdateTabletFields(t.Context(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
 				tablet.Type = topodatapb.TabletType_REPLICA
 				return nil
 			})
@@ -447,7 +446,7 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 			refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(tabletAlias *topodatapb.TabletAlias) {}, false, nil)
 		}()
 		// A replica tablet can be converted to drained type if it has an errant GTID.
-		_, err = ts.UpdateTabletFields(context.Background(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
+		_, err = ts.UpdateTabletFields(t.Context(), tab101.Alias, func(tablet *topodatapb.Tablet) error {
 			tablet.Type = topodatapb.TabletType_DRAINED
 			return nil
 		})
@@ -495,12 +494,12 @@ func TestShardPrimary(t *testing.T) {
 			// Create a memory topo-server and create the keyspace and shard records
 			ctx := t.Context()
 			ts = memorytopo.NewServer(ctx, cell1)
-			_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+			_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
 			require.NoError(t, err)
 
 			// Add tablets to the topo-server
 			for _, tablet := range testcase.tablets {
-				err := ts.CreateTablet(context.Background(), tablet)
+				err := ts.CreateTablet(t.Context(), tablet)
 				require.NoError(t, err)
 			}
 
@@ -526,7 +525,7 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 	var instancesRefreshed atomic.Int32
 	instancesRefreshed.Store(0)
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
-	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(*topodatapb.TabletAlias) {
+	refreshTabletsInKeyspaceShard(t.Context(), keyspace, shard, func(*topodatapb.TabletAlias) {
 		instancesRefreshed.Add(1)
 	}, forceRefresh, tabletsToIgnore)
 	// Verify that all the tablets are present in the database
@@ -642,7 +641,7 @@ func TestSetReadOnly(t *testing.T) {
 				topo.RemoteOperationTimeout = tt.remoteOpTimeout
 			}
 
-			err := setReadOnly(context.Background(), tt.tablet)
+			err := setReadOnly(t.Context(), tt.tablet)
 			if tt.errShouldContain == "" {
 				require.NoError(t, err)
 				return
@@ -706,7 +705,7 @@ func TestTabletUndoDemotePrimary(t *testing.T) {
 				topo.RemoteOperationTimeout = tt.remoteOpTimeout
 			}
 
-			err := tabletUndoDemotePrimary(context.Background(), tt.tablet, false)
+			err := tabletUndoDemotePrimary(t.Context(), tt.tablet, false)
 			if tt.errShouldContain == "" {
 				require.NoError(t, err)
 				return
@@ -770,7 +769,7 @@ func TestChangeTabletType(t *testing.T) {
 				topo.RemoteOperationTimeout = tt.remoteOpTimeout
 			}
 
-			err := changeTabletType(context.Background(), tt.tablet, topodatapb.TabletType_REPLICA, false)
+			err := changeTabletType(t.Context(), tt.tablet, topodatapb.TabletType_REPLICA, false)
 			if tt.errShouldContain == "" {
 				require.NoError(t, err)
 				return
@@ -834,7 +833,7 @@ func TestSetReplicationSource(t *testing.T) {
 				topo.RemoteOperationTimeout = tt.remoteOpTimeout
 			}
 
-			err := setReplicationSource(context.Background(), tt.tablet, tab101, false, 0)
+			err := setReplicationSource(t.Context(), tt.tablet, tab101, false, 0)
 			if tt.errShouldContain == "" {
 				require.NoError(t, err)
 				return
@@ -886,7 +885,7 @@ func TestGetAllTablets(t *testing.T) {
 	defer func() {
 		ts = oldTs
 	}()
-	ctx := context.Background()
+	ctx := t.Context()
 	ts = faketopo.NewFakeTopoServer(ctx, factory)
 
 	// confirm zone1 + zone2 succeeded and zone3 + zone4 failed
@@ -947,12 +946,12 @@ func TestRefreshTabletsUsingCellsToWatch(t *testing.T) {
 	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, cell1, cell2)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
 	require.NoError(t, err)
 
-	err = ts.CreateTablet(context.Background(), tabCell1)
+	err = ts.CreateTablet(t.Context(), tabCell1)
 	require.NoError(t, err)
-	err = ts.CreateTablet(context.Background(), tabCell2)
+	err = ts.CreateTablet(t.Context(), tabCell2)
 	require.NoError(t, err)
 
 	clustersToWatch = nil
@@ -1021,12 +1020,12 @@ func TestRefreshTabletsInKeyspaceShardCellsToWatch(t *testing.T) {
 	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, cell1, cell2)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
 	require.NoError(t, err)
 
-	err = ts.CreateTablet(context.Background(), tabCell1)
+	err = ts.CreateTablet(t.Context(), tabCell1)
 	require.NoError(t, err)
-	err = ts.CreateTablet(context.Background(), tabCell2)
+	err = ts.CreateTablet(t.Context(), tabCell2)
 	require.NoError(t, err)
 
 	clustersToWatch = nil
@@ -1067,7 +1066,7 @@ func TestRefreshTabletsUsingCellsToWatch_InvalidCell(t *testing.T) {
 	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, cell1)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
 	require.NoError(t, err)
 
 	clustersToWatch = nil
