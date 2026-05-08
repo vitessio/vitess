@@ -260,7 +260,7 @@ func (tv *testVisitor) assertVisitOrder(t *testing.T, expected []AST) {
 	expectedSize := len(expected)
 	for i, step := range tv.seen {
 		if expectedSize <= i {
-			t.Errorf("❌️ - Expected less elements %v", tv.seen[i:])
+			assert.Failf(t, "unexpected extra elements", "❌️ - Expected less elements %v", tv.seen[i:])
 			break
 		} else {
 			e := expected[i]
@@ -279,12 +279,12 @@ func (tv *testVisitor) assertVisitOrder(t *testing.T, expected []AST) {
 						fmt.Println(line)
 					}
 				}
-				t.Errorf("❌️ - Expected: %s Got: %s\n", e.String(), step.String())
+				assert.Failf(t, "visit order mismatch", "❌️ - Expected: %s Got: %s\n", e.String(), step.String())
 			}
 		}
 	}
 	walkSize := len(tv.seen)
 	if expectedSize > walkSize {
-		t.Errorf("❌️ - Expected more elements %v", expected[walkSize:])
+		assert.Failf(t, "missing expected elements", "❌️ - Expected more elements %v", expected[walkSize:])
 	}
 }

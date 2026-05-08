@@ -119,7 +119,7 @@ func TestStopTreeWalkButStillVisit(t *testing.T) {
 		case *BinaryExpr:
 			cursor.Replace(NewStrLiteral("johnny was here"))
 		case *ColName:
-			t.Errorf("should not visit ColName in the post")
+			assert.Fail(t, "should not visit ColName in the post")
 		}
 	}, nil)
 

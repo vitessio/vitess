@@ -58,7 +58,7 @@ func TestPrimaryElection(t *testing.T) {
 
 	for _, vttablet := range shard0.Vttablets {
 		if vttablet.Type == "rdonly" && primary.Alias == vttablet.Alias {
-			t.Errorf("Rdonly tablet promoted as primary - %v", primary.Alias)
+			assert.Failf(t, "rdonly promoted", "Rdonly tablet promoted as primary - %v", primary.Alias)
 		}
 	}
 
@@ -352,7 +352,7 @@ func TestVTOrcRepairs(t *testing.T) {
 		// Initially check that replication is working as intended
 		utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 		_, err := clusterInfo.Ts.UpdateTabletFields(ctx, replica.GetAlias(), func(tablet *topodatapb.Tablet) error {
 			tablet.Type = topodatapb.TabletType_PRIMARY
@@ -694,7 +694,7 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 	shard0 := &keyspace.Shards[0]
 	// Before starting VTOrc we explicity want to set the durability policy of the keyspace to an empty string
 	func() {
-		ctx, unlock, lockErr := newCluster.Ts.LockKeyspace(context.Background(), keyspace.Name, "TestDurabilityPolicySetLater")
+		ctx, unlock, lockErr := newCluster.Ts.LockKeyspace(t.Context(), keyspace.Name, "TestDurabilityPolicySetLater")
 		require.NoError(t, lockErr)
 		defer unlock(&lockErr)
 		ki, err := newCluster.Ts.GetKeyspace(ctx, keyspace.Name)
@@ -705,7 +705,7 @@ func TestDurabilityPolicySetLater(t *testing.T) {
 	}()
 
 	// Verify that the durability policy is indeed empty
-	ki, err := newCluster.Ts.GetKeyspace(context.Background(), keyspace.Name)
+	ki, err := newCluster.Ts.GetKeyspace(t.Context(), keyspace.Name)
 	require.NoError(t, err)
 	require.Empty(t, ki.DurabilityPolicy)
 

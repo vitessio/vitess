@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -58,7 +57,7 @@ func TestMultiply(t *testing.T) {
 		Input:      fp,
 		noTxNeeded: noTxNeeded{},
 	}
-	qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false)
+	qr, err := proj.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 
@@ -113,7 +112,7 @@ func TestProjectionStreaming(t *testing.T) {
 	}
 
 	qr := &sqltypes.Result{}
-	err = proj.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(result *sqltypes.Result) error {
+	err = proj.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(result *sqltypes.Result) error {
 		qr.Rows = append(qr.Rows, result.Rows...)
 		return nil
 	})
@@ -142,7 +141,7 @@ func TestEmptyInput(t *testing.T) {
 		Input:      fp,
 		noTxNeeded: noTxNeeded{},
 	}
-	qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false)
+	qr, err := proj.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "[]", fmt.Sprintf("%v", qr.Rows))
 
@@ -155,7 +154,7 @@ func TestEmptyInput(t *testing.T) {
 	//	)},
 	// }
 	// proj.Input = fp
-	// qr, err = wrapStreamExecute(proj, newNoopVCursor(context.Background()), nil, true)
+	// qr, err = wrapStreamExecute(proj, newNoopVCursor(t.Context()), nil, true)
 	// require.NoError(t, err)
 	// assert.Equal(t, "[[UINT64(6)] [UINT64(0)] [UINT64(2)]]", fmt.Sprintf("%v", qr.Rows))
 }
@@ -172,7 +171,7 @@ func TestHexAndBinaryArgument(t *testing.T) {
 		Input:      &SingleRow{},
 		noTxNeeded: noTxNeeded{},
 	}
-	qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{
+	qr, err := proj.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{
 		"vtg1": sqltypes.HexNumBindVariable([]byte("0x9")),
 	}, false)
 	require.NoError(t, err)
@@ -219,7 +218,7 @@ func TestFields(t *testing.T) {
 				Input:      &SingleRow{},
 				noTxNeeded: noTxNeeded{},
 			}
-			qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{
+			qr, err := proj.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{
 				"vtg1": testCase.bindVar,
 			}, true)
 			require.NoError(t, err)
@@ -259,7 +258,7 @@ func TestFieldConversion(t *testing.T) {
 				Input:      &SingleRow{},
 				noTxNeeded: noTxNeeded{},
 			}
-			qr, err := proj.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+			qr, err := proj.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 			require.NoError(t, err)
 			assert.Equal(t, testCase.typ, qr.Fields[0].Type)
 			assert.Equal(t, testCase.collation, collations.ID(qr.Fields[0].Charset))

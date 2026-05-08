@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -237,26 +236,26 @@ func TestSeq(t *testing.T) {
 	// Test select calls to main table and verify expected id.
 	qr = utils.Exec(t, conn, "select id, val  from sequence_test where id=4")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(4) VARCHAR("d")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 
 	// Test next available seq id from cache
 	qr = utils.Exec(t, conn, "select next 1 values from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(5)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 
 	// Test next_id from seq table which should be the increased by cache value(id+cache)
 	qr = utils.Exec(t, conn, "select next_id from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(11)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 
 	// Test insert with no auto-inc
 	utils.Exec(t, conn, "insert into sequence_test(id, val) values(6, 'f')")
 	qr = utils.Exec(t, conn, "select * from sequence_test")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("c")] [INT64(4) VARCHAR("d")] [INT64(6) VARCHAR("f")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 
 	// Next insert will fail as we have corrupted the sequence
@@ -264,14 +263,12 @@ func TestSeq(t *testing.T) {
 	_, err = conn.ExecuteFetch("insert into sequence_test(val) values('g')", 1000, false)
 	utils.Exec(t, conn, "rollback")
 	want := "Duplicate entry"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("wrong insert: %v, must contain %s", err, want)
-	}
+	assert.ErrorContainsf(t, err, want, "wrong insert: %v, must contain %s", err, want)
 
 	utils.Exec(t, conn, "DELETE FROM sequence_test_seq")
 	qr = utils.Exec(t, conn, "select * from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 	}
 }
 

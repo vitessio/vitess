@@ -249,6 +249,7 @@ var keywords = []keyword{
 	{"double", DOUBLE},
 	{"do", DO},
 	{"drop", DROP},
+	{"dual", DUAL},
 	{"dumpfile", DUMPFILE},
 	{"duplicate", DUPLICATE},
 	{"dynamic", DYNAMIC},
