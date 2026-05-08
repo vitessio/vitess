@@ -127,10 +127,11 @@ type Engine struct {
 	gtidExecutedOptimizeLastAt time.Time
 	backgroundCtx              context.Context
 	backgroundCancel           context.CancelFunc
-	// surfacedFreeSpaceTables tracks which user tables we last set on the
-	// tableDataFreeBytes gauge, so we can Reset labels for tables that have
-	// dropped below the threshold and avoid stale entries.
-	surfacedFreeSpaceTables map[string]struct{}
+	// freeSpaceMetricsActive records whether we currently have
+	// SchemaTableDataFreeBytes labels published, so a transition from
+	// enabled→disabled at runtime can ResetAll() once and avoid leaving
+	// stale gauge values around.
+	freeSpaceMetricsActive bool
 	// schemaCopy stores if the user has requested signals on schema changes. If they have, then we
 	// also track the underlying schema and make a copy of it in our MySQL instance.
 	schemaCopy bool
@@ -153,11 +154,10 @@ type Engine struct {
 	tableRowsGauge               *stats.GaugesWithSingleLabel
 	tableClusteredIndexSizeGauge *stats.GaugesWithSingleLabel
 	// tableDataFreeBytes exposes DATA_FREE (bytes reclaimable via OPTIMIZE)
-	// per user table for tables whose DATA_FREE exceeds
-	// SchemaUserTablesFreeSpacePercentThreshold of the table's total
-	// allocated space. Only populated when the threshold is non-zero and a
-	// table is currently exceeding it; labels are reset when a table drops
-	// below it or is removed.
+	// per user table. Populated for every user table on each schema reload
+	// when --schema-user-tables-free-space-metrics-enabled is true; labels
+	// are reset when a table is dropped or when the feature is disabled at
+	// runtime.
 	tableDataFreeBytes *stats.GaugesWithSingleLabel
 
 	indexCardinalityGauge *stats.GaugesWithMultiLabels
@@ -191,7 +191,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
 	se.tableRowsGauge = env.Exporter().NewGaugesWithSingleLabel("TableRows", "estimated number of rows in the table", "Table")
 	se.tableClusteredIndexSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableClusteredIndexSize", "byte size of the clustered index (i.e. row data)", "Table")
-	se.tableDataFreeBytes = env.Exporter().NewGaugesWithSingleLabel("SchemaTableDataFreeBytes", "DATA_FREE bytes (reclaimable via OPTIMIZE) for user tables whose free-space ratio exceeds --schema-user-tables-free-space-percent-threshold", "Table")
+	se.tableDataFreeBytes = env.Exporter().NewGaugesWithSingleLabel("SchemaTableDataFreeBytes", "DATA_FREE bytes (reclaimable via OPTIMIZE) per user table; published when --schema-user-tables-free-space-metrics-enabled is true", "Table")
 	se.indexCardinalityGauge = env.Exporter().NewGaugesWithMultiLabels("IndexCardinality", "estimated number of unique values in the index", []string{"Table", "Index"})
 	se.indexBytesGauge = env.Exporter().NewGaugesWithMultiLabels("IndexBytes", "byte size of the index", []string{"Table", "Index"})
 	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
@@ -656,9 +656,20 @@ func (se *Engine) maybeOptimizeGtidExecutedLocked(ctx context.Context, conn *con
 // to flip the value returns an error so the caller can skip OPTIMIZE.
 func (se *Engine) disableSuperReadOnly(ctx context.Context, conn *dbconnpool.DBConnection) (restore func(), err error) {
 	noop := func() {}
+	// Derive the restore's timeout from context.WithoutCancel(ctx) so that
+	// Engine.Close() — which cancels backgroundCtx — cannot suppress the
+	// restore, while still preserving any values (tracing, request ID) on
+	// the original context. SRO restore is safety-critical cleanup: leaving
+	// a non-primary tablet with super_read_only=OFF can let stale or
+	// misrouted writes land on it after shutdown while MySQL is still up.
+	restoreSuperReadOnly := func() {
+		restoreCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		se.restoreSuperReadOnlyWithContext(restoreCtx)
+	}
 	result, err := se.executeFetchCtx(ctx, conn, "SELECT @@global.super_read_only", 1, false)
 	if err != nil {
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			return noop, nil
 		}
 		return noop, fmt.Errorf("reading @@global.super_read_only: %w", err)
@@ -672,11 +683,11 @@ func (se *Engine) disableSuperReadOnly(ctx context.Context, conn *dbconnpool.DBC
 	}
 	if _, err := se.executeFetchCtx(ctx, conn, "SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
 		if shouldRestoreAfterSuperReadOnlyDisableError(err) {
-			se.restoreSuperReadOnly()
+			restoreSuperReadOnly()
 		}
 		return noop, fmt.Errorf("disabling super_read_only: %w", err)
 	}
-	return se.restoreSuperReadOnly, nil
+	return restoreSuperReadOnly, nil
 }
 
 func shouldRestoreAfterSuperReadOnlyDisableError(err error) bool {
@@ -692,28 +703,16 @@ func shouldRestoreAfterSuperReadOnlyDisableError(err error) bool {
 	return true
 }
 
-// restoreSuperReadOnly re-enables @@global.super_read_only on a fresh
-// DBA connection (independent of any connection the caller may have been
-// using for OPTIMIZE). Called via defer from disableSuperReadOnly's restore
-// closure. Failures are logged loudly but not returned — nothing actionable
-// the caller can do at this point except alert.
+// restoreSuperReadOnlyWithContext re-enables @@global.super_read_only on a
+// fresh DBA connection (independent of any connection the caller may have
+// been using for OPTIMIZE). Called via defer from disableSuperReadOnly's
+// restore closure. Failures are logged loudly but not returned — nothing
+// actionable the caller can do at this point except alert.
 //
 // If the tablet has since been promoted to PRIMARY (e.g. a PRS/ERS landed
 // while OPTIMIZE was running), we skip the restore: the promotion flow
 // itself turns super_read_only OFF and we must not stomp that back ON and
 // leave a freshly-promoted primary read-only.
-func (se *Engine) restoreSuperReadOnly() {
-	// SRO restore is safety-critical cleanup: leaving a non-primary tablet
-	// with super_read_only=OFF can let stale or misrouted writes land on it
-	// after shutdown while MySQL is still up. Derive the timeout from
-	// context.Background() rather than se.backgroundCtx so that
-	// Engine.Close() — which cancels backgroundCtx — cannot suppress the
-	// restore.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	se.restoreSuperReadOnlyWithContext(ctx)
-}
-
 func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
 	if se.isPrimaryTablet.Load() {
 		log.Warn("schema engine: skipping super_read_only restore; tablet has been promoted to PRIMARY since OPTIMIZE started")
@@ -762,10 +761,8 @@ func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
 // (*Mysqld).executeFetchContext in go/vt/mysqlctl/query.go, hardened to
 // not hang if KILL itself cannot be issued.
 func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	var (
@@ -921,87 +918,48 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 	)
 }
 
-// userTableFreeSpaceQueryFormat selects user tables whose DATA_FREE
-// (bytes reclaimable via OPTIMIZE) is more than the given percentage of
-// the table's total allocated space (DATA_LENGTH + INDEX_LENGTH +
-// DATA_FREE). The predicate is written as
-// `data_free * 100 > (data_length + index_length + data_free) * <percent>`
-// to keep the comparison in integer arithmetic.
-const userTableFreeSpaceQueryFormat = `select table_name, data_free, data_length + index_length + data_free as total_size from information_schema.TABLES where table_schema = database() and data_free * 100 > (data_length + index_length + data_free) * %d`
+// userTableFreeSpaceQuery selects DATA_FREE (bytes reclaimable via
+// OPTIMIZE) for every user base table in the current schema. Views are
+// excluded explicitly via table_type so we never publish a zero/NULL
+// DATA_FREE label for a view.
+const userTableFreeSpaceQuery = `select table_name, data_free from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'`
 
-// updateUserTableFreeSpaceLocked populates the SchemaTableDataFreeBytes
-// gauge for user tables where DATA_FREE exceeds
-// SchemaUserTablesFreeSpacePercentThreshold of the table's total allocated
-// space, and emits a throttled INFO log summarizing the offenders. Runs on
-// all tablet types. When the configured threshold is 0 the feature is
-// disabled and this function is a no-op (after clearing any stale gauge
-// labels from a prior enabled run).
+// updateUserTableFreeSpaceLocked publishes the SchemaTableDataFreeBytes
+// gauge for every user table when the feature is enabled, so operators
+// can apply their own alerting thresholds in their monitoring system.
+// Runs on all tablet types; alerting/visibility only — the schema engine
+// does not run OPTIMIZE against user tables.
 //
-// This path is alerting/visibility only — the schema engine does not run
-// OPTIMIZE against user tables. Operators use the metric and log to drive
-// whatever remediation is appropriate for their environment.
+// When the feature is disabled at runtime, any previously published gauge
+// labels are reset once and the function becomes a no-op until re-enabled.
 //
-// Caller must hold se.mu — this is called from reload(), which holds se.mu
-// for its entire duration. The function reads and writes
-// se.surfacedFreeSpaceTables under the caller's lock.
-func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *connpool.Conn, percentThreshold int) {
-	// The flag is viper-dynamic, so even though TabletConfig.Verify() enforces
-	// [0, 100] at startup an operator can still push an out-of-range value via
-	// the config file at runtime. Clamp-to-disabled here: a negative value
-	// would make the SQL predicate match every table (see integer arithmetic
-	// in userTableFreeSpaceQueryFormat) and a value > 100 is nonsensical.
-	if percentThreshold < 0 || percentThreshold > 100 {
-		se.throttledLogger.Warningf("schema engine: --schema-user-tables-free-space-percent-threshold=%d is out of range [0, 100]; treating as disabled", percentThreshold)
-		percentThreshold = 0
-	}
-	if percentThreshold <= 0 {
-		// Clear any gauge labels we might have set while previously enabled.
-		for tableName := range se.surfacedFreeSpaceTables {
-			se.tableDataFreeBytes.Reset(tableName)
+// Caller must hold se.mu — this is called from reload(), which holds
+// se.mu for its entire duration. The function reads and writes
+// se.freeSpaceMetricsActive under the caller's lock. Per-table label
+// cleanup for tables that disappear from the schema entirely is handled
+// by getDroppedTables.
+func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *connpool.Conn, enabled bool) {
+	if !enabled {
+		if se.freeSpaceMetricsActive {
+			se.tableDataFreeBytes.ResetAll()
+			se.freeSpaceMetricsActive = false
 		}
-		se.surfacedFreeSpaceTables = nil
 		return
 	}
-	result, err := conn.Exec(ctx, fmt.Sprintf(userTableFreeSpaceQueryFormat, percentThreshold), mysql.FETCH_ALL_ROWS, false)
+	result, err := conn.Exec(ctx, userTableFreeSpaceQuery, mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		se.throttledLogger.Warningf("schema engine: reading user table DATA_FREE failed: %v", err)
 		return
 	}
-	current := make(map[string]uint64, len(result.Rows))
-	logSummary := make(map[string]string, len(result.Rows))
 	for _, row := range result.Rows {
 		tableName := row[0].ToString()
 		dataFree, err := row[1].ToCastUint64()
 		if err != nil {
 			continue
 		}
-		totalSize, err := row[2].ToCastUint64()
-		if err != nil {
-			continue
-		}
-		current[tableName] = dataFree
 		se.tableDataFreeBytes.Set(tableName, int64(dataFree))
-		if totalSize > 0 {
-			logSummary[tableName] = fmt.Sprintf("%d/%d bytes (%.1f%%)", dataFree, totalSize, float64(dataFree)/float64(totalSize)*100)
-		} else {
-			logSummary[tableName] = fmt.Sprintf("%d bytes", dataFree)
-		}
 	}
-	// Zero out labels for tables that were over the threshold previously but
-	// no longer are (dropped, truncated, or OPTIMIZEd out).
-	for tableName := range se.surfacedFreeSpaceTables {
-		if _, stillOver := current[tableName]; !stillOver {
-			se.tableDataFreeBytes.Reset(tableName)
-		}
-	}
-	se.surfacedFreeSpaceTables = make(map[string]struct{}, len(current))
-	for tableName := range current {
-		se.surfacedFreeSpaceTables[tableName] = struct{}{}
-	}
-	if len(current) > 0 {
-		se.throttledLogger.Infof("schema engine: %d user table(s) have reclaimable free space exceeding %d%% of total size: %v",
-			len(current), percentThreshold, logSummary)
-	}
+	se.freeSpaceMetricsActive = true
 }
 
 // reload reloads the schema. It can also be used to initialize it.
@@ -1052,7 +1010,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		// for the lifetime of the reload, and do not re-acquire it (Go
 		// mutexes are not re-entrant).
 		maintenanceCtx, maintenanceCancel := context.WithTimeout(ctx, schemaMaintenanceProbeTimeout)
-		se.updateUserTableFreeSpaceLocked(maintenanceCtx, conn.Conn, tabletenv.SchemaUserTablesFreeSpacePercentThreshold())
+		se.updateUserTableFreeSpaceLocked(maintenanceCtx, conn.Conn, tabletenv.SchemaUserTablesFreeSpaceMetricsEnabled())
 		maintenanceCancel()
 
 		maintenanceCtx, maintenanceCancel = context.WithTimeout(ctx, schemaMaintenanceProbeTimeout)
@@ -1219,6 +1177,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 			// Many monitoring tools will drop zero-valued metrics.
 			se.tableFileSizeGauge.Reset(tableName)
 			se.tableAllocatedSizeGauge.Reset(tableName)
+			se.tableDataFreeBytes.Reset(tableName)
 		}
 	}
 

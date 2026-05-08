@@ -84,29 +84,29 @@ var (
 	enableReplicationReporter           bool
 	queryThrottlerConfigRefreshInterval time.Duration
 
-	// schemaUserTablesFreeSpacePercentThreshold is the minimum percentage
-	// (0-100) of a user table's total allocated space that must be free
-	// (information_schema DATA_FREE as a fraction of DATA_LENGTH +
-	// INDEX_LENGTH + DATA_FREE) before the table is surfaced via the
-	// SchemaTableDataFreeBytes metric and a throttled INFO log. A value of
-	// 0 disables the feature entirely. This value is backed by viper so it
-	// can be changed at runtime via the dynamic config file.
-	schemaUserTablesFreeSpacePercentThreshold = viperutil.Configure(
-		"schema_user_tables_free_space_percent_threshold",
-		viperutil.Options[int]{
-			FlagName: "schema-user-tables-free-space-percent-threshold",
-			Default:  50,
+	// schemaUserTablesFreeSpaceMetricsEnabled controls whether vttablet
+	// publishes the SchemaTableDataFreeBytes per-table gauge (DATA_FREE bytes
+	// reclaimable via OPTIMIZE) for every user table on each schema reload.
+	// Operators consume the metric and apply their own thresholds for
+	// alerting; vttablet has no opinion on what counts as "too much" free
+	// space. This value is backed by viper so it can be toggled at runtime
+	// via the dynamic config file.
+	schemaUserTablesFreeSpaceMetricsEnabled = viperutil.Configure(
+		"schema_user_tables_free_space_metrics_enabled",
+		viperutil.Options[bool]{
+			FlagName: "schema-user-tables-free-space-metrics-enabled",
+			Default:  true,
 			Dynamic:  true,
 		},
 	)
 )
 
-// SchemaUserTablesFreeSpacePercentThreshold returns the current
-// schema-user-tables-free-space-percent-threshold value. It reads the live
+// SchemaUserTablesFreeSpaceMetricsEnabled returns the current
+// schema-user-tables-free-space-metrics-enabled value. It reads the live
 // viper-backed setting, so runtime updates to the config file are picked up
 // on the next call.
-func SchemaUserTablesFreeSpacePercentThreshold() int {
-	return schemaUserTablesFreeSpacePercentThreshold.Get()
+func SchemaUserTablesFreeSpaceMetricsEnabled() bool {
+	return schemaUserTablesFreeSpaceMetricsEnabled.Get()
 }
 
 func init() {
@@ -165,8 +165,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.DurationVar(&currentConfig.SchemaReloadInterval, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadInterval, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	fs.DurationVar(&currentConfig.SchemaChangeReloadTimeout, "schema-change-reload-timeout", defaultConfig.SchemaChangeReloadTimeout, "query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up")
-	fs.Int("schema-user-tables-free-space-percent-threshold", schemaUserTablesFreeSpacePercentThreshold.Default(), "percentage (0-100) of a user table's total allocated space that must be reclaimable free space (DATA_FREE) before the table is surfaced via the SchemaTableDataFreeBytes metric and a throttled INFO log. 0 disables the feature. Dynamically reloadable via the viper config file.")
-	viperutil.BindFlags(fs, schemaUserTablesFreeSpacePercentThreshold)
+	fs.Bool("schema-user-tables-free-space-metrics-enabled", schemaUserTablesFreeSpaceMetricsEnabled.Default(), "publish DATA_FREE bytes (reclaimable via OPTIMIZE) for every user table via the SchemaTableDataFreeBytes metric on each schema reload. Dynamically reloadable via the viper config file.")
+	viperutil.BindFlags(fs, schemaUserTablesFreeSpaceMetricsEnabled)
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema-change-signal enabled for this to work")
 	fs.DurationVar(&currentConfig.Olap.TxTimeout, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeout, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
 	fs.DurationVar(&currentConfig.Oltp.QueryTimeout, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeout, "query server query timeout, this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")
@@ -956,9 +956,6 @@ func (c *TabletConfig) Verify() error {
 	}
 	if v := c.HotRowProtection.MaxConcurrency; v <= 0 {
 		return fmt.Errorf("--hot-row-protection-concurrent-transactions must be > 0 (specified value: %v)", v)
-	}
-	if v := SchemaUserTablesFreeSpacePercentThreshold(); v < 0 || v > 100 {
-		return fmt.Errorf("--schema-user-tables-free-space-percent-threshold must be in the range 0-100 (specified value: %v)", v)
 	}
 	return nil
 }

@@ -581,8 +581,9 @@ func TestCloseCancelsInFlightOptimize(t *testing.T) {
 		"SRO restore must run even when Engine.Close() has cancelled backgroundCtx; leaving a non-primary tablet with super_read_only=OFF is a correctness hazard")
 }
 
-// TestUpdateUserTableFreeSpaceDisabled verifies that when the threshold is
-// 0 (feature disabled) we issue no query and clear any stale gauge labels.
+// TestUpdateUserTableFreeSpaceDisabled verifies that when the feature is
+// disabled we issue no query and reset any gauge labels published while
+// it was previously enabled.
 func TestUpdateUserTableFreeSpaceDisabled(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -590,35 +591,61 @@ func TestUpdateUserTableFreeSpaceDisabled(t *testing.T) {
 	se.conns.Open(se.cp, se.cp, se.cp)
 	defer se.conns.Close()
 
-	// Seed the "previously surfaced" state as if a prior enabled run had
+	// Seed the "previously active" state as if a prior enabled run had
 	// set labels on the gauge.
 	se.tableDataFreeBytes.Set("t_old", 12345)
-	se.surfacedFreeSpaceTables = map[string]struct{}{"t_old": {}}
+	se.freeSpaceMetricsActive = true
 
-	// With the feature off (threshold=0), updateUserTableFreeSpaceLocked
-	// must not call the DB at all. To assert that, we install an
-	// unconditionally-rejecting query pattern that matches the format's
-	// prefix.
+	// With the feature off, updateUserTableFreeSpaceLocked must not call
+	// the DB at all. To assert that, we install an unconditionally-rejecting
+	// query pattern that matches DATA_FREE queries.
 	db.RejectQueryPattern(".*data_free.*", "updateUserTableFreeSpaceLocked must not query when feature is disabled")
 
 	ctx := t.Context()
 	conn, err := se.conns.Get(ctx, nil)
 	require.NoError(t, err)
 	se.mu.Lock()
-	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, 0)
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, false)
 	se.mu.Unlock()
 	conn.Recycle()
 
-	// Stale label should be cleared; surfacedFreeSpaceTables should be reset.
+	// Stale label should be cleared via ResetAll; freeSpaceMetricsActive
+	// should be flipped back to false.
 	assert.Equal(t, int64(0), se.tableDataFreeBytes.Counts()["t_old"],
 		"gauge label for a table we previously surfaced must be reset when the feature is disabled")
-	assert.Nil(t, se.surfacedFreeSpaceTables)
+	assert.False(t, se.freeSpaceMetricsActive)
+}
+
+// TestUpdateUserTableFreeSpaceDisabledNoOpWhenAlreadyInactive verifies that
+// calling updateUserTableFreeSpaceLocked with enabled=false when no labels
+// were ever published is a clean no-op (no DB work, no ResetAll).
+func TestUpdateUserTableFreeSpaceDisabledNoOpWhenAlreadyInactive(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	se.conns.Open(se.cp, se.cp, se.cp)
+	defer se.conns.Close()
+
+	require.False(t, se.freeSpaceMetricsActive)
+
+	// No gauge labels seeded; no DB query expected.
+	db.RejectQueryPattern(".*data_free.*", "updateUserTableFreeSpaceLocked must not query when feature is disabled")
+
+	ctx := t.Context()
+	conn, err := se.conns.Get(ctx, nil)
+	require.NoError(t, err)
+	se.mu.Lock()
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, false)
+	se.mu.Unlock()
+	conn.Recycle()
+
+	assert.False(t, se.freeSpaceMetricsActive)
 }
 
 // TestUpdateUserTableFreeSpaceEnabled verifies the enabled-feature flow:
-// DATA_FREE query runs with the configured percentage, returned rows
-// populate the gauge, and tables that drop out of the result get their
-// gauge labels reset on the next reload.
+// the DATA_FREE query runs and returned rows populate the gauge for every
+// user table. Operators apply their own thresholds in their monitoring
+// system.
 func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -629,42 +656,28 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	se.conns.Open(se.cp, se.cp, se.cp)
 	defer se.conns.Close()
 
-	dataFreeQuery := "select table_name, data_free, data_length + index_length + data_free as total_size from information_schema.TABLES where table_schema = database() and data_free * 100 > (data_length + index_length + data_free) * 50"
+	dataFreeQuery := "select table_name, data_free from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
 
-	// First reload: two tables are over threshold.
 	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("table_name|data_free|total_size", "varchar|uint64|uint64"),
-		"t_a|600|1000",
-		"t_b|800|1000",
+		sqltypes.MakeTestFields("table_name|data_free", "varchar|uint64"),
+		"t_a|600",
+		"t_b|800",
+		"t_c|0",
 	))
 	ctx := t.Context()
 	conn, err := se.conns.Get(ctx, nil)
 	require.NoError(t, err)
 	se.mu.Lock()
-	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, 50)
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, true)
 	se.mu.Unlock()
 	conn.Recycle()
 
+	// Every user table — including ones with zero DATA_FREE — gets a label
+	// so operators can compute free-space ratios in their monitoring system.
 	assert.Equal(t, int64(600), se.tableDataFreeBytes.Counts()["t_a"])
 	assert.Equal(t, int64(800), se.tableDataFreeBytes.Counts()["t_b"])
-
-	// Second reload: t_a has dropped below threshold (e.g. was OPTIMIZEd
-	// externally), only t_b remains. Its gauge label must be reset.
-	db.DeleteQuery(dataFreeQuery)
-	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("table_name|data_free|total_size", "varchar|uint64|uint64"),
-		"t_b|900|1000",
-	))
-	conn, err = se.conns.Get(ctx, nil)
-	require.NoError(t, err)
-	se.mu.Lock()
-	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, 50)
-	se.mu.Unlock()
-	conn.Recycle()
-
-	assert.Equal(t, int64(0), se.tableDataFreeBytes.Counts()["t_a"],
-		"t_a must be reset now that it is no longer over threshold")
-	assert.Equal(t, int64(900), se.tableDataFreeBytes.Counts()["t_b"])
+	assert.Equal(t, int64(0), se.tableDataFreeBytes.Counts()["t_c"])
+	assert.True(t, se.freeSpaceMetricsActive)
 }
 
 // TestUpdateUserTableFreeSpaceIgnoresMaxTableCount verifies that the
@@ -681,18 +694,18 @@ func TestUpdateUserTableFreeSpaceIgnoresMaxTableCount(t *testing.T) {
 	SetMaxTableCount(1)
 	t.Cleanup(func() { SetMaxTableCount(originalMaxTableCount) })
 
-	dataFreeQuery := "select table_name, data_free, data_length + index_length + data_free as total_size from information_schema.TABLES where table_schema = database() and data_free * 100 > (data_length + index_length + data_free) * 50"
+	dataFreeQuery := "select table_name, data_free from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
 	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("table_name|data_free|total_size", "varchar|uint64|uint64"),
-		"t_a|600|1000",
-		"t_b|800|1000",
+		sqltypes.MakeTestFields("table_name|data_free", "varchar|uint64"),
+		"t_a|600",
+		"t_b|800",
 	))
 
 	ctx := t.Context()
 	conn, err := se.conns.Get(ctx, nil)
 	require.NoError(t, err)
 	se.mu.Lock()
-	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, 50)
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, true)
 	se.mu.Unlock()
 	conn.Recycle()
 
@@ -879,34 +892,6 @@ func TestExecuteFetchCtxFastFailOnExpiredCtx(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Equal(t, 0, db.GetQueryCalledNum("sentinel"),
 		"executeFetchCtx must not issue query when ctx is already done")
-}
-
-// TestUpdateUserTableFreeSpaceOutOfRangeThresholdTreatedAsDisabled verifies
-// that an out-of-range viper-pushed value is clamped to "disabled" and
-// emits a throttled warning. Without this, a negative threshold would
-// make the SQL predicate match every table (integer arithmetic inverts).
-func TestUpdateUserTableFreeSpaceOutOfRangeThresholdTreatedAsDisabled(t *testing.T) {
-	for _, bad := range []int{-1, -50, 101, 200} {
-		t.Run("", func(t *testing.T) {
-			db := fakesqldb.New(t)
-			defer db.Close()
-			se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
-			se.conns.Open(se.cp, se.cp, se.cp)
-			defer se.conns.Close()
-
-			// Fail loudly if any data_free query is issued — out-of-range must be
-			// treated as disabled, so no DB work should happen.
-			db.RejectQueryPattern(".*data_free.*", "out-of-range threshold must be treated as disabled")
-
-			ctx := t.Context()
-			conn, err := se.conns.Get(ctx, nil)
-			require.NoError(t, err)
-			se.mu.Lock()
-			se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, bad)
-			se.mu.Unlock()
-			conn.Recycle()
-		})
-	}
 }
 
 // TestMakeNonPrimaryResetsSequenceInfo covers the sequence-reset branch of

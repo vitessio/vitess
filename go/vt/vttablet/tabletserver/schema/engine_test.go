@@ -1416,6 +1416,7 @@ func TestEngineGetDroppedTables(t *testing.T) {
 			}
 			se.tableFileSizeGauge = stats.NewGaugesWithSingleLabel("TestEngineGetDroppedTables-"+tt.name, "", "Table")
 			se.tableAllocatedSizeGauge = stats.NewGaugesWithSingleLabel("TestEngineGetDroppedTables-allocated-"+tt.name, "", "Table")
+			se.tableDataFreeBytes = stats.NewGaugesWithSingleLabel("TestEngineGetDroppedTables-datafree-"+tt.name, "", "Table")
 			gotDroppedTables := se.getDroppedTables(tt.curTables, tt.changedViews, tt.mismatchTables)
 			require.ElementsMatch(t, gotDroppedTables, tt.wantDroppedTables)
 		})
