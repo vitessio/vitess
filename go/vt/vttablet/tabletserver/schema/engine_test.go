@@ -26,7 +26,6 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -185,7 +184,7 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			firstTime = false
 			createTables := extractNamesFromTablesList(created)
 			sort.Strings(createTables)
-			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
+			assert.Equal(t, []string{"msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
 			assert.Equal(t, []*Table(nil), altered)
 			assert.Equal(t, []*Table(nil), dropped)
 		} else {
@@ -195,7 +194,7 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 		}
 	}
 	se.RegisterNotifier("test", notifier, true)
-	err := se.Reload(context.Background())
+	err := se.Reload(t.Context())
 	require.NoError(t, err)
 
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
@@ -236,11 +235,11 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 	require.NoError(t, err)
 	se.UnregisterNotifier("test")
 
-	err = se.ReloadAt(context.Background(), replication.Position{})
+	err = se.ReloadAt(t.Context(), replication.Position{})
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
-	err = se.ReloadAt(context.Background(), pos1)
+	err = se.ReloadAt(t.Context(), pos1)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
@@ -273,12 +272,12 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			mysql.ShowPrimaryRow("seq", "id"),
 		},
 	})
-	err = se.ReloadAt(context.Background(), pos1)
+	err = se.ReloadAt(t.Context(), pos1)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
 	delete(want, "test_table_03")
-	err = se.ReloadAt(context.Background(), pos2)
+	err = se.ReloadAt(t.Context(), pos2)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 }
@@ -423,7 +422,7 @@ func TestOpenAndReload(t *testing.T) {
 			firstTime = false
 			createTables := extractNamesFromTablesList(created)
 			sort.Strings(createTables)
-			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
+			assert.Equal(t, []string{"msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
 			assert.Equal(t, []*Table(nil), altered)
 			assert.Equal(t, []*Table(nil), dropped)
 		} else {
@@ -433,7 +432,7 @@ func TestOpenAndReload(t *testing.T) {
 		}
 	}
 	se.RegisterNotifier("test", notifier, true)
-	err := se.Reload(context.Background())
+	err := se.Reload(t.Context())
 	require.NoError(t, err)
 
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
@@ -474,11 +473,11 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, err)
 	se.UnregisterNotifier("test")
 
-	err = se.ReloadAt(context.Background(), replication.Position{})
+	err = se.ReloadAt(t.Context(), replication.Position{})
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
-	err = se.ReloadAt(context.Background(), pos1)
+	err = se.ReloadAt(t.Context(), pos1)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
@@ -511,14 +510,131 @@ func TestOpenAndReload(t *testing.T) {
 			mysql.ShowPrimaryRow("seq", "id"),
 		},
 	})
-	err = se.ReloadAt(context.Background(), pos1)
+	err = se.ReloadAt(t.Context(), pos1)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
 	delete(want, "test_table_03")
-	err = se.ReloadAt(context.Background(), pos2)
+	err = se.ReloadAt(t.Context(), pos2)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
+}
+
+// TestUserTableNamedDual verifies that a real user table named `dual` is
+// tracked, refreshed, and dropped like any other table — i.e. that the schema
+// engine does not special-case the name `dual`. The MySQL `FROM dual`
+// placeholder is a parser concept, not a schema concept.
+func TestUserTableNamedDual(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	db.RejectQueryPattern(baseShowTablesWithSizesPattern, "Opening schema engine should query tables without size information")
+	db.RejectQueryPattern(baseInnoDBTableSizesPattern, "Opening schema engine should query tables without size information")
+
+	// SHOW TABLES returns dual as a real user table alongside the default fixtures.
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("dual", false, ""),
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+		},
+	})
+
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowPrimaryRow("dual", "pk"),
+			mysql.ShowPrimaryRow("test_table_01", "pk"),
+		},
+	})
+
+	db.MockQueriesForTable("dual", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+
+	// Advance unix_timestamp one tick past the default BaseShowTablesRow
+	// CreateTime (1427325875) so initial-load tables count as "older" than
+	// se.lastChange and only genuinely-modified tables show up as altered on
+	// subsequent reloads.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields("t", "int64"), "1427325876"))
+
+	AddFakeInnoDBReadRowsResult(db, 12)
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	require.NoError(t, se.Open())
+	defer se.Close()
+
+	// dual is tracked as a real user table, with its real fields and PK.
+	dual := se.GetTable(sqlparser.NewIdentifierCS("dual"))
+	require.NotNil(t, dual, "dual user table should be tracked in the schema engine")
+	assert.Equal(t, "dual", dual.Name.String())
+	assert.Equal(t, NoType, dual.Type)
+	assert.Equal(t, []*querypb.Field{{Name: "pk", Type: sqltypes.Int32}}, dual.Fields)
+	assert.Equal(t, []int{0}, dual.PKColumns)
+	assert.Equal(t, int64(1427325875), dual.CreateTime)
+
+	var (
+		gotCreated []string
+		gotAltered []string
+		gotDropped []string
+	)
+	se.RegisterNotifier("dual-test", func(_ map[string]*Table, created, altered, dropped []*Table, _ bool) {
+		gotCreated = extractNamesFromTablesList(created)
+		gotAltered = extractNamesFromTablesList(altered)
+		gotDropped = extractNamesFromTablesList(dropped)
+		sort.Strings(gotCreated)
+		sort.Strings(gotAltered)
+		sort.Strings(gotDropped)
+	}, true)
+
+	// On registration with runNotifier=true, the notifier fires once with every
+	// currently-tracked table reported as "created" — including dual.
+	assert.Equal(t, []string{"dual", "test_table_01"}, gotCreated)
+	assert.Empty(t, gotAltered)
+	assert.Empty(t, gotDropped)
+
+	// Reload with a refreshed CreateTime for dual: it should flow through `altered`.
+	// test_table_01 keeps its old CreateTime, which is strictly less than lastChange,
+	// so it stays unchanged.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields("t", "int64"), "1427325878"))
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("dual")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
+			},
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+		},
+	})
+
+	gotCreated, gotAltered, gotDropped = nil, nil, nil
+	require.NoError(t, se.Reload(t.Context()))
+	assert.Empty(t, gotCreated)
+	assert.Equal(t, []string{"dual"}, gotAltered)
+	assert.Empty(t, gotDropped)
+	assert.Equal(t, int64(1427325877), se.GetTable(sqlparser.NewIdentifierCS("dual")).CreateTime)
+
+	// Reload with dual removed from the database: it should flow through `dropped`
+	// and disappear from se.tables.
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+		},
+	})
+
+	gotCreated, gotAltered, gotDropped = nil, nil, nil
+	require.NoError(t, se.Reload(context.Background()))
+	assert.Empty(t, gotCreated)
+	assert.Empty(t, gotAltered)
+	assert.Equal(t, []string{"dual"}, gotDropped)
+	assert.Nil(t, se.GetTable(sqlparser.NewIdentifierCS("dual")), "dual should be dropped from the schema engine cache")
 }
 
 func TestReloadWithSwappedTables(t *testing.T) {
@@ -613,7 +729,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.ShowPrimaryRow("msg", "id"),
 		},
 	})
-	err := se.Reload(context.Background())
+	err := se.Reload(t.Context())
 	require.NoError(t, err)
 
 	want["test_table_04"] = &Table{
@@ -693,7 +809,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.ShowPrimaryRow("msg", "id"),
 		},
 	})
-	err = se.Reload(context.Background())
+	err = se.Reload(t.Context())
 	require.NoError(t, err)
 
 	delete(want, "test_table_03")
@@ -727,9 +843,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	db.AddRejectedQuery(mysql.BaseShowTables, errors.New(want))
 	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
 	err := se.Open()
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, want %s", err, want)
-	}
+	require.ErrorContainsf(t, err, want, "se.Open: %v, want %s", err, want)
 }
 
 // TestOpenFailedDueToLoadTableErr tests that schema engine load should fail for test_table and
@@ -794,30 +908,10 @@ func TestEngineTableCount(t *testing.T) {
 	require.NoError(t, se.Open())
 	defer se.Close()
 
-	// TableCount reports user schema objects, not Vitess's synthetic dual entry.
 	assert.Equal(t, 0, se.TableCount())
 	se.SetTableForTests(NewTable("table_count_test_t1", NoType))
 	se.SetTableForTests(NewTable("table_count_test_t2", NoType))
 	assert.Equal(t, 2, se.TableCount())
-}
-
-func TestResetTablesForTestsKeepsSyntheticDual(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	schematest.AddDefaultQueries(db)
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-	})
-	AddFakeInnoDBReadRowsResult(db, 0)
-	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
-	require.NoError(t, se.Open())
-	defer se.Close()
-
-	se.SetTableForTests(NewTable("table_count_test_t1", NoType))
-	se.ResetTablesForTests()
-
-	assert.NotNil(t, se.GetTable(sqlparser.NewIdentifierCS("dual")))
-	assert.Equal(t, 0, se.TableCount())
 }
 
 func TestSchemaEngineCloseTickRace(t *testing.T) {
@@ -864,7 +958,7 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 	case <-finished:
 		return
 	case <-time.After(2 * time.Second):
-		t.Fatal("Could not stop the ticks after 2 seconds")
+		require.Fail(t, "Could not stop the ticks after 2 seconds")
 	}
 }
 
@@ -893,9 +987,6 @@ func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 
 func initialSchema() map[string]*Table {
 	return map[string]*Table{
-		"dual": {
-			Name: sqlparser.NewIdentifierCS("dual"),
-		},
 		"test_table_01": {
 			Name: sqlparser.NewIdentifierCS("test_table_01"),
 			Fields: []*querypb.Field{{
@@ -1066,7 +1157,7 @@ func TestEngineMysqlTime(t *testing.T) {
 			se := &Engine{}
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tt.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			if tt.timeStampErr != nil {
@@ -1075,7 +1166,7 @@ func TestEngineMysqlTime(t *testing.T) {
 				db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("UNIX_TIMESTAMP", "int64"), tt.timeStampResult...))
 			}
 
-			gotTime, err := se.mysqlTime(context.Background(), conn)
+			gotTime, err := se.mysqlTime(t.Context(), conn)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
@@ -1173,7 +1264,7 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tt.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
 
@@ -1184,7 +1275,7 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 				db.AddRejectedQuery(query, errToThrow)
 			}
 
-			err = se.populatePrimaryKeys(context.Background(), conn, tt.tables)
+			err = se.populatePrimaryKeys(t.Context(), conn, tt.tables)
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
 				return
@@ -1235,7 +1326,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tt.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
 			se.innoDbReadRowsCounter = stats.NewCounter("TestEngineUpdateInnoDBRowsRead-"+tt.name, "")
@@ -1247,7 +1338,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 				db.AddRejectedQuery(query, errToThrow)
 			}
 
-			err = se.updateInnoDBRowsRead(context.Background(), conn)
+			err = se.updateInnoDBRowsRead(t.Context(), conn)
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
 				return
@@ -1263,7 +1354,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 func TestEngineGetTableData(t *testing.T) {
 	db := fakesqldb.New(t)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestEngineGetTableData")
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -1298,7 +1389,7 @@ func TestEngineGetTableData(t *testing.T) {
 				defer db.DeleteRejectedQuery(query)
 			}
 
-			_, err = getTableData(context.Background(), conn, false)
+			_, err = getTableData(t.Context(), conn, false)
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
 				return
@@ -1437,7 +1528,7 @@ func TestEngineReload(t *testing.T) {
 			cfg.SignalWhenSchemaChange = true
 
 			env := tabletenv.NewEnv(venv, nil, "TestEngineReload")
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			se := newEngine(10*time.Second, 10*time.Second, 0, db, venv)
@@ -1448,7 +1539,7 @@ func TestEngineReload(t *testing.T) {
 
 			// If we have to skip the meta check, then there is nothing to do
 			se.SkipMetaCheck = true
-			err = se.reload(context.Background(), false)
+			err = se.reload(t.Context(), false)
 			require.NoError(t, err)
 
 			se.SkipMetaCheck = false
@@ -1595,7 +1686,7 @@ func TestEngineReload(t *testing.T) {
 			}, false)
 
 			// Run the reload.
-			err = se.reload(context.Background(), false)
+			err = se.reload(t.Context(), false)
 			require.NoError(t, err)
 			require.NoError(t, db.LastError())
 			require.Zero(t, se.throttledLogger.GetLastLogTime())
@@ -1604,7 +1695,7 @@ func TestEngineReload(t *testing.T) {
 			// Instead we should see a log message with the error.
 			db.RemoveQueryPattern(udfQueryPattern)
 			se.UnregisterNotifier("test")
-			err = se.reload(context.Background(), false)
+			err = se.reload(t.Context(), false)
 			require.NoError(t, err)
 			// Check for the udf error being logged. The last log time should be less than a second.
 			require.Less(t, time.Since(se.throttledLogger.GetLastLogTime()), 1*time.Second)

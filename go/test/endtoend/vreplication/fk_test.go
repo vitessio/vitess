@@ -68,7 +68,7 @@ func TestFKWorkflow(t *testing.T) {
 	var cancel context.CancelFunc
 	var ctx context.Context
 	if withLoad {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		ls = newFKLoadSimulator(t, ctx)
 		defer func() {
 			select {
@@ -134,7 +134,7 @@ func TestFKWorkflow(t *testing.T) {
 
 	// Restart the LoadSimulator.
 	if withLoad {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		ls = newFKLoadSimulator(t, ctx)
 		defer func() {
 			select {
@@ -162,7 +162,7 @@ func TestFKWorkflow(t *testing.T) {
 	log.Info("Switch traffic done")
 
 	if withLoad {
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		ls = newFKLoadSimulator(t, ctx)
 		defer cancel()
 		go ls.simulateLoad()
@@ -290,7 +290,7 @@ func (ls *fkLoadSimulator) waitForAdditionalRows(count int) {
 	for {
 		switch {
 		case shortCtx.Err() != nil:
-			t.Fatalf("Timed out waiting for additional rows")
+			require.Failf(t, "timeout", "Timed out waiting for additional rows")
 		default:
 			numRows := ls.getNumRowsParent(vtgateConn)
 			if numRows >= numRowsStart+count {

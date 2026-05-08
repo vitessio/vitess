@@ -56,12 +56,17 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		buf.literal(SQLCalcFoundRowsStr)
 	}
 
-	buf.astPrintf(node, "%v from ", node.SelectExprs)
+	buf.astPrintf(node, "%v", node.SelectExprs)
 
-	prefix := ""
-	for _, expr := range node.From {
-		buf.astPrintf(node, "%s%v", prefix, expr)
-		prefix = ", "
+	if len(node.From) == 0 {
+		buf.literal(" from dual")
+	} else {
+		buf.literal(" from ")
+		prefix := ""
+		for _, expr := range node.From {
+			buf.astPrintf(node, "%s%v", prefix, expr)
+			prefix = ", "
+		}
 	}
 
 	buf.astPrintf(node, "%v%v%v",
@@ -1399,11 +1404,7 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
-	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
-		buf.WriteString("dual")
-	} else {
-		buf.astPrintf(node, "%v", node.Name)
-	}
+	buf.astPrintf(node, "%v", node.Name)
 }
 
 // Format formats the node.

@@ -75,7 +75,7 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	go func() {
 		uvs.stopPos = replication.Position{} // reset stopPos which was potentially set during fastforward
 		startPos := replication.EncodePosition(uvs.pos)
-		vs := uvs.newStartupVStreamer(ctx, startPos, "", uvs.send2, "catchup", nil)
+		vs := uvs.newStartupVStreamer(ctx, startPos, "", uvs.send2, "catchup", uvs.options)
 		uvs.setVs(vs)
 		errch <- vs.Stream()
 		uvs.setVs(nil)
@@ -307,7 +307,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		uvs.setCopyState(tableName, qrLastPK)
 		log.V(2).Info(fmt.Sprintf("NewLastPK: %v", qrLastPK))
 		return nil
-	}, nil)
+	}, uvs.options)
 	if err != nil {
 		uvs.vse.errorCounts.Add("StreamRows", 1)
 		return err
@@ -334,7 +334,7 @@ func (uvs *uvstreamer) fastForward(stopPos string) error {
 	}()
 	log.Info(fmt.Sprintf("starting fastForward from %s upto pos %s", replication.EncodePosition(uvs.pos), stopPos))
 	uvs.stopPos, _ = replication.DecodePosition(stopPos)
-	vs := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", nil)
+	vs := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", uvs.options)
 	uvs.setVs(vs)
 	return vs.Stream()
 }

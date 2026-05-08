@@ -116,6 +116,9 @@ type SandboxConn struct {
 	VStreamErrors     []error
 	VStreamCh         chan *binlogdatapb.VEvent
 	VStreamEventDelay time.Duration // Any sleep that should be introduced before each event is streamed
+	// VStreamRequests records every VStreamRequest received by VStream so tests can inspect
+	// what was sent to the tablet (e.g. Options.NoTimeouts).
+	VStreamRequests []*binlogdatapb.VStreamRequest
 
 	// BinlogDump expectations.
 	BinlogDumpResponses []*binlogdatapb.BinlogDumpResponse
@@ -602,6 +605,7 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
+	sbc.VStreamRequests = append(sbc.VStreamRequests, request)
 	if sbc.StartPos != "" && sbc.StartPos != request.Position {
 		log.Error(fmt.Sprintf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos))
 		return fmt.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)

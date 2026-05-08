@@ -30,7 +30,7 @@ func TestGetMysqlMetricsRateLimiter(t *testing.T) {
 	for i := range 3 {
 		testName := fmt.Sprintf("iteration %d", i)
 		t.Run(testName, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			{
 				rateLimiter := mysqlHostMetricsRateLimiter.Load()

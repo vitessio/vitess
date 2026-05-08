@@ -284,7 +284,7 @@ func TestThreadFinished(t *testing.T) {
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("max rate was not propapgated to threadThrottler[0] in time: %v", throttlerImpl.threadThrottlers[0].getMaxRate())
+			require.Failf(t, "max rate not propagated", "max rate was not propapgated to threadThrottler[0] in time: %v", throttlerImpl.threadThrottlers[0].getMaxRate())
 		default:
 			// Timer not up yet. Try again.
 		}
@@ -424,7 +424,7 @@ func TestThrottlerMaxLag(t *testing.T) {
 	require.NotNil(t, throttler)
 	require.NotNil(t, throttler.maxReplicationLagModule)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	var wg sync.WaitGroup

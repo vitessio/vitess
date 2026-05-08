@@ -90,6 +90,38 @@ create table t2 (
 	require.NoError(t, err)
 }
 
+// TestAnalyzeWhereFromlessSelect guards against a panic in analyzeWhere
+// for FROM-less SELECTs with an IN predicate in the WHERE clause. After
+// DUAL became a reserved keyword, queries like `SELECT … WHERE x IN (…)`
+// (and equivalently `SELECT … FROM DUAL WHERE x IN (…)`) parse to From: nil,
+// and the previous unconditional selStmt.From[0] indexing panicked.
+func TestAnalyzeWhereFromlessSelect(t *testing.T) {
+	tablet := &explainTablet{collationEnv: collations.MySQL8()}
+	parser := sqlparser.NewTestParser()
+
+	tests := []string{
+		"SELECT 1 WHERE id IN (1, 2, 3)",
+		"SELECT 1 FROM DUAL WHERE id IN (1, 2)",
+	}
+	for _, query := range tests {
+		t.Run(query, func(t *testing.T) {
+			stmt, err := parser.Parse(query)
+			require.NoError(t, err)
+			sel, ok := stmt.(*sqlparser.Select)
+			require.True(t, ok, "expected *sqlparser.Select, got %T", stmt)
+			require.Empty(t, sel.From, "FROM-less SELECT should parse to From: nil")
+
+			require.NotPanics(t, func() {
+				inColName, inVal, rowCount, _, err := tablet.analyzeWhere(sel, nil)
+				require.NoError(t, err)
+				assert.Equal(t, "id", inColName)
+				assert.Len(t, inVal, len(sel.Where.Expr.(*sqlparser.ComparisonExpr).Right.(sqlparser.ValTuple)))
+				assert.Equal(t, 1, rowCount)
+			})
+		})
+	}
+}
+
 func TestParseSchema(t *testing.T) {
 	testSchema := `
 create table t1 (
@@ -129,9 +161,7 @@ create table test_partitioned (
 `
 	env := vtenv.NewTestEnv()
 	ddls, err := parseSchema(testSchema, &Options{StrictDDL: false}, env.Parser())
-	if err != nil {
-		t.Fatalf("parseSchema: %v", err)
-	}
+	require.NoError(t, err)
 	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, Cell)
@@ -160,13 +190,9 @@ create table test_partitioned (
 	got, _ := json.Marshal(t1.Fields)
 	assert.Equal(t, wantCols, string(got))
 
-	if !t1.HasPrimary() || len(t1.PKColumns) != 1 || t1.PKColumns[0] != 0 {
-		t.Errorf("expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
-	}
+	assert.True(t, t1.HasPrimary() && len(t1.PKColumns) == 1 && t1.PKColumns[0] == 0, "expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
 	pkCol := t1.GetPKColumn(0)
-	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64 charset:33 flags:32800` {
-		t.Errorf("expected pkCol[0] == id, got %v", pkCol)
-	}
+	assert.True(t, pkCol != nil && pkCol.String() == `name:"id" type:UINT64 charset:33 flags:32800`, "expected pkCol[0] == id, got %v", pkCol)
 
 	t2 := tables["t2"]
 	require.NotNil(t, t2, "table t2 wasn't parsed properly")
@@ -176,7 +202,7 @@ create table test_partitioned (
 	assert.Equal(t, wantCols, string(got))
 
 	if t2.HasPrimary() || len(t2.PKColumns) != 0 {
-		t.Errorf("expected !HasPrimary && t2.PKColumns == [] got %v", t2.PKColumns)
+		assert.Failf(t, "unexpected primary key", "expected !HasPrimary && t2.PKColumns == [] got %v", t2.PKColumns)
 	}
 
 	t5 := tables["t5"]
@@ -185,7 +211,7 @@ create table test_partitioned (
 	assert.Equal(t, wantCols, string(got))
 
 	if t5.HasPrimary() || len(t5.PKColumns) != 0 {
-		t.Errorf("expected !HasPrimary && t5.PKColumns == [] got %v", t5.PKColumns)
+		assert.Failf(t, "unexpected primary key", "expected !HasPrimary && t5.PKColumns == [] got %v", t5.PKColumns)
 	}
 
 	seq := tables["t1_seq"]

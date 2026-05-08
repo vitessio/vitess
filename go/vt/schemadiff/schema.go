@@ -219,10 +219,8 @@ func (s *Schema) normalize(hints *DiffHints) error {
 		for _, name := range names {
 			dependencyLevel, ok := dependencyLevels[name]
 			if !ok {
-				if strings.ToLower(name) != "dual" {
-					// named table is not yet handled. This means this view cannot be defined yet.
-					return false
-				}
+				// named table is not yet handled. This means this view cannot be defined yet.
+				return false
 			}
 			if dependencyLevel >= level {
 				// named table/view is in same dependency level as this view; we want to postpone this
@@ -1100,9 +1098,6 @@ func (s *Schema) ValidateViewReferences() error {
 		}
 	}
 
-	// Add dual table with no explicit columns for dual style expressions in views.
-	schemaInformation.addTable("dual")
-
 	for _, view := range s.Views() {
 		sel := sqlparser.Clone(view.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
 		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
@@ -1142,10 +1137,6 @@ func (s *Schema) getEntityColumnNames(entityName string, schemaInformation *decl
 ) {
 	entity := s.Entity(entityName)
 	if entity == nil {
-		if strings.ToLower(entityName) == "dual" {
-			// this is fine. DUAL does not exist but is allowed
-			return nil, nil
-		}
 		return nil, &EntityNotFoundError{Name: entityName}
 	}
 	// The entity is either a table or a view
@@ -1183,8 +1174,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 			} else {
 				// add all columns from all referenced tables and views
 				for _, entityName := range dependentNames {
-					if schemaInformation.Tables[entityName] != nil { // is nil for dual/DUAL
-						for _, col := range schemaInformation.Tables[entityName].Columns {
+					if tbl, ok := schemaInformation.Tables[entityName]; ok {
+						for _, col := range tbl.Columns {
 							name := sqlparser.Clone(col.Name)
 							columnNames = append(columnNames, &name)
 						}

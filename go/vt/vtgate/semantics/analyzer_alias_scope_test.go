@@ -60,21 +60,27 @@ func TestSubqueryParentAliasResolution(t *testing.T) {
 	}
 }
 
-// TestSubqueryParentAliasDualFallback covers subqueries with no explicit FROM,
-// where the parser injects an implicit `dual`. The inner column reference is
-// reported as depending on that implicit `dual` rather than on the outer
-// alias. End-user behaviour still matches MySQL because the dual subquery is
-// merged into the outer route at planning time and MySQL itself resolves the
-// alias on the merged single-shard query.
-func TestSubqueryParentAliasDualFallback(t *testing.T) {
+// TestSubqueryParentAliasFromlessSubquery covers subqueries with no FROM clause
+// (DUAL is a reserved keyword, so `(select x)` and `(select x from dual)` both
+// parse to From: nil). The inner column reference resolves against a parent
+// SELECT alias and inherits the alias expression's dependencies; literal aliases
+// fall back to the outer scope's tables so single-route merging still works.
+func TestSubqueryParentAliasFromlessSubquery(t *testing.T) {
 	tcases := []struct {
-		sql string
+		sql  string
+		deps TableSet
 	}{{
-		sql: "select 1 as x, (select x)",
+		// outer has no FROM and the alias is a literal — no tables anywhere.
+		sql:  "select 1 as x, (select x)",
+		deps: EmptyTableSet(),
 	}, {
-		sql: "select id as foobar, (select foobar) from t1",
+		// alias expression references t1 — inner col inherits that dep.
+		sql:  "select id as foobar, (select foobar) from t1",
+		deps: TS0,
 	}, {
-		sql: "select 1 as foobar, (select foobar) from t1",
+		// literal alias falls back to the outer scope's tables (t1).
+		sql:  "select 1 as foobar, (select foobar) from t1",
+		deps: TS0,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -82,11 +88,10 @@ func TestSubqueryParentAliasDualFallback(t *testing.T) {
 			sel := stmt.(*sqlparser.Select)
 
 			subq := extract(sel, 1).(*sqlparser.Subquery).Select.(*sqlparser.Select)
-			innerDual := subq.From[0].(*sqlparser.AliasedTableExpr)
 			innerCol := extract(subq, 0)
 
 			require.NoError(t, semTable.NotSingleRouteErr)
-			assert.Equal(t, semTable.TableSetFor(innerDual), semTable.RecursiveDeps(innerCol))
+			assert.Equal(t, tc.deps, semTable.RecursiveDeps(innerCol))
 		})
 	}
 }

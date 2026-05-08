@@ -210,17 +210,17 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(rightKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 
 	keyRange, err := key.ParseShardingSpec("0")
 	if err != nil || len(keyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+		require.Failf(t, "ParseShardingSpec failed", "ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
 	}
 
 	// Shard not in the SrvKeyspace, ServedType not in SrvKeyspace
@@ -527,7 +527,7 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 			for i := 0; i < testcase.numberOfReadErrors; i++ {
 				fakeConn.AddGetError(true)
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
 			if testcase.expectedError != "" {
 				require.EqualError(t, err, testcase.expectedError)
@@ -544,7 +544,7 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 			require.Equal(t, testcase.expectedTabletType, ti.Type)
 
 			// assert that next change type succeeds irrespective of previous failures
-			err = tm.tmState.ChangeTabletType(context.Background(), topodatapb.TabletType_REPLICA, DBActionNone)
+			err = tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_REPLICA, DBActionNone)
 			require.NoError(t, err)
 		})
 	}

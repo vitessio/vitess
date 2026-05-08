@@ -46,7 +46,7 @@ func TestPermissions(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*60)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	defer ts.Close()

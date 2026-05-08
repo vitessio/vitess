@@ -18,11 +18,13 @@ package vtgate
 
 import (
 	"bytes"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/safehtml/template"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -72,9 +74,7 @@ func TestTabletStatusAggregator(t *testing.T) {
 		AvgLatency: 7,
 	}
 	got := aggr.GetCacheStatus()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("aggr.GetCacheStatus() =\n%+v, want =\n%+v", got, want)
-	}
+	assert.Equalf(t, want, got, "aggr.GetCacheStatus() =\n%+v, want =\n%+v", got, want)
 	// reset values in idx=0
 	for range 59 {
 		aggr.resetNextSlot()
@@ -107,18 +107,14 @@ func TestTabletStatusAggregator(t *testing.T) {
 		AvgLatency: 7.5,
 	}
 	got = aggr.GetCacheStatus()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("aggr.GetCacheStatus() =\n%+v, want =\n%+v", got, want)
-	}
+	assert.Equalf(t, want, got, "aggr.GetCacheStatus() =\n%+v, want =\n%+v", got, want)
 
 	// Make sure the HTML rendering of the cache works.
 	// This will catch most typos.
 	templ, err := template.New("").Parse(StatusTemplate)
-	if err != nil {
-		t.Fatalf("error parsing template: %v", err)
-	}
+	require.NoError(t, err)
 	wr := &bytes.Buffer{}
 	if err := templ.Execute(wr, []*TabletCacheStatus{got}); err != nil {
-		t.Fatalf("error executing template: %v", err)
+		require.NoError(t, err)
 	}
 }

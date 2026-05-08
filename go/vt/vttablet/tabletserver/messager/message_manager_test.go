@@ -142,7 +142,7 @@ func TestReceiverCancel(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(0)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go cancel()
 	_ = mm.Subscribe(ctx, r1.rcv)
 
@@ -155,7 +155,7 @@ func TestReceiverCancel(t *testing.T) {
 		}
 		return
 	}
-	t.Errorf("receivers were not cleared: %d", len(mm.receivers))
+	assert.Failf(t, "receivers not cleared", "receivers were not cleared: %d", len(mm.receivers))
 }
 
 func TestMessageManagerState(t *testing.T) {
@@ -184,26 +184,20 @@ func TestMessageManagerAdd(t *testing.T) {
 	row1 := &MessageRow{
 		Row: []sqltypes.Value{sqltypes.NewVarBinary("1")},
 	}
-	if mm.Add(row1) {
-		t.Error("Add(no receivers): true, want false")
-	}
+	assert.False(t, mm.Add(row1), "Add(no receivers): true, want false")
 
 	r1 := newTestReceiver(0)
 	go func() { <-r1.ch }()
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 
-	if !mm.Add(row1) {
-		t.Error("Add(1 receiver): false, want true")
-	}
+	assert.True(t, mm.Add(row1), "Add(1 receiver): false, want true")
 	// Make sure message is enqueued.
 	r1.WaitForCount(2)
 	// This will fill up the cache.
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 
 	// The third add has to fail.
-	if mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}}) {
-		t.Error("Add(cache full): true, want false")
-	}
+	assert.False(t, mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}}), "Add(cache full): true, want false")
 }
 
 func TestMessageManagerSend(t *testing.T) {
@@ -213,13 +207,13 @@ func TestMessageManagerSend(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 
 	want := &sqltypes.Result{
 		Fields: testFields,
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, want)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, want)
 	}
 	// Set the channel to verify call to Postpone.
 	// Make it buffered so the thread doesn't block on repeated calls.
@@ -233,13 +227,12 @@ func TestMessageManagerSend(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, want)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, want)
 	}
 
 	// Ensure Postpone got called.
-	if got, want := <-ch, "postpone"; got != want {
-		t.Errorf("Postpone: %s, want %v", got, want)
-	}
+	got, want2 := <-ch, "postpone"
+	assert.Equalf(t, want2, got, "Postpone: %s, want %v", got, want2)
 
 	// Verify item has been removed from cache.
 	// Need to obtain lock to prevent data race.
@@ -267,7 +260,7 @@ func TestMessageManagerSend(t *testing.T) {
 
 	// Test that mm stops sending to a canceled receiver.
 	r2 := newTestReceiver(1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	mm.Subscribe(ctx, r2.rcv)
 	<-r2.ch
 
@@ -307,7 +300,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 	<-r1.ch
 
 	// Set the channel to verify call to Postpone.
@@ -322,7 +315,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 
 	// Set up a second subscriber, add a message.
 	r2 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r2.rcv)
+	mm.Subscribe(t.Context(), r2.rcv)
 	<-r2.ch
 
 	// Wait.
@@ -331,9 +324,8 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	// postponeCount should be 1. Verify for two iterations.
-	if got, want := tsv.postponeCount.Load(), int64(1); got != want {
-		t.Errorf("tsv.postponeCount: %d, want %d", got, want)
-	}
+	got, want := tsv.postponeCount.Load(), int64(1)
+	assert.Equalf(t, want, got, "tsv.postponeCount: %d, want %d", got, want)
 
 	// Receive on this channel will allow the next postpone to go through.
 	<-ch
@@ -342,9 +334,8 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 		runtime.Gosched()
 		time.Sleep(10 * time.Millisecond)
 	}
-	if got, want := tsv.postponeCount.Load(), int64(1); got != want {
-		t.Errorf("tsv.postponeCount: %d, want %d", got, want)
-	}
+	got, want = tsv.postponeCount.Load(), int64(1)
+	assert.Equalf(t, want, got, "tsv.postponeCount: %d, want %d", got, want)
 	<-ch
 }
 
@@ -353,7 +344,7 @@ func TestMessageManagerSendError(t *testing.T) {
 	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), semaphore.NewWeighted(1))
 	mm.Open()
 	defer mm.Close()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ch := make(chan *sqltypes.Result)
 	go func() { <-ch }()
@@ -373,16 +364,15 @@ func TestMessageManagerSendError(t *testing.T) {
 	<-ch
 
 	// Ensure Postpone got called.
-	if got, want := <-postponech, "postpone"; got != want {
-		t.Errorf("Postpone: %s, want %v", got, want)
-	}
+	got, want := <-postponech, "postpone"
+	assert.Equalf(t, want, got, "Postpone: %s, want %v", got, want)
 }
 
 func TestMessageManagerFieldSendError(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), semaphore.NewWeighted(1))
 	mm.Open()
 	defer mm.Close()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ch := make(chan *sqltypes.Result)
 	go func() { <-ch }()
@@ -404,7 +394,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 	<-r1.ch
 
 	row1 := &MessageRow{
@@ -418,7 +408,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, row1)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, row1)
 	}
 	mm.mu.Lock()
 	mm.cache.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2"), sqltypes.NULL}})
@@ -435,7 +425,7 @@ func TestMessageManagerBatchSend(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %+v, want %+v", got, row1)
+		assert.Failf(t, "unexpected result", "Received: %+v, want %+v", got, row1)
 	}
 }
 
@@ -474,7 +464,7 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 	<-r1.ch
 
 	want := &sqltypes.Result{
@@ -484,7 +474,7 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, want)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, want)
 	}
 }
 
@@ -499,7 +489,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	defer mm.Close()
 
 	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 	<-r1.ch
 
 	for {
@@ -572,7 +562,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 		}},
 	}
 	if got := <-r1.ch; !got.Equal(want) {
-		t.Errorf("Received: %v, want %v", got, want)
+		assert.Failf(t, "unexpected result", "Received: %v, want %v", got, want)
 	}
 }
 
@@ -595,7 +585,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	r1 := newTestReceiver(1)
 	mm.Subscribe(ctx, r1.rcv)
 	<-r1.ch
@@ -624,9 +614,7 @@ func TestMessageManagerPoller(t *testing.T) {
 				break
 			}
 		}
-		if !found {
-			t.Errorf("row: %v not found in %v", gotrow, want)
-		}
+		assert.Truef(t, found, "row: %v not found in %v", gotrow, want)
 	}
 
 	// If there are no receivers, nothing should fire.
@@ -634,7 +622,7 @@ func TestMessageManagerPoller(t *testing.T) {
 	runtime.Gosched()
 	select {
 	case row := <-r1.ch:
-		t.Errorf("Expecting no value, got: %v", row)
+		assert.Failf(t, "unexpected value", "Expecting no value, got: %v", row)
 	default:
 	}
 }
@@ -653,7 +641,7 @@ func TestMessagesPending1(t *testing.T) {
 
 	r1 := newTestReceiver(0)
 	go func() { <-r1.ch }()
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
 	// Make sure the first message is enqueued.
@@ -678,7 +666,7 @@ func TestMessagesPending1(t *testing.T) {
 		<-r1.ch
 	}
 	if d := time.Since(start); d > 15*time.Second {
-		t.Errorf("pending work trigger did not happen. Duration: %v", d)
+		assert.Failf(t, "pending work trigger missed", "pending work trigger did not happen. Duration: %v", d)
 	}
 }
 
@@ -702,7 +690,7 @@ func TestMessagesPending2(t *testing.T) {
 
 	r1 := newTestReceiver(0)
 	go func() { <-r1.ch }()
-	mm.Subscribe(context.Background(), r1.rcv)
+	mm.Subscribe(t.Context(), r1.rcv)
 
 	// Now, let's pull more than 1 item. It should
 	// trigger the poller every time cache gets empty.
@@ -711,7 +699,7 @@ func TestMessagesPending2(t *testing.T) {
 		<-r1.ch
 	}
 	if d := time.Since(start); d > 15*time.Second {
-		t.Errorf("pending work trigger did not happen. Duration: %v", d)
+		assert.Failf(t, "pending work trigger missed", "pending work trigger did not happen. Duration: %v", d)
 	}
 }
 
@@ -728,9 +716,8 @@ func TestMessageManagerPurge(t *testing.T) {
 	mm.Open()
 	defer mm.Close()
 	// Ensure Purge got called.
-	if got, want := <-ch, "purge"; got != want {
-		t.Errorf("Purge: %s, want %v", got, want)
-	}
+	got, want := <-ch, "purge"
+	assert.Equalf(t, want, got, "Purge: %s, want %v", got, want)
 }
 
 func TestMMGenerate(t *testing.T) {
@@ -739,14 +726,12 @@ func TestMMGenerate(t *testing.T) {
 	defer mm.Close()
 	query, bv := mm.GenerateAckQuery([]string{"1", "2"})
 	wantQuery := "update foo set time_acked = :time_acked, time_next = null where id in ::ids and time_acked is null"
-	if query != wantQuery {
-		t.Errorf("GenerateAckQuery query: %s, want %s", query, wantQuery)
-	}
+	assert.Equalf(t, wantQuery, query, "GenerateAckQuery query: %s, want %s", query, wantQuery)
 	bvv, _ := sqltypes.BindVariableToValue(bv["time_acked"])
 	gotAcked, _ := bvv.ToCastInt64()
 	wantAcked := time.Now().UnixNano()
 	if wantAcked-gotAcked > 10e9 {
-		t.Errorf("gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
+		assert.Failf(t, "acked too old", "gotAcked: %d, should be with 10s of %d", gotAcked, wantAcked)
 	}
 	gotids := bv["ids"]
 	wantids := sqltypes.TestBindVariable([]any{[]byte{'1'}, []byte{'2'}})
@@ -754,17 +739,15 @@ func TestMMGenerate(t *testing.T) {
 
 	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
 	wantQuery = "update foo set time_next = :time_now + :wait_time + IF(FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter) < :min_backoff, :min_backoff, FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter)), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
-	if query != wantQuery {
-		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
-	}
+	assert.Equalf(t, wantQuery, query, "GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	if _, ok := bv["time_now"]; !ok {
-		t.Errorf("time_now is absent in %v", bv)
+		assert.Failf(t, "missing time_now", "time_now is absent in %v", bv)
 	} else {
 		// time_now cannot be compared.
 		delete(bv, "time_now")
 	}
 	if _, ok := bv["jitter"]; !ok {
-		t.Errorf("jitter is absent in %v", bv)
+		assert.Failf(t, "missing jitter", "jitter is absent in %v", bv)
 	} else {
 		// jitter cannot be compared.
 		delete(bv, "jitter")
@@ -778,15 +761,11 @@ func TestMMGenerate(t *testing.T) {
 
 	query, bv = mm.GeneratePurgeQuery(3)
 	wantQuery = "delete from foo where time_acked < :time_acked limit 500"
-	if query != wantQuery {
-		t.Errorf("GeneratePurgeQuery query: %s, want %s", query, wantQuery)
-	}
+	assert.Equalf(t, wantQuery, query, "GeneratePurgeQuery query: %s, want %s", query, wantQuery)
 	wantbv = map[string]*querypb.BindVariable{
 		"time_acked": sqltypes.Int64BindVariable(3),
 	}
-	if !reflect.DeepEqual(bv, wantbv) {
-		t.Errorf("gotid: %v, want %v", bv, wantbv)
-	}
+	assert.Equal(t, wantbv, bv, "gotid: %v, want %v", bv, wantbv)
 }
 
 func TestMMGenerateWithBackoff(t *testing.T) {
@@ -798,17 +777,15 @@ func TestMMGenerateWithBackoff(t *testing.T) {
 
 	query, bv := mm.GeneratePostponeQuery([]string{"1", "2"})
 	wantQuery := "update foo set time_next = :time_now + :wait_time + IF(FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter) < :min_backoff, :min_backoff, IF(FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter) > :max_backoff, :max_backoff, FLOOR((:min_backoff<<ifnull(epoch, 0)) * :jitter))), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
-	if query != wantQuery {
-		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
-	}
+	assert.Equalf(t, wantQuery, query, "GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	if _, ok := bv["time_now"]; !ok {
-		t.Errorf("time_now is absent in %v", bv)
+		assert.Failf(t, "missing time_now", "time_now is absent in %v", bv)
 	} else {
 		// time_now cannot be compared.
 		delete(bv, "time_now")
 	}
 	if _, ok := bv["jitter"]; !ok {
-		t.Errorf("jitter is absent in %v", bv)
+		assert.Failf(t, "missing jitter", "jitter is absent in %v", bv)
 	} else {
 		// jitter cannot be compared.
 		delete(bv, "jitter")
@@ -819,9 +796,7 @@ func TestMMGenerateWithBackoff(t *testing.T) {
 		"max_backoff": sqltypes.Int64BindVariable(4e9),
 		"ids":         wantids,
 	}
-	if !reflect.DeepEqual(bv, wantbv) {
-		t.Errorf("gotid: %v, want %v", bv, wantbv)
-	}
+	assert.Equal(t, wantbv, bv, "gotid: %v, want %v", bv, wantbv)
 }
 
 type fakeTabletServer struct {
