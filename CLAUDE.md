@@ -21,7 +21,6 @@ Always discuss first:
 
 **Only do exactly what I ask for - nothing more, nothing less.**
 
-- Do NOT proactively update documentation unless explicitly requested
 - Do NOT add explanatory comments unless asked
 - Do NOT make "improvements" or "clean up" code beyond the specific task
 - Do NOT add features, optimizations, or enhancements I didn't mention
