@@ -418,6 +418,21 @@ func TestPreparedStatementInOLAP(t *testing.T) {
 	require.Equal(t, int64(1), c7)
 }
 
+func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPEndToEnd(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1, 2)")
+
+	_, err := mcmp.VtConn.ExecuteFetch("set workload = olap", 1000, false)
+	require.NoError(t, err)
+
+	result, err := mcmp.VtConn.ExecuteFetch("update t1 set id2 = id2 + sleep(0.05) where id1 = 1", 1000, true)
+	require.NoError(t, err)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
 func TestPrepareStatements(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
