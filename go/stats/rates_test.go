@@ -20,6 +20,8 @@ import (
 	"expvar"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // For tests, we want to control exactly the time used by Rates.
@@ -73,12 +75,8 @@ func TestRates(t *testing.T) {
 }
 
 func checkRates(t *testing.T, r *Rates, desc string, wantRate float64, wantRateMap string) {
-	if got := r.String(); got != wantRateMap {
-		t.Errorf("%v: want %s, got %s", desc, wantRateMap, got)
-	}
-	if got := r.TotalRate(); got != wantRate {
-		t.Errorf("%v: want rate %v, got rate %v", desc, wantRate, got)
-	}
+	assert.Equalf(t, wantRateMap, r.String(), "%v", desc)
+	assert.Equalf(t, wantRate, r.TotalRate(), "%v", desc)
 }
 
 func TestRatesConsistency(t *testing.T) {
@@ -117,9 +115,7 @@ func TestRatesConsistency(t *testing.T) {
 	for _, v := range rate {
 		sum += v
 	}
-	if sum != float64(counts["a"]) {
-		t.Errorf("rate inconsistent with count: sum of %v != %v", rate, count)
-	}
+	assert.Equalf(t, float64(counts["a"]), sum, "rate inconsistent with count: sum of %v != %v", rate, count)
 }
 
 func TestRatesHook(t *testing.T) {
@@ -135,10 +131,6 @@ func TestRatesHook(t *testing.T) {
 
 	v := NewRates("rates2", c, 2, 10*time.Second)
 	defer v.Stop()
-	if gotname != "rates2" {
-		t.Errorf("want rates2, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "rates2", gotname)
+	assert.Equal(t, v, gotv)
 }

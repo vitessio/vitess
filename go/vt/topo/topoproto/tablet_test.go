@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -50,26 +51,15 @@ func TestParseTabletAlias(t *testing.T) {
 		alias, err := ParseTabletAlias(aliasStr)
 
 		if expectedAlias == nil {
-			if err == nil {
-				t.Fatalf("Expected to fail parsing invalid tablet alias: %s but got no error", aliasStr)
-			} else {
-				expectedErr := fmt.Errorf("invalid tablet alias: '%s', expecting format: '%s'", aliasStr, tabletAliasFormat)
-				if err.Error() != expectedErr.Error() {
-					t.Fatalf("Expected error: %s but got: %s", expectedErr, err)
-				}
-				continue
-			}
+			require.Errorf(t, err, "Expected to fail parsing invalid tablet alias: %s but got no error", aliasStr)
+			expectedErr := fmt.Errorf("invalid tablet alias: '%s', expecting format: '%s'", aliasStr, tabletAliasFormat)
+			require.Equalf(t, expectedErr.Error(), err.Error(), "Expected error: %s but got: %s", expectedErr, err)
+			continue
 		}
 
-		if err != nil {
-			t.Fatalf("Failed to parse valid tablet alias: %s, err: %s", aliasStr, err)
-		}
-		if alias.Cell != expectedAlias.Cell {
-			t.Fatalf("Cell parsed from tabletAlias: %s is %s but expected %s", aliasStr, alias.Cell, expectedAlias.Cell)
-		}
-		if alias.Uid != expectedAlias.Uid {
-			t.Fatalf("Uid parsed from tabletAlias: %s is %d but expected %d", aliasStr, alias.Uid, expectedAlias.Uid)
-		}
+		require.NoErrorf(t, err, "Failed to parse valid tablet alias: %s, err: %s", aliasStr, err)
+		require.Equalf(t, expectedAlias.Cell, alias.Cell, "Cell parsed from tabletAlias: %s is %s but expected %s", aliasStr, alias.Cell, expectedAlias.Cell)
+		require.Equalf(t, expectedAlias.Uid, alias.Uid, "Uid parsed from tabletAlias: %s is %d but expected %d", aliasStr, alias.Uid, expectedAlias.Uid)
 	}
 }
 

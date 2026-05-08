@@ -179,7 +179,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
-	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, log.NewPrefixedLogger("prefix"))
+	recoveryAttempted, _, err := electNewPrimary(t.Context(), analysisEntry, log.NewPrefixedLogger("prefix"))
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
 }
@@ -977,7 +977,7 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				}
 			}
 
-			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(context.Background(), &analysis, logger)
+			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(t.Context(), &analysis, logger)
 			if restoreStderr != nil {
 				log.Flush()
 				require.Eventually(t, func() bool {

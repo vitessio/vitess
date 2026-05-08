@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -31,7 +30,7 @@ import (
 // The transaction updates to failed state.
 func TestCommitPreparedFailNonRetryable(t *testing.T) {
 	dbaConnector := framework.Server.Config().DB.DbaWithDB()
-	conn, err := dbaConnector.Connect(context.Background())
+	conn, err := dbaConnector.Connect(t.Context())
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -51,16 +50,14 @@ func TestCommitPreparedFailNonRetryable(t *testing.T) {
 	_, err = client2.BeginExecute(`select * from _vt.redo_state where dtid = 'bb' for update`, nil, nil)
 	require.NoError(t, err)
 
-	ch := make(chan any)
+	errCh := make(chan error, 1)
 	go func() {
-		err := client.CommitPrepared("bb")
-		ch <- nil
-		require.ErrorContains(t, err, "commit_prepared")
+		errCh <- client.CommitPrepared("bb")
 	}()
 	time.Sleep(1500 * time.Millisecond)
 
 	client2.Release()
-	<-ch
+	require.ErrorContains(t, <-errCh, "commit_prepared")
 
 	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = 'bb'", nil)
 	require.NoError(t, err)
@@ -84,16 +81,14 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	_, err = client2.BeginExecute(`select * from _vt.redo_state where dtid = _binary'aa' for update`, nil, nil)
 	require.NoError(t, err)
 
-	ch := make(chan any)
+	errCh := make(chan error, 1)
 	go func() {
-		err := client.CommitPrepared("aa")
-		ch <- nil
-		require.ErrorContains(t, err, "commit_prepared")
+		errCh <- client.CommitPrepared("aa")
 	}()
 	time.Sleep(100 * time.Millisecond)
 
 	dbaConnector := framework.Server.Config().DB.DbaWithDB()
-	conn, err := dbaConnector.Connect(context.Background())
+	conn, err := dbaConnector.Connect(t.Context())
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -101,7 +96,7 @@ func TestCommitPreparedFailRetryable(t *testing.T) {
 	require.NoError(t, err)
 
 	client2.Release()
-	<-ch
+	require.ErrorContains(t, <-errCh, "commit_prepared")
 
 	qr, err := client2.Execute("select dtid, state, message from _vt.redo_state where dtid = _binary'aa'", nil)
 	require.NoError(t, err)

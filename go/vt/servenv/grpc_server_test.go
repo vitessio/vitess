@@ -22,15 +22,15 @@ import (
 	"net"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/orca"
 )
 
 func TestEmpty(t *testing.T) {
 	interceptors := &serverInterceptorBuilder{}
-	if len(interceptors.Build()) > 0 {
-		t.Fatalf("expected empty builder to report as empty")
-	}
+	require.Empty(t, interceptors.Build(), "expected empty builder to report as empty")
 }
 
 func TestSingleInterceptor(t *testing.T) {
@@ -39,12 +39,8 @@ func TestSingleInterceptor(t *testing.T) {
 
 	interceptors.Add(fake.StreamServerInterceptor, fake.UnaryServerInterceptor)
 
-	if len(interceptors.streamInterceptors) != 1 {
-		t.Fatalf("expected 1 server options to be available")
-	}
-	if len(interceptors.unaryInterceptors) != 1 {
-		t.Fatalf("expected 1 server options to be available")
-	}
+	require.Len(t, interceptors.streamInterceptors, 1, "expected 1 server options to be available")
+	require.Len(t, interceptors.unaryInterceptors, 1, "expected 1 server options to be available")
 }
 
 func TestDoubleInterceptor(t *testing.T) {
@@ -55,12 +51,8 @@ func TestDoubleInterceptor(t *testing.T) {
 	interceptors.Add(fake1.StreamServerInterceptor, fake1.UnaryServerInterceptor)
 	interceptors.Add(fake2.StreamServerInterceptor, fake2.UnaryServerInterceptor)
 
-	if len(interceptors.streamInterceptors) != 2 {
-		t.Fatalf("expected 1 server options to be available")
-	}
-	if len(interceptors.unaryInterceptors) != 2 {
-		t.Fatalf("expected 1 server options to be available")
-	}
+	require.Len(t, interceptors.streamInterceptors, 2, "expected 2 server options to be available")
+	require.Len(t, interceptors.unaryInterceptors, 2, "expected 2 server options to be available")
 }
 
 func TestOrcaRecorder(t *testing.T) {
@@ -71,12 +63,8 @@ func TestOrcaRecorder(t *testing.T) {
 
 	snap := recorder.ServerMetrics()
 
-	if snap.CPUUtilization != 0.25 {
-		t.Errorf("expected cpu 0.25, got %v", snap.CPUUtilization)
-	}
-	if snap.MemUtilization != 0.5 {
-		t.Errorf("expected memory 0.5, got %v", snap.MemUtilization)
-	}
+	assert.Equalf(t, 0.25, snap.CPUUtilization, "expected cpu 0.25, got %v", snap.CPUUtilization)
+	assert.Equalf(t, 0.5, snap.MemUtilization, "expected memory 0.5, got %v", snap.MemUtilization)
 }
 
 func TestReportedOrca(t *testing.T) {
@@ -86,22 +74,16 @@ func TestReportedOrca(t *testing.T) {
 	withTempVar(&GRPCServerMetricsRecorder, nil)
 
 	createGRPCServer()
-	if GRPCServerMetricsRecorder == nil {
-		t.Errorf("GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
-	}
+	assert.NotNil(t, GRPCServerMetricsRecorder, "GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is false")
 
 	serveGRPC()
 	serverMetrics := GRPCServerMetricsRecorder.ServerMetrics()
 	cpuUsage := serverMetrics.CPUUtilization
-	if cpuUsage < 0 {
-		t.Errorf("CPU Utilization is not set %.2f", cpuUsage)
-	}
+	assert.GreaterOrEqualf(t, cpuUsage, float64(0), "CPU Utilization is not set %.2f", cpuUsage)
 	t.Logf("CPU Utilization is %.2f", cpuUsage)
 
 	memUsage := serverMetrics.MemUtilization
-	if memUsage < 0 {
-		t.Errorf("Mem Utilization is not set %.2f", memUsage)
-	}
+	assert.GreaterOrEqualf(t, memUsage, float64(0), "Mem Utilization is not set %.2f", memUsage)
 	t.Logf("Memory utilization is %.2f", memUsage)
 }
 

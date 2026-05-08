@@ -26,7 +26,7 @@ import (
 )
 
 func TestSleepContext(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	start := time.Now()
 	err := SleepContext(ctx, 10*time.Millisecond)
 	require.NoError(t, err)

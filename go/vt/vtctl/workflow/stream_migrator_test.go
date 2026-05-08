@@ -319,7 +319,7 @@ func TestTemplatize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		sm := &StreamMigrator{ts: ts}
-		out, err := sm.templatize(context.Background(), tt.in)
+		out, err := sm.templatize(t.Context(), tt.in)
 		if tt.err != "" {
 			assert.Error(t, err, "templatize(%v) expected to get err=%s, got %+v", stringifyVRS(tt.in), tt.err, err)
 		}
@@ -546,7 +546,7 @@ func addReferenceWorkflow(t *testing.T, env *streamMigratorEnv, id int32, source
 }
 
 func TestBuildStreamMigratorOneMaterialize(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	env := newStreamMigratorEnv(ctx, t, customerUnshardedKeyspace, customerShardedKeyspace)
 	defer env.close()
 	tmc := env.tenv.tmc
@@ -583,7 +583,7 @@ func TestBuildStreamMigratorOneMaterialize(t *testing.T) {
 }
 
 func TestBuildStreamMigratorNoStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	env := newStreamMigratorEnv(ctx, t, customerUnshardedKeyspace, customerShardedKeyspace)
 	defer env.close()
 
@@ -601,7 +601,7 @@ func TestBuildStreamMigratorNoStreams(t *testing.T) {
 }
 
 func TestBuildStreamMigratorRefStream(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	env := newStreamMigratorEnv(ctx, t, customerUnshardedKeyspace, customerShardedKeyspace)
 	defer env.close()
 

@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
@@ -35,7 +36,7 @@ import (
 
 func TestQuerylogzHandler(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := tabletenv.NewLogStats(context.Background(), "Execute", streamlog.NewQueryLogConfigForTest())
+	logStats := tabletenv.NewLogStats(t.Context(), "Execute", streamlog.NewQueryLogConfigForTest())
 	logStats.PlanType = planbuilder.PlanSelect.String()
 	logStats.OriginalSQL = "select name, 'inject <script>alert();</script>' from test_table limit 1000"
 	logStats.RowsAffected = 1000
@@ -46,7 +47,7 @@ func TestQuerylogzHandler(t *testing.T) {
 	logStats.TransactionID = 131
 	logStats.ReservedID = 313
 	logStats.Ctx = callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
 		callerid.NewImmediateCallerID("immediate-caller"),
 	)
@@ -156,7 +157,5 @@ func TestQuerylogzHandler(t *testing.T) {
 func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *tabletenv.LogStats, page []byte) {
 	t.Helper()
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
-	if !matcher.Match(page) {
-		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
-	}
+	require.Truef(t, matcher.Match(page), "querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
 }

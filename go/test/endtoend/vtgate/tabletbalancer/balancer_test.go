@@ -17,7 +17,6 @@ limitations under the License.
 package tabletbalancer
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -67,7 +66,7 @@ func TestCellModeBalancer(t *testing.T) {
 	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -145,7 +144,7 @@ func TestPreferCell(t *testing.T) {
 	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -220,7 +219,7 @@ func TestRandomModeBalancer(t *testing.T) {
 	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -306,7 +305,7 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -386,7 +385,7 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 	shardName := clusterInstance.Keyspaces[0].Shards[0].Name
 	replicaTablets := replicaTablets(allTablets)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,8 +49,6 @@ func TestCompatibility(t *testing.T) {
 		}
 		sql := fmt.Sprintf("create table %s(c1 int)", word)
 		_, err := parser.ParseStrictDDL(sql)
-		if err != nil {
-			t.Errorf("%s is not compatible with mysql", word)
-		}
+		assert.NoErrorf(t, err, "%s is not compatible with mysql", word)
 	}
 }

@@ -17,11 +17,11 @@ limitations under the License.
 package vstreamer
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -57,7 +57,7 @@ func TestStreamResults(t *testing.T) {
 	go func() {
 		first := true
 		defer close(ch)
-		err := engine.StreamResults(context.Background(), query, func(rows *binlogdatapb.VStreamResultsResponse) error {
+		err := engine.StreamResults(t.Context(), query, func(rows *binlogdatapb.VStreamResultsResponse) error {
 			if first {
 				first = false
 				if rows.Gtid == "" {
@@ -81,7 +81,7 @@ func TestStreamResults(t *testing.T) {
 		}
 	}()
 	for err := range ch {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	require.Equal(t, int64(2), engine.resultStreamerNumPackets.Get())
 	require.Equal(t, int64(2), engine.resultStreamerNumRows.Get())
