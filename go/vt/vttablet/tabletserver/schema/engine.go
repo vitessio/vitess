@@ -771,6 +771,17 @@ func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
 		log.Warn("schema engine: tablet was promoted to PRIMARY during super_read_only restore; making it read-write again")
 		undoCtx, undoCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer undoCancel()
+		// We just stomped super_read_only back to ON, which also forces
+		// read_only=ON in MySQL. Both must be cleared to leave the
+		// promoted primary writable, and they must be cleared in this
+		// order: MySQL refuses SET read_only=OFF while super_read_only is
+		// still ON (ER_SUPER_READ_ONLY_OPTION_TWO). On any failure here we
+		// still attempt the next SET so a partial recovery isn't worse
+		// than no recovery.
+		if _, err := se.executeFetchCtx(undoCtx, conn, "SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
+			log.Warn("schema engine: CRITICAL: failed to disable super_read_only after promotion during restore; primary may remain read-only",
+				slog.Any("error", err))
+		}
 		if _, err := se.executeFetchCtx(undoCtx, conn, "SET GLOBAL read_only = 'OFF'", 1, false); err != nil {
 			log.Warn("schema engine: CRITICAL: failed to disable read_only after promotion during restore; primary may remain read-only",
 				slog.Any("error", err))

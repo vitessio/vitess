@@ -313,7 +313,8 @@ func TestDisableSuperReadOnly(t *testing.T) {
 
 		restore()
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
-		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
+		assert.Equal(t, 2, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"),
+			"rescue must clear super_read_only first; MySQL refuses SET read_only = 'OFF' while super_read_only is ON")
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL read_only = 'OFF'"),
 			"restore must make the promoted primary fully writable if the promotion races with SET ... ON")
 	})
