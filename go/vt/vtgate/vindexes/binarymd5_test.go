@@ -17,12 +17,11 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -104,14 +103,10 @@ func TestBinaryMD5Map(t *testing.T) {
 		out: "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[",
 	}}
 	for _, tcase := range tcases {
-		got, err := binVindex.Map(context.Background(), nil, []sqltypes.Value{tcase.in})
-		if err != nil {
-			t.Error(err)
-		}
+		got, err := binVindex.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
+		assert.NoError(t, err)
 		out := string(got[0].(key.DestinationKeyspaceID))
-		if out != tcase.out {
-			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
-		}
+		assert.Equalf(t, tcase.out, out, "Map(%#v)", tcase.in)
 	}
 }
 
@@ -122,25 +117,18 @@ func TestBinaryMD5Verify(t *testing.T) {
 	hexBytes, _ := hex.DecodeString(hexValStr)
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
 	ksids := [][]byte{[]byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), []byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), vMD5Hash(hexBytes), vMD5Hash(hexBytes)}
-	got, err := binVindex.Verify(context.Background(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []bool{true, false, true, true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
-	}
+	got, err := binVindex.Verify(t.Context(), nil, ids, ksids)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false, true, true}, got, "binaryMD5.Verify")
 }
 
 func TestSQLValue(t *testing.T) {
 	val := sqltypes.NewVarBinary("Test")
-	got, err := binVindex.Map(context.Background(), nil, []sqltypes.Value{val})
+	got, err := binVindex.Map(t.Context(), nil, []sqltypes.Value{val})
 	require.NoError(t, err)
 	out := string(got[0].(key.DestinationKeyspaceID))
 	want := "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["
-	if out != want {
-		t.Errorf("Map(%#v): %#v, want %#v", val, out, want)
-	}
+	assert.Equalf(t, want, out, "Map(%#v)", val)
 }
 
 func BenchmarkMD5Hash(b *testing.B) {

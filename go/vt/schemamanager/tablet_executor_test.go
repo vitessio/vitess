@@ -17,7 +17,6 @@ limitations under the License.
 package schemamanager
 
 import (
-	"context"
 	"strconv"
 	"testing"
 	"time"
@@ -39,7 +38,7 @@ var testWaitReplicasTimeout = 10 * time.Second
 
 func TestTabletExecutorOpen(t *testing.T) {
 	executor := newFakeExecutor(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := executor.Open(ctx, "test_keyspace")
 	require.NoError(t, err)
@@ -100,7 +99,7 @@ func TestTabletExecutorValidate(t *testing.T) {
 	})
 
 	executor := NewTabletExecutor("TestTabletExecutorValidate", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sqls := []string{
 		"ALTER TABLE test_table ADD COLUMN new_id bigint(20)",
@@ -169,7 +168,7 @@ func TestTabletExecutorDML(t *testing.T) {
 	})
 
 	executor := NewTabletExecutor("TestTabletExecutorDML", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	executor.Open(ctx, "unsharded_keyspace")
 	defer executor.Close()
@@ -183,7 +182,7 @@ func TestTabletExecutorDML(t *testing.T) {
 
 func TestTabletExecutorExecute(t *testing.T) {
 	executor := newFakeExecutor(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sqls := []string{"DROP TABLE unknown_table"}
 

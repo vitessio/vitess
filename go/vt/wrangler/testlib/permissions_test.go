@@ -18,7 +18,6 @@ package testlib
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	"github.com/stretchr/testify/require"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -45,7 +46,7 @@ func TestPermissions(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1", "cell2")
 	wr := wrangler.New(vtenv.NewTestEnv(), logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -60,9 +61,7 @@ func TestPermissions(t *testing.T) {
 		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	})
-	if err != nil {
-		t.Fatalf("UpdateShardFields failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// primary will be asked for permissions
 	primary.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
@@ -585,7 +584,7 @@ func TestPermissions(t *testing.T) {
 
 	// run ValidatePermissionsKeyspace, this should work
 	if err := vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}); err != nil {
-		t.Fatalf("ValidatePermissionsKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// modify one field, this should fail
@@ -595,7 +594,5 @@ func TestPermissions(t *testing.T) {
 	}
 
 	// run ValidatePermissionsKeyspace again, this should now fail
-	if err := vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}); err == nil || !strings.Contains(err.Error(), "has an extra user") {
-		t.Fatalf("ValidatePermissionsKeyspace has unexpected err: %v", err)
-	}
+	require.ErrorContains(t, vp.Run([]string{"ValidatePermissionsKeyspace", primary.Tablet.Keyspace}), "has an extra user")
 }

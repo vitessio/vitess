@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -65,7 +66,7 @@ func TestSchemaVersioning(t *testing.T) {
 	defer tsv.EnableHistorian(true)
 	defer tsv.SetTracking(true)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	wg := sync.WaitGroup{}
 	tsv.EnableHistorian(true)
@@ -224,7 +225,7 @@ func TestSchemaVersioning(t *testing.T) {
 	require.NoError(t, err)
 
 	log.Info("\n\n\n=============================================== PAST EVENTS WITH TRACK VERSIONS START HERE ======================\n\n\n")
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
 	errCh := make(chan error, 1)
@@ -247,7 +248,8 @@ func TestSchemaVersioning(t *testing.T) {
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
-			t.Fatal("Context Done() in send")
+			assert.Fail(t, "Context Done() in send")
+			return nil
 		}
 		return nil
 	}
@@ -304,7 +306,7 @@ func TestSchemaVersioning(t *testing.T) {
 
 	log.Info("\n\n\n=============================================== PAST EVENTS WITHOUT TRACK VERSIONS START HERE ======================\n\n\n")
 	tsv.EnableHistorian(false)
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
 	noHistorianErrCh := make(chan error, 1)
@@ -327,7 +329,8 @@ func TestSchemaVersioning(t *testing.T) {
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
-			t.Fatal("Context Done() in send")
+			assert.Fail(t, "Context Done() in send")
+			return nil
 		}
 		return nil
 	}

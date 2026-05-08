@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -328,7 +327,7 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	// Steal the lock and wait long enough for the retry
 	// to fail, and then release it. The retry will have
 	// to keep retrying.
-	sm.transitioning.Acquire(context.Background(), 1)
+	sm.transitioning.Acquire(t.Context(), 1)
 	time.Sleep(30 * time.Millisecond)
 	sm.transitioning.Release(1)
 
@@ -506,7 +505,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timedout waiting for checkMySQL to finish")
+			require.Fail(t, "Timedout waiting for checkMySQL to finish")
 		default:
 			if sm.isCheckMySQLRunning() == 0 {
 				return
@@ -631,7 +630,7 @@ func TestStateManagerNotify(t *testing.T) {
 	ch := make(chan *querypb.StreamHealthResponse, 5)
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+		err := sm.hs.Stream(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 			ch <- shr
 			return nil
 		})
@@ -666,7 +665,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	ch := make(chan *querypb.StreamHealthResponse, 5)
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		err := sm.hs.Stream(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+		err := sm.hs.Stream(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 			ch <- shr
 			return nil
 		})
@@ -694,7 +693,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	gotshr = <-ch
 	require.EqualValues(t, "VT09031: Primary demotion is stalled", gotshr.RealtimeStats.HealthError)
 	// Verify that we can't start a new request once we have a demote primary stalled.
-	err = sm.StartRequest(context.Background(), &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, false)
+	err = sm.StartRequest(t.Context(), &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, false)
 	require.ErrorContains(t, err, "operation not allowed in state NOT_SERVING")
 }
 
@@ -739,7 +738,7 @@ func TestPanicInWait(t *testing.T) {
 	sm.wantState = StateServing
 	sm.state = StateServing
 	sm.replHealthy = true
-	ctx := context.Background()
+	ctx := t.Context()
 	// Simulate an Execute RPC running
 	err := sm.StartRequest(ctx, sm.target, false)
 	require.NoError(t, err)
