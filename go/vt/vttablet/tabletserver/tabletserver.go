@@ -781,7 +781,7 @@ func (tsv *TabletServer) hasUnresolvedTwoPCTransactions(ctx context.Context) (bo
 	}
 	count, err := tsv.te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(365*24*time.Hour))
 	if err != nil {
-		return true, err
+		return false, err
 	}
 	return count > 0, nil
 }
@@ -789,7 +789,7 @@ func (tsv *TabletServer) hasUnresolvedTwoPCTransactions(ctx context.Context) (bo
 // WaitForPreparedTwoPCTransactions waits for all unresolved 2PC transactions on this tablet to be resolved.
 func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) error {
 	hasUnresolved, lastErr := tsv.hasUnresolvedTwoPCTransactions(ctx)
-	if !hasUnresolved {
+	if lastErr == nil && !hasUnresolved {
 		return nil
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -807,8 +807,7 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 			hasUnresolved, err = tsv.hasUnresolvedTwoPCTransactions(ctx)
 			if err != nil {
 				lastErr = err
-			}
-			if !hasUnresolved {
+			} else if !hasUnresolved {
 				return nil
 			}
 		}
