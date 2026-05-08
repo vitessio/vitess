@@ -128,7 +128,7 @@ func init() {
 
 func createExecutorEnvCallback(t testing.TB, eConfig ExecutorConfig, eachShard func(shard, ks string, tabletType topodatapb.TabletType, conn *sandboxconn.SandboxConn)) (executor *Executor, ctx context.Context) {
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
 
@@ -214,7 +214,7 @@ func createExecutorEnvWithConfig(t testing.TB, eConfig ExecutorConfig) (executor
 
 func createCustomExecutor(t testing.TB, vschema string, mysqlVersion string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 
@@ -264,7 +264,7 @@ func createExecutorConfigWithNormalizer() ExecutorConfig {
 
 func createCustomExecutorSetValues(t testing.TB, vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn, ctx context.Context) {
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 
@@ -373,7 +373,7 @@ func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*qu
 			continue
 		}
 		if len(wantQueries) < idx {
-			t.Errorf("got more queries than expected")
+			assert.Fail(t, "got more queries than expected")
 		}
 		got := query.Sql
 		expected := wantQueries[idx].Sql
@@ -392,9 +392,7 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 		got := query.Sql
 		expected := wantQueries[idx].Sql
 		if strings.HasPrefix(got, "savepoint") {
-			if !strings.HasPrefix(expected, "savepoint") {
-				t.Fatal("savepoint expected")
-			}
+			require.True(t, strings.HasPrefix(expected, "savepoint"), "savepoint expected")
 			if sp, exists := savepointStore[expected[10:]]; exists {
 				assert.Equal(t, sp, got[10:])
 			} else {
@@ -403,9 +401,7 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 			continue
 		}
 		if strings.HasPrefix(got, "rollback to") {
-			if !strings.HasPrefix(expected, "rollback to") {
-				t.Fatal("rollback to expected")
-			}
+			require.True(t, strings.HasPrefix(expected, "rollback to"), "rollback to expected")
 			assert.Equal(t, savepointStore[expected[12:]], got[12:])
 			continue
 		}
@@ -416,7 +412,7 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 func testCommitCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
 	t.Helper()
 	if got, want := sbc.CommitCount.Load(), int64(want); got != want {
-		t.Errorf("%s.CommitCount: %d, want %d\n", sbcName, got, want)
+		assert.Failf(t, "commit count mismatch", "%s.CommitCount: %d, want %d\n", sbcName, got, want)
 	}
 }
 
@@ -424,7 +420,7 @@ func testNonZeroDuration(t *testing.T, what, d string) {
 	t.Helper()
 	time, _ := strconv.ParseFloat(d, 64)
 	if time == 0 {
-		t.Errorf("querylog %s want non-zero duration got %s (%v)", what, d, time)
+		assert.Failf(t, "zero duration", "querylog %s want non-zero duration got %s (%v)", what, d, time)
 	}
 }
 

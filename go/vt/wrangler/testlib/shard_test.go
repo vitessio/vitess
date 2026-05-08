@@ -17,8 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"context"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -28,6 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -45,55 +46,45 @@ func TestDeleteShardCleanup(t *testing.T) {
 	remoteReplica := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, primary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
-	if err != nil {
-		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
-	}
+	err := topotools.RebuildKeyspace(t.Context(), logutil.NewConsoleLogger(), ts, primary.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
+	require.NoError(t, err)
 
 	// Delete the ShardReplication record in cell2
 	if err := ts.DeleteShardReplication(ctx, "cell2", remoteReplica.Tablet.Keyspace, remoteReplica.Tablet.Shard); err != nil {
-		t.Fatalf("DeleteShardReplication failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Now try to delete the shard without even_if_serving or
 	// recursive flag, should fail on serving check first.
-	if err := vp.Run([]string{
+	require.ErrorContains(t, vp.Run([]string{
 		"DeleteShard",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
-	}); err == nil || !strings.Contains(err.Error(), "is still serving, cannot delete it") {
-		t.Fatalf("DeleteShard() returned wrong error: %v", err)
-	}
+	}), "is still serving, cannot delete it")
 
 	// Now try to delete the shard with even_if_serving, but
 	// without recursive flag, should fail on existing tablets.
-	if err := vp.Run([]string{
+	require.ErrorContains(t, vp.Run([]string{
 		"DeleteShard",
 		"--even_if_serving",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
-	}); err == nil || !strings.Contains(err.Error(), "use -recursive or remove them manually") {
-		t.Fatalf("DeleteShard(evenIfServing=true) returned wrong error: %v", err)
-	}
+	}), "use -recursive or remove them manually")
 
 	// Now try to delete the shard with even_if_serving and recursive,
 	// it should just work.
-	if err := vp.Run([]string{
+	require.NoError(t, vp.Run([]string{
 		"DeleteShard",
 		"--recursive",
 		"--even_if_serving",
 		primary.Tablet.Keyspace + "/" + primary.Tablet.Shard,
-	}); err != nil {
-		t.Fatalf("DeleteShard(recursive=true, evenIfServing=true) should have worked but returned: %v", err)
-	}
+	}))
 
 	// Make sure all tablets are gone.
 	for _, ft := range []*FakeTablet{primary, replica, remoteReplica} {
-		if _, err := ts.GetTablet(ctx, ft.Tablet.Alias); !topo.IsErrType(err, topo.NoNode) {
-			t.Errorf("tablet %v is still in topo: %v", ft.Tablet.Alias, err)
-		}
+		_, err := ts.GetTablet(ctx, ft.Tablet.Alias)
+		assert.Truef(t, topo.IsErrType(err, topo.NoNode), "tablet %v is still in topo: %v", ft.Tablet.Alias, err)
 	}
 
 	// Make sure the shard is gone.
-	if _, err := ts.GetShard(ctx, primary.Tablet.Keyspace, primary.Tablet.Shard); !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("shard %v/%v is still in topo: %v", primary.Tablet.Keyspace, primary.Tablet.Shard, err)
-	}
+	_, err = ts.GetShard(ctx, primary.Tablet.Keyspace, primary.Tablet.Shard)
+	assert.Truef(t, topo.IsErrType(err, topo.NoNode), "shard %v/%v is still in topo: %v", primary.Tablet.Keyspace, primary.Tablet.Shard, err)
 }

@@ -17,7 +17,6 @@ limitations under the License.
 package vtadmin
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -544,7 +543,7 @@ func TestFindSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -857,7 +856,7 @@ func TestGetClusters(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -942,7 +941,7 @@ func TestGetGates(t *testing.T) {
 	}
 
 	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{cluster1, cluster2}, Options{})
-	ctx := context.Background()
+	ctx := t.Context()
 
 	resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
 	assert.NoError(t, err)
@@ -2451,7 +2450,7 @@ func TestGetSchemas(t *testing.T) {
 		api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c1, c2}, Options{})
 		defer api.Close()
 
-		resp, err := api.GetSchemas(context.Background(), &vtadminpb.GetSchemasRequest{
+		resp, err := api.GetSchemas(t.Context(), &vtadminpb.GetSchemasRequest{
 			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 				AggregateSizes: true,
 			},
@@ -3498,7 +3497,7 @@ func TestGetTablet(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3691,7 +3690,7 @@ func TestGetTablets(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3835,7 +3834,7 @@ func TestGetVSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4159,7 +4158,7 @@ func TestGetVSchemas(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4255,7 +4254,7 @@ func TestGetVtctlds(t *testing.T) {
 	}
 
 	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{cluster1, cluster2}, Options{})
-	ctx := context.Background()
+	ctx := t.Context()
 
 	resp, err := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
 	assert.NoError(t, err)
@@ -4378,7 +4377,7 @@ func TestGetWorkflow(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4815,7 +4814,7 @@ func TestGetWorkflows(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -5334,7 +5333,7 @@ func TestServeHTTP(t *testing.T) {
 				"discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}",
 			},
 		},
-	}.Cluster(context.Background())
+	}.Cluster(t.Context())
 	defer testCluster.Close()
 
 	tests := []struct {

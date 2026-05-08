@@ -17,7 +17,6 @@ limitations under the License.
 package informationschema
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -205,7 +204,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 func TestInfrSchemaAndUnionAll(t *testing.T) {
 	vtConnParams := clusterInstance.GetVTParams(keyspaceName)
 	vtConnParams.DbName = keyspaceName
-	conn, err := mysql.Connect(context.Background(), &vtConnParams)
+	conn, err := mysql.Connect(t.Context(), &vtConnParams)
 	require.NoError(t, err)
 
 	for _, workload := range []string{"oltp", "olap"} {

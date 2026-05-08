@@ -17,7 +17,6 @@ limitations under the License.
 package schemadiff
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -679,7 +678,7 @@ func TestDiffViews(t *testing.T) {
 }
 
 func TestDiffSchemas(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tt := []struct {
 		name        string
 		from        string
@@ -1330,7 +1329,7 @@ func TestDiffSchemas(t *testing.T) {
 }
 
 func TestSchemaApplyError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tt := []struct {
 		name string
 		from string

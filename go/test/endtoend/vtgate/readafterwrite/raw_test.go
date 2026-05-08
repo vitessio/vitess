@@ -17,7 +17,6 @@ limitations under the License.
 package readafterwrite
 
 import (
-	"context"
 	"flag"
 	"os"
 	"testing"
@@ -142,7 +141,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestRAWSettings(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

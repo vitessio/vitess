@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -53,7 +52,7 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 	}
 
 	vc := newTestVCursor("-20", "20-")
-	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`InDMLExecution set to true`,
@@ -66,7 +65,7 @@ func TestDeleteWithInputSingleOffset(t *testing.T) {
 
 	vc.Rewind()
 	input.rewind()
-	err = del.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error { return nil })
+	err = del.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`InDMLExecution set to true`,
@@ -101,7 +100,7 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 	}
 
 	vc := newTestVCursor("-20", "20-")
-	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`InDMLExecution set to true`,
@@ -114,7 +113,7 @@ func TestDeleteWithInputMultiOffset(t *testing.T) {
 
 	vc.Rewind()
 	input.rewind()
-	err = del.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error { return nil })
+	err = del.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`InDMLExecution set to true`,
@@ -170,7 +169,7 @@ func TestDeleteWithMultiTarget(t *testing.T) {
 	}
 
 	vc := newTestVCursor("-20", "20-")
-	_, err := del.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`InDMLExecution set to true`,
@@ -183,7 +182,7 @@ func TestDeleteWithMultiTarget(t *testing.T) {
 
 	vc.Rewind()
 	input.rewind()
-	err = del.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error { return nil })
+	err = del.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`InDMLExecution set to true`,
@@ -227,7 +226,7 @@ func TestUpdateWithInputNonLiteral(t *testing.T) {
 	vc.results = []*sqltypes.Result{
 		{RowsAffected: 1}, {RowsAffected: 1}, {RowsAffected: 1},
 	}
-	qr, err := dml.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	qr, err := dml.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`InDMLExecution set to true`,
@@ -249,7 +248,7 @@ func TestUpdateWithInputNonLiteral(t *testing.T) {
 
 	vc.Rewind()
 	input.rewind()
-	err = dml.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false,
+	err = dml.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false,
 		func(result *sqltypes.Result) error {
 			qr = result
 			return nil

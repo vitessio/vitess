@@ -37,7 +37,7 @@ import (
 )
 
 func TestInitializeTargetSequences(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -217,7 +217,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 }
 
 func TestGetTargetSequenceMetadata(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	cell := "cell1"
 	workflow := "wf1"
@@ -734,7 +734,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 // TestDryRunInitializeTargetSequences validates that we get the max value of the using tables and initialize the backing
 // tables to the next value.
 func TestDryRunInitializeTargetSequences(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"

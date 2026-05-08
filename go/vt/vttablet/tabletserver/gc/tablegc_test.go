@@ -381,7 +381,7 @@ func TestCheckTables(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 	dropTablesChan := make(chan *gcTable)
 	transitionRequestsChan := make(chan *transitionRequest)

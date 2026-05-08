@@ -17,7 +17,6 @@ limitations under the License.
 package vtbench
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -163,7 +162,7 @@ func TestBenchCreateConnsUnknownProtocol(t *testing.T) {
 		Timings: stats.NewTimings("test_unknown_protocol", "", "timings"),
 	}
 
-	err := bench.createConns(context.Background())
+	err := bench.createConns(t.Context())
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unimplemented connection protocol")
@@ -178,6 +177,6 @@ func TestMysqlClientConnExecutePanicsWithBindVars(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		_, _ = c.execute(context.Background(), "SELECT 1", bindVars)
+		_, _ = c.execute(t.Context(), "SELECT 1", bindVars)
 	}, "execute should panic when bind vars are provided for mysql protocol")
 }

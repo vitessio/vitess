@@ -19,6 +19,8 @@ package eventtoken
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -221,8 +223,6 @@ func TestFresher(t *testing.T) {
 
 	for _, tcase := range testcases {
 		got := Fresher(tcase.ev1, tcase.ev2)
-		if got != tcase.expected {
-			t.Errorf("got %v but expected %v for Fresher(%v, %v)", got, tcase.expected, tcase.ev1, tcase.ev2)
-		}
+		assert.Equalf(t, tcase.expected, got, "got %v but expected %v for Fresher(%v, %v)", got, tcase.expected, tcase.ev1, tcase.ev2)
 	}
 }
