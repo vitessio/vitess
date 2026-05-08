@@ -132,6 +132,10 @@ type Engine struct {
 	// enabled→disabled at runtime can ResetAll() once and avoid leaving
 	// stale gauge values around.
 	freeSpaceMetricsActive bool
+	// primaryPromotionInProgress is set by TabletManager before MySQL is
+	// made writable, closing the gap before QueryServiceControl observes
+	// the PRIMARY state.
+	primaryPromotionInProgress atomic.Bool
 	// schemaCopy stores if the user has requested signals on schema changes. If they have, then we
 	// also track the underlying schema and make a copy of it in our MySQL instance.
 	schemaCopy bool
@@ -413,6 +417,7 @@ func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	se.primaryPromotionInProgress.Store(false)
 	if se.isPrimaryTablet.Load() {
 		se.tabletTypeLastChangedAt = time.Now()
 	}
@@ -430,11 +435,24 @@ func (se *Engine) MakeNonPrimary() {
 func (se *Engine) MakePrimary(serving bool) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
+	se.primaryPromotionInProgress.Store(false)
 	if !se.isPrimaryTablet.Load() {
 		se.tabletTypeLastChangedAt = time.Now()
 	}
 	se.isPrimaryTablet.Store(true)
 	se.isServingPrimary = serving
+}
+
+// BeginPrimaryPromotion marks that MySQL is becoming writable before the
+// schema engine has observed the PRIMARY tablet state.
+func (se *Engine) BeginPrimaryPromotion() {
+	se.primaryPromotionInProgress.Store(true)
+}
+
+// AbortPrimaryPromotion clears the promotion marker when MySQL was not made
+// writable and the tablet remains non-primary.
+func (se *Engine) AbortPrimaryPromotion() {
+	se.primaryPromotionInProgress.Store(false)
 }
 
 // shouldAttemptGtidExecutedOptimizeLocked reports whether we should run the
@@ -454,13 +472,19 @@ func (se *Engine) shouldAttemptGtidExecutedOptimizeLocked(now time.Time) bool {
 }
 
 func (se *Engine) isGtidExecutedOptimizeEligibleLocked(now time.Time) bool {
-	if se.isPrimaryTablet.Load() {
+	if se.isPrimaryOrPromoting() {
 		return false
 	}
 	if !se.tabletTypeLastChangedAt.IsZero() && now.Sub(se.tabletTypeLastChangedAt) < tabletTypeStabilityCooldown {
 		return false
 	}
 	return true
+}
+
+// isPrimaryOrPromoting reports whether background maintenance must avoid
+// primary-side writes, including the promotion window before MakePrimary runs.
+func (se *Engine) isPrimaryOrPromoting() bool {
+	return se.isPrimaryTablet.Load() || se.primaryPromotionInProgress.Load()
 }
 
 func (se *Engine) ensureBackgroundContextLocked() {
@@ -714,7 +738,7 @@ func shouldRestoreAfterSuperReadOnlyDisableError(err error) bool {
 // itself turns super_read_only OFF and we must not stomp that back ON and
 // leave a freshly-promoted primary read-only.
 func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
-	if se.isPrimaryTablet.Load() {
+	if se.isPrimaryOrPromoting() {
 		log.Warn("schema engine: skipping super_read_only restore; tablet has been promoted to PRIMARY since OPTIMIZE started")
 		return
 	}
@@ -726,8 +750,16 @@ func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
 		return
 	}
 	defer conn.Close()
-	if se.isPrimaryTablet.Load() {
+	if se.isPrimaryOrPromoting() {
 		log.Warn("schema engine: skipping super_read_only restore; tablet was promoted to PRIMARY while reopening the DBA connection")
+		return
+	}
+	readOnly, err := se.readGlobalBool(ctx, conn, "read_only")
+	if err != nil {
+		log.Warn("schema engine: failed to read read_only before super_read_only restore; proceeding with restore based on tablet state",
+			slog.Any("error", err))
+	} else if !readOnly {
+		log.Warn("schema engine: skipping super_read_only restore; MySQL is already read-write")
 		return
 	}
 	if _, err := se.executeFetchCtx(ctx, conn, "SET GLOBAL super_read_only = 'ON'", 1, false); err != nil {
@@ -735,15 +767,28 @@ func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
 			slog.Any("error", err))
 		return
 	}
-	if se.isPrimaryTablet.Load() {
-		log.Warn("schema engine: tablet was promoted to PRIMARY during super_read_only restore; disabling it again")
+	if se.isPrimaryOrPromoting() {
+		log.Warn("schema engine: tablet was promoted to PRIMARY during super_read_only restore; making it read-write again")
 		undoCtx, undoCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer undoCancel()
-		if _, err := se.executeFetchCtx(undoCtx, conn, "SET GLOBAL super_read_only = 'OFF'", 1, false); err != nil {
-			log.Warn("schema engine: CRITICAL: failed to disable super_read_only after promotion during restore; primary may remain read-only",
+		if _, err := se.executeFetchCtx(undoCtx, conn, "SET GLOBAL read_only = 'OFF'", 1, false); err != nil {
+			log.Warn("schema engine: CRITICAL: failed to disable read_only after promotion during restore; primary may remain read-only",
 				slog.Any("error", err))
 		}
 	}
+}
+
+// readGlobalBool reads a MySQL boolean global variable used by restore guards.
+func (se *Engine) readGlobalBool(ctx context.Context, conn *dbconnpool.DBConnection, name string) (bool, error) {
+	result, err := se.executeFetchCtx(ctx, conn, "SELECT @@global."+name, 1, false)
+	if err != nil {
+		return false, err
+	}
+	if len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
+		return false, fmt.Errorf("missing @@global.%s result", name)
+	}
+	value := strings.ToUpper(result.Rows[0][0].ToString())
+	return value == "1" || value == "ON", nil
 }
 
 // executeFetchCtx runs conn.ExecuteFetch while honouring ctx. If ctx expires
@@ -954,8 +999,10 @@ func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *conn
 		se.throttledLogger.Warningf("schema engine: reading user table DATA_FREE failed: %v", err)
 		return
 	}
+	seen := make(map[string]struct{}, len(result.Rows))
 	for _, row := range result.Rows {
 		tableName := row[0].ToString()
+		seen[tableName] = struct{}{}
 		dataFree, err := row[1].ToCastUint64()
 		if err != nil {
 			// IFNULL in the query already covers MySQL NULL; this branch
@@ -965,6 +1012,11 @@ func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *conn
 			continue
 		}
 		se.tableDataFreeBytes.Set(tableName, int64(dataFree))
+	}
+	for tableName := range se.tableDataFreeBytes.Counts() {
+		if _, ok := seen[tableName]; !ok {
+			se.tableDataFreeBytes.Reset(tableName)
+		}
 	}
 	se.freeSpaceMetricsActive = true
 }

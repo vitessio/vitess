@@ -54,6 +54,12 @@ func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
 	})
 
+	t.Run("primary promotion in progress skips", func(t *testing.T) {
+		se := &Engine{tabletTypeLastChangedAt: now.Add(-10 * time.Minute)}
+		se.BeginPrimaryPromotion()
+		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
+	})
+
 	t.Run("within stability cooldown skips", func(t *testing.T) {
 		se := &Engine{tabletTypeLastChangedAt: now.Add(-1 * time.Minute)}
 		assert.False(t, se.shouldAttemptGtidExecutedOptimizeLocked(now))
@@ -117,6 +123,10 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			"1",
 		))
 		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+		db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("read_only", "int64"),
+			"1",
+		))
 		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
 		conn := newTestDBConnection(t, db)
@@ -144,6 +154,10 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			"1",
 		))
 		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+		db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("read_only", "int64"),
+			"1",
+		))
 		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
 		conn := newTestDBConnection(t, db)
@@ -242,6 +256,36 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			"restore must not issue a compensating SET ... OFF since SET ... ON never ran")
 	})
 
+	t.Run("restore skips while primary promotion is in progress", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddRejectedQuery("SET GLOBAL super_read_only = 'ON'",
+			sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "restore must not re-enable super_read_only while promotion is in progress"))
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+
+		se.BeginPrimaryPromotion()
+
+		se.restoreSuperReadOnlyWithContext(t.Context())
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+			"restore must skip SET ... ON after MySQL has started becoming writable but before schema engine observes PRIMARY")
+	})
+
+	t.Run("restore skips when MySQL is already read-write", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("read_only", "int64"),
+			"0",
+		))
+		db.AddRejectedQuery("SET GLOBAL super_read_only = 'ON'",
+			sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "restore must not re-enable super_read_only on read-write MySQL"))
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+
+		se.restoreSuperReadOnlyWithContext(t.Context())
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+			"restore must skip SET ... ON when MySQL is already read-write")
+	})
+
 	t.Run("restore disables super_read_only again if promotion races with restore", func(t *testing.T) {
 		db := fakesqldb.New(t)
 		defer db.Close()
@@ -250,7 +294,12 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			"1",
 		))
 		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+		db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("read_only", "int64"),
+			"1",
+		))
 		onResult := db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+		db.AddQuery("SET GLOBAL read_only = 'OFF'", &sqltypes.Result{})
 		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
 		conn := newTestDBConnection(t, db)
 		defer conn.Close()
@@ -264,8 +313,9 @@ func TestDisableSuperReadOnly(t *testing.T) {
 
 		restore()
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
-		assert.Equal(t, 2, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"),
-			"restore must turn super_read_only back OFF if the tablet is promoted during the restore SET")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL read_only = 'OFF'"),
+			"restore must make the promoted primary fully writable if the promotion races with SET ... ON")
 	})
 
 	t.Run("timeout while disabling restores best effort", func(t *testing.T) {
@@ -298,6 +348,10 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		db.AddQueryPatternWithCallback(`(?i)^kill [0-9]+$`, &sqltypes.Result{}, func(string) {
 			killSeen.Add(1)
 		})
+		db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("read_only", "int64"),
+			"1",
+		))
 		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 
 		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
@@ -347,6 +401,10 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		))
 		db.AddRejectedQuery("SET GLOBAL super_read_only = 'OFF'",
 			sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "lost connection after SET"))
+		db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("read_only", "int64"),
+			"1",
+		))
 		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 
 		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
@@ -371,6 +429,10 @@ func TestRestoreSuperReadOnlyHonorsContextTimeout(t *testing.T) {
 	defer db.Close()
 
 	const restoreQuery = "SET GLOBAL super_read_only = 'ON'"
+	db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("read_only", "int64"),
+		"1",
+	))
 	db.AddQuery(restoreQuery, &sqltypes.Result{})
 	release := make(chan struct{})
 	db.SetBeforeFunc(restoreQuery, func() {
@@ -417,6 +479,10 @@ func TestRunOptimizeGtidExecutedSuccess(t *testing.T) {
 	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
 	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("read_only", "int64"),
+		"1",
+	))
 	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 	// The actual OPTIMIZE.
 	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed", &sqltypes.Result{})
@@ -472,6 +538,10 @@ func TestRunOptimizeGtidExecutedOptimizeFailureRestoresSRO(t *testing.T) {
 	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
 	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("read_only", "int64"),
+		"1",
+	))
 	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 	db.AddRejectedQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed",
 		sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "simulated OPTIMIZE failure"))
@@ -532,6 +602,10 @@ func TestCloseCancelsInFlightOptimize(t *testing.T) {
 	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
 	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("read_only", "int64"),
+		"1",
+	))
 	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed", &sqltypes.Result{})
 
@@ -680,6 +754,39 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	assert.True(t, se.freeSpaceMetricsActive)
 }
 
+// TestUpdateUserTableFreeSpaceResetsMissingBaseTableLabels verifies that a
+// previously-published table label is cleared when the table no longer appears
+// in the base-table DATA_FREE query, e.g. after being replaced by a view with
+// the same name.
+func TestUpdateUserTableFreeSpaceResetsMissingBaseTableLabels(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	se.conns.Open(se.cp, se.cp, se.cp)
+	defer se.conns.Close()
+
+	se.tableDataFreeBytes.Set("became_view", 12345)
+	se.freeSpaceMetricsActive = true
+
+	dataFreeQuery := "select table_name, ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
+	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("table_name|data_free", "varchar|uint64"),
+		"still_table|600",
+	))
+	ctx := t.Context()
+	conn, err := se.conns.Get(ctx, nil)
+	require.NoError(t, err)
+	se.mu.Lock()
+	se.updateUserTableFreeSpaceLocked(ctx, conn.Conn, true)
+	se.mu.Unlock()
+	conn.Recycle()
+
+	counts := se.tableDataFreeBytes.Counts()
+	assert.Equal(t, int64(0), counts["became_view"],
+		"stale DATA_FREE label must be reset when the name is no longer a base table")
+	assert.Equal(t, int64(600), counts["still_table"])
+}
+
 // TestUpdateUserTableFreeSpaceIgnoresMaxTableCount verifies that the
 // visibility query is not coupled to the DDL guard for creating tables.
 func TestUpdateUserTableFreeSpaceIgnoresMaxTableCount(t *testing.T) {
@@ -761,6 +868,10 @@ func TestMaybeOptimizeGtidExecutedLargeDataFreeSpawns(t *testing.T) {
 	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
 	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("read_only", "int64"),
+		"1",
+	))
 	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 	db.AddQuery("OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed", &sqltypes.Result{})
 
