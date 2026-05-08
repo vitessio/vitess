@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 golang:1.25.9-bookworm@sha256:e29e14633a7d43fe3161fee1849a0a11efe81145b0572bfc162743698c3257ae AS builder
+FROM --platform=linux/amd64 golang:1.25.10-bookworm@sha256:6e77087079b02aa8079cd7723da7cb4563703226ed54c6f6be7765050cd884d5 AS builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER

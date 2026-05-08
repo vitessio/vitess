@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.25.9
+go 1.25.10
 
 tool gotest.tools/gotestsum
 
