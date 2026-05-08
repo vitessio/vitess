@@ -88,6 +88,9 @@ func TestVtctldclientCLI(t *testing.T) {
 	t.Run("WorkflowList", func(t *testing.T) {
 		testWorkflowList(t, sourceKeyspaceName, targetKeyspaceName)
 	})
+	t.Run("WorkflowShowSummary", func(t *testing.T) {
+		testWorkflowShowSummary(t, sourceKeyspaceName, targetKeyspaceName)
+	})
 	t.Run("MoveTablesCreateFlags1", func(t *testing.T) {
 		testMoveTablesFlags1(t, &mt, sourceKeyspaceName, targetKeyspaceName, defaultWorkflowName, targetTabs)
 	})
@@ -462,6 +465,38 @@ func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
 	}
 	slices.Sort(defaultWorkflowNames)
 	require.EqualValues(t, wfNames, defaultWorkflowNames)
+}
+
+func testWorkflowShowSummary(t *testing.T, sourceKeyspace, targetKeyspace string) {
+	workflowName := "summary_test"
+	mt := createMoveTables(t, sourceKeyspace, targetKeyspace, workflowName, "customer", nil, nil, nil)
+	defer mt.Cancel()
+
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput(
+		"Workflow", "--keyspace", targetKeyspace, "show", "--workflow", workflowName, "--summary",
+	)
+	require.NoError(t, err)
+
+	var resp vtctldatapb.GetWorkflowsResponse
+	err = protojson.Unmarshal([]byte(output), &resp)
+	require.NoError(t, err)
+	require.Len(t, resp.Workflows, 1)
+
+	workflow := resp.Workflows[0]
+	require.Empty(t, workflow.ShardStreams)
+	require.NotNil(t, workflow.Status)
+	status := workflow.Status
+	require.Greater(t, status.TotalStreams, int32(0))
+	require.True(t,
+		status.State == vtctldatapb.Workflow_WorkflowStatus_RUNNING ||
+			status.State == vtctldatapb.Workflow_WorkflowStatus_COPYING,
+	)
+	require.Equal(t, "Reads Not Switched. Writes Not Switched", status.TrafficState)
+	require.Empty(t, status.Errors)
+	require.Equal(t, int32(0), status.ErrorStreams)
+	require.Equal(t, workflowName, workflow.Name)
+	require.Equal(t, sourceKeyspace, workflow.Source.Keyspace)
+	require.Equal(t, targetKeyspace, workflow.Target.Keyspace)
 }
 
 func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[string]*cluster.VttabletProcess, targetKeyspace, workflow string) {

@@ -4228,8 +4228,11 @@ type GetWorkflowsRequest struct {
 	// search. It has the same semantics as the Keyspaces parameter, so refer to
 	// that documentation for more details.
 	IgnoreKeyspaces []string `protobuf:"bytes,4,rep,name=ignore_keyspaces,json=ignoreKeyspaces,proto3" json:"ignore_keyspaces,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// SummaryOnly requests the reduced workflow payload intended for
+	// monitoring-heavy views.
+	SummaryOnly   bool `protobuf:"varint,5,opt,name=summary_only,json=summaryOnly,proto3" json:"summary_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetWorkflowsRequest) Reset() {
@@ -4288,6 +4291,13 @@ func (x *GetWorkflowsRequest) GetIgnoreKeyspaces() []string {
 		return x.IgnoreKeyspaces
 	}
 	return nil
+}
+
+func (x *GetWorkflowsRequest) GetSummaryOnly() bool {
+	if x != nil {
+		return x.SummaryOnly
+	}
+	return false
 }
 
 type GetWorkflowsResponse struct {
@@ -7846,14 +7856,15 @@ const file_vtadmin_proto_rawDesc = "" +
 	"\n" +
 	"cluster_id\x18\x01 \x01(\tR\tclusterId\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x1a\n" +
-	"\bworkflow\x18\x03 \x01(\tR\bworkflow\"\xa0\x01\n" +
+	"\bworkflow\x18\x03 \x01(\tR\bworkflow\"\xc3\x01\n" +
 	"\x13GetWorkflowsRequest\x12\x1f\n" +
 	"\vcluster_ids\x18\x01 \x03(\tR\n" +
 	"clusterIds\x12\x1f\n" +
 	"\vactive_only\x18\x02 \x01(\bR\n" +
 	"activeOnly\x12\x1c\n" +
 	"\tkeyspaces\x18\x03 \x03(\tR\tkeyspaces\x12)\n" +
-	"\x10ignore_keyspaces\x18\x04 \x03(\tR\x0fignoreKeyspaces\"\xe1\x01\n" +
+	"\x10ignore_keyspaces\x18\x04 \x03(\tR\x0fignoreKeyspaces\x12!\n" +
+	"\fsummary_only\x18\x05 \x01(\bR\vsummaryOnly\"\xe1\x01\n" +
 	"\x14GetWorkflowsResponse\x12g\n" +
 	"\x14workflows_by_cluster\x18\x01 \x03(\v25.vtadmin.GetWorkflowsResponse.WorkflowsByClusterEntryR\x12workflowsByCluster\x1a`\n" +
 	"\x17WorkflowsByClusterEntry\x12\x10\n" +
