@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Stage 1: Build all Vitess Go binaries (uninstrumented)
-FROM golang:1.26.1-trixie@sha256:ce3f1c8d3718a306811d8d5e547073b466b15e85bfa7e1b4f0dc45516c95b72d AS go-builder
+FROM golang:1.26.3-trixie@sha256:49f8228cebc91ccf30b2380adb5cfe2d8a5f99fc8f3447e0b6c5a2f9d052d056 AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
