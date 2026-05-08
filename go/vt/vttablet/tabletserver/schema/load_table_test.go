@@ -19,7 +19,6 @@ package schema
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -207,17 +206,11 @@ func TestLoadTableMessage(t *testing.T) {
 
 	// Missing property
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30", db)
-	wanterr := "not specified for message table"
-	if err == nil || !strings.Contains(err.Error(), wanterr) {
-		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
-	}
+	assert.ErrorContains(t, err, "not specified for message table", "newTestLoadTable")
 
 	mockLoadTableQueries(db)
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	wanterr = "missing from message table: test_table"
-	if err == nil || !strings.Contains(err.Error(), wanterr) {
-		t.Errorf("newTestLoadTable: %v, must contain %s", err, wanterr)
-	}
+	assert.ErrorContains(t, err, "missing from message table: test_table", "newTestLoadTable")
 }
 
 func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Table, error) {

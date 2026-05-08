@@ -23,6 +23,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
@@ -42,12 +45,12 @@ func TestRebuildVSchema(t *testing.T) {
 
 	// Rebuild with no keyspace / no vschema
 	if err := ts.RebuildSrvVSchema(ctx, cells); err != nil {
-		t.Errorf("RebuildVSchema failed: %v", err)
+		assert.NoError(t, err)
 	}
 	for _, cell := range cells {
-		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, emptySrvVSchema) {
-			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
-		}
+		v, err := ts.GetSrvVSchema(ctx, cell)
+		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		assert.Truef(t, proto.Equal(v, emptySrvVSchema), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
 	// create a keyspace, rebuild, should see an empty entry
@@ -60,15 +63,15 @@ func TestRebuildVSchema(t *testing.T) {
 		},
 	}
 	if err := ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace(ks1) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.RebuildSrvVSchema(ctx, cells); err != nil {
-		t.Errorf("RebuildVSchema failed: %v", err)
+		assert.NoError(t, err)
 	}
 	for _, cell := range cells {
-		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, emptyKs1SrvVSchema) {
-			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
-		}
+		v, err := ts.GetSrvVSchema(ctx, cell)
+		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		assert.Truef(t, proto.Equal(v, emptyKs1SrvVSchema), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
 	// save a vschema for the keyspace, rebuild, should see it
@@ -79,10 +82,10 @@ func TestRebuildVSchema(t *testing.T) {
 		Name:     "ks1",
 		Keyspace: keyspace1,
 	}); err != nil {
-		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.RebuildSrvVSchema(ctx, cells); err != nil {
-		t.Errorf("RebuildVSchema failed: %v", err)
+		assert.NoError(t, err)
 	}
 	wanted1 := &vschemapb.SrvVSchema{
 		MirrorRules:       &vschemapb.MirrorRules{},
@@ -93,14 +96,14 @@ func TestRebuildVSchema(t *testing.T) {
 		},
 	}
 	for _, cell := range cells {
-		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, wanted1) {
-			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
-		}
+		v, err := ts.GetSrvVSchema(ctx, cell)
+		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		assert.Truef(t, proto.Equal(v, wanted1), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
 	// save a vschema for a new keyspace, rebuild in one cell only
 	if err := ts.CreateKeyspace(ctx, "ks2", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace(ks2) failed: %v", err)
+		require.NoError(t, err)
 	}
 	keyspace2 := &vschemapb.Keyspace{
 		Sharded: true,
@@ -124,10 +127,10 @@ func TestRebuildVSchema(t *testing.T) {
 		Name:     "ks2",
 		Keyspace: keyspace2,
 	}); err != nil {
-		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.RebuildSrvVSchema(ctx, []string{"cell1"}); err != nil {
-		t.Errorf("RebuildVSchema failed: %v", err)
+		assert.NoError(t, err)
 	}
 	wanted2 := &vschemapb.SrvVSchema{
 		MirrorRules:       &vschemapb.MirrorRules{},
@@ -138,21 +141,21 @@ func TestRebuildVSchema(t *testing.T) {
 			"ks2": keyspace2,
 		},
 	}
-	if v, err := ts.GetSrvVSchema(ctx, "cell1"); err != nil || !proto.Equal(v, wanted2) {
-		t.Errorf("unexpected GetSrvVSchema result: %v %v", v, err)
-	}
-	if v, err := ts.GetSrvVSchema(ctx, "cell2"); err != nil || !proto.Equal(v, wanted1) {
-		t.Errorf("unexpected GetSrvVSchema result: %v %v", v, err)
-	}
+	v, err := ts.GetSrvVSchema(ctx, "cell1")
+	assert.NoErrorf(t, err, "unexpected GetSrvVSchema error: %v %v", v, err)
+	assert.Truef(t, proto.Equal(v, wanted2), "unexpected GetSrvVSchema result: %v %v", v, err)
+	v, err = ts.GetSrvVSchema(ctx, "cell2")
+	assert.NoErrorf(t, err, "unexpected GetSrvVSchema error: %v %v", v, err)
+	assert.Truef(t, proto.Equal(v, wanted1), "unexpected GetSrvVSchema result: %v %v", v, err)
 
 	// now rebuild everywhere
 	if err := ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		t.Errorf("RebuildVSchema failed: %v", err)
+		assert.NoError(t, err)
 	}
 	for _, cell := range cells {
-		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, wanted2) {
-			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
-		}
+		v, err := ts.GetSrvVSchema(ctx, cell)
+		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		assert.Truef(t, proto.Equal(v, wanted2), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
 	rr := &vschemapb.RoutingRules{
@@ -163,10 +166,10 @@ func TestRebuildVSchema(t *testing.T) {
 	}
 
 	if err := ts.SaveRoutingRules(ctx, rr); err != nil {
-		t.Fatalf("SaveRoutingRules() failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		t.Errorf("RebuildVSchema failed: %v", err)
+		assert.NoError(t, err)
 	}
 	wanted3 := &vschemapb.SrvVSchema{
 		MirrorRules:       &vschemapb.MirrorRules{},
@@ -178,9 +181,9 @@ func TestRebuildVSchema(t *testing.T) {
 		},
 	}
 	for _, cell := range cells {
-		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, wanted3) {
-			t.Errorf("unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
-		}
+		v, err := ts.GetSrvVSchema(ctx, cell)
+		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v %v", cell, v, err)
+		assert.Truef(t, proto.Equal(v, wanted3), "unexpected GetSrvVSchema(%v) result: %v %v", cell, v, err)
 	}
 
 	wanted4 := wanted1
@@ -191,17 +194,17 @@ func TestRebuildVSchema(t *testing.T) {
 		Name:     "ks2",
 		Keyspace: &vschemapb.Keyspace{},
 	}); err != nil {
-		t.Fatalf("SaveVSchema(ks1) failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.DeleteKeyspace(ctx, "ks2"); err != nil {
-		t.Fatalf("DeleteKeyspace failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.RebuildSrvVSchema(ctx, nil); err != nil {
-		t.Errorf("RebuildVSchema failed: %v", err)
+		assert.NoError(t, err)
 	}
 	for _, cell := range cells {
-		if v, err := ts.GetSrvVSchema(ctx, cell); err != nil || !proto.Equal(v, wanted4) {
-			t.Errorf("unexpected GetSrvVSchema(%v) result: %v != %v (err = %v)", cell, v, wanted4, err)
-		}
+		v, err := ts.GetSrvVSchema(ctx, cell)
+		assert.NoErrorf(t, err, "unexpected GetSrvVSchema(%v) error: %v != %v (err = %v)", cell, v, wanted4, err)
+		assert.Truef(t, proto.Equal(v, wanted4), "unexpected GetSrvVSchema(%v) result: %v != %v (err = %v)", cell, v, wanted4, err)
 	}
 }

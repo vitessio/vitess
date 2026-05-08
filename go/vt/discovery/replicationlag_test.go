@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/test/utils"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -125,13 +127,11 @@ func TestFilterByReplicationLag(t *testing.T) {
 		}
 		got := FilterStatsByReplicationLag(lts)
 		if len(got) != len(tc.output) {
-			t.Errorf("FilterStatsByReplicationLag(%v) failed: got output:\n%v\nExpected: %v", tc.description, got, tc.output)
+			assert.Failf(t, "FilterStatsByReplicationLag length mismatch", "FilterStatsByReplicationLag(%v) failed: got output:\n%v\nExpected: %v", tc.description, got, tc.output)
 			continue
 		}
 		for i, elag := range tc.output {
-			if got[i].Stats.ReplicationLagSeconds != elag {
-				t.Errorf("FilterStatsByReplicationLag(%v) failed: got output:\n%v\nExpected value index %v to be %v", tc.description, got, i, elag)
-			}
+			assert.Equalf(t, elag, got[i].Stats.ReplicationLagSeconds, "FilterStatsByReplicationLag(%v) failed: got output:\n%v\nExpected value index %v to be %v", tc.description, got, i, elag)
 		}
 	}
 

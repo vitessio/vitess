@@ -291,7 +291,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 			t.Run("apply more DML", func(t *testing.T) {
 				// Looking to run a substantial amount of DML, giving vreplication
 				// more "opportunities" to throttle or to make progress.
-				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 				defer cancel()
 				ticker := time.NewTicker(time.Second)
 				defer ticker.Stop()
@@ -405,7 +405,7 @@ func checkTable(t *testing.T, showTableName string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -453,7 +453,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func waitForReadyToComplete(t *testing.T, uuid string, expected bool) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), migrationWaitTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), migrationWaitTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)

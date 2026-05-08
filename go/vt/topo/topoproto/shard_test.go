@@ -18,6 +18,9 @@ package topoproto
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseKeyspaceShard(t *testing.T) {
@@ -27,18 +30,11 @@ func TestParseKeyspaceShard(t *testing.T) {
 
 	for _, delim := range []string{"/", ":"} {
 		keyspaceShard := keyspace + delim + shard
-		if _, _, err := ParseKeyspaceShard(zkPath); err == nil {
-			t.Errorf("zk path: %s should cause error.", zkPath)
-		}
+		_, _, err := ParseKeyspaceShard(zkPath)
+		assert.Errorf(t, err, "zk path: %s should cause error.", zkPath)
 		k, s, err := ParseKeyspaceShard(keyspaceShard)
-		if err != nil {
-			t.Fatalf("Failed to parse valid keyspace%sshard pair: %s", delim, keyspaceShard)
-		}
-		if k != keyspace {
-			t.Errorf("keyspace parsed from keyspace%sshard pair %s is %s, but expect %s", delim, keyspaceShard, k, keyspace)
-		}
-		if s != shard {
-			t.Errorf("shard parsed from keyspace%sshard pair %s is %s, but expect %s", delim, keyspaceShard, s, shard)
-		}
+		require.NoErrorf(t, err, "Failed to parse valid keyspace%sshard pair: %s", delim, keyspaceShard)
+		assert.Equalf(t, keyspace, k, "keyspace parsed from keyspace%sshard pair %s is %s, but expect %s", delim, keyspaceShard, k, keyspace)
+		assert.Equalf(t, shard, s, "shard parsed from keyspace%sshard pair %s is %s, but expect %s", delim, keyspaceShard, s, shard)
 	}
 }

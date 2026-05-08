@@ -607,6 +607,24 @@ func TestBuildPlayerPlan(t *testing.T) {
 		},
 		err: "failed to build table replication plan for t1 table: unsupported multi-table usage in query: select * from t1, t2",
 	}, {
+		// no FROM clause
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select 1",
+			}},
+		},
+		err: "failed to build table replication plan for t1 table: unsupported select from dual in query: select 1",
+	}, {
+		// FROM DUAL (virtual dual, no real table)
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select 1 from dual",
+			}},
+		},
+		err: "failed to build table replication plan for t1 table: unsupported select from dual in query: select 1 from dual",
+	}, {
 		// no join
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -786,9 +804,7 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 	}
 	_, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 	want := "more than one target for source table t"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
-	}
+	assert.ErrorContainsf(t, err, want, "buildReplicatorPlan err: %v, must contain: %v", err, want)
 }
 
 func TestBuildPlayerPlanExclude(t *testing.T) {

@@ -2088,7 +2088,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
@@ -4023,7 +4023,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
@@ -4349,7 +4349,7 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 					topo.RemoteOperationTimeout = oldTime
 				}()
 			}
-			innodbBufferPoolsData, err := pr.verifyAllTabletsReachable(context.Background(), tt.tabletMap)
+			innodbBufferPoolsData, err := pr.verifyAllTabletsReachable(t.Context(), tt.tabletMap)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
 				require.EqualValues(t, len(tt.wantBufferPoolsData), len(innodbBufferPoolsData))
@@ -4436,9 +4436,9 @@ func TestPlannedReparenterStats(t *testing.T) {
 	}
 	keyspace := "testkeyspace"
 	shard := "-"
-	ts := memorytopo.NewServer(context.Background(), "zone1")
+	ts := memorytopo.NewServer(t.Context(), "zone1")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	testutil.AddShards(ctx, t, ts, shards...)

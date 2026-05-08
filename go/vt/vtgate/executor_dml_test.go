@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -548,9 +547,7 @@ func TestUpdateMultiOwned(t *testing.T) {
 		TargetString: "@primary",
 	}
 	_, err := executorExec(ctx, executor, session, "update user set a=1, b=2, f=4, e=3 where id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select id, a, b, c, d, e, f, a = 1 and b = 2, e = 3 and f = 4 from `user` where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
@@ -1887,9 +1884,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 		},
 	}}
 	assertQueries(t, sbc, wantQueries)
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.True(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 	assert.EqualValues(t, 2, session.LastInsertId)
 }
 
@@ -2087,7 +2082,7 @@ func TestInsertPartialFail1(t *testing.T) {
 	sbclookup.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 
 	_, err := executor.Execute(
-		context.Background(),
+		t.Context(),
 		nil,
 		"TestExecute",
 		econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true}),
@@ -2109,7 +2104,7 @@ func TestInsertPartialFail2(t *testing.T) {
 
 	safeSession := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executor.Execute(
-		context.Background(),
+		t.Context(),
 		nil,
 		"TestExecute",
 		safeSession,
@@ -2120,7 +2115,7 @@ func TestInsertPartialFail2(t *testing.T) {
 
 	want := "reverted partial DML execution failure"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
+		assert.Failf(t, "insert first DML fail", "insert first DML fail: %v, must start with %s", err, want)
 	}
 
 	assert.True(t, safeSession.InTransaction())
@@ -2376,9 +2371,7 @@ func TestInsertBadAutoInc(t *testing.T) {
 	}
 	_, err := executorExec(ctx, executor, session, "insert into bad_auto(v, name) values (1, 'myname')", nil)
 	want := "table bad_auto not found"
-	if err == nil || err.Error() != want {
-		t.Errorf("bad auto inc err: %v, want %v", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "bad auto inc err: %v, want %v", err, want)
 }
 
 func TestKeyDestRangeQuery(t *testing.T) {
@@ -2989,10 +2982,10 @@ func TestInsertSelectFromDual(t *testing.T) {
 			// set result for dual query.
 			sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("1|2|myname", "int64|int64|varchar"), "1|2|myname")})
 
-			_, err := executorExecSession(context.Background(), executor, session, wQuery, nil)
+			_, err := executorExecSession(t.Context(), executor, session, wQuery, nil)
 			require.NoError(t, err)
 
-			_, err = executorExecSession(context.Background(), executor, session, query, nil)
+			_, err = executorExecSession(t.Context(), executor, session, query, nil)
 			require.NoError(t, err)
 
 			assertQueries(t, sbc1, wantQueries)
@@ -3051,10 +3044,10 @@ func TestInsertSelectFromTable(t *testing.T) {
 		sbc2.Queries = nil
 		sbclookup.Queries = nil
 		wQuery := "set @@workload = " + workload
-		_, err := executorExecSession(context.Background(), executor, session, wQuery, nil)
+		_, err := executorExecSession(t.Context(), executor, session, wQuery, nil)
 		require.NoError(t, err)
 
-		_, err = executorExecSession(context.Background(), executor, session, query, nil)
+		_, err = executorExecSession(t.Context(), executor, session, query, nil)
 		require.NoError(t, err)
 
 		assertQueries(t, sbc1, wantQueries)

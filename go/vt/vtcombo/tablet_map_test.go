@@ -17,7 +17,6 @@ limitations under the License.
 package vtcombo
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -77,7 +76,7 @@ func TestInitRoutingRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "cell1")
 
 			err := InitRoutingRules(ctx, ts, tt.rules)
@@ -141,7 +140,7 @@ func TestInitMirrorRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			ts := memorytopo.NewServer(ctx, "cell1")
 
 			err := InitMirrorRules(ctx, ts, tt.rules)
@@ -222,7 +221,7 @@ func TestDialer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			tablet := tt.setupTablet()
 
 			qs, err := dialer(ctx, tablet, grpcclient.FailFast(false))
@@ -265,7 +264,7 @@ func TestInternalTabletConn_Tablet(t *testing.T) {
 }
 
 func TestInternalTabletConn_Close(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	itc := &internalTabletConn{}
 
 	err := itc.Close(ctx)
@@ -319,7 +318,7 @@ func TestInternalTabletManagerClient_Ping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			itmc := &internalTabletManagerClient{}
 			tablet := tt.setupTablet()
 
@@ -341,7 +340,7 @@ func TestInternalTabletManagerClient_TabletNotFoundErrors(t *testing.T) {
 		tabletMap = originalTabletMap
 	})
 
-	ctx := context.Background()
+	ctx := t.Context()
 	itmc := &internalTabletManagerClient{}
 
 	tabletMap = make(map[uint32]*comboTablet)

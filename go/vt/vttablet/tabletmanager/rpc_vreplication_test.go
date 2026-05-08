@@ -23,13 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -273,7 +273,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+					require.Failf(t, "panic in test", "Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
 				}
 			}()
 
@@ -1074,7 +1074,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 				if err := recover(); err != nil {
 					log.Info(fmt.Sprintf("Got panic in test: %v", err))
 					log.Flush()
-					t.Errorf("Recovered from panic: %v, stack: %s", err, debug.Stack())
+					require.Failf(t, "panic in test", "Recovered from panic: %v, stack: %s", err, debug.Stack())
 				}
 			}()
 
@@ -1168,8 +1168,8 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			// This is needed because MockDBClient uses t.Fatal()
 			// which doesn't play well with subtests.
 			defer func() {
-				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v", err)
+				if r := recover(); r != nil {
+					require.Failf(t, "panic in test", "Recovered from panic: %v", r)
 				}
 			}()
 
@@ -1376,7 +1376,7 @@ func TestSourceShardSelection(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+					require.Failf(t, "panic in test", "Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
 				}
 			}()
 
@@ -1657,7 +1657,7 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+					require.Failf(t, "panic in test", "Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
 				}
 			}()
 
@@ -1670,12 +1670,10 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 
 			got, err := tenv.tmc.HasVReplicationWorkflows(ctx, tt.tablet.tablet, req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("TabletManager.HasVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
+				assert.Failf(t, "unexpected error result", "TabletManager.HasVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("TabletManager.HasVReplicationWorkflows() = %v, want %v", got, tt.want)
-			}
+			assert.Equalf(t, tt.want, got, "TabletManager.HasVReplicationWorkflows() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -1773,7 +1771,7 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+					require.Failf(t, "panic in test", "Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
 				}
 			}()
 
@@ -1789,7 +1787,7 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 
 			_, err := tenv.tmc.ReadVReplicationWorkflows(ctx, tablet.tablet, tt.req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("TabletManager.ReadVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
+				assert.Failf(t, "unexpected error result", "TabletManager.ReadVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 		})
@@ -4584,7 +4582,7 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 }
 
 func TestDeleteTableData(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	sourceKs := "sourceks"
 	sourceShard := "0"

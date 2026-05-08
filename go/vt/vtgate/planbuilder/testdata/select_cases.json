@@ -624,10 +624,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     },
     "skip_e2e": true
   },
@@ -670,10 +667,7 @@
         },
         "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
         "Query": "select @@auto_increment_increment from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2071,10 +2065,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2143,10 +2134,7 @@
         },
         "FieldQuery": "select 42 from dual where 1 != 1",
         "Query": "select 42 from dual where 0"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2272,10 +2260,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -2554,7 +2539,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2594,7 +2578,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2637,7 +2620,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2660,7 +2642,6 @@
         "Query": "select t.title, `user`.col from `user` left join (select 'hello' as title from dual) as t on `user`.id <= 4"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2687,7 +2668,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2727,7 +2707,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2835,35 +2814,20 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
     "comment": "Merging dual with user",
     "query": "select 42, id from dual, user",
-    "plan": {
-      "Type": "Scatter",
-      "QueryType": "SELECT",
-      "Original": "select 42, id from dual, user",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
-        "Query": "select 42, id from dual, `user`"
-      },
-      "TablesUsed": [
-        "main.dual",
-        "user.user"
-      ]
-    },
+    "plan": "syntax error at position 25",
     "skip_e2e": true
+  },
+  {
+    "comment": "Backtick-quoted dual is a real table, not virtual dual",
+    "query": "select 1 from `dual`",
+    "skip_e2e": true,
+    "plan": "table dual not found"
   },
   {
     "comment": "subquery in select expression of derived table",
@@ -3018,10 +2982,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3129,10 +3090,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3701,10 +3659,7 @@
         "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.`TABLE_NAME` = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */)",
         "SysTableTableName": "[TABLES_TABLE_NAME:'proc']",
         "SysTableTableSchema": "['mysql']"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3723,10 +3678,7 @@
         },
         "FieldQuery": "select json_quote('null'), json_quote('\"null\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual where 1 != 1",
         "Query": "select json_quote('null'), json_quote('\"null\"'), json_object(BIN(1), 2, 'abc', ASCII(4)), json_array(1, 'abc', null, true, curtime()) from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3803,7 +3755,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -3824,10 +3775,7 @@
         },
         "FieldQuery": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual where 1 != 1",
         "Query": "select json_schema_valid('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"'), json_schema_validation_report('{\"type\":\"string\",\"pattern\":\"(\"}', '\"abc\"') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3846,10 +3794,7 @@
         },
         "FieldQuery": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')), json_keys('{\"a\": 1, \"b\": {\"c\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\"abc\"]', 'one', 'abc'), json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual where 1 != 1",
         "Query": "select json_contains('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', '1'), json_contains_path('{\"a\": 1, \"b\": 2, \"c\": {\"d\": 4}}', 'one', '$.a', '$.e'), json_extract('[10, 20, [30, 40]]', '$[1]'), json_unquote(json_extract('[\"a\",\"b\"]', '$[1]')), json_keys('{\"a\": 1, \"b\": {\"c\": 30}}'), json_overlaps('[1,3,5,7]', '[2,5,7]'), json_search('[\"abc\"]', 'one', 'abc'), json_value('{\"fname\": \"Joe\", \"lname\": \"Palmer\"}', '$.fname'), json_array(4, 5) member of ('[[3,4],[4,5]]') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3914,10 +3859,7 @@
         },
         "FieldQuery": "select json_depth('{}'), json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), json_type(json_extract('{\"a\": [10, true]}', '$.a')), json_valid('{\"a\": 1}') from dual where 1 != 1",
         "Query": "select json_depth('{}'), json_length('{\"a\": 1, \"b\": {\"c\": 30}}', '$.b'), json_type(json_extract('{\"a\": [10, true]}', '$.a')), json_valid('{\"a\": 1}') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3936,10 +3878,7 @@
         },
         "FieldQuery": "select json_array_append('{\"a\": 1}', '$', 'z'), json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual where 1 != 1",
         "Query": "select json_array_append('{\"a\": 1}', '$', 'z'), json_array_insert('[\"a\", {\"b\": [1, 2]}, [3, 4]]', '$[0]', 'x', '$[2][1]', 'y'), json_insert('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', cast('[true, false]' as JSON)) from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3958,10 +3897,7 @@
         },
         "FieldQuery": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}'), json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual where 1 != 1",
         "Query": "select json_merge('[1, 2]', '[true, false]'), json_merge_patch('{\"name\": \"x\"}', '{\"id\": 47}'), json_merge_preserve('[1, 2]', '{\"id\": 47}') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -3980,10 +3916,7 @@
         },
         "FieldQuery": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\"abc\"') from dual where 1 != 1",
         "Query": "select json_remove('[1, [2, 3], 4]', '$[1]'), json_replace('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_set('{ \"a\": 1, \"b\": [2, 3]}', '$.a', 10, '$.c', '[true, false]'), json_unquote('\"abc\"') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -4008,7 +3941,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -4053,7 +3985,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -4075,10 +4006,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -4120,10 +4048,7 @@
         },
         "FieldQuery": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual where 1 != 1",
         "Query": "select gtid_subset('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), gtid_subtract('3E11FA47-71CA-11E1-9E33-C80AA9429562:23', '3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57') from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -5552,11 +5477,71 @@
         },
         "FieldQuery": "select 1 as x, (select x from dual where 1 != 1) from dual where 1 != 1",
         "Query": "select 1 as x, (select x from dual) from dual"
+      }
+    }
+  },
+  {
+    "comment": "Nested subqueries can reference outer aliases in dual context",
+    "query": "SELECT 1 as x, (SELECT x FROM dual), (SELECT (SELECT x FROM DUAL) FROM dual)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 as x, (SELECT x FROM dual), (SELECT (SELECT x FROM DUAL) FROM dual)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as x, (select x from dual where 1 != 1), (select x from dual where 1 != 1) as `(select (select x from dual) from dual)` from dual where 1 != 1",
+        "Query": "select 1 as x, (select x from dual), (select x from dual) as `(select (select x from dual) from dual)` from dual"
+      }
+    }
+  },
+  {
+    "comment": "Unresolved column in dual subquery should fail",
+    "query": "SELECT 1 as x, (SELECT x FROM dual), (SELECT y FROM dual)",
+    "skip_e2e": true,
+    "plan": "column 'y' not found"
+  },
+  {
+    "comment": "Subquery can reference parent alias even when parent has FROM clause",
+    "query": "SELECT id AS foobar, (SELECT foobar) FROM user WHERE id = 1",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "SELECT id AS foobar, (SELECT foobar) FROM user WHERE id = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id as foobar, (select foobar from dual where 1 != 1) from `user` where 1 != 1",
+        "Query": "select id as foobar, (select foobar from dual) from `user` where id = 1",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual"
+        "user.user"
       ]
     }
+  },
+  {
+    "comment": "Same-scope alias reference in SELECT without FROM should fail",
+    "query": "SELECT 1 AS x, x",
+    "skip_e2e": true,
+    "plan": "column 'x' not found"
+  },
+  {
+    "comment": "Same-scope alias reference in WHERE without FROM should fail",
+    "query": "SELECT 1 AS x WHERE x = 1",
+    "skip_e2e": true,
+    "plan": "column 'x' not found"
   },
   {
     "comment": "Subquery can reference parent alias in dual context",
@@ -5574,17 +5559,52 @@
         },
         "FieldQuery": "select 1 as x, (select x from dual where 1 != 1) from dual where 1 != 1",
         "Query": "select 1 as x, (select x from dual) from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
     "comment": "Literal parent alias referenced from sharded subquery is correctly tagged as correlated even when outer has no explicit FROM",
     "query": "SELECT 1 AS x, (SELECT x FROM authoritative)",
-    "skip_e2e": true,
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "SELECT 1 AS x, (SELECT x FROM authoritative)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select x from authoritative where 1 != 1",
+            "Query": "select x from authoritative"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 as x, :__sq1 /* INT64 */ as `(select x from authoritative)` from dual where 1 != 1",
+            "Query": "select 1 as x, :__sq1 /* INT64 */ as `(select x from authoritative)` from dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Subquery WHERE clause can reference parent alias",
@@ -5608,7 +5628,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.authoritative"
       ]
     }
@@ -5616,7 +5635,6 @@
   {
     "comment": "Subquery with own non-authoritative FROM treats unknown column as table column",
     "query": "SELECT id AS foobar, (SELECT foobar FROM user_extra WHERE foobar = 1) FROM user WHERE id = 1",
-    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
@@ -5660,25 +5678,26 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Subquery with own FROM falls back to parent alias when column not in table",
     "query": "SELECT user_id AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
-    "skip_e2e": true,
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "Literal parent alias referenced by subquery rejected as correlated when subquery cannot merge with outer route",
     "query": "SELECT 1 AS foobar, (SELECT foobar FROM authoritative) FROM authoritative WHERE user_id = 1",
-    "skip_e2e": true,
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "Nested subquery resolves alias across multiple scope levels",
     "query": "SELECT user_id AS foobar, (SELECT (SELECT foobar) AS barbaz FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
-    "skip_e2e": true,
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "Nested subquery resolves alias across multiple dual scopes",
@@ -5696,23 +5715,20 @@
         },
         "FieldQuery": "select 1 as foobar, (select foobar from dual where 1 != 1) as `(select (select foobar from dual) as barbaz from dual)` from dual where 1 != 1",
         "Query": "select 1 as foobar, (select foobar from dual) as `(select (select foobar from dual) as barbaz from dual)` from dual"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
     "comment": "Subquery referencing compound expression alias is correctly correlated",
     "query": "SELECT user_id + 1 AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
-    "skip_e2e": true,
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "Duplicate column aliases in subquery are ambiguous in MySQL",
     "query": "SELECT user_id AS foobar, col1 AS foobar, (SELECT foobar FROM authoritative WHERE foobar = 1) FROM authoritative WHERE user_id = 1",
-    "skip_e2e": true,
-    "plan": "Column 'foobar' in field list is ambiguous"
+    "plan": "Column 'foobar' in field list is ambiguous",
+    "skip_e2e": true
   },
   {
     "comment": "Repeating the same column with the same alias is not ambiguous",
@@ -5736,7 +5752,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.authoritative"
       ]
     }
@@ -5763,7 +5778,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.authoritative"
       ]
     }
@@ -5790,7 +5804,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.authoritative"
       ]
     }
@@ -5817,7 +5830,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.authoritative"
       ]
     }
@@ -5844,7 +5856,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.authoritative"
       ]
     }
@@ -5871,7 +5882,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.authoritative"
       ]
     }
@@ -5879,14 +5889,14 @@
   {
     "comment": "Forward reference to alias in subquery should fail",
     "query": "SELECT (SELECT foobar FROM authoritative), user_id AS foobar FROM authoritative WHERE user_id = 1",
-    "skip_e2e": true,
-    "plan": "column 'foobar' not found"
+    "plan": "column 'foobar' not found",
+    "skip_e2e": true
   },
   {
     "comment": "Qualified column in subquery does not match parent alias",
     "query": "SELECT user_id AS foobar, (SELECT asdf.foobar) FROM authoritative AS asdf WHERE user_id = 1",
-    "skip_e2e": true,
-    "plan": "column 'asdf.foobar' not found"
+    "plan": "column 'asdf.foobar' not found",
+    "skip_e2e": true
   },
   {
     "comment": "Subquery can reference parent alias even when parent has FROM clause",
@@ -5910,7 +5920,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.authoritative"
       ]
     }
@@ -6001,7 +6010,6 @@
   {
     "comment": "volatile subqueries (uuid) each get their own pullout",
     "query": "select (select uuid() from user_extra limit 1) as a, (select uuid() from user_extra limit 1) as b, (select uuid() from user_extra limit 1) as c from user where id = 1",
-    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
@@ -6105,7 +6113,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "(OR 1 = 0) doesn't cause unnecessary scatter",
@@ -6177,7 +6186,6 @@
         "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1"
       },
       "TablesUsed": [
-        "main.dual",
         "main.unsharded_a"
       ]
     },

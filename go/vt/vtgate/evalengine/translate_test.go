@@ -17,8 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -122,9 +120,7 @@ func TestTranslateSimplification(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			stmt, err := venv.Parser().Parse("select " + tc.expression)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			fields := FieldResolver([]*querypb.Field{
 				{Name: "json", Type: sqltypes.TypeJSON, Charset: collations.CollationUtf8mb4ID},
@@ -142,11 +138,9 @@ func TestTranslateSimplification(t *testing.T) {
 			converted, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.converted.err == "" {
-					t.Fatalf("failed to Convert (simplify=false): %v", err)
+					require.NoError(t, err)
 				}
-				if !strings.Contains(err.Error(), tc.converted.err) {
-					t.Fatalf("wrong Convert error (simplify=false): %q (expected %q)", err, tc.converted.err)
-				}
+				require.ErrorContainsf(t, err, tc.converted.err, "wrong Convert error (simplify=false): %q (expected %q)", err, tc.converted.err)
 				return
 			}
 			assert.Equal(t, tc.converted.literal, sqlparser.String(converted))
@@ -155,11 +149,9 @@ func TestTranslateSimplification(t *testing.T) {
 			simplified, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.simplified.err == "" {
-					t.Fatalf("failed to Convert (simplify=true): %v", err)
+					require.NoError(t, err)
 				}
-				if !strings.Contains(err.Error(), tc.simplified.err) {
-					t.Fatalf("wrong Convert error (simplify=true): %q (expected %q)", err, tc.simplified.err)
-				}
+				require.ErrorContainsf(t, err, tc.simplified.err, "wrong Convert error (simplify=true): %q (expected %q)", err, tc.simplified.err)
 				return
 			}
 			assert.Equal(t, tc.simplified.literal, sqlparser.String(simplified))
@@ -325,7 +317,7 @@ func TestEvaluate(t *testing.T) {
 			})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
-			env := NewExpressionEnv(context.Background(), map[string]*querypb.BindVariable{
+			env := NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{
 				"exp":                  sqltypes.Int64BindVariable(66),
 				"string_bind_variable": sqltypes.StringBindVariable("bar"),
 				"int32_bind_variable":  sqltypes.Int32BindVariable(20),

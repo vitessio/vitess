@@ -32,7 +32,7 @@ import (
 )
 
 func TestPermutations(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	tt := []struct {
 		name               string
 		fromQueries        []string
@@ -243,7 +243,7 @@ func TestPermutations(t *testing.T) {
 }
 
 func TestPermutationsContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
@@ -256,7 +256,7 @@ func TestPermutationsContext(t *testing.T) {
 }
 
 func TestSchemaDiff(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	createQueries := []string{
 		"create table t1 (id int primary key, info int not null);",
 		"create table t2 (id int primary key, ts timestamp);",
@@ -1395,7 +1395,7 @@ func TestSchemaDiff(t *testing.T) {
 // $ TEST_SCHEMADIFF_DIFF_FILES=/tmp/1.sql,/tmp/2.sql go test -v -count=1 -run TestDiffFiles ./go/vt/schemadiff/
 // ```
 func TestDiffFiles(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	envName := "TEST_SCHEMADIFF_DIFF_FILES"
 	filesVar := os.Getenv(envName)

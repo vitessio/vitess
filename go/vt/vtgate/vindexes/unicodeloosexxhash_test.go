@@ -17,9 +17,10 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -127,26 +128,18 @@ func TestUnicodeLooseXXHashMap(t *testing.T) {
 		out: "\x99\xe9\xd8Q7\xdbF\xef",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindexXXHash.Map(context.Background(), nil, []sqltypes.Value{tcase.in})
-		if err != nil {
-			t.Error(err)
-		}
+		got, err := charVindexXXHash.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
+		assert.NoError(t, err)
 		out := string(got[0].(key.DestinationKeyspaceID))
-		if out != tcase.out {
-			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
-		}
+		assert.Equalf(t, tcase.out, out, "Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
 	}
 }
 
 func TestUnicodeLooseXXHashVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewVarBinary("different")}
 	ksids := [][]byte{[]byte("B\xd2\x13a\bzL\a"), []byte("B\xd2\x13a\bzL\a"), []byte(" \xaf\x87\xfc6\xe3\xfdQ")}
-	got, err := charVindexXXHash.Verify(context.Background(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
+	got, err := charVindexXXHash.Verify(t.Context(), nil, ids, ksids)
+	require.NoError(t, err)
 	want := []bool{true, true, false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("UnicodeLooseXXHash.Verify: %v, want %v", got, want)
-	}
+	assert.Equalf(t, want, got, "UnicodeLooseXXHash.Verify: %v, want %v", got, want)
 }

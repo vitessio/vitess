@@ -270,7 +270,7 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGet
 }
 
 func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                     string
@@ -1692,7 +1692,7 @@ func (fake *waitForRelayLogsToApplyTestTMClient) WaitForPosition(_ context.Conte
 func TestWaitForRelayLogsToApply(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name                    string
 		client                  *waitForRelayLogsToApplyTestTMClient
