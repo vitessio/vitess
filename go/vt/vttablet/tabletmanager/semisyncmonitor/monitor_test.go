@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -382,7 +383,7 @@ func TestGetSemiSyncStats(t *testing.T) {
 			}()
 
 			db.AddQuery(fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds()), tt.res)
-			conn, err := m.appPool.Get(context.Background())
+			conn, err := m.appPool.Get(t.Context())
 			require.NoError(t, err)
 			defer conn.Recycle()
 
@@ -665,28 +666,39 @@ func TestMonitorWriteBlocked(t *testing.T) {
 	m.mu.Unlock()
 
 	// ExecuteFetchMulti will execute each statement separately, so we need to add SET query and INSERT query.
-	// Add them multiple times so the writes can execute.
-	for range maxWritesPermitted {
-		db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
-		db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
-	}
+	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
+	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
+	// Block the INSERT so we have a deterministic window in which write() is in
+	// progress; otherwise the goroutine can complete before the assertion below
+	// observes inProgressWriteCount > 0 on a busy CI runner. release() is
+	// idempotent and registered with t.Cleanup so a require.* failure can't
+	// leave the INSERT goroutine wedged inside BeforeFunc and deadlock
+	// db.Close() during teardown.
+	unblock := make(chan struct{})
+	var unblockOnce sync.Once
+	release := func() { unblockOnce.Do(func() { close(unblock) }) }
+	t.Cleanup(release)
+	db.SetBeforeFunc("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", func() {
+		<-unblock
+	})
 
-	// Do a write, which we expect to block.
+	// Do a write, which we expect to block on the INSERT.
 	var writeFinished atomic.Bool
 	go func() {
 		m.write()
 		writeFinished.Store(true)
 	}()
 
-	// We should see the number of writers increase briefly, before it completes.
+	// We should see the number of writers increase while the INSERT is blocked.
 	require.Zero(t, m.errorCount.Get())
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount > 0
-	}, 15*time.Second, 1*time.Microsecond)
+	}, 15*time.Second, time.Millisecond)
 
-	// Check that the writes finished successfully.
+	// Let the INSERT proceed and check that the write finished successfully.
+	release()
 	require.Eventually(t, func() bool {
 		return writeFinished.Load()
 	}, 10*time.Second, 100*time.Millisecond)
@@ -933,7 +945,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	m.Open()
 
 	// When everything is unblocked, then this should return without blocking.
-	err := m.WaitUntilSemiSyncUnblocked(context.Background())
+	err := m.WaitUntilSemiSyncUnblocked(t.Context())
 	require.NoError(t, err)
 
 	// Now we set the monitor to be blocked by changing the state.
@@ -949,7 +961,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	// Start a cancellable context and use that to wait.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	wg.Add(1)
 	var ctxErr error
@@ -964,7 +976,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	// Start another go routine, also waiting for semi-sync being unblocked, but not using the cancellable context.
 	wg.Go(func() {
-		err := m.WaitUntilSemiSyncUnblocked(context.Background())
+		err := m.WaitUntilSemiSyncUnblocked(t.Context())
 		require.NoError(t, err)
 	})
 
@@ -983,7 +995,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	// Now we set the monitor to be unblocked by changing the state
 	handler.semisyncBlocked.Store(false)
 
-	err = m.WaitUntilSemiSyncUnblocked(context.Background())
+	err = m.WaitUntilSemiSyncUnblocked(t.Context())
 	require.NoError(t, err)
 	// This should unblock the second wait.
 	wg.Wait()
@@ -996,7 +1008,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 
 	// Also verify that if the monitor is closed, we don't wait.
 	m.Close()
-	err = m.WaitUntilSemiSyncUnblocked(context.Background())
+	err = m.WaitUntilSemiSyncUnblocked(t.Context())
 	require.NoError(t, err)
 	require.True(t, m.isClosed())
 }
@@ -1053,7 +1065,7 @@ func TestDeadlockOnClose(t *testing.T) {
 		buf := make([]byte, 1<<16) // 64 KB buffer size
 		stackSize := runtime.Stack(buf, true)
 		log.Error("Stack trace:\n" + string(buf[:stackSize]))
-		t.Fatalf("Deadlock occurred while closing the monitor")
+		require.Fail(t, "Deadlock occurred while closing the monitor")
 	}
 }
 
@@ -1108,7 +1120,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 
 	// Initially writes aren't blocked and the wait returns immediately.
 	require.False(t, m.AllWritesBlocked())
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	err := m.WaitUntilSemiSyncUnblocked(ctx)
 	require.NoError(t, err)
@@ -1123,9 +1135,11 @@ func TestSemiSyncMonitor(t *testing.T) {
 	// Start a waiter.
 	var waitFinished atomic.Bool
 	go func() {
-		err := m.WaitUntilSemiSyncUnblocked(context.Background())
-		require.NoError(t, err)
-		waitFinished.Store(true)
+		defer waitFinished.Store(true)
+		err := m.WaitUntilSemiSyncUnblocked(t.Context())
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	// Now unblock and verify the wait completes.
@@ -1150,7 +1164,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 // in the next check of stillBlocked.
 func waitUntilWritingStopped(t *testing.T, m *Monitor) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
@@ -1158,7 +1172,7 @@ func waitUntilWritingStopped(t *testing.T, m *Monitor) {
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("Timed out waiting for writing to stop: %v", ctx.Err())
+			require.Failf(t, "writing did not stop", "Timed out waiting for writing to stop: %v", ctx.Err())
 		case <-tick.C:
 			m.mu.Lock()
 			if !m.isWriting.Load() {

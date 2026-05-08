@@ -17,11 +17,11 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -32,7 +32,7 @@ func TestLastInsertId(t *testing.T) {
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, "ks", "t1_last_insert_id", cluster.VTProcess().ReadVSchema))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -50,7 +50,7 @@ func TestLastInsertId(t *testing.T) {
 	want := fmt.Sprintf("[[UINT64(%d)]]", oldLastID+1)
 
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Error(diff)
+		assert.Fail(t, diff)
 	}
 }
 
@@ -58,7 +58,7 @@ func TestLastInsertIdWithRollback(t *testing.T) {
 	require.NoError(t,
 		utils.WaitForAuthoritative(t, "ks", "t1_last_insert_id", cluster.VTProcess().ReadVSchema))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -76,13 +76,13 @@ func TestLastInsertIdWithRollback(t *testing.T) {
 	want := fmt.Sprintf("[[UINT64(%d)]]", oldLastID+1)
 
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Error(diff)
+		assert.Fail(t, diff)
 	}
 	// even if we do a rollback, we should still get the same last_insert_id
 	exec(t, conn, "rollback")
 	qr = exec(t, conn, "select last_insert_id()")
 	got = fmt.Sprintf("%v", qr.Rows)
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Error(diff)
+		assert.Fail(t, diff)
 	}
 }

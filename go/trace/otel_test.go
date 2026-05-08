@@ -70,7 +70,7 @@ func TestOtelSpan(t *testing.T) {
 	require.NotEmpty(t, clientSpan)
 	require.NotNil(t, ctx)
 
-	spanFromCtx, ok := svc.FromContext(context.Background())
+	spanFromCtx, ok := svc.FromContext(t.Context())
 	require.False(t, ok)
 	require.Nil(t, spanFromCtx)
 

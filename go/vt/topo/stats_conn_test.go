@@ -206,7 +206,7 @@ func TestStatsConnTopoListDir(t *testing.T) {
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	semAcquiredChan := make(chan struct{})
 	go createTestReadSemaphoreContention(ctx, 100*time.Millisecond, semAcquiredChan)
@@ -234,7 +234,7 @@ func TestStatsConnTopoCreate(t *testing.T) {
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	statsConn.Create(ctx, "", []byte{})
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Create.global"])
@@ -257,7 +257,7 @@ func TestStatsConnTopoUpdate(t *testing.T) {
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	statsConn.Update(ctx, "", []byte{}, conn.v)
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Update.global"])
@@ -280,7 +280,7 @@ func TestStatsConnTopoGet(t *testing.T) {
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	semAcquiredChan := make(chan struct{})
 	go createTestReadSemaphoreContention(ctx, time.Millisecond*100, semAcquiredChan)
@@ -308,7 +308,7 @@ func TestStatsConnTopoDelete(t *testing.T) {
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	statsConn.Delete(ctx, "", conn.v)
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Delete.global"])
@@ -331,7 +331,7 @@ func TestStatsConnTopoLock(t *testing.T) {
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	statsConn.Lock(ctx, "", "")
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Lock.global"])
@@ -360,7 +360,7 @@ func TestStatsConnTopoWatch(t *testing.T) {
 
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn, testStatsConnReadSem)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	statsConn.Watch(ctx, "")
 	require.Equal(t, int64(1), topoStatsConnTimings.Counts()["Watch.global"])

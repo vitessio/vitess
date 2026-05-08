@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -63,9 +64,7 @@ func TestVtGateVExplain(t *testing.T) {
 			qr.Rows[i] = qr.Rows[i][1:]
 		}
 
-		if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, sqltypes.RowsEqualsStr(expected, qr.Rows))
 	}
 
 	utils.AssertContainsError(t, conn,

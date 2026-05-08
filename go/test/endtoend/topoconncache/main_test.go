@@ -29,6 +29,8 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -241,7 +243,7 @@ func TestMain(m *testing.M) {
 func testURL(t *testing.T, url string, testCaseName string) {
 	statusCode := getStatusForURL(url)
 	if got, want := statusCode, 200; got != want {
-		t.Errorf("\nurl: %v\nstatus code: %v \nwant %v for %s", url, got, want, testCaseName)
+		assert.Equalf(t, want, got, "\nurl: %v\nstatus code: %v \nwant %v for %s", url, got, want, testCaseName)
 	}
 }
 

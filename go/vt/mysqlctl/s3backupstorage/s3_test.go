@@ -2,7 +2,6 @@ package s3backupstorage
 
 import (
 	"bytes"
-	"context"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
@@ -244,7 +243,7 @@ func TestAddFileError(t *testing.T) {
 		readOnly: false,
 	}
 
-	wc, err := bh.AddFile(context.Background(), "somefile", 100000)
+	wc, err := bh.AddFile(t.Context(), "somefile", 100000)
 	require.NoError(t, err, "AddFile() should not error on creation")
 	assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
@@ -284,7 +283,7 @@ func TestAddFileStats(t *testing.T) {
 	}
 
 	for i := range 4 {
-		wc, err := bh.AddFile(context.Background(), fmt.Sprintf("somefile-%d", i), 100000)
+		wc, err := bh.AddFile(t.Context(), fmt.Sprintf("somefile-%d", i), 100000)
 		require.NoError(t, err, "AddFile() expected no error")
 		assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
@@ -334,7 +333,7 @@ func TestAddFileErrorStats(t *testing.T) {
 		readOnly: false,
 	}
 
-	wc, err := bh.AddFile(context.Background(), "somefile", 100000)
+	wc, err := bh.AddFile(t.Context(), "somefile", 100000)
 	require.NoError(t, err, "AddFile() should not error on creation")
 	assert.NotNil(t, wc, "AddFile() expected non-nil WriteCloser")
 
@@ -383,7 +382,7 @@ func TestAddFileMultipartStats(t *testing.T) {
 
 	data := bytes.Repeat([]byte("a"), 6*1024*1024)
 
-	wc, err := bh.AddFile(context.Background(), "multipart-file", int64(len(data)))
+	wc, err := bh.AddFile(t.Context(), "multipart-file", int64(len(data)))
 	require.NoError(t, err)
 
 	n, err := wc.Write(data)
@@ -438,7 +437,7 @@ func TestReadFileStats(t *testing.T) {
 		readOnly: false,
 	}
 
-	wc, err := writeBh.AddFile(context.Background(), "testfile", 100)
+	wc, err := writeBh.AddFile(t.Context(), "testfile", 100)
 	require.NoError(t, err)
 	_, err = wc.Write([]byte("test file contents"))
 	require.NoError(t, err)
@@ -463,7 +462,7 @@ func TestReadFileStats(t *testing.T) {
 		readOnly: true,
 	}
 
-	rc, err := readBh.ReadFile(context.Background(), "testfile")
+	rc, err := readBh.ReadFile(t.Context(), "testfile")
 	require.NoError(t, err)
 	_, err = io.ReadAll(rc)
 	require.NoError(t, err)
@@ -513,7 +512,7 @@ func TestReadFileErrorStats(t *testing.T) {
 		readOnly: true,
 	}
 
-	_, err := bh.ReadFile(context.Background(), "testfile")
+	_, err := bh.ReadFile(t.Context(), "testfile")
 	require.Error(t, err)
 
 	require.Len(t, fakeStats.ScopeCalls, 1)
@@ -556,7 +555,7 @@ func TestReadFile(t *testing.T) {
 		readOnly: false,
 	}
 
-	wc, err := bh.AddFile(context.Background(), "testfile", 100)
+	wc, err := bh.AddFile(t.Context(), "testfile", 100)
 	require.NoError(t, err)
 	_, err = wc.Write(testData)
 	require.NoError(t, err)
@@ -580,7 +579,7 @@ func TestReadFile(t *testing.T) {
 		readOnly: true,
 	}
 
-	rc, err := readBh.ReadFile(context.Background(), "testfile")
+	rc, err := readBh.ReadFile(t.Context(), "testfile")
 	require.NoError(t, err, "ReadFile() should not error")
 	require.NotNil(t, rc, "ReadFile() should return non-nil ReadCloser")
 
@@ -597,7 +596,7 @@ func TestReadFileOnWriteHandle(t *testing.T) {
 		readOnly: false,
 	}
 
-	_, err := bh.ReadFile(context.Background(), "testfile")
+	_, err := bh.ReadFile(t.Context(), "testfile")
 	require.Error(t, err, "ReadFile() should error on write handle")
 	require.Contains(t, err.Error(), "cannot be called on read-write backup")
 }
@@ -607,7 +606,7 @@ func TestAddFileOnReadOnlyHandle(t *testing.T) {
 		readOnly: true,
 	}
 
-	_, err := bh.AddFile(context.Background(), "testfile", 100)
+	_, err := bh.AddFile(t.Context(), "testfile", 100)
 	require.Error(t, err, "AddFile() should error on read-only handle")
 	require.Contains(t, err.Error(), "cannot be called on read-only backup")
 }
@@ -617,7 +616,7 @@ func TestEndBackupOnReadOnlyHandle(t *testing.T) {
 		readOnly: true,
 	}
 
-	err := bh.EndBackup(context.Background())
+	err := bh.EndBackup(t.Context())
 	require.Error(t, err, "EndBackup() should error on read-only handle")
 	require.Contains(t, err.Error(), "cannot be called on read-only backup")
 }
@@ -627,7 +626,7 @@ func TestAbortBackupOnReadOnlyHandle(t *testing.T) {
 		readOnly: true,
 	}
 
-	err := bh.AbortBackup(context.Background())
+	err := bh.AbortBackup(t.Context())
 	require.Error(t, err, "AbortBackup() should error on read-only handle")
 	require.Contains(t, err.Error(), "cannot be called on read-only backup")
 }
@@ -660,7 +659,7 @@ func TestEndBackup(t *testing.T) {
 	}
 
 	// Add a file
-	wc, err := bh.AddFile(context.Background(), "testfile", 100)
+	wc, err := bh.AddFile(t.Context(), "testfile", 100)
 	require.NoError(t, err)
 	n, err := wc.Write([]byte("test data"))
 	require.NoError(t, err)
@@ -669,7 +668,7 @@ func TestEndBackup(t *testing.T) {
 	require.NoError(t, err)
 
 	// End the backup
-	err = bh.EndBackup(context.Background())
+	err = bh.EndBackup(t.Context())
 	require.NoError(t, err, "EndBackup() should not error")
 	require.False(t, bh.HasErrors(), "EndBackup() should not have errors")
 }
@@ -694,7 +693,7 @@ func TestEndBackupWithError(t *testing.T) {
 	}
 
 	// Add a file that will fail to upload
-	wc, err := bh.AddFile(context.Background(), "testfile", 100)
+	wc, err := bh.AddFile(t.Context(), "testfile", 100)
 	require.NoError(t, err)
 	n, err := wc.Write([]byte("test data"))
 	require.NoError(t, err)
@@ -703,7 +702,7 @@ func TestEndBackupWithError(t *testing.T) {
 	require.NoError(t, err)
 
 	// End the backup - should return the error
-	err = bh.EndBackup(context.Background())
+	err = bh.EndBackup(t.Context())
 	require.Error(t, err, "EndBackup() should return error when upload fails")
 }
 
@@ -896,14 +895,14 @@ func TestAbortBackup(t *testing.T) {
 	}
 
 	// Add a file
-	wc, err := bh.AddFile(context.Background(), "testfile", 100)
+	wc, err := bh.AddFile(t.Context(), "testfile", 100)
 	require.NoError(t, err)
 	wc.Write([]byte("test data"))
 	wc.Close()
 	bh.waitGroup.Wait()
 
 	// Abort the backup
-	err = bh.AbortBackup(context.Background())
+	err = bh.AbortBackup(t.Context())
 	require.NoError(t, err, "AbortBackup() should not error")
 }
 
@@ -930,7 +929,7 @@ func TestAddFileWithLargeData(t *testing.T) {
 
 	// Calculate part size for a large file (10MB)
 	largeFileSize := int64(10 * 1024 * 1024)
-	wc, err := bh.AddFile(context.Background(), "largefile", largeFileSize)
+	wc, err := bh.AddFile(t.Context(), "largefile", largeFileSize)
 	require.NoError(t, err, "AddFile() should not error for large file")
 	require.NotNil(t, wc)
 
@@ -972,7 +971,7 @@ func TestAddFilePartSizeCalculation(t *testing.T) {
 
 	// Small file should use minimum part size
 	fileSize := int64(5 * 1024 * 1024) // 5MB
-	wc, err := bh.AddFile(context.Background(), "smallfile", fileSize)
+	wc, err := bh.AddFile(t.Context(), "smallfile", fileSize)
 	require.NoError(t, err)
 	require.NotNil(t, wc)
 
@@ -993,7 +992,7 @@ func TestAddFileInvalidPartSize(t *testing.T) {
 		readOnly: false,
 	}
 
-	_, err := bh.AddFile(context.Background(), "testfile", 100)
+	_, err := bh.AddFile(t.Context(), "testfile", 100)
 	require.Error(t, err, "AddFile() should error with invalid part size")
 	require.Contains(t, err.Error(), "minimum S3 part size")
 }
@@ -1025,7 +1024,7 @@ func TestServerSideEncryptionConversion(t *testing.T) {
 		readOnly: false,
 	}
 
-	wc, err := bh.AddFile(context.Background(), "encrypted-file", 100)
+	wc, err := bh.AddFile(t.Context(), "encrypted-file", 100)
 	require.NoError(t, err)
 
 	wc.Write([]byte("encrypted data"))
@@ -1058,7 +1057,7 @@ func TestReadFileError(t *testing.T) {
 	}
 
 	// Try to read a file from a server that's returning errors
-	_, err := bh.ReadFile(context.Background(), "nonexistent")
+	_, err := bh.ReadFile(t.Context(), "nonexistent")
 	require.Error(t, err, "ReadFile() should error when server returns error")
 }
 
@@ -1105,7 +1104,7 @@ func TestListBackups(t *testing.T) {
 		}
 	}))
 
-	backups, err := bs.ListBackups(context.Background(), "testdir")
+	backups, err := bs.ListBackups(t.Context(), "testdir")
 	require.NoError(t, err, "ListBackups() should not error")
 	require.Len(t, backups, 2, "Should return 2 backups")
 	require.Equal(t, "backup1", backups[0].Name())
@@ -1150,7 +1149,7 @@ func TestListBackupsRoot(t *testing.T) {
 		}
 	}))
 
-	backups, err := bs.ListBackups(context.Background(), "/")
+	backups, err := bs.ListBackups(t.Context(), "/")
 	require.NoError(t, err, "ListBackups() should not error")
 	require.Len(t, backups, 1)
 	require.Equal(t, "root-backup1", backups[0].Name())
@@ -1204,7 +1203,7 @@ func TestListBackupsPagination(t *testing.T) {
 		}
 	}))
 
-	backups, err := bs.ListBackups(context.Background(), "testdir")
+	backups, err := bs.ListBackups(t.Context(), "testdir")
 	require.NoError(t, err)
 	require.Len(t, backups, 2)
 	require.Equal(t, 2, requestCount, "Should make 2 requests for pagination")
@@ -1225,7 +1224,7 @@ func TestStartBackup(t *testing.T) {
 	}
 	require.NoError(t, bs.s3SSE.init())
 
-	bh, err := bs.StartBackup(context.Background(), "testdir", "newbackup")
+	bh, err := bs.StartBackup(t.Context(), "testdir", "newbackup")
 	require.NoError(t, err, "StartBackup() should not error")
 	require.NotNil(t, bh)
 
@@ -1276,7 +1275,7 @@ func TestRemoveBackup(t *testing.T) {
 		}
 	}))
 
-	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
+	err := bs.RemoveBackup(t.Context(), "testdir", "backup1")
 	require.NoError(t, err, "RemoveBackup() should not error")
 }
 
@@ -1321,7 +1320,7 @@ func TestRemoveBackupWithErrors(t *testing.T) {
 		}
 	}))
 
-	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
+	err := bs.RemoveBackup(t.Context(), "testdir", "backup1")
 	require.Error(t, err, "RemoveBackup() should error when delete fails")
 	require.Contains(t, err.Error(), "Access Denied")
 }
@@ -1377,7 +1376,7 @@ func TestRemoveBackupPaginated(t *testing.T) {
 		}
 	}))
 
-	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
+	err := bs.RemoveBackup(t.Context(), "testdir", "backup1")
 	require.NoError(t, err)
 	require.Equal(t, 2, requestCount, "Should handle paginated list for removal")
 }
@@ -1435,7 +1434,7 @@ func TestListBackupsError(t *testing.T) {
 	}
 	require.NoError(t, bs.s3SSE.init())
 
-	_, err := bs.ListBackups(context.Background(), "testdir")
+	_, err := bs.ListBackups(t.Context(), "testdir")
 	require.Error(t, err, "ListBackups() should error when server returns error")
 }
 
@@ -1449,7 +1448,7 @@ func TestStartBackupError(t *testing.T) {
 	bucket = ""
 	defer func() { bucket = originalBucket }()
 
-	_, err := bs.StartBackup(context.Background(), "testdir", "newbackup")
+	_, err := bs.StartBackup(t.Context(), "testdir", "newbackup")
 	require.Error(t, err, "StartBackup() should error when client init fails")
 }
 
@@ -1469,7 +1468,7 @@ func TestRemoveBackupListError(t *testing.T) {
 		params:  backupstorage.NoParams(),
 	}
 
-	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
+	err := bs.RemoveBackup(t.Context(), "testdir", "backup1")
 	require.Error(t, err, "RemoveBackup() should error when list fails")
 }
 
@@ -1510,7 +1509,7 @@ func TestRemoveBackupDeleteError(t *testing.T) {
 		}
 	}))
 
-	err := bs.RemoveBackup(context.Background(), "testdir", "backup1")
+	err := bs.RemoveBackup(t.Context(), "testdir", "backup1")
 	require.Error(t, err, "RemoveBackup() should error when delete fails")
 }
 
@@ -1544,7 +1543,7 @@ func TestEndpointResolver(t *testing.T) {
 	params := s3.EndpointParameters{
 		Region: &regionStr,
 	}
-	resolvedEndpoint, err := resolver.ResolveEndpoint(context.Background(), params)
+	resolvedEndpoint, err := resolver.ResolveEndpoint(t.Context(), params)
 	require.NoError(t, err)
 	require.NotEmpty(t, resolvedEndpoint.URI.String())
 }
@@ -1564,7 +1563,7 @@ func TestRetryerMethods(t *testing.T) {
 	require.GreaterOrEqual(t, delay, time.Duration(0))
 
 	// Test GetRetryToken
-	ctx := context.Background()
+	ctx := t.Context()
 	releaseFunc, err := retryer.GetRetryToken(ctx, nil)
 	require.NoError(t, err)
 	require.NotNil(t, releaseFunc)
@@ -1604,7 +1603,7 @@ func TestFullBackupRestoreWorkflow(t *testing.T) {
 	require.NoError(t, bs.s3SSE.init())
 
 	// Start a new backup
-	bh, err := bs.StartBackup(context.Background(), "testdir", "full-backup")
+	bh, err := bs.StartBackup(t.Context(), "testdir", "full-backup")
 	require.NoError(t, err)
 	require.False(t, bh.(*S3BackupHandle).readOnly)
 
@@ -1612,14 +1611,14 @@ func TestFullBackupRestoreWorkflow(t *testing.T) {
 	testData1 := []byte("file 1 contents")
 	testData2 := []byte("file 2 contents with more data")
 
-	wc1, err := bh.AddFile(context.Background(), "file1.dat", int64(len(testData1)))
+	wc1, err := bh.AddFile(t.Context(), "file1.dat", int64(len(testData1)))
 	require.NoError(t, err)
 	_, err = wc1.Write(testData1)
 	require.NoError(t, err)
 	err = wc1.Close()
 	require.NoError(t, err)
 
-	wc2, err := bh.AddFile(context.Background(), "file2.dat", int64(len(testData2)))
+	wc2, err := bh.AddFile(t.Context(), "file2.dat", int64(len(testData2)))
 	require.NoError(t, err)
 	_, err = wc2.Write(testData2)
 	require.NoError(t, err)
@@ -1627,7 +1626,7 @@ func TestFullBackupRestoreWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// End the backup
-	err = bh.EndBackup(context.Background())
+	err = bh.EndBackup(t.Context())
 	require.NoError(t, err)
 
 	// Close and reopen storage
@@ -1658,7 +1657,7 @@ func TestFullBackupRestoreWorkflow(t *testing.T) {
 	}))
 
 	// List backups
-	backups, err := bs2.ListBackups(context.Background(), "testdir")
+	backups, err := bs2.ListBackups(t.Context(), "testdir")
 	require.NoError(t, err)
 	require.Len(t, backups, 1)
 	require.Equal(t, "full-backup", backups[0].Name())
@@ -1667,14 +1666,14 @@ func TestFullBackupRestoreWorkflow(t *testing.T) {
 	readBh := backups[0]
 	require.True(t, readBh.(*S3BackupHandle).readOnly)
 
-	rc1, err := readBh.ReadFile(context.Background(), "file1.dat")
+	rc1, err := readBh.ReadFile(t.Context(), "file1.dat")
 	require.NoError(t, err)
 	data1, err := io.ReadAll(rc1)
 	require.NoError(t, err)
 	require.Equal(t, testData1, data1)
 	rc1.Close()
 
-	rc2, err := readBh.ReadFile(context.Background(), "file2.dat")
+	rc2, err := readBh.ReadFile(t.Context(), "file2.dat")
 	require.NoError(t, err)
 	data2, err := io.ReadAll(rc2)
 	require.NoError(t, err)
@@ -1709,10 +1708,10 @@ func TestSSEWithActualUpload(t *testing.T) {
 		s3SSE:   s3SSE,
 	}
 
-	bh, err := bs.StartBackup(context.Background(), "encrypted", "backup1")
+	bh, err := bs.StartBackup(t.Context(), "encrypted", "backup1")
 	require.NoError(t, err)
 
-	wc, err := bh.AddFile(context.Background(), "secret.txt", 100)
+	wc, err := bh.AddFile(t.Context(), "secret.txt", 100)
 	require.NoError(t, err)
 
 	_, err = wc.Write([]byte("secret data"))
@@ -1721,7 +1720,7 @@ func TestSSEWithActualUpload(t *testing.T) {
 	err = wc.Close()
 	require.NoError(t, err)
 
-	err = bh.EndBackup(context.Background())
+	err = bh.EndBackup(t.Context())
 	require.NoError(t, err)
 }
 

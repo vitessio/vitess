@@ -17,7 +17,6 @@ limitations under the License.
 package vstreamer
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -41,7 +40,7 @@ func TestStartSnapshot(t *testing.T) {
 		"drop table t1",
 	})
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := snapshotConnect(ctx, env.TabletEnv.Config().DB.AppWithDB())
 	require.NoError(t, err)
 	defer conn.Close()

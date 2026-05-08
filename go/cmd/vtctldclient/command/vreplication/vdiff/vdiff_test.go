@@ -17,7 +17,6 @@ limitations under the License.
 package vdiff
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -574,7 +573,7 @@ func TestVDiffUnsharded(t *testing.T) {
 				Arg:            UUID,
 			}
 
-			resp, err := env.ws.VDiffShow(context.Background(), req)
+			resp, err := env.ws.VDiffShow(t.Context(), req)
 			require.NoError(t, err)
 			vds, err := displayShowSingleSummary(env.out, options.ReportOptions.Format, env.targetKeyspace, env.workflow, UUID, resp, false)
 			require.NoError(t, err)
@@ -725,7 +724,7 @@ func TestVDiffSharded(t *testing.T) {
 				Arg:            UUID,
 			}
 
-			resp, err := env.ws.VDiffShow(context.Background(), req)
+			resp, err := env.ws.VDiffShow(t.Context(), req)
 			require.NoError(t, err)
 			vds, err := displayShowSingleSummary(env.out, options.ReportOptions.Format, env.targetKeyspace, env.workflow, UUID, resp, true)
 			require.NoError(t, err)
@@ -793,7 +792,7 @@ Use "--format=json" for more detailed output.
 				Arg:            UUID,
 			}
 
-			resp, err := env.ws.VDiffShow(context.Background(), req)
+			resp, err := env.ws.VDiffShow(t.Context(), req)
 			require.NoError(t, err)
 			vds, err := displayShowSingleSummary(env.out, "text", env.targetKeyspace, env.workflow, UUID, resp, true)
 			require.NoError(t, err)

@@ -284,7 +284,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token LEX_ERROR
 %left <str> UNION
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <str> DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%token <str> DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DUAL DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %left <str> ALL ANY SOME
 %token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
@@ -5589,9 +5589,12 @@ col_alias:
 
 from_opt:
   %prec EMPTY_FROM_CLAUSE {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewIdentifierCS("dual")}}}
+    $$ = nil
   }
-  | from_clause
+| FROM DUAL {
+    $$ = nil
+  }
+| from_clause
   {
     $$ = $1
   }
@@ -8879,6 +8882,7 @@ reserved_keyword:
 | DISTINCTROW
 | DIV
 | DROP
+| DUAL
 | ELSE
 | ELSEIF
 | EMPTY

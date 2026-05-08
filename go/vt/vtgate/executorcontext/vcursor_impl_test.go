@@ -311,7 +311,7 @@ func TestSetExecQueryTimeout(t *testing.T) {
 
 func TestRecordMirrorStats(t *testing.T) {
 	safeSession := NewSafeSession(nil)
-	logStats := logstats.NewLogStats(context.Background(), t.Name(), "select 1", "", nil, streamlog.NewQueryLogConfigForTest())
+	logStats := logstats.NewLogStats(t.Context(), t.Name(), "select 1", "", nil, streamlog.NewQueryLogConfigForTest())
 	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, logStats, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
 	require.NoError(t, err)
 
