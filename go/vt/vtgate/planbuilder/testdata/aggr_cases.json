@@ -6247,7 +6247,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user",
         "user.user_extra"
       ]
@@ -6776,7 +6775,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -6918,7 +6916,6 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }

@@ -17,11 +17,13 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -160,32 +162,26 @@ func TestMain(m *testing.M) {
 }
 
 func TestDelete(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	exec(t, conn, "insert into del_test_a(id, val1, val2) values(1,'a',1), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4)")
 	exec(t, conn, "insert into del_test_b(id, val1, val2) values(1,'a',1), (2,'a',1), (3,'a',1), (4,'d',3), (5,'f',4)")
 
 	qr := exec(t, conn, "delete a.*, b.* from del_test_a a, del_test_b b where a.id = b.id and b.val1 = 'a' and a.val1 = 'a'")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got, want := fmt.Sprintf("%v", qr.Rows), `[]`
+	assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 
 	qr = exec(t, conn, "select * from del_test_a")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(3) VARBINARY("b") INT64(1)] [INT64(4) VARBINARY("c") INT64(3)] [INT64(5) VARBINARY("c") INT64(4)]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	got, want = fmt.Sprintf("%v", qr.Rows), `[[INT64(3) VARBINARY("b") INT64(1)] [INT64(4) VARBINARY("c") INT64(3)] [INT64(5) VARBINARY("c") INT64(4)]]`
+	assert.Equalf(t, want, got, "select:\n%v want\n%v", got, want)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return qr
 }

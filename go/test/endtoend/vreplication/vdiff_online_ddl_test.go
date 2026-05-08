@@ -33,7 +33,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 	keyspace := defaultSourceKs
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	createQuery := "create table temp (id int, name varchar(100), blb blob, primary key (id))"
@@ -130,7 +130,7 @@ func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
 
 	numRowsStart := getNumRows(t, vtgateConn, keyspace, table)
 	numRows := 0
-	shortCtx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	shortCtx, cancel := context.WithTimeout(t.Context(), defaultTimeout)
 	defer cancel()
 	for {
 		switch {

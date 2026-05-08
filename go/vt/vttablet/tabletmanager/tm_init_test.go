@@ -205,7 +205,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks")
 
-	srvVSchema, err := ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err := ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	wantVSchema := &vschemapb.Keyspace{}
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks"])
@@ -218,7 +218,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	_, err = ts.GetShard(ctx, "ks1", "0")
 	require.NoError(t, err)
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks1")
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks1"])
 
@@ -231,9 +231,9 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 	_, err = ts.GetShard(ctx, "ks2", "0")
 	require.NoError(t, err)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks2")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks2")
 	require.NoError(t, err)
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks2"])
 
@@ -248,9 +248,9 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm.Stop()
 	_, err = ts.GetShard(ctx, "ks3", "0")
 	require.NoError(t, err)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks3")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks3")
 	require.NoError(t, err)
-	srvVSchema, err = ts.GetSrvVSchema(context.Background(), cell)
+	srvVSchema, err = ts.GetSrvVSchema(t.Context(), cell)
 	require.NoError(t, err)
 	assert.Equal(t, wantVSchema, srvVSchema.Keyspaces["ks3"])
 
@@ -260,7 +260,7 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 
 	// Wait a bit and make sure that srvKeyspace is still not created.
 	time.Sleep(100 * time.Millisecond)
-	_, err = ts.GetSrvKeyspace(context.Background(), cell, "ks4")
+	_, err = ts.GetSrvKeyspace(t.Context(), cell, "ks4")
 	require.True(t, topo.IsErrType(err, topo.NoNode), err)
 
 	tm2 := newTestTM(t, ts, 6, "ks4", "80-", nil)
@@ -422,7 +422,7 @@ func TestStartCheckMysql(t *testing.T) {
 		Port: 1,
 	}
 	tm := &TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            t.Context(),
 		TopoServer:          ts,
 		MysqlDaemon:         newTestMysqlDaemon(t, 1),
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
@@ -449,7 +449,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 	tablet := newTestTablet(t, 1, "ks", "0", nil)
 	fmd := newTestMysqlDaemon(t, -1)
 	tm := &TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            t.Context(),
 		TopoServer:          ts,
 		MysqlDaemon:         fmd,
 		DBConfigs:           &dbconfigs.DBConfigs{},
@@ -505,7 +505,7 @@ func TestStartFixesReplicationData(t *testing.T) {
 	assert.Equal(t, 0, len(sri.Nodes))
 
 	// An initTablet will recreate the shard replication data.
-	err = tm.initTablet(context.Background())
+	err = tm.initTablet(t.Context())
 	require.NoError(t, err)
 
 	sri, err = ts.GetShardReplication(ctx, cell, "ks", "0")
@@ -704,7 +704,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string, t
 	statsTabletTypeCount.ResetAll()
 
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	tablet := newTestTablet(t, uid, keyspace, shard, tags)
 	fakeDb := newTestMysqlDaemon(t, 1)
 	tm := &TabletManager{
@@ -957,7 +957,7 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 	}
 
 	connParams := cluster.MySQLConnParams()
-	conn, err := mysql.Connect(context.Background(), &connParams)
+	conn, err := mysql.Connect(t.Context(), &connParams)
 	require.NoError(t, err)
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`CREATE USER '%v'@'localhost'`, testUser), 1000, false)
 	conn.Close()
@@ -967,7 +967,7 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 
 // grantAllPrivilegesToUser grants all the privileges to the user specified.
 func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) {
-	conn, err := mysql.Connect(context.Background(), &connParams)
+	conn, err := mysql.Connect(t.Context(), &connParams)
 	require.NoError(t, err)
 	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
 	require.NoError(t, err)

@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -77,7 +76,7 @@ func TestSemiJoinExecute(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.TryExecute(context.Background(), &noopVCursor{}, bv, true)
+	r, err := jn.TryExecute(t.Context(), &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	leftPrim.ExpectLog(t, []string{
 		fmt.Sprintf(`Execute a: %v true`, sqltypes.Int64BindVariable(10)),
@@ -212,7 +211,7 @@ func TestSemiJoinStreamExecuteParallelExecution(t *testing.T) {
 	}
 	var res *sqltypes.Result
 	var mu sync.Mutex
-	err := jn.TryStreamExecute(context.Background(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error {
+	err := jn.TryStreamExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
 		if res == nil {

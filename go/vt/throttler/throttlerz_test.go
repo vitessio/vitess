@@ -37,9 +37,7 @@ func TestThrottlerzHandler_MissingSlash(t *testing.T) {
 
 func TestThrottlerzHandler_List(t *testing.T) {
 	f := &managerTestFixture{}
-	if err := f.setUp(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, f.setUp())
 	defer f.tearDown()
 
 	request, _ := http.NewRequest("GET", "/throttlerz/", nil)
@@ -54,9 +52,7 @@ func TestThrottlerzHandler_List(t *testing.T) {
 
 func TestThrottlerzHandler_Details(t *testing.T) {
 	f := &managerTestFixture{}
-	if err := f.setUp(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, f.setUp())
 	defer f.tearDown()
 
 	request, _ := http.NewRequest("GET", "/throttlerz/t1", nil)

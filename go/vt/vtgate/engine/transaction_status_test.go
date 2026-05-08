@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -131,7 +130,7 @@ func TestTransactionStatusOutput(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			res, err := test.primitive.TryExecute(context.Background(), &loggingVCursor{
+			res, err := test.primitive.TryExecute(t.Context(), &loggingVCursor{
 				transactionStatusOutput: test.transactionStatusOutput,
 				resultErr:               test.resultErr,
 			}, nil, true)
