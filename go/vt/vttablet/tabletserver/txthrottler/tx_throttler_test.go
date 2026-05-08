@@ -191,12 +191,12 @@ func TestFetchKnownCells(t *testing.T) {
 	ctx := t.Context()
 	{
 		ts := memorytopo.NewServer(ctx, "cell1", "cell2")
-		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
+		cells := fetchKnownCells(t.Context(), ts, &querypb.Target{Cell: "cell1"})
 		assert.Equal(t, []string{"cell1", "cell2"}, cells)
 	}
 	{
 		ts := memorytopo.NewServer(ctx)
-		cells := fetchKnownCells(context.Background(), ts, &querypb.Target{Cell: "cell1"})
+		cells := fetchKnownCells(t.Context(), ts, &querypb.Target{Cell: "cell1"})
 		assert.Equal(t, []string{"cell1"}, cells)
 	}
 }

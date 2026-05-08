@@ -349,7 +349,7 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
 
 	// Cancel the context deliberately
-	cancelledCtx, cancelCtx := context.WithCancel(context.Background())
+	cancelledCtx, cancelCtx := context.WithCancel(t.Context())
 	cancelCtx()
 
 	backupResult, err := be.ExecuteBackup(cancelledCtx, mysqlctl.BackupParams{
@@ -551,9 +551,8 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, bm)
 	// error message can contain any combination of "context deadline exceeded" or "context canceled"
-	if !strings.Contains(err.Error(), "context canceled") && !strings.Contains(err.Error(), "context deadline exceeded") {
-		assert.Fail(t, "Test should fail with either `context canceled` or `context deadline exceeded`")
-	}
+	assert.True(t, strings.Contains(err.Error(), "context canceled") || strings.Contains(err.Error(), "context deadline exceeded"),
+		"Test should fail with either `context canceled` or `context deadline exceeded`")
 }
 
 type rwCloseFailFirstCall struct {

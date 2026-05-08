@@ -17,7 +17,6 @@ limitations under the License.
 package workflow
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -93,7 +92,7 @@ func TestGetStreamState(t *testing.T) {
 }
 
 func TestGetWorkflowCopyStates(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceShards := []string{"-"}
 	targetShards := []string{"-"}
@@ -153,7 +152,7 @@ func TestGetWorkflowCopyStates(t *testing.T) {
 }
 
 func TestFetchCopyStatesByShardStream(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceShards := []string{"-"}
 	targetShards := []string{"-"}

@@ -30,9 +30,8 @@ func TestPositionEqual(t *testing.T) {
 	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := true
 
-	if got := input1.Equal(input2); got != want {
-		t.Errorf("%#v.Equal(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.Equal(input2)
+	assert.Equalf(t, want, got, "%#v.Equal(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionNotEqual(t *testing.T) {
@@ -40,9 +39,8 @@ func TestPositionNotEqual(t *testing.T) {
 	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 12345}}}
 	want := false
 
-	if got := input1.Equal(input2); got != want {
-		t.Errorf("%#v.Equal(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.Equal(input2)
+	assert.Equalf(t, want, got, "%#v.Equal(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionEqualZero(t *testing.T) {
@@ -50,9 +48,8 @@ func TestPositionEqualZero(t *testing.T) {
 	input2 := Position{}
 	want := false
 
-	if got := input1.Equal(input2); got != want {
-		t.Errorf("%#v.Equal(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.Equal(input2)
+	assert.Equalf(t, want, got, "%#v.Equal(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionZeroEqualZero(t *testing.T) {
@@ -60,9 +57,8 @@ func TestPositionZeroEqualZero(t *testing.T) {
 	input2 := Position{}
 	want := true
 
-	if got := input1.Equal(input2); got != want {
-		t.Errorf("%#v.Equal(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.Equal(input2)
+	assert.Equalf(t, want, got, "%#v.Equal(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionAtLeastLess(t *testing.T) {
@@ -70,9 +66,8 @@ func TestPositionAtLeastLess(t *testing.T) {
 	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := false
 
-	if got := input1.AtLeast(input2); got != want {
-		t.Errorf("%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.AtLeast(input2)
+	assert.Equalf(t, want, got, "%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionAtLeastEqual(t *testing.T) {
@@ -80,9 +75,8 @@ func TestPositionAtLeastEqual(t *testing.T) {
 	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := true
 
-	if got := input1.AtLeast(input2); got != want {
-		t.Errorf("%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.AtLeast(input2)
+	assert.Equalf(t, want, got, "%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionAtLeastGreater(t *testing.T) {
@@ -90,9 +84,8 @@ func TestPositionAtLeastGreater(t *testing.T) {
 	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := true
 
-	if got := input1.AtLeast(input2); got != want {
-		t.Errorf("%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.AtLeast(input2)
+	assert.Equalf(t, want, got, "%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionAtLeastDifferentServer(t *testing.T) {
@@ -100,9 +93,8 @@ func TestPositionAtLeastDifferentServer(t *testing.T) {
 	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 4444, Sequence: 1234}}}
 	want := true
 
-	if got := input1.AtLeast(input2); got != want {
-		t.Errorf("%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.AtLeast(input2)
+	assert.Equalf(t, want, got, "%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionAtLeastDifferentDomain(t *testing.T) {
@@ -110,9 +102,8 @@ func TestPositionAtLeastDifferentDomain(t *testing.T) {
 	input2 := Position{GTIDSet: MariadbGTIDSet{4: MariadbGTID{Domain: 4, Server: 5555, Sequence: 1234}}}
 	want := false
 
-	if got := input1.AtLeast(input2); got != want {
-		t.Errorf("%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.AtLeast(input2)
+	assert.Equalf(t, want, got, "%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionZeroAtLeast(t *testing.T) {
@@ -120,9 +111,8 @@ func TestPositionZeroAtLeast(t *testing.T) {
 	input2 := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := false
 
-	if got := input1.AtLeast(input2); got != want {
-		t.Errorf("%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.AtLeast(input2)
+	assert.Equalf(t, want, got, "%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionAtLeastZero(t *testing.T) {
@@ -130,9 +120,8 @@ func TestPositionAtLeastZero(t *testing.T) {
 	input2 := Position{GTIDSet: nil}
 	want := true
 
-	if got := input1.AtLeast(input2); got != want {
-		t.Errorf("%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.AtLeast(input2)
+	assert.Equalf(t, want, got, "%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionZeroAtLeastZero(t *testing.T) {
@@ -140,45 +129,40 @@ func TestPositionZeroAtLeastZero(t *testing.T) {
 	input2 := Position{}
 	want := true
 
-	if got := input1.AtLeast(input2); got != want {
-		t.Errorf("%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
-	}
+	got := input1.AtLeast(input2)
+	assert.Equalf(t, want, got, "%#v.AtLeast(%#v) = %v, want %v", input1, input2, got, want)
 }
 
 func TestPositionString(t *testing.T) {
 	input := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := "3-5555-1234"
 
-	if got := input.String(); got != want {
-		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
-	}
+	got := input.String()
+	assert.Equalf(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
 }
 
 func TestPositionStringNil(t *testing.T) {
 	input := Position{}
 	want := "<nil>"
 
-	if got := input.String(); got != want {
-		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
-	}
+	got := input.String()
+	assert.Equalf(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
 }
 
 func TestPositionIsZero(t *testing.T) {
 	input := Position{}
 	want := true
 
-	if got := input.IsZero(); got != want {
-		t.Errorf("%#v.IsZero() = %#v, want %#v", input, got, want)
-	}
+	got := input.IsZero()
+	assert.Equalf(t, want, got, "%#v.IsZero() = %#v, want %#v", input, got, want)
 }
 
 func TestPositionIsNotZero(t *testing.T) {
 	input := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 	want := false
 
-	if got := input.IsZero(); got != want {
-		t.Errorf("%#v.IsZero() = %#v, want %#v", input, got, want)
-	}
+	got := input.IsZero()
+	assert.Equalf(t, want, got, "%#v.IsZero() = %#v, want %#v", input, got, want)
 }
 
 func TestPositionAppend(t *testing.T) {
@@ -187,9 +171,8 @@ func TestPositionAppend(t *testing.T) {
 		input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}
 		want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1235}}}
 
-		if got := AppendGTID(input1, input2); !got.Equal(want) {
-			t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
-		}
+		got := AppendGTID(input1, input2)
+		assert.Truef(t, got.Equal(want), "AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
 	})
 	t.Run("MySQL56", func(t *testing.T) {
 		gtidset, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
@@ -284,9 +267,8 @@ func TestPositionAppendNil(t *testing.T) {
 		input2 := GTID(nil)
 		want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 
-		if got := AppendGTID(input1, input2); !got.Equal(want) {
-			t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
-		}
+		got := AppendGTID(input1, input2)
+		assert.Truef(t, got.Equal(want), "AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
 	})
 	t.Run("MySQL56", func(t *testing.T) {
 		gtidset, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
@@ -315,9 +297,8 @@ func TestPositionAppendToZero(t *testing.T) {
 		input2 := MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}
 		want := Position{GTIDSet: MariadbGTIDSet{3: MariadbGTID{Domain: 3, Server: 5555, Sequence: 1234}}}
 
-		if got := AppendGTID(input1, input2); !got.Equal(want) {
-			t.Errorf("AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
-		}
+		got := AppendGTID(input1, input2)
+		assert.Truef(t, got.Equal(want), "AppendGTID(%#v, %#v) = %#v, want %#v", input1, input2, got, want)
 	})
 	t.Run("MySQL56", func(t *testing.T) {
 		gtid, err := parseMysql56GTID("16b1039f-22b6-11ed-b765-0a43f95f28a3:616")
@@ -345,9 +326,8 @@ func TestMustParsePosition(t *testing.T) {
 	input := "12345"
 	want := Position{GTIDSet: fakeGTID{value: "12345"}}
 
-	if got := MustParsePosition(flavor, input); !got.Equal(want) {
-		t.Errorf("MustParsePosition(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
-	}
+	got := MustParsePosition(flavor, input)
+	assert.Truef(t, got.Equal(want), "MustParsePosition(%#v, %#v) = %#v, want %#v", flavor, input, got, want)
 }
 
 func TestMustParsePositionError(t *testing.T) {
@@ -357,9 +337,8 @@ func TestMustParsePositionError(t *testing.T) {
 		assert.NotNil(t, err, "wrong error, got %#v, want %#v", err, want)
 
 		got, ok := err.(error)
-		if !ok || !strings.HasPrefix(got.Error(), want) {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
+		require.True(t, ok, "wrong error type")
+		assert.Truef(t, strings.HasPrefix(got.Error(), want), "wrong error, got %#v, want %#v", got, want)
 	}()
 
 	MustParsePosition("unknown flavor !@$!@", "yowzah")
@@ -372,18 +351,16 @@ func TestEncodePosition(t *testing.T) {
 	}}
 	want := "myflav/1:2:3-4-5-6"
 
-	if got := EncodePosition(input); got != want {
-		t.Errorf("EncodePosition(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := EncodePosition(input)
+	assert.Equalf(t, want, got, "EncodePosition(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestEncodePositionZero(t *testing.T) {
 	input := Position{}
 	want := ""
 
-	if got := EncodePosition(input); got != want {
-		t.Errorf("EncodePosition(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := EncodePosition(input)
+	assert.Equalf(t, want, got, "EncodePosition(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestDecodePosition(t *testing.T) {
@@ -444,9 +421,8 @@ func TestJsonMarshalPosition(t *testing.T) {
 	buf, err := json.Marshal(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 
-	if got := string(buf); got != want {
-		t.Errorf("json.Marshal(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := string(buf)
+	assert.Equalf(t, want, got, "json.Marshal(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestJsonMarshalPositionPointer(t *testing.T) {
@@ -456,9 +432,8 @@ func TestJsonMarshalPositionPointer(t *testing.T) {
 	buf, err := json.Marshal(&input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 
-	if got := string(buf); got != want {
-		t.Errorf("json.Marshal(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := string(buf)
+	assert.Equalf(t, want, got, "json.Marshal(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestJsonUnmarshalPosition(t *testing.T) {
@@ -485,9 +460,8 @@ func TestJsonMarshalPositionInStruct(t *testing.T) {
 	buf, err := json.Marshal(&mystruct{input})
 	assert.NoError(t, err, "unexpected error: %v", err)
 
-	if got := string(buf); got != want {
-		t.Errorf("json.Marshal(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := string(buf)
+	assert.Equalf(t, want, got, "json.Marshal(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestJsonUnmarshalPositionInStruct(t *testing.T) {
@@ -503,9 +477,8 @@ func TestJsonUnmarshalPositionInStruct(t *testing.T) {
 	err := json.Unmarshal([]byte(input), &gotStruct)
 	assert.NoError(t, err, "unexpected error: %v", err)
 
-	if got := gotStruct.Position; !got.Equal(want) {
-		t.Errorf("json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := gotStruct.Position
+	assert.Truef(t, got.Equal(want), "json.Unmarshal(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestJsonMarshalPositionZero(t *testing.T) {
@@ -515,9 +488,8 @@ func TestJsonMarshalPositionZero(t *testing.T) {
 	buf, err := json.Marshal(input)
 	assert.NoError(t, err, "unexpected error: %v", err)
 
-	if got := string(buf); got != want {
-		t.Errorf("json.Marshal(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := string(buf)
+	assert.Equalf(t, want, got, "json.Marshal(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestJsonUnmarshalPositionZero(t *testing.T) {

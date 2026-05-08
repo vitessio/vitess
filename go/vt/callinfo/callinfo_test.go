@@ -42,15 +42,15 @@ func TestNewContext(t *testing.T) {
 	}{
 		{
 			name:            "empty",
-			ctx:             context.Background(),
+			ctx:             t.Context(),
 			ci:              nil,
-			expectedContext: context.WithValue(context.Background(), callInfoKey, nil),
+			expectedContext: context.WithValue(t.Context(), callInfoKey, nil),
 		},
 		{
 			name:            "not empty",
-			ctx:             context.Background(),
+			ctx:             t.Context(),
 			ci:              &fci,
-			expectedContext: context.WithValue(context.Background(), callInfoKey, &fci),
+			expectedContext: context.WithValue(t.Context(), callInfoKey, &fci),
 		},
 	}
 
@@ -70,14 +70,14 @@ func TestFromContext(t *testing.T) {
 	}{
 		{
 			name:       "empty",
-			ctx:        context.WithValue(context.Background(), callInfoKey, nil),
+			ctx:        context.WithValue(t.Context(), callInfoKey, nil),
 			expectedCi: nil,
 			ok:         false,
 		},
 		{
 			name:       "not empty",
 			expectedCi: &fci,
-			ctx:        context.WithValue(context.Background(), callInfoKey, &fci),
+			ctx:        context.WithValue(t.Context(), callInfoKey, &fci),
 			ok:         true,
 		},
 	}
@@ -99,12 +99,12 @@ func TestHTMLFromContext(t *testing.T) {
 	}{
 		{
 			name:         "empty",
-			ctx:          context.WithValue(context.Background(), callInfoKey, nil),
+			ctx:          context.WithValue(t.Context(), callInfoKey, nil),
 			expectedHTML: safehtml.HTML{},
 		},
 		{
 			name:         "not empty",
-			ctx:          context.WithValue(context.Background(), callInfoKey, &fci),
+			ctx:          context.WithValue(t.Context(), callInfoKey, &fci),
 			expectedHTML: safehtml.HTML{},
 		},
 	}

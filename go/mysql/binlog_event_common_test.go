@@ -260,9 +260,8 @@ func TestBinlogEventIsSemiSyncNoAckQuery(t *testing.T) {
 	assert.False(t, input.IsSemiSyncAckRequested())
 
 	want := true
-	if got := input.IsQuery(); got != want {
-		t.Errorf("%#v.IsQuery() = %v, want %v", input, got, want)
-	}
+	got := input.IsQuery()
+	assert.Equalf(t, want, got, "%#v.IsQuery() = %v, want %v", input, got, want)
 }
 
 func TestBinlogEventIsNotSemiSyncAckXID(t *testing.T) {
@@ -289,7 +288,6 @@ func TestBinlogEventIsSemiSyncAckXID(t *testing.T) {
 	assert.True(t, input.IsSemiSyncAckRequested())
 
 	want := true
-	if got := input.IsXID(); got != want {
-		t.Errorf("%#v.IsXID() = %v, want %v", input, got, want)
-	}
+	got := input.IsXID()
+	assert.Equalf(t, want, got, "%#v.IsXID() = %v, want %v", input, got, want)
 }

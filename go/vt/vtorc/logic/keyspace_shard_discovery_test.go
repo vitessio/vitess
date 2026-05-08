@@ -17,7 +17,6 @@ limitations under the License.
 package logic
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -99,7 +98,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	clustersToWatch = onlyKs1and3
 	err := initializeShardsToWatch()
 	require.NoError(t, err)
-	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
+	require.NoError(t, RefreshAllKeyspacesAndShards(t.Context()))
 
 	// Verify that we only have ks1 and ks3 in vtorc's db.
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilityNone, "")
@@ -116,7 +115,7 @@ func TestRefreshAllKeyspaces(t *testing.T) {
 	require.NoError(t, err)
 	// Change the durability policy of ks1
 	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks1", policy.DurabilitySemiSync)
-	require.NoError(t, RefreshAllKeyspacesAndShards(context.Background()))
+	require.NoError(t, RefreshAllKeyspacesAndShards(t.Context()))
 
 	// Verify that all the keyspaces are correctly reloaded
 	verifyKeyspaceInfo(t, "ks1", keyspaceDurabilitySemiSync, "")
@@ -214,7 +213,7 @@ func TestRefreshKeyspace(t *testing.T) {
 
 			ts = memorytopo.NewServer(ctx, "zone1")
 			if tt.keyspace != nil {
-				err := ts.CreateKeyspace(context.Background(), tt.keyspaceName, tt.keyspace)
+				err := ts.CreateKeyspace(t.Context(), tt.keyspaceName, tt.keyspace)
 				require.NoError(t, err)
 			}
 
@@ -294,9 +293,9 @@ func TestRefreshShard(t *testing.T) {
 
 			ts = memorytopo.NewServer(ctx, "zone1")
 			if tt.shard != nil {
-				_, err := ts.GetOrCreateShard(context.Background(), tt.keyspaceName, tt.shardName)
+				_, err := ts.GetOrCreateShard(t.Context(), tt.keyspaceName, tt.shardName)
 				require.NoError(t, err)
-				_, err = ts.UpdateShardFields(context.Background(), tt.keyspaceName, tt.shardName, func(info *topo.ShardInfo) error {
+				_, err = ts.UpdateShardFields(t.Context(), tt.keyspaceName, tt.shardName, func(info *topo.ShardInfo) error {
 					info.PrimaryAlias = tt.shard.PrimaryAlias
 					return nil
 				})
@@ -335,7 +334,7 @@ func TestRefreshAllShards(t *testing.T) {
 		db.ClearVTOrcDatabase()
 	}()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	ts = memorytopo.NewServer(ctx, "zone1")
 	require.NoError(t, initializeShardsToWatch())
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", keyspaceDurabilityNone))
