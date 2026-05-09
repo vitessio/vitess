@@ -372,6 +372,26 @@ func TestShouldEmitLog(t *testing.T) {
 			ok:         true,
 			emitReason: "error",
 		},
+		{
+			sql:        "select $$",
+			ok:         false,
+			emitReason: "",
+		},
+		{
+			sql:        "SELECT $$",
+			ok:         false,
+			emitReason: "",
+		},
+		{
+			sql:        "  select $$  ",
+			ok:         false,
+			emitReason: "",
+		},
+		{
+			sql:        "select $$ from dual",
+			ok:         true,
+			emitReason: "",
+		},
 	}
 
 	for _, tt := range tests {
