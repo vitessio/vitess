@@ -387,7 +387,8 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			close(releaseDisable)
 		})
 		res := <-done
-		require.ErrorIs(t, res.err, context.DeadlineExceeded)
+		require.Error(t, res.err)
+		assert.ErrorContains(t, res.err, context.DeadlineExceeded.Error())
 		assert.NotNil(t, res.restore)
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
 			"disable timeout has unknown MySQL-side result, so it must best-effort restore super_read_only")

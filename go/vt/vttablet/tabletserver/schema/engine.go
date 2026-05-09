@@ -696,7 +696,7 @@ func (se *Engine) disableSuperReadOnly(ctx context.Context, conn *dbconnpool.DBC
 		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			return noop, nil
 		}
-		return noop, fmt.Errorf("reading @@global.super_read_only: %w", err)
+		return noop, vterrors.Wrapf(err, "reading @@global.super_read_only")
 	}
 	if len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
 		return noop, nil
@@ -709,7 +709,7 @@ func (se *Engine) disableSuperReadOnly(ctx context.Context, conn *dbconnpool.DBC
 		if shouldRestoreAfterSuperReadOnlyDisableError(err) {
 			restoreSuperReadOnly()
 		}
-		return noop, fmt.Errorf("disabling super_read_only: %w", err)
+		return noop, vterrors.Wrapf(err, "disabling super_read_only")
 	}
 	return restoreSuperReadOnly, nil
 }
@@ -796,7 +796,7 @@ func (se *Engine) readGlobalBool(ctx context.Context, conn *dbconnpool.DBConnect
 		return false, err
 	}
 	if len(result.Rows) == 0 || len(result.Rows[0]) == 0 {
-		return false, fmt.Errorf("missing @@global.%s result", name)
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "missing @@global.%s result", name)
 	}
 	value := strings.ToUpper(result.Rows[0][0].ToString())
 	return value == "1" || value == "ON", nil
@@ -914,10 +914,22 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 		se.mu.Lock()
 		defer se.mu.Unlock()
 		if !se.isGtidExecutedOptimizeEligibleLocked(time.Now()) {
+			// Conditions changed between the spawn-time stamp and now
+			// (e.g. tablet promoted to PRIMARY, stability cooldown reset).
+			// We never actually attempted an OPTIMIZE, so clear the stamp
+			// to let the next eligible reload retry immediately instead of
+			// waiting 24h from a phantom attempt. Contrast stampLastAttempt
+			// below, which preserves the stamp on real failures so we
+			// don't retry every reload cycle.
 			se.gtidExecutedOptimizeLastAt = time.Time{}
 			return false
 		}
 		return true
+	}
+	stampLastAttempt := func() {
+		se.mu.Lock()
+		defer se.mu.Unlock()
+		se.gtidExecutedOptimizeLastAt = time.Now()
 	}
 
 	if !checkEligibility() {
@@ -927,9 +939,7 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
 	if err != nil {
 		log.Warn("schema engine: failed to open connection for mysql.gtid_executed OPTIMIZE", slog.Any("error", err))
-		se.mu.Lock()
-		se.gtidExecutedOptimizeLastAt = time.Now()
-		se.mu.Unlock()
+		stampLastAttempt()
 		return
 	}
 	defer conn.Close()
@@ -945,9 +955,7 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 	if err != nil {
 		log.Warn("schema engine: skipping mysql.gtid_executed OPTIMIZE; could not disable super_read_only",
 			slog.Any("error", err))
-		se.mu.Lock()
-		se.gtidExecutedOptimizeLastAt = time.Now()
-		se.mu.Unlock()
+		stampLastAttempt()
 		return
 	}
 
@@ -963,9 +971,7 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 			slog.Duration("elapsed", elapsed),
 			slog.Uint64("dataFreeAtSpawn", dataFreeAtSpawn),
 		)
-		se.mu.Lock()
-		se.gtidExecutedOptimizeLastAt = time.Now()
-		se.mu.Unlock()
+		stampLastAttempt()
 		return
 	}
 	log.Info("schema engine: OPTIMIZE of mysql.gtid_executed completed",
