@@ -106,6 +106,7 @@ var (
 		"enable-online-ddl",
 		viperutil.Options[bool]{
 			FlagName: "enable-online-ddl",
+			Aliases:  []string{"enable_online_ddl"},
 			Default:  true,
 			Dynamic:  true,
 		},
@@ -115,6 +116,7 @@ var (
 		"enable-direct-ddl",
 		viperutil.Options[bool]{
 			FlagName: "enable-direct-ddl",
+			Aliases:  []string{"enable_direct_ddl"},
 			Default:  true,
 			Dynamic:  true,
 		},
@@ -124,6 +126,7 @@ var (
 		"enable-binlog-dump",
 		viperutil.Options[bool]{
 			FlagName: "enable-binlog-dump",
+			Aliases:  []string{"enable_binlog_dump"},
 			Default:  false,
 			Dynamic:  true,
 		},
@@ -133,6 +136,7 @@ var (
 		"transaction-mode",
 		viperutil.Options[vtgatepb.TransactionMode]{
 			FlagName: "transaction-mode",
+			Aliases:  []string{"transaction_mode"},
 			Default:  vtgatepb.TransactionMode_MULTI,
 			Dynamic:  true,
 			GetFunc: func(v *viper.Viper) func(key string) vtgatepb.TransactionMode {

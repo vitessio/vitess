@@ -64,6 +64,7 @@ var AuthorizedDDLUsers = viperutil.Configure(
 	"vschema-ddl-authorized-users",
 	viperutil.Options[*authorizedDDLUsers]{
 		FlagName: "vschema-ddl-authorized-users",
+		Aliases:  []string{"vschema_ddl_authorized_users"},
 		Default:  &authorizedDDLUsers{},
 		Dynamic:  true,
 		GetFunc: func(v *viper.Viper) func(key string) *authorizedDDLUsers {
