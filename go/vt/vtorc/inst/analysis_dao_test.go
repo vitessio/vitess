@@ -1536,16 +1536,16 @@ func TestDeclaresBefore(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "PrimaryIsReadOnly declares before PrimaryDiskStalled",
+			name:     "PrimaryIsReadOnly does not declare before PrimaryDiskStalled",
 			problem:  GetDetectionAnalysisProblem(PrimaryIsReadOnly),
 			code:     PrimaryDiskStalled,
-			expected: true,
+			expected: false,
 		},
 		{
-			name:     "ReplicationStopped declares before PrimaryDiskStalled",
+			name:     "ReplicationStopped does not declare before PrimaryDiskStalled",
 			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
 			code:     PrimaryDiskStalled,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "problem with no BeforeAnalyses",
