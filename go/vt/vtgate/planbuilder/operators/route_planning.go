@@ -334,6 +334,9 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 // and if cross-keyspace joins are denied for any involved keyspace. Fast path for direct
 // Route/Route comparisons (no allocations), falls back to collecting all keyspaces from
 // both operator trees to handle composite operators spanning multiple keyspaces.
+//
+// Panics via checkCrossKeyspacePair if the operation is denied — this follows the
+// planner convention of using panics for control flow on planning errors.
 func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, opType string) {
 	// Fast path: both sides are direct *Route — two type assertions + pointer comparison, no allocations.
 	if lRoute, ok := lhs.(*Route); ok {
@@ -388,7 +391,7 @@ func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator,
 		}
 		if !allowed {
 			panic(vterrors.VT12001(
-				fmt.Sprintf("cross-keyspace %s between keyspaces '%s' and '%s' (use /*vt+ ALLOW_CROSS_KEYSPACE_READS */ to override)", opType, lhsKs.Name, rhsKs.Name),
+				fmt.Sprintf("cross-keyspace %s between keyspaces %q and %q (use /*vt+ ALLOW_CROSS_KEYSPACE_READS */ to override)", opType, lhsKs.Name, rhsKs.Name),
 			))
 		}
 	}
