@@ -128,9 +128,9 @@ type Engine struct {
 	backgroundCtx              context.Context
 	backgroundCancel           context.CancelFunc
 	// freeSpaceMetricsActive records whether we currently have
-	// SchemaTableDataFreeBytes labels published, so a transition from
-	// enabled→disabled at runtime can ResetAll() once and avoid leaving
-	// stale gauge values around.
+	// SchemaTableDataFreeBytes / SchemaTableAllocatedBytes labels
+	// published, so a transition from enabled→disabled at runtime can
+	// ResetAll() once and avoid leaving stale gauge values around.
 	freeSpaceMetricsActive bool
 	// primaryPromotionInProgress is set by TabletManager before MySQL is
 	// made writable, closing the gap before QueryServiceControl observes
@@ -158,11 +158,16 @@ type Engine struct {
 	tableRowsGauge               *stats.GaugesWithSingleLabel
 	tableClusteredIndexSizeGauge *stats.GaugesWithSingleLabel
 	// tableDataFreeBytes exposes DATA_FREE (bytes reclaimable via OPTIMIZE)
-	// per user table. Populated for every user table on each schema reload
-	// when --schema-user-tables-free-space-metrics-enabled is true; labels
-	// are reset when a table is dropped or when the feature is disabled at
+	// per user table. tableAllocatedBytes exposes the matching total
+	// allocated-tablespace footprint (data_length + index_length +
+	// data_free), so operators can compute the bloat fraction as
+	// SchemaTableDataFreeBytes / SchemaTableAllocatedBytes. Both are
+	// populated for every user table on each schema reload when
+	// --schema-user-tables-free-space-metrics-enabled is true; labels are
+	// reset when a table is dropped or when the feature is disabled at
 	// runtime.
-	tableDataFreeBytes *stats.GaugesWithSingleLabel
+	tableDataFreeBytes  *stats.GaugesWithSingleLabel
+	tableAllocatedBytes *stats.GaugesWithSingleLabel
 
 	indexCardinalityGauge *stats.GaugesWithMultiLabels
 	indexBytesGauge       *stats.GaugesWithMultiLabels
@@ -196,6 +201,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 	se.tableRowsGauge = env.Exporter().NewGaugesWithSingleLabel("TableRows", "estimated number of rows in the table", "Table")
 	se.tableClusteredIndexSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableClusteredIndexSize", "byte size of the clustered index (i.e. row data)", "Table")
 	se.tableDataFreeBytes = env.Exporter().NewGaugesWithSingleLabel("SchemaTableDataFreeBytes", "DATA_FREE bytes (reclaimable via OPTIMIZE) per user table; published when --schema-user-tables-free-space-metrics-enabled is true", "Table")
+	se.tableAllocatedBytes = env.Exporter().NewGaugesWithSingleLabel("SchemaTableAllocatedBytes", "Total allocated tablespace bytes (DATA_LENGTH + INDEX_LENGTH + DATA_FREE) per user table; pair with SchemaTableDataFreeBytes to compute bloat percentage. Published when --schema-user-tables-free-space-metrics-enabled is true", "Table")
 	se.indexCardinalityGauge = env.Exporter().NewGaugesWithMultiLabels("IndexCardinality", "estimated number of unique values in the index", []string{"Table", "Index"})
 	se.indexBytesGauge = env.Exporter().NewGaugesWithMultiLabels("IndexBytes", "byte size of the index", []string{"Table", "Index"})
 	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
@@ -981,19 +987,24 @@ func (se *Engine) runOptimizeGtidExecuted(dataFreeAtSpawn uint64) {
 }
 
 // userTableFreeSpaceQuery selects DATA_FREE (bytes reclaimable via
-// OPTIMIZE) for every user base table in the current schema. Views are
-// excluded explicitly via table_type so we never publish a zero/NULL
-// DATA_FREE label for a view. IFNULL guarantees a numeric column even
-// for the rare BASE TABLE rows (some non-InnoDB engines, partitioned
-// tables in transient states) where information_schema reports NULL,
-// so the per-row parse cannot leave a stale gauge value behind.
-const userTableFreeSpaceQuery = `select table_name, ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'`
+// OPTIMIZE) and the matching total allocated tablespace footprint
+// (DATA_LENGTH + INDEX_LENGTH + DATA_FREE) for every user base table in
+// the current schema, so operators can compute the bloat fraction as
+// `data_free / allocated` in their monitoring system. Views are excluded
+// explicitly via table_type so we never publish a zero/NULL label for a
+// view. IFNULL guarantees numeric columns even for the rare BASE TABLE
+// rows (some non-InnoDB engines, partitioned tables in transient states)
+// where information_schema reports NULL, so the per-row parse cannot
+// leave a stale gauge value behind.
+const userTableFreeSpaceQuery = `select table_name, ifnull(data_free, 0), ifnull(data_length, 0) + ifnull(index_length, 0) + ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'`
 
 // updateUserTableFreeSpaceLocked publishes the SchemaTableDataFreeBytes
-// gauge for every user table when the feature is enabled, so operators
-// can apply their own alerting thresholds in their monitoring system.
-// Runs on all tablet types; alerting/visibility only — the schema engine
-// does not run OPTIMIZE against user tables.
+// and SchemaTableAllocatedBytes gauges for every user table when the
+// feature is enabled, so operators can apply their own alerting
+// thresholds in their monitoring system (typically as the ratio
+// SchemaTableDataFreeBytes / SchemaTableAllocatedBytes). Runs on all
+// tablet types; alerting/visibility only — the schema engine does not
+// run OPTIMIZE against user tables.
 //
 // When the feature is disabled at runtime, any previously published gauge
 // labels are reset once and the function becomes a no-op until re-enabled.
@@ -1007,6 +1018,7 @@ func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *conn
 	if !enabled {
 		if se.freeSpaceMetricsActive {
 			se.tableDataFreeBytes.ResetAll()
+			se.tableAllocatedBytes.ResetAll()
 			se.freeSpaceMetricsActive = false
 		}
 		return
@@ -1020,19 +1032,27 @@ func (se *Engine) updateUserTableFreeSpaceLocked(ctx context.Context, conn *conn
 	for _, row := range result.Rows {
 		tableName := row[0].ToString()
 		seen[tableName] = struct{}{}
+		// IFNULL in the query already covers MySQL NULL; the ToCastUint64
+		// branches below are for any other parse failure. Set the gauges
+		// to 0 in that case so we don't leave a stale reading from a
+		// prior reload.
 		dataFree, err := row[1].ToCastUint64()
 		if err != nil {
-			// IFNULL in the query already covers MySQL NULL; this branch
-			// is for any other parse failure. Set the gauge to 0 so we
-			// don't leave a stale reading from a prior reload.
 			se.tableDataFreeBytes.Set(tableName, 0)
-			continue
+		} else {
+			se.tableDataFreeBytes.Set(tableName, int64(dataFree))
 		}
-		se.tableDataFreeBytes.Set(tableName, int64(dataFree))
+		allocated, err := row[2].ToCastUint64()
+		if err != nil {
+			se.tableAllocatedBytes.Set(tableName, 0)
+		} else {
+			se.tableAllocatedBytes.Set(tableName, int64(allocated))
+		}
 	}
 	for tableName := range se.tableDataFreeBytes.Counts() {
 		if _, ok := seen[tableName]; !ok {
 			se.tableDataFreeBytes.Reset(tableName)
+			se.tableAllocatedBytes.Reset(tableName)
 		}
 	}
 	se.freeSpaceMetricsActive = true
@@ -1254,6 +1274,7 @@ func (se *Engine) getDroppedTables(curTables map[string]bool, changedViews map[s
 			se.tableFileSizeGauge.Reset(tableName)
 			se.tableAllocatedSizeGauge.Reset(tableName)
 			se.tableDataFreeBytes.Reset(tableName)
+			se.tableAllocatedBytes.Reset(tableName)
 		}
 	}
 

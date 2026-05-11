@@ -668,8 +668,9 @@ func TestUpdateUserTableFreeSpaceDisabled(t *testing.T) {
 	defer se.conns.Close()
 
 	// Seed the "previously active" state as if a prior enabled run had
-	// set labels on the gauge.
+	// set labels on both gauges.
 	se.tableDataFreeBytes.Set("t_old", 12345)
+	se.tableAllocatedBytes.Set("t_old", 67890)
 	se.freeSpaceMetricsActive = true
 
 	// With the feature off, updateUserTableFreeSpaceLocked must not call
@@ -685,10 +686,12 @@ func TestUpdateUserTableFreeSpaceDisabled(t *testing.T) {
 	se.mu.Unlock()
 	conn.Recycle()
 
-	// Stale label should be cleared via ResetAll; freeSpaceMetricsActive
-	// should be flipped back to false.
+	// Stale labels should be cleared via ResetAll on both gauges;
+	// freeSpaceMetricsActive should be flipped back to false.
 	assert.Equal(t, int64(0), se.tableDataFreeBytes.Counts()["t_old"],
-		"gauge label for a table we previously surfaced must be reset when the feature is disabled")
+		"DATA_FREE gauge label for a table we previously surfaced must be reset when the feature is disabled")
+	assert.Equal(t, int64(0), se.tableAllocatedBytes.Counts()["t_old"],
+		"ALLOCATED gauge label for a table we previously surfaced must be reset when the feature is disabled")
 	assert.False(t, se.freeSpaceMetricsActive)
 }
 
@@ -732,13 +735,13 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	se.conns.Open(se.cp, se.cp, se.cp)
 	defer se.conns.Close()
 
-	dataFreeQuery := "select table_name, ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
+	dataFreeQuery := "select table_name, ifnull(data_free, 0), ifnull(data_length, 0) + ifnull(index_length, 0) + ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
 
 	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("table_name|data_free", "varchar|uint64"),
-		"t_a|600",
-		"t_b|800",
-		"t_c|0",
+		sqltypes.MakeTestFields("table_name|data_free|allocated", "varchar|uint64|uint64"),
+		"t_a|600|2000",
+		"t_b|800|1600",
+		"t_c|0|4096",
 	))
 	ctx := t.Context()
 	conn, err := se.conns.Get(ctx, nil)
@@ -748,11 +751,17 @@ func TestUpdateUserTableFreeSpaceEnabled(t *testing.T) {
 	se.mu.Unlock()
 	conn.Recycle()
 
-	// Every user table — including ones with zero DATA_FREE — gets a label
-	// so operators can compute free-space ratios in their monitoring system.
-	assert.Equal(t, int64(600), se.tableDataFreeBytes.Counts()["t_a"])
-	assert.Equal(t, int64(800), se.tableDataFreeBytes.Counts()["t_b"])
-	assert.Equal(t, int64(0), se.tableDataFreeBytes.Counts()["t_c"])
+	// Every user table — including ones with zero DATA_FREE — gets labels
+	// on both gauges so operators can compute free-space ratios as
+	// data_free / allocated in their monitoring system.
+	dataFree := se.tableDataFreeBytes.Counts()
+	allocated := se.tableAllocatedBytes.Counts()
+	assert.Equal(t, int64(600), dataFree["t_a"])
+	assert.Equal(t, int64(800), dataFree["t_b"])
+	assert.Equal(t, int64(0), dataFree["t_c"])
+	assert.Equal(t, int64(2000), allocated["t_a"])
+	assert.Equal(t, int64(1600), allocated["t_b"])
+	assert.Equal(t, int64(4096), allocated["t_c"])
 	assert.True(t, se.freeSpaceMetricsActive)
 }
 
@@ -768,12 +777,13 @@ func TestUpdateUserTableFreeSpaceResetsMissingBaseTableLabels(t *testing.T) {
 	defer se.conns.Close()
 
 	se.tableDataFreeBytes.Set("became_view", 12345)
+	se.tableAllocatedBytes.Set("became_view", 67890)
 	se.freeSpaceMetricsActive = true
 
-	dataFreeQuery := "select table_name, ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
+	dataFreeQuery := "select table_name, ifnull(data_free, 0), ifnull(data_length, 0) + ifnull(index_length, 0) + ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
 	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("table_name|data_free", "varchar|uint64"),
-		"still_table|600",
+		sqltypes.MakeTestFields("table_name|data_free|allocated", "varchar|uint64|uint64"),
+		"still_table|600|2000",
 	))
 	ctx := t.Context()
 	conn, err := se.conns.Get(ctx, nil)
@@ -783,10 +793,14 @@ func TestUpdateUserTableFreeSpaceResetsMissingBaseTableLabels(t *testing.T) {
 	se.mu.Unlock()
 	conn.Recycle()
 
-	counts := se.tableDataFreeBytes.Counts()
-	assert.Equal(t, int64(0), counts["became_view"],
+	dataFree := se.tableDataFreeBytes.Counts()
+	allocated := se.tableAllocatedBytes.Counts()
+	assert.Equal(t, int64(0), dataFree["became_view"],
 		"stale DATA_FREE label must be reset when the name is no longer a base table")
-	assert.Equal(t, int64(600), counts["still_table"])
+	assert.Equal(t, int64(0), allocated["became_view"],
+		"stale ALLOCATED label must be reset when the name is no longer a base table")
+	assert.Equal(t, int64(600), dataFree["still_table"])
+	assert.Equal(t, int64(2000), allocated["still_table"])
 }
 
 // TestUpdateUserTableFreeSpaceIgnoresMaxTableCount verifies that the
@@ -803,11 +817,11 @@ func TestUpdateUserTableFreeSpaceIgnoresMaxTableCount(t *testing.T) {
 	SetMaxTableCount(1)
 	t.Cleanup(func() { SetMaxTableCount(originalMaxTableCount) })
 
-	dataFreeQuery := "select table_name, ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
+	dataFreeQuery := "select table_name, ifnull(data_free, 0), ifnull(data_length, 0) + ifnull(index_length, 0) + ifnull(data_free, 0) from information_schema.TABLES where table_schema = database() and table_type = 'BASE TABLE'"
 	db.AddQuery(dataFreeQuery, sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("table_name|data_free", "varchar|uint64"),
-		"t_a|600",
-		"t_b|800",
+		sqltypes.MakeTestFields("table_name|data_free|allocated", "varchar|uint64|uint64"),
+		"t_a|600|2000",
+		"t_b|800|1600",
 	))
 
 	ctx := t.Context()
@@ -820,6 +834,8 @@ func TestUpdateUserTableFreeSpaceIgnoresMaxTableCount(t *testing.T) {
 
 	assert.Equal(t, int64(600), se.tableDataFreeBytes.Counts()["t_a"])
 	assert.Equal(t, int64(800), se.tableDataFreeBytes.Counts()["t_b"])
+	assert.Equal(t, int64(2000), se.tableAllocatedBytes.Counts()["t_a"])
+	assert.Equal(t, int64(1600), se.tableAllocatedBytes.Counts()["t_b"])
 }
 
 // TestMaybeOptimizeGtidExecutedSmallDataFreeSkips verifies that when
