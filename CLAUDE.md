@@ -162,7 +162,7 @@ return user.NeedsMigration() && migrate(user) || user
 
 ### 4. Zero-Value / Default Behavior Safety
 - New struct fields must not change behavior for existing callers who omit them
-- Prefer negative-polarity booleans (`NoCrossKeyspaceJoins` not `AllowCrossKeyspaceJoins`) so the zero-value preserves existing behavior
+- Prefer negative-polarity booleans (`PreventCrossKeyspaceReads` not `AllowCrossKeyspaceReads`) so the zero-value preserves existing behavior
 - When a flag value of `0` or empty previously meant "disabled," don't change it to mean "unlimited" — preserve the existing semantic or make the change explicit
 - Validate mutually exclusive flags in `PreRunE` and add unit tests for invalid combinations
 
