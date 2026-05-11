@@ -18,11 +18,7 @@ package mysqlctl
 
 import (
 	"context"
-<<<<<<< HEAD
-||||||| parent of 29d1760a77 (mysqlctl: propagate remote shutdown timeout (#20059))
-=======
 	"net"
->>>>>>> 29d1760a77 (mysqlctl: propagate remote shutdown timeout (#20059))
 	"os"
 	"strconv"
 	"strings"
