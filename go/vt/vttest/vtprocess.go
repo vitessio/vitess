@@ -252,6 +252,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		fmt.Sprintf("--enable-direct-ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable-system-settings=%t", args.EnableSystemSettings),
 		fmt.Sprintf("--no-scatter=%t", args.NoScatter),
+		fmt.Sprintf("--prevent-cross-keyspace-reads=%t", args.PreventCrossKeyspaceReads),
 	}...)
 
 	// If topo tablet refresh interval is not defined then we will give it value of 10s. Please note
