@@ -632,7 +632,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.Shutdown(ctx, waitForMysqld)
+		return client.Shutdown(ctx, waitForMysqld, shutdownTimeout)
 	}
 
 	// We're shutting down on purpose. We no longer want to be notified when
