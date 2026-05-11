@@ -33,7 +33,6 @@ import { Link, useParams } from 'react-router-dom';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { READ_ONLY_COLUMNS } from '../Transactions';
 import { COLUMNS } from '../Transactions';
-import * as React from 'react';
 import { TransactionLink } from '../../links/TransactionLink';
 
 interface RouteParams {
