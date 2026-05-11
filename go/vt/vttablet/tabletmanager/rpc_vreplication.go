@@ -606,7 +606,11 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			return nil, err
 		}
 		if req.State != nil {
-			state = binlogdatapb.VReplicationWorkflowState_name[int32(*req.State)]
+			var ok bool
+			state, ok = binlogdatapb.VReplicationWorkflowState_name[int32(*req.State)]
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid state value: %v", req.GetState())
+			}
 		}
 		if state == binlogdatapb.VReplicationWorkflowState_Running.String() {
 			// `Workflow Start` sets the new state to Running. However, if stream is still copying tables, we should set
