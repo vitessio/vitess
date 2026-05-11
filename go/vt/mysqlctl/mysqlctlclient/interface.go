@@ -21,7 +21,6 @@ package mysqlctlclient
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/pflag"
