@@ -83,7 +83,7 @@ func TestSlowQueriesCounter(t *testing.T) {
 	executor, sbc1, _, _, ctx := createExecutorEnv(t)
 
 	oldThreshold := slowQueryThreshold
-	slowQueryThreshold = 5 * time.Millisecond
+	slowQueryThreshold = time.Hour
 	t.Cleanup(func() {
 		slowQueryThreshold = oldThreshold
 		sbc1.ExecDelayResponse = 0
@@ -103,6 +103,7 @@ func TestSlowQueriesCounter(t *testing.T) {
 	assert.Equal(t, initialCount, getTotalSlowQueryCount(), "fast query should not increment slow query count")
 
 	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	slowQueryThreshold = 5 * time.Millisecond
 	_, err = executorExecSession(ctx, executor, session, "select id from user where id = 1", nil)
 	require.NoError(t, err)
 	assert.Equal(t, initialCount+1, getTotalSlowQueryCount(), "slow query should increment slow query count")
