@@ -21,6 +21,13 @@ package mysqlctlclient
 import (
 	"context"
 	"fmt"
+<<<<<<< HEAD
+||||||| parent of 29d1760a77 (mysqlctl: propagate remote shutdown timeout (#20059))
+	"os"
+=======
+	"os"
+	"time"
+>>>>>>> 29d1760a77 (mysqlctl: propagate remote shutdown timeout (#20059))
 
 	"github.com/spf13/pflag"
 
@@ -46,7 +53,7 @@ type MysqlctlClient interface {
 	Start(ctx context.Context, mysqldArgs ...string) error
 
 	// Shutdown calls Mysqld.Shutdown remotely.
-	Shutdown(ctx context.Context, waitForMysqld bool) error
+	Shutdown(ctx context.Context, waitForMysqld bool, shutdownTimeout time.Duration) error
 
 	// RunMysqlUpgrade calls Mysqld.RunMysqlUpgrade remotely.
 	RunMysqlUpgrade(ctx context.Context) error
