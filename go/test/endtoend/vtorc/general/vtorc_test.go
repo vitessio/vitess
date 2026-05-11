@@ -1029,6 +1029,14 @@ func TestRecoveryDeadlocks(t *testing.T) {
 		// Issue a write that will block on the semi-sync wait. The connection
 		// will return only once fixReplica restarts the acker's IO thread,
 		// after which an ACK flows and the write commits.
+		//
+		// Note: we cannot reliably assert PrimarySemiSyncBlocked is detected
+		// in this test (same caveat as TestReplicationStoppedWithSemiSyncBlocked).
+		// SemiSyncBlocked only flips when a write is waiting for acks, and
+		// VTOrc fixes the replica faster than we can sustain the blocking
+		// condition. The deadlock scenario is covered by unit tests in
+		// analysis_dao_test.go (TestDeclaresBefore) and
+		// topology_recovery_test.go (TestRecheckPrimaryHealth).
 		var wg sync.WaitGroup
 		wg.Go(func() {
 			_, _ = utils.RunSQL(t, "CREATE TABLE IF NOT EXISTS test_recovery_deadlocks (id INT PRIMARY KEY)", primary, "vt_ks")
@@ -1045,7 +1053,7 @@ func TestRecoveryDeadlocks(t *testing.T) {
 		_, err = utils.RunSQL(t, "SET GLOBAL super_read_only = ON", primary, "")
 		require.NoError(t, err)
 
-		// Both problems should be detected within a few analysis cycles.
+		// PrimaryIsReadOnly is detected within ~1 analysis cycle.
 		utils.WaitForDetectedProblems(t, vtorc, string(inst.PrimaryIsReadOnly), primary.Alias, keyspace.Name, shard0.Name, 1)
 
 		// fixPrimary must complete despite the shard-wide problem also being
