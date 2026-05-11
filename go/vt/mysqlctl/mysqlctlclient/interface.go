@@ -21,13 +21,8 @@ package mysqlctlclient
 import (
 	"context"
 	"fmt"
-<<<<<<< HEAD
-||||||| parent of 29d1760a77 (mysqlctl: propagate remote shutdown timeout (#20059))
-	"os"
-=======
 	"os"
 	"time"
->>>>>>> 29d1760a77 (mysqlctl: propagate remote shutdown timeout (#20059))
 
 	"github.com/spf13/pflag"
 
