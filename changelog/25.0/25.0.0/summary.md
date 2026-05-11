@@ -10,8 +10,14 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+<<<<<<< HEAD
     - **[VStream](#minor-changes-vstream)**
         - [Query timeouts disabled during VTGate VStream copy/sync](#vstream-copy-no-timeouts)
+||||||| 01ba245f5e
+=======
+    - **[VTGate](#minor-changes-vtgate)**
+        - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+>>>>>>> main
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
 
@@ -39,6 +45,7 @@ The `--keep-data` flag help text has been updated to note this default explicitl
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
+<<<<<<< HEAD
 ### <a id="minor-changes-vstream"/>VStream</a>
 
 #### <a id="vstream-copy-no-timeouts"/>Query timeouts disabled during VTGate VStream copy/sync</a>
@@ -49,6 +56,35 @@ With this change, VStream sets `NoTimeouts = true` for all requests during the c
 
 See [#20040](https://github.com/vitessio/vitess/pull/20040) for details.
 
+||||||| 01ba245f5e
+=======
+### <a id="minor-changes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-cross-keyspace-reads"/>New controls for cross-keyspace reads</a>
+
+VTGate now supports preventing cross-keyspace reads (joins and UNIONs), preventing queries that would combine data from different keyspaces. This can be configured at two levels:
+
+**VTGate flag** (applies to all queries):
+
+```
+--prevent-cross-keyspace-reads
+```
+
+**Per-keyspace VSchema setting** (applies to specific keyspaces):
+
+```bash
+vtctldclient ApplyVSchema --vschema='{"prevent_cross_keyspace_reads": true}' my_keyspace
+```
+
+When enabled, the planner will reject queries that require joining or combining (via UNION) tables from different keyspaces. This can be overridden on a per-query basis using the `ALLOW_CROSS_KEYSPACE_READS` comment directive:
+
+```sql
+/*vt+ ALLOW_CROSS_KEYSPACE_READS */ SELECT * FROM ks1.t1 JOIN ks2.t2 ON t1.id = t2.id;
+```
+
+The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+>>>>>>> main
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-schema-max-table-count"/>Schema engine table-count limit is now configurable</a>
