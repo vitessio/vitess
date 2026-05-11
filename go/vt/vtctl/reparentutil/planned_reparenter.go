@@ -414,6 +414,10 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	defer stopAllCancel()
 
 	for alias, tabletInfo := range tabletMap {
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
+
 		stopAllWg.Add(1)
 
 		go func(alias string, tablet *topodatapb.Tablet) {
@@ -637,8 +641,10 @@ func (pr *PlannedReparenter) reparentShardLocked(
 
 	if needsRefresh {
 		// Refresh the state to force the tabletserver to reconnect after db has been created.
+		// This is best-effort — internal components retry initialization on their own, and
+		// returning an error here would report a functionally-successful reparent as failed.
 		if err := pr.tmc.RefreshState(ctx, ev.NewPrimary); err != nil {
-			pr.logger.Warningf("RefreshState failed: %v", err)
+			pr.logger.Warningf("RefreshState failed on new primary %v: %v", topoproto.TabletAliasString(ev.NewPrimary.Alias), err)
 		}
 	}
 	return nil
@@ -678,6 +684,10 @@ func (pr *PlannedReparenter) reparentTablets(
 	// the new primary.
 	for alias, tabletInfo := range tabletMap {
 		if alias == primaryElectAliasStr {
+			continue
+		}
+
+		if tabletInfo.Type == topodatapb.TabletType_RESTORE {
 			continue
 		}
 
@@ -753,6 +763,9 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 	errorGroup, groupCtx := errgroup.WithContext(verifyCtx)
 	for tblStr, info := range tabletMap {
 		tablet := info.Tablet
+		if tablet.Type == topodatapb.TabletType_RESTORE {
+			continue
+		}
 		errorGroup.Go(func() error {
 			statusValues, err := pr.tmc.GetGlobalStatusVars(groupCtx, tablet, []string{InnodbBufferPoolsDataVar})
 			if err != nil {

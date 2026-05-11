@@ -31,6 +31,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -177,7 +179,7 @@ func TestElectNewPrimaryPanic(t *testing.T) {
 	ctx := t.Context()
 
 	ts = memorytopo.NewServer(ctx, "zone1")
-	recoveryAttempted, _, err := electNewPrimary(context.Background(), analysisEntry, log.NewPrefixedLogger("prefix"))
+	recoveryAttempted, _, err := electNewPrimary(t.Context(), analysisEntry, log.NewPrefixedLogger("prefix"))
 	require.True(t, recoveryAttempted)
 	require.Error(t, err)
 }
@@ -496,6 +498,60 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			wantErr: "aborting ReplicationStopped, primary mitigation is required",
 		},
 		{
+			// PrimarySemiSyncBlocked on the primary, acker replica has
+			// ReplicationStopped. GetDetectionAnalysis preserves the
+			// acker's analysis (via declaresBefore), so checkIfAlreadyFixed
+			// finds it and returns alreadyFixed=false → proceed.
+			name: "acker ReplicationStopped preserved despite shard-wide PrimarySemiSyncBlocked",
+			info: []*test.InfoForRecoveryAnalysis{
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_PRIMARY,
+						MysqlHostname: "localhost",
+						MysqlPort:     6708,
+					},
+					DurabilityPolicy:                   policy.DurabilitySemiSync,
+					LastCheckValid:                     1,
+					CountReplicas:                      1,
+					CountValidReplicas:                 1,
+					CountValidReplicatingReplicas:      0,
+					CountValidOracleGTIDReplicas:       1,
+					CountLoggingReplicas:               1,
+					IsPrimary:                          1,
+					CurrentTabletType:                  int(topodatapb.TabletType_PRIMARY),
+					SemiSyncPrimaryEnabled:             1,
+					SemiSyncPrimaryStatus:              1,
+					SemiSyncBlocked:                    1,
+					SemiSyncPrimaryWaitForReplicaCount: 1,
+					SemiSyncPrimaryClients:             0,
+					CountSemiSyncReplicasEnabled:       1,
+				},
+				{
+					TabletInfo: &topodatapb.Tablet{
+						Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+						Hostname:      "localhost",
+						Keyspace:      "ks",
+						Shard:         "0",
+						Type:          topodatapb.TabletType_REPLICA,
+						MysqlHostname: "localhost",
+						MysqlPort:     6709,
+					},
+					DurabilityPolicy: policy.DurabilitySemiSync,
+					PrimaryTabletInfo: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					},
+					LastCheckValid:         1,
+					ReadOnly:               1,
+					ReplicationStopped:     1,
+					SemiSyncReplicaEnabled: 1,
+				},
+			},
+		},
+		{
 			name: "analysis did not change",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
@@ -570,11 +626,57 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 	}
 }
 
+func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
+	primaryAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	tests := []struct {
+		name        string
+		analysis    inst.AnalysisCode
+		wantIgnored bool
+	}{
+		{
+			name:        "DeadPrimary skips primary refresh",
+			analysis:    inst.DeadPrimary,
+			wantIgnored: true,
+		},
+		{
+			name:        "DeadPrimaryAndSomeReplicas skips primary refresh",
+			analysis:    inst.DeadPrimaryAndSomeReplicas,
+			wantIgnored: true,
+		},
+		{
+			name:        "PrimarySemiSyncBlocked does NOT skip primary refresh",
+			analysis:    inst.PrimarySemiSyncBlocked,
+			wantIgnored: false,
+		},
+		{
+			name:        "PrimaryDiskStalled does NOT skip primary refresh",
+			analysis:    inst.PrimaryDiskStalled,
+			wantIgnored: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := &inst.DetectionAnalysis{
+				Analysis:              tt.analysis,
+				AnalyzedInstanceAlias: primaryAlias,
+			}
+			ignored := shardWideRecoveryIgnoredTablets(recoverDeadPrimaryFunc, entry)
+			if tt.wantIgnored {
+				require.Len(t, ignored, 1)
+				assert.True(t, topoproto.TabletAliasEqual(ignored[0], primaryAlias))
+			} else {
+				assert.Empty(t, ignored)
+			}
+		})
+	}
+}
+
 func TestRecoverShardAnalyses(t *testing.T) {
 	// DeadPrimary and PrimaryHasPrimary have detectionAnalysisPriorityShardWideAction,
-	// so they require ordered execution. ReplicationStopped and ReplicaIsWritable are
-	// medium priority with no shard-wide action or before/after dependencies,
-	// so they run concurrently.
+	// so they require ordered execution. ReplicationStopped requires ordered execution
+	// because it declares BeforeAnalyses: [PrimarySemiSyncBlocked]. ReplicaIsWritable
+	// has no dependencies, so it runs concurrently.
 	analyses := []*inst.DetectionAnalysis{
 		{Analysis: inst.ReplicationStopped, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}},
 		{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 2}},
@@ -595,10 +697,11 @@ func TestRecoverShardAnalyses(t *testing.T) {
 
 	require.Len(t, order, 4)
 	// Ordered recoveries must come first, in their original order.
-	require.Equal(t, inst.DeadPrimary, order[0])
-	require.Equal(t, inst.PrimaryHasPrimary, order[1])
-	// Concurrent recoveries come after, in any order.
-	require.ElementsMatch(t, []inst.AnalysisCode{inst.ReplicationStopped, inst.ReplicaIsWritable}, order[2:])
+	require.Equal(t, inst.ReplicationStopped, order[0])
+	require.Equal(t, inst.DeadPrimary, order[1])
+	require.Equal(t, inst.PrimaryHasPrimary, order[2])
+	// Concurrent recoveries come after.
+	require.Equal(t, inst.ReplicaIsWritable, order[3])
 }
 
 func TestRecoverIncapacitatedPrimary(t *testing.T) {
@@ -874,7 +977,7 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				}
 			}
 
-			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(context.Background(), &analysis, logger)
+			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(t.Context(), &analysis, logger)
 			if restoreStderr != nil {
 				log.Flush()
 				require.Eventually(t, func() bool {
@@ -1020,11 +1123,8 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 					DemotePrimary(gomock.Any(), gomock.Any(), true).
 					DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, _ bool) (*replicationdatapb.PrimaryStatus, error) {
 						if tt.demotePrimaryDelay > 0 {
-							select {
-							case <-ctx.Done():
-								return nil, ctx.Err()
-							case <-time.After(tt.demotePrimaryDelay):
-							}
+							<-ctx.Done()
+							return nil, ctx.Err()
 						}
 
 						if tt.demotePrimaryErr != nil {
@@ -1068,6 +1168,161 @@ func TestReconcileStaleTopoPrimary(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestReconcileStaleTopoPrimaryTopoTimeout verifies that reconcileStaleTopoPrimary
+// returns when the topology type change blocks until the remote operation timeout.
+func TestReconcileStaleTopoPrimaryTopoTimeout(t *testing.T) {
+	orcDB, fromCache, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !fromCache {
+		t.Cleanup(func() {
+			_ = orcDB.Close()
+		})
+	}
+
+	synctest.Test(t, func(t *testing.T) {
+		for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace"} {
+			_, err = orcDB.Exec("delete from " + table)
+			require.NoError(t, err)
+		}
+
+		const (
+			keyspace = "ks"
+			shard    = "0"
+		)
+
+		primaryTablet := &topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Hostname:             "primary",
+			MysqlHostname:        "primary",
+			MysqlPort:            3306,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+			PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+		}
+
+		staleTablet := &topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			Hostname:             "stale-primary",
+			MysqlHostname:        "stale-primary",
+			MysqlPort:            3306,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: &vttimepb.Time{Seconds: 500},
+			PortMap:              map[string]int32{"vt": 15200, "grpc": 15201},
+		}
+
+		require.NoError(t, inst.SaveTablet(primaryTablet))
+		require.NoError(t, inst.SaveTablet(staleTablet))
+
+		keyspaceInfo := &topo.KeyspaceInfo{
+			Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone},
+		}
+		keyspaceInfo.SetKeyspaceName(keyspace)
+		require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+		ctx := t.Context()
+
+		seededTS, topoFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+		t.Cleanup(seededTS.Close)
+
+		require.NoError(t, seededTS.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
+		require.NoError(t, seededTS.CreateShard(ctx, keyspace, shard))
+		require.NoError(t, seededTS.CreateTablet(ctx, primaryTablet))
+		require.NoError(t, seededTS.CreateTablet(ctx, staleTablet))
+
+		require.NoError(t, seededTS.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+			ci.ServerAddress = memorytopo.UnreachableServerAddr
+			return nil
+		}))
+
+		blockedTS, err := topo.NewWithFactory(topoFactory, "", "")
+		require.NoError(t, err)
+		t.Cleanup(blockedTS.Close)
+
+		oldTS := ts
+		oldTMC := tmc
+		oldRemoteOpTimeout := topo.RemoteOperationTimeout
+
+		t.Cleanup(func() {
+			ts = oldTS
+			tmc = oldTMC
+			topo.RemoteOperationTimeout = oldRemoteOpTimeout
+		})
+
+		ts = blockedTS
+		topo.RemoteOperationTimeout = 100 * time.Millisecond
+
+		mockController := gomock.NewController(t)
+		t.Cleanup(mockController.Finish)
+
+		mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+		mockTMC.EXPECT().
+			DemotePrimary(gomock.Any(), gomock.Any(), true).
+			Return(&replicationdatapb.PrimaryStatus{}, nil).
+			Times(1)
+
+		mockTMC.EXPECT().
+			SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			Times(1)
+
+		tmc = mockTMC
+
+		analysisEntry := &inst.DetectionAnalysis{
+			Analysis:              inst.StaleTopoPrimary,
+			AnalyzedInstanceAlias: staleTablet.Alias,
+			AnalyzedKeyspace:      keyspace,
+			AnalyzedShard:         shard,
+		}
+
+		logger := log.NewPrefixedLogger("test-stale-primary-topo-timeout")
+
+		type reconcileResult struct {
+			attempted        bool
+			topologyRecovery *TopologyRecovery
+			err              error
+		}
+
+		recoveryCtx, cancel := context.WithCancel(ctx)
+		t.Cleanup(func() {
+			cancel()
+			synctest.Wait()
+		})
+
+		resultCh := make(chan reconcileResult, 1)
+		go func() {
+			attempted, topologyRecovery, err := reconcileStaleTopoPrimary(recoveryCtx, analysisEntry, logger)
+			resultCh <- reconcileResult{
+				attempted:        attempted,
+				topologyRecovery: topologyRecovery,
+				err:              err,
+			}
+		}()
+
+		synctest.Wait()
+
+		time.Sleep(topo.RemoteOperationTimeout + time.Nanosecond)
+		synctest.Wait()
+
+		select {
+		case result := <-resultCh:
+			require.True(t, result.attempted, "recovery must be attempted")
+			require.NotNil(t, result.topologyRecovery, "topology recovery record must be returned")
+			require.ErrorContains(t, result.err, "failed to set tablet type to REPLICA in topology")
+			require.ErrorContains(t, result.err, context.DeadlineExceeded.Error(), "reconcileStaleTopoPrimary must timeout and return when the topo type change blocks indefinitely")
+		default:
+			require.FailNowf(t, "reconcileStaleTopoPrimary did not return", "expected timeout after %s when the topo type change hangs indefinitely", topo.RemoteOperationTimeout)
+		}
+
+		activeRecoveries, err := ReadActiveClusterRecoveries(keyspace, shard)
+		require.NoError(t, err)
+		require.Empty(t, activeRecoveries, "recovery row must be resolved after reconcileStaleTopoPrimary returns")
+	})
 }
 
 // TestRestartDirectReplicasTimeout verifies that restartDirectReplicas does not block forever if an RPC hangs.

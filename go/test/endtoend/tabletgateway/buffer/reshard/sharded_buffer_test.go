@@ -48,7 +48,7 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 		var resp vtctldatapb.GetWorkflowsResponse
 		err = json2.UnmarshalPB([]byte(output), &resp)
 		require.NoError(t, err)
-		require.GreaterOrEqual(t, len(resp.Workflows), 1, "responce should have at least one workflow")
+		require.GreaterOrEqual(t, len(resp.Workflows), 1, "response should have at least one workflow")
 		lagSeconds := resp.Workflows[0].MaxVReplicationTransactionLag
 
 		require.NoError(t, err, output)
@@ -63,7 +63,7 @@ func waitForLowLag(t *testing.T, clusterInstance *cluster.LocalProcessCluster, k
 	}
 
 	if duration <= 0 {
-		t.Fatalf("waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+		require.Failf(t, "lag timeout", "waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
 	}
 }
 

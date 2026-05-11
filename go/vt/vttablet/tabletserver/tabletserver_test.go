@@ -69,25 +69,19 @@ func TestTabletServerHealthz(t *testing.T) {
 	defer db.Close()
 
 	req, err := http.NewRequest("GET", "/healthz", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(tsv.healthzHandler)
 	handler.ServeHTTP(rr, req)
 
 	expectedCode := http.StatusOK
-	if status := rr.Code; status != expectedCode {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, expectedCode)
-	}
+	assert.Equalf(t, expectedCode, rr.Code, "handler returned wrong status code: got %v want %v",
+		rr.Code, expectedCode)
 
 	expected := "ok\n"
-	if rr.Body.String() != expected {
-		t.Errorf("handler returned unexpected body: got %v want %v",
-			rr.Body.String(), expected)
-	}
+	assert.Equalf(t, expected, rr.Body.String(), "handler returned unexpected body: got %v want %v",
+		rr.Body.String(), expected)
 }
 
 func TestTabletServerHealthzNotConnected(t *testing.T) {
@@ -99,25 +93,19 @@ func TestTabletServerHealthzNotConnected(t *testing.T) {
 	tsv.sm.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, StateNotConnected, "test disconnected")
 
 	req, err := http.NewRequest("GET", "/healthz", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(tsv.healthzHandler)
 	handler.ServeHTTP(rr, req)
 
 	expectedCode := http.StatusInternalServerError
-	if status := rr.Code; status != expectedCode {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, expectedCode)
-	}
+	assert.Equalf(t, expectedCode, rr.Code, "handler returned wrong status code: got %v want %v",
+		rr.Code, expectedCode)
 
 	expected := "500 internal server error: vttablet is not serving\n"
-	if rr.Body.String() != expected {
-		t.Errorf("handler returned unexpected body: got %v want %v",
-			rr.Body.String(), expected)
-	}
+	assert.Equalf(t, expected, rr.Body.String(), "handler returned unexpected body: got %v want %v",
+		rr.Body.String(), expected)
 }
 
 func TestBeginOnReplica(t *testing.T) {
@@ -182,7 +170,7 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	// but it must wait for the unprepared (txid2) to become non-busy.
 	select {
 	case <-ch:
-		t.Fatal("ch should not fire")
+		require.Fail(t, "ch should not fire")
 	case <-time.After(100 * time.Millisecond):
 	}
 	require.EqualValues(t, 1, tsv.te.txPool.scp.active.Size(), "tsv.te.txPool.scp.active.Size()")
@@ -467,7 +455,7 @@ func TestTabletServerConcludeTransaction(t *testing.T) {
 }
 
 func TestTabletServerBeginFail(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.TxPool.Size = 1
@@ -476,7 +464,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	defer db.Close()
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
-	ctx, cancel = context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	ctx, cancel = context.WithTimeout(t.Context(), 1*time.Nanosecond)
 	defer cancel()
 	tsv.Begin(ctx, nil, &target, nil)
 	_, err := tsv.Begin(ctx, nil, &target, nil)
@@ -576,9 +564,6 @@ func TestTabletServerRollback(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	state, err := tsv.Begin(ctx, nil, &target, nil)
 	require.NoError(t, err)
-	if err != nil {
-		t.Fatalf("call TabletServer.Begin failed: %v", err)
-	}
 	_, err = tsv.Execute(ctx, nil, &target, executeSQL, nil, state.TransactionID, 0, nil)
 	require.NoError(t, err)
 	_, err = tsv.Rollback(ctx, &target, state.TransactionID)
@@ -682,7 +667,7 @@ func TestTabletServerWithNilTarget(t *testing.T) {
 
 	// Finally be sure that we return an error now as expected when NOT
 	// using a local context but passing a nil target.
-	nonLocalCtx := context.Background()
+	nonLocalCtx := t.Context()
 	_, err = tsv.Begin(nonLocalCtx, nil, target, nil)
 	require.True(t, errors.Is(err, ErrNoTarget))
 	_, err = tsv.resolveTargetType(nonLocalCtx, target)
@@ -948,10 +933,9 @@ func TestTabletServerStreamExecute(t *testing.T) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	callback := func(*sqltypes.Result) error { return nil }
-	if err := tsv.StreamExecute(ctx, nil, &target, executeSQL, nil, 0, 0, nil, callback); err != nil {
-		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
-			executeSQL, err)
-	}
+	err := tsv.StreamExecute(ctx, nil, &target, executeSQL, nil, 0, 0, nil, callback)
+	require.NoErrorf(t, err, "TabletServer.StreamExecute should success: %s, but get error: %v",
+		executeSQL, err)
 }
 
 func TestTabletServerStreamExecuteComments(t *testing.T) {
@@ -977,19 +961,16 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	ch := tabletenv.StatsLogger.Subscribe("test stats logging")
 	defer tabletenv.StatsLogger.Unsubscribe(ch)
 
-	if err := tsv.StreamExecute(ctx, nil, &target, executeSQL, nil, 0, 0, nil, callback); err != nil {
-		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
-			executeSQL, err)
-	}
+	err := tsv.StreamExecute(ctx, nil, &target, executeSQL, nil, 0, 0, nil, callback)
+	require.NoErrorf(t, err, "TabletServer.StreamExecute should success: %s, but get error: %v",
+		executeSQL, err)
 
 	wantSQL := executeSQL
 	select {
 	case stats := <-ch:
-		if wantSQL != stats.OriginalSQL {
-			t.Errorf("logstats: SQL want %s got %s", wantSQL, stats.OriginalSQL)
-		}
+		assert.Equalf(t, wantSQL, stats.OriginalSQL, "logstats: SQL want %s got %s", wantSQL, stats.OriginalSQL)
 	default:
-		t.Fatal("stats are empty")
+		require.Fail(t, "stats are empty")
 	}
 }
 
@@ -1043,11 +1024,8 @@ func TestTabletServerBeginStreamExecute(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	callback := func(*sqltypes.Result) error { return nil }
 	state, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, executeSQL, nil, 0, nil, callback)
-	if err != nil {
-		t.Fatalf("TabletServer.BeginStreamExecute should success: %s, but get error: %v",
-			executeSQL, err)
-	}
-	require.NoError(t, err)
+	require.NoErrorf(t, err, "TabletServer.BeginStreamExecute should success: %s, but get error: %v",
+		executeSQL, err)
 	_, err = tsv.Commit(ctx, &target, state.TransactionID)
 	require.NoError(t, err)
 }
@@ -1127,8 +1105,8 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
 		func() {
 			close(tx1Started)
-			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2); err != nil {
-				t.Fatal(err)
+			if !assert.NoError(t, waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2)) {
+				return
 			}
 		})
 
@@ -1138,11 +1116,9 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	// tx1.
 	wg.Go(func() {
 		state1, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q1, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1150,16 +1126,14 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	wg.Go(func() {
 		<-tx1Started
 		state2, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q2, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q2, err)
 		// TODO(mberlin): This should actually be in the BeforeFunc() of tx1 but
 		// then the test is hanging. It looks like the MySQL C client library cannot
 		// open a second connection while the request of the first connection is
 		// still pending.
 		<-tx3Finished
 		if _, err := tsv.Commit(ctx, &target, state2.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1167,11 +1141,9 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	wg.Go(func() {
 		<-tx1Started
 		state3, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q3, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 		close(tx3Finished)
 	})
@@ -1180,9 +1152,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 
 	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 1
-	if !ok || got != want {
-		t.Fatalf("only tx2 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
-	}
+	require.Truef(t, ok && got == want, "only tx2 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
 }
 
 func TestDMLQueryWithoutWhereClause(t *testing.T) {
@@ -1271,12 +1241,10 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	// tx1.
 	wg.Go(func() {
 		state1, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q1, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
 
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1287,12 +1255,10 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		<-tx1Started
 
 		state2, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q2, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q2, err)
 
 		if _, err := tsv.Commit(ctx, &target, state2.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1303,12 +1269,10 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		<-tx1Started
 
 		state3, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q3, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
 
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1329,9 +1293,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 
 	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 1
-	if !ok || got != want {
-		t.Fatalf("One out of the three transactions must have waited: ok? %v got: %v want: %v", ok, got, want)
-	}
+	require.Truef(t, ok && got == want, "One out of the three transactions must have waited: ok? %v got: %v want: %v", ok, got, want)
 }
 
 func waitForTxSerializationPendingQueries(tsv *TabletServer, key string, i int) error {
@@ -1397,11 +1359,9 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	// tx1.
 	wg.Go(func() {
 		state1, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q1, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1411,9 +1371,8 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 
 		<-tx1Started
 		_, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
-		if err == nil || vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED || err.Error() != "hot row protection: too many queued transactions (1 >= 1) for the same row (table + WHERE clause: 'test_table where pk = 1 and `name` = 1')" {
-			t.Errorf("tx2 should have failed because there are too many pending requests: %v", err)
-		}
+		assert.ErrorContains(t, err, "hot row protection: too many queued transactions")
+		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 		// No commit necessary because the Begin failed.
 	})
 
@@ -1421,9 +1380,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 
 	got := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 0
-	if got != want {
-		t.Fatalf("tx2 should have failed early and not tracked as serialized: got: %v want: %v", got, want)
-	}
+	require.Equalf(t, want, got, "tx2 should have failed early and not tracked as serialized: got: %v want: %v", got, want)
 }
 
 func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
@@ -1480,12 +1437,10 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	// tx1.
 	wg.Go(func() {
 		state1, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q1, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
 
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1498,26 +1453,21 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		<-tx1Started
 
 		_, _, err := tsv.BeginExecute(ctxTx2, nil, &target, nil, q2, bvTx2, 0, nil)
-		if err == nil || vterrors.Code(err) != vtrpcpb.Code_CANCELED || err.Error() != "context canceled" {
-			t.Errorf("tx2 should have failed because the context was canceled: %v", err)
-		}
+		assert.ErrorContains(t, err, "context canceled")
+		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 		// No commit necessary because the Begin failed.
 	})
 
 	// tx3.
 	wg.Go(func() {
 		// Wait until tx1 and tx2 are pending to make the test deterministic.
-		if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2); err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2))
 
 		state3, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil)
-		if err != nil {
-			t.Errorf("failed to execute query: %s: %s", q3, err)
-		}
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
 
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
-			t.Errorf("call TabletServer.Commit failed: %v", err)
+			assert.NoError(t, err)
 		}
 	})
 
@@ -1531,9 +1481,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 
 	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 2
-	if got != want {
-		t.Fatalf("tx2 and tx3 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
-	}
+	require.Equalf(t, want, got, "tx2 and tx3 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
 }
 
 func TestMessageStream(t *testing.T) {
@@ -1546,9 +1494,7 @@ func TestMessageStream(t *testing.T) {
 		return nil
 	})
 	wantErr := "table nomsg not found in schema"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("tsv.MessageStream: %v, want %s", err, wantErr)
-	}
+	assert.EqualErrorf(t, err, wantErr, "tsv.MessageStream: %v, want %s", err, wantErr)
 
 	// Check that the streaming mechanism works.
 	called := false
@@ -1557,9 +1503,7 @@ func TestMessageStream(t *testing.T) {
 		return io.EOF
 	})
 	require.NoError(t, err)
-	if !called {
-		t.Fatal("callback was not called for MessageStream")
-	}
+	require.True(t, called, "callback was not called for MessageStream")
 }
 
 func TestCheckMySQLGauge(t *testing.T) {
@@ -1580,7 +1524,7 @@ func TestCheckMySQLGauge(t *testing.T) {
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timedout waiting for CheckMySQL to finish")
+			require.Fail(t, "Timedout waiting for CheckMySQL to finish")
 		default:
 			if tsv.checkMysqlGaugeFunc.Get() == 0 {
 				return
@@ -1756,60 +1700,77 @@ func TestQueryAsString(t *testing.T) {
 	assert.Equal(t, want, query)
 }
 
-type testLogger struct {
-	logsMu sync.Mutex
-	logs   []string
+// testLogState holds the shared mutable state for testLogHandler instances.
+// All handlers derived via WithAttrs/WithGroup share the same state so that
+// log messages are captured regardless of which derived handler records them.
+type testLogState struct {
+	mu   sync.Mutex
+	logs []string
+}
 
-	savedInfo  func(msg string, attrs ...slog.Attr)
-	savedError func(msg string, attrs ...slog.Attr)
+// testLogHandler is a slog.Handler that records log messages for test assertions
+// while forwarding them to the original handler. It uses the atomic logger swap
+// mechanism in the log package instead of mutating global function pointers,
+// which avoids data races with background goroutines that call log functions.
+type testLogHandler struct {
+	state   *testLogState
+	wrapped slog.Handler
+}
+
+func (h *testLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.wrapped.Enabled(ctx, level)
+}
+
+func (h *testLogHandler) Handle(ctx context.Context, r slog.Record) error {
+	h.state.mu.Lock()
+	h.state.logs = append(h.state.logs, r.Message)
+	h.state.mu.Unlock()
+	return h.wrapped.Handle(ctx, r)
+}
+
+func (h *testLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &testLogHandler{state: h.state, wrapped: h.wrapped.WithAttrs(attrs)}
+}
+
+func (h *testLogHandler) WithGroup(name string) slog.Handler {
+	return &testLogHandler{state: h.state, wrapped: h.wrapped.WithGroup(name)}
+}
+
+type testLogger struct {
+	state       *testLogState
+	savedLogger *slog.Logger
 }
 
 func newTestLogger() *testLogger {
-	tl := &testLogger{
-		savedInfo:  log.Info,
-		savedError: log.Error,
+	savedLogger := log.SwapLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	state := &testLogState{}
+	handler := &testLogHandler{state: state, wrapped: savedLogger.Handler()}
+	log.SwapLogger(slog.New(handler))
+	return &testLogger{
+		state:       state,
+		savedLogger: savedLogger,
 	}
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	log.Info = tl.recordInfo
-	log.Error = tl.recordError
-	return tl
 }
 
 func (tl *testLogger) Close() {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	log.Info = tl.savedInfo
-	log.Error = tl.savedError
-}
-
-func (tl *testLogger) recordInfo(msg string, attrs ...slog.Attr) {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedInfo(msg, attrs...)
-}
-
-func (tl *testLogger) recordError(msg string, attrs ...slog.Attr) {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	tl.logs = append(tl.logs, msg)
-	tl.savedError(msg, attrs...)
+	log.SwapLogger(tl.savedLogger)
 }
 
 func (tl *testLogger) getLog(i int) string {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	if i < len(tl.logs) {
-		return tl.logs[i]
+	tl.state.mu.Lock()
+	defer tl.state.mu.Unlock()
+	if i < len(tl.state.logs) {
+		return tl.state.logs[i]
 	}
-	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.logs))
+	return fmt.Sprintf("ERROR: log %d/%d does not exist", i, len(tl.state.logs))
 }
 
 func (tl *testLogger) getLogs() []string {
-	tl.logsMu.Lock()
-	defer tl.logsMu.Unlock()
-	return tl.logs
+	tl.state.mu.Lock()
+	defer tl.state.mu.Unlock()
+	logs := make([]string, len(tl.state.logs))
+	copy(logs, tl.state.logs)
+	return logs
 }
 
 func TestHandleExecTabletError(t *testing.T) {
@@ -1830,9 +1791,7 @@ func TestHandleExecTabletError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"select * from test_table\", BindVars: {}"
-	if !strings.Contains(tl.getLog(0), want) {
-		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
-	}
+	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
 }
 
 func TestTerseErrors(t *testing.T) {
@@ -1858,15 +1817,11 @@ func TestTerseErrors(t *testing.T) {
 
 	// The client error message should be redacted (made terse)
 	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("error got '%v', want '%s'", err, wantErr)
-	}
+	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// But the log message should NOT be
 	wantLog := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
-	if wantLog != tl.getLog(0) {
-		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
-	}
+	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
 }
 
 func TestSanitizeLogMessages(t *testing.T) {
@@ -1892,15 +1847,11 @@ func TestSanitizeLogMessages(t *testing.T) {
 
 	// Error is not sanitized, nor truncated
 	wantErr := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is pretty rad my doo, getting swole\\\"\"}"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("error got '%v', want '%s'", err, wantErr)
-	}
+	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// But the log message is sanitized
 	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
-	if wantLog != tl.getLog(0) {
-		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
-	}
+	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
 }
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
@@ -1922,9 +1873,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"select * from test_table\", BindVars: {}"
-	if !strings.Contains(tl.getLog(0), want) {
-		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
-	}
+	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
 }
 
 func TestSanitizeLogMessagesNonSQLError(t *testing.T) {
@@ -1947,9 +1896,7 @@ func TestSanitizeLogMessagesNonSQLError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"select * from test_table where a = :a\", BindVars: {[REDACTED]}"
-	if !strings.Contains(tl.getLog(0), want) {
-		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
-	}
+	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
 }
 
 func TestSanitizeMessagesBindVars(t *testing.T) {
@@ -1973,14 +1920,10 @@ func TestSanitizeMessagesBindVars(t *testing.T) {
 		nil,
 	)
 	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {[REDACTED]}"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("error got '%v', want '%s'", err, wantErr)
-	}
+	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	wantLog := wantErr
-	if wantLog != tl.getLog(0) {
-		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
-	}
+	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
 }
 
 func TestSanitizeMessagesNoBindVars(t *testing.T) {
@@ -1997,9 +1940,7 @@ func TestSanitizeMessagesNoBindVars(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"\", BindVars: {}"
-	if !strings.Contains(tl.getLog(0), want) {
-		t.Errorf("error log '%s', want '%s'", tl.getLog(0), want)
-	}
+	assert.Containsf(t, tl.getLog(0), want, "error log '%s', want '%s'", tl.getLog(0), want)
 }
 
 func TestTruncateErrorLen(t *testing.T) {
@@ -2021,9 +1962,7 @@ func TestTruncateErrorLen(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, err.Error(), want)
 	want = "Sql: \"select 42 from dual\", BindVars: {}"
-	if !strings.Contains(tl.getLog(0), want) {
-		t.Errorf("error log %s, want '%s'", tl.getLog(0), want)
-	}
+	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
 }
 
 func TestTruncateMessages(t *testing.T) {
@@ -2055,15 +1994,11 @@ func TestTruncateMessages(t *testing.T) {
 
 	// Error not truncated
 	wantErr := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("error got '%v', want '%s'", err, wantErr)
-	}
+	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// but log *is* truncated, and sanitized
 	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {[REDACTED]}"
-	if wantLog != tl.getLog(0) {
-		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
-	}
+	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
 
 	env.Parser().SetTruncateErrLen(140)
 	err = tsv.convertAndLogError(
@@ -2076,15 +2011,11 @@ func TestTruncateMessages(t *testing.T) {
 
 	// Error not truncated
 	wantErr = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("error got '%v', want '%s'", err, wantErr)
-	}
+	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// Log not truncated, since our limit is large enough now, but it is still sanitized
 	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
-	if wantLog != tl.getLog(1) {
-		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
-	}
+	assert.Equalf(t, wantLog, tl.getLog(1), "log got '%s', want '%s'", tl.getLog(1), wantLog)
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
@@ -2100,12 +2031,11 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 		sqlerror.NewSQLError(1227, sqlerror.SSClientError, "failover in progress"),
 		nil,
 	)
-	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; !strings.HasPrefix(got, want) {
-		t.Fatalf("'failover in progress' text must never be stripped: got = %v, want = %v", got, want)
-	}
+	got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"
+	require.Truef(t, strings.HasPrefix(got, want), "'failover in progress' text must never be stripped: got = %v, want = %v", got, want)
 
 	// errors during failover aren't logged at all
-	require.Empty(t, tl.logs, "unexpected error log during failover")
+	require.Empty(t, tl.getLogs(), "unexpected error log during failover")
 }
 
 var aclJSON1 = `{
@@ -2171,9 +2101,8 @@ func TestACLHUP(t *testing.T) {
 	require.NoError(t, err)
 
 	groups1 := tableacl.GetCurrentConfig().TableGroups
-	if name1 := groups1[0].GetName(); name1 != "group01" {
-		t.Fatalf("Expected name 'group01', got '%s'", name1)
-	}
+	name1 := groups1[0].GetName()
+	require.Equalf(t, "group01", name1, "Expected name 'group01', got '%s'", name1)
 
 	f, err = os.Create(f.Name())
 	require.NoError(t, err)
@@ -2185,19 +2114,12 @@ func TestACLHUP(t *testing.T) {
 
 	test_loaded_acl := func() {
 		groups2 := tableacl.GetCurrentConfig().TableGroups
-		if len(groups2) != 1 {
-			t.Fatalf("Expected only one table group")
-		}
+		require.Lenf(t, groups2, 1, "Expected only one table group")
 		group2 := groups2[0]
-		if name2 := group2.GetName(); name2 != "group02" {
-			t.Fatalf("Expected name 'group02', got '%s'", name2)
-		}
-		if group2.GetAdmins() == nil {
-			t.Fatalf("Expected 'admins' to exist, but it didn't")
-		}
-		if group2.GetWriters() != nil {
-			t.Fatalf("Expected 'writers' to not exist, got '%s'", group2.GetWriters())
-		}
+		name2 := group2.GetName()
+		require.Equalf(t, "group02", name2, "Expected name 'group02', got '%s'", name2)
+		require.NotNilf(t, group2.GetAdmins(), "Expected 'admins' to exist, but it didn't")
+		require.Nilf(t, group2.GetWriters(), "Expected 'writers' to not exist, got '%s'", group2.GetWriters())
 	}
 
 	test_loaded_acl()
@@ -2224,59 +2146,47 @@ func TestConfigChanges(t *testing.T) {
 	newSize := 10
 	newDuration := time.Duration(10 * time.Millisecond)
 
-	err := tsv.SetPoolSize(context.Background(), newSize)
+	err := tsv.SetPoolSize(t.Context(), newSize)
 	require.NoError(t, err)
 
-	if val := tsv.PoolSize(); val != newSize {
-		t.Errorf("PoolSize: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.qe.conns.Capacity()); val != newSize {
-		t.Errorf("tsv.qe.connPool.Capacity: %d, want %d", val, newSize)
-	}
+	val := tsv.PoolSize()
+	assert.Equalf(t, newSize, val, "PoolSize: %d, want %d", val, newSize)
+	valCap := int(tsv.qe.conns.Capacity())
+	assert.Equalf(t, newSize, valCap, "tsv.qe.connPool.Capacity: %d, want %d", valCap, newSize)
 
-	err = tsv.SetStreamPoolSize(context.Background(), newSize)
+	err = tsv.SetStreamPoolSize(t.Context(), newSize)
 	require.NoError(t, err)
 
-	if val := tsv.StreamPoolSize(); val != newSize {
-		t.Errorf("StreamPoolSize: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.qe.streamConns.Capacity()); val != newSize {
-		t.Errorf("tsv.qe.streamConnPool.Capacity: %d, want %d", val, newSize)
-	}
+	val = tsv.StreamPoolSize()
+	assert.Equalf(t, newSize, val, "StreamPoolSize: %d, want %d", val, newSize)
+	valCap = int(tsv.qe.streamConns.Capacity())
+	assert.Equalf(t, newSize, valCap, "tsv.qe.streamConnPool.Capacity: %d, want %d", valCap, newSize)
 
-	err = tsv.SetTxPoolSize(context.Background(), newSize)
+	err = tsv.SetTxPoolSize(t.Context(), newSize)
 	require.NoError(t, err)
 
-	if val := tsv.TxPoolSize(); val != newSize {
-		t.Errorf("TxPoolSize: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.te.txPool.scp.Capacity()); val != newSize {
-		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
-	}
+	val = tsv.TxPoolSize()
+	assert.Equalf(t, newSize, val, "TxPoolSize: %d, want %d", val, newSize)
+	valCap = int(tsv.te.txPool.scp.Capacity())
+	assert.Equalf(t, newSize, valCap, "tsv.te.txPool.pool.Capacity: %d, want %d", valCap, newSize)
 
 	tsv.Config().SetTxTimeoutForWorkload(newDuration, querypb.ExecuteOptions_OLTP)
-	if val := tsv.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); val != newDuration {
-		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
-	}
-	if val := tsv.te.txPool.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); val != newDuration {
-		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
-	}
+	valDur := tsv.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
+	assert.Equalf(t, newDuration, valDur, "tsv.TxTimeout: %v, want %v", valDur, newDuration)
+	valDur = tsv.te.txPool.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP)
+	assert.Equalf(t, newDuration, valDur, "tsv.te.Pool().Timeout: %v, want %v", valDur, newDuration)
 
 	tsv.SetMaxResultSize(newSize)
-	if val := tsv.MaxResultSize(); val != newSize {
-		t.Errorf("MaxResultSize: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.qe.maxResultSize.Load()); val != newSize {
-		t.Errorf("tsv.qe.maxResultSize.Get: %d, want %d", val, newSize)
-	}
+	val = tsv.MaxResultSize()
+	assert.Equalf(t, newSize, val, "MaxResultSize: %d, want %d", val, newSize)
+	val = int(tsv.qe.maxResultSize.Load())
+	assert.Equalf(t, newSize, val, "tsv.qe.maxResultSize.Get: %d, want %d", val, newSize)
 
 	tsv.SetWarnResultSize(newSize)
-	if val := tsv.WarnResultSize(); val != newSize {
-		t.Errorf("WarnResultSize: %d, want %d", val, newSize)
-	}
-	if val := int(tsv.qe.warnResultSize.Load()); val != newSize {
-		t.Errorf("tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
-	}
+	val = tsv.WarnResultSize()
+	assert.Equalf(t, newSize, val, "WarnResultSize: %d, want %d", val, newSize)
+	val = int(tsv.qe.warnResultSize.Load())
+	assert.Equalf(t, newSize, val, "tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
 }
 
 func TestReserveBeginExecute(t *testing.T) {

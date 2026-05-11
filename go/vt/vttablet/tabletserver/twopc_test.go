@@ -18,10 +18,10 @@ package tabletserver
 
 import (
 	"encoding/json"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -40,23 +40,15 @@ func TestReadAllRedo(t *testing.T) {
 	tpc := tsv.te.twoPC
 
 	conn, err := tsv.qe.conns.Get(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Recycle()
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{})
 	prepared, failed, err := tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var want []*tx.PreparedTx
-	if !reflect.DeepEqual(prepared, want) {
-		t.Errorf("ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
-	}
-	if len(failed) != 0 {
-		t.Errorf("ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
-	}
+	assert.Equalf(t, want, prepared, "ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
+	assert.Emptyf(t, failed, "ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -75,20 +67,14 @@ func TestReadAllRedo(t *testing.T) {
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01"},
 		Time:    time.Unix(0, 1),
 	}}
-	if !reflect.DeepEqual(prepared, want) {
-		t.Errorf("ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
-	}
-	if len(failed) != 0 {
-		t.Errorf("ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
-	}
+	assert.Equalf(t, want, prepared, "ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
+	assert.Emptyf(t, failed, "ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -113,20 +99,14 @@ func TestReadAllRedo(t *testing.T) {
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
 		Time:    time.Unix(0, 1),
 	}}
-	if !reflect.DeepEqual(prepared, want) {
-		t.Errorf("ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
-	}
-	if len(failed) != 0 {
-		t.Errorf("ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
-	}
+	assert.Equalf(t, want, prepared, "ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
+	assert.Emptyf(t, failed, "ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -157,9 +137,7 @@ func TestReadAllRedo(t *testing.T) {
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
@@ -169,12 +147,8 @@ func TestReadAllRedo(t *testing.T) {
 		Queries: []string{"stmt11"},
 		Time:    time.Unix(0, 1),
 	}}
-	if !reflect.DeepEqual(prepared, want) {
-		t.Errorf("ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
-	}
-	if len(failed) != 0 {
-		t.Errorf("ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
-	}
+	assert.Equalf(t, want, prepared, "ReadAllRedo: %s, want %s", jsonStr(prepared), jsonStr(want))
+	assert.Emptyf(t, failed, "ReadAllRedo (failed): %v, must be empty", jsonStr(failed))
 
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -223,9 +197,7 @@ func TestReadAllRedo(t *testing.T) {
 		}},
 	})
 	prepared, failed, err = tpc.ReadAllRedo(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.PreparedTx{{
 		Dtid:    "dtid0",
 		Queries: []string{"stmt01", "stmt02"},
@@ -258,20 +230,14 @@ func TestReadAllTransactions(t *testing.T) {
 	tpc := tsv.te.twoPC
 
 	conn, err := tsv.qe.conns.Get(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Recycle()
 
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{})
 	distributed, err := tpc.ReadAllTransactions(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	var want []*tx.DistributedTx
-	if !reflect.DeepEqual(distributed, want) {
-		t.Errorf("ReadAllTransactions: %s, want %s", jsonStr(distributed), jsonStr(want))
-	}
+	assert.Equalf(t, want, distributed, "ReadAllTransactions: %s, want %s", jsonStr(distributed), jsonStr(want))
 
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -290,9 +256,7 @@ func TestReadAllTransactions(t *testing.T) {
 		}},
 	})
 	distributed, err = tpc.ReadAllTransactions(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
@@ -302,9 +266,7 @@ func TestReadAllTransactions(t *testing.T) {
 			Shard:    "shard01",
 		}},
 	}}
-	if !reflect.DeepEqual(distributed, want) {
-		t.Errorf("ReadAllTransactions:\n%s, want\n%s", jsonStr(distributed), jsonStr(want))
-	}
+	assert.Equalf(t, want, distributed, "ReadAllTransactions:\n%s, want\n%s", jsonStr(distributed), jsonStr(want))
 
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -329,9 +291,7 @@ func TestReadAllTransactions(t *testing.T) {
 		}},
 	})
 	distributed, err = tpc.ReadAllTransactions(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
@@ -344,9 +304,7 @@ func TestReadAllTransactions(t *testing.T) {
 			Shard:    "shard02",
 		}},
 	}}
-	if !reflect.DeepEqual(distributed, want) {
-		t.Errorf("ReadAllTransactions:\n%s, want\n%s", jsonStr(distributed), jsonStr(want))
-	}
+	assert.Equalf(t, want, distributed, "ReadAllTransactions:\n%s, want\n%s", jsonStr(distributed), jsonStr(want))
 
 	db.AddQuery(tpc.readAllTransactions, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -377,9 +335,7 @@ func TestReadAllTransactions(t *testing.T) {
 		}},
 	})
 	distributed, err = tpc.ReadAllTransactions(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	want = []*tx.DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
@@ -400,9 +356,7 @@ func TestReadAllTransactions(t *testing.T) {
 			Shard:    "shard11",
 		}},
 	}}
-	if !reflect.DeepEqual(distributed, want) {
-		t.Errorf("ReadAllTransactions:\n%s, want\n%s", jsonStr(distributed), jsonStr(want))
-	}
+	assert.Equalf(t, want, distributed, "ReadAllTransactions:\n%s, want\n%s", jsonStr(distributed), jsonStr(want))
 }
 
 func jsonStr(v any) string {

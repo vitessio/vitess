@@ -253,9 +253,7 @@ func TestUint64Key(t *testing.T) {
 
 	f := func(k Uint64Key, x string) {
 		hexK := hex.EncodeToString(k.Bytes())
-		if x != hexK {
-			t.Errorf("byte mismatch %#v != %#v", k, x)
-		}
+		assert.Equalf(t, x, hexK, "byte mismatch %#v != %#v", k, x)
 	}
 
 	f(k0, "0000000000000000")

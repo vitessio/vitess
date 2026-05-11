@@ -21,9 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"testing"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -32,7 +32,7 @@ import (
 )
 
 func TestFakeSpan(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// It should be safe to call all the usual methods as if a plugin were installed.
 	span1, ctx := NewSpan(ctx, "label")
@@ -87,13 +87,13 @@ func TestNewFromString(t *testing.T) {
 			parent:      "parent",
 			label:       "non-empty parent",
 			expectedLog: "[key: sql-statement-type values:non-empty parent]\n",
-			context:     context.Background(),
+			context:     t.Context(),
 			isPresent:   false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.label, func(t *testing.T) {
-			span, ctx, err := NewFromString(context.Background(), tt.parent, tt.label)
+			span, ctx, err := NewFromString(t.Context(), tt.parent, tt.label)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 				require.NotEmpty(t, span)
@@ -128,10 +128,6 @@ func TestNilCloser(t *testing.T) {
 type fakeTracer struct {
 	name string
 	log  []string
-}
-
-func (f *fakeTracer) GetOpenTracingTracer() opentracing.Tracer {
-	return opentracing.GlobalTracer()
 }
 
 func (f *fakeTracer) NewFromString(ctx context.Context, parent, label string) (Span, context.Context, error) {
@@ -183,6 +179,38 @@ func (m *mockSpan) Finish() {
 func (m *mockSpan) Annotate(key string, value any) {
 	m.tracer.log = append(m.tracer.log, fmt.Sprintf("key: %v values:%v", key, value))
 	fmt.Println(m.tracer.log)
+}
+
+// captureOutput redirects stdout or stderr to capture output from f.
+func captureOutput(t *testing.T, f func(), captureStdout bool) string {
+	oldVal := os.Stderr
+	if captureStdout {
+		oldVal = os.Stdout
+	}
+	t.Cleanup(func() {
+		if captureStdout {
+			os.Stdout = oldVal
+		} else {
+			os.Stderr = oldVal
+		}
+	})
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { r.Close() })
+	if captureStdout {
+		os.Stdout = w
+	} else {
+		os.Stderr = w
+	}
+
+	f()
+
+	w.Close()
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	return string(got)
 }
 
 type fakeStringer struct {

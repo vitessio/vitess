@@ -270,7 +270,7 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) StopReplicationAndGet
 }
 
 func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                     string
@@ -1369,6 +1369,101 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 			}},
 			shouldErr: false,
 		},
+		{
+			// ignoredTablets contains a stale alias not present in tabletMap.
+			// The old code computed numGoRoutines as len(tabletMap) - ignoredTablets.Len(),
+			// which would be 2 - 2 = 0 instead of the correct 1.
+			name:       "stale alias in ignoredTablets does not miscount goroutines",
+			durability: policy.DurabilityNone,
+			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
+				stopReplicationAndGetStatusResults: map[string]*struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Err        error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-9"},
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			// zone1-0000000101 is in the map, but zone1-0000000999 is stale/not in the map.
+			// Old code: numGoRoutines = 2 - 2 = 0 (wrong). New code: numGoRoutines = 1 (correct).
+			ignoredTablets: sets.New[string]("zone1-0000000101", "zone1-0000000999"),
+			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+					After:  &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-9"},
+				},
+			},
+			expectedTakingBackup:     map[string]bool{"zone1-0000000100": false},
+			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expectedTabletsReachable: []*topodatapb.Tablet{{
+				Type: topodatapb.TabletType_REPLICA,
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}},
+			shouldErr: false,
+		},
+		{
+			// All tablets in the map are in the ignored set — the new precondition
+			// guard should return FAILED_PRECONDITION instead of silently proceeding
+			// with numGoRoutines=0 / requiredSuccesses=-1.
+			name:       "all tablets ignored returns FAILED_PRECONDITION",
+			durability: policy.DurabilityNone,
+			tmc:        &stopReplicationAndBuildStatusMapsTestTMClient{},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Type: topodatapb.TabletType_REPLICA,
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			ignoredTablets: sets.New[string]("zone1-0000000100", "zone1-0000000101"),
+			shouldErr:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1484,6 +1579,97 @@ func TestReplicaWasRunning(t *testing.T) {
 	}
 }
 
+func TestReplicaIOThreadWasRunning(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		in        *replicationdatapb.StopReplicationStatus
+		expected  bool
+		shouldErr bool
+	}{
+		{
+			name: "io thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateRunning),
+					SqlState: int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "io thread connecting without an io error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "io thread connecting with an io error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:     int32(replication.ReplicationStateConnecting),
+					LastIoError: "dial tcp 127.0.0.1:3306: connect: connection refused",
+					SqlState:    int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "only sql thread running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateStopped),
+					SqlState: int32(replication.ReplicationStateRunning),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "no replication threads running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateStopped),
+					SqlState: int32(replication.ReplicationStateStopped),
+				},
+			},
+			expected: false,
+		},
+		{
+			name:      "passing nil pointer results in an error",
+			in:        nil,
+			shouldErr: true,
+		},
+		{
+			name: "status.Before is nil results in an error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: nil,
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual, err := replicaIOThreadWasRunning(tt.in)
+			if tt.shouldErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 // waitForRelayLogsToApplyTestTMClient implements just the WaitForPosition
 // method of the tmclient.TabletManagerClient interface for
 // TestWaitForRelayLogsToApply, with the necessary trackers to facilitate
@@ -1506,7 +1692,7 @@ func (fake *waitForRelayLogsToApplyTestTMClient) WaitForPosition(_ context.Conte
 func TestWaitForRelayLogsToApply(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name                    string
 		client                  *waitForRelayLogsToApplyTestTMClient

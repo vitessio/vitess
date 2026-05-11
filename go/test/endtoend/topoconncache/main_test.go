@@ -29,8 +29,9 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -50,13 +51,13 @@ var (
 					) Engine=InnoDB
 `
 	commonTabletArg = []string{
-		utils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		utils.GetFlagVariantForTests("--degraded-threshold"), "5s",
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		utils.GetFlagVariantForTests("--watch-replication-stream"),
-		utils.GetFlagVariantForTests("--enable-replication-reporter"),
-		utils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
-		utils.GetFlagVariantForTests("--binlog-player-protocol"), "grpc",
+		"--vreplication-retry-delay", "1s",
+		"--degraded-threshold", "5s",
+		"--lock-tables-timeout", "5s",
+		"--watch-replication-stream",
+		"--enable-replication-reporter",
+		"--serving-state-grace-period", "1s",
+		"--binlog-player-protocol", "grpc",
 	}
 	vSchema = `
 		{
@@ -242,7 +243,7 @@ func TestMain(m *testing.M) {
 func testURL(t *testing.T, url string, testCaseName string) {
 	statusCode := getStatusForURL(url)
 	if got, want := statusCode, 200; got != want {
-		t.Errorf("\nurl: %v\nstatus code: %v \nwant %v for %s", url, got, want, testCaseName)
+		assert.Equalf(t, want, got, "\nurl: %v\nstatus code: %v \nwant %v for %s", url, got, want, testCaseName)
 	}
 }
 

@@ -23,12 +23,8 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -135,9 +131,7 @@ func TestOpen(t *testing.T) {
 
 	for _, tc := range testcases {
 		c, err := drv{}.Open(tc.connStr)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		defer c.Close()
 
 		wantc := tc.conn
@@ -145,74 +139,52 @@ func TestOpen(t *testing.T) {
 		newc.cfg.Address = ""
 		newc.conn = nil
 		newc.session = nil
-		if !reflect.DeepEqual(&newc, wantc) {
-			t.Errorf("%v: conn:\n%+v, want\n%+v", tc.desc, &newc, wantc)
-		}
+		require.Equal(t, wantc, &newc, tc.desc)
 	}
 }
 
 func TestOpen_UnregisteredProtocol(t *testing.T) {
 	_, err := drv{}.Open(`{"protocol": "none"}`)
-	want := "no dialer registered for VTGate protocol none"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "no dialer registered for VTGate protocol none")
 }
 
 func TestOpen_InvalidJson(t *testing.T) {
 	_, err := drv{}.Open(`{`)
-	want := "unexpected end of JSON input"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, want %s", err, want)
-	}
+	require.ErrorContains(t, err, "unexpected end of JSON input")
 }
 
 func TestBeginIsolation(t *testing.T) {
 	db, err := Open(testAddress, "@primary")
 	require.NoError(t, err)
 	defer db.Close()
-	_, err = db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
-	want := errIsolationUnsupported.Error()
-	if err == nil || err.Error() != want {
-		t.Errorf("Begin: %v, want %s", err, want)
-	}
+	_, err = db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	require.EqualError(t, err, errIsolationUnsupported.Error())
 }
 
 func TestExec(t *testing.T) {
 	db, err := Open(testAddress, "@rdonly")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	s, err := db.Prepare("request")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer s.Close()
 
 	r, err := s.Exec(int64(0))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if v, _ := r.LastInsertId(); v != 72 {
-		t.Errorf("insert id: %d, want 72", v)
-	}
-	if v, _ := r.RowsAffected(); v != 123 {
-		t.Errorf("rows affected: %d, want 123", v)
-	}
+	require.NoError(t, err)
+	v, err := r.LastInsertId()
+	require.NoError(t, err)
+	require.EqualValues(t, 72, v)
+	v, err = r.RowsAffected()
+	require.NoError(t, err)
+	require.EqualValues(t, 123, v)
 
 	s2, err := db.Prepare("none")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer s2.Close()
 
 	_, err = s2.Exec()
-	want := "no match for: none"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, does not contain %s", err, want)
-	}
+	require.ErrorContains(t, err, "no match for: none")
 }
 
 func TestConfigurationToJSON(t *testing.T) {
@@ -225,31 +197,20 @@ func TestConfigurationToJSON(t *testing.T) {
 	want := `{"Protocol":"some-invalid-protocol","Address":"","Target":"ks2","Streaming":true,"DefaultLocation":"Local","SessionToken":""}`
 
 	json, err := config.toJSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if json != want {
-		t.Errorf("Configuration.JSON(): got: %v want: %v", json, want)
-	}
+	require.NoError(t, err)
+	require.Equal(t, want, json)
 }
 
 func TestExecStreamingNotAllowed(t *testing.T) {
 	db, err := OpenForStreaming(testAddress, "@rdonly")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	s, err := db.Prepare("request")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer s.Close()
 
 	_, err = s.Exec(int64(0))
-	want := "Exec not allowed for streaming connections"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, does not contain %s", err, want)
-	}
+	require.ErrorContains(t, err, "Exec not allowed for streaming connections")
 }
 
 func TestQuery(t *testing.T) {
@@ -280,77 +241,54 @@ func TestQuery(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		db, err := OpenWithConfiguration(tc.config)
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		defer db.Close()
+		t.Run(tc.desc, func(t *testing.T) {
+			db, err := OpenWithConfiguration(tc.config)
+			require.NoError(t, err)
+			defer db.Close()
 
-		s, err := db.Prepare(tc.requestName)
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		defer s.Close()
+			s, err := db.Prepare(tc.requestName)
+			require.NoError(t, err)
+			defer s.Close()
 
-		r, err := s.Query(int64(0))
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		defer r.Close()
-		cols, err := r.Columns()
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		wantCols := []string{
-			"field1",
-			"field2",
-		}
-		if !reflect.DeepEqual(cols, wantCols) {
-			t.Errorf("%v: cols: %v, want %v", tc.desc, cols, wantCols)
-		}
-		count := 0
-		wantValues := []struct {
-			field1 int16
-			field2 string
-		}{{1, "value1"}, {2, "value2"}}
-		for r.Next() {
-			var field1 int16
-			var field2 string
-			err := r.Scan(&field1, &field2)
-			if err != nil {
-				t.Errorf("%v: %v", tc.desc, err)
+			r, err := s.Query(int64(0))
+			require.NoError(t, err)
+			defer r.Close()
+			cols, err := r.Columns()
+			require.NoError(t, err)
+			wantCols := []string{
+				"field1",
+				"field2",
 			}
-			if want := wantValues[count].field1; field1 != want {
-				t.Errorf("%v: wrong value for field1: got: %v want: %v", tc.desc, field1, want)
+			require.Equal(t, wantCols, cols)
+			count := 0
+			wantValues := []struct {
+				field1 int16
+				field2 string
+			}{{1, "value1"}, {2, "value2"}}
+			for r.Next() {
+				var field1 int16
+				var field2 string
+				err := r.Scan(&field1, &field2)
+				require.NoError(t, err)
+				require.Equal(t, wantValues[count].field1, field1)
+				require.Equal(t, wantValues[count].field2, field2)
+				count++
 			}
-			if want := wantValues[count].field2; field2 != want {
-				t.Errorf("%v: wrong value for field2: got: %v want: %v", tc.desc, field2, want)
-			}
-			count++
-		}
-		if count != len(wantValues) {
-			t.Errorf("%v: count: %d, want %d", tc.desc, count, len(wantValues))
-		}
+			require.Equal(t, len(wantValues), count)
 
-		s2, err := db.Prepare("none")
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		defer s2.Close()
+			s2, err := db.Prepare("none")
+			require.NoError(t, err)
+			defer s2.Close()
 
-		rows, err := s2.Query()
-		want := "no match for: none"
-		if tc.config.Streaming && err == nil {
-			defer rows.Close()
-			// gRPC requires to consume the stream first before the error becomes visible.
-			if rows.Next() {
-				t.Errorf("%v: query should not have returned anything but did.", tc.desc)
+			rows, err := s2.Query()
+			if tc.config.Streaming && err == nil {
+				defer rows.Close()
+				// gRPC requires to consume the stream first before the error becomes visible.
+				require.False(t, rows.Next())
+				err = rows.Err()
 			}
-			err = rows.Err()
-		}
-		if err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("%v: err: %v, does not contain %s", tc.desc, err, want)
-		}
+			require.ErrorContains(t, err, "no match for: none")
+		})
 	}
 }
 
@@ -427,11 +365,10 @@ func TestBindVars(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			bv, err := converter.bindVarsFromNamedValues(tc.in)
 			if tc.outErr != "" {
-				assert.EqualError(t, err, tc.outErr)
+				require.EqualError(t, err, tc.outErr)
 			} else {
-				if !reflect.DeepEqual(bv, tc.out) {
-					t.Errorf("%s: %v, want %v", tc.desc, bv, tc.out)
-				}
+				require.NoError(t, err)
+				require.Equal(t, tc.out, bv)
 			}
 		})
 	}
@@ -475,75 +412,57 @@ func TestDatetimeQuery(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		db, err := OpenWithConfiguration(tc.config)
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		defer db.Close()
+		t.Run(tc.desc, func(t *testing.T) {
+			db, err := OpenWithConfiguration(tc.config)
+			require.NoError(t, err)
+			defer db.Close()
 
-		s, err := db.Prepare(tc.requestName)
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		defer s.Close()
+			s, err := db.Prepare(tc.requestName)
+			require.NoError(t, err)
+			defer s.Close()
 
-		r, err := s.Query(0)
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		defer r.Close()
+			r, err := s.Query(0)
+			require.NoError(t, err)
+			defer r.Close()
 
-		cols, err := r.Columns()
-		if err != nil {
-			t.Errorf("%v: %v", tc.desc, err)
-		}
-		wantCols := []string{
-			"fieldDatetime",
-			"fieldDate",
-		}
-		if !reflect.DeepEqual(cols, wantCols) {
-			t.Errorf("%v: cols: %v, want %v", tc.desc, cols, wantCols)
-		}
-
-		location := time.UTC
-		if tc.config.DefaultLocation != "" {
-			location, err = time.LoadLocation(tc.config.DefaultLocation)
-			if err != nil {
-				t.Errorf("%v: %v", tc.desc, err)
+			cols, err := r.Columns()
+			require.NoError(t, err)
+			wantCols := []string{
+				"fieldDatetime",
+				"fieldDate",
 			}
-		}
+			require.Equal(t, wantCols, cols)
 
-		count := 0
-		wantValues := []struct {
-			fieldDatetime time.Time
-			fieldDate     time.Time
-		}{{
-			time.Date(2009, 3, 29, 17, 22, 11, 0, location),
-			time.Date(2006, 7, 2, 0, 0, 0, 0, location),
-		}, {
-			time.Time{},
-			time.Time{},
-		}}
+			location := time.UTC
+			if tc.config.DefaultLocation != "" {
+				location, err = time.LoadLocation(tc.config.DefaultLocation)
+				require.NoError(t, err)
+			}
 
-		for r.Next() {
-			var fieldDatetime time.Time
-			var fieldDate time.Time
-			err := r.Scan(&fieldDatetime, &fieldDate)
-			if err != nil {
-				t.Errorf("%v: %v", tc.desc, err)
-			}
-			if want := wantValues[count].fieldDatetime; fieldDatetime != want {
-				t.Errorf("%v: wrong value for fieldDatetime: got: %v want: %v", tc.desc, fieldDatetime, want)
-			}
-			if want := wantValues[count].fieldDate; fieldDate != want {
-				t.Errorf("%v: wrong value for fieldDate: got: %v want: %v", tc.desc, fieldDate, want)
-			}
-			count++
-		}
+			count := 0
+			wantValues := []struct {
+				fieldDatetime time.Time
+				fieldDate     time.Time
+			}{{
+				time.Date(2009, 3, 29, 17, 22, 11, 0, location),
+				time.Date(2006, 7, 2, 0, 0, 0, 0, location),
+			}, {
+				time.Time{},
+				time.Time{},
+			}}
 
-		if count != len(wantValues) {
-			t.Errorf("%v: count: %d, want %d", tc.desc, count, len(wantValues))
-		}
+			for r.Next() {
+				var fieldDatetime time.Time
+				var fieldDate time.Time
+				err := r.Scan(&fieldDatetime, &fieldDate)
+				require.NoError(t, err)
+				require.Equal(t, wantValues[count].fieldDatetime, fieldDatetime)
+				require.Equal(t, wantValues[count].fieldDate, fieldDate)
+				count++
+			}
+
+			require.Equal(t, len(wantValues), count)
+		})
 	}
 }
 
@@ -555,76 +474,49 @@ func TestTx(t *testing.T) {
 	}
 
 	db, err := OpenWithConfiguration(c)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	tx, err := db.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	s, err := tx.Prepare("txRequest")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer s.Close()
 
 	_, err = s.Exec(int64(0))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	err = tx.Commit()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// Commit on committed transaction is caught by Golang sql package.
 	// We actually don't have to cover this in our code.
 	err = tx.Commit()
-	if err != sql.ErrTxDone {
-		t.Errorf("err: %v, not ErrTxDone", err)
-	}
+	require.ErrorIs(t, err, sql.ErrTxDone)
 
 	// Test rollback now.
 	tx, err = db.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	s, err = tx.Prepare("txRequest")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer s.Close()
 	r, err := s.Query(int64(0))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer r.Close()
 	err = tx.Rollback()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// Rollback on rolled back transaction is caught by Golang sql package.
 	// We actually don't have to cover this in our code.
 	err = tx.Rollback()
-	if err != sql.ErrTxDone {
-		t.Errorf("err: %v, not ErrTxDone", err)
-	}
+	require.ErrorIs(t, err, sql.ErrTxDone)
 }
 
 func TestTxExecStreamingNotAllowed(t *testing.T) {
 	db, err := OpenForStreaming(testAddress, "@rdonly")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	_, err = db.Begin()
-	want := "Exec not allowed for streaming connection"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, does not contain %s", err, want)
-	}
+	require.ErrorContains(t, err, "Exec not allowed for streaming connection")
 }
 
 func TestSessionToken(t *testing.T) {
@@ -634,34 +526,24 @@ func TestSessionToken(t *testing.T) {
 		Target:   "@primary",
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	db, err := OpenWithConfiguration(c)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
 	tx, err := db.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	s, err := tx.Prepare("txRequest")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer s.Close()
 
 	_, err = s.Exec(int64(0))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	sessionToken, err := SessionTokenFromTx(ctx, tx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	distributedTxConfig := Configuration{
 		Address:      testAddress,
@@ -670,63 +552,41 @@ func TestSessionToken(t *testing.T) {
 	}
 
 	sameTx, sameValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	newS, err := sameTx.Prepare("distributedTxRequest")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer newS.Close()
 
 	_, err = newS.Exec(int64(1))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = sameValidationFunc()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// enforce that Rollback can't be called on the distributed tx
 	noRollbackTx, noRollbackValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = noRollbackValidationFunc()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = noRollbackTx.Rollback()
-	if err == nil || err.Error() != "calling Rollback from a distributed tx is not allowed" {
-		t.Fatal(err)
-	}
+	require.EqualError(t, err, "calling Rollback from a distributed tx is not allowed")
 
 	// enforce that Commit can't be called on the distributed tx
 	noCommitTx, noCommitValidationFunc, err := DistributedTxFromSessionToken(ctx, distributedTxConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = noCommitValidationFunc()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	err = noCommitTx.Commit()
-	if err == nil || err.Error() != "calling Commit from a distributed tx is not allowed" {
-		t.Fatal(err)
-	}
+	require.EqualError(t, err, "calling Commit from a distributed tx is not allowed")
 
 	// finally commit the original tx
 	err = tx.Commit()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 }
 
 // TestStreamExec tests that different kinds of query present in `execMap` can run through streaming api
@@ -775,12 +635,10 @@ func TestConnSeparateSessions(t *testing.T) {
 	}
 
 	db, err := OpenWithConfiguration(c)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	// Each new connection starts a fresh session pointed at @primary. When the
@@ -792,9 +650,7 @@ func TestConnSeparateSessions(t *testing.T) {
 	var conns []*sql.Conn
 	for range 3 {
 		sconn, err := db.Conn(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		conns = append(conns, sconn)
 
 		targets := []string{targetString(t, sconn)}
@@ -820,12 +676,10 @@ func TestConnReuseSessions(t *testing.T) {
 	}
 
 	db, err := OpenWithConfiguration(c)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	// Pull an individual connection from the pool and execute a USE, resulting
@@ -833,9 +687,7 @@ func TestConnReuseSessions(t *testing.T) {
 	// continuously in this test and verify that we keep pulling the same
 	// connection with its target string altered.
 	sconn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	_, err = sconn.ExecContext(ctx, "use @rdonly")
 	require.NoError(t, err)
@@ -844,9 +696,7 @@ func TestConnReuseSessions(t *testing.T) {
 	var targets []string
 	for range 3 {
 		sconn, err := db.Conn(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		targets = append(targets, targetString(t, sconn))
 		require.NoError(t, sconn.Close())

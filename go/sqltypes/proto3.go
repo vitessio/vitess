@@ -94,17 +94,25 @@ func proto3ToRows(fields []*querypb.Field, rows []*querypb.Row) [][]Value {
 	return result
 }
 
-// ResultToProto3 converts Result to proto3.
 func ResultToProto3(qr *Result) *querypb.QueryResult {
 	if qr == nil {
 		return nil
+	}
+	// This read is susceptible to TOCTOU if proto3Rows is populated
+	// concurrently, but the worst case is a redundant RowsToProto3 call.
+	// In the consolidation path this can't happen today (the leader sets
+	// the cached value before releasing the RWMutex), but the fallback is
+	// harmless.
+	rows := qr.proto3Rows
+	if rows == nil {
+		rows = RowsToProto3(qr.Rows)
 	}
 	return &querypb.QueryResult{
 		Fields:              qr.Fields,
 		RowsAffected:        qr.RowsAffected,
 		InsertId:            qr.InsertID,
 		InsertIdChanged:     qr.InsertIDChanged,
-		Rows:                RowsToProto3(qr.Rows),
+		Rows:                rows,
 		Info:                qr.Info,
 		SessionStateChanges: qr.SessionStateChanges,
 	}

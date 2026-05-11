@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 type WriteMetrics struct {
@@ -177,13 +176,13 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
+			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
+			"--ddl-strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -367,7 +366,7 @@ func checkTable(t *testing.T, showTableName string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
