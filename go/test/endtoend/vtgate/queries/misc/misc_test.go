@@ -466,7 +466,7 @@ func assertQueryLogLineContains(t *testing.T, queryMarker string, substrings ...
 		if err != nil {
 			return false
 		}
-		for _, line := range strings.Split(string(data), "\n") {
+		for line := range strings.SplitSeq(string(data), "\n") {
 			if !strings.Contains(line, queryMarker) {
 				continue
 			}
@@ -490,7 +490,7 @@ func assertVtgateMetricsLineContains(t *testing.T, metric string, substrings ...
 	require.Equal(t, http.StatusOK, status)
 	assert.Contains(t, metrics, metric)
 
-	for _, line := range strings.Split(metrics, "\n") {
+	for line := range strings.SplitSeq(metrics, "\n") {
 		if !strings.Contains(line, metric) {
 			continue
 		}
