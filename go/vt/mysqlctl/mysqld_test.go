@@ -17,6 +17,8 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -25,10 +27,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	_ "vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlclient"
+	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
 
 type testcase struct {
@@ -112,6 +118,70 @@ func TestParseVersionString(t *testing.T) {
 			assert.Failf(t, "ParseVersionString failed", "ParseVersionString failed for: %#v, Got: %#v, %#v Expected: %#v, %#v", testcase.versionString, v, f, testcase.version, testcase.flavor)
 		}
 	}
+}
+
+// shutdownRecordingMysqlCtlServer records remote Shutdown requests from Mysqld.
+type shutdownRecordingMysqlCtlServer struct {
+	mysqlctlpb.UnimplementedMysqlCtlServer
+
+	// shutdownRequests carries the remote shutdown request.
+	shutdownRequests chan *mysqlctlpb.ShutdownRequest
+}
+
+// Shutdown records the request and returns a successful response.
+func (s *shutdownRecordingMysqlCtlServer) Shutdown(ctx context.Context, request *mysqlctlpb.ShutdownRequest) (*mysqlctlpb.ShutdownResponse, error) {
+	s.shutdownRequests <- request
+
+	return &mysqlctlpb.ShutdownResponse{}, nil
+}
+
+// TestMysqldShutdownForwardsTimeoutToRemoteMysqlctld verifies that the remote
+// shutdown path preserves the caller's timeout.
+func TestMysqldShutdownForwardsTimeoutToRemoteMysqlctld(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	oldSocketFile := socketFile
+	t.Cleanup(func() {
+		socketFile = oldSocketFile
+	})
+
+	tempSocketFile, err := os.CreateTemp("/tmp", "mysqlctld-*.sock")
+	require.NoError(t, err)
+	require.NoError(t, tempSocketFile.Close())
+	require.NoError(t, os.Remove(tempSocketFile.Name()))
+	t.Cleanup(func() {
+		_ = os.Remove(tempSocketFile.Name())
+	})
+
+	socketPath := tempSocketFile.Name()
+	listener, err := net.Listen("unix", socketPath)
+	require.NoError(t, err)
+
+	server := grpc.NewServer()
+	t.Cleanup(server.Stop)
+
+	recordingServer := &shutdownRecordingMysqlCtlServer{
+		shutdownRequests: make(chan *mysqlctlpb.ShutdownRequest, 1),
+	}
+	mysqlctlpb.RegisterMysqlCtlServer(server, recordingServer)
+
+	go func() { _ = server.Serve(listener) }()
+
+	socketFile = socketPath
+	shutdownTimeout := 43*time.Second + 125*time.Millisecond
+
+	mysqld := &Mysqld{}
+	err = mysqld.Shutdown(ctx, &Mycnf{}, true, shutdownTimeout)
+	require.NoError(t, err)
+
+	request := <-recordingServer.shutdownRequests
+	assert.True(t, request.WaitForMysqld)
+
+	gotTimeout, ok, err := protoutil.DurationFromProto(request.MysqlShutdownTimeout)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, shutdownTimeout, gotTimeout)
 }
 
 func TestRegexps(t *testing.T) {
