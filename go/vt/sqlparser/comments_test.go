@@ -319,7 +319,7 @@ func TestExtractCommentDirectives(t *testing.T) {
 					case *DropView:
 						comments = s.Comments
 					default:
-						t.Errorf("Unexpected statement type %+v", s)
+						assert.Failf(t, "unexpected statement type", "Unexpected statement type %+v", s)
 					}
 
 					vals := comments.Directives()
@@ -568,6 +568,47 @@ func TestGetMySQLSetVarValue(t *testing.T) {
 				comments: tt.comments,
 			}
 			assert.Equal(t, tt.want, c.GetMySQLSetVarValue(tt.valToFind))
+		})
+	}
+}
+
+func TestGetMySQLSetVarNames(t *testing.T) {
+	tests := []struct {
+		name     string
+		comments []string
+		want     []string
+	}{{
+		name:     "SET_VAR clause in the middle",
+		comments: []string{"/*+ NO_RANGE_OPTIMIZATION(t3 PRIMARY, f2_idx) SET_VAR(foreign_key_checks=OFF) NO_ICP(t1, t2) */"},
+		want:     []string{"foreign_key_checks"},
+	}, {
+		name:     "Single SET_VAR clause",
+		comments: []string{"/*+ SET_VAR(sort_buffer_size = 16M) */"},
+		want:     []string{"sort_buffer_size"},
+	}, {
+		name:     "No comments",
+		comments: nil,
+		want:     nil,
+	}, {
+		name:     "Multiple SET_VAR clauses in first optimizer hint comment",
+		comments: []string{"/*+ SET_VAR(sort_buffer_size = 16M) SET_VAR( foReiGn_key_checks = On) */"},
+		want:     []string{"sort_buffer_size", "foReiGn_key_checks"},
+	}, {
+		name:     "Only first optimizer hint comment is parsed",
+		comments: []string{"/*+ SET_VAR(sort_buffer_size = 16M) */", "/*+ SET_VAR(foreign_key_checks = On) */"},
+		want:     []string{"sort_buffer_size"},
+	}, {
+		name:     "Leading comment is a normal comment",
+		comments: []string{"/* This is a normal comment */", "/*+ MAX_EXECUTION_TIME(1000) SET_VAR( foreign_key_checks = 1) */"},
+		want:     []string{"foreign_key_checks"},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &ParsedComments{
+				comments: tt.comments,
+			}
+			assert.Equal(t, tt.want, c.GetMySQLSetVarNames())
 		})
 	}
 }

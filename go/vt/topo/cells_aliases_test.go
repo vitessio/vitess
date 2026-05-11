@@ -17,8 +17,9 @@ limitations under the License.
 package topo
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -78,17 +79,10 @@ func TestValidateAlias(t *testing.T) {
 		gotErr := validateAlias(currentAliases, test.newAliasName, newAlias)
 		if test.wantErrMsg == "" {
 			// Expect success.
-			if gotErr != nil {
-				t.Errorf("validateAlias(%v) error = %q; want nil", test.newAliasName, gotErr.Error())
-			}
+			assert.NoErrorf(t, gotErr, "validateAlias(%v) error = %q; want nil", test.newAliasName, gotErr)
 		} else {
 			// Expect failure.
-			if gotErr == nil {
-				t.Errorf("validateAlias(%v) error = nil; want non-nil", test.newAliasName)
-			}
-			if got, want := gotErr.Error(), test.wantErrMsg; !strings.Contains(got, want) {
-				t.Errorf("validateAlias(%v) error = %q; want *%q*", test.newAliasName, got, want)
-			}
+			assert.ErrorContainsf(t, gotErr, test.wantErrMsg, "validateAlias(%v) error = %q; want *%q*", test.newAliasName, gotErr, test.wantErrMsg)
 		}
 	}
 }

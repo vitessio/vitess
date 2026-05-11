@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 func start(t *testing.T) *mysql.Conn {
@@ -88,7 +87,7 @@ func TestPreventCrossKeyspaceReadsVTGateFlag(t *testing.T) {
 	// Restart vtgate with the --prevent-cross-keyspace-reads flag.
 	originalArgs := clusterInstance.VtGateExtraArgs
 	clusterInstance.VtGateExtraArgs = append(slices.Clone(originalArgs),
-		vtutils.GetFlagVariantForTests("--prevent-cross-keyspace-reads")+"=true")
+		"--prevent-cross-keyspace-reads=true")
 	require.NoError(t, clusterInstance.RestartVtgate())
 	vtParams = mysql.ConnParams{
 		Host: clusterInstance.Hostname,

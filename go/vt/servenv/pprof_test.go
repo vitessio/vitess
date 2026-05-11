@@ -7,7 +7,6 @@ package servenv
 
 import (
 	"os/signal"
-	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -51,12 +50,10 @@ func TestParseProfileFlag(t *testing.T) {
 			}
 			got, err := parseProfileFlag(profileFlag)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseProfileFlag() error = %v, wantErr %v", err, tt.wantErr)
+				assert.Failf(t, "parseProfileFlag() unexpected error", "error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseProfileFlag() got = %v, want %v", got, tt.want)
-			}
+			assert.Equalf(t, tt.want, got, "parseProfileFlag() got = %v, want %v", got, tt.want)
 		})
 	}
 }

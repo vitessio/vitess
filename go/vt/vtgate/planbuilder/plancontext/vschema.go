@@ -39,6 +39,12 @@ type VSchema interface {
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
+	// IsSystemVariableDenied reports whether the given system variable name is
+	// in the VTGate-configured denylist. Names are compared case-insensitively.
+	IsSystemVariableDenied(name string) bool
+	// HasDeniedSystemVariables reports whether the VTGate-configured denylist
+	// contains any system variables.
+	HasDeniedSystemVariables() bool
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	FindKeyspace(keyspace string) (*vindexes.Keyspace, error)

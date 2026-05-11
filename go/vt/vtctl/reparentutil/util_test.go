@@ -65,7 +65,7 @@ func (fake *chooseNewPrimaryTestTMClient) ReplicationStatus(ctx context.Context,
 func TestElectNewPrimary(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                    string
@@ -1156,7 +1156,7 @@ zone1-0000000100 is not a replica`,
 func TestFindPositionForTablet(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                   string
@@ -1752,7 +1752,7 @@ func TestWaitForCatchUp(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			logger := logutil.NewMemoryLogger()
 			err := waitForCatchUp(ctx, test.tmc, logger, test.newPrimary, test.source, 2*time.Second)
 			if test.err != "" {

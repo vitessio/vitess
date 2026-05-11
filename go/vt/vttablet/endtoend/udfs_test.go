@@ -43,22 +43,29 @@ func TestUDFs(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
 	copySOFile(t, client)
 
 	ch := make(chan any)
-	ctx := t.Context()
+	ctx, cancel := context.WithCancel(t.Context())
+	streamErrCh := make(chan error, 1)
+	defer func() {
+		cancel()
+		require.NoError(t, <-streamErrCh)
+	}()
 	go func() {
-		err := client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
+		streamErrCh <- client.StreamHealthWithContext(ctx, func(shr *querypb.StreamHealthResponse) error {
 			if shr.RealtimeStats.UdfsChanged {
-				ch <- true
+				select {
+				case ch <- true:
+				case <-ctx.Done():
+				}
 			}
 			return nil
 		})
-		require.NoError(t, err)
 	}()
 
 	// create a user defined function directly on mysql as it is not supported by vitess parser.
@@ -90,7 +97,7 @@ func validateHealthStreamSignal(t *testing.T, client *framework.QueryClient, ch 
 	select {
 	case <-ch:
 	case <-time.After(30 * time.Second):
-		t.Fatal("timed out waiting for udf create signal")
+		require.Fail(t, "timed out waiting for udf create signal")
 	}
 
 	// validate the row in _vt.udfs.
@@ -104,7 +111,7 @@ func TestUDF_RPC(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
@@ -136,7 +143,7 @@ func validateRPC(t *testing.T, client *framework.QueryClient, cond func(udfs []*
 		time.Sleep(1 * time.Second)
 		select {
 		case <-timeout:
-			t.Fatal("timed out waiting for updated udf")
+			require.Fail(t, "timed out waiting for updated udf")
 		default:
 			schemaDef, udfs, err := client.GetSchema(querypb.SchemaTableType_UDFS, "")
 			require.NoError(t, err)

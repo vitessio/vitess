@@ -190,10 +190,7 @@
       "Original": "prepare prep_dual from 'select 1+?, 10/?'",
       "Instructions": {
         "OperatorType": "Rows"
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {

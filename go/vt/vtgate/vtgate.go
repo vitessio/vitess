@@ -93,8 +93,9 @@ var (
 	healthCheckTimeout = time.Minute
 
 	// System settings related flags
-	sysVarSetEnabled = true
-	setVarEnabled    = true
+	sysVarSetEnabled      = true
+	setVarEnabled         = true
+	deniedSystemVariables []string
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = 5 * time.Second
@@ -202,6 +203,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagIntVar(fs, &warnPayloadSize, "warn-payload-size", warnPayloadSize, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 	utils.SetFlagBoolVar(fs, &sysVarSetEnabled, "enable-system-settings", sysVarSetEnabled, "This will enable the system settings to be changed per session at the database connection level")
 	utils.SetFlagBoolVar(fs, &setVarEnabled, "enable-set-var", setVarEnabled, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
+	fs.StringSliceVar(&deniedSystemVariables, "denied-system-variables", deniedSystemVariables, "Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.")
 	utils.SetFlagDurationVar(fs, &lockHeartbeatTime, "lock-heartbeat-time", lockHeartbeatTime, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 	utils.SetFlagBoolVar(fs, &warnShardedOnly, "warn-sharded-only", warnShardedOnly, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 	utils.SetFlagStringVar(fs, &foreignKeyMode, "foreign-key-mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")

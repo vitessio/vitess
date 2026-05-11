@@ -18,7 +18,6 @@ package tabletmanager
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -61,9 +60,7 @@ func TestLockAndUnlock(t *testing.T) {
 	// Unlocking when we do not have a valid lock should lead to an exception being raised
 	err = tmcUnlockTables(ctx, replicaTablet.GrpcPort)
 	want := "tables were not locked"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Table unlock: %v, must contain %s", err, want)
-	}
+	assert.ErrorContains(t, err, want)
 
 	// Clean the table for further testing
 	utils.Exec(t, conn, "delete from t1")
