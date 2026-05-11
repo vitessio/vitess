@@ -470,17 +470,25 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			chosenProblem := matchedProblems[0]
 			a.Analysis = chosenProblem.Meta.Analysis
 			a.Description = chosenProblem.Meta.Description
+			// Per-decision log keys gated by util.ClearToLog so operators
+			// see the first occurrence of each unique prioritization decision
+			// and a periodic refresh while it persists, without flooding the
+			// log every analysis cycle for the duration of an incident.
+			tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
 			if chosenProblem.Meta.Priority == detectionAnalysisPriorityShardWideAction {
 				if ca.hasShardWideAction {
 					// Already have a shard-wide action — suppress this one.
-					log.Info(
-						"suppressing duplicate shard-wide action",
-						slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
-						slog.String("keyspace", a.AnalyzedKeyspace),
-						slog.String("shard", a.AnalyzedShard),
-						slog.String("suppressed", string(chosenProblem.Meta.Analysis)),
-						slog.String("active_shard_wide", string(ca.shardWideAnalysisCode)),
-					)
+					key := fmt.Sprintf("%s.%s.%s.%s.%s", tabletAliasString, a.AnalyzedKeyspace, a.AnalyzedShard, chosenProblem.Meta.Analysis, ca.shardWideAnalysisCode)
+					if util.ClearToLog("analysis_dao.suppress_duplicate_shard_wide", key) {
+						log.Info(
+							"suppressing duplicate shard-wide action",
+							slog.String("tablet", tabletAliasString),
+							slog.String("keyspace", a.AnalyzedKeyspace),
+							slog.String("shard", a.AnalyzedShard),
+							slog.String("suppressed", string(chosenProblem.Meta.Analysis)),
+							slog.String("active_shard_wide", string(ca.shardWideAnalysisCode)),
+						)
+					}
 					return nil
 				}
 				ca.hasShardWideAction = true
@@ -502,27 +510,33 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 						declaresAfter(ca.shardWideProblem, p.Meta.Analysis)
 				}
 				if survives(chosenProblem) {
-					log.Info(
-						"prioritizing tablet problem before shard-wide action",
-						slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
-						slog.String("keyspace", a.AnalyzedKeyspace),
-						slog.String("shard", a.AnalyzedShard),
-						slog.String("chosen", string(chosenProblem.Meta.Analysis)),
-						slog.String("deferred_shard_wide", string(ca.shardWideAnalysisCode)),
-					)
+					key := fmt.Sprintf("%s.%s.%s.%s.%s", tabletAliasString, a.AnalyzedKeyspace, a.AnalyzedShard, chosenProblem.Meta.Analysis, ca.shardWideAnalysisCode)
+					if util.ClearToLog("analysis_dao.prioritize", key) {
+						log.Info(
+							"prioritizing tablet problem before shard-wide action",
+							slog.String("tablet", tabletAliasString),
+							slog.String("keyspace", a.AnalyzedKeyspace),
+							slog.String("shard", a.AnalyzedShard),
+							slog.String("chosen", string(chosenProblem.Meta.Analysis)),
+							slog.String("deferred_shard_wide", string(ca.shardWideAnalysisCode)),
+						)
+					}
 				} else {
 					found := false
 					for _, p := range matchedProblems[1:] {
 						if survives(p) {
-							log.Info(
-								"prioritizing tablet problem before shard-wide action",
-								slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
-								slog.String("keyspace", a.AnalyzedKeyspace),
-								slog.String("shard", a.AnalyzedShard),
-								slog.String("chosen", string(p.Meta.Analysis)),
-								slog.String("higher_priority_skipped", string(chosenProblem.Meta.Analysis)),
-								slog.String("deferred_shard_wide", string(ca.shardWideAnalysisCode)),
-							)
+							key := fmt.Sprintf("%s.%s.%s.%s.%s.%s", tabletAliasString, a.AnalyzedKeyspace, a.AnalyzedShard, p.Meta.Analysis, chosenProblem.Meta.Analysis, ca.shardWideAnalysisCode)
+							if util.ClearToLog("analysis_dao.prioritize_alt", key) {
+								log.Info(
+									"prioritizing tablet problem before shard-wide action",
+									slog.String("tablet", tabletAliasString),
+									slog.String("keyspace", a.AnalyzedKeyspace),
+									slog.String("shard", a.AnalyzedShard),
+									slog.String("chosen", string(p.Meta.Analysis)),
+									slog.String("higher_priority_skipped", string(chosenProblem.Meta.Analysis)),
+									slog.String("deferred_shard_wide", string(ca.shardWideAnalysisCode)),
+								)
+							}
 							a.Analysis = p.Meta.Analysis
 							a.Description = p.Meta.Description
 							found = true
@@ -530,14 +544,17 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 						}
 					}
 					if !found {
-						log.Info(
-							"suppressing tablet problem in favor of shard-wide action",
-							slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
-							slog.String("keyspace", a.AnalyzedKeyspace),
-							slog.String("shard", a.AnalyzedShard),
-							slog.String("suppressed", string(chosenProblem.Meta.Analysis)),
-							slog.String("shard_wide", string(ca.shardWideAnalysisCode)),
-						)
+						key := fmt.Sprintf("%s.%s.%s.%s.%s", tabletAliasString, a.AnalyzedKeyspace, a.AnalyzedShard, chosenProblem.Meta.Analysis, ca.shardWideAnalysisCode)
+						if util.ClearToLog("analysis_dao.suppress_tablet", key) {
+							log.Info(
+								"suppressing tablet problem in favor of shard-wide action",
+								slog.String("tablet", tabletAliasString),
+								slog.String("keyspace", a.AnalyzedKeyspace),
+								slog.String("shard", a.AnalyzedShard),
+								slog.String("suppressed", string(chosenProblem.Meta.Analysis)),
+								slog.String("shard_wide", string(ca.shardWideAnalysisCode)),
+							)
+						}
 						return nil
 					}
 				}
