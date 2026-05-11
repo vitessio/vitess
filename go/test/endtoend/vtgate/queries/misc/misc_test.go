@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -427,10 +429,80 @@ func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPEndToEnd(t *testing.T) {
 	_, err := mcmp.VtConn.ExecuteFetch("set workload = olap", 1000, false)
 	require.NoError(t, err)
 
-	result, err := mcmp.VtConn.ExecuteFetch("update t1 set id2 = id2 + sleep(0.05) where id1 = 1", 1000, true)
+	slowQueryMetric := "UPDATE.Passthrough.PRIMARY"
+	initialSlowQueries := vtgateMetricValue(t, "SlowQueries", slowQueryMetric)
+	query := "update /* slow_e2e */ t1 set id2 = id2 + sleep(0.05) where id1 = 1"
+	result, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
 	assert.Empty(t, result.Fields)
 	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+	assert.Greater(t, vtgateMetricValue(t, "SlowQueries", slowQueryMetric), initialSlowQueries)
+	assertVtgateMetricsLineContains(t, "vtgate_slow_queries", `query="UPDATE"`, `plan="Passthrough"`, `tablet="PRIMARY"`)
+	assertQueryLogLineContains(t, "slow_e2e", "\ttrue\t")
+}
+
+func vtgateMetricValue(t *testing.T, metric, key string) float64 {
+	t.Helper()
+
+	vars := clusterInstance.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
+
+	values, ok := vars[metric].(map[string]any)
+	require.True(t, ok, "%s is not a map", metric)
+
+	if raw, ok := values[key]; ok {
+		value, ok := raw.(float64)
+		require.True(t, ok, "%s value is not a number", metric)
+		return value
+	}
+	return 0
+}
+
+func assertQueryLogLineContains(t *testing.T, queryMarker string, substrings ...string) {
+	t.Helper()
+
+	assert.Eventually(t, func() bool {
+		data, err := os.ReadFile(clusterInstance.VtgateProcess.FileToLogQueries)
+		if err != nil {
+			return false
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if !strings.Contains(line, queryMarker) {
+				continue
+			}
+			matched := true
+			for _, substring := range substrings {
+				matched = matched && strings.Contains(line, substring)
+			}
+			if matched {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 100*time.Millisecond)
+}
+
+func assertVtgateMetricsLineContains(t *testing.T, metric string, substrings ...string) {
+	t.Helper()
+
+	status, metrics, err := clusterInstance.VtgateProcess.MakeAPICall("metrics")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	assert.Contains(t, metrics, metric)
+
+	for _, line := range strings.Split(metrics, "\n") {
+		if !strings.Contains(line, metric) {
+			continue
+		}
+		matched := true
+		for _, substring := range substrings {
+			matched = matched && strings.Contains(line, substring)
+		}
+		if matched {
+			return
+		}
+	}
+	assert.Failf(t, "missing vtgate metric line", "%s did not include labels %v", metric, substrings)
 }
 
 func TestPrepareStatements(t *testing.T) {

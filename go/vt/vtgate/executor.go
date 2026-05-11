@@ -373,6 +373,23 @@ func (e *Executor) StreamExecute(
 		err := vc.StreamExecutePrimitive(ctx, plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
+
+		updateLogStats := func() {
+			logStats.StmtType = plan.QueryType.String()
+			logStats.PlanType = plan.Type.String()
+			logStats.TablesUsed = plan.TablesUsed
+			executedRoot := vc.ExecutedPrimitive()
+			if executedRoot == nil {
+				executedRoot = plan.Instructions
+			}
+			logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+			logStats.TabletType = vc.TabletType().String()
+			logStats.ExecuteTime = time.Since(execStart)
+			logStats.ActiveKeyspace = vc.GetKeyspace()
+
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+		}
+
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
@@ -385,6 +402,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		if !canReturnRows(plan.QueryType) {
+			updateLogStats()
 			return nil
 		}
 
@@ -396,17 +414,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 5: Log and add statistics
-		logStats.TablesUsed = plan.TablesUsed
-		executedRoot := vc.ExecutedPrimitive()
-		if executedRoot == nil {
-			executedRoot = plan.Instructions
-		}
-		logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
-		logStats.TabletType = vc.TabletType().String()
-		logStats.ExecuteTime = time.Since(execStart)
-		logStats.ActiveKeyspace = vc.GetKeyspace()
-
-		e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+		updateLogStats()
 
 		return err
 	}
