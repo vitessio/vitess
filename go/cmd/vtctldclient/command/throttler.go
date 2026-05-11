@@ -19,13 +19,16 @@ package command
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/protoutil"
 
+	"vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -62,6 +65,18 @@ var (
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetThrottlerStatus,
 	}
+
+	// UpdateQueryThrottlerConfig makes an UpdateQueryThrottlerConfig gRPC call to a vtctld.
+	UpdateQueryThrottlerConfig = &cobra.Command{
+		Use:                   "UpdateQueryThrottlerConfig {--config <config> | --config-file <file>} <keyspace>",
+		Short:                 "Update the query throttler configuration for the given keyspace.",
+		Long:                  "Update the query throttler configuration for the given keyspace. The configuration controls how incoming queries are throttled based on tablet throttler metrics.",
+		Example:               `UpdateQueryThrottlerConfig --config '{"enabled":true,"strategy":"TABLET_THROTTLER","dry_run":false}' my_keyspace`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		PreRunE:               validateUpdateQueryThrottlerConfig,
+		RunE:                  commandUpdateQueryThrottlerConfig,
+	}
 )
 
 var (
@@ -72,6 +87,11 @@ var (
 
 	checkThrottlerOptions vtctldatapb.CheckThrottlerRequest
 	requestHeartbeats     bool
+
+	updateQueryThrottlerConfigOptions = struct {
+		Config     string
+		ConfigFile string
+	}{}
 )
 
 func validateUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
@@ -163,6 +183,92 @@ func commandGetThrottlerStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func validateUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error {
+	opts := updateQueryThrottlerConfigOptions
+	if (opts.Config != "" && opts.ConfigFile != "") || (opts.Config == "" && opts.ConfigFile == "") {
+		return errors.New("must pass exactly one of --config or --config-file")
+	}
+	return nil
+}
+
+// validateQueryThrottlerConfigContent performs client-side validation of the
+// config content for fast feedback before the gRPC round-trip.
+func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
+	if !cfg.GetEnabled() {
+		return nil
+	}
+
+	if cfg.GetStrategy() != querythrottler.ThrottlingStrategy_TABLET_THROTTLER {
+		return fmt.Errorf("strategy must be TABLET_THROTTLER when enabled is true, got %s", cfg.GetStrategy())
+	}
+
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return errors.New("tablet_strategy_config is required when strategy is TABLET_THROTTLER")
+	}
+
+	if len(tsc.GetTabletRules()) == 0 {
+		return errors.New("tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
+	}
+
+	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
+		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for metricName, rule := range metricRuleSet.GetMetricRules() {
+				for i, t := range rule.GetThresholds() {
+					if t.GetAbove() < 0 {
+						return fmt.Errorf("threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+
+					if t.GetThrottle() < 0 || t.GetThrottle() > 100 {
+						return fmt.Errorf("threshold[%d] 'throttle' must be between 0 and 100, got %d (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetThrottle(), tabletType, stmtType, metricName)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func commandUpdateQueryThrottlerConfig(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	opts := updateQueryThrottlerConfigOptions
+	cli.FinishedParsing(cmd)
+
+	var configBytes []byte
+	if opts.ConfigFile != "" {
+		data, err := os.ReadFile(opts.ConfigFile)
+		if err != nil {
+			return err
+		}
+		configBytes = data
+	} else {
+		configBytes = []byte(opts.Config)
+	}
+
+	config := &querythrottler.Config{}
+	if err := json2.UnmarshalPB(configBytes, config); err != nil {
+		return err
+	}
+
+	if err := validateQueryThrottlerConfigContent(config); err != nil {
+		return err
+	}
+
+	_, err := client.UpdateQueryThrottlerConfig(commandCtx, &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+		Keyspace:             keyspace,
+		QueryThrottlerConfig: config,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully updated QueryThrottlerConfig for keyspace %s\n", keyspace)
+	return nil
+}
+
 func init() {
 	// UpdateThrottlerConfig
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
@@ -191,4 +297,9 @@ func init() {
 
 	// GetThrottlerStatus
 	Root.AddCommand(GetThrottlerStatus)
+
+	// UpdateQueryThrottlerConfig
+	UpdateQueryThrottlerConfig.Flags().StringVarP(&updateQueryThrottlerConfigOptions.Config, "config", "c", "", "QueryThrottlerConfig as a JSON string")
+	UpdateQueryThrottlerConfig.Flags().StringVarP(&updateQueryThrottlerConfigOptions.ConfigFile, "config-file", "f", "", "Path to a file containing QueryThrottlerConfig as JSON")
+	Root.AddCommand(UpdateQueryThrottlerConfig)
 }

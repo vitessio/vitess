@@ -130,10 +130,12 @@ type throttlerTopoService interface {
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {
-	keyspace    string
-	shard       string
-	tabletAlias *topodatapb.TabletAlias
-	tabletInfo  atomic.Pointer[topo.TabletInfo]
+	keyspace      string
+	shard         string
+	tabletAlias   *topodatapb.TabletAlias
+	throttlerType ThrottlerType
+	configLoader  configLoader
+	tabletInfo    atomic.Pointer[topo.TabletInfo]
 
 	check     *ThrottlerCheck
 	isEnabled atomic.Bool
@@ -214,15 +216,28 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, connectionPoolName string) *Throttler {
+func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, throttlerType ThrottlerType) *Throttler {
+	var poolName string
+	var cfgLoader configLoader
+	switch throttlerType {
+	case QueryTabletThrottler:
+		poolName = "QueryThrottlerPool"
+		cfgLoader = &queryConfigLoader{}
+	default:
+		poolName = "ThrottlerPool"
+		cfgLoader = &defaultConfigLoader{}
+	}
+
 	throttler := &Throttler{
 		tabletAlias:     tabletAlias,
+		throttlerType:   throttlerType,
+		configLoader:    cfgLoader,
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
 		srvTopoServer:   srvTopoServer,
 		ts:              ts,
 		heartbeatWriter: heartbeatWriter,
-		pool: connpool.NewPool(env, connectionPoolName, tabletenv.ConnPoolConfig{
+		pool: connpool.NewPool(env, poolName, tabletenv.ConnPoolConfig{
 			Size:        2,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
@@ -295,6 +310,14 @@ func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.shard = shard
 }
 
+// getConfigLoader returns the configLoader, defaulting to defaultConfigLoader if not set.
+func (throttler *Throttler) getConfigLoader() configLoader {
+	if throttler.configLoader != nil {
+		return throttler.configLoader
+	}
+	return &defaultConfigLoader{}
+}
+
 func (throttler *Throttler) GetMetricsQuery() string {
 	if customQuery := throttler.GetCustomMetricsQuery(); customQuery != "" {
 		return customQuery
@@ -344,7 +367,7 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 	if err != nil {
 		return nil, err
 	}
-	return throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig), nil
+	return throttler.normalizeThrottlerConfig(throttler.getConfigLoader().loadConfig(srvks)), nil
 }
 
 // normalizeThrottlerConfig normalizes missing throttler config information, as needed.
@@ -377,7 +400,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		}
 		return true
 	}
-	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
+	throttlerConfig := throttler.normalizeThrottlerConfig(throttler.getConfigLoader().loadConfig(srvks))
 
 	if throttler.IsEnabled() {
 		// Throttler is enabled and we should apply the config change
@@ -682,7 +705,10 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 		if tablet.Type != topodatapb.TabletType_PRIMARY {
 			continue
 		}
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{
+			AppName:       throttlerapp.ThrottlerStimulatorName.String(),
+			ThrottlerType: throttler.throttlerType.ToProto(),
+		}
 		_, err = tmClient.CheckThrottler(ctx, tablet.Tablet, req)
 		if err != nil {
 			log.Error(fmt.Sprintf("stimulatePrimaryThrottler: %+v", err))
@@ -892,7 +918,9 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		}
 		metrics := make(base.ThrottleMetrics)
 
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{
+			ThrottlerType: throttler.throttlerType.ToProto(),
+		} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, err := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if err != nil {
 			err = vterrors.Wrapf(err, "gRPC error accessing tablet %v. Err=%s", probe.Alias, err.Error())
