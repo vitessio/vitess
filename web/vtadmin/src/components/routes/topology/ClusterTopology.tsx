@@ -87,7 +87,6 @@ export const ClusterTopology = () => {
         if (data?.cell) {
             setTopology({ cell: data?.cell as TopologyCell });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data]);
 
     if (!data) {
