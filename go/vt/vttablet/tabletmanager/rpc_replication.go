@@ -569,7 +569,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 	defer tm.unlock()
 	defer tm.QueryServiceControl.SetDemotePrimaryStalled(false)
-	log.Info("acquired action lock")
 
 	finishCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -598,7 +597,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	wasPrimary := tablet.Type == topodatapb.TabletType_PRIMARY
 	wasServing := tm.QueryServiceControl.IsServing()
 
-	log.Info("reading mysql read_only state")
 	wasReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	if err != nil {
 		return nil, err
@@ -639,7 +637,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
-	log.Info("checking semi-sync status")
 	isSemiSyncBlocked, err := tm.MysqlDaemon.IsSemiSyncBlocked(ctx)
 	if err != nil {
 		return nil, err
@@ -669,7 +666,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	//
 	// The demoted primary will end up with errant GTIDs, but that's unavoidable in this scenario.
 	if force && isSemiSyncBlocked {
-		log.Info("checking primary-side semi-sync state")
 		if tm.isPrimarySideSemiSyncEnabled(ctx) {
 			// Disable the primary side semi-sync to unblock the writes.
 			log.Info("disabling primary-side semi-sync to unblock stuck writes")
@@ -733,7 +729,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}
 	}()
 
-	log.Info("checking primary-side semi-sync state")
 	// If we haven't disabled the primary side semi-sync so far, do it now.
 	if tm.isPrimarySideSemiSyncEnabled(ctx) {
 		// If using semi-sync, we need to disable primary-side.
@@ -752,7 +747,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 
 	// Return the current replication position.
-	log.Info("reading primary status")
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	if err != nil {
 		return nil, err
