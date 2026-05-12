@@ -225,19 +225,6 @@ func (pool *ConnPool[C]) open() {
 	pool.capacity.Store(pool.config.maxCapacity)
 	pool.setIdleCount()
 
-	// The expire worker takes care of removing from the waiter list any clients whose
-	// context has been cancelled.
-	pool.runWorker(closeChan, 100*time.Millisecond, func(_ time.Time) bool {
-		maybeStarving := pool.wait.maybeStarvingCount()
-
-		// Do not allow connections to starve; if there's waiters in the queue
-		// and connections in the stack, it means we could be starving them.
-		// Try getting out a connection and handing it over directly
-		for n := 0; n < maybeStarving && pool.tryReturnAnyConn(); n++ {
-		}
-		return true
-	})
-
 	idleTimeout := pool.IdleTimeout()
 	if idleTimeout != 0 {
 		// The idle worker takes care of closing connections that have been idle too long
@@ -469,6 +456,9 @@ func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
 		stack := connSetting.bucket & stackMask
 		pool.settings[stack].Push(conn)
 		pool.freshSettingsStack.Store(int64(stack))
+	}
+	if pool.wait.waiting() != 0 {
+		return pool.tryReturnAnyConn()
 	}
 	return false
 }

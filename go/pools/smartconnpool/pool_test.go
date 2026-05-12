@@ -61,6 +61,7 @@ type TestConn struct {
 	timeCreated time.Time
 	closed      bool
 	failApply   bool
+	onSetting   func()
 }
 
 func (tr *TestConn) waitForClose() chan struct{} {
@@ -73,6 +74,9 @@ func (tr *TestConn) IsClosed() bool {
 }
 
 func (tr *TestConn) Setting() *Setting {
+	if tr.onSetting != nil {
+		tr.onSetting()
+	}
 	return tr.setting
 }
 
@@ -1180,6 +1184,109 @@ func TestGetRetriesWhenConnectionReturnedBeforeWaiterEnqueues(t *testing.T) {
 			assert.NotNil(c, result.conn)
 		default:
 			assert.Fail(c, "waiting Get did not retry after connection was returned before enqueue")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestGetRetriesWhenConnectionReturnedAfterWaiterEnqueues(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	})
+	p.config.connect = newConnector(&state)
+	p.capacity.Store(1)
+	p.setIdleCount()
+
+	closeChan := make(chan struct{})
+	p.close.Store(&closeChan)
+
+	var result struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	getCtx, cancelGet := context.WithCancel(ctx)
+	releaseReturn := make(chan struct{})
+	releaseReturnOnce := sync.Once{}
+	defer func() {
+		cancelGet()
+		releaseReturnOnce.Do(func() {
+			close(releaseReturn)
+		})
+		if result.conn != nil {
+			result.conn.Recycle()
+		}
+
+		closeCtx, cancelClose := context.WithTimeout(ctx, PoolCloseTimeout)
+		defer cancelClose()
+		require.NoError(t, p.CloseWithContext(closeCtx))
+	}()
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	returnReady := make(chan struct{})
+	var returnReadyOnce sync.Once
+	conn.Conn.onSetting = func() {
+		returnReadyOnce.Do(func() {
+			close(returnReady)
+			<-releaseReturn
+		})
+	}
+
+	recycleDone := make(chan struct{})
+	go func() {
+		defer close(recycleDone)
+		conn.Recycle()
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-returnReady:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	results := make(chan struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- struct {
+			conn *Pooled[*TestConn]
+			err  error
+		}{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	releaseReturnOnce.Do(func() {
+		close(releaseReturn)
+	})
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-recycleDone:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not retry after connection was returned after enqueue")
 		}
 	}, 5*time.Second, 10*time.Millisecond)
 }

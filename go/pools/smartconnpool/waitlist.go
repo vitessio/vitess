@@ -47,9 +47,8 @@ type waitlist[C Connection] struct {
 // or until the given context expires.
 // If maxWaiters is > 0 and the waitlist already has that many waiters, it returns
 // ErrPoolWaiterCapReached immediately without blocking.
-// The returned connection may _not_ have the requested Setting. This function can
-// also return a `nil` connection even if our context has expired, if the pool has
-// forced an expiration of all waiters in the waitlist.
+// The returned connection may _not_ have the requested Setting. A nil connection
+// with nil error means the caller should retry acquisition.
 func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint, shouldRetry func() bool) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	defer wl.nodes.Put(elem)
@@ -169,25 +168,6 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 
 func (wl *waitlist[C]) aboveWaiterCap(maxWaiters uint) bool {
 	return maxWaiters > 0 && wl.list.Len() >= int(maxWaiters)
-}
-
-func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
-	if wl.list.Len() == 0 {
-		return
-	}
-
-	wl.mu.Lock()
-	defer wl.mu.Unlock()
-
-	// iterate the waitlist looking for waiters with an expired Context,
-	// or remove everything if force is true
-	for e := wl.list.Front(); e != nil; e = e.Next() {
-		if e.Value.age == 0 {
-			maybeStarving++
-		}
-	}
-
-	return
 }
 
 // tryReturnConn tries handing over a connection to one of the waiters in the pool.
