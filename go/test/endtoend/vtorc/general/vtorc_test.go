@@ -23,13 +23,7 @@ import (
 	"os"
 	"path"
 	"strconv"
-<<<<<<< HEAD
-||||||| parent of dc67850af6 (VTOrc: fix `PrimaryIsReadOnly` recovery deadlock against `PrimarySemiSyncBlocked` (#20015))
-	"strings"
-=======
-	"strings"
 	"sync"
->>>>>>> dc67850af6 (VTOrc: fix `PrimaryIsReadOnly` recovery deadlock against `PrimarySemiSyncBlocked` (#20015))
 	"testing"
 	"time"
 

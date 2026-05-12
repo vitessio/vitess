@@ -435,7 +435,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 		name          string
 		info          []*test.InfoForRecoveryAnalysis
 		analysis      inst.AnalysisCode
-		analyzedAlias *topodatapb.TabletAlias
+		analyzedAlias string
 		wantErr       string
 	}{
 		{
@@ -519,7 +519,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 			// checkIfAlreadyFixed finds it and recovery proceeds.
 			name:          "PrimaryIsReadOnly preserved despite shard-wide PrimarySemiSyncBlocked",
 			analysis:      inst.PrimaryIsReadOnly,
-			analyzedAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			analyzedAlias: "zone1-0000000101",
 			info: []*test.InfoForRecoveryAnalysis{
 				{
 					TabletInfo: &topodatapb.Tablet{
@@ -632,21 +632,13 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				analysis = inst.ReplicationStopped
 			}
 			analyzedAlias := tt.analyzedAlias
-			if analyzedAlias == nil {
-				analyzedAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+			if analyzedAlias == "" {
+				analyzedAlias = "zon1-0000000100"
 			}
 
 			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
-<<<<<<< HEAD
-				AnalyzedInstanceAlias: "zon1-0000000100",
-				Analysis:              inst.ReplicationStopped,
-||||||| parent of dc67850af6 (VTOrc: fix `PrimaryIsReadOnly` recovery deadlock against `PrimarySemiSyncBlocked` (#20015))
-				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-				Analysis:              inst.ReplicationStopped,
-=======
 				AnalyzedInstanceAlias: analyzedAlias,
 				Analysis:              analysis,
->>>>>>> dc67850af6 (VTOrc: fix `PrimaryIsReadOnly` recovery deadlock against `PrimarySemiSyncBlocked` (#20015))
 				AnalyzedKeyspace:      "ks",
 				AnalyzedShard:         "0",
 			}, []string{"ks", "0", ""}, func(s string, b bool) {
