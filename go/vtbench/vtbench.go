@@ -241,11 +241,12 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 		result, err := bt.conn.execute(ctx, bt.query, bt.bindVars)
 		b.Timings.Record("query", start)
 		if err != nil {
-			log.Error(fmt.Sprintf("query error: %v", err))
 			b.Errors.Add(errorCode(err).String(), 1)
 			if b.ContinueOnError && ctx.Err() == nil {
+				log.V(1).Info(fmt.Sprintf("query error: %v", err))
 				continue
 			}
+			log.Error(fmt.Sprintf("query error: %v", err))
 			break
 		} else {
 			b.Rows.Add(int64(len(result.Rows)))
