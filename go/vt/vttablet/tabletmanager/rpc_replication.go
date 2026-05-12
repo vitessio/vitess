@@ -550,7 +550,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 //
 // If a step fails in the middle, it will try to undo any changes it made.
 func (tm *TabletManager) DemotePrimary(ctx context.Context, force bool) (*replicationdatapb.PrimaryStatus, error) {
-	log.Info("DemotePrimary")
+	log.Info("demoting primary", slog.Bool("force", force))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
@@ -563,6 +563,7 @@ func (tm *TabletManager) DemotePrimary(ctx context.Context, force bool) (*replic
 // If revertPartialFailure is true, and a step fails in the middle, it will try
 // to undo any changes it made.
 func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure bool, force bool) (primaryStatus *replicationdatapb.PrimaryStatus, finalErr error) {
+	log.Info("acquiring action lock")
 	if err := tm.lock(ctx); err != nil {
 		return nil, err
 	}
@@ -595,10 +596,22 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	tablet := tm.Tablet()
 	wasPrimary := tablet.Type == topodatapb.TabletType_PRIMARY
 	wasServing := tm.QueryServiceControl.IsServing()
+
+	log.Info("reading mysql read_only state")
 	wasReadOnly, err := tm.MysqlDaemon.IsReadOnly(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info(
+		"captured initial state",
+		slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+		slog.Bool("force", force),
+		slog.Bool("revert_partial_failure", revertPartialFailure),
+		slog.Bool("was_primary", wasPrimary),
+		slog.Bool("was_serving", wasServing),
+		slog.Bool("was_read_only", wasReadOnly),
+	)
 
 	// If we are a primary tablet and not yet read-only, stop accepting new
 	// queries and wait for in-flight queries to complete. If we are not primary,
@@ -617,6 +630,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasServing {
+				log.Info("reverting query service to serving")
 				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 					log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
 				}
@@ -624,10 +638,17 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		}()
 	}
 
+	log.Info("checking semi-sync status")
 	isSemiSyncBlocked, err := tm.MysqlDaemon.IsSemiSyncBlocked(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info(
+		"checked semi-sync status",
+		slog.Bool("force", force),
+		slog.Bool("is_semi_sync_blocked", isSemiSyncBlocked),
+	)
 
 	// `force` is true when `DemotePrimary` is called for `EmergencyReparentShard` or when a primary notices
 	// that a different tablet has been promoted to primary and demotes itself.
@@ -647,14 +668,16 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	//
 	// The demoted primary will end up with errant GTIDs, but that's unavoidable in this scenario.
 	if force && isSemiSyncBlocked {
+		log.Info("checking primary-side semi-sync state")
 		if tm.isPrimarySideSemiSyncEnabled(ctx) {
 			// Disable the primary side semi-sync to unblock the writes.
+			log.Info("disabling primary-side semi-sync to unblock stuck writes")
 			if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 				return nil, err
 			}
 			defer func() {
 				if finalErr != nil && revertPartialFailure && wasPrimary {
-					// enable primary-side semi-sync again
+					log.Info("reverting primary-side semi-sync to enabled")
 					if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
 						log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
 					}
@@ -678,6 +701,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		// all semi-sync enabled replicas.
 		//
 		// If we can't unblock within the context timeout, the `PlannedReparentShard` operation will fail.
+		log.Info("waiting for semi-sync to be unblocked")
 		err = tm.SemiSyncMonitor.WaitUntilSemiSyncUnblocked(ctx)
 		if err != nil {
 			return nil, err
@@ -687,33 +711,39 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// We can now set MySQL to super_read_only mode. If we are already super_read_only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
+	log.Info("enabling super_read_only")
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
 		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return nil, err
 		}
+	} else {
+		log.Info("enabled super_read_only")
 	}
 
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// setting read_only OFF will also set super_read_only OFF if it was set
+			log.Info("reverting read-only by redoing prepared transactions")
 			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 				log.Warn(fmt.Sprintf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err))
 			}
 		}
 	}()
 
+	log.Info("checking primary-side semi-sync state")
 	// If we haven't disabled the primary side semi-sync so far, do it now.
 	if tm.isPrimarySideSemiSyncEnabled(ctx) {
 		// If using semi-sync, we need to disable primary-side.
+		log.Info("disabling primary-side semi-sync")
 		if err := tm.fixSemiSync(ctx, topodatapb.TabletType_REPLICA, SemiSyncActionSet); err != nil {
 			return nil, err
 		}
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasPrimary {
-				// enable primary-side semi-sync again
+				log.Info("reverting primary-side semi-sync to enabled")
 				if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
 					log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
 				}
@@ -722,11 +752,16 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 
 	// Return the current replication position.
+	log.Info("reading primary status")
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return replication.PrimaryStatusToProto(status), nil
+
+	protoStatus := replication.PrimaryStatusToProto(status)
+	log.Info("demoted primary", slog.String("position", protoStatus.Position))
+
+	return protoStatus, nil
 }
 
 // UndoDemotePrimary reverts a previous call to DemotePrimary
