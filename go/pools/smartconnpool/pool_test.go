@@ -1663,6 +1663,65 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 	}
 }
 
+func TestCloseDoesNotReturnConnToWaitingGet(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	type getResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	results := make(chan getResult, 1)
+	getCtx, cancelGet := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelGet()
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- getResult{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	closeCtx, cancelClose := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelClose()
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.Capacity() == 0
+	}, 5*time.Second, 10*time.Millisecond)
+
+	conn.Recycle()
+
+	var result getResult
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.ErrorIs(c, result.err, ErrConnPoolClosed)
+			assert.Nil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not return after close")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	if result.conn != nil {
+		result.conn.Recycle()
+	}
+
+	require.NoError(t, <-closeDone)
+}
+
 // TestIdleTimeoutConnectionLeak checks for leaked connections after idle timeout
 func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	var state TestState

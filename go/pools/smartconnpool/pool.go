@@ -573,6 +573,11 @@ func (pool *ConnPool[C]) getFromSettingsStack(setting *Setting) *Pooled[C] {
 	return nil
 }
 
+func (pool *ConnPool[C]) discardConn(conn *Pooled[C]) {
+	conn.Close()
+	pool.closedConn()
+}
+
 func (pool *ConnPool[C]) closedConn() {
 	_ = pool.active.Add(-1)
 	pool.notifyWaitersForAvailableCapacity(1)
@@ -627,6 +632,10 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
 
 	for {
+		if pool.capacity.Load() == 0 {
+			return nil, ErrConnPoolClosed
+		}
+
 		// best case: if there's a connection in the clean stack, return it right away
 		if conn := pool.pop(&pool.clean); conn != nil {
 			pool.borrowed.Add(1)
@@ -654,7 +663,10 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 
 			conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters, pool.shouldRetryWait)
 			if err != nil {
-				if errors.Is(err, ErrPoolWaiterCapReached) {
+				if conn != nil {
+					pool.discardConn(conn)
+				}
+				if errors.Is(err, ErrPoolWaiterCapReached) || errors.Is(err, ErrConnPoolClosed) {
 					return nil, err
 				}
 				return nil, ErrTimeout
@@ -663,6 +675,10 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 		}
 		if conn == nil {
 			continue
+		}
+		if pool.capacity.Load() == 0 {
+			pool.discardConn(conn)
+			return nil, ErrConnPoolClosed
 		}
 
 		// if the connection we've acquired has a Setting applied, we must reset it before returning
@@ -690,6 +706,10 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	pool.Metrics.getWithSettingsCount.Add(1)
 
 	for {
+		if pool.capacity.Load() == 0 {
+			return nil, ErrConnPoolClosed
+		}
+
 		var err error
 		// best case: check if there's a connection in the setting stack where our Setting belongs
 		conn := pool.pop(&pool.settings[setting.bucket&stackMask])
@@ -721,7 +741,10 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 
 			conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters, pool.shouldRetryWait)
 			if err != nil {
-				if errors.Is(err, ErrPoolWaiterCapReached) {
+				if conn != nil {
+					pool.discardConn(conn)
+				}
+				if errors.Is(err, ErrPoolWaiterCapReached) || errors.Is(err, ErrConnPoolClosed) {
 					return nil, err
 				}
 				return nil, ErrTimeout
@@ -730,6 +753,10 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 		}
 		if conn == nil {
 			continue
+		}
+		if pool.capacity.Load() == 0 {
+			pool.discardConn(conn)
+			return nil, ErrConnPoolClosed
 		}
 
 		// ensure that the setting applied to the connection matches the one we want
@@ -789,6 +816,11 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	// update the idle count to match the new capacity if necessary
 	// wait for connections to be returned to the pool if we're reducing the capacity.
 	defer pool.setIdleCount()
+
+	if newcap == 0 {
+		for pool.wait.tryNotifyWaiter() {
+		}
+	}
 
 	const delay = 10 * time.Millisecond
 

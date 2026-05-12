@@ -121,7 +121,7 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 		if conn == nil {
 			return nil, ErrConnPoolClosed
 		}
-		return conn, nil
+		return conn, ErrConnPoolClosed
 
 	case <-ctx.Done():
 		// Context expired. We need to try to remove ourselves from the waitlist to
@@ -159,6 +159,12 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 			select {
 			case <-closeChan:
 				return nil, ErrConnPoolClosed
+			default:
+			}
+		} else {
+			select {
+			case <-closeChan:
+				return conn, ErrConnPoolClosed
 			default:
 			}
 		}
