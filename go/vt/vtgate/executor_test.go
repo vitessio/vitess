@@ -2101,16 +2101,16 @@ func TestServingKeyspaces(t *testing.T) {
 	hc.BroadcastAll()
 
 	sbc1.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("keyspace", "varchar"), "TestExecutor"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
 	})
 	sbclookup.SetResults([]*sqltypes.Result{
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("keyspace", "varchar"), "TestUnsharded"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"),
 	})
 
 	require.ElementsMatch(t, []string{"TestExecutor", "TestUnsharded"}, gw.GetServingKeyspaces())
-	result, err := executorExec(ctx, executor, &vtgatepb.Session{}, "select keyspace_name from dual", nil)
+	result, err := executorExec(ctx, executor, &vtgatepb.Session{}, "select 1 from dual", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[VARCHAR("TestExecutor")]]`, fmt.Sprintf("%v", result.Rows))
+	require.Equal(t, `[[INT64(1)]]`, fmt.Sprintf("%v", result.Rows))
 
 	for _, tablet := range hc.GetAllTablets() {
 		if tablet.Keyspace == "TestExecutor" {
@@ -2124,9 +2124,9 @@ func TestServingKeyspaces(t *testing.T) {
 	// Clear plan cache, to force re-planning of the query.
 	executor.ClearPlans()
 	require.ElementsMatch(t, []string{"TestUnsharded"}, gw.GetServingKeyspaces())
-	result, err = executorExec(ctx, executor, &vtgatepb.Session{}, "select keyspace_name from dual", nil)
+	result, err = executorExec(ctx, executor, &vtgatepb.Session{}, "select 1 from dual", nil)
 	require.NoError(t, err)
-	require.Equal(t, `[[VARCHAR("TestUnsharded")]]`, fmt.Sprintf("%v", result.Rows))
+	require.Equal(t, `[[INT64(1)]]`, fmt.Sprintf("%v", result.Rows))
 }
 
 func TestExecutorOther(t *testing.T) {

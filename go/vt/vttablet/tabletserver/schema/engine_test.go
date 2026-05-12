@@ -185,7 +185,7 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			firstTime = false
 			createTables := extractNamesFromTablesList(created)
 			sort.Strings(createTables)
-			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
+			assert.Equal(t, []string{"msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
 			assert.Equal(t, []*Table(nil), altered)
 			assert.Equal(t, []*Table(nil), dropped)
 		} else {
@@ -423,7 +423,7 @@ func TestOpenAndReload(t *testing.T) {
 			firstTime = false
 			createTables := extractNamesFromTablesList(created)
 			sort.Strings(createTables)
-			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
+			assert.Equal(t, []string{"msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, createTables)
 			assert.Equal(t, []*Table(nil), altered)
 			assert.Equal(t, []*Table(nil), dropped)
 		} else {
@@ -519,6 +519,123 @@ func TestOpenAndReload(t *testing.T) {
 	err = se.ReloadAt(context.Background(), pos2)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
+}
+
+// TestUserTableNamedDual verifies that a real user table named `dual` is
+// tracked, refreshed, and dropped like any other table — i.e. that the schema
+// engine does not special-case the name `dual`. The MySQL `FROM dual`
+// placeholder is a parser concept, not a schema concept.
+func TestUserTableNamedDual(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	db.RejectQueryPattern(baseShowTablesWithSizesPattern, "Opening schema engine should query tables without size information")
+	db.RejectQueryPattern(baseInnoDBTableSizesPattern, "Opening schema engine should query tables without size information")
+
+	// SHOW TABLES returns dual as a real user table alongside the default fixtures.
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("dual", false, ""),
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+		},
+	})
+
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowPrimaryRow("dual", "pk"),
+			mysql.ShowPrimaryRow("test_table_01", "pk"),
+		},
+	})
+
+	db.MockQueriesForTable("dual", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+
+	// Advance unix_timestamp one tick past the default BaseShowTablesRow
+	// CreateTime (1427325875) so initial-load tables count as "older" than
+	// se.lastChange and only genuinely-modified tables show up as altered on
+	// subsequent reloads.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields("t", "int64"), "1427325876"))
+
+	AddFakeInnoDBReadRowsResult(db, 12)
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	require.NoError(t, se.Open())
+	defer se.Close()
+
+	// dual is tracked as a real user table, with its real fields and PK.
+	dual := se.GetTable(sqlparser.NewIdentifierCS("dual"))
+	require.NotNil(t, dual, "dual user table should be tracked in the schema engine")
+	assert.Equal(t, "dual", dual.Name.String())
+	assert.Equal(t, NoType, dual.Type)
+	assert.Equal(t, []*querypb.Field{{Name: "pk", Type: sqltypes.Int32}}, dual.Fields)
+	assert.Equal(t, []int{0}, dual.PKColumns)
+	assert.Equal(t, int64(1427325875), dual.CreateTime)
+
+	var (
+		gotCreated []string
+		gotAltered []string
+		gotDropped []string
+	)
+	se.RegisterNotifier("dual-test", func(_ map[string]*Table, created, altered, dropped []*Table, _ bool) {
+		gotCreated = extractNamesFromTablesList(created)
+		gotAltered = extractNamesFromTablesList(altered)
+		gotDropped = extractNamesFromTablesList(dropped)
+		sort.Strings(gotCreated)
+		sort.Strings(gotAltered)
+		sort.Strings(gotDropped)
+	}, true)
+
+	// On registration with runNotifier=true, the notifier fires once with every
+	// currently-tracked table reported as "created" — including dual.
+	assert.Equal(t, []string{"dual", "test_table_01"}, gotCreated)
+	assert.Empty(t, gotAltered)
+	assert.Empty(t, gotDropped)
+
+	// Reload with a refreshed CreateTime for dual: it should flow through `altered`.
+	// test_table_01 keeps its old CreateTime, which is strictly less than lastChange,
+	// so it stays unchanged.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields("t", "int64"), "1427325878"))
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("dual")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
+			},
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+		},
+	})
+
+	gotCreated, gotAltered, gotDropped = nil, nil, nil
+	require.NoError(t, se.Reload(context.Background()))
+	assert.Empty(t, gotCreated)
+	assert.Equal(t, []string{"dual"}, gotAltered)
+	assert.Empty(t, gotDropped)
+	assert.Equal(t, int64(1427325877), se.GetTable(sqlparser.NewIdentifierCS("dual")).CreateTime)
+
+	// Reload with dual removed from the database: it should flow through `dropped`
+	// and disappear from se.tables.
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+		},
+	})
+
+	gotCreated, gotAltered, gotDropped = nil, nil, nil
+	require.NoError(t, se.Reload(context.Background()))
+	assert.Empty(t, gotCreated)
+	assert.Empty(t, gotAltered)
+	assert.Equal(t, []string{"dual"}, gotDropped)
+	assert.Nil(t, se.GetTable(sqlparser.NewIdentifierCS("dual")), "dual should be dropped from the schema engine cache")
 }
 
 func TestReloadWithSwappedTables(t *testing.T) {
@@ -782,6 +899,24 @@ func TestStatsURL(t *testing.T) {
 	se.handleDebugSchema(response, request)
 }
 
+func TestEngineTableCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+	})
+	AddFakeInnoDBReadRowsResult(db, 0)
+	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
+	require.NoError(t, se.Open())
+	defer se.Close()
+
+	assert.Equal(t, 0, se.TableCount())
+	se.SetTableForTests(NewTable("table_count_test_t1", NoType))
+	se.SetTableForTests(NewTable("table_count_test_t2", NoType))
+	assert.Equal(t, 2, se.TableCount())
+}
+
 func TestSchemaEngineCloseTickRace(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -855,9 +990,6 @@ func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 
 func initialSchema() map[string]*Table {
 	return map[string]*Table{
-		"dual": {
-			Name: sqlparser.NewIdentifierCS("dual"),
-		},
 		"test_table_01": {
 			Name: sqlparser.NewIdentifierCS("test_table_01"),
 			Fields: []*querypb.Field{{
@@ -1957,4 +2089,50 @@ func TestGetTableForPos(t *testing.T) {
 			require.NoError(t, fakedb.LastError())
 		})
 	}
+}
+
+func TestEngineReloadIndependentOfMaxTableCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	// Mock five user tables. The schematest defaults already cover dual.
+	rows := [][]sqltypes.Value{
+		mysql.BaseShowTablesRow("ut1", false, ""),
+		mysql.BaseShowTablesRow("ut2", false, ""),
+		mysql.BaseShowTablesRow("ut3", false, ""),
+		mysql.BaseShowTablesRow("ut4", false, ""),
+		mysql.BaseShowTablesRow("ut5", false, ""),
+	}
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows:   rows,
+	})
+	for _, r := range rows {
+		name := r[0].ToString()
+		db.MockQueriesForTable(name, sqltypes.MakeTestResult(sqltypes.MakeTestFields("c1", "varchar")))
+	}
+	AddFakeInnoDBReadRowsResult(db, 0)
+
+	// Override the dynamic flag for the duration of this test, restoring
+	// whatever value was in effect at entry.
+	originalMaxTableCount := MaxTableCount()
+	SetMaxTableCount(1)
+	t.Cleanup(func() { SetMaxTableCount(originalMaxTableCount) })
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.SchemaReloadInterval = 1 * time.Second
+	cfg.OltpReadPool.IdleTimeout = 1 * time.Second
+	cfg.OlapReadPool.IdleTimeout = 1 * time.Second
+	cfg.TxPool.IdleTimeout = 1 * time.Second
+	cfg.DB = newDBConfigs(db)
+	se := NewEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "SchemaTest"))
+	se.InitDBConfig(cfg.DB.DbaWithDB())
+
+	require.NoError(t, se.Open())
+	defer se.Close()
+
+	// All five user tables should be present despite MaxTableCount() == 1.
+	got := se.TableCount()
+	assert.GreaterOrEqual(t, got, 5, "reload must load all rows regardless of MaxTableCount")
 }

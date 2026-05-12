@@ -55,11 +55,11 @@ func TestScopingWDerivedTables(t *testing.T) {
 		}, {
 			query:         "select id from (select 42 as id) as t",
 			recursiveDeps: NoTables,
-			directDeps:    TS1,
+			directDeps:    TS0,
 		}, {
 			query:         "select t.id from (select 42 as id) as t",
 			recursiveDeps: NoTables,
-			directDeps:    TS1,
+			directDeps:    TS0,
 		}, {
 			query:        "select ks.t.id from (select 42 as id) as t",
 			errorMessage: "column 'ks.t.id' not found",

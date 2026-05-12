@@ -96,9 +96,10 @@ var (
 )
 
 const (
-	defaultCutOverThreshold = 10 * time.Second
-	minCutOverThreshold     = 5 * time.Second
-	maxCutOverThreshold     = 30 * time.Second
+	defaultCutOverThreshold  = 10 * time.Second
+	minCutOverThreshold      = 5 * time.Second
+	maxCutOverThreshold      = 30 * time.Second
+	waitTimeoutDuringCutOver = 365 * 24 * time.Hour // maximum MySQL wait_timeout
 )
 
 func init() {
@@ -171,6 +172,14 @@ type Executor struct {
 type cancellableMigration struct {
 	uuid    string
 	message string
+}
+
+// pendingMigration carries both the UUID and migration context of a pending migration.
+// The context is required so that in-order completion logic can be scoped per-context:
+// migrations from different contexts form independent sequences and must not block each other.
+type pendingMigration struct {
+	uuid             string
+	migrationContext string
 }
 
 func newCancellableMigration(uuid string, message string) *cancellableMigration {
@@ -395,7 +404,7 @@ func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigrati
 		// Specifically, if the running migration is an ALTER, and is still busy with copying rows (copy_state), then
 		// we consider the two to be conflicting. But, if the running migration is done copying rows, and is now only
 		// applying binary logs, and is up-to-date, then we consider a new ALTER migration to be non-conflicting.
-		if atomic.LoadInt64(&runningMigration.WasReadyToComplete) == 0 {
+		if atomic.LoadInt64(&runningMigration.WasReadyToComplete) == 0 && runningMigration.MigrationContext == proposedMigration.MigrationContext {
 			return true
 		}
 	}
@@ -884,11 +893,26 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "post-sentry pos reached")
 	}
 
+	renameWasSuccessful := false
 	lockConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting locking connection")
 	}
 	defer lockConn.Recycle()
+	defer func() {
+		// Always attempt UNLOCK TABLES first, as it releases locks immediately on this
+		// connection. Then kill the connection as a fallback to guarantee any held locks
+		// are released, even if UNLOCK TABLES were to fail.
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := lockConn.Conn.Exec(unlockCtx, sqlUnlockTables, 1, false); err != nil {
+			log.Warn(fmt.Sprintf("Failed to UNLOCK TABLES in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+		}
+		if err := lockConn.Conn.Kill("closing lock tables connection", 0); err != nil {
+			log.Error(fmt.Sprintf("Failed to kill lock tables connection in OnlineDDL migration %s: %v", onlineDDL.UUID, err))
+		}
+	}()
+
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
 	lockConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, lockConn.Conn, 3*onlineDDL.CutOverThreshold)
@@ -896,19 +920,16 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on locking connection")
 	}
 	defer lockConnRestoreLockWaitTimeout()
-	defer lockConn.Conn.Exec(ctx, sqlUnlockTables, 1, false)
+	lockConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, lockConn.Conn, "wait_timeout", waitTimeoutDuringCutOver)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed ensuring wait_timeout on locking connection")
+	}
+	defer lockConnRestoreWaitTimeout()
 
 	renameCompleteChan := make(chan error)
-	renameWasSuccessful := false
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting rename connection")
-	}
-	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
-	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
-	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
 	}
 	defer renameConn.Recycle()
 	defer func() {
@@ -919,7 +940,18 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 			}
 		}
 	}()
+	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
+	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
+	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed setting lock_wait_timeout on rename connection")
+	}
 	defer renameConnRestoreLockWaitTimeout()
+	renameConnRestoreWaitTimeout, err := e.initConnectionSessionTimeout(ctx, renameConn.Conn, "wait_timeout", waitTimeoutDuringCutOver)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed ensuring wait_timeout on rename connection")
+	}
+	defer renameConnRestoreWaitTimeout()
 
 	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable
 	preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
@@ -1210,22 +1242,47 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 	return deferFunc, nil
 }
 
-// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function
-func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, lockWaitTimeout time.Duration) (deferFunc func(), err error) {
+// initConnectionSessionTimeout saves the current value of the given session variable, sets it to the given duration,
+// and returns a deferred restore function.
+func (e *Executor) initConnectionSessionTimeout(ctx context.Context, conn *connpool.Conn, variable string, timeout time.Duration) (deferFunc func(), err error) {
 	deferFunc = func() {}
 
-	if _, err := conn.Exec(ctx, `set @lock_wait_timeout=@@session.lock_wait_timeout`, 0, false); err != nil {
-		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read lock_wait_timeout: %v", err)
+	saveQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @%s=@@session.%s", variable, variable),
+	)
+	if err != nil {
+		return deferFunc, err
 	}
-	timeoutSeconds := int64(lockWaitTimeout.Seconds())
-	setQuery := fmt.Sprintf("set @@session.lock_wait_timeout=%d", timeoutSeconds)
+	if _, err := conn.Exec(ctx, saveQuery, 0, false); err != nil {
+		return deferFunc, vterrors.Wrapf(err, "could not read %s", variable)
+	}
+	setQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=%%a", variable),
+		sqltypes.Int64BindVariable(int64(timeout.Seconds())),
+	)
+	if err != nil {
+		return deferFunc, err
+	}
 	if _, err := conn.Exec(ctx, setQuery, 0, false); err != nil {
 		return deferFunc, err
 	}
+	restoreQuery, err := sqlparser.ParseAndBind(
+		fmt.Sprintf("set @@session.%s=@%s", variable, variable),
+	)
+	if err != nil {
+		return deferFunc, err
+	}
 	deferFunc = func() {
-		conn.Exec(ctx, "set @@session.lock_wait_timeout=@lock_wait_timeout", 0, false)
+		restoreCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		conn.Exec(restoreCtx, restoreQuery, 0, false)
 	}
 	return deferFunc, nil
+}
+
+// initConnectionLockWaitTimeout sets the given lock_wait_timeout for the given connection, with a deferred value restoration function.
+func (e *Executor) initConnectionLockWaitTimeout(ctx context.Context, conn *connpool.Conn, timeout time.Duration) (func(), error) {
+	return e.initConnectionSessionTimeout(ctx, conn, "lock_wait_timeout", timeout)
 }
 
 // initDBConnectionLockWaitTimeout sets the given lock_wait_timeout for the given direct connection, with a deferred value restoration function.
@@ -1536,16 +1593,32 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 }
 
 // readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
-func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []string, err error) {
+func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) ([]string, error) {
+	pending, err := e.readPendingMigrations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	uuids := make([]string, len(pending))
+	for i, pm := range pending {
+		uuids[i] = pm.uuid
+	}
+	return uuids, nil
+}
+
+// readPendingMigrations returns pending migrations (queued/ready/running) with their migration contexts.
+func (e *Executor) readPendingMigrations(ctx context.Context) ([]pendingMigration, error) {
 	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
 	if err != nil {
-		return uuids, err
+		return nil, err
 	}
+	migrations := make([]pendingMigration, 0, len(r.Named().Rows))
 	for _, row := range r.Named().Rows {
-		uuid := row["migration_uuid"].ToString()
-		uuids = append(uuids, uuid)
+		migrations = append(migrations, pendingMigration{
+			uuid:             row["migration_uuid"].ToString(),
+			migrationContext: row["migration_context"].ToString(),
+		})
 	}
-	return uuids, err
+	return migrations, nil
 }
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
@@ -2849,7 +2922,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 // - a migration is 'ready' but is not set to run _concurrently_, and there's a running migration that is also non-concurrent
 // - a migration is 'ready' but there's another migration 'running' on the exact same table
 func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.OnlineDDL, error) {
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -2873,7 +2946,18 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 		}
 		if isImmediateOperation && onlineDDL.StrategySetting().IsInOrderCompletion() {
 			// This migration is immediate: if we run it now, it will complete within a second or two at most.
-			if len(pendingMigrationsUUIDs) > 0 && pendingMigrationsUUIDs[0] != onlineDDL.UUID {
+			// For in-order completion, an immediate migration must be the first pending one in its context —
+			// if anything in the same context precedes it, we must wait for that to complete first.
+			// We scope the check to the same context because different contexts are independent sequences:
+			// a pending migration in another context should not delay this one.
+			firstInContext := ""
+			for _, pm := range pendingMigrations {
+				if pm.migrationContext == onlineDDL.MigrationContext {
+					firstInContext = pm.uuid
+					break
+				}
+			}
+			if firstInContext != onlineDDL.UUID {
 				continue
 			}
 		}
@@ -2899,11 +2983,12 @@ func (e *Executor) getNonConflictingMigration(ctx context.Context) (*schema.Onli
 // reviewInOrderMigrations reviews all pending migrations that are also `--in-order` to see whether
 // they should be failed due to prior failed/cancelled migrations in same context.
 func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return err
 	}
-	for _, uuid := range pendingMigrationsUUIDs {
+	for _, pm := range pendingMigrations {
+		uuid := pm.uuid
 		onlineDDL, _, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return err
@@ -2915,7 +3000,7 @@ func (e *Executor) reviewInOrderMigrations(ctx context.Context) error {
 		if wasFailed {
 			log.Info(fmt.Sprintf("reviewInOrderMigrations: failing in-order migration uuid=%s due to previous failed/cancelled migrations in same context", uuid))
 		} else {
-			pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+			pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrations)
 			if err := e.updateInOrderCompletionPendingCount(ctx, uuid, pendingMigrationsCount); err != nil {
 				return vterrors.Wrapf(err, "failed to update in order completion pending count for migration %s", uuid)
 			}
@@ -3133,19 +3218,18 @@ func shouldCutOverAccordingToBackoff(
 
 // getInOrderCompletionPendingCount returns a count of migrations that must cut-over in-order, before the
 // provided migration is able to proceed. This count is relevant only if the migration uses the
-// --in-order-completion option.
-func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrationsUUIDs []string) uint64 {
-	if len(pendingMigrationsUUIDs) == 0 {
-		return 0
-	}
+// --in-order-completion option. Only migrations within the same migration context are counted: each
+// context is an independent ordered sequence, so a pending migration in a different context must not
+// hold up this one.
+func getInOrderCompletionPendingCount(onlineDDL *schema.OnlineDDL, pendingMigrations []pendingMigration) uint64 {
 	var pendingCount uint64
-	for _, pendingMigrationsUUID := range pendingMigrationsUUIDs {
-		if pendingMigrationsUUID == onlineDDL.UUID {
-			// found all migrations we must wait for if
-			// we found ourself in the pending list.
+	for _, pm := range pendingMigrations {
+		if pm.uuid == onlineDDL.UUID {
 			break
 		}
-		pendingCount++
+		if pm.migrationContext == onlineDDL.MigrationContext {
+			pendingCount++
+		}
 	}
 	return pendingCount
 }
@@ -3174,7 +3258,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	if err != nil {
 		return countRunnning, cancellable, err
 	}
-	pendingMigrationsUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return countRunnning, cancellable, err
 	}
@@ -3302,7 +3386,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					return nil
 				}
 				if strategySetting.IsInOrderCompletion() {
-					pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrationsUUIDs)
+					pendingMigrationsCount := getInOrderCompletionPendingCount(onlineDDL, pendingMigrations)
 					if pendingMigrationsCount > 0 {
 						postponeCompletion = true
 					}
@@ -3345,8 +3429,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	{
 		// now, let's look at UUIDs we own and _think_ should be running, and see which of them _isn't_ actually running or pending...
 		uuidsFoundPending := map[string]bool{}
-		for _, uuid := range pendingMigrationsUUIDs {
-			uuidsFoundPending[uuid] = true
+		for _, pm := range pendingMigrations {
+			uuidsFoundPending[pm.uuid] = true
 		}
 
 		e.ownedRunningMigrations.Range(func(k, _ any) bool {
@@ -4467,10 +4551,6 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
-	if err != nil {
-		return result, err
-	}
 	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
 		return result, err
@@ -4487,7 +4567,7 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(rows)))
 	return result, nil
 }
 

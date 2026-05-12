@@ -26,32 +26,68 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// analyzeExecuteFetchAsDbaMultiQuery reutrns 'true' when at least one of the queries
-// in the given SQL has a `/*vt+ allowZeroInDate=true */` directive.
-func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (queries []string, parseable bool, countCreate int, allowZeroInDate bool, err error) {
+// schemaEngine returns the schema engine if available, or nil. It nil-guards
+// the QueryServiceControl reference so callers — particularly tests that
+// build TabletManager without a controller wired in — don't panic. The
+// schema-package gate helpers all treat a nil engine as a no-op.
+func (tm *TabletManager) schemaEngine() *schema.Engine {
+	if tm.QueryServiceControl == nil {
+		return nil
+	}
+	return tm.QueryServiceControl.SchemaEngine()
+}
+
+// checkCreateTableLimitForSQL splits the given multi-statement SQL into
+// individual statements and applies the schema engine's CREATE TABLE
+// table-count gate to the batch. Statements that fail to parse are reported
+// to the gate in their original order so unparseable input cannot silently
+// bypass the limit.
+func checkCreateTableLimitForSQL(parser *sqlparser.Parser, se *schema.Engine, sql string) error {
+	queries, splitErr := parser.SplitStatementToPieces(sql)
+	if splitErr != nil {
+		// We could not split the SQL at all; treat the whole input as a
+		// single unparseable unit.
+		return schema.CheckCreateTableLimit(se, nil, 1)
+	}
+	return schema.CheckCreateTableLimitForQueries(se, parser, queries)
+}
+
+// analyzeExecuteFetchAsDbaMultiQuery splits and parses sql, returning the
+// individual queries and their parsed AST. parsedStmts has the same length
+// as queries; nil entries indicate statements that failed to parse (which
+// is legitimate for some DDL, e.g. `CHANGE REPLICATION SOURCE TO...`).
+// parseable is false iff any statement failed to parse. allowZeroInDate is
+// true iff any parsed statement carries the `/*vt+ allowZeroInDate=true */`
+// directive.
+func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (queries []string, parsedStmts []sqlparser.Statement, parseable bool, countCreate int, allowZeroInDate bool, err error) {
 	queries, err = parser.SplitStatementToPieces(sql)
 	if err != nil {
-		return nil, false, 0, false, err
+		return nil, nil, false, 0, false, err
 	}
 	if len(queries) == 0 {
-		return nil, false, 0, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no statements found in query: %s", sql)
+		return nil, nil, false, 0, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no statements found in query: %s", sql)
 	}
+	parsedStmts = make([]sqlparser.Statement, len(queries))
 	parseable = true
-	for _, query := range queries {
+	for i, query := range queries {
 		// Some of the queries we receive here are legitimately non-parseable by our
 		// current parser, such as `CHANGE REPLICATION SOURCE TO...`. We must allow
-		// them and so we skip parsing errors.
-		stmt, err := parser.Parse(query)
-		if err != nil {
+		// them and so we skip parsing errors. The corresponding parsedStmts[i]
+		// stays nil so downstream callers can recognize the parse failure in
+		// place.
+		stmt, parseErr := parser.Parse(query)
+		if parseErr != nil {
 			parseable = false
 			continue
 		}
+		parsedStmts[i] = stmt
 		switch stmt.(type) {
 		case *sqlparser.CreateTable, *sqlparser.CreateView:
 			countCreate++
@@ -65,7 +101,7 @@ func analyzeExecuteFetchAsDbaMultiQuery(sql string, parser *sqlparser.Parser) (q
 			}
 		}
 	}
-	return queries, parseable, countCreate, allowZeroInDate, nil
+	return queries, parsedStmts, parseable, countCreate, allowZeroInDate, nil
 }
 
 // ExecuteMultiFetchAsDba will execute the given queries, possibly disabling binlogs and reload schema.
@@ -82,6 +118,29 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+
+	// Parse, validate, and gate before acquiring an mysqld connection so a
+	// rejected batch does not cost us a connection acquire and the SET
+	// sql_log_bin / foreign_key_checks / USE round-trips that follow.
+	// countCreate also includes CREATE VIEW; the gate ignores non-table
+	// statements internally. Unparseable statements that look like
+	// persistent CREATE TABLE/VIEW statements are treated as worst-case
+	// potential schema object creations in their original execution order.
+	queries, parsedStmts, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
+	if err != nil {
+		return nil, err
+	}
+	if validateQueries != nil {
+		if err := validateQueries(queries, countCreate); err != nil {
+			return nil, err
+		}
+	}
+	if countCreate > 0 || !parseable {
+		if err := schema.CheckCreateTableLimitForParsedStatements(tm.schemaEngine(), tm.Env.Parser(), queries, parsedStmts); err != nil {
+			return nil, err
+		}
+	}
+
 	// Get a connection.
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
@@ -111,15 +170,6 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
 	}
 
-	queries, _, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(sql, tm.Env.Parser())
-	if err != nil {
-		return nil, err
-	}
-	if validateQueries != nil {
-		if err := validateQueries(queries, countCreate); err != nil {
-			return nil, err
-		}
-	}
 	if allowZeroInDate {
 		if _, err := conn.ExecuteFetch("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", 1, false); err != nil {
 			return nil, err
@@ -220,6 +270,16 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+	// Replace any provided sidecar database qualifiers with the correct one,
+	// then gate before opening the mysqld connection so a rejected batch
+	// does not cost a connection acquire and a USE round-trip.
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetAllPrivsConnection(ctx)
 	if err != nil {
@@ -233,11 +293,6 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
-	if err != nil {
-		return nil, err
-	}
 	result, err := conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 
 	if err == nil && req.ReloadSchema {
@@ -254,23 +309,32 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
 	}
+	// Replace any provided sidecar database qualifiers with the correct one,
+	// then gate before opening the mysqld connection so a rejected batch
+	// does not cost a connection acquire.
+	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCreateTableLimitForSQL(tm.Env.Parser(), tm.schemaEngine(), uq); err != nil {
+		return nil, err
+	}
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetAppConnection(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Recycle()
-	// Replace any provided sidecar database qualifiers with the correct one.
-	uq, err := tm.Env.Parser().ReplaceTableQualifiers(string(req.Query), sidecar.DefaultName, sidecar.GetName())
-	if err != nil {
-		return nil, err
-	}
+
 	result, err := conn.Conn.ExecuteFetch(uq, int(req.MaxRows), true /*wantFields*/)
 	return sqltypes.ResultToProto3(result), err
 }
 
 // MysqlHostMetrics gets system metrics from mysqlctl[d]
 func (tm *TabletManager) MysqlHostMetrics(ctx context.Context, req *tabletmanagerdatapb.MysqlHostMetricsRequest) (*tabletmanagerdatapb.MysqlHostMetricsResponse, error) {
+	if tm.Cnf == nil {
+		return &tabletmanagerdatapb.MysqlHostMetricsResponse{}, nil
+	}
 	mysqlResp, err := tm.MysqlDaemon.HostMetrics(ctx, tm.Cnf)
 	if err != nil {
 		return nil, err

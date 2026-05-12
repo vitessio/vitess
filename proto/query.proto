@@ -220,10 +220,10 @@ enum Type {
   VECTOR = 2083;
   // RAW specifies a type which won't be quoted but the value used as-is while encoding.
   // Properties: 36, None.
-  RAW = 2084;
+  RAW = 36;
   // ROW_TUPLE represents multiple rows.
   // Properties: 37, None.
-  ROW_TUPLE = 2085;
+  ROW_TUPLE = 37;
 }
 
 // Value represents a typed value.
@@ -379,6 +379,13 @@ message ExecuteOptions {
 
   // transaction_timeout specifies the transaction timeout in milliseconds. If not set, the default timeout is used.
   optional int64 transaction_timeout = 20;
+
+  // no_result specifies that the caller does not need the query result rows.
+  // When set, the server will still execute the query via the Execute RPC
+  // but will not return rows or fields in the response. This flag is not
+  // currently honored by StreamExecute. This is useful for warming reads
+  // where the goal is to warm the buffer pool, not to retrieve data.
+  bool no_result = 21;
 }
 
 // Field describes a single column returned by a query

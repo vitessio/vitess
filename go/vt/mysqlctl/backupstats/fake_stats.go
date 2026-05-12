@@ -42,7 +42,7 @@ func (fs *FakeStats) Scope(scopes ...Scope) Stats {
 			newScopeV[s.Type] = s.Value
 		}
 	}
-	newScopes := []Scope{}
+	newScopes := make([]Scope, 0, len(newScopeV))
 	for t, v := range newScopeV {
 		newScopes = append(newScopes, Scope{t, v})
 	}

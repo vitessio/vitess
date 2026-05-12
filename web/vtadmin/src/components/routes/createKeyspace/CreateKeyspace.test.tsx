@@ -102,7 +102,6 @@ describe('CreateKeyspace integration test', () => {
         // Both assertions must be checked atomically during the transient loading state.
         await waitFor(() => {
             expect(submitButton).toHaveTextContent('Creating Keyspace...');
-            // eslint-disable-next-line testing-library/no-wait-for-multiple-assertions
             expect(submitButton).toHaveAttribute('disabled');
         });
 

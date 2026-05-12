@@ -18,10 +18,11 @@ package stats
 
 import (
 	"expvar"
-	"math/rand/v2"
+	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -165,44 +166,79 @@ func BenchmarkMultiCounters(b *testing.B) {
 	})
 }
 
-func BenchmarkCountersTailLatency(b *testing.B) {
-	// For this one, ignore the time reported by 'go test'.
-	// The 99th Percentile log line is all that matters.
-	// (Cmd: go test -bench=BenchmarkCountersTailLatency -benchtime=30s -cpu=10)
-	clearStats()
-	benchCounter.Add("c1", 1)
-	c := make(chan time.Duration, 100)
-	done := make(chan struct{})
-	go func() {
-		all := make([]int, b.N)
-		i := 0
-		for dur := range c {
-			all[i] = int(dur)
-			i++
-		}
-		sort.Ints(all)
-		p99 := time.Duration(all[b.N*99/100])
-		b.Logf("99th Percentile (for N=%v): %v", b.N, p99)
-		close(done)
-	}()
+// benchmarkContention measures Add() latency under heavy contention.
+// Each goroutine collects latencies locally to avoid measurement skew
+// from shared channels or locks. Percentiles are computed after the
+// benchmark completes.
+//
+// Run with high -cpu to increase goroutine count:
+//
+//	go test -bench=BenchmarkContention -benchtime=5s -cpu=10 -run='^$'
+func benchmarkContention(b *testing.B, addFunc func(i int)) {
+	b.Helper()
+
+	b.SetParallelism(100) // 100 * GOMAXPROCS goroutines
+
+	var mu sync.Mutex
+	var allLatencies []time.Duration
 
 	b.ResetTimer()
-	b.SetParallelism(100) // The actual number of goroutines is 100*GOMAXPROCS
 	b.RunParallel(func(pb *testing.PB) {
-		var start time.Time
-
+		local := make([]time.Duration, 0, 1024)
+		i := 0
 		for pb.Next() {
-			// sleep between 0~200ms to simulate 10 QPS per goroutine.
-			time.Sleep(time.Duration(rand.Int64N(200)) * time.Millisecond)
-			start = time.Now()
-			benchCounter.Add("c1", 1)
-			c <- time.Since(start)
+			start := time.Now()
+			addFunc(i)
+			local = append(local, time.Since(start))
+			i++
 		}
+		mu.Lock()
+		allLatencies = append(allLatencies, local...)
+		mu.Unlock()
 	})
 	b.StopTimer()
 
-	close(c)
-	<-done
+	slices.Sort(allLatencies)
+	n := len(allLatencies)
+	if n > 0 {
+		b.Logf("p50: %v  p99: %v  p999: %v  max: %v  (n=%d)",
+			allLatencies[n*50/100],
+			allLatencies[n*99/100],
+			allLatencies[n*999/1000],
+			allLatencies[n-1],
+			n,
+		)
+	}
+}
+
+func BenchmarkCountersWithSingleLabelContention(b *testing.B) {
+	clearStats()
+	c := NewCountersWithSingleLabel("", "help", "key")
+	c.Add("c1", 0) // pre-create
+
+	benchmarkContention(b, func(_ int) {
+		c.Add("c1", 1)
+	})
+}
+
+func BenchmarkCountersWithMultiLabelsContention(b *testing.B) {
+	clearStats()
+	c := NewCountersWithMultiLabels("", "help", []string{"call", "keyspace", "dbtype"})
+
+	// Pre-create 50 distinct key combos to simulate realistic workload.
+	keys := make([][]string, 50)
+	for i := range keys {
+		keys[i] = []string{
+			fmt.Sprintf("method-%d", i),
+			fmt.Sprintf("ks-%d", i%5),
+			fmt.Sprintf("type-%d", i%3),
+		}
+		c.Add(keys[i], 0)
+	}
+
+	benchmarkContention(b, func(i int) {
+		c.Add(keys[i%len(keys)], 1)
+	})
 }
 
 func TestCountersFuncWithMultiLabels(t *testing.T) {

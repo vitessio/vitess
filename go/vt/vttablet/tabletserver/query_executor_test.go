@@ -48,6 +48,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
@@ -558,6 +559,149 @@ func TestDisableOnlineDDL(t *testing.T) {
 	require.EqualError(t, err, "online DDL is disabled")
 }
 
+func TestExecDDLSchemaTableCountLimit(t *testing.T) {
+	type setup struct {
+		// limit is what we set the dynamic flag to.
+		limit int
+		// preloadedTables are tables we install in the schema engine before
+		// the test runs (representing the "current" set on disk).
+		preloadedTables []string
+		// query is the DDL to execute.
+		query string
+		// wantErrContains is non-empty if we expect a rejection from our gate.
+		// When empty we expect the gate to let the request through.
+		wantErrContains string
+	}
+	cases := []struct {
+		name string
+		setup
+	}{
+		{
+			name: "below_limit_create_passes_gate",
+			setup: setup{
+				limit:           10,
+				preloadedTables: []string{"a", "b"},
+				query:           "create table c (id int primary key)",
+			},
+		},
+		{
+			name: "at_limit_plain_create_rejected",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create table c (id int primary key)",
+				wantErrContains: "schema engine table limit of 2 reached",
+			},
+		},
+		{
+			name: "at_limit_create_view_rejected",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create view c as select 1 from dual",
+				wantErrContains: "schema engine table limit of 2 reached",
+			},
+		},
+		{
+			name: "at_limit_if_not_exists_on_existing_passes",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create table if not exists a (id int primary key)",
+			},
+		},
+		{
+			name: "at_limit_create_on_existing_passes_gate",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create table a (id int primary key)",
+			},
+		},
+		{
+			name: "at_limit_temporary_passes",
+			setup: setup{
+				limit:           2,
+				preloadedTables: []string{"a", "b"},
+				query:           "create temporary table c (id int primary key)",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			// Register a pattern so any CREATE TABLE DDL that reaches MySQL
+			// returns an empty success result rather than an "unsupported
+			// query" error.  The deferred schema reload may still encounter
+			// errors for unregistered queries (e.g. SHOW CREATE TABLE), but
+			// those errors are only logged – they do not propagate back
+			// through execDDL.
+			db.AddQueryPattern("create.*", &sqltypes.Result{})
+
+			ctx := context.Background()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
+
+			// Reset the engine's table set so TableCount() exactly equals
+			// len(preloadedTables) when the gate runs. The deferred schema reload
+			// after Execute will repopulate the engine — that is fine, it happens
+			// after the gate check.
+			tsv.se.ResetTablesForTests()
+
+			// Override the dynamic flag for this test only, restoring
+			// whatever value was in effect at entry.
+			originalLimit := eschema.MaxTableCount()
+			eschema.SetMaxTableCount(tc.limit)
+			t.Cleanup(func() { eschema.SetMaxTableCount(originalLimit) })
+
+			// Add the preloaded tables into the schema engine.
+			for _, name := range tc.preloadedTables {
+				tsv.se.SetTableForTests(eschema.NewTable(name, eschema.NoType))
+			}
+
+			qre := newTestQueryExecutor(ctx, tsv, tc.query, 0)
+			_, err := qre.Execute()
+
+			if tc.wantErrContains == "" {
+				// Either the request passed our gate (success) or it failed
+				// downstream for unrelated reasons; what matters is that the
+				// error is NOT our limit error.
+				if err != nil {
+					assert.NotContains(t, err.Error(), "schema engine table limit")
+				}
+			} else {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErrContains)
+				assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+			}
+		})
+	}
+}
+
+func TestExecDDLSchemaTableCountLimitIgnoresSyntheticDual(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	db.AddQueryPattern("create.*", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	originalLimit := eschema.MaxTableCount()
+	eschema.SetMaxTableCount(4)
+	t.Cleanup(func() { eschema.SetMaxTableCount(originalLimit) })
+
+	// The test schema starts with 3 real tables plus Vitess's synthetic dual.
+	// Creating a fourth real table should be allowed when the limit is 4.
+	qre := newTestQueryExecutor(ctx, tsv, "create table c (id int primary key)", 0)
+	_, err := qre.Execute()
+	if err != nil {
+		assert.NotContains(t, err.Error(), "schema engine table limit")
+	}
+}
+
 func TestQueryExecutorLimitFailure(t *testing.T) {
 	type dbResponse struct {
 		query  string
@@ -1040,6 +1184,74 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	}
 }
 
+// TestQueryExecutorTableAclUserTableNamedDual verifies that a real user table
+// named `dual` (referenced via backticks per the parser) is subject to ACL like
+// any other table — it does NOT inherit the placeholder-dual ACL bypass.
+func TestQueryExecutorTableAclUserTableNamedDual(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	// Add a real user table named `dual` to the schema fixtures. The default
+	// setUpQueryExecutorTest doesn't include it; we layer it on top.
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseShowTablesRow("dual", false, ""),
+		},
+	})
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowPrimaryRow("test_table", "pk"),
+			mysql.ShowPrimaryRow("seq", "id"),
+			mysql.ShowPrimaryRow("msg", "id"),
+			mysql.ShowPrimaryRow("dual", "pk"),
+		},
+	})
+	db.MockQueriesForTable("dual", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+
+	username := "basic_username"
+	callerID := &querypb.VTGateCallerID{Username: username}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+
+	// ACL config exists but does not authorize this caller for the `dual` table.
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group01",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{username},
+		}},
+	}
+	if err := tableacl.InitFromProto(config); err != nil {
+		t.Fatalf("unable to load tableacl config, error: %v", err)
+	}
+
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	defer tsv.StopService()
+
+	// Backtick-quoted form references the user table (post-#19579), not the
+	// placeholder. ACL must apply.
+	query := "select * from `dual` limit 1000"
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err := qre.Execute()
+	require.Error(t, err, "ACL should deny access to user table `dual`")
+	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
+		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
+	}
+	assert.EqualError(t, err, `Select command denied to user 'basic_username' for table 'dual' (ACL check error)`)
+}
+
 func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -1423,7 +1635,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 
 			// Set up consolidator pre-conditions.
 
-			fakePendingResult := &sync2.FakePendingResult{}
+			fakePendingResult := &sync2.FakePendingResult{Consolidator: fakeConsolidator}
 			fakePendingResult.SetResult(result)
 			fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
 				Created:       !tcase.consolidatorHasIdenticalQuery,
@@ -1494,10 +1706,11 @@ func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
 	}
 
 	// Set up consolidator to simulate an identical query already running (Created=false)
-	fakePendingResult := &sync2.FakePendingResult{}
+	fakePendingResult := &sync2.FakePendingResult{Consolidator: fakeConsolidator}
 	fakePendingResult.SetResult(result)
 	// Start with waiter count above the cap (2 > 1), so the condition fails
 	fakePendingResult.WaiterCount = 2
+	fakeConsolidator.SetTotalWaiterCount(2)
 
 	fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
 		Created:       false, // Simulate identical query already running
@@ -1528,10 +1741,9 @@ func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
 	// Verify we did NOT broadcast (because we're not the original)
 	require.Equal(t, 0, fakePendingResult.BroadcastCalls)
 
-	// Verify AddWaiterCounter was called: once with 0 (to check count), once with -1 (cleanup)
-	require.Len(t, fakePendingResult.AddWaiterCounterCalls, 2)
-	require.Equal(t, int64(0), fakePendingResult.AddWaiterCounterCalls[0])  // Check current count
-	require.Equal(t, int64(-1), fakePendingResult.AddWaiterCounterCalls[1]) // Decrement
+	// Verify AddWaiterCounter was called once with -1 (cleanup)
+	require.Len(t, fakePendingResult.AddWaiterCounterCalls, 1)
+	require.Equal(t, int64(-1), fakePendingResult.AddWaiterCounterCalls[0])
 
 	// Verify fallback executed the query independently
 	require.Equal(t, 1, db.GetQueryCalledNum(input))

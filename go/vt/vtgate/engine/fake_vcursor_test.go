@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -64,6 +65,10 @@ type noopVCursor struct {
 func (t *noopVCursor) GetExecutionMetrics() *Metrics {
 	panic("implement me")
 }
+
+func (t *noopVCursor) SetExecutedPrimitive(Primitive) {}
+
+func (t *noopVCursor) ExecutedPrimitive() Primitive { return nil }
 
 func (t *noopVCursor) SetExecQueryTimeout(timeout *int) {
 	panic("implement me")
@@ -116,11 +121,19 @@ func (t *noopVCursor) GetWarmingReadsPercent() int {
 	panic("implement me")
 }
 
-func (t *noopVCursor) GetWarmingReadsChannel() chan bool {
+func (t *noopVCursor) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetQueryPriority() (int, error) {
 	panic("implement me")
 }
 
 func (t *noopVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
+	panic("implement me")
+}
+
+func (t *noopVCursor) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	panic("implement me")
 }
 
@@ -470,10 +483,11 @@ type loggingVCursor struct {
 
 	parser *sqlparser.Parser
 
-	onMirrorClonesFn       func(context.Context) VCursor
-	onExecuteMultiShardFn  func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
-	onStreamExecuteMultiFn func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
-	onRecordMirrorStatsFn  func(time.Duration, time.Duration, error)
+	onMirrorClonesFn        func(context.Context) VCursor
+	onExecuteMultiShardFn   func(context.Context, Primitive, []*srvtopo.ResolvedShard, []*querypb.BoundQuery, bool, bool)
+	onStreamExecuteMultiFn  func(context.Context, Primitive, string, []*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, bool, bool, func(*sqltypes.Result) error)
+	onRecordMirrorStatsFn   func(time.Duration, time.Duration, error)
+	onResolveDestinationsFn func(context.Context)
 
 	metrics *Metrics
 }
@@ -591,12 +605,20 @@ func (f *loggingVCursor) GetWarmingReadsPercent() int {
 	return 0
 }
 
-func (f *loggingVCursor) GetWarmingReadsChannel() chan bool {
-	return make(chan bool)
+func (f *loggingVCursor) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	return semaphore.NewWeighted(0)
+}
+
+func (f *loggingVCursor) GetQueryPriority() (int, error) {
+	return 0, nil
 }
 
 func (f *loggingVCursor) CloneForReplicaWarming(ctx context.Context) VCursor {
 	return f
+}
+
+func (f *loggingVCursor) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return ctx, func() {}
 }
 
 func (f *loggingVCursor) CloneForMirroring(ctx context.Context) VCursor {
@@ -662,6 +684,9 @@ func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primi
 }
 
 func (f *loggingVCursor) ResolveDestinations(ctx context.Context, keyspace string, ids []*querypb.Value, destinations []key.ShardDestination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	if f.onResolveDestinationsFn != nil {
+		f.onResolveDestinationsFn(ctx)
+	}
 	f.log = append(f.log, fmt.Sprintf("ResolveDestinations %v %v %v", keyspace, ids, key.DestinationsString(destinations)))
 	if f.shardErr != nil {
 		return nil, nil, f.shardErr

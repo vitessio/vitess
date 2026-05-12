@@ -824,7 +824,7 @@ func (tm *TabletManager) redoPreparedTransactionsAndSetReadWrite(ctx context.Con
 	if err != nil {
 		// Ignore the error if the sever doesn't support super read only variable.
 		// We should just redo the preapred transactions before we set it to read-write.
-		if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return err
@@ -1135,8 +1135,8 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
 	}
 
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
-		return "", vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
+		return "", vterrors.Wrap(err, "failed to configure replication source")
 	}
 
 	return primaryStatus.Position, nil

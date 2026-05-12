@@ -503,8 +503,8 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 
 		tEnv.tableColumns[table] = make(map[string]querypb.Type)
 		var rowTypes []*querypb.Field
-		var colTypes []*querypb.Field
 		var colValues [][]sqltypes.Value
+		colTypes := make([]*querypb.Field, 0, 1)
 		colType := &querypb.Field{
 			Name:    "column_type",
 			Type:    sqltypes.VarChar,
@@ -643,7 +643,7 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 
 		tableName := sqlparser.String(sqlparser.GetTableName(table.Expr))
 		columns, exists := t.vte.getGlobalTabletEnv().tableColumns[tableName]
-		if !exists && tableName != "" && tableName != "dual" {
+		if !exists && tableName != "" {
 			return nil, fmt.Errorf("unable to resolve table name %s", tableName)
 		}
 
@@ -730,14 +730,17 @@ func (t *explainTablet) analyzeWhere(selStmt *sqlparser.Select, tableColumnMap m
 	}
 	colName := strings.ToLower(c.Name.String())
 	colType := querypb.Type_VARCHAR
-	tableExpr := selStmt.From[0]
-	expr, ok := tableExpr.(*sqlparser.AliasedTableExpr)
-	if ok {
-		m := tableColumnMap[sqlparser.GetTableName(expr.Expr)]
-		if m != nil {
-			t, found := m[colName]
-			if found {
-				colType = t
+	// FROM-less SELECTs (post-DUAL-as-keyword virtual dual) have no tables to
+	// infer column types from — leave the default and proceed.
+	if len(selStmt.From) > 0 {
+		expr, ok := selStmt.From[0].(*sqlparser.AliasedTableExpr)
+		if ok {
+			m := tableColumnMap[sqlparser.GetTableName(expr.Expr)]
+			if m != nil {
+				t, found := m[colName]
+				if found {
+					colType = t
+				}
 			}
 		}
 	}

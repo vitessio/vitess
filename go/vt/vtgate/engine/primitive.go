@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -126,11 +128,21 @@ type (
 		// GetWarmingReadsPercent gets the percentage of queries to clone to replicas for bufferpool warming
 		GetWarmingReadsPercent() int
 
-		// GetWarmingReadsChannel returns the channel for executing warming reads against replicas
-		GetWarmingReadsChannel() chan bool
+		// GetWarmingReadsSemaphore returns the semaphore for limiting concurrent warming reads
+		GetWarmingReadsSemaphore() *semaphore.Weighted
 
-		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas
+		// GetQueryPriority returns the current session's query priority as an int, defaulting to 0 if unset
+		GetQueryPriority() (int, error)
+
+		// CloneForReplicaWarming clones the VCursor for re-use in warming queries to replicas.
+		// The clone must be created before launching the warming goroutine to avoid
+		// concurrent access to the original VCursor. Use WarmingReadsContext on the
+		// clone to obtain a timeout-bounded context for the warming query.
 		CloneForReplicaWarming(ctx context.Context) VCursor
+
+		// WarmingReadsContext returns a timeout-bounded context for a warming query
+		// and a cancel function that must be called when the warming query completes.
+		WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc)
 
 		// CloneForMirroring clones the VCursor for re-use in mirroring queries to other keyspaces
 		CloneForMirroring(ctx context.Context) VCursor
@@ -151,6 +163,14 @@ type (
 		SetLastInsertID(uint64)
 
 		GetExecutionMetrics() *Metrics
+
+		// SetExecutedPrimitive records the post-PlanSwitcher root primitive that
+		// was actually executed. Per-query state set by PlanSwitcher when it
+		// picks a branch.
+		SetExecutedPrimitive(Primitive)
+		// ExecutedPrimitive returns the value previously recorded by
+		// SetExecutedPrimitive, or nil if none was recorded.
+		ExecutedPrimitive() Primitive
 	}
 
 	// SessionActions gives primitives ability to interact with the session state

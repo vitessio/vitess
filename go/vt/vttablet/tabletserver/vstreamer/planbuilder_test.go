@@ -688,6 +688,14 @@ func TestPlanBuilder(t *testing.T) {
 		outErr:  `unsupported: select * from t1, t2`,
 	}, {
 		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select 1"},
+		outErr:  `unsupported select from dual: select 1 from dual`,
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select 1 from dual"},
+		outErr:  `unsupported select from dual: select 1 from dual`,
+	}, {
+		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select * from t1 join t2"},
 		outErr:  `unsupported: select * from t1 join t2`,
 	}, {
@@ -730,7 +738,7 @@ func TestPlanBuilder(t *testing.T) {
 		// analyzeExpr tests.
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, * from t1"},
-		outErr:  `syntax error: unexpected '*' at position 13`,
+		outErr:  `syntax error at position 13`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select none from t1"},

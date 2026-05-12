@@ -64,6 +64,16 @@ type FakeMysqlDaemon struct {
 	// It is used by Shutdown.
 	ShutdownTime time.Duration
 
+	// StartAfterExitTime is used to simulate mysqlds that take some time to
+	// disappear after shutting themselves down before restarting.
+	StartAfterExitTime time.Duration
+
+	// StartAfterExitError is used by StartAfterExit.
+	StartAfterExitError error
+
+	// StartAfterExitCalls tracks how many times StartAfterExit was called.
+	StartAfterExitCalls int
+
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
 	MysqlPort atomic.Int32
@@ -125,6 +135,13 @@ type FakeMysqlDaemon struct {
 	// SuperReadOnly is the current value of the flag.
 	SuperReadOnly atomic.Bool
 
+	// SetSuperReadOnlyError is used by SetSuperReadOnly.
+	SetSuperReadOnlyError error
+
+	// ExecuteSuperQueryListCallback is called at the start of ExecuteSuperQueryList
+	// before any queries are executed, if set.
+	ExecuteSuperQueryListCallback func()
+
 	// SetReplicationPositionPos is matched against the input of
 	// SetReplicationPosition. If it doesn't match, SetReplicationPosition
 	// will return an error.
@@ -140,6 +157,9 @@ type FakeMysqlDaemon struct {
 
 	// SetReplicationSourceError is used by SetReplicationSource.
 	SetReplicationSourceError error
+
+	// SetReplicationSourceFunc overrides SetReplicationSource when it is set.
+	SetReplicationSourceFunc func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error
 
 	// StopReplicationError error is used by StopReplication.
 	StopReplicationError error
@@ -183,6 +203,12 @@ type FakeMysqlDaemon struct {
 	// ExpectedExecuteSuperQueryCurrent is the current index of the
 	// queries we expect.
 	ExpectedExecuteSuperQueryCurrent int
+
+	// ExecuteSuperQueryErrorMap maps query strings to errors. When a query
+	// matches a key in this map, the corresponding error is returned immediately,
+	// bypassing the normal ExpectedExecuteSuperQueryList validation. Useful for
+	// simulating errors on specific queries without consuming from the expected list.
+	ExecuteSuperQueryErrorMap map[string]error
 
 	// FetchSuperQueryResults is used by FetchSuperQuery.
 	FetchSuperQueryMap map[string]*sqltypes.Result
@@ -293,6 +319,26 @@ func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *Mycnf) error
 
 // Wait is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *Mycnf) error {
+	return nil
+}
+
+// StartAfterExit simulates waiting for mysqld to exit and then restarting it.
+func (fmd *FakeMysqlDaemon) StartAfterExit(ctx context.Context, cnf *Mycnf) error {
+	fmd.mu.Lock()
+	fmd.StartAfterExitCalls++
+	fmd.mu.Unlock()
+
+	if fmd.StartAfterExitTime > 0 {
+		select {
+		case <-time.After(fmd.StartAfterExitTime):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if fmd.StartAfterExitError != nil {
+		return fmd.StartAfterExitError
+	}
+	fmd.Running = true
 	return nil
 }
 
@@ -456,9 +502,25 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(ctx context.Context, on bool) error {
 
 // SetSuperReadOnly is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
+	if fmd.SetSuperReadOnlyError != nil {
+		return nil, fmd.SetSuperReadOnlyError
+	}
+	prev := fmd.SuperReadOnly.Load()
+	prevReadOnly := fmd.ReadOnly
 	fmd.SuperReadOnly.Store(on)
-	fmd.ReadOnly = on
-	return nil, nil
+	// In real MySQL, enabling super_read_only implies read_only = ON,
+	// but disabling super_read_only does not change read_only.
+	if on {
+		fmd.ReadOnly = true
+	}
+	if prev == on {
+		return nil, nil
+	}
+	return func() error {
+		fmd.SuperReadOnly.Store(prev)
+		fmd.ReadOnly = prevReadOnly
+		return nil
+	}, nil
 }
 
 // GetGlobalStatusVars is part of the MysqlDaemon interface.
@@ -526,6 +588,10 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos repl
 
 // SetReplicationSource is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
+	if fmd.SetReplicationSourceFunc != nil {
+		return fmd.SetReplicationSourceFunc(ctx, host, port, heartbeatInterval, stopReplicationBefore, startReplicationAfter)
+	}
+
 	input := fmt.Sprintf("%v:%v", host, port)
 	found := false
 	for _, sourceInput := range fmd.SetReplicationSourceInputs {
@@ -593,7 +659,18 @@ func (fmd *FakeMysqlDaemon) ExecuteSuperQuery(ctx context.Context, query string)
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queryList []string) error {
+	if fmd.ExecuteSuperQueryListCallback != nil {
+		fmd.ExecuteSuperQueryListCallback()
+	}
 	for _, query := range queryList {
+		// Return a specific error for this query if one is configured, bypassing
+		// the normal expected-query validation.
+		if fmd.ExecuteSuperQueryErrorMap != nil {
+			if err, ok := fmd.ExecuteSuperQueryErrorMap[query]; ok {
+				return err
+			}
+		}
+
 		// test we still have a query to compare
 		if fmd.ExpectedExecuteSuperQueryCurrent >= len(fmd.ExpectedExecuteSuperQueryList) {
 			return fmt.Errorf("unexpected extra query in ExecuteSuperQueryList: %v", query)

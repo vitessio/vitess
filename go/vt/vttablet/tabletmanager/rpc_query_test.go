@@ -100,18 +100,43 @@ func TestAnalyzeExecuteFetchAsDbaMultiQuery(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.query, func(t *testing.T) {
 			parser := sqlparser.NewTestParser()
-			queries, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(tcase.query, parser)
+			queries, parsedStmts, parseable, countCreate, allowZeroInDate, err := analyzeExecuteFetchAsDbaMultiQuery(tcase.query, parser)
 			if tcase.expectErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tcase.count, len(queries))
+				assert.Equal(t, len(queries), len(parsedStmts))
 				assert.Equal(t, tcase.parseable, parseable)
 				assert.Equal(t, tcase.allCreate, (countCreate == len(queries)))
 				assert.Equal(t, tcase.allowZeroInDate, allowZeroInDate)
+				// Verify parsedStmts contract: nil entries iff parse failed.
+				gotAllParsed := true
+				for _, stmt := range parsedStmts {
+					if stmt == nil {
+						gotAllParsed = false
+						break
+					}
+				}
+				assert.Equal(t, tcase.parseable, gotAllParsed,
+					"parsedStmts non-nil count must match parseable flag")
 			}
 		})
 	}
+}
+
+func TestTabletManager_MysqlHostMetricsNilCnf(t *testing.T) {
+	ctx := context.Background()
+	// When using external MySQL (e.g. Cloud SQL, RDS), Cnf is nil because
+	// vttablet skips loading my.cnf when connection parameters are specified.
+	// MysqlHostMetrics should return an empty response instead of panicking.
+	tm := &TabletManager{
+		Cnf: nil,
+	}
+	resp, err := tm.MysqlHostMetrics(ctx, &tabletmanagerdatapb.MysqlHostMetricsRequest{})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Nil(t, resp.HostMetrics)
 }
 
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {

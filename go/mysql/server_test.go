@@ -267,7 +267,7 @@ func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) 
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return nil
 }
 
@@ -1514,6 +1514,7 @@ func TestListenerShutdown(t *testing.T) {
 
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err)
+	defer conn.Close()
 
 	err = conn.Ping()
 	require.NoError(t, err)

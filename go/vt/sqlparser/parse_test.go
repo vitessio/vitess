@@ -2424,6 +2424,19 @@ var validSQL = []struct {
 	input:  "show grants for current_user()",
 	output: "show grants",
 }, {
+	input: "show grants for 'u' using 'r1', current_user, 'r2'",
+}, {
+	input: "show grants for 'u' using current_user",
+}, {
+	input: "show grants for current_user using 'r1', 'r2'",
+}, {
+	input:  "show grants for current_user() using 'r1'",
+	output: "show grants for current_user using 'r1'",
+}, {
+	input: "show grants for 'u' using ''@''",
+}, {
+	input: "show grants for 'u' using 'r1'@''",
+}, {
 	input:  "show index from t",
 	output: "show indexes from t",
 }, {
@@ -4242,6 +4255,9 @@ func TestInvalid(t *testing.T) {
 		}, {
 			input: "select next 2 values from seq, seq",
 			err:   "syntax error at position 31",
+		}, {
+			input: "select next 2 values from dual",
+			err:   "syntax error at position 31 near 'dual'",
 		}, {
 			input: "select 1, next value from seq",
 			err:   "syntax error",
@@ -6635,10 +6651,10 @@ var invalidSQL = []struct {
 	output: "syntax error at position 39",
 }, {
 	input:  "select a, * from t",
-	output: "syntax error: unexpected '*' at position 12",
+	output: "syntax error at position 12",
 }, {
 	input:  "select *, * from t",
-	output: "syntax error: unexpected '*' at position 12",
+	output: "syntax error at position 12",
 }}
 
 func TestErrors(t *testing.T) {

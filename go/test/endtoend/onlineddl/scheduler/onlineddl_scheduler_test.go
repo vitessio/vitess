@@ -23,6 +23,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -34,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -257,10 +257,10 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			utils.GetFlagVariantForTests("--migration-check-interval"), "2s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "2s",
+			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -969,6 +969,116 @@ func testScheduler(t *testing.T) {
 		})
 	}
 
+	t.Run("low wait_timeout", func(t *testing.T) {
+		// Validate that OnlineDDL cutover increases wait_timeout on its connections
+		// when the server has a low wait_timeout configured. Without this protection,
+		// MySQL would kill cutover connections mid-operation, potentially causing
+		// data corruption.
+		ctx, cancel := context.WithTimeout(t.Context(), extendedWaitTime*5)
+		defer cancel()
+
+		// Read the original wait_timeout.
+		rs, err := primaryTablet.VttabletProcess.QueryTabletWithDB("select @@global.wait_timeout as wait_timeout", "performance_schema")
+		require.NoError(t, err)
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		originalWaitTimeout := row.AsInt64("wait_timeout", 0)
+		require.NotZero(t, originalWaitTimeout)
+
+		// Ensure the table exists (may not if running this subtest in isolation).
+		t.Run("ensure table exists", func(t *testing.T) {
+			uuid := testOnlineDDLStatement(t, createParams(createT1IfNotExistsStatement, ddlStrategy, "vtgate", "", "", false))
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		})
+
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+		t.Run("wait for t1 running", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		})
+		t.Run("wait for t1 ready to complete", func(t *testing.T) {
+			waitForReadyToComplete(t, t1uuid, true)
+		})
+
+		// Set a dangerously low wait_timeout AFTER the migration is running and
+		// ready to complete. This way VReplication and other connections survive
+		// setup, but new connections (the cutover connections) inherit the low value.
+		t.Run("set low wait_timeout", func(t *testing.T) {
+			_, err = primaryTablet.VttabletProcess.QueryTabletWithDB("set global wait_timeout=5", "performance_schema")
+			require.NoError(t, err)
+		})
+		defer primaryTablet.VttabletProcess.QueryTabletWithDB(fmt.Sprintf("set global wait_timeout=%d", originalWaitTimeout), "performance_schema")
+
+		// Hold a WRITE lock on the table to stall the cutover's RENAME TABLE.
+		lockConn, err := primaryTablet.VttabletProcess.TabletConn(keyspaceName, true)
+		require.NoError(t, err)
+		defer lockConn.Close()
+		// Ensure our lock connection itself won't be killed.
+		_, err = lockConn.ExecuteFetch("set @@session.wait_timeout=28800", 0, false)
+		require.NoError(t, err)
+
+		t.Run("lock table to stall cutover", func(t *testing.T) {
+			_, err := lockConn.ExecuteFetch("lock tables t1_test write", 0, false)
+			require.NoError(t, err)
+		})
+		defer lockConn.ExecuteFetch("unlock tables", 0, false)
+
+		t.Run("injecting heartbeats asynchronously", func(t *testing.T) {
+			go func() {
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				for {
+					throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.OnlineDDLName, nil)
+					select {
+					case <-ticker.C:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
+		})
+
+		t.Run("complete migration", func(t *testing.T) {
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+		})
+
+		t.Run("validate cutover connections have increased wait_timeout", func(t *testing.T) {
+			// Wait for the cutover to be in-progress. The LOCK TABLES will be blocked by
+			// our held WRITE lock, so the lock connection should be visible in the
+			// processlist with state "Waiting for table metadata lock".
+			query := `
+				SELECT v.VARIABLE_VALUE as wait_timeout
+				FROM performance_schema.threads t
+				JOIN performance_schema.variables_by_thread v ON v.THREAD_ID = t.THREAD_ID
+				WHERE v.VARIABLE_NAME = 'wait_timeout'
+				AND t.PROCESSLIST_STATE = 'Waiting for table metadata lock'
+				AND t.PROCESSLIST_INFO LIKE 'LOCK TABLES%'
+			`
+			assert.Eventually(t, func() bool {
+				rs, err := primaryTablet.VttabletProcess.QueryTabletWithDB(query, "performance_schema")
+				if err != nil {
+					return false
+				}
+				for _, row := range rs.Named().Rows {
+					waitTimeout, _ := strconv.ParseInt(row.AsString("wait_timeout", "0"), 10, 64)
+					if waitTimeout == 31536000 {
+						// Validated! Release the lock so the cutover can proceed.
+						lockConn.ExecuteFetch("unlock tables", 0, false)
+						return true
+					}
+				}
+				return false
+			}, normalWaitTime, time.Second, "expected cutover connection to have wait_timeout == 31536000")
+		})
+
+		t.Run("expect completion", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+	})
+
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
 		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
@@ -1059,9 +1169,10 @@ func testScheduler(t *testing.T) {
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
 		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
 
-		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
-		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
-		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
+		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running.
+		// Both use the same migration context so that the copy-state conflict check (scoped per context) still applies: t2 waits for t1 to be ready_to_complete.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-scheduler-throttling", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-scheduler-throttling", skipWait: true})
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		testAllowConcurrent(t, "t2", t2uuid, 1)
@@ -1162,6 +1273,33 @@ func testScheduler(t *testing.T) {
 		})
 
 		testTableCompletionTimes(t, t2uuid, t1uuid)
+	})
+	onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
+
+	t.Run("ALTER both tables, cross-context concurrent in copy state", func(t *testing.T) {
+		// Regression test for: a running ALTER in copy state should not block a proposed ALTER from a
+		// different migration context. Previously the copy-state conflict check was global; now it is
+		// scoped to the same context, so t2 (ctx-b) must start while t1 (ctx-a) is still copying.
+		onlineddl.ThrottleAllMigrations(t, &vtParams)
+		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, true)
+
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-scheduler-crossctx-a", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		// t1 is now running in copy state (throttled). A migration in a different context must not be blocked.
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-scheduler-crossctx-b", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		time.Sleep(ensureStateNotChangedTime)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
+
+		onlineddl.UnthrottleAllMigrations(t, &vtParams)
+		onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCompleteMigration(t, &vtParams, shards, t2uuid, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 	})
 	onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false)
 
@@ -2154,6 +2292,150 @@ DROP TABLE IF EXISTS stress_test
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
+	})
+
+	// The following two scenarios validate that --in-order-completion is scoped to migration
+	// context: migrations from different contexts form independent ordered sequences and must
+	// not block each other.
+
+	t.Run("cross-context in-order: immediate migration in different context is not blocked", func(t *testing.T) {
+		// Validates the getNonConflictingMigration fix: an immediate in-order migration
+		// must only require being first within its own context, not globally.
+
+		// ctx-a: slow ALTER that will not cut over until explicitly completed.
+		uuidA := testOnlineDDLStatement(t, createParams(
+			alterTableTrivialStatement,
+			"vitess --allow-concurrent --in-order-completion --postpone-completion",
+			"vtctl", "ctx-singleton-cross-1a", "hint_col", "", true,
+		))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// ctx-b: immediate migration (DROP IF NOT EXISTS on a non-existent table).
+		// Before the fix: getNonConflictingMigration would not start it because uuidA
+		// globally precedes it and the migration is not globally first.
+		// After the fix: it is first in ctx-b, so it is selected and completes immediately.
+		uuidB := testOnlineDDLStatement(t, createParams(
+			dropNonexistentTableStatement,
+			"vitess --allow-concurrent --in-order-completion",
+			"vtctl", "ctx-singleton-cross-1b", "", "", false,
+		))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidB, schema.OnlineDDLStatusComplete)
+		// ctx-a's migration is unaffected and still running.
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidA, schema.OnlineDDLStatusRunning)
+
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuidA, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+	})
+
+	t.Run("cross-context in-order: non-immediate migration in different context is not blocked from cutting over", func(t *testing.T) {
+		// Validates the getInOrderCompletionPendingCount fix in the reviewRunningMigrations
+		// path: a non-immediate (vreplication) migration that is ready to cut over must not
+		// be blocked by a running migration from a different context.
+		//
+		// Unlike the immediate case (which never starts), a non-immediate migration starts
+		// running fine but gets stuck: reviewRunningMigrations sees pendingMigrationsCount > 0
+		// and sets postponeCompletion, so the migration runs indefinitely without cutting over.
+		// After the fix, only same-context predecessors are counted, so B1 cuts over freely.
+
+		uuid := testOnlineDDLStatement(t, createParams(
+			`CREATE TABLE stress_test_ctx_cross2 (id bigint not null, PRIMARY KEY (id)) ENGINE=InnoDB`,
+			"vitess", "vtctl", "", "", "", false,
+		))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		defer testOnlineDDLStatement(t, createParams(
+			`DROP TABLE IF EXISTS stress_test_ctx_cross2`,
+			"vitess", "vtctl", "", "", "", false,
+		))
+
+		// A1: slow ALTER on stress_test in ctx-a (postponed, will not cut over).
+		uuidA1 := testOnlineDDLStatement(t, createParams(
+			alterTableTrivialStatement,
+			"vitess --allow-concurrent --in-order-completion --postpone-completion",
+			"vtctl", "ctx-singleton-cross-nr-a", "hint_col", "", true,
+		))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA1, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// B1: non-immediate ALTER on stress_test_ctx_cross2 in ctx-b, no postpone.
+		// It can start running (no immediate-operation guard blocks it), and since it has
+		// no same-context predecessors, it must cut over and complete on its own.
+		// Before the fix: reviewRunningMigrations counted A1 (ctx-a) as a predecessor,
+		// so postponeCompletion=true and B1 would run forever without cutting over.
+		// After the fix: A1 is not counted (different context), B1 cuts over normally.
+		uuidB1 := testOnlineDDLStatement(t, createParams(
+			`ALTER TABLE stress_test_ctx_cross2 ENGINE=InnoDB`,
+			"vitess --allow-concurrent --in-order-completion",
+			"vtctl", "ctx-singleton-cross-nr-b", "", "", false,
+		))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidB1, schema.OnlineDDLStatusComplete)
+		// ctx-a's migration is unaffected and still running.
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidA1, schema.OnlineDDLStatusRunning)
+
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuidA1, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA1, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+	})
+
+	t.Run("cross-context in-order: in_order_completion_pending_count is scoped to context", func(t *testing.T) {
+		// Validates the getInOrderCompletionPendingCount fix: a migration's predecessor
+		// count must only include migrations from the same context.
+		//
+		// Setup: A1 (ctx-a, stress_test) and B1 (ctx-b, stress_test_ctx_cross) run
+		// concurrently. A2 (ctx-a, immediate) is then submitted. A2's
+		// in_order_completion_pending_count must be 1 (A1 only), not 2 (which would
+		// incorrectly include B1 from ctx-b).
+
+		uuid := testOnlineDDLStatement(t, createParams(
+			`CREATE TABLE stress_test_ctx_cross (id bigint not null, PRIMARY KEY (id)) ENGINE=InnoDB`,
+			"vitess", "vtctl", "", "", "", false,
+		))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		defer testOnlineDDLStatement(t, createParams(
+			`DROP TABLE IF EXISTS stress_test_ctx_cross`,
+			"vitess", "vtctl", "", "", "", false,
+		))
+
+		// A1: slow ALTER on stress_test in ctx-a.
+		uuidA1 := testOnlineDDLStatement(t, createParams(
+			alterTableTrivialStatement,
+			"vitess --allow-concurrent --in-order-completion --postpone-completion",
+			"vtctl", "ctx-singleton-cross-2a", "hint_col", "", true,
+		))
+		// B1: slow ALTER on stress_test_ctx_cross in ctx-b (different table, runs concurrently with A1).
+		uuidB1 := testOnlineDDLStatement(t, createParams(
+			`ALTER TABLE stress_test_ctx_cross ENGINE=InnoDB`,
+			"vitess --allow-concurrent --in-order-completion --postpone-completion",
+			"vtctl", "ctx-singleton-cross-2b", "", "", true,
+		))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA1, normalWaitTime, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidB1, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// A2: immediate in ctx-a, follows A1 in sequence. Stays queued while A1 is pending.
+		uuidA2 := testOnlineDDLStatement(t, createParams(
+			dropNonexistentTableStatement,
+			"vitess --allow-concurrent --in-order-completion",
+			"vtctl", "ctx-singleton-cross-2a", "", "", true,
+		))
+
+		// A2's in_order_completion_pending_count must be 1: A1 precedes it in ctx-a, but
+		// B1 (ctx-b) must not be counted even though B1 precedes A2 in the global queue.
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, uuidA2)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				assert.EqualValues(c, 1, row.AsUint64("in_order_completion_pending_count", 0))
+			}
+		}, normalWaitTime, time.Second, "expected A2's in_order_completion_pending_count=1 (B1 from ctx-b must not be counted)")
+
+		// Complete A1; A2 (immediate, now first in ctx-a) should start and complete.
+		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuidA1, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA1, normalWaitTime, schema.OnlineDDLStatusComplete)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidA2, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidA2, schema.OnlineDDLStatusComplete)
+		// B1 is still running: completing A1 only unblocked ctx-a's sequence, not ctx-b's.
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuidB1, schema.OnlineDDLStatusRunning)
+
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuidB1, true)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuidB1, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
 	})
 }
 

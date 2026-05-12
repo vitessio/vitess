@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/config"
@@ -88,9 +90,15 @@ type (
 		WarnShardedOnly    bool
 		PlannerVersion     plancontext.PlannerVersion
 
-		WarmingReadsPercent int
-		WarmingReadsTimeout time.Duration
-		WarmingReadsChannel chan bool
+		// DeniedSystemVariables is the set of system variable names (lowercased)
+		// that clients are not allowed to SET via this VTGate. Attempts return
+		// an UNIMPLEMENTED error at plan time. A nil or empty map disables the
+		// denylist entirely, preserving the historical behavior.
+		DeniedSystemVariables map[string]struct{}
+
+		WarmingReadsPercent   int
+		WarmingReadsTimeout   time.Duration
+		WarmingReadsSemaphore *semaphore.Weighted
 	}
 
 	// vcursor_impl needs these facilities to be able to be able to execute queries for vindexes
@@ -188,6 +196,11 @@ type (
 
 		// For specializing plans for the current query
 		bindVars map[string]*querypb.BindVariable
+
+		// executedPrimitive records the branch chosen by a PlanSwitcher at
+		// execution time, so that downstream consumers (e.g. GetRoutingIndexes)
+		// don't have to re-evaluate PlanSwitcher conditions.
+		executedPrimitive engine.Primitive
 	}
 )
 
@@ -299,12 +312,6 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 }
 
 func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCursor {
-	callerId := callerid.EffectiveCallerIDFromContext(ctx)
-	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
-
-	timedCtx, _ := context.WithTimeout(context.Background(), vc.config.WarmingReadsTimeout) //nolint
-	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
-
 	v := &VCursorImpl{
 		config:         vc.config,
 		SafeSession:    NewAutocommitSession(vc.SafeSession.Session),
@@ -315,7 +322,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		executor:       vc.executor,
 		resolver:       vc.resolver,
 		topoServer:     vc.topoServer,
-		logStats:       &logstats.LogStats{Ctx: clonedCtx},
+		logStats:       &logstats.LogStats{},
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
@@ -327,8 +334,22 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 	}
 
 	v.marginComments.Trailing += "/* warming read */"
+	v.SafeSession.GetOrCreateOptions().NoResult = true
 
 	return v
+}
+
+func (vc *VCursorImpl) WarmingReadsContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	callerId := callerid.EffectiveCallerIDFromContext(ctx)
+	immediateCallerId := callerid.ImmediateCallerIDFromContext(ctx)
+
+	baseCtx := context.WithoutCancel(ctx)
+	timedCtx, cancel := context.WithTimeout(baseCtx, vc.config.WarmingReadsTimeout)
+	clonedCtx := callerid.NewContext(timedCtx, callerId, immediateCallerId)
+
+	vc.logStats = &logstats.LogStats{Ctx: clonedCtx}
+
+	return clonedCtx, cancel
 }
 
 func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
@@ -350,6 +371,18 @@ func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 		topoServer: vc.topoServer,
 		observer:   vc.observer,
 	}
+}
+
+// SetExecutedPrimitive records the post-PlanSwitcher root primitive that
+// was actually executed for this query.
+func (vc *VCursorImpl) SetExecutedPrimitive(p engine.Primitive) {
+	vc.executedPrimitive = p
+}
+
+// ExecutedPrimitive returns the value previously recorded by
+// SetExecutedPrimitive, or nil if none was recorded.
+func (vc *VCursorImpl) ExecutedPrimitive() engine.Primitive {
+	return vc.executedPrimitive
 }
 
 // GetExecutionMetrics provides the execution metrics object.
@@ -499,12 +532,6 @@ func (vc *VCursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Base
 
 // FindTableOrVindex finds the specified table or vindex.
 func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
-	if name.Qualifier.IsEmpty() && name.Name.String() == "dual" {
-		// The magical MySQL dual table should only be resolved
-		// when it is not qualified by a database name.
-		return vc.getDualTable()
-	}
-
 	destKeyspace, destTabletType, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
@@ -551,23 +578,6 @@ func ParseDestinationTarget(targetString string, tablet topodatapb.TabletType, v
 		}
 	}
 	return destKeyspace, destTabletType, dest, tabletAlias, err
-}
-
-func (vc *VCursorImpl) getDualTable() (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {
-	ksName := vc.getActualKeyspace()
-	var ks *vindexes.Keyspace
-	if ksName == "" {
-		ks = vc.vschema.FirstKeyspace()
-		ksName = ks.Name
-	} else {
-		ks = vc.vschema.Keyspaces[ksName].Keyspace
-	}
-	tbl := &vindexes.BaseTable{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     vindexes.TypeReference,
-	}
-	return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
 }
 
 func (vc *VCursorImpl) getActualKeyspace() string {
@@ -659,6 +669,20 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *VCursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()
+}
+
+// IsSystemVariableDenied implements the plancontext.VSchema interface.
+func (vc *VCursorImpl) IsSystemVariableDenied(name string) bool {
+	if len(vc.config.DeniedSystemVariables) == 0 {
+		return false
+	}
+	_, denied := vc.config.DeniedSystemVariables[strings.ToLower(name)]
+	return denied
+}
+
+// HasDeniedSystemVariables implements the plancontext.VSchema interface.
+func (vc *VCursorImpl) HasDeniedSystemVariables() bool {
+	return len(vc.config.DeniedSystemVariables) > 0
 }
 
 // KeyspaceExists provides whether the keyspace exists or not.
@@ -1209,7 +1233,17 @@ func (vc *VCursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 
 func (vc *VCursorImpl) SetPriority(priority string) {
 	if priority != "" {
-		vc.SafeSession.GetOrCreateOptions().Priority = priority
+		intPriority, err := strconv.Atoi(priority)
+		if err != nil {
+			// On invalid priority input, clear any existing priority to avoid
+			// unintentionally reusing a previous valid priority.
+			if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
+				vc.SafeSession.Options.Priority = ""
+			}
+			return
+		}
+		intPriority = max(0, min(intPriority, sqlparser.MaxPriorityValue))
+		vc.SafeSession.GetOrCreateOptions().Priority = strconv.Itoa(intPriority)
 	} else if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
 		vc.SafeSession.Options.Priority = ""
 	}
@@ -1644,8 +1678,19 @@ func (vc *VCursorImpl) GetWarmingReadsPercent() int {
 	return vc.config.WarmingReadsPercent
 }
 
-func (vc *VCursorImpl) GetWarmingReadsChannel() chan bool {
-	return vc.config.WarmingReadsChannel
+func (vc *VCursorImpl) GetWarmingReadsSemaphore() *semaphore.Weighted {
+	return vc.config.WarmingReadsSemaphore
+}
+
+func (vc *VCursorImpl) GetQueryPriority() (int, error) {
+	if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
+		priority, err := strconv.Atoi(vc.SafeSession.Options.Priority)
+		if err != nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", vc.SafeSession.Options.Priority, err)
+		}
+		return max(0, min(priority, sqlparser.MaxPriorityValue)), nil
+	}
+	return 0, nil
 }
 
 // SetForeignKeyCheckState updates the foreign key checks state of the vcursor.

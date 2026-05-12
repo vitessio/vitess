@@ -81,16 +81,17 @@ func TestStateManagerServePrimary(t *testing.T) {
 
 	verifySubcomponent(t, 1, sm.se, testStateOpen)
 	verifySubcomponent(t, 2, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 3, sm.qe, testStateOpen)
-	verifySubcomponent(t, 4, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 5, sm.rt, testStatePrimary)
-	verifySubcomponent(t, 6, sm.tracker, testStateOpen)
-	verifySubcomponent(t, 7, sm.te, testStatePrimary)
-	verifySubcomponent(t, 8, sm.messager, testStateOpen)
-	verifySubcomponent(t, 9, sm.throttler, testStateOpen)
-	verifySubcomponent(t, 10, sm.qThrottler, testStateOpen)
-	verifySubcomponent(t, 11, sm.tableGC, testStateOpen)
-	verifySubcomponent(t, 12, sm.ddle, testStateOpen)
+	verifySubcomponent(t, 3, sm.binlogDumper, testStateOpen)
+	verifySubcomponent(t, 4, sm.qe, testStateOpen)
+	verifySubcomponent(t, 5, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 6, sm.rt, testStatePrimary)
+	verifySubcomponent(t, 7, sm.tracker, testStateOpen)
+	verifySubcomponent(t, 8, sm.te, testStatePrimary)
+	verifySubcomponent(t, 9, sm.messager, testStateOpen)
+	verifySubcomponent(t, 10, sm.throttler, testStateOpen)
+	verifySubcomponent(t, 11, sm.qThrottler, testStateOpen)
+	verifySubcomponent(t, 12, sm.tableGC, testStateOpen)
+	verifySubcomponent(t, 13, sm.ddle, testStateOpen)
 
 	assert.False(t, sm.se.(*testSchemaEngine).nonPrimary)
 	assert.True(t, sm.se.(*testSchemaEngine).ensureCalled)
@@ -113,11 +114,12 @@ func TestStateManagerServeNonPrimary(t *testing.T) {
 
 	verifySubcomponent(t, 5, sm.se, testStateOpen)
 	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 7, sm.qe, testStateOpen)
-	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 9, sm.te, testStateNonPrimary)
-	verifySubcomponent(t, 10, sm.rt, testStateNonPrimary)
-	verifySubcomponent(t, 11, sm.throttler, testStateOpen)
+	verifySubcomponent(t, 7, sm.binlogDumper, testStateOpen)
+	verifySubcomponent(t, 8, sm.qe, testStateOpen)
+	verifySubcomponent(t, 9, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 10, sm.te, testStateNonPrimary)
+	verifySubcomponent(t, 11, sm.rt, testStateNonPrimary)
+	verifySubcomponent(t, 12, sm.throttler, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -139,10 +141,11 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 	verifySubcomponent(t, 7, sm.tracker, testStateClosed)
 	verifySubcomponent(t, 8, sm.se, testStateOpen)
 	verifySubcomponent(t, 9, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 10, sm.qe, testStateOpen)
-	verifySubcomponent(t, 11, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 10, sm.binlogDumper, testStateOpen)
+	verifySubcomponent(t, 11, sm.qe, testStateOpen)
+	verifySubcomponent(t, 12, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 12, sm.rt, testStatePrimary)
+	verifySubcomponent(t, 13, sm.rt, testStatePrimary)
 
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -198,10 +201,11 @@ func TestStateManagerUnserveNonPrimary(t *testing.T) {
 
 	verifySubcomponent(t, 8, sm.se, testStateOpen)
 	verifySubcomponent(t, 9, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 10, sm.qe, testStateOpen)
-	verifySubcomponent(t, 11, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 10, sm.binlogDumper, testStateOpen)
+	verifySubcomponent(t, 11, sm.qe, testStateOpen)
+	verifySubcomponent(t, 12, sm.txThrottler, testStateOpen)
 
-	verifySubcomponent(t, 12, sm.rt, testStateNonPrimary)
+	verifySubcomponent(t, 13, sm.rt, testStateNonPrimary)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotServing, sm.state)
@@ -223,9 +227,10 @@ func TestStateManagerClose(t *testing.T) {
 
 	verifySubcomponent(t, 8, sm.txThrottler, testStateClosed)
 	verifySubcomponent(t, 9, sm.qe, testStateClosed)
-	verifySubcomponent(t, 10, sm.vstreamer, testStateClosed)
-	verifySubcomponent(t, 11, sm.rt, testStateClosed)
-	verifySubcomponent(t, 12, sm.se, testStateClosed)
+	verifySubcomponent(t, 10, sm.binlogDumper, testStateClosed)
+	verifySubcomponent(t, 11, sm.vstreamer, testStateClosed)
+	verifySubcomponent(t, 12, sm.rt, testStateClosed)
+	verifySubcomponent(t, 13, sm.se, testStateClosed)
 
 	assert.Equal(t, topodatapb.TabletType_RDONLY, sm.target.TabletType)
 	assert.Equal(t, StateNotConnected, sm.state)
@@ -295,11 +300,12 @@ func TestStateManagerSetServingTypeNoChange(t *testing.T) {
 
 	verifySubcomponent(t, 5, sm.se, testStateOpen)
 	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
-	verifySubcomponent(t, 7, sm.qe, testStateOpen)
-	verifySubcomponent(t, 8, sm.txThrottler, testStateOpen)
-	verifySubcomponent(t, 9, sm.te, testStateNonPrimary)
-	verifySubcomponent(t, 10, sm.rt, testStateNonPrimary)
-	verifySubcomponent(t, 11, sm.throttler, testStateOpen)
+	verifySubcomponent(t, 7, sm.binlogDumper, testStateOpen)
+	verifySubcomponent(t, 8, sm.qe, testStateOpen)
+	verifySubcomponent(t, 9, sm.txThrottler, testStateOpen)
+	verifySubcomponent(t, 10, sm.te, testStateNonPrimary)
+	verifySubcomponent(t, 11, sm.rt, testStateNonPrimary)
+	verifySubcomponent(t, 12, sm.throttler, testStateOpen)
 
 	assert.Equal(t, topodatapb.TabletType_REPLICA, sm.target.TabletType)
 	assert.Equal(t, StateServing, sm.state)
@@ -652,7 +658,6 @@ func TestStateManagerNotify(t *testing.T) {
 
 func TestDemotePrimaryStalled(t *testing.T) {
 	sm := newTestStateManager()
-	defer sm.StopService()
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	// Stopping the ticker so that we don't get unexpected health streams.
@@ -667,7 +672,16 @@ func TestDemotePrimaryStalled(t *testing.T) {
 		})
 		assert.Contains(t, err.Error(), "tabletserver is shutdown")
 	})
+	// Order matters: StopService cancels the streamer's context, which lets
+	// Stream return so wg.Wait can complete. Defers run LIFO.
 	defer wg.Wait()
+	defer sm.StopService()
+
+	// register() pushes the current state onto the channel as soon as the
+	// streaming client subscribes, and that value is racy with respect to
+	// SetServingType's async Broadcast trigger. Drain it so the assertions
+	// below only inspect states produced by our explicit Broadcast calls.
+	<-ch
 
 	// Send a broadcast message and check we have no error there.
 	sm.Broadcast()
@@ -682,9 +696,6 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	// Verify that we can't start a new request once we have a demote primary stalled.
 	err = sm.StartRequest(context.Background(), &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, false)
 	require.ErrorContains(t, err, "operation not allowed in state NOT_SERVING")
-
-	// Stop the state manager.
-	sm.StopService()
 }
 
 func TestRefreshReplHealthLocked(t *testing.T) {
@@ -764,6 +775,7 @@ func newTestStateManager() *stateManager {
 		se:                &testSchemaEngine{},
 		rt:                &testReplTracker{lag: 1 * time.Second},
 		vstreamer:         &testSubcomponent{},
+		binlogDumper:      &testSubcomponent{},
 		tracker:           &testSubcomponent{},
 		qe:                &testQueryEngine{},
 		txThrottler:       &testTxThrottler{},
