@@ -81,7 +81,10 @@ jobs:
           else
             # Find the merged main PRs represented by this push so each one can be
             # backported or forwardported according to its labels.
-            mapfile -t PR_NUMBERS < <(
+            PR_NUMBERS_FILE=$(mktemp)
+            if ! (
+              set -o pipefail
+
               jq -r '.commits[].id' "$GITHUB_EVENT_PATH" |
               while IFS= read -r COMMIT_SHA; do
                 if [[ ! "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
@@ -89,13 +92,22 @@ jobs:
                   continue
                 fi
 
-                gh api \
+                if ! gh api \
                   -H "Accept: application/vnd.github+json" \
                   "repos/${GITHUB_REPOSITORY}/commits/${COMMIT_SHA}/pulls" \
-                  --jq '.[] | select(.merged_at != null and .base.ref == "main") | .number'
+                  --jq '.[] | select(.merged_at != null and .base.ref == "main") | .number'; then
+                  echo "Error: failed to look up pull requests for commit $COMMIT_SHA" >&2
+                  exit 1
+                fi
               done |
-              sort -n -u
-            )
+              sort -n -u > "$PR_NUMBERS_FILE"
+            ); then
+              rm -f "$PR_NUMBERS_FILE"
+              exit 1
+            fi
+
+            mapfile -t PR_NUMBERS < "$PR_NUMBERS_FILE"
+            rm -f "$PR_NUMBERS_FILE"
 
             DRY_RUN="false"
           fi
