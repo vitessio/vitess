@@ -1086,6 +1086,104 @@ func TestWaiterRetriesWhenCapacityIncreases(t *testing.T) {
 	conn = nil
 }
 
+func TestGetRetriesWhenConnectionReturnedBeforeWaiterEnqueues(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	})
+	p.config.connect = newConnector(&state)
+	p.capacity.Store(1)
+	p.setIdleCount()
+
+	closeChan := make(chan struct{})
+	p.close.Store(&closeChan)
+
+	var (
+		conn   *Pooled[*TestConn]
+		result struct {
+			conn *Pooled[*TestConn]
+			err  error
+		}
+		allowWaiterToEnqueue sync.Once
+		waiterReadyOnce      sync.Once
+	)
+	releaseWaiter := make(chan struct{})
+	defer func() {
+		allowWaiterToEnqueue.Do(func() {
+			close(releaseWaiter)
+		})
+		if conn != nil {
+			conn.Recycle()
+		}
+		if result.conn != nil {
+			result.conn.Recycle()
+		}
+
+		closeCtx, cancel := context.WithTimeout(ctx, PoolCloseTimeout)
+		defer cancel()
+		require.NoError(t, p.CloseWithContext(closeCtx))
+	}()
+
+	var err error
+	conn, err = p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	waiterReady := make(chan struct{})
+	oldOnWait := p.wait.onWait
+	p.wait.onWait = func() {
+		if oldOnWait != nil {
+			oldOnWait()
+		}
+		waiterReadyOnce.Do(func() {
+			close(waiterReady)
+		})
+		<-releaseWaiter
+	}
+
+	getCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	results := make(chan struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- struct {
+			conn *Pooled[*TestConn]
+			err  error
+		}{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-waiterReady:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	conn.Recycle()
+	conn = nil
+	allowWaiterToEnqueue.Do(func() {
+		close(releaseWaiter)
+	})
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not retry after connection was returned before enqueue")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
 func TestTimeout(t *testing.T) {
 	var state TestState
 

@@ -617,6 +617,21 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 	}
 }
 
+func (pool *ConnPool[C]) shouldRetryWait() bool {
+	if pool.active.Load() < pool.capacity.Load() {
+		return true
+	}
+	if pool.clean.Peek() != nil {
+		return true
+	}
+	for i := range pool.settings {
+		if pool.settings[i].Peek() != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // get returns a pooled connection with no Setting applied
 func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
@@ -647,7 +662,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 				return nil, ErrConnPoolClosed
 			}
 
-			conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters)
+			conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters, pool.shouldRetryWait)
 			if err != nil {
 				if errors.Is(err, ErrPoolWaiterCapReached) {
 					return nil, err
@@ -714,7 +729,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 				return nil, ErrConnPoolClosed
 			}
 
-			conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters)
+			conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters, pool.shouldRetryWait)
 			if err != nil {
 				if errors.Is(err, ErrPoolWaiterCapReached) {
 					return nil, err
