@@ -109,6 +109,11 @@
     "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
   },
   {
+    "comment": "load data bypass rejects internal operation table",
+    "query": "load data from s3 'x.txt' into table main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
     "comment": "bypass query for into outfile s3",
     "query": "select count(*), col from unsharded into outfile S3 'x.txt'",
     "plan": {

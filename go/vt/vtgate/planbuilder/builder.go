@@ -334,6 +334,10 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 }
 
 func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
+	if err := rejectInternalTableLoad(query, vschema.Environment().Parser()); err != nil {
+		return nil, err
+	}
+
 	keyspace, err := vschema.SelectedKeyspace()
 	if err != nil {
 		return nil, err
