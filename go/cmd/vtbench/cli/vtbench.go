@@ -230,12 +230,20 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error in test: %w", err)
 	}
 
-	fmt.Printf("Average Rows Returned: %d\n", b.Rows.Get()/int64(b.Threads*b.Count))
+	executed := b.Timings.Count()
+	planned := int64(b.Threads * b.Count)
+	fmt.Printf("Queries Executed: %d/%d\n", executed, planned)
 	printSortedErrors(b.Errors)
-	fmt.Printf("Average Query Time: %v\n", time.Duration(b.Timings.Time()/b.Timings.Count()))
+	if executed == 0 {
+		fmt.Printf("Total Test Time: %v\n", b.TotalTime)
+		return nil
+	}
+
+	fmt.Printf("Average Rows Returned: %d\n", b.Rows.Get()/executed)
+	fmt.Printf("Average Query Time: %v\n", time.Duration(b.Timings.Time()/executed))
 	fmt.Printf("Total Test Time: %v\n", b.TotalTime)
-	fmt.Printf("QPS (Per Thread): %v\n", float64(b.Count)/b.TotalTime.Seconds())
-	fmt.Printf("QPS (Total): %v\n", float64(b.Count*b.Threads)/b.TotalTime.Seconds())
+	fmt.Printf("QPS (Per Thread): %v\n", float64(executed)/float64(b.Threads)/b.TotalTime.Seconds())
+	fmt.Printf("QPS (Total): %v\n", float64(executed)/b.TotalTime.Seconds())
 
 	last := int64(0)
 
