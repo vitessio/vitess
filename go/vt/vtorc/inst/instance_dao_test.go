@@ -186,6 +186,28 @@ func TestReadInstance(t *testing.T) {
 	}
 }
 
+func TestReadInstanceLastCheckValidByAlias(t *testing.T) {
+	defer db.ClearVTOrcDatabase()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	_, err := db.ExecVTOrc("update database_instance set last_seen = DATETIME(last_checked, '-1 second') where alias = 'zone1-0000000101'")
+	require.NoError(t, err)
+
+	validByAlias, err := ReadInstanceLastCheckValidByAlias([]string{
+		"zone1-0000000100",
+		"zone1-0000000101",
+		"zone1-0009999999",
+	})
+	require.NoError(t, err)
+	require.Equal(t, map[string]bool{
+		"zone1-0000000100": true,
+		"zone1-0000000101": false,
+	}, validByAlias)
+}
+
 // TestReadProblemInstances is used to test the functionality of ReadProblemInstances and verify its failure modes and successes.
 func TestReadProblemInstances(t *testing.T) {
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.

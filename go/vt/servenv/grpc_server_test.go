@@ -87,6 +87,20 @@ func TestReportedOrca(t *testing.T) {
 	t.Logf("Memory utilization is %.2f", memUsage)
 }
 
+func TestNewGRPCServer(t *testing.T) {
+	restoreEnableOrca := withTempVar(&gRPCEnableOrcaMetrics, true)
+	restoreRecorder := withTempVar(&GRPCServerMetricsRecorder, nil)
+	t.Cleanup(restoreEnableOrca)
+	t.Cleanup(restoreRecorder)
+
+	server := NewGRPCServer()
+	t.Cleanup(server.Stop)
+
+	if GRPCServerMetricsRecorder == nil {
+		t.Fatalf("GRPCServerMetricsRecorder should be initialized when gRPCEnableOrcaMetrics is true")
+	}
+}
+
 func getFreePort() int {
 	l, err := net.Listen("tcp", ":0")
 	if err != nil {

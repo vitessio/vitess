@@ -712,6 +712,11 @@ func (client *localVtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctl
 	return client.s.UpdateCellsAlias(ctx, in)
 }
 
+// UpdateGossipConfig is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) UpdateGossipConfig(ctx context.Context, in *vtctldatapb.UpdateGossipConfigRequest, opts ...grpc.CallOption) (*vtctldatapb.UpdateGossipConfigResponse, error) {
+	return client.s.UpdateGossipConfig(ctx, in)
+}
+
 // UpdateThrottlerConfig is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) UpdateThrottlerConfig(ctx context.Context, in *vtctldatapb.UpdateThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldatapb.UpdateThrottlerConfigResponse, error) {
 	return client.s.UpdateThrottlerConfig(ctx, in)

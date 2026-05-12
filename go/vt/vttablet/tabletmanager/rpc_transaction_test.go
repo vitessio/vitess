@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/gossip"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
@@ -33,6 +34,7 @@ func TestTabletManager_UnresolvedTransactions(t *testing.T) {
 	tm := &TabletManager{
 		QueryServiceControl:    qsc,
 		Env:                    vtenv.NewTestEnv(),
+		Gossip:                 gossip.New(gossip.Config{}, nil, nil),
 		_waitForGrantsComplete: make(chan struct{}),
 		BatchCtx:               ctx,
 	}
@@ -51,6 +53,7 @@ func TestTabletManager_ReadTransaction(t *testing.T) {
 	tm := &TabletManager{
 		QueryServiceControl:    qsc,
 		Env:                    vtenv.NewTestEnv(),
+		Gossip:                 gossip.New(gossip.Config{}, nil, nil),
 		_waitForGrantsComplete: make(chan struct{}),
 		BatchCtx:               ctx,
 	}
@@ -71,6 +74,7 @@ func TestTabletManager_ConcludeTransaction(t *testing.T) {
 	tm := &TabletManager{
 		QueryServiceControl:    qsc,
 		Env:                    vtenv.NewTestEnv(),
+		Gossip:                 gossip.New(gossip.Config{}, nil, nil),
 		_waitForGrantsComplete: make(chan struct{}),
 		BatchCtx:               ctx,
 	}

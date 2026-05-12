@@ -193,10 +193,11 @@ func TestReadKeyspaceShardStats(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []ShardStats{
 			{
-				Keyspace:                 "test",
-				Shard:                    "-40",
-				TabletCount:              100,
-				DisableEmergencyReparent: true,
+				Keyspace:                      "test",
+				Shard:                         "-40",
+				TabletCount:                   100,
+				DisableEmergencyReparent:      true,
+				ShardDisableEmergencyReparent: true,
 			},
 			{
 				Keyspace:                 "test",
@@ -236,28 +237,33 @@ func TestReadKeyspaceShardStats(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []ShardStats{
 			{
-				Keyspace:                 "test",
-				Shard:                    "-40",
-				TabletCount:              100,
-				DisableEmergencyReparent: true,
+				Keyspace:                         "test",
+				Shard:                            "-40",
+				TabletCount:                      100,
+				DisableEmergencyReparent:         true,
+				KeyspaceDisableEmergencyReparent: true,
+				ShardDisableEmergencyReparent:    true,
 			},
 			{
-				Keyspace:                 "test",
-				Shard:                    "40-80",
-				TabletCount:              100,
-				DisableEmergencyReparent: true,
+				Keyspace:                         "test",
+				Shard:                            "40-80",
+				TabletCount:                      100,
+				DisableEmergencyReparent:         true,
+				KeyspaceDisableEmergencyReparent: true,
 			},
 			{
-				Keyspace:                 "test",
-				Shard:                    "80-c0",
-				TabletCount:              100,
-				DisableEmergencyReparent: true,
+				Keyspace:                         "test",
+				Shard:                            "80-c0",
+				TabletCount:                      100,
+				DisableEmergencyReparent:         true,
+				KeyspaceDisableEmergencyReparent: true,
 			},
 			{
-				Keyspace:                 "test",
-				Shard:                    "c0-",
-				TabletCount:              100,
-				DisableEmergencyReparent: true,
+				Keyspace:                         "test",
+				Shard:                            "c0-",
+				TabletCount:                      100,
+				DisableEmergencyReparent:         true,
+				KeyspaceDisableEmergencyReparent: true,
 			},
 		}, shardStats)
 	})

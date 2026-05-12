@@ -146,6 +146,19 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
+	// PrimaryTabletUnreachableByQuorum — detected via gossip quorum, not the
+	// standard MatchFunc pipeline. Registered here for priority ordering only.
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    PrimaryTabletUnreachableByQuorum,
+			Description: "Primary vttablet unreachable confirmed by gossip quorum",
+			Priority:    detectionAnalysisPriorityShardWideAction,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return false // Detection comes from gossip analysis, not SQL-based analysis.
+		},
+	},
+
 	// DeadPrimary*
 	{
 		Meta: &DetectionAnalysisProblemMeta{

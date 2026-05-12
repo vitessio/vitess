@@ -123,6 +123,7 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		}
 		srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
 			ThrottlerConfig: ki.ThrottlerConfig,
+			GossipConfig:    ki.GossipConfig,
 		}
 	}
 

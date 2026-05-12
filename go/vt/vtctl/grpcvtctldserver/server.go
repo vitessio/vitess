@@ -2183,6 +2183,89 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	return &vtctldatapb.UpdateThrottlerConfigResponse{}, err
 }
 
+// UpdateGossipConfig is part of the vtctlservicepb.VtctldServer
+// interface. It is the one place that writes gossip config to topo:
+// it validates input, updates the Keyspace record, and fans the change
+// out to each cell's SrvKeyspace so running vttablets and VTOrc pick
+// it up live without restarts. Holds the keyspace lock for the whole
+// sequence so concurrent edits don't leave the Keyspace and
+// SrvKeyspace records out of sync.
+func (s *VtctldServer) UpdateGossipConfig(ctx context.Context, req *vtctldatapb.UpdateGossipConfigRequest) (resp *vtctldatapb.UpdateGossipConfigResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateGossipConfig")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	// phi-threshold must be strictly positive when specified. Omit the
+	// flag (nil pointer) to fall back to the default on create or leave
+	// the existing value unchanged on update.
+	if req.PhiThreshold != nil && *req.PhiThreshold <= 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid phi-threshold: must be positive, got %v", *req.PhiThreshold)
+	}
+	if req.PingInterval != "" {
+		if d, err := time.ParseDuration(req.PingInterval); err != nil || d <= 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid ping-interval %q: must be a positive duration", req.PingInterval)
+		}
+	}
+	if req.MaxUpdateAge != "" {
+		if d, err := time.ParseDuration(req.MaxUpdateAge); err != nil || d <= 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid max-update-age %q: must be a positive duration", req.MaxUpdateAge)
+		}
+	}
+
+	update := func(gossipConfig *topodatapb.GossipConfig) *topodatapb.GossipConfig {
+		creatingConfig := gossipConfig == nil
+		if gossipConfig == nil {
+			gossipConfig = &topodatapb.GossipConfig{}
+		}
+		if req.Enabled != nil {
+			gossipConfig.Enabled = *req.Enabled
+		}
+		if req.PhiThreshold != nil {
+			// Validator has already ensured *req.PhiThreshold > 0.
+			gossipConfig.PhiThreshold = *req.PhiThreshold
+		} else if creatingConfig {
+			gossipConfig.PhiThreshold = 4
+		}
+		if req.PingInterval != "" {
+			gossipConfig.PingInterval = req.PingInterval
+		} else if creatingConfig {
+			gossipConfig.PingInterval = "1s"
+		}
+		if req.MaxUpdateAge != "" {
+			gossipConfig.MaxUpdateAge = req.MaxUpdateAge
+		} else if creatingConfig {
+			gossipConfig.MaxUpdateAge = "5s"
+		}
+		return gossipConfig
+	}
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "UpdateGossipConfig")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	ki.GossipConfig = update(ki.GossipConfig)
+	finalGossipConfig := ki.GossipConfig.CloneVT()
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.ts.UpdateSrvKeyspaceGossipConfig(ctx, req.Keyspace, []string{}, func(*topodatapb.GossipConfig) *topodatapb.GossipConfig {
+		return finalGossipConfig.CloneVT()
+	})
+
+	return &vtctldatapb.UpdateGossipConfigResponse{}, err
+}
+
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest) (resp *vtctldatapb.GetSrvVSchemaResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.GetSrvVSchema")

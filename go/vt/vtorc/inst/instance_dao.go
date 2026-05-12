@@ -718,6 +718,63 @@ func ReadInstance(tabletAlias *topodatapb.TabletAlias) (*Instance, bool, error) 
 	return instances[0], true, nil
 }
 
+// ReadInstanceLastCheckValidByAlias reads the IsLastCheckValid bit for
+// many aliases in a single backend query. The gossip analysis path
+// (buildVTOrcView) used to call ReadInstance once per shard primary on
+// every recovery cycle; on installs with hundreds of shards that turned
+// into N+1 query traffic. This helper folds it into one batched query.
+func ReadInstanceLastCheckValidByAlias(aliases []string) (map[string]bool, error) {
+	validByAlias := make(map[string]bool, len(aliases))
+	if len(aliases) == 0 {
+		return validByAlias, nil
+	}
+
+	uniqueAliases := make([]string, 0, len(aliases))
+	seen := make(map[string]struct{}, len(aliases))
+	for _, alias := range aliases {
+		if alias == "" {
+			continue
+		}
+		if _, ok := seen[alias]; ok {
+			continue
+		}
+		seen[alias] = struct{}{}
+		uniqueAliases = append(uniqueAliases, alias)
+	}
+	if len(uniqueAliases) == 0 {
+		return validByAlias, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(uniqueAliases)), ",")
+	query := fmt.Sprintf(`SELECT
+			alias,
+			IFNULL(last_checked <= last_seen, 0) AS is_last_check_valid
+		FROM
+			vitess_tablet
+			LEFT JOIN database_instance USING (alias, hostname, port)
+		WHERE
+			alias IN (%s)`, placeholders)
+
+	args := make([]any, 0, len(uniqueAliases))
+	for _, alias := range uniqueAliases {
+		args = append(args, alias)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxBackendOpTime)
+	defer cancel()
+
+	if err := instanceReadSem.Acquire(ctx, 1); err != nil {
+		return nil, err
+	}
+	defer instanceReadSem.Release(1)
+
+	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
+		validByAlias[row.GetString("alias")] = row.GetBool("is_last_check_valid")
+		return nil
+	})
+	return validByAlias, err
+}
+
 // ReadProblemInstances reads all instances with problems
 func ReadProblemInstances(keyspace, shard string) ([]*Instance, error) {
 	condition := `
