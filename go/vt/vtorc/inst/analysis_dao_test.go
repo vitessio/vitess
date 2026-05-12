@@ -1435,6 +1435,24 @@ func TestDeclaresBefore(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "PrimaryIsReadOnly declares before PrimarySemiSyncBlocked",
+			problem:  GetDetectionAnalysisProblem(PrimaryIsReadOnly),
+			code:     PrimarySemiSyncBlocked,
+			expected: true,
+		},
+		{
+			name:     "PrimaryIsReadOnly does not declare before PrimaryDiskStalled",
+			problem:  GetDetectionAnalysisProblem(PrimaryIsReadOnly),
+			code:     PrimaryDiskStalled,
+			expected: false,
+		},
+		{
+			name:     "ReplicationStopped does not declare before PrimaryDiskStalled",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
+			code:     PrimaryDiskStalled,
+			expected: false,
+		},
+		{
 			name:     "problem with no BeforeAnalyses",
 			problem:  GetDetectionAnalysisProblem(NotConnectedToPrimary),
 			code:     PrimarySemiSyncBlocked,

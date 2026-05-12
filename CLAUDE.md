@@ -69,6 +69,9 @@ func TestConnectionBilateralCleanup(t *testing.T) {
 
 To make sure tests are easy to read, we use testify assertions. Make sure to use assert.Eventually instead of using manual thread.sleep and timeouts.
 
+### Test Honesty
+- A test must actually exercise the condition its name and doc claim, must fail on `main` without the fix it guards, and must not duplicate coverage that a unit test already pins down precisely. Tests that pass identically with or without the fix waste CI time and create false confidence.
+
 ## :rotating_light: Error Handling Excellence
 
 Error handling is not an afterthought - it's core to reliable software.
