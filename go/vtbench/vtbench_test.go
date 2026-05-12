@@ -300,11 +300,14 @@ func TestBenchClientLoopContinueOnErrorStopsOnContextCancel(t *testing.T) {
 		close(done)
 	}()
 
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("clientLoop did not return after context cancel under ContinueOnError")
-	}
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 50*time.Millisecond, "clientLoop did not return after context cancel under ContinueOnError")
 
 	assert.Less(t, calls.Load(), int64(1_000_000), "loop must stop after context cancel even with ContinueOnError")
 }
