@@ -232,6 +232,11 @@ func (bt *benchThread) clientLoop(ctx context.Context) {
 	log.V(10).Info(fmt.Sprintf("thread %d starting loop", bt.i))
 
 	for i := 0; i < b.Count; i++ {
+		// Enforce the deadline across all protocols, even if execute()
+		// ignores ctx (e.g. mysqlClientConn).
+		if ctx.Err() != nil {
+			break
+		}
 		start := time.Now()
 		result, err := bt.conn.execute(ctx, bt.query, bt.bindVars)
 		b.Timings.Record("query", start)

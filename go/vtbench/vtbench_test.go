@@ -312,6 +312,44 @@ func TestBenchClientLoopContinueOnErrorStopsOnContextCancel(t *testing.T) {
 	assert.Less(t, calls.Load(), int64(1_000_000), "loop must stop after context cancel even with ContinueOnError")
 }
 
+func TestBenchClientLoopStopsOnContextCancelWhenExecuteIgnoresCtx(t *testing.T) {
+	// Simulates a protocol (e.g. mysql) where execute() ignores ctx and
+	// never surfaces ctx errors. The loop must still honor a canceled ctx
+	// so --deadline is enforced.
+	b := newBenchForTest(1, 1_000_000)
+	b.ContinueOnError = true
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	var calls atomic.Int64
+	conn := &fakeClientConn{
+		execFn: func(ctx context.Context) (*sqltypes.Result, error) {
+			if calls.Add(1) == 3 {
+				cancel()
+			}
+			return &sqltypes.Result{}, nil
+		},
+	}
+
+	done := make(chan struct{})
+	go func() {
+		runClientLoop(ctx, b, conn)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 50*time.Millisecond, "clientLoop did not return after context cancel when execute ignores ctx")
+
+	assert.Less(t, calls.Load(), int64(1_000_000), "loop must stop after context cancel even when execute always succeeds")
+}
+
 func TestMysqlClientConnExecutePanicsWithBindVars(t *testing.T) {
 	c := &mysqlClientConn{}
 
