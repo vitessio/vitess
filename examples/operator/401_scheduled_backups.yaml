@@ -160,6 +160,9 @@ spec:
   - name: customer
     durabilityPolicy: none
     turndownPolicy: Immediate
+    vitessOrchestrator:
+      extraFlags:
+        cell: zone1
     partitionings:
     - equal:
         parts: 2
