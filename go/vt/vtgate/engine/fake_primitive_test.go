@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 
@@ -171,9 +172,7 @@ func (f *fakePrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars
 
 func (f *fakePrimitive) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	if strings.Join(f.log, "\n") != strings.Join(want, "\n") {
-		t.Errorf("vc.log got:\n%v\nwant:\n%v", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
-	}
+	assert.Equalf(t, strings.Join(want, "\n"), strings.Join(f.log, "\n"), "vc.log")
 }
 
 func (f *fakePrimitive) NeedsTransaction() bool {

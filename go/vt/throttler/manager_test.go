@@ -75,9 +75,7 @@ func TestManager_Registration(t *testing.T) {
 
 func TestManager_SetMaxRate(t *testing.T) {
 	f := &managerTestFixture{}
-	if err := f.setUp(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, f.setUp())
 	defer f.tearDown()
 
 	// Test SetMaxRate().
@@ -96,9 +94,7 @@ func TestManager_SetMaxRate(t *testing.T) {
 
 func TestManager_GetConfiguration(t *testing.T) {
 	f := &managerTestFixture{}
-	if err := f.setUp(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, f.setUp())
 	defer f.tearDown()
 
 	// Test GetConfiguration() when all throttlers are returned.

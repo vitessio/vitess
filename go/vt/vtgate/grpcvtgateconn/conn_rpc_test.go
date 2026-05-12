@@ -17,13 +17,13 @@ limitations under the License.
 package grpcvtgateconn
 
 import (
-	"context"
 	"io"
 	"net"
 	"os"
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -48,7 +48,7 @@ func TestGRPCVTGateConn(t *testing.T) {
 	go server.Serve(listener)
 
 	// Create a Go RPC client connecting to the server
-	ctx := context.Background()
+	ctx := t.Context()
 	client, err := dial(ctx, listener.Addr().String())
 	require.NoError(t, err)
 	RegisterTestDialProtocol(client)
@@ -70,9 +70,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 
 	// add auth interceptors
 	opts = append(opts, grpc.StreamInterceptor(servenv.FakeAuthStreamInterceptor))
@@ -97,7 +95,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a Go RPC client connecting to the server
-	ctx := context.Background()
+	ctx := t.Context()
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
 
@@ -134,7 +132,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	require.NoError(t, f.Close())
 
 	// Create a Go RPC client connecting to the server
-	ctx = context.Background()
+	ctx = t.Context()
 	fs = pflag.NewFlagSet("", pflag.ContinueOnError)
 	grpcclient.RegisterFlags(fs)
 
@@ -147,17 +145,13 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 	require.NoError(t, err, "failed to set `%s=%s`", "--grpc-auth-static-client-creds", f.Name())
 
 	client, err = dial(ctx, listener.Addr().String())
-	if err != nil {
-		t.Fatalf("dial failed: %v", err)
-	}
+	require.NoError(t, err)
 	RegisterTestDialProtocol(client)
-	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "")
+	conn, _ := vtgateconn.DialProtocol(t.Context(), "test", "")
 	// run the test suite
-	_, err = conn.Session("", nil).Execute(context.Background(), "select * from t", nil, false)
+	_, err = conn.Session("", nil).Execute(t.Context(), "select * from t", nil, false)
 	want := "rpc error: code = Unauthenticated desc = username and password must be provided"
-	if err == nil || err.Error() != want {
-		t.Errorf("expected auth failure:\n%v, want\n%s", err, want)
-	}
+	assert.EqualErrorf(t, err, want, "expected auth failure:\n%v, want\n%s", err, want)
 	// and clean up again
 	client.Close()
 }

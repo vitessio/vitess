@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var vtInsertTest = `
@@ -75,9 +74,13 @@ func TestFailingReplication(t *testing.T) {
 	go func() {
 		<-time.After(30 * time.Second)
 		_, err = primary.VttabletProcess.QueryTablet("GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';", keyspaceName, true)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	startTime := time.Now()
@@ -241,23 +244,23 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 
 	// Take the back using vtbackup executable
 	extraArgs := []string{
-		"--allow_first_backup",
+		"--allow-first-backup",
 		"--db-credentials-file", dbCredentialFile,
-		utils.GetFlagVariantForTests("--mysql-socket"), mysqlSocket.Name(),
+		"--mysql-socket", mysqlSocket.Name(),
 
 		// Use opentsdb for stats.
-		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",
+		"--stats-backend", "opentsdb",
 		// Write stats to file for reading afterwards.
-		utils.GetFlagVariantForTests("--opentsdb-uri"), "file://" + statsPath,
+		"--opentsdb-uri", "file://" + statsPath,
 	}
 	if restartBeforeBackup {
-		extraArgs = append(extraArgs, "--restart_before_backup")
+		extraArgs = append(extraArgs, "--restart-before-backup")
 	}
 	if disableRedoLog {
 		extraArgs = append(extraArgs, "--disable-redo-log")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	if !initialBackup && disableRedoLog {

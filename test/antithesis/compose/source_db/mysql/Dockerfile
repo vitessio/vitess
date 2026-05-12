@@ -1,3 +1,3 @@
-FROM mysql:8.4@sha256:43bd9764df60666fb2ba2cf8217dd17b3d2414c150005d2fdd07a0cd73d3b7f5
+FROM mysql:8.4@sha256:21d5c55b7f74a97dcbd281dfbb10356a16b1199da956a63b55493418afe2b940
 COPY commerce.sql grant.sh dataset.csv /docker-entrypoint-initdb.d/
 COPY mysql84.cnf /etc/mysql/conf.d/mysql84.cnf

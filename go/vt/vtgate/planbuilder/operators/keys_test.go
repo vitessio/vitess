@@ -60,7 +60,6 @@ func TestMarshalUnmarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	if diff := cmp.Diff(original, unmarshalled); diff != "" {
-		t.Errorf("Unmarshalled struct does not match original (-want +got):\n%s", diff)
-		t.FailNow()
+		require.Failf(t, "unmarshal mismatch", "Unmarshalled struct does not match original (-want +got):\n%s", diff)
 	}
 }

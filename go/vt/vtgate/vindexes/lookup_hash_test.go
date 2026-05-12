@@ -17,10 +17,9 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -56,14 +55,10 @@ func TestLookupHashCreateVindex(t *testing.T) {
 
 func TestLookupHashNew(t *testing.T) {
 	l := createLookup(t, "lookup_hash", false /* writeOnly */)
-	if want, got := l.(*LookupHash).writeOnly, false; got != want {
-		t.Errorf("Create(lookup, false): %v, want %v", got, want)
-	}
+	assert.False(t, l.(*LookupHash).writeOnly, "Create(lookup, false)")
 
 	l = createLookup(t, "lookup_hash", true)
-	if want, got := l.(*LookupHash).writeOnly, true; got != want {
-		t.Errorf("Create(lookup, false): %v, want %v", got, want)
-	}
+	assert.True(t, l.(*LookupHash).writeOnly, "Create(lookup, true)")
 
 	vdx, err := CreateVindex("lookup_hash", "lookup_hash", map[string]string{
 		"table":      "t",
@@ -71,10 +66,7 @@ func TestLookupHashNew(t *testing.T) {
 		"to":         "toc",
 		"write_only": "invalid",
 	})
-	want := "write_only value must be 'true' or 'false': 'invalid'"
-	if err == nil || err.Error() != want {
-		t.Errorf("Create(bad_scatter): %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "write_only value must be 'true' or 'false': 'invalid'", "Create(bad_scatter)")
 	if err == nil {
 		unknownParams := vdx.(ParamValidating).UnknownParams()
 		require.Empty(t, unknownParams)
@@ -85,7 +77,7 @@ func TestLookupHashMap(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false /* writeOnly */)
 	vc := &vcursor{numRows: 2}
 
-	got, err := lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookuphash.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
@@ -97,29 +89,22 @@ func TestLookupHashMap(t *testing.T) {
 			[]byte("\x06\xe7\xea\"Βp\x8f"),
 		}),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 
 	// Test conversion fail.
 	vc.result = sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "int64|varbinary"),
 		"1|notint",
 	)
-	got, err = lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	got, err = lookuphash.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
 	require.NoError(t, err)
 	want = []key.ShardDestination{key.DestinationKeyspaceIDs([][]byte{})}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %#v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 
 	// Test query fail.
 	vc.mustFail = true
-	_, err = lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
-	wantErr := "lookup.Map: execute failed"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("lookuphash(query fail) err: %v, want %s", err, wantErr)
-	}
+	_, err = lookuphash.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)})
+	assert.EqualError(t, err, "lookup.Map: execute failed", "lookuphash(query fail)")
 	vc.mustFail = false
 }
 
@@ -127,19 +112,17 @@ func TestLookupHashMapAbsent(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false /* writeOnly */)
 	vc := &vcursor{numRows: 0}
 
-	got, err := lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err := lookuphash.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want := []key.ShardDestination{
 		key.DestinationNone{},
 		key.DestinationNone{},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 
 	// writeOnly true should return full keyranges.
 	lookuphash = createLookup(t, "lookup_hash", true)
-	got, err = lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	got, err = lookuphash.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
 	require.NoError(t, err)
 	want = []key.ShardDestination{
 		key.DestinationKeyRange{
@@ -149,38 +132,32 @@ func TestLookupHashMapAbsent(t *testing.T) {
 			KeyRange: &topodatapb.KeyRange{},
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestLookupHashMapNull(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false /* writeOnly */)
 	vc := &vcursor{numRows: 1, keys: []sqltypes.Value{sqltypes.NULL}}
 
-	got, err := lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NULL})
+	got, err := lookuphash.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NULL})
 	require.NoError(t, err)
 	want := []key.ShardDestination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("\x16k@\xb4J\xbaK\xd6"),
 		}),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 
 	// writeOnly true should return full keyranges.
 	lookuphash = createLookup(t, "lookup_hash", true)
-	got, err = lookuphash.Map(context.Background(), vc, []sqltypes.Value{sqltypes.NULL})
+	got, err = lookuphash.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NULL})
 	require.NoError(t, err)
 	want = []key.ShardDestination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestLookupHashVerify(t *testing.T) {
@@ -189,64 +166,46 @@ func TestLookupHashVerify(t *testing.T) {
 
 	// The check doesn't actually happen. But we give correct values
 	// to avoid confusion.
-	got, err := lookuphash.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
+	got, err := lookuphash.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
 	require.NoError(t, err)
-	want := []bool{true, true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("lookuphash.Verify(match): %v, want %v", got, want)
-	}
+	assert.Equal(t, []bool{true, true}, got, "lookuphash.Verify(match)")
 
 	vc.numRows = 0
-	got, err = lookuphash.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
+	got, err = lookuphash.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
 	require.NoError(t, err)
-	want = []bool{false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("lookuphash.Verify(mismatch): %v, want %v", got, want)
-	}
+	assert.Equal(t, []bool{false}, got, "lookuphash.Verify(mismatch)")
 
-	_, err = lookuphash.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
-	wantErr := "lookup.Verify.vunhash: invalid keyspace id: 626f677573"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("lookuphash.Verify(bogus) err: %v, want %s", err, wantErr)
-	}
+	_, err = lookuphash.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("bogus")})
+	assert.EqualError(t, err, "lookup.Verify.vunhash: invalid keyspace id: 626f677573", "lookuphash.Verify(bogus)")
 
 	// writeOnly true should always yield true.
 	lookuphash = createLookup(t, "lookup_hash", true)
 	vc.queries = nil
 
-	got, err = lookuphash.Verify(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
+	got, err = lookuphash.Verify(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
 	require.NoError(t, err)
-	if vc.queries != nil {
-		t.Errorf("lookuphash.Verify(scatter), queries: %v, want nil", vc.queries)
-	}
-	wantBools := []bool{true, true}
-	if !reflect.DeepEqual(got, wantBools) {
-		t.Errorf("lookuphash.Verify(scatter): %v, want %v", got, wantBools)
-	}
+	assert.Nil(t, vc.queries, "lookuphash.Verify(scatter), queries")
+	assert.Equal(t, []bool{true, true}, got, "lookuphash.Verify(scatter)")
 }
 
 func TestLookupHashCreate(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false /* writeOnly */)
 	vc := &vcursor{}
 
-	err := lookuphash.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	err := lookuphash.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	require.NoError(t, err)
-	if got, want := len(vc.queries), 1; got != want {
-		t.Errorf("vc.queries length: %v, want %v", got, want)
-	}
+	assert.Len(t, vc.queries, 1, "vc.queries length")
 
-	err = lookuphash.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	err = lookuphash.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	require.ErrorContains(t, err, "VT03028: Column 'fromc' cannot be null on row 0, col 0")
 
 	vc.queries = nil
 	lookuphash.(*LookupHash).lkp.IgnoreNulls = true
-	err = lookuphash.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
+	err = lookuphash.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
 	require.NoError(t, err)
-	if got, want := len(vc.queries), 0; got != want {
-		t.Errorf("vc.queries length: %v, want %v", got, want)
-	}
+	assert.Empty(t, vc.queries, "vc.queries length")
 
-	err = lookuphash.(Lookup).Create(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
+	err = lookuphash.(Lookup).Create(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("bogus")}, false /* ignoreMode */)
 	require.ErrorContains(t, err, "lookup.Create.vunhash: invalid keyspace id: 626f677573")
 }
 
@@ -254,40 +213,29 @@ func TestLookupHashDelete(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false /* writeOnly */)
 	vc := &vcursor{}
 
-	err := lookuphash.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err := lookuphash.(Lookup).Delete(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	require.NoError(t, err)
-	if got, want := len(vc.queries), 1; got != want {
-		t.Errorf("vc.queries length: %v, want %v", got, want)
-	}
+	assert.Len(t, vc.queries, 1, "vc.queries length")
 
 	vc.queries = nil
-	err = lookuphash.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NULL}}, []byte("\x16k@\xb4J\xbaK\xd6"))
+	err = lookuphash.(Lookup).Delete(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NULL}}, []byte("\x16k@\xb4J\xbaK\xd6"))
 	require.NoError(t, err)
-	if got, want := len(vc.queries), 1; got != want {
-		t.Errorf("vc.queries length: %v, want %v", got, want)
-	}
+	assert.Len(t, vc.queries, 1, "vc.queries length")
 
-	err = lookuphash.(Lookup).Delete(context.Background(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("bogus"))
-	want := "lookup.Delete.vunhash: invalid keyspace id: 626f677573"
-	if err == nil || err.Error() != want {
-		t.Errorf("lookuphash.Delete(bogus) err: %v, want %s", err, want)
-	}
+	err = lookuphash.(Lookup).Delete(t.Context(), vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("bogus"))
+	assert.EqualError(t, err, "lookup.Delete.vunhash: invalid keyspace id: 626f677573", "lookuphash.Delete(bogus)")
 }
 
 func TestLookupHashUpdate(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false /* writeOnly */)
 	vc := &vcursor{}
 
-	err := lookuphash.(Lookup).Update(context.Background(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
+	err := lookuphash.(Lookup).Update(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	if got, want := len(vc.queries), 2; got != want {
-		t.Errorf("vc.queries length: %v, want %v", got, want)
-	}
+	assert.Len(t, vc.queries, 2, "vc.queries length")
 
 	vc.queries = nil
-	err = lookuphash.(Lookup).Update(context.Background(), vc, []sqltypes.Value{sqltypes.NULL}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
+	err = lookuphash.(Lookup).Update(t.Context(), vc, []sqltypes.Value{sqltypes.NULL}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
 	require.NoError(t, err)
-	if got, want := len(vc.queries), 2; got != want {
-		t.Errorf("vc.queries length: %v, want %v", got, want)
-	}
+	assert.Len(t, vc.queries, 2, "vc.queries length")
 }

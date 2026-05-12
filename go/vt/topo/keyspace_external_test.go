@@ -22,6 +22,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqlescape"
@@ -100,9 +101,7 @@ func TestServerFindAllShardsInKeyspace(t *testing.T) {
 			require.Len(t, out, tt.shards)
 
 			for _, s := range shards {
-				if _, ok := out[s]; !ok {
-					t.Errorf("shard %q was not found", s)
-				}
+				assert.Containsf(t, out, s, "shard %q was not found", s)
 			}
 		})
 	}

@@ -17,7 +17,6 @@ limitations under the License.
 package reservedconn
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -31,7 +30,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -88,7 +86,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--lock-heartbeat-time"), "2s"}
+		clusterInstance.VtGateExtraArgs = []string{"--lock-heartbeat-time", "2s"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
@@ -103,7 +101,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestTabletChange(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -123,7 +121,7 @@ func TestTabletChange(t *testing.T) {
 }
 
 func TestTabletChangeStreaming(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

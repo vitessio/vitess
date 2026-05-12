@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -57,11 +56,11 @@ var (
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
 	extraVTGateArgs       = []string{
-		utils.GetFlagVariantForTests("--tablet-refresh-interval"), "10ms", "--enable_buffer", utils.GetFlagVariantForTests("--buffer-window"), loadTestBufferingWindowDuration.String(),
-		utils.GetFlagVariantForTests("--buffer-size"), "250000", utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "1s", utils.GetFlagVariantForTests("--buffer-max-failover-duration"), loadTestBufferingWindowDuration.String(),
-		utils.GetFlagVariantForTests("--buffer-drain-concurrency"), "10",
+		"--tablet-refresh-interval", "10ms", "--enable-buffer", "--buffer-window", loadTestBufferingWindowDuration.String(),
+		"--buffer-size", "250000", "--buffer-min-time-between-failovers", "1s", "--buffer-max-failover-duration", loadTestBufferingWindowDuration.String(),
+		"--buffer-drain-concurrency", "10",
 	}
-	extraVtctldArgs = []string{utils.GetFlagVariantForTests("--remote-operation-timeout"), "600s", "--topo-etcd-lease-ttl", "120"}
+	extraVtctldArgs = []string{"--remote-operation-timeout", "600s", "--topo-etcd-lease-ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior.
 	extraVTTabletArgs = []string{}
 
@@ -502,8 +501,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 	var options []string
 	defaultHeartbeatOptions := []string{
-		utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-		utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
+		"--heartbeat-on-demand-duration", "5s",
+		"--heartbeat-interval", "250ms",
 	}
 	if !mainClusterConfig.overrideHeartbeatOptions {
 		options = append(options, defaultHeartbeatOptions...)
@@ -539,9 +538,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	require.NotNil(t, tablet.DbServer)
 	tablet.DbServer.InitMysql = true
 	proc, err := tablet.DbServer.StartProcess()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	require.NoError(t, err)
 	require.NotNil(t, proc)
 	tablet.Name = fmt.Sprintf("%s-%d", cell.Name, tabletID)
 	vttablet.Name = tablet.Name
@@ -582,9 +579,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			log.Info(fmt.Sprintf("Shard %s already exists, not adding", shardName))
 		} else {
 			log.Info("Adding Shard " + shardName)
-			if err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName); err != nil {
-				t.Fatalf("CreateShard command failed with %+v\n", err)
-			}
+			err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName)
+			require.NoErrorf(t, err, "CreateShard command failed with %+v\n", err)
 			keyspace.Shards[shardName] = shard
 		}
 		for i, cell := range cells {
@@ -662,7 +658,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 							log.Error(fmt.Sprintf("Failed to read the mysqld error log file %q: %v", mysqldLog, ferr))
 						}
 						output, _ := dbcmd.CombinedOutput()
-						t.Fatalf("%v :: Unable to start mysql server for %v; Output: %s", err,
+						require.FailNowf(t, "Unable to start mysql server", "%v :: Unable to start mysql server for %v; Output: %s", err,
 							tablets[ind].Vttablet, string(output))
 					}
 				}
@@ -674,9 +670,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				// Set time_zone to UTC for all tablets. Without this it fails locally on some MacOS setups.
 				query := "SET GLOBAL time_zone = '+00:00';"
 				qr, err := tablet.Vttablet.QueryTablet(query, tablet.Vttablet.Keyspace, false)
-				if err != nil {
-					t.Fatalf("failed to set time_zone: %v, output: %v", err, qr)
-				}
+				require.NoErrorf(t, err, "failed to set time_zone: %v, output: %v", err, qr)
 			}
 		}
 		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
@@ -747,9 +741,8 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 	}
 	log.Info("Deleting Shard " + shardName)
 	// TODO how can we avoid the use of even_if_serving?
-	if output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName); err != nil {
-		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
-	}
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("DeleteShard", "--recursive", "--even-if-serving", ksName+"/"+shardName)
+	require.NoErrorf(t, err, "DeleteShard command failed with error %+v and output %s\n", err, output)
 }
 
 // StartVtgate starts a vtgate process
@@ -946,17 +939,13 @@ func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing
 // function to reset any environment changes made.
 func setupDBTypeVersion(t *testing.T, value string) func() {
 	details := strings.Split(value, "-")
-	if len(details) != 2 {
-		t.Fatalf("Invalid database details: %s", value)
-	}
+	require.Lenf(t, details, 2, "Invalid database details: %s", value)
 	dbType := strings.ToLower(details[0])
 	majorVersion := details[1]
 	dbTypeMajorVersion := fmt.Sprintf("%s-%s", dbType, majorVersion)
 	// Do nothing if this version is already installed
 	dbVersionInUse, err := getDBTypeVersionInUse()
-	if err != nil {
-		t.Fatalf("Could not get details of database to be used for the keyspace: %v", err)
-	}
+	require.NoError(t, err)
 	if dbTypeMajorVersion == dbVersionInUse {
 		t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
 		return func() {}
@@ -964,11 +953,11 @@ func setupDBTypeVersion(t *testing.T, value string) func() {
 	path := "/tmp/" + dbTypeMajorVersion
 	// Set the root path and create it if needed
 	if err := setVtMySQLRoot(path); err != nil {
-		t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
+		require.FailNowf(t, "Could not set VT_MYSQL_ROOT", "Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
 	}
 	// Download and extract the version artifact if needed
 	if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
-		t.Fatalf("Could not download %s, error: %v", majorVersion, err)
+		require.FailNowf(t, "Could not download", "Could not download %s, error: %v", majorVersion, err)
 	}
 	return func() {
 		unsetVtMySQLRoot()

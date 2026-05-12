@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -251,18 +251,16 @@ func resetBinlogClient() {
 
 func primaryPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.PrimaryPosition(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos, err := env.Mysqld.PrimaryPosition(t.Context())
+	require.NoError(t, err)
 	return replication.EncodePosition(pos)
 }
 
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
-	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+	if err := env.Mysqld.ExecuteSuperQueryList(t.Context(), queries); err != nil {
 		log.Error("Error executing query: " + err.Error())
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	for _, query := range queries {
 		updateMockSchemaForQuery(query)
@@ -272,10 +270,8 @@ func execStatements(t *testing.T, queries []string) {
 func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []string) {
 	t.Helper()
 	for _, query := range queries {
-		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
-			t.Fatalf("ExecuteFetch(%v) failed: %v", query, err)
-		}
-		updateMockSchemaForQuery(query)
+		_, err := conn.ExecuteFetch(query, 10000, false)
+		require.NoErrorf(t, err, "ExecuteFetch(%v) failed: %v", query, err)
 	}
 }
 
@@ -715,18 +711,10 @@ func (bts *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 
 func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {
 	t.Helper()
-	if !proto.Equal(tablet, globalFBC.lastTablet) {
-		t.Errorf("Request tablet: %v, want %v", globalFBC.lastTablet, tablet)
-	}
-	if pos != globalFBC.lastPos {
-		t.Errorf("Request pos: %v, want %v", globalFBC.lastPos, pos)
-	}
-	if !reflect.DeepEqual(tables, globalFBC.lastTables) {
-		t.Errorf("Request tables: %v, want %v", globalFBC.lastTables, tables)
-	}
-	if !proto.Equal(kr, globalFBC.lastKeyRange) {
-		t.Errorf("Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
-	}
+	assert.True(t, proto.Equal(tablet, globalFBC.lastTablet), "Request tablet: %v, want %v", globalFBC.lastTablet, tablet)
+	assert.Equalf(t, pos, globalFBC.lastPos, "Request pos: %v, want %v", globalFBC.lastPos, pos)
+	assert.Equalf(t, tables, globalFBC.lastTables, "Request tables: %v, want %v", globalFBC.lastTables, tables)
+	assert.True(t, proto.Equal(kr, globalFBC.lastKeyRange), "Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
 }
 
 // --------------------------------------
@@ -1420,7 +1408,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 	failed := false
 	for i, log := range logs {
 		if failed {
-			t.Errorf("no logs received")
+			assert.Fail(t, "no logs received")
 			continue
 		}
 		select {
@@ -1439,11 +1427,9 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 				}
 			}
 
-			if !match {
-				t.Errorf("log:\n%v, does not match log %d:\n%q", got, i, log)
-			}
+			assert.True(t, match, "log:\n%v, does not match log %d:\n%q", got, i, log)
 		case <-time.After(5 * time.Second):
-			t.Errorf("no logs received, expecting %s", log)
+			assert.Failf(t, "no logs received", "no logs received, expecting %s", log)
 			failed = true
 		}
 	}
@@ -1487,7 +1473,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 
 	for len(validator.Pending()) > 0 {
 		if failed {
-			t.Errorf("no query received")
+			assert.Fail(t, "no query received")
 			continue
 		}
 		var got string
@@ -1528,7 +1514,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 			if shouldIgnoreQuery(got) {
 				continue
 			}
-			t.Errorf("unexpected query: %s", got)
+			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
 			require.Len(t, validator.Pending(), 0)
@@ -1550,7 +1536,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 
 	for len(validator.Pending()) > 0 {
 		if failed {
-			t.Errorf("no query received")
+			assert.Fail(t, "no query received")
 			continue
 		}
 		var got string
@@ -1581,7 +1567,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 			if shouldIgnoreQuery(got) {
 				continue
 			}
-			t.Errorf("unexpected query: %s", got)
+			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
 			require.Len(t, validator.Pending(), 0)

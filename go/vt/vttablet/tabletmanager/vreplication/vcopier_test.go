@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/utils"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -112,9 +111,8 @@ func testPlayerCopyRespectsMaxQuerySize(t *testing.T) {
 
 	t.Cleanup(func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", vrqr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 		playerEngine.Close()
 		playerEngine.Open(context.WithoutCancel(t.Context()))
@@ -185,9 +183,8 @@ func testPlayerCopyTablesJSONStreamSQL(t *testing.T) {
 
 	t.Cleanup(func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 		playerEngine.Close()
 		playerEngine.Open(context.WithoutCancel(t.Context()))
@@ -252,7 +249,7 @@ func testVcopierTestCases(t *testing.T, test func(*testing.T), cases []vcopierTe
 		// Run test case.
 		t.Run(
 			fmt.Sprintf(
-				"%s=%d,vreplication_parallel_insert_workers=%d", utils.GetFlagVariantForTests("vreplication-experimental-flags"),
+				"%s=%d,vreplication_parallel_insert_workers=%d", "vreplication-experimental-flags",
 				tc.vreplicationExperimentalFlags, tc.vreplicationParallelInsertWorkers,
 			),
 			test,
@@ -360,14 +357,11 @@ func testPlayerCopyCharPK(t *testing.T) {
 
 	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -466,14 +460,11 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 
 	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -545,7 +536,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"drop table src",
 		fmt.Sprintf("drop table %s.dst", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
+	env.SchemaEngine.Reload(t.Context())
 
 	count := 0
 	vstreamRowsSendHook = func(ctx context.Context) {
@@ -589,14 +580,11 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 
 	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -740,9 +728,8 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 	validateCopyRowCountStat(t, 4)
 
 	query = fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"set @@session.foreign_key_checks=1",
 		"begin",
@@ -803,9 +790,8 @@ func testPlayerCopyTables(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -852,7 +838,7 @@ func testPlayerCopyTables(t *testing.T) {
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 5)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	type logTestCase struct {
 		name string
@@ -955,14 +941,11 @@ func testPlayerCopyBigTable(t *testing.T) {
 
 	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1092,14 +1075,11 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 	}
 	query := createVReplicationStateWithSourceOverrides(t, "test", bls, binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, copyTestSourceOverrides())
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1228,9 +1208,7 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Stopped, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	// As mentioned above. lastpk cut-off is set at (6,6)
 	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -1246,14 +1224,11 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1365,9 +1340,7 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Stopped, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id",
 		"int32"),
@@ -1379,14 +1352,11 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1466,9 +1436,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Stopped, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id",
 		"int32"),
@@ -1480,14 +1448,11 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	})
 	id := qr.InsertID
 	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1536,14 +1501,11 @@ func testPlayerCopyTablesNone(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1589,14 +1551,11 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1677,14 +1636,11 @@ func testPlayerCopyTablesGIPK(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1776,14 +1732,11 @@ func testPlayerCopyTableCancel(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1858,14 +1811,11 @@ func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 
@@ -1903,7 +1853,7 @@ func TestCopyTablesWithInvalidDates(t *testing.T) {
 func testCopyTablesWithInvalidDates(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	conn, err := env.Mysqld.GetDbaConnection(context.Background())
+	conn, err := env.Mysqld.GetDbaConnection(t.Context())
 	require.NoError(t, err)
 
 	// default mysql flavor allows invalid dates: so disallow explicitly for this test
@@ -1972,9 +1922,8 @@ func testCopyTablesWithInvalidDates(t *testing.T) {
 	})
 
 	query = fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-	if _, err := playerEngine.Exec(query); err != nil {
-		t.Fatal(err)
-	}
+	_, err = playerEngine.Exec(query)
+	require.NoError(t, err)
 	expectDBClientQueries(t, qh.Expect(
 		"begin",
 		"/delete from _vt.vreplication",
@@ -2012,7 +1961,7 @@ func testCopyInvisibleColumns(t *testing.T) {
 		"drop table src1",
 		fmt.Sprintf("drop table %s.dst1", vrepldb),
 	})
-	env.SchemaEngine.Reload(context.Background())
+	env.SchemaEngine.Reload(t.Context())
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -2029,14 +1978,11 @@ func testCopyInvisibleColumns(t *testing.T) {
 	}
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() {
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}()
 

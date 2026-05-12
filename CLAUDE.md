@@ -75,6 +75,7 @@ To make sure tests are easy to read, we use `github.com/stretchr/testify/assert`
 - Use `assert.ErrorContains` / `require.ErrorContains` to check error messages
 - Use the `_test.go` suffix for mocks and test helpers that are only used by the current package's tests; if helpers or mocks need to be imported by other packages' tests or fuzz harnesses, put them in a normal reusable package such as `testlib` or `testutil`
 - CI timeouts must be generous (30s+) — GitHub Actions runners can be resource-starved with multi-second pauses; sub-second timeouts cause flakiness with no recourse but retry
+- Do not use t.Fatal or t.Error in tests, but instead require and assert
 
 ## :rotating_light: Error Handling Excellence
 
@@ -161,7 +162,7 @@ return user.NeedsMigration() && migrate(user) || user
 
 ### 4. Zero-Value / Default Behavior Safety
 - New struct fields must not change behavior for existing callers who omit them
-- Prefer negative-polarity booleans (`NoCrossKeyspaceJoins` not `AllowCrossKeyspaceJoins`) so the zero-value preserves existing behavior
+- Prefer negative-polarity booleans (`PreventCrossKeyspaceReads` not `AllowCrossKeyspaceReads`) so the zero-value preserves existing behavior
 - When a flag value of `0` or empty previously meant "disabled," don't change it to mean "unlimited" — preserve the existing semantic or make the change explicit
 - Validate mutually exclusive flags in `PreRunE` and add unit tests for invalid combinations
 

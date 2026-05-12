@@ -54,7 +54,6 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtutils "vitess.io/vitess/go/vt/utils"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
@@ -105,12 +104,10 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	defer vc.TearDown()
 	defaultCell := vc.Cells[cell]
 
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+	require.NoError(t, err)
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil)
+	require.NoError(t, err)
 	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
@@ -235,16 +232,14 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		// We rely on holding open transactions to generate innodb history so extend the timeout
 		// to avoid flakiness when the CI is very slow.
 		"--queryserver-config-transaction-timeout=" + (defaultTimeout * 3).String(),
-		fmt.Sprintf("%s=%d", vtutils.GetFlagVariantForTests("--vreplication-copy-phase-max-innodb-history-list-length"), maxSourceTrxHistory),
+		fmt.Sprintf("%s=%d", "--vreplication-copy-phase-max-innodb-history-list-length", maxSourceTrxHistory),
 		parallelInsertWorkers,
 	}
 
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+	require.NoError(t, err)
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil)
+	require.NoError(t, err)
 	vtgate := defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 
@@ -431,12 +426,10 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	// to deal with CI resource constraints.
 	// This also makes it easier to confirm the behavior as we know exactly
 	// what tablets will be involved.
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, defaultSourceKs, shard, initialProductVSchema, initialProductSchema, 0, 0, 100, nil)
+	require.NoError(t, err)
+	_, err = vc.AddKeyspace(t, []*Cell{defaultCell}, defaultTargetKs, shard, "", "", 0, 0, 200, nil)
+	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
 
 	sourceTab = vc.getPrimaryTablet(t, defaultSourceKs, shard)
@@ -753,15 +746,22 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 	}
 	ch := make(chan bool, 1)
 	go func() {
+		defer func() { ch <- true }()
 		streamConn, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer streamConn.Close()
 		_, err = streamConn.ExecuteFetch("set workload='olap'", 1000, false)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		query := "vstream * from " + table
 		err = streamConn.ExecuteStreamFetch(query)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		wantFields := []*querypb.Field{{
 			Name: "op",
@@ -780,7 +780,9 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 			Type: sqltypes.Datetime,
 		}}
 		gotFields, err := streamConn.Fields()
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		for i, field := range gotFields {
 			gotFields[i] = &querypb.Field{
 				Name: field.Name,
@@ -790,21 +792,23 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 		utils.MustMatch(t, wantFields, gotFields)
 
 		gotRows, err := streamConn.FetchNext(nil)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		log.Info(fmt.Sprintf("QR1:%v\n", gotRows))
 
 		gotRows, err = streamConn.FetchNext(nil)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		log.Info(fmt.Sprintf("QR2:%+v\n", gotRows))
-
-		ch <- true
 	}()
 
 	select {
 	case <-ch:
 		return
 	case <-time.After(5 * time.Second):
-		t.Fatal("nothing streamed within timeout")
+		require.Fail(t, "nothing streamed within timeout")
 	}
 }
 
@@ -812,9 +816,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 	t.Run("shardCustomer", func(t *testing.T) {
 		workflow := "p2c"
 		ksWorkflow := fmt.Sprintf("%s.%s", defaultTargetKs, workflow)
-		if _, err := vc.AddKeyspace(t, cells, defaultTargetKs, "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, defaultTargetKsOpts); err != nil {
-			t.Fatal(err)
-		}
+		_, err := vc.AddKeyspace(t, cells, defaultTargetKs, "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, defaultTargetKsOpts)
+		require.NoError(t, err)
 		// Assume we are operating on first cell
 		defaultCell := cells[0]
 		custKs := vc.Cells[defaultCell.Name].Keyspaces[defaultTargetKs]
@@ -1088,18 +1091,14 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 
 		for shard := range strings.SplitSeq("-80,80-", ",") {
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
-			if err == nil {
-				t.Fatal("GetShard merchant:-80 failed")
-			}
+			require.Error(t, err, "GetShard merchant:-80 failed")
 			assert.Contains(t, output, "node doesn't exist", "GetShard succeeded for dropped shard merchant:"+shard)
 		}
 
 		for shard := range strings.SplitSeq("-40,40-c0,c0-", ",") {
 			ksShard := fmt.Sprintf("%s:%s", merchantKeyspace, shard)
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", ksShard)
-			if err != nil {
-				t.Fatalf("GetShard merchant failed for: %s: %v", shard, err)
-			}
+			require.NoErrorf(t, err, "GetShard merchant failed for: %s: %v", shard, err)
 			assert.NotContains(t, output, "node doesn't exist", "GetShard failed for valid shard "+ksShard)
 			assert.Contains(t, output, "primary_alias", "GetShard failed for valid shard "+ksShard)
 		}
@@ -1260,9 +1259,8 @@ func shardMerchant(t *testing.T) {
 		targetKs := merchantKeyspace
 		tables := "merchant"
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
-		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400, defaultTargetKsOpts); err != nil {
-			t.Fatal(err)
-		}
+		_, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400, defaultTargetKsOpts)
+		require.NoError(t, err)
 		moveTablesAction(t, "Create", cell, workflow, defaultSourceKs, targetKs, tables)
 		merchantKs := vc.Cells[defaultCell.Name].Keyspaces[merchantKeyspace]
 		merchantTab1 := merchantKs.Shards["-80"].Tablets["zone1-400"].Vttablet
@@ -1516,17 +1514,13 @@ func materializeMerchantOrders(t *testing.T) {
 func checkVtgateHealth(t *testing.T, cell *Cell) {
 	for _, vtgate := range cell.Vtgates {
 		vtgateHealthURL := strings.ReplaceAll(vtgate.VerifyURL, "vars", "health")
-		if !checkHealth(t, vtgateHealthURL) {
-			assert.Fail(t, "Vtgate not healthy: ", vtgateHealthURL)
-		}
+		assert.True(t, checkHealth(t, vtgateHealthURL), "Vtgate not healthy: ", vtgateHealthURL)
 	}
 }
 
 func checkTabletHealth(t *testing.T, tablet *Tablet) {
 	vttabletHealthURL := strings.ReplaceAll(tablet.Vttablet.VerifyURL, "debug/vars", "healthz")
-	if !checkHealth(t, vttabletHealthURL) {
-		assert.Fail(t, "Vttablet not healthy: ", vttabletHealthURL)
-	}
+	assert.True(t, checkHealth(t, vttabletHealthURL), "Vttablet not healthy: ", vttabletHealthURL)
 }
 
 func iterateTablets(t *testing.T, cluster *VitessCluster, f func(t *testing.T, tablet *Tablet)) {
@@ -1578,7 +1572,7 @@ func waitForLowLag(t *testing.T, keyspace, workflow string) {
 	}
 
 	if duration <= 0 {
-		t.Fatalf("waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
+		require.Failf(t, "waitForLowLag timed out", "waitForLowLag timed out for workflow %s, keyspace %s, current lag is %d", workflow, keyspace, lagSeconds)
 	}
 }
 
@@ -1621,16 +1615,14 @@ func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, 
 			action, workflow, output)
 	}
 	if err != nil {
-		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
+		require.Failf(t, "MoveTables command failed", "MoveTables %s command failed with %+v\n", action, err)
 	}
 }
 
 func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, ignoreErrors bool) {
 	if err := vc.VtctldClient.ExecuteCommand("MoveTables", "--workflow="+workflow, "--target-keyspace="+targetKs, action,
 		"--source-keyspace="+sourceKs, "--tables="+tables, "--cells="+cell, "--tablet-types="+tabletTypes); err != nil {
-		if !ignoreErrors {
-			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
-		}
+		require.True(t, ignoreErrors, "MoveTables %s command failed with %+v\n", action, err)
 	}
 }
 
@@ -1659,7 +1651,7 @@ func reshardAction(t *testing.T, action, workflow, keyspaceName, sourceShards, t
 		log.Info(fmt.Sprintf("Output of vtctldclient Reshard %s for %s workflow:\n++++++\n%s\n--------\n", action, workflow, output))
 	}
 	if err != nil {
-		t.Fatalf("Reshard %s command failed with %+v\nOutput: %s", action, err, output)
+		require.Failf(t, "Reshard command failed", "Reshard %s command failed with %+v\nOutput: %s", action, err, output)
 	}
 }
 
@@ -1698,7 +1690,7 @@ func ensureCanSwitch(t *testing.T, workflowType, cells, ksWorkflow string) {
 		}
 		select {
 		case <-timer.C:
-			t.Fatalf("Did not become ready to switch traffic for %s before the timeout of %s", ksWorkflow, defaultTimeout)
+			require.Failf(t, "ensureCanSwitch timeout", "Did not become ready to switch traffic for %s before the timeout of %s", ksWorkflow, defaultTimeout)
 		default:
 			time.Sleep(defaultTick)
 		}

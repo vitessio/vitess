@@ -138,7 +138,7 @@ func TestVDiff2(t *testing.T) {
 	targetShards := []string{"-80", "80-"}
 	extraVTTabletArgs = []string{
 		// This forces us to use multiple vstream packets even with small test tables.
-		"--vstream_packet_size=1",
+		"--vstream-packet-size=1",
 	}
 
 	vc = NewVitessCluster(t, &clusterOptions{cells: strings.Split(cellNames, ",")})
@@ -248,9 +248,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	waitForShardsToCatchup()
 
 	if diffDuration, ok := tc.extraVDiffFlags["--max-diff-duration"]; ok {
-		if !strings.Contains(tc.tables, "customer") {
-			require.Fail(t, "customer table must be included in the table list to test --max-diff-duration")
-		}
+		require.Contains(t, tc.tables, "customer", "customer table must be included in the table list to test --max-diff-duration")
 		// Generate enough customer table data so that the table diff gets restarted.
 		dur, err := time.ParseDuration(diffDuration)
 		require.NoError(t, err, "could not parse --max-diff-duration %q: %v", diffDuration, err)

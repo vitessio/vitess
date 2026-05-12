@@ -202,7 +202,7 @@ services:
           condition: service_healthy
       source_db_host:
         condition: service_healthy
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15000:8080
 
@@ -243,7 +243,7 @@ services:
       - SOURCE_DB=0
       - DB_USER=
       - DB_PASS=
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 13000:8080
     volumes:
@@ -282,7 +282,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15101:8080
     volumes:
@@ -321,7 +321,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15102:8080
     volumes:
@@ -360,7 +360,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15104:8080
     volumes:
@@ -399,7 +399,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15201:8080
     volumes:
@@ -438,7 +438,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15202:8080
     volumes:
@@ -477,7 +477,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15204:8080
     volumes:
@@ -516,7 +516,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15301:8080
     volumes:
@@ -555,7 +555,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15302:8080
     volumes:
@@ -594,7 +594,7 @@ services:
         - CMD-SHELL
         - curl -s --fail --show-error localhost:8080/debug/health
       timeout: 10s
-    image: docker.io/vitess/lite:latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/vitess-repository/vitess-antithesis-vitess:latest
     ports:
       - 15304:8080
     volumes:

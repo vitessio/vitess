@@ -60,8 +60,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var usage = `Usage of test.go:
@@ -81,7 +79,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql80", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "55", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "56", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
 	timeout          = flag.Duration("timeout", 30*time.Minute, "timeout for each test")
@@ -180,7 +178,8 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 				testCmd = append(testCmd, "-keep-data")
 			}
 		} else {
-			testCmd = []string{"test/" + t.File, "-v", "--skip-build", utils.GetFlagVariantForTests("--keep-logs")}
+			testCmd = make([]string, 0, 4+len(t.Args))
+			testCmd = append(testCmd, "test/"+t.File, "-v", "--skip-build", "--keep-logs")
 			testCmd = append(testCmd, t.Args...)
 		}
 		if *partialKeyspace {

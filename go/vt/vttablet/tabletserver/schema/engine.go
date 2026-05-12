@@ -57,12 +57,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-const (
-	maxTableCount         = 10000
-	maxPartitionsPerTable = 8192
-	maxIndexesPerTable    = 64
-)
-
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
 
 // Engine stores the schema info and performs operations that
@@ -270,9 +264,7 @@ func (se *Engine) Open() error {
 		}
 	}()
 
-	se.tables = map[string]*Table{
-		"dual": NewTable("dual", NoType),
-	}
+	se.tables = make(map[string]*Table)
 	se.notifiers = make(map[string]notifier)
 
 	if err := se.reload(ctx, false); err != nil {
@@ -420,7 +412,7 @@ func populateInnoDBStats(ctx context.Context, conn *connpool.Conn) (map[string]*
 		return nil, nil
 	}
 
-	innodbResults, err := conn.Exec(ctx, innodbTableSizesQuery, maxTableCount*maxPartitionsPerTable, false)
+	innodbResults, err := conn.Exec(ctx, innodbTableSizesQuery, mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "in Engine.reload(), reading innodb tables")
 	}
@@ -534,7 +526,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
-	curTables := map[string]bool{"dual": true}
+	curTables := make(map[string]bool)
 	// changedTables keeps track of tables that have changed so we can reload their pk info.
 	changedTables := make(map[string]*Table)
 	// created and altered contain the names of created and altered tables for broadcast.
@@ -693,7 +685,7 @@ func getTableData(ctx context.Context, conn *connpool.Conn, includeStats bool) (
 	} else {
 		showTablesQuery = conn.BaseShowTables()
 	}
-	return conn.Exec(ctx, showTablesQuery, maxTableCount, false)
+	return conn.Exec(ctx, showTablesQuery, mysql.FETCH_ALL_ROWS, false)
 }
 
 func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn) error {
@@ -728,7 +720,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		partition string
 	}
 
-	partitionsResults, err := conn.Exec(ctx, conn.BaseShowPartitions(), 8192*maxTableCount, false)
+	partitionsResults, err := conn.Exec(ctx, conn.BaseShowPartitions(), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return err
 	}
@@ -749,7 +741,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 		rowBytes int64
 	}
 	tables := make(map[string]table)
-	tableStatsResults, err := conn.Exec(ctx, conn.BaseShowTableRowCountClusteredIndex(), maxTableCount*maxPartitionsPerTable, false)
+	tableStatsResults, err := conn.Exec(ctx, conn.BaseShowTableRowCountClusteredIndex(), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return err
 	}
@@ -780,7 +772,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	indexes := make(map[[2]string]index)
 
 	// Load the byte sizes of all indexes. Results contain one row for every index/partition combination.
-	bytesResults, err := conn.Exec(ctx, conn.BaseShowIndexSizes(), maxTableCount*maxIndexesPerTable, false)
+	bytesResults, err := conn.Exec(ctx, conn.BaseShowIndexSizes(), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return err
 	}
@@ -806,7 +798,7 @@ func (se *Engine) updateTableIndexMetrics(ctx context.Context, conn *connpool.Co
 	}
 
 	// Load index cardinalities. Results contain one row for every index (pre-aggregated across partitions).
-	cardinalityResults, err := conn.Exec(ctx, conn.BaseShowIndexCardinalities(), maxTableCount*maxPartitionsPerTable, false)
+	cardinalityResults, err := conn.Exec(ctx, conn.BaseShowIndexCardinalities(), mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return err
 	}
@@ -863,7 +855,7 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.Conn) (int64, er
 
 // populatePrimaryKeys populates the PKColumns for the specified tables.
 func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.Conn, tables map[string]*Table) error {
-	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, maxTableCount, false)
+	pkData, err := conn.Exec(ctx, mysql.BaseShowPrimary, mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not get table primary key info: %v", err)
 	}
@@ -917,7 +909,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	tableNameStr := tableName.String()
-	if st, ok := se.tables[tableNameStr]; ok && tableNameStr != "dual" { // No need to refresh dual
+	if st, ok := se.tables[tableNameStr]; ok {
 		// Test Engines (NewEngineForTests()) don't have a conns pool and are not
 		// supposed to talk to the database, so don't update the cache entry in that
 		// case.
@@ -1042,6 +1034,14 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	return se.tables[tableName.String()]
 }
 
+// TableCount returns the number of real schema objects currently tracked in the
+// schema engine. Safe for concurrent use.
+func (se *Engine) TableCount() int {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return len(se.tables)
+}
+
 // GetSchema returns the current schema. The Tables are a
 // shared data structure and must be treated as read-only.
 func (se *Engine) GetSchema() map[string]*Table {
@@ -1131,6 +1131,13 @@ func (se *Engine) SetTableForTests(table *Table) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	se.tables[table.Name.String()] = table
+}
+
+// ResetTablesForTests clears the engine's table map. For test use only.
+func (se *Engine) ResetTablesForTests() {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	se.tables = map[string]*Table{}
 }
 
 func (se *Engine) GetDBConnector() dbconfigs.Connector {

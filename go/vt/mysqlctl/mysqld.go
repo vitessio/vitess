@@ -74,6 +74,12 @@ const maxLogFileSampleSize = 4096
 // DbaGrantWaitTime is the amount of time to wait for the grants to have applied
 const DbaGrantWaitTime = 10 * time.Second
 
+const (
+	// mysqldExitPollInterval is how often waitForMysqldExit checks whether
+	// mysqld has removed its socket and pid files.
+	mysqldExitPollInterval = 100 * time.Millisecond
+)
+
 var (
 	// DisableActiveReparents is a flag to disable active
 	// reparents for safety reasons. It is used in three places:
@@ -453,10 +459,12 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 			case <-cancel:
 			default:
 				mysqld.mutex.Lock()
-				for _, callback := range mysqld.onTermFuncs {
-					go callback()
-				}
+				callbacks := append([]func(){}, mysqld.onTermFuncs...)
 				mysqld.mutex.Unlock()
+
+				for _, callback := range callbacks {
+					callback()
+				}
 			}
 		}(mysqld.cancelWaitCmd)
 		mysqld.mutex.Unlock()
@@ -624,7 +632,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 			return fmt.Errorf("can't dial mysqlctld: %v", err)
 		}
 		defer client.Close()
-		return client.Shutdown(ctx, waitForMysqld)
+		return client.Shutdown(ctx, waitForMysqld, shutdownTimeout)
 	}
 
 	// We're shutting down on purpose. We no longer want to be notified when
@@ -705,23 +713,38 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 	// didn't start.
 	if waitForMysqld {
 		log.Info(fmt.Sprintf("Mysqld.Shutdown: waiting for socket file (%v) and pid file (%v) to disappear", cnf.SocketFile, cnf.PidFile))
-
-		for {
-			select {
-			case <-ctx.Done():
-				return errors.New("gave up waiting for mysqld to stop")
-			default:
-			}
-
-			_, socketPathErr = os.Stat(cnf.SocketFile)
-			_, pidPathErr = os.Stat(cnf.PidFile)
-			if os.IsNotExist(socketPathErr) && os.IsNotExist(pidPathErr) {
-				return nil
-			}
-			time.Sleep(100 * time.Millisecond)
+		if err := waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// StartAfterExit waits for a mysqld process that shut itself down (e.g. after a
+// CLONE operation) to fully exit, then starts a new one. It polls for the
+// disappearance of the socket and pid files before calling Start.
+func (mysqld *Mysqld) StartAfterExit(ctx context.Context, cnf *Mycnf) error {
+	if err := waitForMysqldExit(ctx, cnf.SocketFile, cnf.PidFile); err != nil {
+		return err
+	}
+	return mysqld.Start(ctx, cnf)
+}
+
+// waitForMysqldExit polls until both socketFile and pidFile have been removed,
+// which signals that the mysqld process has fully exited.
+func waitForMysqldExit(ctx context.Context, socketFile, pidFile string) error {
+	for {
+		_, socketErr := os.Stat(socketFile)
+		_, pidErr := os.Stat(pidFile)
+		if os.IsNotExist(socketErr) && os.IsNotExist(pidErr) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return errors.New("gave up waiting for mysqld to stop")
+		case <-time.After(mysqldExitPollInterval):
+		}
+	}
 }
 
 // execCmd searches the PATH for a command and runs it, logging the output.
@@ -1500,7 +1523,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		log.Info("ApplyBinlogFile: disabling super_read_only")
 		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
 		if err != nil {
-			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
+			if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 				log.Warn("ApplyBinlogFile: server does not know about super_read_only, continuing anyway...")
 			} else {
 				log.Error(fmt.Sprintf("ApplyBinlogFile: unexpected error while trying to set super_read_only: %v", err))
