@@ -1369,6 +1369,10 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 		// Check the total number of closed connections
 		assert.Equal(c, int64(1), state.close.Load())
 	}, 100*time.Millisecond, 10*time.Millisecond)
+
+	// Keep this test focused on the in-flight reopen above. Further idle
+	// cleanup ticks can legitimately close additional connections and make the
+	// leak assertions below depend on background timing.
 	p.SetIdleTimeout(0)
 
 	// At this point, the idle timeout worker has expired the connections
