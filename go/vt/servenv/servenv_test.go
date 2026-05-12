@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/event"
 )
 
@@ -35,15 +37,12 @@ func TestFireOnTermSyncHooksFinished(t *testing.T) {
 		triggered2 = true
 	})
 
-	if finished, want := fireOnTermSyncHooks(1*time.Second), true; finished != want {
-		t.Errorf("finished = %v, want %v", finished, want)
-	}
-	if want := true; triggered1 != want {
-		t.Errorf("triggered1 = %v, want %v", triggered1, want)
-	}
-	if want := true; triggered2 != want {
-		t.Errorf("triggered1 = %v, want %v", triggered2, want)
-	}
+	finished, want := fireOnTermSyncHooks(1*time.Second), true
+	assert.Equalf(t, want, finished, "finished = %v, want %v", finished, want)
+	want1 := true
+	assert.Equalf(t, want1, triggered1, "triggered1 = %v, want %v", triggered1, want1)
+	want2 := true
+	assert.Equalf(t, want2, triggered2, "triggered1 = %v, want %v", triggered2, want2)
 }
 
 func TestFireOnTermSyncHooksTimeout(t *testing.T) {
@@ -53,9 +52,8 @@ func TestFireOnTermSyncHooksTimeout(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	})
 
-	if finished, want := fireOnTermSyncHooks(1*time.Nanosecond), false; finished != want {
-		t.Errorf("finished = %v, want %v", finished, want)
-	}
+	finished, want := fireOnTermSyncHooks(1*time.Nanosecond), false
+	assert.Equalf(t, want, finished, "finished = %v, want %v", finished, want)
 }
 
 func TestFireOnCloseHooksTimeout(t *testing.T) {
@@ -65,7 +63,6 @@ func TestFireOnCloseHooksTimeout(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	})
 
-	if finished, want := fireOnCloseHooks(1*time.Nanosecond), false; finished != want {
-		t.Errorf("finished = %v, want %v", finished, want)
-	}
+	finished, want := fireOnCloseHooks(1*time.Nanosecond), false
+	assert.Equalf(t, want, finished, "finished = %v, want %v", finished, want)
 }

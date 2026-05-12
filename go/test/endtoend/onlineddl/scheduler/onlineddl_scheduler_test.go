@@ -172,7 +172,7 @@ func TestParseTableName(t *testing.T) {
 }
 
 func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+	ctx, cancel := context.WithTimeout(t.Context(), normalWaitTime)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
@@ -203,7 +203,7 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 }
 
 func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
-	ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+	ctx, cancel := context.WithTimeout(t.Context(), normalWaitTime)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
@@ -739,7 +739,7 @@ func testScheduler(t *testing.T) {
 	require.NoError(t, err)
 	if forceCutoverCapable {
 		t.Run("force_cutover", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
+			ctx, cancel := context.WithTimeout(t.Context(), extendedWaitTime*5)
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
@@ -828,7 +828,7 @@ func testScheduler(t *testing.T) {
 			})
 		})
 		t.Run("force_cutover mdl", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
+			ctx, cancel := context.WithTimeout(t.Context(), extendedWaitTime*5)
 			defer cancel()
 
 			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
@@ -914,7 +914,7 @@ func testScheduler(t *testing.T) {
 
 	if forceCutoverCapable {
 		t.Run("force_cutover_instant", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime*5)
+			ctx, cancel := context.WithTimeout(t.Context(), extendedWaitTime*5)
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
@@ -1614,7 +1614,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusCancelled)
 		})
 		t.Run("wait for cleanup", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), normalWaitTime)
+			ctx, cancel := context.WithTimeout(t.Context(), normalWaitTime)
 			defer cancel()
 
 			for {
@@ -1651,7 +1651,7 @@ func testScheduler(t *testing.T) {
 				t.Logf("marked %d migrations for cleanup", cleanedUp)
 			})
 			t.Run("wait for all migrations cleanup", func(t *testing.T) {
-				ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime)
+				ctx, cancel := context.WithTimeout(t.Context(), extendedWaitTime)
 				defer cancel()
 
 				for {
@@ -1713,7 +1713,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckCleanupAllMigrations(t, &vtParams, 1)
 		})
 		t.Run("wait for migration cleanup", func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), extendedWaitTime)
+			ctx, cancel := context.WithTimeout(t.Context(), extendedWaitTime)
 			defer cancel()
 
 			for {

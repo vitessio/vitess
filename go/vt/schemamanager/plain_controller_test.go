@@ -17,7 +17,6 @@ limitations under the License.
 package schemamanager
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -27,7 +26,7 @@ import (
 func TestPlainController(t *testing.T) {
 	sql := "CREATE TABLE test_table (pk int)"
 	controller := NewPlainController([]string{sql}, "test_keyspace")
-	ctx := context.Background()
+	ctx := t.Context()
 	err := controller.Open(ctx)
 	require.NoError(t, err)
 

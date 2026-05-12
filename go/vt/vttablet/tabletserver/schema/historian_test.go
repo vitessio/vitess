@@ -17,7 +17,6 @@ limitations under the License.
 package schema
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -78,7 +77,7 @@ func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.MinimalTable)
 }
 
 func TestHistorian(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
 
@@ -434,7 +433,7 @@ func TestHistorianRegisterVersionEventBestEffortOnReadError(t *testing.T) {
 }
 
 func TestHistorianPurgeOldSchemas(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	schemaVersionMaxAgeSeconds := 3600 // 1 hour
 	se, db, cancel := getTestSchemaEngine(t, int64(schemaVersionMaxAgeSeconds))
 	defer cancel()

@@ -17,7 +17,6 @@ limitations under the License.
 package kill
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -93,7 +92,7 @@ func TestMain(m *testing.M) {
 }
 
 func setupData(t *testing.T, huge bool) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -128,7 +127,7 @@ func setupData(t *testing.T, huge bool) {
 }
 
 func dropData(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

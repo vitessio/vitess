@@ -18,13 +18,13 @@ package fileutil
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testWildcard(t *testing.T, pattern string, expected bool) {
 	result := HasWildcard(pattern)
-	if result != expected {
-		t.Errorf("HasWildcard(%v) returned %v but expected %v", pattern, result, expected)
-	}
+	assert.Equalf(t, expected, result, "HasWildcard(%v) returned %v but expected %v", pattern, result, expected)
 }
 
 func TestHasWildcard(t *testing.T) {

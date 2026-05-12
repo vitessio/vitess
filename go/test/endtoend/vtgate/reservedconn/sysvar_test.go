@@ -91,7 +91,7 @@ func TestSetSysVarSingle(t *testing.T) {
 }
 
 func TestSetSystemVariable(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -109,7 +109,7 @@ func TestSetSystemVariable(t *testing.T) {
 }
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -136,7 +136,7 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 }
 
 func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, "delete from test")
@@ -153,7 +153,7 @@ func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 }
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, "delete from test")
@@ -167,7 +167,7 @@ func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 }
 
 func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, `delete from test`)
@@ -198,11 +198,11 @@ func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 // changing the session transaction isolation level affects only the next
 // transaction that's started.
 func TestSetSystemVariableWithAutocommitDisabled(t *testing.T) {
-	conn1, err := mysql.Connect(context.Background(), &vtParams)
+	conn1, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn1.Close()
 
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 
@@ -221,7 +221,7 @@ func TestSetSystemVariableWithAutocommitDisabled(t *testing.T) {
 }
 
 func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, "delete from test")
@@ -238,7 +238,7 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("For partial keyspaces, kill is called on the source keyspace but queries execute on the target, so this test will fail")
 	}
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -264,7 +264,7 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 }
 
 func TestSetSystemVarInTxWithConnError(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -311,7 +311,7 @@ func BenchmarkReservedConnFieldQuery(b *testing.B) {
 }
 
 func TestEnableSystemSettings(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -338,7 +338,7 @@ func TestEnableSystemSettings(t *testing.T) {
 
 // Tests type consitency through multiple queries
 func TestSystemVariableType(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -357,7 +357,7 @@ func TestSystemVariableType(t *testing.T) {
 }
 
 func TestSysvarSocket(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -374,7 +374,7 @@ func TestSysvarSocket(t *testing.T) {
 }
 
 func TestReservedConnInStreaming(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, "delete from test")
@@ -389,7 +389,7 @@ func TestReservedConnInStreaming(t *testing.T) {
 }
 
 func TestUnifiedOlapAndOltp(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -444,7 +444,7 @@ func checkOltpAndOlapInterchangingTx(t *testing.T, conn *mysql.Conn) {
 
 func TestSysVarTxIsolation(t *testing.T) {
 	t.Run("returns the default isolation level if unchanged", func(t *testing.T) {
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 
@@ -467,7 +467,7 @@ func TestSysVarTxIsolation(t *testing.T) {
 	})
 
 	t.Run("allows changing the isolation level via special syntax", func(t *testing.T) {
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 
@@ -490,7 +490,7 @@ func TestSysVarTxIsolation(t *testing.T) {
 	})
 
 	t.Run("allows changing the isolation level via session variable", func(t *testing.T) {
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 
@@ -515,7 +515,7 @@ func TestSysVarTxIsolation(t *testing.T) {
 
 // TestSysVarInnodbWaitTimeout tests the innodb_lock_wait_timeout system variable
 func TestSysVarInnodbWaitTimeout(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -819,7 +819,7 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
+			conn, err := mysql.Connect(t.Context(), &vtParams)
 			require.NoError(t, err)
 			defer conn.Close()
 
@@ -840,7 +840,7 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 	}
 
 	t.Run("ROLLBACK TO SAVEPOINT returns an error when no transaction has been started", func(t *testing.T) {
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 
@@ -860,7 +860,7 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 	})
 
 	t.Run("RELEASE SAVEPOINT returns an error when no transaction has been started", func(t *testing.T) {
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)
 		defer conn.Close()
 

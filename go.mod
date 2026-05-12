@@ -1,8 +1,9 @@
 module vitess.io/vitess
 
-go 1.26.2
+go 1.26.3
 
 tool (
+	github.com/antithesishq/antithesis-sdk-go/tools/antithesis-go-instrumentor
 	github.com/vitessio/goyacc
 	gotest.tools/gotestsum
 	mvdan.cc/gofumpt
@@ -115,6 +116,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.1 // indirect
+	github.com/antithesishq/antithesis-sdk-go v0.7.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect

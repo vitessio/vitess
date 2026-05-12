@@ -41,17 +41,17 @@ func verifyAllCodepoints(t *testing.T, expected map[rune][]uint16, weights uca.W
 
 		if len(vitessWeights) == 0 {
 			if mysqlFound {
-				t.Errorf("missing MySQL weight in Vitess' tables: U+%04X", cp)
+				assert.Failf(t, "missing MySQL weight in Vitess' tables", "U+%04X", cp)
 				continue
 			}
 		} else {
 			if !mysqlFound {
-				t.Errorf("missing Vitess weight in MySQL's tables: U+%04X", cp)
+				assert.Failf(t, "missing Vitess weight in MySQL's tables", "U+%04X", cp)
 				continue
 			}
 
 			if len(mysqlWeights) != len(vitessWeights) {
-				t.Errorf("wrong number of collation entities for U+%04X: mysql=%v vs vitess=%v", cp, mysqlWeights, vitessWeights)
+				assert.Failf(t, "wrong number of collation entities", "U+%04X: mysql=%v vs vitess=%v", cp, mysqlWeights, vitessWeights)
 				continue
 			}
 
@@ -79,9 +79,7 @@ func loadExpectedWeights(t *testing.T, weights string) map[rune][]uint16 {
 	result := make(map[rune][]uint16, len(meta.Weights))
 	for key, w := range meta.Weights {
 		cp, err := strconv.ParseInt(key[2:], 16, 32)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		result[rune(cp)] = w
 	}
 	return result
@@ -118,7 +116,7 @@ func TestWeightTablesAreDeduplicated(t *testing.T) {
 	}
 	average := float64(total) / float64(len(uniqueTables))
 	if average < 10.0/3.0 {
-		t.Fatalf("weight tables are not deduplicated, average table reuse: %f", average)
+		require.Failf(t, "weight tables are not deduplicated", "average table reuse: %f", average)
 	}
 }
 

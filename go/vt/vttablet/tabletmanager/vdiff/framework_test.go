@@ -559,14 +559,14 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 		ddls = append(ddls, fmt.Sprintf("create table if not exists %s.t1 (c1 bigint primary key, c2 bigint)", vdiffDBName))
 
 		for _, ddl := range ddls {
-			if err := tstenv.Mysqld.ExecuteSuperQuery(context.Background(), ddl); err != nil {
+			if err := tstenv.Mysqld.ExecuteSuperQuery(t.Context(), ddl); err != nil {
 				fmt.Fprintf(os.Stderr, "%v", err)
 			}
 		}
 	})
 
 	vdiffenv.vre = vreplication.NewSimpleTestEngine(tstenv.TopoServ, tstenv.Cells[0], tstenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffDBName, nil)
-	vdiffenv.vre.Open(context.Background())
+	vdiffenv.vre.Open(t.Context())
 
 	vdiffenv.tmc.schema = testSchema
 	// We need to add t1, which we use for a full VDiff in TestVDiff, to
@@ -615,7 +615,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	vdiffenv.tmc.setVRResults(primary.tablet, fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name='%s' and workflow='%s'", vdiffDBName, vdiffenv.workflow), singleRowAffected)
 
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending') and db_name = "+encodeString(vdiffDBName), noResults, nil)
-	vdiffenv.vde.Open(context.Background(), vdiffenv.vre)
+	vdiffenv.vde.Open(t.Context(), vdiffenv.vre)
 	assert.True(t, vdiffenv.vde.IsOpen())
 	assert.Equal(t, 0, len(vdiffenv.vde.controllers))
 
@@ -696,7 +696,7 @@ func (tvde *testVDiffEnv) createController(t *testing.T, id int) *controller {
 }
 
 func (tvde *testVDiffEnv) newController(t *testing.T, controllerQR *sqltypes.Result) *controller {
-	ctx := context.Background()
+	ctx := t.Context()
 	ct, err := newController(controllerQR.Named().Row(), tvde.dbClientFactory, tstenv.TopoServ, tvde.vde, tvde.opts)
 	require.NoError(t, err)
 	ctx2, cancel := context.WithCancel(ctx)

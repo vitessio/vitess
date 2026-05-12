@@ -26,7 +26,6 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -195,7 +194,7 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 		}
 	}
 	se.RegisterNotifier("test", notifier, true)
-	err := se.Reload(context.Background())
+	err := se.Reload(t.Context())
 	require.NoError(t, err)
 
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
@@ -236,11 +235,11 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 	require.NoError(t, err)
 	se.UnregisterNotifier("test")
 
-	err = se.ReloadAt(context.Background(), replication.Position{})
+	err = se.ReloadAt(t.Context(), replication.Position{})
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
-	err = se.ReloadAt(context.Background(), pos1)
+	err = se.ReloadAt(t.Context(), pos1)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
@@ -273,12 +272,12 @@ func TestOpenAndReloadLegacy(t *testing.T) {
 			mysql.ShowPrimaryRow("seq", "id"),
 		},
 	})
-	err = se.ReloadAt(context.Background(), pos1)
+	err = se.ReloadAt(t.Context(), pos1)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
 	delete(want, "test_table_03")
-	err = se.ReloadAt(context.Background(), pos2)
+	err = se.ReloadAt(t.Context(), pos2)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 }
@@ -433,7 +432,7 @@ func TestOpenAndReload(t *testing.T) {
 		}
 	}
 	se.RegisterNotifier("test", notifier, true)
-	err := se.Reload(context.Background())
+	err := se.Reload(t.Context())
 	require.NoError(t, err)
 
 	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsCounter.Get())
@@ -474,11 +473,11 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, err)
 	se.UnregisterNotifier("test")
 
-	err = se.ReloadAt(context.Background(), replication.Position{})
+	err = se.ReloadAt(t.Context(), replication.Position{})
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
-	err = se.ReloadAt(context.Background(), pos1)
+	err = se.ReloadAt(t.Context(), pos1)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
@@ -511,12 +510,12 @@ func TestOpenAndReload(t *testing.T) {
 			mysql.ShowPrimaryRow("seq", "id"),
 		},
 	})
-	err = se.ReloadAt(context.Background(), pos1)
+	err = se.ReloadAt(t.Context(), pos1)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
 	delete(want, "test_table_03")
-	err = se.ReloadAt(context.Background(), pos2)
+	err = se.ReloadAt(t.Context(), pos2)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 }
@@ -615,7 +614,7 @@ func TestUserTableNamedDual(t *testing.T) {
 	})
 
 	gotCreated, gotAltered, gotDropped = nil, nil, nil
-	require.NoError(t, se.Reload(context.Background()))
+	require.NoError(t, se.Reload(t.Context()))
 	assert.Empty(t, gotCreated)
 	assert.Equal(t, []string{"dual"}, gotAltered)
 	assert.Empty(t, gotDropped)
@@ -730,7 +729,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.ShowPrimaryRow("msg", "id"),
 		},
 	})
-	err := se.Reload(context.Background())
+	err := se.Reload(t.Context())
 	require.NoError(t, err)
 
 	want["test_table_04"] = &Table{
@@ -810,7 +809,7 @@ func TestReloadWithSwappedTables(t *testing.T) {
 			mysql.ShowPrimaryRow("msg", "id"),
 		},
 	})
-	err = se.Reload(context.Background())
+	err = se.Reload(t.Context())
 	require.NoError(t, err)
 
 	delete(want, "test_table_03")
@@ -844,9 +843,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	db.AddRejectedQuery(mysql.BaseShowTables, errors.New(want))
 	se := newEngine(1*time.Second, 1*time.Second, 0, db, nil)
 	err := se.Open()
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, want %s", err, want)
-	}
+	require.ErrorContainsf(t, err, want, "se.Open: %v, want %s", err, want)
 }
 
 // TestOpenFailedDueToLoadTableErr tests that schema engine load should fail for test_table and
@@ -961,7 +958,7 @@ func TestSchemaEngineCloseTickRace(t *testing.T) {
 	case <-finished:
 		return
 	case <-time.After(2 * time.Second):
-		t.Fatal("Could not stop the ticks after 2 seconds")
+		require.Fail(t, "Could not stop the ticks after 2 seconds")
 	}
 }
 
@@ -1160,7 +1157,7 @@ func TestEngineMysqlTime(t *testing.T) {
 			se := &Engine{}
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tt.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			if tt.timeStampErr != nil {
@@ -1169,7 +1166,7 @@ func TestEngineMysqlTime(t *testing.T) {
 				db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("UNIX_TIMESTAMP", "int64"), tt.timeStampResult...))
 			}
 
-			gotTime, err := se.mysqlTime(context.Background(), conn)
+			gotTime, err := se.mysqlTime(t.Context(), conn)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
@@ -1267,7 +1264,7 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tt.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
 
@@ -1278,7 +1275,7 @@ func TestEnginePopulatePrimaryKeys(t *testing.T) {
 				db.AddRejectedQuery(query, errToThrow)
 			}
 
-			err = se.populatePrimaryKeys(context.Background(), conn, tt.tables)
+			err = se.populatePrimaryKeys(t.Context(), conn, tt.tables)
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
 				return
@@ -1329,7 +1326,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := fakesqldb.New(t)
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, tt.name)
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 			se := &Engine{}
 			se.innoDbReadRowsCounter = stats.NewCounter("TestEngineUpdateInnoDBRowsRead-"+tt.name, "")
@@ -1341,7 +1338,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 				db.AddRejectedQuery(query, errToThrow)
 			}
 
-			err = se.updateInnoDBRowsRead(context.Background(), conn)
+			err = se.updateInnoDBRowsRead(t.Context(), conn)
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
 				return
@@ -1357,7 +1354,7 @@ func TestEngineUpdateInnoDBRowsRead(t *testing.T) {
 func TestEngineGetTableData(t *testing.T) {
 	db := fakesqldb.New(t)
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestEngineGetTableData")
-	conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+	conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -1392,7 +1389,7 @@ func TestEngineGetTableData(t *testing.T) {
 				defer db.DeleteRejectedQuery(query)
 			}
 
-			_, err = getTableData(context.Background(), conn, false)
+			_, err = getTableData(t.Context(), conn, false)
 			if tt.expectedError != "" {
 				require.ErrorContains(t, err, tt.expectedError)
 				return
@@ -1531,7 +1528,7 @@ func TestEngineReload(t *testing.T) {
 			cfg.SignalWhenSchemaChange = true
 
 			env := tabletenv.NewEnv(venv, nil, "TestEngineReload")
-			conn, err := connpool.NewConn(context.Background(), dbconfigs.New(db.ConnParams()), nil, nil, env)
+			conn, err := connpool.NewConn(t.Context(), dbconfigs.New(db.ConnParams()), nil, nil, env)
 			require.NoError(t, err)
 
 			se := newEngine(10*time.Second, 10*time.Second, 0, db, venv)
@@ -1542,7 +1539,7 @@ func TestEngineReload(t *testing.T) {
 
 			// If we have to skip the meta check, then there is nothing to do
 			se.SkipMetaCheck = true
-			err = se.reload(context.Background(), false)
+			err = se.reload(t.Context(), false)
 			require.NoError(t, err)
 
 			se.SkipMetaCheck = false
@@ -1689,7 +1686,7 @@ func TestEngineReload(t *testing.T) {
 			}, false)
 
 			// Run the reload.
-			err = se.reload(context.Background(), false)
+			err = se.reload(t.Context(), false)
 			require.NoError(t, err)
 			require.NoError(t, db.LastError())
 			require.Zero(t, se.throttledLogger.GetLastLogTime())
@@ -1698,7 +1695,7 @@ func TestEngineReload(t *testing.T) {
 			// Instead we should see a log message with the error.
 			db.RemoveQueryPattern(udfQueryPattern)
 			se.UnregisterNotifier("test")
-			err = se.reload(context.Background(), false)
+			err = se.reload(t.Context(), false)
 			require.NoError(t, err)
 			// Check for the udf error being logged. The last log time should be less than a second.
 			require.Less(t, time.Since(se.throttledLogger.GetLastLogTime()), 1*time.Second)

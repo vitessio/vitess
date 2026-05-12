@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -123,7 +124,7 @@ func setBinlogRowImage(t *testing.T, mode string) {
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	wg, ch := startStream(ctx, t, filter, position, tablePK)
 	defer wg.Wait()
@@ -141,14 +142,14 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 		case string:
 			execStatement(t, input)
 		default:
-			t.Fatalf("unexpected input: %#v", input)
+			require.Failf(t, "unexpected input", "unexpected input: %#v", input)
 		}
 		engine.se.Reload(ctx)
 		expectLog(ctx, t, tcase.input, ch, tcase.output)
 	}
 	cancel()
 	if evs, ok := <-ch; ok {
-		t.Fatalf("unexpected evs: %v", evs)
+		require.Failf(t, "unexpected evs", "unexpected evs: %v", evs)
 	}
 	log.Info("Last line of runCases")
 }
@@ -177,9 +178,7 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 		for {
 			select {
 			case allevs, ok := <-ch:
-				if !ok {
-					require.FailNow(t, "expectLog: not ok, stream ended early")
-				}
+				require.True(t, ok, "expectLog: not ok, stream ended early")
 				for _, ev := range allevs {
 					// Ignore spurious heartbeats that can happen on slow machines.
 					if ev.Throttled || ev.Type == binlogdatapb.VEventType_HEARTBEAT {
@@ -224,33 +223,19 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 			evs[i].Shard = ""
 			switch want {
 			case "begin":
-				if evs[i].Type != binlogdatapb.VEventType_BEGIN {
-					t.Fatalf("%v (%d): event: %v, want begin", input, i, evs[i])
-				}
+				require.Equalf(t, binlogdatapb.VEventType_BEGIN, evs[i].Type, "%v (%d): event: %v, want begin", input, i, evs[i])
 			case "gtid":
-				if evs[i].Type != binlogdatapb.VEventType_GTID {
-					t.Fatalf("%v (%d): event: %v, want gtid", input, i, evs[i])
-				}
+				require.Equalf(t, binlogdatapb.VEventType_GTID, evs[i].Type, "%v (%d): event: %v, want gtid", input, i, evs[i])
 			case "lastpk":
-				if evs[i].Type != binlogdatapb.VEventType_LASTPK {
-					t.Fatalf("%v (%d): event: %v, want lastpk", input, i, evs[i])
-				}
+				require.Equalf(t, binlogdatapb.VEventType_LASTPK, evs[i].Type, "%v (%d): event: %v, want lastpk", input, i, evs[i])
 			case "commit":
-				if evs[i].Type != binlogdatapb.VEventType_COMMIT {
-					t.Fatalf("%v (%d): event: %v, want commit", input, i, evs[i])
-				}
+				require.Equalf(t, binlogdatapb.VEventType_COMMIT, evs[i].Type, "%v (%d): event: %v, want commit", input, i, evs[i])
 			case "other":
-				if evs[i].Type != binlogdatapb.VEventType_OTHER {
-					t.Fatalf("%v (%d): event: %v, want other", input, i, evs[i])
-				}
+				require.Equalf(t, binlogdatapb.VEventType_OTHER, evs[i].Type, "%v (%d): event: %v, want other", input, i, evs[i])
 			case "ddl":
-				if evs[i].Type != binlogdatapb.VEventType_DDL {
-					t.Fatalf("%v (%d): event: %v, want ddl", input, i, evs[i])
-				}
+				require.Equalf(t, binlogdatapb.VEventType_DDL, evs[i].Type, "%v (%d): event: %v, want ddl", input, i, evs[i])
 			case "copy_completed":
-				if evs[i].Type != binlogdatapb.VEventType_COPY_COMPLETED {
-					t.Fatalf("%v (%d): event: %v, want copy_completed", input, i, evs[i])
-				}
+				require.Equalf(t, binlogdatapb.VEventType_COPY_COMPLETED, evs[i].Type, "%v (%d): event: %v, want copy_completed", input, i, evs[i])
 			default:
 				evs[i].Timestamp = 0
 				if evs[i].Type == binlogdatapb.VEventType_FIELD {
@@ -274,15 +259,14 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 				evs[i].CommitParent = 0
 				evs[i].EventGtid = ""
 				want = env.RemoveAnyDeprecatedDisplayWidths(want)
-				if got := fmt.Sprintf("%v", evs[i]); got != want {
+				got := fmt.Sprintf("%v", evs[i])
+				if got != want {
 					log.Error(fmt.Sprintf("%v (%d): event:\n%q, want\n%q", input, i, got, want))
-					t.Fatalf("%v (%d): event:\n%q, want\n%q", input, i, got, want)
 				}
+				require.Equalf(t, want, got, "%v (%d): event:\n%q, want\n%q", input, i, got, want)
 			}
 		}
-		if len(wantset) != len(evs) {
-			t.Fatalf("%v: evs\n%v, want\n%v, got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
-		}
+		require.Lenf(t, evs, len(wantset), "%v: evs\n%v, want\n%v, got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
 	}
 }
 
@@ -360,15 +344,15 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 
 func execStatement(t *testing.T, query string) {
 	t.Helper()
-	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
-		t.Fatal(err)
-	}
+	// Use context.Background() because this helper is called from t.Cleanup,
+	// where t.Context() has already been cancelled.
+	require.NoError(t, env.Mysqld.ExecuteSuperQuery(context.Background(), query))
 }
 
 func execStatements(t *testing.T, queries []string) {
-	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
-		t.Fatal(err)
-	}
+	// Use context.Background() because this helper is called from t.Cleanup,
+	// where t.Context() has already been cancelled.
+	require.NoError(t, env.Mysqld.ExecuteSuperQueryList(context.Background(), queries))
 }
 
 func primaryPosition(t *testing.T) string {
@@ -377,18 +361,12 @@ func primaryPosition(t *testing.T) string {
 	// the flavor to FilePos. If so, we have to obtain the position
 	// in that flavor format.
 	connParam, err := engine.env.Config().DB.DbaWithDB().MysqlParams()
-	if err != nil {
-		t.Fatal(err)
-	}
-	conn, err := mysql.Connect(context.Background(), connParam)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	conn, err := mysql.Connect(t.Context(), connParam)
+	require.NoError(t, err)
 	defer conn.Close()
 	pos, err := conn.PrimaryPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return replication.EncodePosition(pos)
 }
 
@@ -396,9 +374,7 @@ func setVSchema(t *testing.T, vschema string) {
 	t.Helper()
 
 	curCount := engine.vschemaUpdates.Get()
-	if err := env.SetVSchema(vschema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(vschema))
 	// Wait for curCount to go up.
 	updated := false
 	for range 10 {
@@ -410,7 +386,7 @@ func setVSchema(t *testing.T, vschema string) {
 	}
 	if !updated {
 		log.Info("vschema did not get updated")
-		t.Error("vschema did not get updated")
+		assert.Fail(t, "vschema did not get updated")
 	}
 }
 
