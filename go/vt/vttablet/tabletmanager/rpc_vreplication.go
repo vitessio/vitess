@@ -598,6 +598,9 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 			return nil, err
 		}
 		if req.OnDdl != nil {
+			if _, ok := binlogdatapb.OnDDLAction_name[int32(*req.OnDdl)]; !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid OnDdl value: %v", req.GetOnDdl())
+			}
 			bls.OnDdl = *req.OnDdl
 		}
 		bls.Filter.Rules = append(bls.Filter.Rules, req.FilterRules...)
