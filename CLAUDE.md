@@ -76,6 +76,9 @@ To make sure tests are easy to read, we use `github.com/stretchr/testify/assert`
 - Use the `_test.go` suffix for mocks and test helpers that are only used by the current package's tests; if helpers or mocks need to be imported by other packages' tests or fuzz harnesses, put them in a normal reusable package such as `testlib` or `testutil`
 - CI timeouts must be generous (30s+) — GitHub Actions runners can be resource-starved with multi-second pauses; sub-second timeouts cause flakiness with no recourse but retry
 
+### Test Honesty
+- A test must actually exercise the condition its name and doc claim, must fail on `main` without the fix it guards, and must not duplicate coverage that a unit test already pins down precisely. Tests that pass identically with or without the fix waste CI time and create false confidence.
+
 ## :rotating_light: Error Handling Excellence
 
 Error handling is not an afterthought - it's core to reliable software.
