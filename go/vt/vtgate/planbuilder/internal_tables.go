@@ -151,12 +151,33 @@ func rejectInternalTableDMLTableExpr(tableExpr sqlparser.TableExpr) error {
 // targets a Vitess internal operation table.
 func rejectInternalTableDDL(stmt sqlparser.DDLStatement) error {
 	for _, tableName := range stmt.AffectedTables() {
-		if !schema.IsInternalOperationTableName(tableName.Name.String()) {
-			continue
+		if err := rejectInternalTableName(tableName); err != nil {
+			return err
 		}
-
-		return internalTableModificationError(tableName.Name.String())
 	}
 
-	return nil
+	alterTable, ok := stmt.(*sqlparser.AlterTable)
+	if !ok {
+		return nil
+	}
+
+	// AffectedTables does not include the WITH TABLE target, but EXCHANGE
+	// PARTITION swaps data with that table.
+	partitionSpec := alterTable.PartitionSpec
+	if partitionSpec == nil || partitionSpec.Action != sqlparser.ExchangeAction {
+		return nil
+	}
+
+	return rejectInternalTableName(partitionSpec.TableName)
+}
+
+// rejectInternalTableName returns an error for a Vitess internal operation
+// table name.
+func rejectInternalTableName(tableName sqlparser.TableName) error {
+	name := tableName.Name.String()
+	if !schema.IsInternalOperationTableName(name) {
+		return nil
+	}
+
+	return internalTableModificationError(name)
 }
