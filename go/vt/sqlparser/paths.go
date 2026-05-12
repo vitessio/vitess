@@ -75,7 +75,7 @@ func (path ASTPath) DebugString() string {
 			}
 			offset, readBytes := path.nextPathOffset()
 			path = path[readBytes:]
-			sb.WriteString(fmt.Sprintf("(%d)", offset))
+			fmt.Fprintf(&sb, "(%d)", offset)
 		}
 	}
 

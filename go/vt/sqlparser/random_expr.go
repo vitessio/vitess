@@ -376,7 +376,7 @@ func (g *Generator) randomBool(prob float32) bool {
 }
 
 func (g *Generator) intLiteral() Expr {
-	t := strconv.Itoa(rand.IntN(100) - rand.IntN(100)) //nolint:staticcheck
+	t := strconv.Itoa(rand.IntN(100) - rand.IntN(100))
 
 	return NewIntLiteral(t)
 }

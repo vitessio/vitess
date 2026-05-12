@@ -694,7 +694,7 @@ func (tmc *testTMClient) confirmVDiffRequests(t *testing.T) {
 	reqString := func([]*vdiffRequestResponse) string {
 		str := strings.Builder{}
 		for _, vrr := range tmc.vdiffRequests {
-			str.WriteString(fmt.Sprintf("\n%+v", vrr.req))
+			fmt.Fprintf(&str, "\n%+v", vrr.req)
 		}
 		return str.String()
 	}

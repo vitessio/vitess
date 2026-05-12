@@ -663,8 +663,7 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 				if totalReplicas > 0 && len(notReplicatingReplicas) == totalReplicas {
 					resultChanged = true
 					analysis.Analysis = DeadPrimary
-					for i := len(notReplicatingReplicas) - 1; i >= 0; i-- {
-						idxToRemove := notReplicatingReplicas[i]
+					for _, idxToRemove := range slices.Backward(notReplicatingReplicas) {
 						result = append(result[0:idxToRemove], result[idxToRemove+1:]...)
 					}
 					break

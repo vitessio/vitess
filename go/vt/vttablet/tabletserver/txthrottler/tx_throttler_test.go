@@ -22,7 +22,6 @@ package txthrottler
 
 import (
 	"context"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -148,7 +147,7 @@ func TestEnabledThrottler(t *testing.T) {
 	throttlerStateImpl.done <- true
 
 	// 1 should not throttle due to return value of underlying Throttle(), despite high lag
-	atomic.StoreInt64(&throttlerStateImpl.maxLag, 20)
+	throttlerStateImpl.maxLag.Store(20)
 	assert.False(t, throttlerImpl.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Zero(t, throttlerImpl.requestsThrottled.Counts()["some-workload"])
@@ -178,7 +177,7 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
 	// 4 should not throttle despite return value of underlying Throttle() and priority = 100, due to low lag
-	atomic.StoreInt64(&throttlerStateImpl.maxLag, 1)
+	throttlerStateImpl.maxLag.Store(1)
 	assert.False(t, throttler.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(4), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])

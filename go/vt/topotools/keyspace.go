@@ -52,7 +52,7 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 		// keep going
 	case topo.IsErrType(err, topo.PartialResult):
 		logger.Warningf("RefreshTabletsByShard: got partial result for shard %v/%v, may not refresh all tablets everywhere", si.Keyspace(), si.ShardName())
-		prd.WriteString(fmt.Sprintf("got partial results from topo server for shard %v/%v: %v", si.Keyspace(), si.ShardName(), err))
+		fmt.Fprintf(&prd, "got partial results from topo server for shard %v/%v: %v", si.Keyspace(), si.ShardName(), err)
 		isPartialRefresh = true
 	default:
 		return false, "", err
@@ -91,7 +91,7 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 			if err := tmc.RefreshState(grctx, ti.Tablet); err != nil {
 				logger.Warningf("RefreshTabletsByShard: failed to refresh %v: %v", ti.AliasString(), err)
 				m.Lock()
-				prd.WriteString(fmt.Sprintf("failed to refresh tablet %v: %v", ti.AliasString(), err))
+				fmt.Fprintf(&prd, "failed to refresh tablet %v: %v", ti.AliasString(), err)
 				isPartialRefresh = true
 				m.Unlock()
 			}

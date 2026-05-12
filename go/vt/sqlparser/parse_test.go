@@ -7010,16 +7010,16 @@ func testFile(t *testing.T, filename, tempDir string) {
 				if tcase.output == "" && tcase.errStr == "" {
 					tcase.output = tcase.input
 				}
-				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
+				fmt.Fprintf(&expected, "%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input))
 				tree, err := parser.Parse(tcase.input)
 				if tcase.errStr != "" {
 					errPresent := ""
 					if err != nil {
 						errPresent = err.Error()
-						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
+						fmt.Fprintf(&expected, "ERROR\n%s\nEND\n", escapeNewLines(errPresent))
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						fmt.Fprintf(&expected, "OUTPUT\n%s\nEND\n", escapeNewLines(out))
 					}
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
@@ -7027,12 +7027,12 @@ func testFile(t *testing.T, filename, tempDir string) {
 					}
 				} else {
 					if err != nil {
-						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
+						fmt.Fprintf(&expected, "ERROR\n%s\nEND\n", escapeNewLines(err.Error()))
 						fail = true
 						assert.Failf(t, "unexpected parse error", "File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						fmt.Fprintf(&expected, "OUTPUT\n%s\nEND\n", escapeNewLines(out))
 						if tcase.output != out {
 							fail = true
 							assert.Failf(t, "parsing failed", "Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)

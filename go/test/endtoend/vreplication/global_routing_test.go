@@ -58,7 +58,7 @@ func (h *grHelpers) getSchema(tables []string) string {
 	var createSQL string
 	var createSQLSb59 strings.Builder
 	for _, table := range tables {
-		createSQLSb59.WriteString(fmt.Sprintf("CREATE TABLE %s (id int primary key, val varchar(32)) ENGINE=InnoDB;\n", table))
+		fmt.Fprintf(&createSQLSb59, "CREATE TABLE %s (id int primary key, val varchar(32)) ENGINE=InnoDB;\n", table)
 	}
 	createSQL += createSQLSb59.String()
 	return createSQL
@@ -220,7 +220,7 @@ func (h *grHelpers) getUnshardedVschema(unshardedHasVSchema bool, tables []strin
 		if i != 0 {
 			vschemaSb216.WriteString(`,`)
 		}
-		vschemaSb216.WriteString(fmt.Sprintf(`"%s": {}`, table))
+		fmt.Fprintf(&vschemaSb216, `"%s": {}`, table)
 	}
 	vschema += vschemaSb216.String()
 	vschema += `}}`

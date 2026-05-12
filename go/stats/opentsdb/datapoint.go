@@ -36,12 +36,12 @@ type DataPoint struct {
 func (dp *DataPoint) MarshalText() (string, error) {
 	var sb strings.Builder
 
-	if _, err := sb.WriteString(fmt.Sprintf("%s %f %f", dp.Metric, dp.Timestamp, dp.Value)); err != nil {
+	if _, err := fmt.Fprintf(&sb, "%s %f %f", dp.Metric, dp.Timestamp, dp.Value); err != nil {
 		return "", err
 	}
 
 	for k, v := range dp.Tags {
-		if _, err := sb.WriteString(fmt.Sprintf(" %s=%s", k, v)); err != nil {
+		if _, err := fmt.Fprintf(&sb, " %s=%s", k, v); err != nil {
 			return "", err
 		}
 	}

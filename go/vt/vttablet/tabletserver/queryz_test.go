@@ -76,7 +76,7 @@ func TestQueryzHandler(t *testing.T) {
 	hugeInsert := "insert into test_table values 0"
 	var hugeInsertSb75 strings.Builder
 	for i := 1; i < 1000; i++ {
-		hugeInsertSb75.WriteString(fmt.Sprintf(", %d", i))
+		fmt.Fprintf(&hugeInsertSb75, ", %d", i)
 	}
 	hugeInsert += hugeInsertSb75.String()
 	plan4 := &TabletPlan{

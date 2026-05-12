@@ -36,6 +36,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1715,9 +1716,7 @@ func (mysqld *Mysqld) ReadBinlogFilesTimestamps(ctx context.Context, req *mysqlc
 	}
 	// Find last timestamp
 	err = func() error {
-		for i := len(req.BinlogFileNames) - 1; i >= 0; i-- {
-			binlogFile := req.BinlogFileNames[i]
-
+		for _, binlogFile := range slices.Backward(req.BinlogFileNames) {
 			// See if we have a cached value for this file. This is certainly be the situation if there's a single binary log file in req.BinlogFileNames,
 			// which means the first file and last file are the same, and so we have already parsed the file while searching for the first timestamp.
 			lastMatchedTime, ok := lastMatchedTimeMap[binlogFile]

@@ -100,7 +100,7 @@ func insertMoreCustomers(t *testing.T, numCustomers int) {
 	sql := "insert into customer (cid, name) values "
 	var sqlSb101 strings.Builder
 	for i := 1; i <= numCustomers; i++ {
-		sqlSb101.WriteString(fmt.Sprintf("(%d, 'customer%d')", cid, i))
+		fmt.Fprintf(&sqlSb101, "(%d, 'customer%d')", cid, i)
 		if i != numCustomers {
 			sqlSb101.WriteString(",")
 		}

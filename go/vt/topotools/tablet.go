@@ -277,7 +277,7 @@ func TabletIdent(tablet *topodatapb.Tablet) string {
 	if tablet.Tags != nil {
 		var tagStrSb277 strings.Builder
 		for key, val := range tablet.Tags {
-			tagStrSb277.WriteString(fmt.Sprintf(" %s=%s", key, val))
+			fmt.Fprintf(&tagStrSb277, " %s=%s", key, val)
 		}
 		tagStr += tagStrSb277.String()
 	}
