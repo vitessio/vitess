@@ -585,6 +585,14 @@ func (pool *ConnPool[C]) getFromSettingsStack(setting *Setting) *Pooled[C] {
 
 func (pool *ConnPool[C]) closedConn() {
 	_ = pool.active.Add(-1)
+	pool.notifyWaiterForAvailableCapacity()
+}
+
+func (pool *ConnPool[C]) notifyWaiterForAvailableCapacity() {
+	if pool.active.Load() >= pool.capacity.Load() {
+		return
+	}
+	pool.wait.tryNotifyWaiter()
 }
 
 func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
@@ -609,117 +617,48 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
 
-	// best case: if there's a connection in the clean stack, return it right away
-	if conn := pool.pop(&pool.clean); conn != nil {
-		pool.borrowed.Add(1)
-		return conn, nil
-	}
-
-	// check if we have enough capacity to open a brand-new connection to return
-	conn, err := pool.getNew(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// if we don't have capacity, try popping a connection from any of the setting stacks
-	if conn == nil {
-		conn = pool.getFromSettingsStack(nil)
-	}
-	// if there are no connections in the setting stacks and we've lent out connections
-	// to other clients, wait until one of the connections is returned
-	if conn == nil {
-		start := time.Now()
-
-		closeChan := pool.close.Load()
-		if closeChan == nil {
-			return nil, ErrConnPoolClosed
+	for {
+		// best case: if there's a connection in the clean stack, return it right away
+		if conn := pool.pop(&pool.clean); conn != nil {
+			pool.borrowed.Add(1)
+			return conn, nil
 		}
 
-		conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters)
-		if err != nil {
-			if errors.Is(err, ErrPoolWaiterCapReached) {
-				return nil, err
-			}
-			return nil, ErrTimeout
-		}
-		pool.recordWaitDuration(start)
-	}
-	// no connections available and no connections to wait for (pool is closed)
-	if conn == nil {
-		return nil, ErrTimeout
-	}
-
-	// if the connection we've acquired has a Setting applied, we must reset it before returning
-	if conn.Conn.Setting() != nil {
-		pool.Metrics.resetSetting.Add(1)
-
-		err = conn.Conn.ResetSetting(ctx)
-		if err != nil {
-			conn.Close()
-			err = pool.connReopen(ctx, conn, monotonicNow())
-			if err != nil {
-				pool.closedConn()
-				return nil, err
-			}
-		}
-	}
-
-	pool.borrowed.Add(1)
-	return conn, nil
-}
-
-// getWithSetting returns a connection from the pool with the given Setting applied
-func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (*Pooled[C], error) {
-	pool.Metrics.getWithSettingsCount.Add(1)
-
-	var err error
-	// best case: check if there's a connection in the setting stack where our Setting belongs
-	conn := pool.pop(&pool.settings[setting.bucket&stackMask])
-	// if there's connection with our setting, try popping a clean connection
-	if conn == nil {
-		conn = pool.pop(&pool.clean)
-	}
-	// otherwise try opening a brand new connection and we'll apply the setting to it
-	if conn == nil {
-		conn, err = pool.getNew(ctx)
+		// check if we have enough capacity to open a brand-new connection to return
+		conn, err := pool.getNew(ctx)
 		if err != nil {
 			return nil, err
 		}
-	}
-	// try on the _other_ setting stacks, even if we have to reset the Setting for the returned
-	// connection
-	if conn == nil {
-		conn = pool.getFromSettingsStack(setting)
-	}
-	// no connections anywhere in the pool; if we've lent out connections to other clients
-	// wait for one of them
-	if conn == nil {
-		start := time.Now()
-
-		closeChan := pool.close.Load()
-		if closeChan == nil {
-			return nil, ErrConnPoolClosed
+		// if we don't have capacity, try popping a connection from any of the setting stacks
+		if conn == nil {
+			conn = pool.getFromSettingsStack(nil)
 		}
+		// if there are no connections in the setting stacks and we've lent out connections
+		// to other clients, wait until one of the connections is returned
+		if conn == nil {
+			start := time.Now()
 
-		conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters)
-		if err != nil {
-			if errors.Is(err, ErrPoolWaiterCapReached) {
-				return nil, err
+			closeChan := pool.close.Load()
+			if closeChan == nil {
+				return nil, ErrConnPoolClosed
 			}
-			return nil, ErrTimeout
-		}
-		pool.recordWaitDuration(start)
-	}
-	// no connections available and no connections to wait for (pool is closed)
-	if conn == nil {
-		return nil, ErrTimeout
-	}
 
-	// ensure that the setting applied to the connection matches the one we want
-	connSetting := conn.Conn.Setting()
-	if connSetting != setting {
-		// if there's another setting applied, reset it before applying our setting
-		if connSetting != nil {
-			pool.Metrics.diffSetting.Add(1)
+			conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters)
+			if err != nil {
+				if errors.Is(err, ErrPoolWaiterCapReached) {
+					return nil, err
+				}
+				return nil, ErrTimeout
+			}
+			pool.recordWaitDuration(start)
+		}
+		if conn == nil {
+			continue
+		}
+
+		// if the connection we've acquired has a Setting applied, we must reset it before returning
+		if conn.Conn.Setting() != nil {
+			pool.Metrics.resetSetting.Add(1)
 
 			err = conn.Conn.ResetSetting(ctx)
 			if err != nil {
@@ -731,17 +670,88 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 				}
 			}
 		}
-		// apply our setting now; if we can't we assume that the conn is broken
-		// and close it without returning to the pool
-		if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
-			conn.Close()
-			pool.closedConn()
-			return nil, err
-		}
-	}
 
-	pool.borrowed.Add(1)
-	return conn, nil
+		pool.borrowed.Add(1)
+		return conn, nil
+	}
+}
+
+// getWithSetting returns a connection from the pool with the given Setting applied
+func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (*Pooled[C], error) {
+	pool.Metrics.getWithSettingsCount.Add(1)
+
+	for {
+		var err error
+		// best case: check if there's a connection in the setting stack where our Setting belongs
+		conn := pool.pop(&pool.settings[setting.bucket&stackMask])
+		// if there's connection with our setting, try popping a clean connection
+		if conn == nil {
+			conn = pool.pop(&pool.clean)
+		}
+		// otherwise try opening a brand new connection and we'll apply the setting to it
+		if conn == nil {
+			conn, err = pool.getNew(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+		// try on the _other_ setting stacks, even if we have to reset the Setting for the returned
+		// connection
+		if conn == nil {
+			conn = pool.getFromSettingsStack(setting)
+		}
+		// no connections anywhere in the pool; if we've lent out connections to other clients
+		// wait for one of them
+		if conn == nil {
+			start := time.Now()
+
+			closeChan := pool.close.Load()
+			if closeChan == nil {
+				return nil, ErrConnPoolClosed
+			}
+
+			conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters)
+			if err != nil {
+				if errors.Is(err, ErrPoolWaiterCapReached) {
+					return nil, err
+				}
+				return nil, ErrTimeout
+			}
+			pool.recordWaitDuration(start)
+		}
+		if conn == nil {
+			continue
+		}
+
+		// ensure that the setting applied to the connection matches the one we want
+		connSetting := conn.Conn.Setting()
+		if connSetting != setting {
+			// if there's another setting applied, reset it before applying our setting
+			if connSetting != nil {
+				pool.Metrics.diffSetting.Add(1)
+
+				err = conn.Conn.ResetSetting(ctx)
+				if err != nil {
+					conn.Close()
+					err = pool.connReopen(ctx, conn, monotonicNow())
+					if err != nil {
+						pool.closedConn()
+						return nil, err
+					}
+				}
+			}
+			// apply our setting now; if we can't we assume that the conn is broken
+			// and close it without returning to the pool
+			if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
+				conn.Close()
+				pool.closedConn()
+				return nil, err
+			}
+		}
+
+		pool.borrowed.Add(1)
+		return conn, nil
+	}
 }
 
 // SetCapacity changes the capacity (number of open connections) on the pool.

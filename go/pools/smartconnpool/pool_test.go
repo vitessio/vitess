@@ -959,6 +959,66 @@ func TestSlowCreateFail(t *testing.T) {
 	}
 }
 
+func TestWaiterRetriesWhenCapacityFreedByFailedReplacement(t *testing.T) {
+	var state TestState
+	var connectAttempts atomic.Int64
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		attempt := connectAttempts.Add(1)
+		if attempt == 2 {
+			return nil, errors.New("forced replacement failure")
+		}
+		return &TestConn{
+			num:    attempt,
+			counts: &state,
+		}, nil
+	}
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(connector, nil)
+	defer p.Close()
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	getCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	type getResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	results := make(chan getResult, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- getResult{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	conn.Taint()
+	require.GreaterOrEqual(t, connectAttempts.Load(), int64(2))
+	require.EqualValues(t, 1, p.Capacity())
+
+	var result getResult
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not retry after replacement failure freed capacity")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	result.conn.Recycle()
+}
+
 func TestTimeout(t *testing.T) {
 	var state TestState
 

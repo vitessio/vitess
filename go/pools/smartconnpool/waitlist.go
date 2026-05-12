@@ -100,7 +100,11 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 
 		// if we weren't able to remove ourselves from the waitlist, it means
 		// another goroutine is trying to hand us a connection
-		return <-elem.Value.conn, nil
+		conn := <-elem.Value.conn
+		if conn == nil {
+			return nil, ErrConnPoolClosed
+		}
+		return conn, nil
 
 	case <-ctx.Done():
 		// Context expired. We need to try to remove ourselves from the waitlist to
@@ -124,9 +128,23 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 
 		// if we weren't able to remove ourselves from the waitlist, it means
 		// another goroutine is trying to hand us a connection
-		return <-elem.Value.conn, nil
+		conn := <-elem.Value.conn
+		if conn == nil {
+			return nil, context.Cause(ctx)
+		}
+		return conn, nil
 
 	case conn := <-elem.Value.conn:
+		if conn == nil {
+			if err := ctx.Err(); err != nil {
+				return nil, context.Cause(ctx)
+			}
+			select {
+			case <-closeChan:
+				return nil, ErrConnPoolClosed
+			default:
+			}
+		}
 		return conn, nil
 	}
 }
@@ -203,6 +221,28 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	// into the waiter's channel.
 	target.Value.conn <- conn
 	// Allow the goroutine waiting on the channel to start running _now_.
+	runtime.Gosched()
+
+	return true
+}
+
+func (wl *waitlist[D]) tryNotifyWaiter() bool {
+	if wl.list.Len() == 0 {
+		return false
+	}
+
+	wl.mu.Lock()
+	target := wl.list.Front()
+	if target != nil {
+		wl.list.Remove(target)
+	}
+	wl.mu.Unlock()
+
+	if target == nil {
+		return false
+	}
+
+	target.Value.conn <- nil
 	runtime.Gosched()
 
 	return true
