@@ -56,7 +56,6 @@ var (
 		"--vreplication-retry-delay", "1s",
 		"--degraded-threshold", "5s",
 		"--lock-tables-timeout", "5s",
-		"--watch-replication-stream",
 		"--enable-replication-reporter",
 		"--serving-state-grace-period", "1s",
 		"--binlog-player-protocol", "grpc",
