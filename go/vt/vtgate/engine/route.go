@@ -54,17 +54,20 @@ const WarmingReadsBaseWeight = 100
 var replicaWarmingReadsMirrored = stats.NewCountersWithMultiLabels(
 	"ReplicaWarmingReadsMirrored",
 	"Number of reads mirrored to replicas to warm their bufferpools",
-	[]string{"Keyspace"})
+	[]string{"Keyspace"},
+)
 
 var replicaWarmingReadsDropped = stats.NewCountersWithMultiLabels(
 	"ReplicaWarmingReadsDropped",
 	"Number of warming reads dropped due to concurrency/weight limits or invalid priority",
-	[]string{"Keyspace"})
+	[]string{"Keyspace"},
+)
 
 var replicaWarmingReadsErrors = stats.NewCountersWithMultiLabels(
 	"ReplicaWarmingReadsErrors",
 	"Number of warming reads that failed with errors",
-	[]string{"Keyspace", "Code"})
+	[]string{"Keyspace", "Code"},
+)
 
 // Route represents the instructions to route a read query to
 // one or many vttablets.
@@ -410,7 +413,7 @@ func (route *Route) description() PrimitiveDescription {
 		other["SysTableTableSchema"] = sysTabSchema
 	}
 	if len(route.SysTableTableName) != 0 {
-		var sysTableName []string
+		sysTableName := make([]string, 0, len(route.SysTableTableName))
 		for k, v := range route.SysTableTableName {
 			sysTableName = append(sysTableName, k+":"+sqlparser.String(v))
 		}
