@@ -1019,6 +1019,73 @@ func TestWaiterRetriesWhenCapacityFreedByFailedReplacement(t *testing.T) {
 	result.conn.Recycle()
 }
 
+func TestWaiterRetriesWhenCapacityIncreases(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	getCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	type getResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	results := make(chan getResult, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- getResult{conn: conn, err: err}
+	}()
+
+	defer func() {
+		cancel()
+		if conn != nil {
+			conn.Recycle()
+		}
+		select {
+		case result := <-results:
+			if result.conn != nil {
+				result.conn.Recycle()
+			}
+		default:
+		}
+
+		closeCtx, closeCancel := context.WithTimeout(ctx, PoolCloseTimeout)
+		defer closeCancel()
+		require.NoError(t, p.CloseWithContext(closeCtx))
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, p.SetCapacity(ctx, 2))
+	require.EqualValues(t, 2, p.Capacity())
+
+	var result getResult
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not retry after capacity increased")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	result.conn.Recycle()
+	conn.Recycle()
+	result.conn = nil
+	conn = nil
+}
+
 func TestTimeout(t *testing.T) {
 	var state TestState
 

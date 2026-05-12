@@ -585,14 +585,18 @@ func (pool *ConnPool[C]) getFromSettingsStack(setting *Setting) *Pooled[C] {
 
 func (pool *ConnPool[C]) closedConn() {
 	_ = pool.active.Add(-1)
-	pool.notifyWaiterForAvailableCapacity()
+	pool.notifyWaitersForAvailableCapacity(1)
 }
 
-func (pool *ConnPool[C]) notifyWaiterForAvailableCapacity() {
-	if pool.active.Load() >= pool.capacity.Load() {
-		return
+func (pool *ConnPool[C]) notifyWaitersForAvailableCapacity(limit int64) {
+	for range limit {
+		if pool.active.Load() >= pool.capacity.Load() {
+			return
+		}
+		if !pool.wait.tryNotifyWaiter() {
+			return
+		}
 	}
-	pool.wait.tryNotifyWaiter()
 }
 
 func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
@@ -802,6 +806,10 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 		}
 		conn.Close()
 		pool.closedConn()
+	}
+
+	if newcap > oldcap {
+		pool.notifyWaitersForAvailableCapacity(newcap - oldcap)
 	}
 
 	return nil
