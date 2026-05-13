@@ -1,0 +1,37 @@
+{{ define "keyspace_create.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Create keyspace</h1>
+  <a href="/keyspaces">Back to keyspaces</a>
+</div>
+<div class="card">
+  <form class="form-grid" method="post" action="/keyspaces/create">
+    <label>
+      Cluster
+      <select name="cluster_id" required>
+        {{ range .Data }}<option value="{{ .GetId }}">{{ .GetName }} ({{ .GetId }})</option>{{ end }}
+      </select>
+    </label>
+    <label>
+      Keyspace name
+      <input type="text" name="name" required>
+    </label>
+    <label>
+      Durability policy
+      <input type="text" name="durability_policy">
+    </label>
+    <label>
+      Sidecar DB name
+      <input type="text" name="sidecar_db_name">
+    </label>
+    <label><input type="checkbox" name="force"> Force if keyspace already exists</label>
+    <label><input type="checkbox" name="allow_empty_v_schema"> Allow empty VSchema</label>
+    <div>
+      <button class="button" type="submit">Create keyspace</button>
+    </div>
+  </form>
+</div>
+{{ end }}

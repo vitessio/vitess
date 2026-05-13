@@ -1,0 +1,33 @@
+{{ define "tablets.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Tablets</h1>
+  <input class="table-filter" data-table-filter="#tablets-table" placeholder="Filter tablets" aria-label="Filter tablets">
+</div>
+<div class="card">
+  <table id="tablets-table">
+    <thead>
+      <tr><th>Cluster</th><th>Alias</th><th>Hostname</th><th>Keyspace</th><th>Shard</th><th>Type</th><th>State</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      {{ $tablet := .GetTablet }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ tabletAlias $tablet.GetAlias }}</td>
+        <td>{{ $tablet.GetHostname }}</td>
+        <td>{{ $tablet.GetKeyspace }}</td>
+        <td>{{ $tablet.GetShard }}</td>
+        <td>{{ $tablet.GetType }}</td>
+        <td>{{ .GetState }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="7">No tablets found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

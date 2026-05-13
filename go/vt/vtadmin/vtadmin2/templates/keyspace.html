@@ -1,0 +1,30 @@
+{{ define "keyspace.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $ks := .Data }}
+<div class="toolbar">
+  <h1>{{ keyspaceName $ks }}</h1>
+  <a href="/keyspaces">Back to keyspaces</a>
+</div>
+<div class="card">
+  <dl>
+    <dt>Cluster</dt><dd>{{ clusterID $ks.GetCluster }}</dd>
+    <dt>Keyspace</dt><dd>{{ keyspaceName $ks }}</dd>
+  </dl>
+</div>
+<div class="card">
+  <h2>Shards</h2>
+  <table>
+    <thead><tr><th>Name</th></tr></thead>
+    <tbody>
+      {{ range sortedShardNames $ks }}
+      <tr><td>{{ . }}</td></tr>
+      {{ else }}
+      <tr><td>No shards found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}
