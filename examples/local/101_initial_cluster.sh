@@ -91,3 +91,9 @@ else
 	../common/scripts/vtadmin-up.sh
 fi
 
+# start vtadmin2
+if [[ -n ${SKIP_VTADMIN2} ]]; then
+	echo -e "\nSkipping VTAdmin2! If this is not what you want then please unset the SKIP_VTADMIN2 env variable in your shell."
+else
+	../common/scripts/vtadmin2-up.sh
+fi
