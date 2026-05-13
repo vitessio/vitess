@@ -115,6 +115,19 @@ type Config[C Connection] struct {
 // the number of stacks must always be a power of two
 const stackMask = 7
 
+type closeCtxState struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+// alreadyCanceledCtx is returned by closeContext when the pool is not open;
+// it ensures connect callbacks fail fast without checking pool state again.
+var alreadyCanceledCtx = func() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
+}()
+
 // ConnPool is a connection pool for generic connections
 type ConnPool[C Connection] struct {
 	// clean is a connections stack for connections with no Setting applied
@@ -146,6 +159,11 @@ type ConnPool[C Connection] struct {
 	// generation is bumped on every reopen so that borrowed connections from
 	// before the reopen can be identified and retired when they return.
 	generation atomic.Int64
+	// closeCtx holds a context that's cancelled when the pool starts closing,
+	// so background workers and put-driven reconnects abort instead of pinning
+	// workers.Wait(). Installed in open(), cancelled and cleared in
+	// CloseWithContext. nil means the pool is not open.
+	closeCtx atomic.Pointer[closeCtxState]
 
 	config struct {
 		// connect is the callback to create a new connection for the pool
@@ -230,6 +248,12 @@ func (pool *ConnPool[C]) open() {
 	// returns to this re-opened pool.
 	pool.generation.Add(1)
 
+	// Install the close context before starting any workers so they can read
+	// it race-free. CloseWithContext cancels it before signalling close-chan,
+	// so in-flight worker reconnects abort promptly.
+	ctx, cancel := context.WithCancel(context.Background())
+	pool.closeCtx.Store(&closeCtxState{ctx: ctx, cancel: cancel})
+
 	pool.capacity.Store(pool.config.maxCapacity)
 	pool.setIdleCount()
 
@@ -289,21 +313,30 @@ func (pool *ConnPool[C]) Close() {
 // CloseWithContext behaves like Close but allows passing in a Context to time out the
 // pool closing operation
 func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
-	pool.capacityMu.Lock()
-	defer pool.capacityMu.Unlock()
-
-	if pool.close.Load() == nil {
+	// Cancel the pool's close context first, before taking capacityMu. Any
+	// concurrent reopen holding the mutex derives its setCapacity ctx from
+	// this same context; cancelling it now lets reopen abort and release the
+	// mutex. Worker reconnects (closeIdleResources, put) read the same ctx
+	// and also abort.
+	closeState := pool.closeCtx.Swap(nil)
+	if closeState == nil {
 		// already closed
 		return nil
 	}
+	closeState.cancel()
+
+	closeChan := pool.close.Swap(nil)
+	if closeChan != nil {
+		close(*closeChan)
+	}
+
+	pool.capacityMu.Lock()
+	defer pool.capacityMu.Unlock()
 
 	// close all the connections in the pool; if we time out while waiting for
 	// users to return our connections, we still want to finish the shutdown
 	// for the pool
 	err := pool.setCapacity(ctx, 0)
-
-	closeChan := *pool.close.Swap(nil)
-	close(closeChan)
 
 	pool.workers.Wait()
 	return err
@@ -323,7 +356,9 @@ func (pool *ConnPool[C]) reopen() {
 	// previous generation and will be retired when they return via put.
 	pool.generation.Add(1)
 
-	ctx, cancel := context.WithTimeout(context.Background(), PoolCloseTimeout)
+	// Derive from closeContext so a concurrent Close can short-circuit our
+	// setCapacity calls and release capacityMu promptly.
+	ctx, cancel := context.WithTimeout(pool.closeContext(), PoolCloseTimeout)
 	defer cancel()
 
 	// to re-open the connection pool, first set the capacity to 0 so we close
@@ -427,9 +462,7 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 
 	if conn == nil {
 		var err error
-		// Using context.Background() is fine since MySQL connection already enforces
-		// a connect timeout via the `db-connect-timeout-ms` config param.
-		conn, err = pool.connNew(context.Background())
+		conn, err = pool.connNew(pool.closeContext())
 		if err != nil {
 			pool.closedConn()
 			return
@@ -450,9 +483,7 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 		if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
 			pool.Metrics.maxLifetimeClosed.Add(1)
 			conn.Close()
-			// Using context.Background() is fine since MySQL connection already enforces
-			// a connect timeout via the `db-connect-timeout-ms` config param.
-			if err := pool.connReopen(context.Background(), conn, conn.timeUsed.get()); err != nil {
+			if err := pool.connReopen(pool.closeContext(), conn, conn.timeUsed.get()); err != nil {
 				pool.closedConn()
 				return
 			}
@@ -533,6 +564,20 @@ func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 			return true
 		}
 	}
+}
+
+// closeContext returns the pool-wide context that is cancelled when the pool
+// starts closing. Returns an already-cancelled context if the pool is not
+// open, so callers that race with close fail fast.
+//
+// Used by background workers and by put() so that in-flight reconnects abort
+// when CloseWithContext fires, instead of pinning workers.Wait(). The context
+// is owned by the pool — do not cancel it.
+func (pool *ConnPool[C]) closeContext() context.Context {
+	if state := pool.closeCtx.Load(); state != nil {
+		return state.ctx
+	}
+	return alreadyCanceledCtx
 }
 
 func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
@@ -899,6 +944,10 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 
 	mono := monotonicFromTime(now)
 
+	// Reconnects must abort when the pool starts closing; otherwise a slow
+	// MySQL connect pins workers.Wait() inside CloseWithContext.
+	connectCtx := pool.closeContext()
+
 	closeInStack := func(s *connStack[C]) {
 		conn, ok := s.Pop()
 		if !ok {
@@ -968,7 +1017,7 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 				break
 			}
 
-			if err := pool.connReopen(context.Background(), conn, mono); err != nil {
+			if err := pool.connReopen(connectCtx, conn, mono); err != nil {
 				continue
 			}
 

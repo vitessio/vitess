@@ -724,6 +724,81 @@ func TestReopenViaCloseAndOpenRetiresStaleConnections(t *testing.T) {
 	require.EqualValues(t, 0, state.open.Load(), "stale conn should be closed when returned")
 }
 
+func TestCloseHonorsContextDuringIdleReopen(t *testing.T) {
+	// The idle worker's reopen path used context.Background, so a slow MySQL
+	// connect would pin workers.Wait() inside CloseWithContext, no matter how
+	// tight the caller's deadline was. The fix derives the connect context
+	// from the pool's close channel so in-flight reconnects abort on close.
+
+	var state TestState
+	var connectCount atomic.Int32
+
+	reopenStartedCh := make(chan struct{})
+	var reopenStartedOnce sync.Once
+	blockConnect := make(chan struct{})
+	var blockOnce sync.Once
+	unblockConnect := func() { blockOnce.Do(func() { close(blockConnect) }) }
+	defer unblockConnect()
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		// First call is the seed; succeed quickly so we have an idle conn to
+		// expire.
+		if connectCount.Add(1) == 1 {
+			state.open.Add(1)
+			return &TestConn{counts: &state, num: state.lastID.Add(1)}, nil
+		}
+		// Subsequent calls are the idle worker's reopen. Block until our ctx
+		// is cancelled (the fix) or the test unblocks us as a fallback.
+		reopenStartedOnce.Do(func() { close(reopenStartedCh) })
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-blockConnect:
+			return nil, errors.New("test fallback unblock")
+		}
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		IdleTimeout: 50 * time.Millisecond,
+	}).Open(connector, nil)
+
+	seed, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	seed.Recycle()
+
+	// Wait for the idle worker to begin its (blocked) reopen.
+	select {
+	case <-reopenStartedCh:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "idle worker did not start its reopen within 5s")
+	}
+
+	closeCtx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	defer cancel()
+
+	closeDone := make(chan time.Duration, 1)
+	start := time.Now()
+	go func() {
+		_ = p.CloseWithContext(closeCtx)
+		closeDone <- time.Since(start)
+	}()
+
+	var elapsed time.Duration
+	select {
+	case elapsed = <-closeDone:
+	case <-time.After(3 * time.Second):
+		// Close is stuck on the worker's reconnect; release it so the test
+		// can shut down cleanly, then fail.
+		unblockConnect()
+		elapsed = <-closeDone
+		require.Failf(t, "close did not return", "took %s", elapsed)
+	}
+
+	require.Less(t, elapsed, 2*time.Second,
+		"close should abort the worker's reconnect on ctx; took %s", elapsed)
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 
