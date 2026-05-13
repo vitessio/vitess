@@ -508,6 +508,7 @@ func TestReopen(t *testing.T) {
 		refreshed.Store(true)
 		return true, nil
 	})
+	t.Cleanup(p.Close)
 
 	var resources [10]*Pooled[*TestConn]
 	for i := range 5 {
