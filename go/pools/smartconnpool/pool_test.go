@@ -561,6 +561,29 @@ func TestReopen(t *testing.T) {
 	assert.EqualValues(t, 0, state.open.Load())
 }
 
+func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
+	var state TestState
+	var refreshCount atomic.Int32
+
+	// The refresh callback returns true exactly once to trigger a reopen. If
+	// the worker exits after the trigger (the bug we're guarding against),
+	// refreshCount stops at 1. With the worker still ticking we expect many
+	// more calls within a reasonable window.
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        2,
+		RefreshInterval: 50 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		count := refreshCount.Add(1)
+		return count == 1, nil
+	})
+	t.Cleanup(p.Close)
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 3
+	}, 30*time.Second, 50*time.Millisecond,
+		"refresh worker stopped ticking after first triggered reopen")
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 

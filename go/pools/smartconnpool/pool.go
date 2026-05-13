@@ -246,7 +246,6 @@ func (pool *ConnPool[C]) open() {
 			}
 			if refresh {
 				go pool.reopen()
-				return false
 			}
 			return true
 		})
