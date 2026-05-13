@@ -4,7 +4,7 @@ name: arewefastyet comment
 permissions: read-all
 
 on:
-  pull_request_target:
+  issues:
     types: [labeled]
 
 jobs:
@@ -13,7 +13,9 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
-    if: github.event.label.name == 'Benchmark me'
+    if: github.event.issue.pull_request != null && github.event.label.name == 'Benchmark me'
+    env:
+      PR_NUMBER: ${{ github.event.issue.number }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -29,14 +31,13 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           permission-pull-requests: write
 
-      - name: Set token in environment
-        run: echo "GH_TOKEN=${{ steps.app-token.outputs.token }}" >> "$GITHUB_ENV"
-
       - name: Check if comment already exists
         id: check_comment
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           # Get all comments on the PR
-          COMMENTS=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments --jq '.[].body')
+          COMMENTS=$(gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" --jq '.[].body')
 
           # Check if arewefastyet comment already exists
           if echo "$COMMENTS" | grep -q "This Pull Request is now handled by arewefastyet"; then
@@ -48,11 +49,13 @@ jobs:
 
       - name: Add arewefastyet comment
         if: steps.check_comment.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} \
+          gh pr comment "$PR_NUMBER" \
             --repo ${{ github.repository }} \
             --body "Hello! :wave:
 
           This Pull Request is now handled by arewefastyet. The current HEAD and future commits will be benchmarked.
 
-          You can find the performance comparison on the [arewefastyet website](https://benchmark.vitess.io/pr/${{ github.event.pull_request.number }})."
+          You can find the performance comparison on the [arewefastyet website](https://benchmark.vitess.io/pr/$PR_NUMBER)."
