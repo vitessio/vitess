@@ -2288,14 +2288,21 @@ func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
 	require.EqualValues(t, 10, p.Active())
 	require.EqualValues(t, 10, p.Available())
 
-	// Wait a bit for the idle timeout worker to refresh connections
-	assert.Eventually(t, func() bool {
+	// Wait for the idle worker to actually rotate connections.
+	require.Eventually(t, func() bool {
 		return p.Metrics.IdleClosed() > 10
-	}, 500*time.Millisecond, 10*time.Millisecond, "Expected at least 10 connections to be closed by idle timeout")
+	}, time.Second, 5*time.Millisecond, "expected at least 10 idle closes")
 
-	// Verify that new connections were created to replace the closed ones
-	require.EqualValues(t, 10, p.Active())
-	require.EqualValues(t, 10, p.Available())
+	// Wait for the pool to settle back to steady state before asserting on
+	// Active/Available. closeIdleResources intentionally drops pool.active
+	// during the close-then-reopen sequence so concurrent Gets can claim
+	// the freed slot (see closeIdleResources's doc and
+	// TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity). A naive
+	// `Active() == 10` check right after the first Eventually could observe
+	// that dip mid-cycle.
+	require.Eventually(t, func() bool {
+		return p.Active() == 10 && p.Available() == 10
+	}, time.Second, 5*time.Millisecond, "pool didn't settle back to capacity")
 
 	// Count how many connections in the stack are closed
 	totalInStack := 0

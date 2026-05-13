@@ -959,6 +959,22 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	return nil
 }
 
+// closeIdleResources rotates connections that have been idle longer than
+// IdleTimeout. It's called on a ticker by the idle worker.
+//
+// Design note: the rotation is split into two loops on purpose. The close
+// loop drops pool.active for each expired conn before the reopen loop tries
+// to bring it back up. The visible dip in pool.active is intentional — it's
+// the mechanism by which a concurrent Get can claim the freed slot via
+// getNew during a slow reopen, instead of waiting for the worker to finish.
+// If the Get wins the CAS race for the slot, the reopen-loop's inner check
+// `if open >= pool.capacity.Load() { conn.Close() }` discards the worker's
+// freshly-opened conn rather than exceeding capacity.
+//
+// This trades occasional wasted reopens under contention for non-blocking
+// Get during idle cycling. The contract is pinned by
+// TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity; do not
+// "fix" the dip into an in-place rotation without changing that test too.
 func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	timeout := pool.IdleTimeout()
 	if timeout == 0 {
