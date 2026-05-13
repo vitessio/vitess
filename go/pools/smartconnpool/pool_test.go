@@ -912,6 +912,56 @@ func TestReopenDrainsBeforeBumpingGeneration(t *testing.T) {
 		"stacks must be drained before pool.generation is bumped; otherwise a racing Get can pop a stale-at-acquisition conn")
 }
 
+func TestSetCapacityUpdatesIdleCountBeforeDraining(t *testing.T) {
+	// setIdleCount must run synchronously with the capacity Swap, not as a
+	// deferred trailer that fires only when setCapacity returns. Otherwise a
+	// borrowed conn returning during the drain loop sees the OLD idleCount in
+	// closeOnIdleLimitReached, gets pushed back to the stack instead of being
+	// closed, and — if drain times out — strands there with the pre-reopen
+	// generation. A later Get's fast-path pop then hands a stale-gen conn to
+	// the caller.
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 3, p.IdleCount())
+
+	// Hold every conn so SetCapacity(0) blocks in its drain loop.
+	var held []*Pooled[*TestConn]
+	for range 3 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		held = append(held, c)
+	}
+
+	setCapacityDone := make(chan struct{})
+	go func() {
+		defer close(setCapacityDone)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		_ = p.SetCapacity(ctx, 0)
+	}()
+
+	// Wait until SetCapacity has swapped capacity to 0 (drain phase started).
+	require.Eventually(t, func() bool {
+		return p.Capacity() == 0
+	}, time.Second, time.Millisecond)
+
+	// idleCount must already reflect the new capacity while SetCapacity is
+	// still in its drain loop. The held conns keep SetCapacity blocked, so
+	// any non-synchronous setIdleCount would still observe the old value.
+	require.Eventually(t, func() bool {
+		return p.IdleCount() == 0
+	}, time.Second, time.Millisecond,
+		"idleCount must be updated synchronously with capacity; otherwise a returning conn during the drain can be pushed back to the stack")
+
+	for _, c := range held {
+		c.Recycle()
+	}
+	<-setCapacityDone
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 

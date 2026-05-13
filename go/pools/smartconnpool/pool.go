@@ -620,6 +620,11 @@ func (pool *ConnPool[C]) tryReturnAnyConn() bool {
 
 // closeOnIdleLimitReached closes a connection if the number of idle connections (active - inuse) in the pool
 // exceeds the idleCount limit. It returns true if the connection is closed, false otherwise.
+//
+// The Metrics.idleClosed counter is only incremented when the pool is open
+// (capacity > 0). A close while capacity == 0 is part of a shutdown or
+// reopen drain rather than an idle-policy eviction, and shouldn't show up
+// in the idle-eviction metric.
 func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 	for {
 		open := pool.active.Load()
@@ -628,7 +633,9 @@ func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 			return false
 		}
 		if pool.active.CompareAndSwap(open, open-1) {
-			pool.Metrics.idleClosed.Add(1)
+			if pool.capacity.Load() > 0 {
+				pool.Metrics.idleClosed.Add(1)
+			}
 			conn.Close()
 			return true
 		}
@@ -965,9 +972,14 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	if oldcap == newcap {
 		return nil
 	}
-	// update the idle count to match the new capacity if necessary
-	// wait for connections to be returned to the pool if we're reducing the capacity.
-	defer pool.setIdleCount()
+	// Update idleCount synchronously with the capacity Swap. closeOnIdleLimitReached
+	// uses idleCount to decide whether a returning borrowed conn should be
+	// closed or pushed back to the stack. If idleCount still reflects the
+	// pre-shrink value during the drain loop below, a returning conn can be
+	// pushed back onto a stack and stranded there if the drain times out —
+	// which then leaves a stale-generation conn for the next Get's fast path
+	// to pick up after reopen() bumps the generation.
+	pool.setIdleCount()
 
 	if newcap == 0 {
 		for pool.wait.tryNotifyWaiter() {
