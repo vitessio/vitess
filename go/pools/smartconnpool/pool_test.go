@@ -584,6 +584,50 @@ func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
 		"refresh worker stopped ticking after first triggered reopen")
 }
 
+func TestSetCapacityOnUnopenedPoolFails(t *testing.T) {
+	// Without Open(), pool.config.connect is nil. SetCapacity should refuse
+	// rather than silently arming a capacity that a subsequent Get would use
+	// to invoke the nil connect function.
+	p := NewPool(&Config[*TestConn]{Capacity: 5})
+
+	err := p.SetCapacity(t.Context(), 1)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+	require.EqualValues(t, 0, p.Capacity())
+	require.False(t, p.IsOpen())
+}
+
+func TestSetCapacityAfterCloseFails(t *testing.T) {
+	// After Close(), workers are gone and the close channel pointer is nil.
+	// SetCapacity must not silently resurrect the capacity, because Get would
+	// then serve connections from a pool with no idle/refresh workers.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
+	p.Close()
+
+	err := p.SetCapacity(t.Context(), 1)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+	require.EqualValues(t, 0, p.Capacity())
+	require.False(t, p.IsOpen())
+}
+
+func TestCloseAfterSetCapacityZeroStopsPool(t *testing.T) {
+	// SetCapacity(0) drains an open pool but does not close it; a subsequent
+	// Close() must actually shut the pool down. The bug treats capacity==0
+	// as "already closed" in CloseWithContext and returns immediately,
+	// leaving workers running.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    5,
+		IdleTimeout: time.Second,
+	}).Open(newConnector(&state), nil)
+
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+	require.True(t, p.IsOpen(), "pool with capacity 0 should still be open")
+
+	p.Close()
+	require.False(t, p.IsOpen(), "pool should be closed after Close()")
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 

@@ -284,7 +284,7 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
 
-	if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+	if pool.close.Load() == nil {
 		// already closed
 		return nil
 	}
@@ -795,9 +795,14 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 // that means waiting for clients to return connections to the pool.
 // If the given context times out before we've managed to close enough connections
 // an error will be returned.
+// SetCapacity returns ErrConnPoolClosed if the pool has not been opened or has
+// already been closed; the lifecycle is tracked by Open/Close, not by capacity.
 func (pool *ConnPool[C]) SetCapacity(ctx context.Context, newcap int64) error {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
+	if pool.close.Load() == nil {
+		return ErrConnPoolClosed
+	}
 	return pool.setCapacity(ctx, newcap)
 }
 
