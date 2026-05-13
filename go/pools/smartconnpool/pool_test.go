@@ -656,6 +656,74 @@ func TestWaitTimeRecordedOnTimeout(t *testing.T) {
 	require.Greater(t, p.Metrics.WaitTime(), time.Duration(0), "WaitTime should reflect the timed-out wait")
 }
 
+func TestReopenRetiresStaleConnections(t *testing.T) {
+	// reopen() is invoked when the pool needs to retire all open connections
+	// (e.g., after a DNS change). If a borrowed conn isn't returned before
+	// setCapacity(ctx, 0) times out, the conn survives the reopen window and
+	// could later return to the pool. It should be retired instead, because
+	// the very reason for reopen is that the old conns are no longer trusted.
+
+	// Shorten the close timeout so the reopen path returns quickly when a
+	// held conn prevents setCapacity(ctx, 0) from draining the pool.
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+
+	// Trigger a reopen synchronously. setCapacity(0) will time out because
+	// the held conn isn't returned, but reopen continues and restores capacity.
+	p.reopen()
+
+	require.EqualValues(t, 1, p.Capacity())
+	require.EqualValues(t, 1, p.Active())
+	require.EqualValues(t, 1, state.open.Load(), "stale conn is still in flight after reopen")
+
+	// Recycle the now-stale conn. It must not return to the pool — the whole
+	// point of the reopen was to retire conns of this generation.
+	held.Recycle()
+
+	require.EqualValues(t, 0, state.open.Load(), "stale conn should be closed when returned")
+	require.EqualValues(t, 0, p.Active(), "stale conn slot should be released")
+}
+
+func TestReopenViaCloseAndOpenRetiresStaleConnections(t *testing.T) {
+	// Same generation invariant as TestReopenRetiresStaleConnections, but the
+	// reset happens via Close+Open instead of reopen(). A conn that survived
+	// a timed-out Close must not return to the re-opened pool.
+
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+
+	// Close times out because the held conn isn't returned; it survives in
+	// the user's hands while the pool transitions through closed back to open.
+	p.Close()
+	p.Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held.Recycle()
+
+	require.EqualValues(t, 0, state.open.Load(), "stale conn should be closed when returned")
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 

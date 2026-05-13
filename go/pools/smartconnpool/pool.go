@@ -143,6 +143,9 @@ type ConnPool[C Connection] struct {
 	workers    sync.WaitGroup
 	close      atomic.Pointer[chan struct{}]
 	capacityMu sync.Mutex
+	// generation is bumped on every reopen so that borrowed connections from
+	// before the reopen can be identified and retired when they return.
+	generation atomic.Int64
 
 	config struct {
 		// connect is the callback to create a new connection for the pool
@@ -221,6 +224,11 @@ func (pool *ConnPool[C]) open() {
 		// already open
 		return
 	}
+
+	// Bump generation so that any conn that survived a previous Close (e.g.,
+	// a borrowed conn while CloseWithContext timed out) is retired when it
+	// returns to this re-opened pool.
+	pool.generation.Add(1)
 
 	pool.capacity.Store(pool.config.maxCapacity)
 	pool.setIdleCount()
@@ -309,6 +317,11 @@ func (pool *ConnPool[C]) reopen() {
 	if capacity == 0 {
 		return
 	}
+
+	// Bump generation before draining so any conn established from this point
+	// on is tagged as fresh. Conns still borrowed at reopen time keep the
+	// previous generation and will be retired when they return via put.
+	pool.generation.Add(1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), PoolCloseTimeout)
 	defer cancel()
@@ -422,6 +435,15 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 			return
 		}
 	} else {
+		// A conn whose generation predates the pool's was established before
+		// the most recent reopen and must not return to the pool — the reason
+		// for reopen is that those conns are no longer trusted.
+		if conn.generation != pool.generation.Load() {
+			conn.Close()
+			pool.closedConn()
+			return
+		}
+
 		conn.timeUsed.update()
 
 		lifetime := pool.extendedMaxLifetime()
@@ -537,6 +559,7 @@ func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now 
 
 	dbconn.timeCreated.set(now)
 	dbconn.timeUsed.set(now)
+	dbconn.generation = pool.generation.Load()
 	return nil
 }
 
@@ -546,8 +569,9 @@ func (pool *ConnPool[C]) connNew(ctx context.Context) (*Pooled[C], error) {
 		return nil, err
 	}
 	pooled := &Pooled[C]{
-		pool: pool,
-		Conn: conn,
+		pool:       pool,
+		Conn:       conn,
+		generation: pool.generation.Load(),
 	}
 	now := monotonicNow()
 	pooled.timeUsed.set(now)
