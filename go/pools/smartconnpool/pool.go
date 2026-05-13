@@ -115,6 +115,13 @@ type Config[C Connection] struct {
 // the number of stacks must always be a power of two
 const stackMask = 7
 
+// reopenAfterGenBumpHook is a test-only seam invoked by reopen() immediately
+// after pool.generation is incremented. Production builds leave it nil.
+// It exists so tests can observe whether the stacks have already been drained
+// by the time the generation bump becomes visible — the ordering invariant
+// that prevents a racing Get from popping a stale-at-acquisition conn.
+var reopenAfterGenBumpHook func()
+
 type closeCtxState struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -351,21 +358,28 @@ func (pool *ConnPool[C]) reopen() {
 		return
 	}
 
-	// Bump generation before draining so any conn established from this point
-	// on is tagged as fresh. Conns still borrowed at reopen time keep the
-	// previous generation and will be retired when they return via put.
-	pool.generation.Add(1)
-
 	// Derive from closeContext so a concurrent Close can short-circuit our
 	// setCapacity calls and release capacityMu promptly.
 	ctx, cancel := context.WithTimeout(pool.closeContext(), PoolCloseTimeout)
 	defer cancel()
 
-	// to re-open the connection pool, first set the capacity to 0 so we close
+	// To re-open the connection pool, first set the capacity to 0 so we close
 	// all the existing connections, as they're now connected to a stale MySQL
-	// instance.
+	// instance. We drain BEFORE bumping the generation counter so that at no
+	// point are the connection stacks holding conns whose generation already
+	// mismatches the pool's — otherwise a racing Get could pop a
+	// stale-at-acquisition conn between the bump and the capacity Swap.
 	if err := pool.setCapacity(ctx, 0); err != nil {
 		log.Error(fmt.Sprintf("failed to reopen pool %q: %v", pool.Name, err))
+	}
+
+	// Bump generation now that the stacks are empty. Any conn still borrowed
+	// at this point keeps the previous generation and will be retired via
+	// tryReturnConn when it returns. Conns established from this point on
+	// (by getNew or connReopen) capture the new generation.
+	pool.generation.Add(1)
+	if reopenAfterGenBumpHook != nil {
+		reopenAfterGenBumpHook()
 	}
 
 	// the second call to setCapacity cannot fail because it's only increasing the number

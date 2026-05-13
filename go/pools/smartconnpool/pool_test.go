@@ -870,6 +870,48 @@ func TestGetReturnsErrConnPoolClosedDuringCloseWindow(t *testing.T) {
 	<-closeDone
 }
 
+func TestReopenDrainsBeforeBumpingGeneration(t *testing.T) {
+	// reopen() must drain the connection stacks BEFORE bumping
+	// pool.generation. If gen bumps first, a Get that races reopen between
+	// the bump and setCapacity(0)'s capacity.Swap could pop a conn whose
+	// generation already mismatches the pool's — handing the caller a
+	// stale-at-acquisition conn.
+	//
+	// The hook fires immediately after pool.generation is incremented. At
+	// that point the stacks must already be empty.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	var seeds []*Pooled[*TestConn]
+	for range 5 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		seeds = append(seeds, c)
+	}
+	for _, c := range seeds {
+		c.Recycle()
+	}
+
+	var stacksEmpty atomic.Bool
+	reopenAfterGenBumpHook = func() {
+		empty := p.clean.Peek() == nil
+		for i := range p.settings {
+			if p.settings[i].Peek() != nil {
+				empty = false
+				break
+			}
+		}
+		stacksEmpty.Store(empty)
+	}
+	t.Cleanup(func() { reopenAfterGenBumpHook = nil })
+
+	p.reopen()
+
+	require.True(t, stacksEmpty.Load(),
+		"stacks must be drained before pool.generation is bumped; otherwise a racing Get can pop a stale-at-acquisition conn")
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 
