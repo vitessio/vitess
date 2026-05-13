@@ -816,6 +816,41 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 	}
 }
 
+func TestExtendedMaxLifetimeJitter(t *testing.T) {
+	var state TestState
+	connector := newConnector(&state)
+
+	// 30 minutes is well above 2^32 ns (~4.29s). A uint32(maxLifetime) cast
+	// would cap jitter at ~408ms, so no sample could ever reach the upper half
+	// of [M, 2M). A single sample above M + M/2 proves the full 64-bit range
+	// is in use; the loop bound just guards against the ~5e-20 chance that all
+	// uniform draws land in the lower half.
+	config := &Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: 30 * time.Minute,
+		LogWait:     state.LogWait,
+	}
+
+	p := NewPool(config).Open(connector, nil)
+	t.Cleanup(p.Close)
+
+	threshold := config.MaxLifetime + config.MaxLifetime/2
+	const maxAttempts = 64
+
+	for range maxAttempts {
+		s := p.extendedMaxLifetime()
+		require.LessOrEqual(t, config.MaxLifetime, s)
+		require.Greater(t, 2*config.MaxLifetime, s)
+
+		if s > threshold {
+			return
+		}
+	}
+
+	require.Failf(t, "jitter never reached upper half of range",
+		"no sample in %d tries exceeded %s; jitter appears truncated", maxAttempts, threshold)
+}
+
 // TestMaxIdleCount tests the MaxIdleCount setting, to check if the pool closes
 // the idle connections when the number of idle connections exceeds the limit.
 func TestMaxIdleCount(t *testing.T) {

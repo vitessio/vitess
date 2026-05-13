@@ -519,7 +519,7 @@ func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 	if maxLifetime == 0 {
 		return 0
 	}
-	return time.Duration(maxLifetime) + time.Duration(rand.Uint32N(uint32(maxLifetime)))
+	return time.Duration(maxLifetime) + time.Duration(rand.Int64N(maxLifetime))
 }
 
 func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now time.Duration) (err error) {
