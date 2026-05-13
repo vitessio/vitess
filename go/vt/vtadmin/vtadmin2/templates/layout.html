@@ -1,0 +1,30 @@
+{{ define "layout" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }} | {{ .DocumentTitle }}</title>
+  <link rel="stylesheet" href="/static/vtadmin2.css">
+  <script src="/static/vtadmin2.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/clusters">VTAdmin2</a>
+    {{ if .ReadOnly }}<span class="badge">Read-only</span>{{ end }}
+  </header>
+  <div class="shell">
+    <nav class="nav" aria-label="Primary navigation">
+      <a href="/clusters" class="{{ if eq .Active "clusters" }}active{{ end }}">Clusters</a>
+      <a href="/keyspaces" class="{{ if eq .Active "keyspaces" }}active{{ end }}">Keyspaces</a>
+      <a href="/tablets" class="{{ if eq .Active "tablets" }}active{{ end }}">Tablets</a>
+      <a href="/schemas" class="{{ if eq .Active "schemas" }}active{{ end }}">Schemas</a>
+    </nav>
+    <main class="content">
+      {{ if .Flash }}<div class="flash {{ .Flash.Kind }}">{{ .Flash.Message }}</div>{{ end }}
+      {{ template "content" . }}
+    </main>
+  </div>
+</body>
+</html>
+{{ end }}

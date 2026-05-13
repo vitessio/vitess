@@ -1,0 +1,27 @@
+{{ define "clusters.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Clusters</h1>
+  <input class="table-filter" data-table-filter="#clusters-table" placeholder="Filter clusters" aria-label="Filter clusters">
+</div>
+<div class="card">
+  <table id="clusters-table">
+    <thead>
+      <tr><th>ID</th><th>Name</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ .GetId }}</td>
+        <td>{{ .GetName }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="2">No clusters found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}
