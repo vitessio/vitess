@@ -352,6 +352,34 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	return err
 }
 
+// reopen retires the pool's current connections and restores capacity. It's
+// invoked by the refresh worker when the refresh callback reports that the
+// pool's connections are no longer trusted (e.g., a DNS change for the
+// underlying MySQL endpoint).
+//
+// The contract is cooperative — there is no atomic way to atomically replace
+// every in-flight connection. Each conn category is handled differently:
+//
+//   - Idle conns in the stacks at reopen-time: closed before reopen returns
+//     by setCapacity(0)'s drain loop.
+//   - Conns borrowed at reopen-time: retired when they return via the
+//     generation check in tryReturnConn.
+//   - Conns whose connect was in flight at reopen-time: handled like borrowed
+//     conns if the drain loop waits for them to land. If the drain TIMES OUT
+//     (PoolCloseTimeout exceeded), the in-flight connect finishes with the
+//     pre-reopen generation tag and Get briefly returns that conn to the
+//     caller. It is then retired on Recycle by tryReturnConn's gen check.
+//     This residual race is bounded — the conn is well-formed, the slot is
+//     reclaimed on Recycle, no leak — but the caller may use one stale conn
+//     across the reopen boundary. Closing this fully would require an
+//     acquisition-side gen check that itself has the same kind of window
+//     (between check and use), so it isn't worth the hot-path cost.
+//
+// Ordering note: setCapacity(0) MUST drain the stacks before pool.generation
+// is bumped. Otherwise a racing Get could pop a stack conn between the bump
+// and capacity.Swap(0), which would be a stale-at-acquisition conn (the
+// pool's generation already advertises the new value). See
+// TestReopenDrainsBeforeBumpingGeneration.
 func (pool *ConnPool[C]) reopen() {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
