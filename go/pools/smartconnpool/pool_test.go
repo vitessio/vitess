@@ -800,6 +800,33 @@ func TestCloseHonorsContextDuringIdleReopen(t *testing.T) {
 		"close should abort the worker's reconnect on ctx; took %s", elapsed)
 }
 
+func TestTryReturnConnRejectsStaleGeneration(t *testing.T) {
+	// tryReturnConn is the single ownership gate for stale-generation conns.
+	// put's initial check catches the common case; this test exercises the
+	// secondary check that catches a reopen racing between put's first check
+	// and the actual handoff.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+	require.EqualValues(t, 1, p.Active())
+
+	// Simulate a reopen that races with put() by bumping generation directly.
+	p.generation.Add(1)
+
+	// Mirror put()'s borrowed-- step, then hand the now-stale conn straight
+	// to tryReturnConn.
+	p.borrowed.Add(-1)
+	returned := p.tryReturnConn(held)
+
+	require.False(t, returned, "tryReturnConn should refuse a stale conn")
+	require.EqualValues(t, 0, state.open.Load(), "tryReturnConn must close the stale conn itself")
+	require.EqualValues(t, 0, p.Active(), "tryReturnConn must release the slot")
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 

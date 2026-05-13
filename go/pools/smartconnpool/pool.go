@@ -494,6 +494,18 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 }
 
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
+	// Ownership gate: a conn whose generation predates the pool's belongs to
+	// a previous reopen window. Reject before any handoff (waiter, idle-limit,
+	// stack push) so a stale conn never reaches another caller. This catches
+	// reopens that race with put()'s initial check, with tryReturnAnyConn's
+	// pop, or with closeIdleResources' push-back. The caller must NOT also
+	// close — tryReturnConn owns the close + closedConn here.
+	if conn.generation != pool.generation.Load() {
+		conn.Close()
+		pool.closedConn()
+		return false
+	}
+
 	if pool.wait.tryReturnConn(conn) {
 		return true
 	}
