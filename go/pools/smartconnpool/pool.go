@@ -736,9 +736,6 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 				pool.recordWaitDuration(start)
 			}
 			if err != nil {
-				if conn != nil {
-					pool.discardConn(conn)
-				}
 				if errors.Is(err, ErrPoolWaiterCapReached) || errors.Is(err, ErrConnPoolClosed) {
 					return nil, err
 				}
@@ -818,9 +815,6 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 				pool.recordWaitDuration(start)
 			}
 			if err != nil {
-				if conn != nil {
-					pool.discardConn(conn)
-				}
 				if errors.Is(err, ErrPoolWaiterCapReached) || errors.Is(err, ErrConnPoolClosed) {
 					return nil, err
 				}

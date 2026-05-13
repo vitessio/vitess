@@ -18,7 +18,6 @@ package smartconnpool
 
 import (
 	"context"
-	"runtime"
 	"sync"
 
 	"vitess.io/vitess/go/list"
@@ -49,9 +48,24 @@ type waitlist[C Connection] struct {
 // ErrPoolWaiterCapReached immediately without blocking.
 // The returned connection may _not_ have the requested Setting. A nil connection
 // with nil error means the caller should retry acquisition.
+// If a non-nil error is returned, any conn that was already in flight to this
+// waiter is discarded internally — callers never need to handle (conn, err).
 func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint, shouldRetry func() bool) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
-	defer wl.nodes.Put(elem)
+	defer func() {
+		// Defensive drain. Every branch below already either returns the
+		// conn to the caller or discards it explicitly, but a leftover in
+		// this element's buffered channel would surface as a phantom conn
+		// for the next user pulling this Element out of the sync.Pool.
+		select {
+		case conn := <-elem.Value.conn:
+			if conn != nil {
+				conn.pool.discardConn(conn)
+			}
+		default:
+		}
+		wl.nodes.Put(elem)
+	}()
 
 	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting}
 
@@ -115,13 +129,13 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 			return nil, ErrConnPoolClosed
 		}
 
-		// if we weren't able to remove ourselves from the waitlist, it means
-		// another goroutine is trying to hand us a connection
-		conn := <-elem.Value.conn
-		if conn == nil {
-			return nil, ErrConnPoolClosed
+		// We lost the race to remove ourselves: another goroutine handed us a
+		// connection we can no longer use. Drain it from the channel and
+		// discard so the conn isn't leaked.
+		if conn := <-elem.Value.conn; conn != nil {
+			conn.pool.discardConn(conn)
 		}
-		return conn, ErrConnPoolClosed
+		return nil, ErrConnPoolClosed
 
 	case <-ctx.Done():
 		// Context expired. We need to try to remove ourselves from the waitlist to
@@ -143,13 +157,12 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 			return nil, context.Cause(ctx)
 		}
 
-		// if we weren't able to remove ourselves from the waitlist, it means
-		// another goroutine is trying to hand us a connection
-		conn := <-elem.Value.conn
-		if conn == nil {
-			return nil, context.Cause(ctx)
+		// We lost the race to remove ourselves: drain the handed-off conn
+		// and discard so it isn't leaked to a caller whose ctx is already dead.
+		if conn := <-elem.Value.conn; conn != nil {
+			conn.pool.discardConn(conn)
 		}
-		return conn, nil
+		return nil, context.Cause(ctx)
 
 	case conn := <-elem.Value.conn:
 		if conn == nil {
@@ -161,12 +174,13 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 				return nil, ErrConnPoolClosed
 			default:
 			}
-		} else {
-			select {
-			case <-closeChan:
-				return conn, ErrConnPoolClosed
-			default:
-			}
+			return nil, nil
+		}
+		select {
+		case <-closeChan:
+			conn.pool.discardConn(conn)
+			return nil, ErrConnPoolClosed
+		default:
 		}
 		return conn, nil
 	}
@@ -221,11 +235,9 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 		return false
 	}
 
-	// if we have a target to return the connection to, simply write the connection
-	// into the waiter's channel.
+	// Write into the waiter's buffered channel; this never blocks because the
+	// waiter is the sole receiver and the buffer is sized 1.
 	target.Value.conn <- conn
-	// Allow the goroutine waiting on the channel to start running _now_.
-	runtime.Gosched()
 
 	return true
 }
@@ -247,15 +259,18 @@ func (wl *waitlist[D]) tryNotifyWaiter() bool {
 	}
 
 	target.Value.conn <- nil
-	runtime.Gosched()
 
 	return true
 }
 
 func (wl *waitlist[C]) init() {
 	wl.nodes.New = func() any {
+		// Buffer of 1 so tryReturnConnSlow / tryNotifyWaiter never block on
+		// the send. A receiver that bails on ctx.Done or closeChan picks up
+		// the queued conn via the blocking drain in waitForConn's
+		// not-removed branches (and a defensive drain on the way out).
 		return &list.Element[waiter[C]]{
-			Value: waiter[C]{conn: make(chan *Pooled[C])},
+			Value: waiter[C]{conn: make(chan *Pooled[C], 1)},
 		}
 	}
 	wl.list.Init()
