@@ -661,6 +661,11 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 			}
 
 			conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters, pool.shouldRetryWait)
+			// ErrPoolWaiterCapReached is the only error path where we never
+			// entered the wait queue, so it's also the only one not to record.
+			if !errors.Is(err, ErrPoolWaiterCapReached) {
+				pool.recordWaitDuration(start)
+			}
 			if err != nil {
 				if conn != nil {
 					pool.discardConn(conn)
@@ -670,7 +675,6 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 				}
 				return nil, ErrTimeout
 			}
-			pool.recordWaitDuration(start)
 		}
 		if conn == nil {
 			continue
@@ -739,6 +743,11 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			}
 
 			conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters, pool.shouldRetryWait)
+			// ErrPoolWaiterCapReached is the only error path where we never
+			// entered the wait queue, so it's also the only one not to record.
+			if !errors.Is(err, ErrPoolWaiterCapReached) {
+				pool.recordWaitDuration(start)
+			}
 			if err != nil {
 				if conn != nil {
 					pool.discardConn(conn)
@@ -748,7 +757,6 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 				}
 				return nil, ErrTimeout
 			}
-			pool.recordWaitDuration(start)
 		}
 		if conn == nil {
 			continue

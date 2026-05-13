@@ -628,6 +628,34 @@ func TestCloseAfterSetCapacityZeroStopsPool(t *testing.T) {
 	require.False(t, p.IsOpen(), "pool should be closed after Close()")
 }
 
+func TestWaitTimeRecordedOnTimeout(t *testing.T) {
+	// A Get that enters the waitlist and times out should still count toward
+	// WaitTime. Otherwise pool stress is invisible to monitoring exactly when
+	// it matters most.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Cleanups run LIFO: Recycle first, then Close — keeps Close from waiting
+	// the full PoolCloseTimeout for the held conn.
+	t.Cleanup(p.Close)
+	t.Cleanup(held.Recycle)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err = p.Get(ctx, nil)
+	require.ErrorIs(t, err, ErrTimeout)
+
+	require.EqualValues(t, 1, p.Metrics.WaitCount(), "WaitCount should reflect the timed-out wait")
+	require.Greater(t, p.Metrics.WaitTime(), time.Duration(0), "WaitTime should reflect the timed-out wait")
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 
