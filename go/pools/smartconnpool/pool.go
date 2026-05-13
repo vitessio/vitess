@@ -466,6 +466,13 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.borrowed.Add(-1)
 
 	if conn == nil {
+		// Short-circuit if the pool is closed or drained: there's nothing for
+		// the new conn to do, and the connector may not honor our cancelled
+		// closeContext anyway. Skip the connect outright.
+		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+			pool.closedConn()
+			return
+		}
 		var err error
 		conn, err = pool.connNew(pool.closeContext())
 		if err != nil {
