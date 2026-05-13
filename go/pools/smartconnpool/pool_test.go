@@ -827,6 +827,49 @@ func TestTryReturnConnRejectsStaleGeneration(t *testing.T) {
 	require.EqualValues(t, 0, p.Active(), "tryReturnConn must release the slot")
 }
 
+func TestGetReturnsErrConnPoolClosedDuringCloseWindow(t *testing.T) {
+	// CloseWithContext swaps the close channel out before taking capacityMu,
+	// which means there's a window in which pool.close is nil but capacity
+	// is still > 0 and an idle conn is sitting in the stack. Get must refuse
+	// new requests during that window — it shouldn't pop the idle conn or
+	// open a new one.
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 2}).Open(newConnector(&state), nil)
+
+	// Seed an idle conn so a racing Get would otherwise pop it.
+	c, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	c.Recycle()
+
+	// Hold capacityMu so CloseWithContext can swap close->nil but cannot
+	// progress into setCapacity. That extends the close window indefinitely.
+	p.capacityMu.Lock()
+
+	closeDone := make(chan struct{})
+	go func() {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		_ = p.CloseWithContext(ctx)
+		close(closeDone)
+	}()
+
+	// Wait for Close to advance past the close-pointer swap.
+	require.Eventually(t, func() bool {
+		return !p.IsOpen()
+	}, 5*time.Second, time.Millisecond)
+	require.Greater(t, p.Capacity(), int64(0),
+		"setCapacity hasn't run yet; we should still observe the close window")
+
+	// During this window, Get must already refuse.
+	_, err = p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+
+	// Release the mutex and let Close finish.
+	p.capacityMu.Unlock()
+	<-closeDone
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 

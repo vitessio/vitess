@@ -446,7 +446,12 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
 	}
-	if pool.capacity.Load() == 0 {
+	// Reject when the pool is logically closed (close pointer cleared) or
+	// drained (capacity == 0). The close-pointer is cleared before
+	// CloseWithContext takes capacityMu and runs setCapacity(0), so checking
+	// it covers the window where capacity is still > 0 but the pool is on
+	// its way out.
+	if pool.close.Load() == nil || pool.capacity.Load() == 0 {
 		return nil, ErrConnPoolClosed
 	}
 	if setting == nil {
@@ -720,7 +725,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
 
 	for {
-		if pool.capacity.Load() == 0 {
+		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
 			return nil, ErrConnPoolClosed
 		}
 
@@ -765,7 +770,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 		if conn == nil {
 			continue
 		}
-		if pool.capacity.Load() == 0 {
+		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
 			pool.discardConn(conn)
 			return nil, ErrConnPoolClosed
 		}
@@ -795,7 +800,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	pool.Metrics.getWithSettingsCount.Add(1)
 
 	for {
-		if pool.capacity.Load() == 0 {
+		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
 			return nil, ErrConnPoolClosed
 		}
 
@@ -844,7 +849,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 		if conn == nil {
 			continue
 		}
-		if pool.capacity.Load() == 0 {
+		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
 			pool.discardConn(conn)
 			return nil, ErrConnPoolClosed
 		}
