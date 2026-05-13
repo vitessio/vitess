@@ -691,6 +691,7 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 		lastStatus replication.ReplicationStatus
 		status     replication.ReplicationStatus
 		statusErr  error
+		haveStatus bool
 
 		waitStartTime = time.Now()
 	)
@@ -707,7 +708,6 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 		case <-time.After(time.Second):
 		}
 
-		lastStatus = status
 		status, statusErr = mysqld.ReplicationStatus(ctx)
 		if statusErr != nil {
 			lastErr.Record(statusErr)
@@ -723,15 +723,27 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 			break
 		}
 
-		if !lastStatus.Position.IsZero() {
+		replicationHealthy := status.Healthy()
+		sourceExists := true
+		if haveStatus {
 			if status.Position.Equal(lastStatus.Position) {
 				phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 1)
+				if replicationHealthy {
+					var err error
+					sourceExists, err = replicationSourceExists(ctx, topoServer, status)
+					if err != nil {
+						log.Warn(fmt.Sprintf("Failed to check replication source in topo: %v", err))
+						sourceExists = true
+					}
+				}
 			} else {
 				phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 			}
 		}
+		lastStatus = status
+		haveStatus = true
 
-		if !status.Healthy() {
+		if !replicationHealthy || !sourceExists {
 			errStr := "Replication has stopped before backup could be taken. Trying to restart replication."
 			log.Warn(errStr)
 			lastErr.Record(errors.New(strings.ToLower(errStr)))
@@ -813,6 +825,23 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 	return nil
+}
+
+func replicationSourceExists(ctx context.Context, topoServer *topo.Server, status replication.ReplicationStatus) (bool, error) {
+	if status.SourceHost == "" || status.SourcePort == 0 {
+		return false, nil
+	}
+
+	tablets, err := topoServer.GetTabletMapForShard(ctx, initKeyspace, initShard)
+	if err != nil {
+		return false, err
+	}
+	for _, tablet := range tablets {
+		if tablet.MysqlHostname == status.SourceHost && tablet.MysqlPort == status.SourcePort {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (replication.Position, error) {
