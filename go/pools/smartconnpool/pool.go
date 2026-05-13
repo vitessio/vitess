@@ -589,6 +589,11 @@ func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 }
 
 func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now time.Duration) (err error) {
+	// Capture generation before the connect so a reopen that races with this
+	// call doesn't mark our stale-server conn as fresh. tryReturnConn will
+	// reject the conn on the way back if generation has moved on.
+	generation := pool.generation.Load()
+
 	dbconn.Conn, err = pool.config.connect(ctx)
 	if err != nil {
 		return err
@@ -604,11 +609,14 @@ func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now 
 
 	dbconn.timeCreated.set(now)
 	dbconn.timeUsed.set(now)
-	dbconn.generation = pool.generation.Load()
+	dbconn.generation = generation
 	return nil
 }
 
 func (pool *ConnPool[C]) connNew(ctx context.Context) (*Pooled[C], error) {
+	// Capture generation before the connect; see connReopen.
+	generation := pool.generation.Load()
+
 	conn, err := pool.config.connect(ctx)
 	if err != nil {
 		return nil, err
@@ -616,7 +624,7 @@ func (pool *ConnPool[C]) connNew(ctx context.Context) (*Pooled[C], error) {
 	pooled := &Pooled[C]{
 		pool:       pool,
 		Conn:       conn,
-		generation: pool.generation.Load(),
+		generation: generation,
 	}
 	now := monotonicNow()
 	pooled.timeUsed.set(now)
