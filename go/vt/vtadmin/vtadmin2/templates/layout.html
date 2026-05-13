@@ -10,7 +10,10 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/clusters">VTAdmin2</a>
+    <a class="brand" href="/clusters">
+      <img class="brand-logo" src="/static/vitess-stacked.png" alt="Vitess">
+      <span>VTAdmin2</span>
+    </a>
     {{ if .ReadOnly }}<span class="badge">Read-only</span>{{ end }}
   </header>
   <div class="shell">
