@@ -1,6 +1,7 @@
 :root {
-  --vt-color-primary: #513399;
-  --vt-color-primary-dark: #32205f;
+  --vt-color-primary: #f16626;
+  --vt-color-primary-dark: #d64d0e;
+  --vt-color-primary-light: #fef1ec;
   --vt-color-accent: #00a3a6;
   --vt-color-bg: #f7f8fc;
   --vt-color-surface: #ffffff;
@@ -34,10 +35,19 @@ a { color: var(--vt-color-primary); }
 }
 
 .brand {
+  align-items: center;
   color: white;
+  display: flex;
   font-size: 1.1rem;
   font-weight: 700;
+  gap: 0.65rem;
   text-decoration: none;
+}
+
+.brand-logo {
+  display: block;
+  height: 2.4rem;
+  width: auto;
 }
 
 .badge {
@@ -70,7 +80,7 @@ a { color: var(--vt-color-primary); }
 
 .nav a.active,
 .nav a:hover {
-  background: #ece7fb;
+  background: var(--vt-color-primary-light);
   color: var(--vt-color-primary-dark);
 }
 
