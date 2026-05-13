@@ -305,9 +305,12 @@ func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnP
 	return pool
 }
 
-// Close shuts down the pool. No connections will be returned from ConnPool.Get after calling this,
-// but calling ConnPool.Put is still allowed. This function will not return until all of the pool's
-// connections have been returned or the default PoolCloseTimeout has elapsed
+// Close shuts down the pool. Once Close returns, every subsequent
+// ConnPool.Get call returns ErrConnPoolClosed; Get calls that race with Close
+// may briefly succeed in the window before Close finishes draining, and the
+// returned connection is then closed on Pooled.Recycle. ConnPool.Put remains
+// valid throughout. This function will not return until all of the pool's
+// connections have been returned or the default PoolCloseTimeout has elapsed.
 func (pool *ConnPool[C]) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), PoolCloseTimeout)
 	defer cancel()
