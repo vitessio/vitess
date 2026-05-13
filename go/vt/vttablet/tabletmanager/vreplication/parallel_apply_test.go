@@ -3341,6 +3341,66 @@ func TestApplyEvent_FIELDIgnoresIdentityEquivalentReorderedUniqueSecondaryIndex(
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 }
 
+// TestApplyEvent_FIELDIgnoresUniqueSecondaryIndexThatContainsIdentity covers a
+// unique secondary index whose column set is a strict superset of the
+// identity. UNIQUE(id, name) where id is the PK cannot introduce conflicts
+// beyond what PK(id) already enforces, so the table must not be flagged as
+// having an "extra" unique secondary index. The pre-fix code short-circuited
+// on column-count mismatch, forcing unnecessary global serialization.
+func TestApplyEvent_FIELDIgnoresUniqueSecondaryIndexThatContainsIdentity(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+
+	tableName := "parallel_apply_field_unique_secondary_contains_identity"
+	qualifiedTableName := vrepldb + "." + tableName
+	execStatements(t, []string{
+		"create table " + qualifiedTableName + " (id int not null, name varchar(128) not null, primary key(id), unique key uk_id_name(id, name))",
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table if exists " + qualifiedTableName})
+	})
+
+	realDB := &realDBClient{nolog: true}
+	require.NoError(t, realDB.Connect())
+	t.Cleanup(realDB.Close)
+
+	vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.dbClient = vp.vr.dbClient
+	vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+	vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}}}
+
+	colInfoMap, err := vp.vr.buildColInfoMap(ctx)
+	require.NoError(t, err)
+	vp.vr.colInfoMap = colInfoMap
+
+	vp.replicatorPlan, err = vp.vr.buildReplicatorPlan(
+		vp.vr.source,
+		vp.vr.colInfoMap,
+		nil,
+		vp.vr.stats,
+		vp.vr.vre.env.CollationEnv(),
+		vp.vr.vre.env.Parser(),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: tableName,
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT32},
+				{Name: "name", Type: querypb.Type_VARCHAR},
+			},
+		},
+	}, false))
+	require.NoError(t, vp.dbClient.Rollback())
+
+	require.Equal(t, []string{"id"}, vp.tablePlans[tableName].IdentityColumns)
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+}
+
 func TestApplyEvent_FIELDIgnoresIdentityEquivalentReorderedPrimaryKey(t *testing.T) {
 	ctx := testCtx(t)
 	vp, _ := testVPlayer(t)
@@ -6056,6 +6116,40 @@ func TestSetState_BatchedTransactionDefersStateUpdateUntilCommit(t *testing.T) {
 	require.NoError(t, vp.vr.dbClient.CommitTrxQueryBatch())
 	require.Len(t, recording.queries, 1)
 	assert.Contains(t, recording.queries[0], "update _vt.vreplication set state='Stopped'")
+}
+
+// TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites covers the
+// worker batch-mode stop-position path. The caller adds the position update
+// via AddQueryToTrxBatch, then setStateWithDBClientImmediate runs the
+// state UPDATE and the vreplication_log INSERT via ExecuteFetch (those
+// were appended to the trx batch buffer by ExecuteFetch), and finally
+// CommitTrxQueryBatch should not replay them — otherwise reaching
+// stopPos doubles every vreplication_log row and breaks atomicity of
+// the position + state writes (issue spotted by review on
+// parallel_apply.go:2091-2101).
+func TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	recording := &recordingDBClient{}
+
+	dbClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.vr.dbClient = dbClient
+	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Running
+	dbClient.maxBatchSize = 1024
+
+	require.NoError(t, dbClient.Begin())
+	require.NoError(t, dbClient.AddQueryToTrxBatch(
+		"update _vt.vreplication set pos='MySQL56/x:1-5', time_updated=1 where id=1"))
+	require.NoError(t, vp.vr.setStateWithDBClientImmediate(
+		dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at position foo"))
+	require.NoError(t, dbClient.CommitTrxQueryBatch())
+
+	joined := strings.Join(recording.queries, ";")
+	assert.Equal(t, 1, strings.Count(joined, "update _vt.vreplication set state='Stopped'"),
+		"state UPDATE must be sent exactly once. Queries: %v", recording.queries)
+	assert.Equal(t, 1, strings.Count(joined, "insert into _vt.vreplication_log"),
+		"vreplication_log INSERT must be sent exactly once. Queries: %v", recording.queries)
+	assert.Equal(t, 1, strings.Count(joined, "update _vt.vreplication set pos="),
+		"position UPDATE must be sent exactly once. Queries: %v", recording.queries)
 }
 
 // ---------- enqueueCommitOnly tests ----------

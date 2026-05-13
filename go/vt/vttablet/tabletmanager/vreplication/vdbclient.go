@@ -200,6 +200,19 @@ func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
 	return qrs, nil
 }
 
+// markTrxBatchedQueriesFlushed advances the batch position past every
+// query currently buffered. ExecuteFetch appends each query it runs to
+// the trx batch buffer (so Retry can replay them), but in batch-commit
+// mode that buffer is also what CommitTrxQueryBatch sends as a single
+// multi-statement, which double-executes any query that was already
+// run on the wire via ExecuteFetch. Callers that have already executed
+// queries through ExecuteFetch mid-batch use this to keep them out of
+// the upcoming CommitTrxQueryBatch replay.
+func (vc *vdbClient) markTrxBatchedQueriesFlushed() {
+	vc.queriesPos = int64(len(vc.queries))
+	vc.batchSize = 0
+}
+
 // Execute is ExecuteFetch without the maxrows.
 func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
 	// Number of rows should never exceed relayLogMaxItems.

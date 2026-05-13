@@ -585,6 +585,21 @@ func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdat
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	// In batch-commit mode the immediate path runs queries via ExecuteFetch,
+	// which executes them on the wire AND appends them to the trx batch
+	// buffer (for Retry). CommitTrxQueryBatch would then replay them in a
+	// fresh MySQL transaction, doubling the state UPDATE and vreplication_log
+	// INSERT and breaking atomicity with the position write. Flush any
+	// already-batched queries first so they share the same MySQL transaction
+	// as the upcoming immediate writes, then mark the immediate writes as
+	// flushed before returning so the caller's CommitTrxQueryBatch only
+	// sends "commit".
+	batchedImmediate := immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0
+	if batchedImmediate {
+		if _, err := dbClient.ExecuteTrxQueryBatch(); err != nil {
+			return fmt.Errorf("could not flush pending batched queries before set state: %v: %v", query, err)
+		}
+	}
 	if !immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0 {
 		if err := dbClient.AddQueryToTrxBatch(query); err != nil {
 			return fmt.Errorf("could not set state: %v: %v", query, err)
@@ -595,10 +610,16 @@ func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdat
 		}
 	}
 	if state == vr.state {
+		if batchedImmediate {
+			dbClient.markTrxBatchedQueriesFlushed()
+		}
 		return nil
 	}
 	insertLog(dbClient, LogStateChange, vr.id, state.String(), message)
 	vr.state = state
+	if batchedImmediate {
+		dbClient.markTrxBatchedQueriesFlushed()
+	}
 
 	return nil
 }
@@ -1025,31 +1046,37 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 		if secondaryKey == nil || secondaryKey.Info == nil || !secondaryKey.Info.IsUnique() {
 			continue
 		}
-		if len(secondaryKey.Columns) != len(identityCols) {
+		// A unique secondary index can only enforce conflicts beyond the
+		// identity if its raw column set does not contain the identity. If
+		// the index covers (id, anything-else) and id is the identity, two
+		// rows with different identity values cannot collide on the index.
+		// Functional expressions and prefix lengths break that reasoning
+		// because uniqueness is enforced over a derived value rather than
+		// the raw column, so identity uniqueness no longer implies index
+		// uniqueness.
+		indexColSet := make(map[string]struct{}, len(secondaryKey.Columns))
+		hasDerivedColumn := false
+		for _, idxCol := range secondaryKey.Columns {
+			if idxCol == nil {
+				continue
+			}
+			if idxCol.Expression != nil || idxCol.Length != nil {
+				hasDerivedColumn = true
+				break
+			}
+			indexColSet[idxCol.Column.Lowered()] = struct{}{}
+		}
+		if hasDerivedColumn {
 			return true, nil
 		}
-		matchesIdentity := true
-		matchesIdentitySet := len(identityColSet) == len(identityCols)
-		for i, idxCol := range secondaryKey.Columns {
-			if idxCol.Expression != nil {
-				matchesIdentity = false
-				matchesIdentitySet = false
+		containsIdentity := true
+		for _, col := range identityCols {
+			if _, ok := indexColSet[col]; !ok {
+				containsIdentity = false
 				break
-			}
-			if idxCol.Length != nil {
-				matchesIdentity = false
-				matchesIdentitySet = false
-				break
-			}
-			colName := idxCol.Column.Lowered()
-			if colName != identityCols[i] {
-				matchesIdentity = false
-			}
-			if _, ok := identityColSet[colName]; !ok {
-				matchesIdentitySet = false
 			}
 		}
-		if matchesIdentity || matchesIdentitySet {
+		if containsIdentity {
 			continue
 		}
 		return true, nil
