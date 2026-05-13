@@ -37,9 +37,15 @@ type TxPreparedPool struct {
 	mu       sync.Mutex
 	conns    map[string]*StatefulConnection
 	reserved map[string]error
+
+	// redoCommitStarted tracks dtids whose redo metadata transaction reached
+	// COMMIT. Such dtids must not be rolled back until redo deletion succeeds.
+	redoCommitStarted map[string]struct{}
+
 	// open tells if the prepared pool is open for accepting transactions.
 	open     bool
 	capacity int
+
 	// twoPCEnabled is set to true if 2PC is enabled.
 	twoPCEnabled bool
 }
@@ -51,10 +57,11 @@ func NewTxPreparedPool(capacity int, twoPCEnabled bool) *TxPreparedPool {
 		capacity = 0
 	}
 	return &TxPreparedPool{
-		conns:        make(map[string]*StatefulConnection, capacity),
-		reserved:     make(map[string]error),
-		capacity:     capacity,
-		twoPCEnabled: twoPCEnabled,
+		conns:             make(map[string]*StatefulConnection, capacity),
+		reserved:          make(map[string]error),
+		redoCommitStarted: make(map[string]struct{}),
+		capacity:          capacity,
+		twoPCEnabled:      twoPCEnabled,
 	}
 }
 
@@ -98,7 +105,26 @@ func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 		return vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, fmt.Sprintf("prepared transactions exceeded limit: %d", pp.capacity))
 	}
 	pp.conns[dtid] = c
+	delete(pp.redoCommitStarted, dtid)
+
 	return nil
+}
+
+// MarkRedoCommitStarted records that redo metadata reached COMMIT.
+func (pp *TxPreparedPool) MarkRedoCommitStarted(dtid string) {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+
+	pp.redoCommitStarted[dtid] = struct{}{}
+}
+
+// RedoCommitStarted reports whether redo metadata reached COMMIT.
+func (pp *TxPreparedPool) RedoCommitStarted(dtid string) bool {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+
+	_, ok := pp.redoCommitStarted[dtid]
+	return ok
 }
 
 // FetchForRollback returns the connection and removes it from the pool.
@@ -111,10 +137,13 @@ func (pp *TxPreparedPool) FetchForRollback(dtid string) *StatefulConnection {
 	defer pp.mu.Unlock()
 	if _, ok := pp.reserved[dtid]; ok {
 		delete(pp.reserved, dtid)
+		delete(pp.redoCommitStarted, dtid)
 		return nil
 	}
 	c := pp.conns[dtid]
 	delete(pp.conns, dtid)
+	delete(pp.redoCommitStarted, dtid)
+
 	return c
 }
 
@@ -156,7 +185,9 @@ func (pp *TxPreparedPool) SetFailed(dtid string) {
 func (pp *TxPreparedPool) Forget(dtid string) {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+
 	delete(pp.reserved, dtid)
+	delete(pp.redoCommitStarted, dtid)
 }
 
 // FetchAllForRollback removes all connections and returns them as a list.
@@ -171,6 +202,8 @@ func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	}
 	pp.conns = make(map[string]*StatefulConnection, pp.capacity)
 	pp.reserved = make(map[string]error)
+	pp.redoCommitStarted = make(map[string]struct{})
+
 	return conns
 }
 

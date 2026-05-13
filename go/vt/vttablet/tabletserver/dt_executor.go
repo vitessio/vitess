@@ -134,9 +134,30 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return vterrors.VT10002("cannot prepare the transaction on a closed connection")
 	}
 
-	return dte.inTransaction(func(localConn *StatefulConnection) error {
-		return dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, queries)
-	})
+	// RollbackPrepared needs to know if we sent a commit for the redo write.
+	// After that, an error might mean we lost the reply, not that the redo
+	// write failed.
+	localConn, _, _, err := dte.te.txPool.Begin(dte.ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	if err != nil {
+		return err
+	}
+	defer dte.te.txPool.RollbackAndRelease(dte.ctx, localConn)
+
+	err = dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, queries)
+	if err != nil {
+		return err
+	}
+
+	remove, err := addActiveCommit(dte.ctx, localConn, dte.te)
+	if err != nil {
+		return err
+	}
+	defer remove()
+
+	dte.te.preparedPool.MarkRedoCommitStarted(dtid)
+
+	_, err = dte.te.txPool.Commit(dte.ctx, localConn)
+	return err
 }
 
 // CommitPrepared commits a prepared transaction. If the operation
@@ -211,13 +232,12 @@ func (dte *DTExecutor) RollbackPrepared(dtid string, originalID int64) error {
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("ROLLBACK_PREPARED", time.Now())
 
-	// Keep track of whether the redo log deletion was committed. That way we only rollback the prepared
-	// transaction if the redo log was successfully deleted.
 	redoDeleted := false
+	redoCommitStarted := dte.te.preparedPool.RedoCommitStarted(dtid)
 
 	defer func() {
-		// If the redo log was not deleted, do not roll back the prepared transaction.
-		if !redoDeleted {
+		// If redo might be durable, wait for confirmed redo deletion before rollback.
+		if redoCommitStarted && !redoDeleted {
 			return
 		}
 

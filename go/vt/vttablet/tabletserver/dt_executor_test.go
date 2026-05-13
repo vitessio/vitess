@@ -161,6 +161,26 @@ func TestTxExecutorPrepareRedoFail(t *testing.T) {
 	require.Contains(t, err.Error(), "is not supported")
 }
 
+// TestTxExecutorRollbackPreparedCleansUpAfterSaveRedoFailure verifies that a
+// failed prepare can still be cleaned up when redo was never durably written.
+func TestTxExecutorRollbackPreparedCleansUpAfterSaveRedoFailure(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	txid := newTxForPrep(ctx, tsv)
+
+	err := txe.Prepare(txid, "bb")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not supported")
+	require.Len(t, txe.te.preparedPool.conns, 1)
+
+	err = txe.RollbackPrepared("bb", txid)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not supported")
+	require.Empty(t, txe.te.preparedPool.conns)
+}
+
 func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	ctx := t.Context()
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)

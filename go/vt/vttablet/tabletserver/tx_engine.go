@@ -561,6 +561,10 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 	// We should not use the external Prepare because
 	// we don't want to write again to the redo log.
 	err = te.preparedPool.Put(conn, preparedTx.Dtid)
+	if err == nil {
+		te.preparedPool.MarkRedoCommitStarted(preparedTx.Dtid)
+	}
+
 	return
 }
 
