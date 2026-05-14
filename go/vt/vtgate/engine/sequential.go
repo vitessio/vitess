@@ -53,6 +53,9 @@ func (s *Sequential) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		if finalRes.InsertID == 0 {
 			finalRes.InsertID = res.InsertID
 		}
+		if res.InsertIDChanged {
+			finalRes.InsertIDChanged = true
+		}
 		if res.Info != "" {
 			finalRes.Info = res.Info
 		}

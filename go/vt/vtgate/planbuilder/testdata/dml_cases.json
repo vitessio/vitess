@@ -1381,15 +1381,71 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1)",
         "InsertIgnore": true,
-        "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2",
+        "Query": "insert into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0) on duplicate key update col = 2, id = last_insert_id(id)",
         "VindexValues": {
           "costly_map": "null",
           "name_user_map": "null",
           "user_index": ":__seq0"
-        }
+        },
+        "FetchLastInsertID": true
       },
       "TablesUsed": [
         "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "insert on duplicate key with user LAST_INSERT_ID on different column - should not append extra_id = last_insert_id(extra_id)",
+    "query": "insert into user_extra(user_id) values(1) on duplicate key update col = last_insert_id(col)",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id) values(1) on duplicate key update col = last_insert_id(col)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
+        "InsertIgnore": true,
+        "FetchLastInsertID": true,
+        "Query": "insert into user_extra(user_id, extra_id) values (:_user_id_0, :__seq0) on duplicate key update col = last_insert_id(col)",
+        "VindexValues": {
+          "user_index": "1"
+        }
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "insert on duplicate key with auto-inc column explicitly set - should not modify or add last_insert_id",
+    "query": "insert into user_extra(user_id) values(1) on duplicate key update extra_id = 5",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id) values(1) on duplicate key update extra_id = 5",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(null)",
+        "InsertIgnore": true,
+        "Query": "insert into user_extra(user_id, extra_id) values (:_user_id_0, :__seq0) on duplicate key update extra_id = 5",
+        "VindexValues": {
+          "user_index": "1"
+        }
+      },
+      "TablesUsed": [
+        "user.user_extra"
       ]
     },
     "skip_e2e": true

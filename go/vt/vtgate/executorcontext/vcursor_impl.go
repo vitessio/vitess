@@ -1752,3 +1752,9 @@ func (vc *VCursorImpl) SetLastInsertID(id uint64) {
 	defer vc.SafeSession.mu.Unlock()
 	vc.SafeSession.LastInsertId = id
 }
+
+func (vc *VCursorImpl) GetLastInsertID() uint64 {
+	vc.SafeSession.mu.Lock()
+	defer vc.SafeSession.mu.Unlock()
+	return vc.SafeSession.LastInsertId
+}

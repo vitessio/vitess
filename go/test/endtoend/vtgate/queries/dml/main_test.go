@@ -60,6 +60,9 @@ var (
     },
     "mixed_seq": {
        "type":   "sequence"
+    },
+    "lid_seq": {
+       "type":   "sequence"
     }
   }
 }`
@@ -136,7 +139,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 		tables := []string{
 			"s_tbl", "num_vdx_tbl", "col_vdx_tbl", "user_tbl", "order_tbl", "oevent_tbl", "oextra_tbl",
 			"auto_tbl", "oid_vdx_tbl", "unq_idx", "nonunq_idx", "u_tbl", "mixed_tbl", "j_tbl", "j_utbl",
-			"t1", "t2",
+			"t1", "t2", "lid_tbl",
 		}
 		for _, table := range tables {
 			// TODO (@frouioui): following assertions produce different results between MySQL and Vitess

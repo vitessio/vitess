@@ -161,6 +161,7 @@ type (
 		RecordMirrorStats(time.Duration, time.Duration, error)
 
 		SetLastInsertID(uint64)
+		GetLastInsertID() uint64
 
 		GetExecutionMetrics() *Metrics
 
