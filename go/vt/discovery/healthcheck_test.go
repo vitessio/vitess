@@ -343,6 +343,58 @@ func TestHealthCheckStreamError(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
+// TestHealthCheckRetryDelayIsFixed verifies that repeated stream failures do not
+// cause the retry delay to grow. After multiple consecutive errors the tablet
+// should still be rediscovered within a short, fixed window once it recovers.
+// Regression test for https://github.com/vitessio/vitess/issues/19894.
+func TestHealthCheckRetryDelayIsFixed(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// Use a short but measurable retry delay so we can assert timing.
+	hc.retryDelay = 10 * time.Millisecond
+	defer hc.Close()
+
+	tablet := createTestTablet(0, "cell", "a")
+	input := make(chan *querypb.StreamHealthResponse)
+	resultChan := hc.Subscribe("TestHealthCheckRetryDelayIsFixed")
+	fc := createFakeConn(tablet, input)
+	fc.errCh = make(chan error)
+	hc.AddTablet(tablet)
+
+	// Drain the initial not-serving notification from AddTablet.
+	<-resultChan
+
+	// Send multiple consecutive stream errors to simulate a prolonged outage
+	// where the tablet is unreachable for many retry cycles.
+	const numErrors = 6 // with exponential backoff this would reach 320ms (10*2^5)
+	for range numErrors {
+		fc.errCh <- errors.New("connection refused")
+		<-resultChan // drain the not-serving update
+	}
+
+	// Now the tablet recovers. Send a healthy response.
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+	input <- shr
+
+	// With a fixed 10ms retry delay, rediscovery should happen well within 100ms.
+	// With the old exponential backoff (10ms * 2^6 = 640ms cap), this would time out.
+	select {
+	case result := <-resultChan:
+		assert.True(t, result.Serving, "tablet should be serving after recovery")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("tablet was not rediscovered promptly after recovery; retry delay may be growing exponentially")
+	}
+}
+
 // TestHealthCheckErrorOnPrimary is the same as TestHealthCheckStreamError except for tablet type
 func TestHealthCheckErrorOnPrimary(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
@@ -668,7 +720,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	fc.resetCanceledFlag()
 	input <- shr
 
-	// wait for the exponential backoff to wear off and health monitoring to resume.
+	// wait for the retry delay to pass and health monitoring to resume.
 	result = <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
 }
