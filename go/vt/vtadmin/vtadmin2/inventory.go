@@ -47,12 +47,12 @@ func (s *Server) vtctlds(w http.ResponseWriter, r *http.Request) {
 		ClusterIds: queryValues(r, "cluster_id"),
 	})
 	if err != nil {
-		s.renderError(w, r, http.StatusInternalServerError, "Vtctlds", err)
+		s.renderError(w, r, http.StatusInternalServerError, "VTCtlds", err)
 		return
 	}
 
 	s.render(w, r, http.StatusOK, "vtctlds.html", PageData{
-		Title:  "Vtctlds",
+		Title:  "VTCtlds",
 		Active: "vtctlds",
 		Data:   resp.GetVtctlds(),
 	})

@@ -29,9 +29,18 @@ import (
 )
 
 type (
+	migrationsData struct {
+		Form       formOptions
+		UUID       string
+		Migrations []*vtadminpb.SchemaMigration
+	}
+
 	transactionsData struct {
 		ClusterID    string
+		Keyspace     string
+		AbandonAge   string
 		Transactions []*querypb.TransactionMetadata
+		Form         formOptions
 	}
 
 	transactionInfoData struct {
@@ -43,17 +52,37 @@ type (
 
 func (s *Server) schemaMigrations(w http.ResponseWriter, r *http.Request) {
 	clusterIDs := queryValues(r, "cluster_id")
-	if len(clusterIDs) == 0 {
-		s.renderError(w, r, http.StatusBadRequest, "Migrations", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
-		return
-	}
-	if slices.Contains(clusterIDs, "") {
-		s.renderError(w, r, http.StatusBadRequest, "Migrations", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
-		return
+	requestedCluster := ""
+	if len(clusterIDs) > 0 {
+		requestedCluster = clusterIDs[0]
 	}
 	keyspace := queryValue(r, "keyspace")
-	if keyspace == "" {
-		s.renderError(w, r, http.StatusBadRequest, "Migrations", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace query parameter is required"))
+	if len(r.URL.Query()) > 0 {
+		if len(clusterIDs) == 0 {
+			s.renderError(w, r, http.StatusBadRequest, "Migrations", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
+			return
+		}
+		if slices.Contains(clusterIDs, "") {
+			s.renderError(w, r, http.StatusBadRequest, "Migrations", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
+			return
+		}
+		if keyspace == "" {
+			s.renderError(w, r, http.StatusBadRequest, "Migrations", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace query parameter is required"))
+			return
+		}
+	}
+	form, err := s.loadFormOptions(r.Context(), requestedCluster, keyspace)
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "Migrations", err)
+		return
+	}
+	data := migrationsData{Form: form, UUID: queryValue(r, "uuid")}
+	if len(r.URL.Query()) == 0 {
+		s.render(w, r, http.StatusOK, "migrations.html", PageData{
+			Title:  "Migrations",
+			Active: "migrations",
+			Data:   data,
+		})
 		return
 	}
 	clusterRequests := make([]*vtadminpb.GetSchemaMigrationsRequest_ClusterRequest, 0, len(clusterIDs))
@@ -74,23 +103,41 @@ func (s *Server) schemaMigrations(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, http.StatusInternalServerError, "Migrations", err)
 		return
 	}
+	data.Migrations = resp.GetSchemaMigrations()
 
 	s.render(w, r, http.StatusOK, "migrations.html", PageData{
 		Title:  "Migrations",
 		Active: "migrations",
-		Data:   resp.GetSchemaMigrations(),
+		Data:   data,
 	})
 }
 
 func (s *Server) transactions(w http.ResponseWriter, r *http.Request) {
 	clusterID := queryValue(r, "cluster_id")
-	if clusterID == "" {
-		s.renderError(w, r, http.StatusBadRequest, "Transactions", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
+	keyspace := queryValue(r, "keyspace")
+	if len(r.URL.Query()) > 0 {
+		if clusterID == "" {
+			s.renderError(w, r, http.StatusBadRequest, "Transactions", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
+			return
+		}
+		if keyspace == "" {
+			s.renderError(w, r, http.StatusBadRequest, "Transactions", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace query parameter is required"))
+			return
+		}
+	}
+	form, err := s.loadFormOptions(r.Context(), clusterID, keyspace)
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "Transactions", err)
 		return
 	}
-	keyspace := queryValue(r, "keyspace")
-	if keyspace == "" {
-		s.renderError(w, r, http.StatusBadRequest, "Transactions", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace query parameter is required"))
+	abandonAgeParam := queryValue(r, "abandon_age")
+	data := transactionsData{ClusterID: form.SelectedCluster, Keyspace: form.SelectedKeyspace, AbandonAge: abandonAgeParam, Form: form}
+	if len(r.URL.Query()) == 0 {
+		s.render(w, r, http.StatusOK, "transactions.html", PageData{
+			Title:  "Transactions",
+			Active: "transactions",
+			Data:   data,
+		})
 		return
 	}
 	abandonAge, err := parseQueryInt64(r, "abandon_age", 0)
@@ -118,7 +165,10 @@ func (s *Server) transactions(w http.ResponseWriter, r *http.Request) {
 		Active: "transactions",
 		Data: transactionsData{
 			ClusterID:    clusterID,
+			Keyspace:     keyspace,
+			AbandonAge:   abandonAgeParam,
 			Transactions: resp.GetTransactions(),
+			Form:         form,
 		},
 	})
 }

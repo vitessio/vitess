@@ -41,6 +41,7 @@ type (
 		Workflow  string
 		Arg       string
 		Response  *vtadminpb.VDiffShowResponse
+		Form      formOptions
 	}
 )
 
@@ -140,6 +141,11 @@ func (s *Server) vdiffShow(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, http.StatusBadRequest, "VDiff", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "workflow query parameter is required"))
 		return
 	}
+	form, err := s.loadFormOptions(r.Context(), r.PathValue("cluster_id"), keyspace)
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "VDiff", err)
+		return
+	}
 	arg := queryValue(r, "arg")
 	if arg == "" {
 		arg = "last"
@@ -171,6 +177,7 @@ func (s *Server) vdiffShow(w http.ResponseWriter, r *http.Request) {
 			Workflow:  workflow,
 			Arg:       arg,
 			Response:  resp,
+			Form:      form,
 		},
 	})
 }

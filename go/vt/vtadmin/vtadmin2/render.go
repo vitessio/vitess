@@ -60,6 +60,7 @@ func parseTemplates() (*templateSet, error) {
 
 		tmpl, err := template.New("").Funcs(template.FuncMap{
 			"clusterID":        clusterID,
+			"externalURL":      externalURL,
 			"keyspaceName":     keyspaceName,
 			"pathEscape":       pathEscape,
 			"protoJSON":        protoJSON,

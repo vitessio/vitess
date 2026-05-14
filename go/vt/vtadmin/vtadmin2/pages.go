@@ -17,10 +17,37 @@ limitations under the License.
 package vtadmin2
 
 import (
+	"context"
 	"net/http"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
+
+func (s *Server) loadFormOptions(ctx context.Context, requestedCluster, requestedKeyspace string) (formOptions, error) {
+	clustersResp, err := s.api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+	if err != nil {
+		return formOptions{}, err
+	}
+	clusters := clustersResp.GetClusters()
+	selectedCluster := selectedClusterID(clusters, requestedCluster)
+
+	keyspaceReq := &vtadminpb.GetKeyspacesRequest{}
+	if selectedCluster != "" {
+		keyspaceReq.ClusterIds = []string{selectedCluster}
+	}
+	keyspacesResp, err := s.api.GetKeyspaces(ctx, keyspaceReq)
+	if err != nil {
+		return formOptions{}, err
+	}
+	keyspaces := keyspacesResp.GetKeyspaces()
+
+	return formOptions{
+		Clusters:         clusters,
+		Keyspaces:        keyspaces,
+		SelectedCluster:  selectedCluster,
+		SelectedKeyspace: selectedKeyspaceName(keyspaces, selectedCluster, requestedKeyspace),
+	}, nil
+}
 
 func (s *Server) clusters(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.api.GetClusters(r.Context(), &vtadminpb.GetClustersRequest{})

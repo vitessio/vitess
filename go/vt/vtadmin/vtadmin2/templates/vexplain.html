@@ -8,8 +8,24 @@
 </div>
 <div class="card">
   <form method="get" action="/vexplain" class="form-grid">
-    <label>Cluster <input name="cluster_id" value="{{ .Data.ClusterID }}"></label>
-    <label>Keyspace <input name="keyspace" value="{{ .Data.Keyspace }}"></label>
+    <label>
+      Cluster
+      <select name="cluster_id" required>
+        {{ range .Data.Form.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $.Data.Form.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Keyspace
+      <select name="keyspace" required>
+        {{ range .Data.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $.Data.Form.SelectedCluster }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $.Data.Form.SelectedKeyspace }} selected{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
     <label>SQL <textarea name="sql">{{ .Data.SQL }}</textarea></label>
     <button type="submit">Run VExplain</button>
   </form>

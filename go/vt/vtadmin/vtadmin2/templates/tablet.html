@@ -12,7 +12,7 @@
   <dl>
     <dt>Cluster</dt><dd>{{ .Data.ClusterID }}</dd>
     <dt>Alias</dt><dd>{{ .Data.Alias }}</dd>
-    <dt>Hostname</dt><dd>{{ $tablet.GetHostname }}</dd>
+    <dt>Hostname</dt><dd>{{ if $tablet.GetHostname }}<a href="{{ externalURL $tablet.GetHostname }}" target="_blank" rel="noopener noreferrer">{{ $tablet.GetHostname }}</a>{{ end }}</dd>
     <dt>Keyspace</dt><dd>{{ $tablet.GetKeyspace }}</dd>
     <dt>Shard</dt><dd>{{ $tablet.GetShard }}</dd>
     <dt>Type</dt><dd>{{ $tablet.GetType }}</dd>

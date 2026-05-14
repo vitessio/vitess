@@ -10,7 +10,11 @@
   <form method="GET" action="/topology">
     <label>
       Cluster
-      <input name="cluster_id" value="{{ .Data.ClusterID }}" required>
+      <select name="cluster_id" required>
+        {{ range .Data.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $.Data.ClusterID }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
     </label>
     <label>
       Path
