@@ -38,7 +38,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Aggregates": "sum_count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -91,7 +91,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "sum_count_star(1) AS count(*)",
+        "Aggregates": "sum_count_star(1) AS `count(*)`",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -123,12 +123,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(col)",
+        "Aggregates": "sum(0) AS `sum(col)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "sum(col) * count(*) as sum(col)"
+              "sum(col) * count(*) as `sum(col)`"
             ],
             "Inputs": [
               {
@@ -178,7 +178,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS count(city)",
+        "Aggregates": "count(0) AS `count(city)`",
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
@@ -219,12 +219,12 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count_star(0) AS count(*)",
+        "Aggregates": "count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "1 as 1"
+              "1 as `1`"
             ],
             "Inputs": [
               {
@@ -262,7 +262,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS count(col)",
+        "Aggregates": "count(0) AS `count(col)`",
         "Inputs": [
           {
             "OperatorType": "Limit",
@@ -330,7 +330,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count_star(1) AS count(*)",
+        "Aggregates": "count_star(1) AS `count(*)`",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -338,8 +338,8 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":1 as val1",
-              "1 as 1",
-              ":2 as weight_string(val1)"
+              "1 as `1`",
+              ":2 as `weight_string(val1)`"
             ],
             "Inputs": [
               {
@@ -386,7 +386,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":0 as id",
-              "count(*) = 1 as count(*) = 1"
+              "count(*) = 1 as `count(*) = 1`"
             ],
             "Inputs": [
               {
@@ -396,7 +396,7 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS count(*), constant_aggr(1) AS 1",
+                    "Aggregates": "any_value(0) AS id, sum_count_star(1) AS `count(*)`, constant_aggr(1) AS `1`",
                     "Inputs": [
                       {
                         "OperatorType": "Route",
@@ -643,7 +643,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(col)",
+        "Aggregates": "sum(0) AS `sum(col)`",
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -688,7 +688,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count(0) AS count(val2), sum(1) AS sum(val2)",
+        "Aggregates": "count(0) AS `count(val2)`, sum(1) AS `sum(val2)`",
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
@@ -729,18 +729,18 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "count_star(0) AS count(*)",
+        "Aggregates": "count_star(0) AS `count(*)`",
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "1 as 1"
+              "1 as `1`"
             ],
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "sum_count_star(0) AS count(*)",
+                "Aggregates": "sum_count_star(0) AS `count(*)`",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -1976,12 +1976,12 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Scalar",
-                    "Aggregates": "constant_aggr(1000) AS 1000, sum(1) AS sum(num)",
+                    "Aggregates": "constant_aggr(1000) AS `1000`, sum(1) AS `sum(num)`",
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
-                          "1000 as 1000",
+                          "1000 as `1000`",
                           ":0 as num"
                         ],
                         "Inputs": [
@@ -2000,7 +2000,7 @@
                                       {
                                         "OperatorType": "Projection",
                                         "Expressions": [
-                                          "1 as 1"
+                                          "1 as `1`"
                                         ],
                                         "Inputs": [
                                           {
@@ -2037,7 +2037,7 @@
                                       {
                                         "OperatorType": "Projection",
                                         "Expressions": [
-                                          "1 as 1"
+                                          "1 as `1`"
                                         ],
                                         "Inputs": [
                                           {
@@ -2346,8 +2346,8 @@
             "OperatorType": "Projection",
             "Expressions": [
               ":2 as manager_id",
-              "1 as 1",
-              "weight_string(:2) as weight_string(manager_id)"
+              "1 as `1`",
+              "weight_string(:2) as `weight_string(manager_id)`"
             ],
             "Inputs": [
               {

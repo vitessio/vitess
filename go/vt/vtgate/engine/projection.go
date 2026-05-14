@@ -172,7 +172,7 @@ func (p *Projection) description() PrimitiveDescription {
 		expr := sqlparser.String(e)
 		alias := p.Cols[idx]
 		if alias != "" {
-			expr += " as " + alias
+			expr += " as " + sqlparser.String(sqlparser.NewIdentifierCI(alias))
 		}
 		exprs = append(exprs, expr)
 	}

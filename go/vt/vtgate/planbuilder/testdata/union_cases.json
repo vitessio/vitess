@@ -64,7 +64,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(case when tb.col = 1 then 1 else 2 end)",
+        "Aggregates": "sum(0) AS `sum(case when tb.col = 1 then 1 else 2 end)`",
         "Inputs": [
           {
             "OperatorType": "SimpleProjection",
@@ -1250,7 +1250,7 @@
       "Instructions": {
         "OperatorType": "Projection",
         "Expressions": [
-          "1 as 1"
+          "1 as `1`"
         ],
         "Inputs": [
           {

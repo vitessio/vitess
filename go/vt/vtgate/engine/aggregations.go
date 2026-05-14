@@ -103,7 +103,7 @@ func (ap *AggregateParams) String() string {
 		dispOrigOp = "_" + ap.OrigOpcode.String()
 	}
 	if ap.Alias != "" {
-		return fmt.Sprintf("%s%s(%s) AS %s", ap.Opcode.String(), dispOrigOp, keyCol, ap.Alias)
+		return fmt.Sprintf("%s%s(%s) AS %s", ap.Opcode.String(), dispOrigOp, keyCol, sqlparser.String(sqlparser.NewIdentifierCI(ap.Alias)))
 	}
 	return fmt.Sprintf("%s%s(%s)", ap.Opcode.String(), dispOrigOp, keyCol)
 }

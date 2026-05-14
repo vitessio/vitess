@@ -24,7 +24,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum(2) AS sum_qty, sum(3) AS sum_base_price, sum(4) AS sum_disc_price, sum(5) AS sum_charge, sum(6) AS avg_qty, sum(7) AS avg_price, sum(8) AS avg_disc, sum_count_star(9) AS count_order, sum_count(10) AS count(l_quantity), sum_count(11) AS count(l_extendedprice), sum_count(12) AS count(l_discount)",
+            "Aggregates": "sum(2) AS sum_qty, sum(3) AS sum_base_price, sum(4) AS sum_disc_price, sum(5) AS sum_charge, sum(6) AS avg_qty, sum(7) AS avg_price, sum(8) AS avg_disc, sum_count_star(9) AS count_order, sum_count(10) AS `count(l_quantity)`, sum_count(11) AS `count(l_extendedprice)`, sum_count(12) AS `count(l_discount)`",
             "GroupBy": "(0|13), (1|14)",
             "Inputs": [
               {
@@ -82,9 +82,9 @@
                       "sum(l_extendedprice * (1 - l_discount)) * count(*) as revenue",
                       ":3 as o_orderdate",
                       ":4 as o_shippriority",
-                      ":5 as weight_string(l_orderkey)",
-                      ":6 as weight_string(o_orderdate)",
-                      ":7 as weight_string(o_shippriority)"
+                      ":5 as `weight_string(l_orderkey)`",
+                      ":6 as `weight_string(o_orderdate)`",
+                      ":7 as `weight_string(o_shippriority)`"
                     ],
                     "Inputs": [
                       {
@@ -113,11 +113,11 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "count(*) * count(*) as count(*)",
+                                  "count(*) * count(*) as `count(*)`",
                                   ":2 as o_orderdate",
                                   ":3 as o_shippriority",
-                                  ":4 as weight_string(o_orderdate)",
-                                  ":5 as weight_string(o_shippriority)"
+                                  ":4 as `weight_string(o_orderdate)`",
+                                  ":5 as `weight_string(o_shippriority)`"
                                 ],
                                 "Inputs": [
                                   {
@@ -284,7 +284,7 @@
                 "Expressions": [
                   ":2 as n_name",
                   "sum(l_extendedprice * (1 - l_discount)) * count(*) as revenue",
-                  ":3 as weight_string(n_name)"
+                  ":3 as `weight_string(n_name)`"
                 ],
                 "Inputs": [
                   {
@@ -319,7 +319,7 @@
                                   {
                                     "OperatorType": "Projection",
                                     "Expressions": [
-                                      "count(*) * count(*) as count(*)",
+                                      "count(*) * count(*) as `count(*)`",
                                       ":2 as o_orderkey",
                                       ":3 as c_nationkey"
                                     ],
@@ -438,9 +438,9 @@
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "count(*) * count(*) as count(*)",
+                              "count(*) * count(*) as `count(*)`",
                               ":2 as n_name",
-                              ":3 as weight_string(n_name)"
+                              ":3 as `weight_string(n_name)`"
                             ],
                             "Inputs": [
                               {
@@ -553,9 +553,9 @@
               ":3 as cust_nation",
               ":4 as l_year",
               "sum(volume) * count(*) as revenue",
-              ":5 as weight_string(supp_nation)",
-              ":6 as weight_string(cust_nation)",
-              ":7 as weight_string(l_year)"
+              ":5 as `weight_string(supp_nation)`",
+              ":6 as `weight_string(cust_nation)`",
+              ":7 as `weight_string(l_year)`"
             ],
             "Inputs": [
               {
@@ -579,8 +579,8 @@
                           ":2 as supp_nation",
                           ":3 as l_year",
                           ":4 as o_custkey",
-                          ":5 as weight_string(supp_nation)",
-                          ":6 as weight_string(l_year)"
+                          ":5 as `weight_string(supp_nation)`",
+                          ":6 as `weight_string(l_year)`"
                         ],
                         "Inputs": [
                           {
@@ -598,7 +598,7 @@
                                   ":2 as l_year",
                                   ":3 as o_custkey",
                                   ":4 as l_suppkey",
-                                  ":5 as weight_string(l_year)"
+                                  ":5 as `weight_string(l_year)`"
                                 ],
                                 "Inputs": [
                                   {
@@ -640,9 +640,9 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "count(*) * count(*) as count(*)",
+                                  "count(*) * count(*) as `count(*)`",
                                   ":2 as supp_nation",
-                                  ":3 as weight_string(supp_nation)"
+                                  ":3 as `weight_string(supp_nation)`"
                                 ],
                                 "Inputs": [
                                   {
@@ -692,9 +692,9 @@
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
-                          "count(*) * count(*) as count(*)",
+                          "count(*) * count(*) as `count(*)`",
                           ":2 as cust_nation",
-                          ":3 as weight_string(cust_nation)"
+                          ":3 as `weight_string(cust_nation)`"
                         ],
                         "Inputs": [
                           {
@@ -771,16 +771,16 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum(1) AS sum(case when nation = 'BRAZIL' then volume else 0 end), sum(2) AS sum(volume)",
+            "Aggregates": "sum(1) AS `sum(case when nation = 'BRAZIL' then volume else 0 end)`, sum(2) AS `sum(volume)`",
             "GroupBy": "(0|3)",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
                   ":3 as o_year",
-                  "sum(case when nation = 'BRAZIL' then volume else 0 end) * count(*) as sum(case when nation = 'BRAZIL' then volume else 0 end)",
-                  "sum(volume) * count(*) as sum(volume)",
-                  ":4 as weight_string(o_year)"
+                  "sum(case when nation = 'BRAZIL' then volume else 0 end) * count(*) as `sum(case when nation = 'BRAZIL' then volume else 0 end)`",
+                  "sum(volume) * count(*) as `sum(volume)`",
+                  ":4 as `weight_string(o_year)`"
                 ],
                 "Inputs": [
                   {
@@ -799,7 +799,7 @@
                           {
                             "OperatorType": "Aggregate",
                             "Variant": "Ordered",
-                            "Aggregates": "sum(0) AS sum(case when nation = 'BRAZIL' then volume else 0 end), sum(1) AS sum(volume)",
+                            "Aggregates": "sum(0) AS `sum(case when nation = 'BRAZIL' then volume else 0 end)`, sum(1) AS `sum(volume)`",
                             "GroupBy": "(2|3)",
                             "Inputs": [
                               {
@@ -891,9 +891,9 @@
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "count(*) * count(*) as count(*)",
+                              "count(*) * count(*) as `count(*)`",
                               ":2 as o_year",
-                              ":3 as weight_string(o_year)"
+                              ":3 as `weight_string(o_year)`"
                             ],
                             "Inputs": [
                               {
@@ -907,10 +907,10 @@
                                   {
                                     "OperatorType": "Projection",
                                     "Expressions": [
-                                      "count(*) * count(*) as count(*)",
+                                      "count(*) * count(*) as `count(*)`",
                                       ":2 as o_year",
                                       ":3 as c_nationkey",
-                                      ":4 as weight_string(o_year)"
+                                      ":4 as `weight_string(o_year)`"
                                     ],
                                     "Inputs": [
                                       {
@@ -956,7 +956,7 @@
                                   {
                                     "OperatorType": "Projection",
                                     "Expressions": [
-                                      "count(*) * count(*) as count(*)"
+                                      "count(*) * count(*) as `count(*)`"
                                     ],
                                     "Inputs": [
                                       {
@@ -1044,8 +1044,8 @@
               ":2 as nation",
               ":3 as o_year",
               "sum(amount) * count(*) as sum_profit",
-              ":4 as weight_string(nation)",
-              ":5 as weight_string(o_year)"
+              ":4 as `weight_string(nation)`",
+              ":5 as `weight_string(o_year)`"
             ],
             "Inputs": [
               {
@@ -1213,9 +1213,9 @@
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
-                          "count(*) * count(*) as count(*)",
+                          "count(*) * count(*) as `count(*)`",
                           ":2 as nation",
-                          ":3 as weight_string(nation)"
+                          ":3 as `weight_string(nation)`"
                         ],
                         "Inputs": [
                           {
@@ -1310,13 +1310,13 @@
                       ":7 as c_address",
                       ":5 as c_phone",
                       ":8 as c_comment",
-                      ":9 as weight_string(c_custkey)",
-                      ":10 as weight_string(c_name)",
-                      ":11 as weight_string(c_acctbal)",
-                      ":12 as weight_string(c_phone)",
-                      ":13 as weight_string(n_name)",
-                      ":14 as weight_string(c_address)",
-                      ":15 as weight_string(c_comment)"
+                      ":9 as `weight_string(c_custkey)`",
+                      ":10 as `weight_string(c_name)`",
+                      ":11 as `weight_string(c_acctbal)`",
+                      ":12 as `weight_string(c_phone)`",
+                      ":13 as `weight_string(n_name)`",
+                      ":14 as `weight_string(c_address)`",
+                      ":15 as `weight_string(c_comment)`"
                     ],
                     "Inputs": [
                       {
@@ -1402,7 +1402,7 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "count(*) * count(*) as count(*)",
+                                  "count(*) * count(*) as `count(*)`",
                                   ":2 as c_custkey",
                                   ":3 as c_name",
                                   ":4 as c_acctbal",
@@ -1410,13 +1410,13 @@
                                   ":6 as n_name",
                                   ":7 as c_address",
                                   ":8 as c_comment",
-                                  ":9 as weight_string(c_custkey)",
-                                  ":10 as weight_string(c_name)",
-                                  ":11 as weight_string(c_acctbal)",
-                                  ":12 as weight_string(c_phone)",
-                                  ":13 as weight_string(n_name)",
-                                  ":14 as weight_string(c_address)",
-                                  ":15 as weight_string(c_comment)"
+                                  ":9 as `weight_string(c_custkey)`",
+                                  ":10 as `weight_string(c_name)`",
+                                  ":11 as `weight_string(c_acctbal)`",
+                                  ":12 as `weight_string(c_phone)`",
+                                  ":13 as `weight_string(n_name)`",
+                                  ":14 as `weight_string(c_address)`",
+                                  ":15 as `weight_string(c_comment)`"
                                 ],
                                 "Inputs": [
                                   {
@@ -1497,19 +1497,19 @@
             "InputName": "SubQuery",
             "OperatorType": "Projection",
             "Expressions": [
-              "sum(ps_supplycost * ps_availqty) * 0.00001000000 as sum(ps_supplycost * ps_availqty) * 0.00001000000"
+              "sum(ps_supplycost * ps_availqty) * 0.00001000000 as `sum(ps_supplycost * ps_availqty) * 0.00001000000`"
             ],
             "Inputs": [
               {
                 "OperatorType": "Aggregate",
                 "Variant": "Scalar",
-                "Aggregates": "sum(0) AS sum(ps_supplycost * ps_availqty), constant_aggr(0.00001000000) AS 0.00001000000",
+                "Aggregates": "sum(0) AS `sum(ps_supplycost * ps_availqty)`, constant_aggr(0.00001000000) AS `0.00001000000`",
                 "Inputs": [
                   {
                     "OperatorType": "Projection",
                     "Expressions": [
-                      "sum(ps_supplycost * ps_availqty) * count(*) as sum(ps_supplycost * ps_availqty)",
-                      ":2 as 0.00001000000"
+                      "sum(ps_supplycost * ps_availqty) * count(*) as `sum(ps_supplycost * ps_availqty)`",
+                      ":2 as `0.00001000000`"
                     ],
                     "Inputs": [
                       {
@@ -1523,8 +1523,8 @@
                           {
                             "OperatorType": "Projection",
                             "Expressions": [
-                              "sum(ps_supplycost * ps_availqty) * count(*) as sum(ps_supplycost * ps_availqty)",
-                              ":2 as 0.00001000000",
+                              "sum(ps_supplycost * ps_availqty) * count(*) as `sum(ps_supplycost * ps_availqty)`",
+                              ":2 as `0.00001000000`",
                               ":3 as s_nationkey"
                             ],
                             "Inputs": [
@@ -1600,15 +1600,15 @@
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Ordered",
-                    "Aggregates": "sum(1) AS value",
+                    "Aggregates": "sum(1) AS `value`",
                     "GroupBy": "(0|2)",
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
                           ":2 as ps_partkey",
-                          "sum(ps_supplycost * ps_availqty) * count(*) as value",
-                          ":3 as weight_string(ps_partkey)"
+                          "sum(ps_supplycost * ps_availqty) * count(*) as `value`",
+                          ":3 as `weight_string(ps_partkey)`"
                         ],
                         "Inputs": [
                           {
@@ -1622,10 +1622,10 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "sum(ps_supplycost * ps_availqty) * count(*) as value",
+                                  "sum(ps_supplycost * ps_availqty) * count(*) as `value`",
                                   ":2 as ps_partkey",
                                   ":3 as s_nationkey",
-                                  ":4 as weight_string(ps_partkey)"
+                                  ":4 as `weight_string(ps_partkey)`"
                                 ],
                                 "Inputs": [
                                   {
@@ -1718,7 +1718,7 @@
               ":3 as l_shipmode",
               "sum(case when o_orderpriority = '1-URGENT' or o_orderpriority = '2-HIGH' then 1 else 0 end) * count(*) as high_line_count",
               "sum(case when o_orderpriority != '1-URGENT' and o_orderpriority != '2-HIGH' then 1 else 0 end) * count(*) as low_line_count",
-              ":4 as weight_string(l_shipmode)"
+              ":4 as `weight_string(l_shipmode)`"
             ],
             "Inputs": [
               {
@@ -1818,21 +1818,21 @@
                 "OperatorType": "Projection",
                 "Expressions": [
                   ":1 as c_count",
-                  "1 as 1"
+                  "1 as `1`"
                 ],
                 "Inputs": [
                   {
                     "OperatorType": "Aggregate",
                     "Variant": "Ordered",
-                    "Aggregates": "sum_count(1) AS count(o_orderkey)",
+                    "Aggregates": "sum_count(1) AS `count(o_orderkey)`",
                     "GroupBy": "(0|2)",
                     "Inputs": [
                       {
                         "OperatorType": "Projection",
                         "Expressions": [
                           ":2 as c_custkey",
-                          "count(*) * count(o_orderkey) as count(o_orderkey)",
-                          ":3 as weight_string(c_custkey)"
+                          "count(*) * count(o_orderkey) as `count(o_orderkey)`",
+                          ":3 as `weight_string(c_custkey)`"
                         ],
                         "Inputs": [
                           {
@@ -1905,14 +1905,14 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "constant_aggr(100.00) AS 100.00, sum(1) AS sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end), sum(2) AS sum(l_extendedprice * (1 - l_discount))",
+            "Aggregates": "constant_aggr(100.00) AS `100.00`, sum(1) AS `sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end)`, sum(2) AS `sum(l_extendedprice * (1 - l_discount))`",
             "Inputs": [
               {
                 "OperatorType": "Projection",
                 "Expressions": [
-                  "100.00 as 100.00",
-                  ":0 as case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end",
-                  ":1 as l_extendedprice * (1 - l_discount)"
+                  "100.00 as `100.00`",
+                  ":0 as `case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end`",
+                  ":1 as `l_extendedprice * (1 - l_discount)`"
                 ],
                 "Inputs": [
                   {
@@ -1981,7 +1981,7 @@
             "InputName": "SubQuery",
             "OperatorType": "Aggregate",
             "Variant": "Scalar",
-            "Aggregates": "max(0|1) AS max(total_revenue)",
+            "Aggregates": "max(0|1) AS `max(total_revenue)`",
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -2129,7 +2129,7 @@
           {
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
-            "Aggregates": "sum(5) AS sum(l_quantity)",
+            "Aggregates": "sum(5) AS `sum(l_quantity)`",
             "GroupBy": "(4|6), (3|7), (0|8), (1|9), (2|10)",
             "ResultColumns": 6,
             "Inputs": [
@@ -2161,12 +2161,12 @@
                       ":4 as o_orderkey",
                       ":5 as o_orderdate",
                       ":6 as o_totalprice",
-                      "sum(l_quantity) * count(*) as sum(l_quantity)",
-                      ":7 as weight_string(o_totalprice)",
-                      ":8 as weight_string(o_orderdate)",
-                      ":9 as weight_string(c_name)",
-                      ":10 as weight_string(c_custkey)",
-                      ":11 as weight_string(o_orderkey)"
+                      "sum(l_quantity) * count(*) as `sum(l_quantity)`",
+                      ":7 as `weight_string(o_totalprice)`",
+                      ":8 as `weight_string(o_orderdate)`",
+                      ":9 as `weight_string(c_name)`",
+                      ":10 as `weight_string(c_custkey)`",
+                      ":11 as `weight_string(o_orderkey)`"
                     ],
                     "Inputs": [
                       {
@@ -2199,17 +2199,17 @@
                                   {
                                     "OperatorType": "Projection",
                                     "Expressions": [
-                                      "count(*) * count(*) as count(*)",
+                                      "count(*) * count(*) as `count(*)`",
                                       ":2 as c_name",
                                       ":3 as c_custkey",
                                       ":4 as o_orderkey",
                                       ":5 as o_orderdate",
                                       ":6 as o_totalprice",
-                                      ":7 as weight_string(o_totalprice)",
-                                      ":8 as weight_string(o_orderdate)",
-                                      ":9 as weight_string(c_name)",
-                                      ":10 as weight_string(c_custkey)",
-                                      ":11 as weight_string(o_orderkey)"
+                                      ":7 as `weight_string(o_totalprice)`",
+                                      ":8 as `weight_string(o_orderdate)`",
+                                      ":9 as `weight_string(c_name)`",
+                                      ":10 as `weight_string(c_custkey)`",
+                                      ":11 as `weight_string(o_orderkey)`"
                                     ],
                                     "Inputs": [
                                       {
@@ -2367,7 +2367,7 @@
                     "Expressions": [
                       ":2 as s_name",
                       "count(*) * count(*) as numwait",
-                      ":3 as weight_string(s_name)"
+                      ":3 as `weight_string(s_name)`"
                     ],
                     "Inputs": [
                       {
@@ -2386,7 +2386,7 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "count(*) * count(*) as count(*)",
+                                  "count(*) * count(*) as `count(*)`",
                                   ":2 as l_suppkey"
                                 ],
                                 "Inputs": [
@@ -2430,9 +2430,9 @@
                               {
                                 "OperatorType": "Projection",
                                 "Expressions": [
-                                  "count(*) * count(*) as count(*)",
+                                  "count(*) * count(*) as `count(*)`",
                                   ":2 as s_name",
-                                  ":3 as weight_string(s_name)"
+                                  ":3 as `weight_string(s_name)`"
                                 ],
                                 "Inputs": [
                                   {
