@@ -753,6 +753,60 @@ func TestWaitTimeRecordedOnTimeout(t *testing.T) {
 	require.Greater(t, p.Metrics.WaitTime(), time.Duration(0), "WaitTime should reflect the timed-out wait")
 }
 
+func TestWaitForConnHonorsCtxOnRetryPath(t *testing.T) {
+	// waitForConn's shouldRetry path removes the waiter and returns (nil,
+	// nil) so the outer get loop can re-evaluate state changes that
+	// happened during enqueue. If ctx has been canceled in the meantime,
+	// the retry path would otherwise pop a conn and hand it to a caller
+	// whose ctx is dead — the get loop doesn't re-check ctx per iteration.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Replace onWait with a gate: hold the waiter just before push so we
+	// can stage the race deterministically — recycle a conn (so the
+	// stack is non-empty, making shouldRetry fire) and cancel ctx before
+	// the waiter actually enqueues.
+	blocked := make(chan struct{})
+	unblock := make(chan struct{})
+	p.wait.onWait = func() {
+		close(blocked)
+		<-unblock
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	type result struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		c, err := p.Get(ctx, nil)
+		done <- result{c, err}
+	}()
+
+	select {
+	case <-blocked:
+	case <-time.After(time.Second):
+		require.Fail(t, "waiter never reached onWait")
+	}
+
+	held.Recycle() // populates the clean stack so shouldRetryWait fires
+	cancel()
+	close(unblock)
+
+	res := <-done
+	if res.conn != nil {
+		res.conn.Recycle()
+	}
+	require.ErrorIs(t, res.err, ErrTimeout, "Get must honor canceled ctx via the retry path")
+	require.Nil(t, res.conn)
+}
+
 func TestReopenRetiresStaleConnections(t *testing.T) {
 	// reopen() is invoked when the pool needs to retire all open connections
 	// (e.g., after a DNS change). A borrowed conn outlives reopen by definition;

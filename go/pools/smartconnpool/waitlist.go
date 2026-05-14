@@ -105,6 +105,13 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 		wl.mu.Unlock()
 
 		if removed {
+			// The retry signal asks the outer get loop to re-evaluate; that
+			// loop doesn't re-check ctx, so if it was canceled while we were
+			// enqueuing we'd otherwise let the retry hand a conn to a dead
+			// caller. Surface the cancellation here.
+			if err := ctx.Err(); err != nil {
+				return nil, context.Cause(ctx)
+			}
 			return nil, nil
 		}
 	}
@@ -175,6 +182,13 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 			default:
 			}
 			return nil, nil
+		}
+		// Go's select is pseudo-random when multiple cases are ready, so we
+		// can be picked here even if ctx has already fired. Re-check before
+		// surfacing the conn so a canceled caller never receives one.
+		if err := ctx.Err(); err != nil {
+			conn.pool.discardConn(conn)
+			return nil, context.Cause(ctx)
 		}
 		select {
 		case <-closeChan:
