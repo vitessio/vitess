@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -273,14 +272,8 @@ func TestShrinking(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 	}
-	done := make(chan bool)
-	go func() {
-		defer func() { done <- true }()
-		err := p.SetCapacity(ctx, 3)
-		if !assert.NoError(t, err) {
-			return
-		}
-	}()
+	err := p.SetCapacity(ctx, 3)
+	require.NoError(t, err)
 	expected := map[string]any{
 		"Capacity":          3,
 		"Available":         -1, // negative because we've borrowed past our capacity
@@ -292,20 +285,14 @@ func TestShrinking(t *testing.T) {
 		"IdleClosed":        0,
 		"MaxLifetimeClosed": 0,
 	}
-	for i := range 10 {
-		time.Sleep(10 * time.Millisecond)
-		stats := p.StatsJSON()
-		if reflect.DeepEqual(expected, stats) {
-			break
-		}
-		if i == 9 {
-			assert.Equal(t, expected, stats)
-		}
-	}
-	// There are already 2 resources available in the pool.
-	// So, returning one should be enough for SetCapacity to complete.
+	assert.Equal(t, expected, p.StatsJSON())
+
+	// Returning one borrowed conn gets the pool back under capacity by closing
+	// that conn instead of pushing it back to the stack.
 	p.put(resources[3])
-	<-done
+	require.EqualValues(t, 3, p.Active())
+	require.EqualValues(t, 3, state.open.Load())
+
 	// Return the rest of the resources
 	for i := range 3 {
 		p.put(resources[i])
@@ -327,7 +314,6 @@ func TestShrinking(t *testing.T) {
 
 	// Ensure no deadlock if SetCapacity is called after we start
 	// waiting for a resource
-	var err error
 	for i := range 3 {
 		var r *Pooled[*TestConn]
 		if i%2 == 0 {
@@ -339,6 +325,7 @@ func TestShrinking(t *testing.T) {
 		resources[i] = r
 	}
 	// This will wait because pool is empty
+	done := make(chan bool)
 	go func() {
 		defer func() { done <- true }()
 		r, err := p.Get(ctx, nil)
@@ -348,21 +335,18 @@ func TestShrinking(t *testing.T) {
 		p.put(r)
 	}()
 
-	// This will also wait
-	go func() {
-		defer func() { done <- true }()
-		err := p.SetCapacity(ctx, 2)
-		if !assert.NoError(t, err) {
-			return
-		}
-	}()
-	time.Sleep(10 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, time.Second, time.Millisecond)
 
-	// This should not hang
+	err = p.SetCapacity(ctx, 2)
+	require.NoError(t, err)
+
+	// The first return closes because active is over capacity. A later return
+	// can satisfy the waiter once the pool has converged back to capacity.
 	for i := range 3 {
 		p.put(resources[i])
 	}
-	<-done
 	<-done
 	assert.EqualValues(t, 2, p.Capacity())
 	assert.EqualValues(t, 2, p.Available())
@@ -393,23 +377,23 @@ func TestShrinking(t *testing.T) {
 		}
 		p.put(r)
 	}()
-	time.Sleep(10 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, time.Second, time.Millisecond)
 
-	// This will wait till we Put
+	setCapDone := make(chan struct{}, 2)
 	go func() {
 		err := p.SetCapacity(ctx, 2)
-		if !assert.NoError(t, err) {
-			return
-		}
+		assert.NoError(t, err)
+		setCapDone <- struct{}{}
 	}()
-	time.Sleep(10 * time.Millisecond)
 	go func() {
 		err := p.SetCapacity(ctx, 4)
-		if !assert.NoError(t, err) {
-			return
-		}
+		assert.NoError(t, err)
+		setCapDone <- struct{}{}
 	}()
-	time.Sleep(10 * time.Millisecond)
+	<-setCapDone
+	<-setCapDone
 
 	// This should not hang
 	for i := range 3 {
@@ -421,8 +405,9 @@ func TestShrinking(t *testing.T) {
 		_ = p.SetCapacity(ctx, -1)
 	})
 
-	assert.EqualValues(t, 4, p.Capacity())
-	assert.EqualValues(t, 4, p.Available())
+	capacity := p.Capacity()
+	assert.Contains(t, []int64{2, 4}, capacity)
+	assert.EqualValues(t, capacity, p.Available())
 }
 
 func TestClosing(t *testing.T) {
@@ -588,7 +573,7 @@ func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
 func TestSetCapacityOnUnopenedPoolArmsCapacity(t *testing.T) {
 	// SetCapacity is allowed before Open so callers can pre-configure the
 	// pool. The value is just stored; Get still refuses until the pool is
-	// opened (the close pointer is what gates lifecycle, not capacity).
+	// opened (the lifecycle pointer is what gates lifecycle, not capacity).
 	p := NewPool(&Config[*TestConn]{Capacity: 5})
 
 	require.NoError(t, p.SetCapacity(t.Context(), 1))
@@ -601,7 +586,7 @@ func TestSetCapacityOnUnopenedPoolArmsCapacity(t *testing.T) {
 
 func TestTryReturnConnClosesOnClosedPool(t *testing.T) {
 	// put() guards against Recycles that arrive after Close at the top,
-	// but it only checks pool.close once. A Recycle that passes the check
+	// but it only checks the pool lifecycle once. A Recycle that passes the check
 	// then proceeds through tryReturnConn can race a CloseWithContext that
 	// fires before the push lands — the conn would otherwise end up in an
 	// idle stack of a closed pool (especially when SetCapacity has armed
@@ -616,7 +601,7 @@ func TestTryReturnConnClosesOnClosedPool(t *testing.T) {
 	held, err := p.Get(t.Context(), nil)
 	require.NoError(t, err)
 
-	// Close with a tight ctx so the close returns despite the held conn.
+	// Close returns without waiting for the held conn.
 	closeCtx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	_ = p.CloseWithContext(closeCtx)
@@ -630,7 +615,7 @@ func TestTryReturnConnClosesOnClosedPool(t *testing.T) {
 
 	// Mimic put()'s borrowed-- and then enter tryReturnConn directly,
 	// matching the state of a racing Recycle that passed put's close
-	// check but reached tryReturnConn after close cleared pool.close.
+	// check but reached tryReturnConn after close cleared the pool lifecycle.
 	p.borrowed.Add(-1)
 	p.tryReturnConn(held)
 
@@ -653,7 +638,7 @@ func TestRecycleOnClosedPoolClosesConn(t *testing.T) {
 	held, err := p.Get(t.Context(), nil)
 	require.NoError(t, err)
 
-	// Close with a tight ctx so the close returns despite the held conn.
+	// Close returns without waiting for the held conn.
 	closeCtx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	_ = p.CloseWithContext(closeCtx)
@@ -675,14 +660,10 @@ func TestRecycleOnClosedPoolClosesConn(t *testing.T) {
 
 func TestSetCapacityOnClosedPoolDoesNotDrain(t *testing.T) {
 	// SetCapacity on a closed pool must update the capacity field without
-	// entering setCapacity's drain loop. If a prior CloseWithContext timed
-	// out with conns still borrowed, the drain would otherwise block on
-	// those conns — but the pool is no longer serving connections, so
-	// draining is lifecycle teardown's job, not capacity configuration's.
-
-	old := PoolCloseTimeout
-	PoolCloseTimeout = 50 * time.Millisecond
-	t.Cleanup(func() { PoolCloseTimeout = old })
+	// entering setCapacity's drain loop. If a prior Close returned with
+	// conns still borrowed, the drain would otherwise block on those conns —
+	// but the pool is no longer serving connections, so draining is lifecycle
+	// teardown's job, not capacity configuration's.
 
 	var state TestState
 	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
@@ -694,12 +675,11 @@ func TestSetCapacityOnClosedPoolDoesNotDrain(t *testing.T) {
 		held = append(held, c)
 	}
 
-	// Close with a short timeout; the held conns keep active > 0 so close's
-	// drain times out. The pool ends up logically closed but with active
-	// slots still booked.
+	// Close does not wait for borrowed conns. The pool ends up logically
+	// closed but with active slots still booked.
 	p.Close()
 	require.False(t, p.IsOpen())
-	require.EqualValues(t, 3, p.Active(), "held conns still count as active after timed-out close")
+	require.EqualValues(t, 3, p.Active(), "held conns still count as active after close")
 
 	// SetCapacity(1) with active=3 would otherwise enter setCapacity's drain
 	// loop and block until the held conns return (or the ctx fires). On a
@@ -726,7 +706,7 @@ func TestSetCapacityOnClosedPoolDoesNotDrain(t *testing.T) {
 
 func TestSetCapacityAfterCloseArmsCapacity(t *testing.T) {
 	// SetCapacity after Close is also allowed: the capacity field is config,
-	// not lifecycle. Gets still return ErrConnPoolClosed because the close
+	// not lifecycle. Gets still return ErrConnPoolClosed because the lifecycle
 	// pointer is nil.
 	var state TestState
 	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
@@ -759,12 +739,9 @@ func TestCloseAfterSetCapacityZeroStopsPool(t *testing.T) {
 }
 
 func TestCloseWithExpiredCtxStillClosesIdleConns(t *testing.T) {
-	// CloseWithContext calls setCapacity(ctx, 0) to drain the pool. If ctx
-	// is already expired, the drain loop's ctx.Err() check used to bail out
-	// before even popping idle conns from the stacks, leaving them
-	// physically open. Closing those idle conns is unconditional work and
-	// shouldn't depend on the caller's deadline — only waiting for borrowed
-	// conns to return needs to honor ctx.
+	// CloseWithContext must drain idle stacks even when ctx is already
+	// expired. Closing idle conns is unconditional work and Close no longer
+	// waits for borrowed conns.
 	var state TestState
 	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
 
@@ -827,14 +804,7 @@ func TestSetCapacityZeroWakesExistingWaiters(t *testing.T) {
 		return p.wait.waiting() == 1
 	}, time.Second, time.Millisecond)
 
-	// SetCapacity(0) blocks until active drains; the held conn keeps it
-	// blocked. We only care that the waiter wakes up — release the held conn
-	// afterwards so SetCapacity can finish.
-	setCapDone := make(chan struct{})
-	go func() {
-		defer close(setCapDone)
-		_ = p.SetCapacity(t.Context(), 0)
-	}()
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
 
 	select {
 	case err := <-waiterErr:
@@ -845,7 +815,7 @@ func TestSetCapacityZeroWakesExistingWaiters(t *testing.T) {
 	}
 
 	held.Recycle()
-	<-setCapDone
+	require.EqualValues(t, 0, p.Active(), "returned conn should close once capacity is zero")
 }
 
 func TestSetCapacityResumesAfterZero(t *testing.T) {
@@ -893,8 +863,7 @@ func TestWaitTimeRecordedOnTimeout(t *testing.T) {
 	held, err := p.Get(t.Context(), nil)
 	require.NoError(t, err)
 
-	// Cleanups run LIFO: Recycle first, then Close — keeps Close from waiting
-	// the full PoolCloseTimeout for the held conn.
+	// Cleanups run LIFO: Recycle first, then Close.
 	t.Cleanup(p.Close)
 	t.Cleanup(held.Recycle)
 
@@ -996,11 +965,7 @@ func TestReopenRetiresStaleConnections(t *testing.T) {
 func TestReopenViaCloseAndOpenRetiresStaleConnections(t *testing.T) {
 	// Same generation invariant as TestReopenRetiresStaleConnections, but the
 	// reset happens via Close+Open instead of reopen(). A conn that survived
-	// a timed-out Close must not return to the re-opened pool.
-
-	old := PoolCloseTimeout
-	PoolCloseTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { PoolCloseTimeout = old })
+	// Close must not return to the re-opened pool.
 
 	var state TestState
 	p := NewPool(&Config[*TestConn]{
@@ -1011,8 +976,8 @@ func TestReopenViaCloseAndOpenRetiresStaleConnections(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, state.open.Load())
 
-	// Close times out because the held conn isn't returned; it survives in
-	// the user's hands while the pool transitions through closed back to open.
+	// The held conn survives in the user's hands while the pool transitions
+	// through closed back to open.
 	p.Close()
 	p.Open(newConnector(&state), nil)
 	t.Cleanup(p.Close)
@@ -1254,22 +1219,13 @@ func TestReopenDoesNotWakeWaiters(t *testing.T) {
 	}
 }
 
-func TestSetCapacityUpdatesIdleCountBeforeDraining(t *testing.T) {
-	// setIdleCount must run synchronously with the capacity Swap, not as a
-	// deferred trailer that fires only when setCapacity returns. Otherwise a
-	// borrowed conn returning during the drain loop sees the OLD idleCount in
-	// closeOnIdleLimitReached, gets pushed back to the stack instead of being
-	// closed, and — if drain times out — strands there with the pre-reopen
-	// generation. A later Get's fast-path pop then hands a stale-gen conn to
-	// the caller.
-
+func TestSetCapacityZeroClosesBorrowedConnsOnReturn(t *testing.T) {
 	var state TestState
 	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
 	t.Cleanup(p.Close)
 
 	require.EqualValues(t, 3, p.IdleCount())
 
-	// Hold every conn so SetCapacity(0) blocks in its drain loop.
 	var held []*Pooled[*TestConn]
 	for range 3 {
 		c, err := p.Get(t.Context(), nil)
@@ -1277,31 +1233,16 @@ func TestSetCapacityUpdatesIdleCountBeforeDraining(t *testing.T) {
 		held = append(held, c)
 	}
 
-	setCapacityDone := make(chan struct{})
-	go func() {
-		defer close(setCapacityDone)
-		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-		defer cancel()
-		_ = p.SetCapacity(ctx, 0)
-	}()
-
-	// Wait until SetCapacity has swapped capacity to 0 (drain phase started).
-	require.Eventually(t, func() bool {
-		return p.Capacity() == 0
-	}, time.Second, time.Millisecond)
-
-	// idleCount must already reflect the new capacity while SetCapacity is
-	// still in its drain loop. The held conns keep SetCapacity blocked, so
-	// any non-synchronous setIdleCount would still observe the old value.
-	require.Eventually(t, func() bool {
-		return p.IdleCount() == 0
-	}, time.Second, time.Millisecond,
-		"idleCount must be updated synchronously with capacity; otherwise a returning conn during the drain can be pushed back to the stack")
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+	require.EqualValues(t, 0, p.Capacity())
+	require.EqualValues(t, 0, p.IdleCount())
+	require.EqualValues(t, 3, p.Active(), "borrowed conns remain active until returned")
 
 	for _, c := range held {
 		c.Recycle()
 	}
-	<-setCapacityDone
+	require.EqualValues(t, 0, p.Active())
+	require.EqualValues(t, 0, state.open.Load())
 }
 
 func TestUserClosing(t *testing.T) {
@@ -1339,9 +1280,13 @@ func TestUserClosing(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.Fail(t, "Pool did not shutdown after 5s")
 	case err := <-ch:
-		require.Error(t, err)
-		t.Logf("Shutdown error: %v", err)
+		require.NoError(t, err)
 	}
+
+	require.EqualValues(t, 1, p.Active(), "borrowed conn should outlive Close until recycled")
+	resources[4].Recycle()
+	require.EqualValues(t, 0, p.Active())
+	require.EqualValues(t, 0, state.open.Load())
 }
 
 func TestConnReopen(t *testing.T) {
@@ -1855,9 +1800,7 @@ func TestWaiterRetriesWhenCapacityIncreases(t *testing.T) {
 		default:
 		}
 
-		closeCtx, closeCancel := context.WithTimeout(ctx, PoolCloseTimeout)
-		defer closeCancel()
-		require.NoError(t, p.CloseWithContext(closeCtx))
+		require.NoError(t, p.CloseWithContext(t.Context()))
 	}()
 
 	require.Eventually(t, func() bool {
@@ -1896,8 +1839,9 @@ func TestGetRetriesWhenConnectionReturnedBeforeWaiterEnqueues(t *testing.T) {
 	p.capacity.Store(1)
 	p.setIdleCount()
 
-	closeChan := make(chan struct{})
-	p.close.Store(&closeChan)
+	lifecycleCtx, cancelLifecycle := context.WithCancel(ctx)
+	defer cancelLifecycle()
+	p.lifecycle.Store(&lifecycleState{ctx: lifecycleCtx, cancel: cancelLifecycle})
 
 	var (
 		conn   *Pooled[*TestConn]
@@ -1920,9 +1864,7 @@ func TestGetRetriesWhenConnectionReturnedBeforeWaiterEnqueues(t *testing.T) {
 			result.conn.Recycle()
 		}
 
-		closeCtx, cancel := context.WithTimeout(ctx, PoolCloseTimeout)
-		defer cancel()
-		require.NoError(t, p.CloseWithContext(closeCtx))
+		require.NoError(t, p.CloseWithContext(t.Context()))
 	}()
 
 	var err error
@@ -1994,8 +1936,9 @@ func TestGetRetriesWhenConnectionReturnedAfterWaiterEnqueues(t *testing.T) {
 	p.capacity.Store(1)
 	p.setIdleCount()
 
-	closeChan := make(chan struct{})
-	p.close.Store(&closeChan)
+	lifecycleCtx, cancelLifecycle := context.WithCancel(ctx)
+	defer cancelLifecycle()
+	p.lifecycle.Store(&lifecycleState{ctx: lifecycleCtx, cancel: cancelLifecycle})
 
 	var result struct {
 		conn *Pooled[*TestConn]
@@ -2013,9 +1956,7 @@ func TestGetRetriesWhenConnectionReturnedAfterWaiterEnqueues(t *testing.T) {
 			result.conn.Recycle()
 		}
 
-		closeCtx, cancelClose := context.WithTimeout(ctx, PoolCloseTimeout)
-		defer cancelClose()
-		require.NoError(t, p.CloseWithContext(closeCtx))
+		require.NoError(t, p.CloseWithContext(t.Context()))
 	}()
 
 	conn, err := p.Get(ctx, nil)
