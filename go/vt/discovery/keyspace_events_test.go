@@ -786,21 +786,35 @@ func TestKeyspaceEventWatcherMissingKeyspaceCache(t *testing.T) {
 // keyspace exists in localCell when newKeyspaceState registers onSrvVSchema,
 // then later disappears. onSrvKeyspace marks the state deleted and returns
 // false (reaping itself), but onSrvVSchema must also return false on its next
-// invocation. Otherwise the resilient SrvVSchema watcher keeps the closure
+// invocation — for every payload shape, including the nil "server shutting
+// down" case. Otherwise the resilient SrvVSchema watcher keeps the closure
 // (and the orphan keyspaceState it captures) in its listeners slice forever
 // and re-runs the callback's work on every SrvVSchema update.
 func TestOnSrvVSchemaUnregistersAfterDelete(t *testing.T) {
-	kss := &keyspaceState{
-		keyspace: "ks1",
-		shards:   make(map[string]*shardState),
+	cases := []struct {
+		name string
+		vs   *vschemapb.SrvVSchema
+		err  error
+	}{
+		{"non-nil payload", &vschemapb.SrvVSchema{}, nil},
+		{"nil payload (server shutdown)", nil, nil},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kss := &keyspaceState{
+				keyspace: "ks1",
+				shards:   make(map[string]*shardState),
+			}
 
-	// Simulate the async deletion: SrvKeyspace returns NoNode for localCell.
-	require.False(t, kss.onSrvKeyspace(nil, topo.NewError(topo.NoNode, "ks1")),
-		"onSrvKeyspace must return false on NoNode so the SrvKeyspace watcher reaps it")
-	require.True(t, kss.isDeleted())
+			// Simulate the async deletion: SrvKeyspace returns NoNode for localCell.
+			require.False(t, kss.onSrvKeyspace(nil, topo.NewError(topo.NoNode, "ks1")),
+				"onSrvKeyspace must return false on NoNode so the SrvKeyspace watcher reaps it")
+			require.True(t, kss.isDeleted())
 
-	// The next SrvVSchema update must reap the orphan listener.
-	require.False(t, kss.onSrvVSchema(&vschemapb.SrvVSchema{}, nil),
-		"onSrvVSchema must return false once the keyspace is deleted, otherwise the listener pins an orphan keyspaceState")
+			// The next SrvVSchema update must reap the orphan listener
+			// regardless of payload shape.
+			require.False(t, kss.onSrvVSchema(tc.vs, tc.err),
+				"onSrvVSchema must return false once the keyspace is deleted, otherwise the listener pins an orphan keyspaceState")
+		})
+	}
 }

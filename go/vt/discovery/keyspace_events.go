@@ -639,25 +639,30 @@ func (kss *keyspaceState) isServing() bool {
 // In addition, the traffic switcher updates SrvVSchema when the DeniedTables attributes in a Shard
 // record is modified.
 func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+	// If onSrvKeyspace has already marked this keyspace deleted (NoNode in
+	// localCell), unregister this listener too — including on nil-payload
+	// updates from a server shutdown. onSrvVSchema otherwise always returns
+	// true, so the resilient SrvVSchema watcher would keep the closure —
+	// and the orphan keyspaceState it captures — in its listeners slice
+	// forever and re-run this callback's work on every update.
+	if kss.deleted {
+		return false
+	}
 	// The vschema can be nil if the server is currently shutting down.
 	if vs == nil {
 		return true
 	}
-
-	kss.mu.Lock()
-	defer kss.mu.Unlock()
-	// If onSrvKeyspace has already marked this keyspace deleted (NoNode in
-	// localCell), unregister this listener too. onSrvVSchema otherwise always
-	// returns true, so the resilient SrvVSchema watcher would keep the
-	// closure — and the orphan keyspaceState it captures — alive forever and
-	// re-run this callback's work on every SrvVSchema update.
-	if kss.deleted {
-		return false
-	}
-	var kerr error
-	if kss.moveTablesState, kerr = kss.getMoveTablesStatus(vs); err != nil {
+	// Use a local for the new state — getMoveTablesStatus returns (nil, err)
+	// on failure, and assigning directly into kss.moveTablesState would
+	// silently clobber the previously-tracked state on a transient topo blip.
+	newState, kerr := kss.getMoveTablesStatus(vs)
+	if kerr != nil {
 		log.Error(fmt.Sprintf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr))
+		return true
 	}
+	kss.moveTablesState = newState
 	if kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesNone {
 		// Mark the keyspace as inconsistent. ensureConsistentLocked() checks if the workflow is
 		// switched, and if so, it will send an event to the buffering subscribers to indicate that
