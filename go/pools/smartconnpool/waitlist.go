@@ -183,13 +183,6 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 			}
 			return nil, nil
 		}
-		// Go's select is pseudo-random when multiple cases are ready, so we
-		// can be picked here even if ctx has already fired. Re-check before
-		// surfacing the conn so a canceled caller never receives one.
-		if err := ctx.Err(); err != nil {
-			conn.pool.discardConn(conn)
-			return nil, context.Cause(ctx)
-		}
 		select {
 		case <-closeChan:
 			conn.pool.discardConn(conn)
