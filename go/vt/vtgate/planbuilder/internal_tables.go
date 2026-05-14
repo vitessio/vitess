@@ -162,19 +162,42 @@ func rejectInternalTableDDL(stmt sqlparser.DDLStatement) error {
 		}
 	}
 
-	alterTable, ok := stmt.(*sqlparser.AlterTable)
-	if !ok {
+	switch stmt := stmt.(type) {
+	case *sqlparser.AlterTable:
+		return rejectInternalTableExchangePartition(stmt)
+	case *sqlparser.CreateProcedure:
+		return rejectInternalTableCreateProcedure(stmt)
+	default:
 		return nil
 	}
+}
 
-	// AffectedTables does not include the WITH TABLE target, but EXCHANGE
-	// PARTITION swaps data with that table.
+// rejectInternalTableExchangePartition rejects ALTER TABLE ... EXCHANGE PARTITION
+// when the exchanged table is a Vitess internal operation table.
+func rejectInternalTableExchangePartition(alterTable *sqlparser.AlterTable) error {
 	partitionSpec := alterTable.PartitionSpec
 	if partitionSpec == nil || partitionSpec.Action != sqlparser.ExchangeAction {
 		return nil
 	}
 
 	return rejectInternalTableName(partitionSpec.TableName)
+}
+
+// rejectInternalTableCreateProcedure returns an error when a stored procedure
+// body contains DML that would write to a Vitess internal operation table.
+func rejectInternalTableCreateProcedure(stmt *sqlparser.CreateProcedure) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Insert:
+			return false, rejectInternalTableDML(node)
+		case *sqlparser.Update:
+			return false, rejectInternalTableDML(node)
+		case *sqlparser.Delete:
+			return false, rejectInternalTableDML(node)
+		default:
+			return true, nil
+		}
+	}, stmt.Body)
 }
 
 // rejectInternalTableName returns an error for a Vitess internal operation
