@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -429,6 +430,91 @@ func TestSetReplicationSource(t *testing.T) {
 	assert.ErrorContains(t, err, `SOURCE_HOST = 'test_host'`)
 	assert.ErrorContains(t, err, `SOURCE_PORT = 2`)
 	assert.ErrorContains(t, err, `CHANGE REPLICATION SOURCE TO`)
+}
+
+func setReplicationRetryCountFlagForTest(t *testing.T, value string) {
+	t.Helper()
+
+	oldRetryCount := replicationRetryCount
+	oldRetryCountFlag := replicationRetryCountFlag
+
+	fs := pflag.NewFlagSet("test-mysqlctl-flags", pflag.ContinueOnError)
+	registerMySQLDFlags(fs)
+	require.NoError(t, fs.Set("replication-retry-count", value))
+
+	t.Cleanup(func() {
+		replicationRetryCount = oldRetryCount
+		replicationRetryCountFlag = oldRetryCountFlag
+	})
+}
+
+func TestSetReplicationSourceRetryCount(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
+	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
+
+	setReplicationRetryCountFlagForTest(t, "12")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+
+	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, 0, true, true)
+	assert.ErrorContains(t, err, `SOURCE_RETRY_COUNT = 12`)
+}
+
+func TestSetReplicationSourceRetryCountZero(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("RESET MASTER", &sqltypes.Result{})
+	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
+	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
+
+	setReplicationRetryCountFlagForTest(t, "0")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+
+	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, 0, true, true)
+	assert.ErrorContains(t, err, `SOURCE_RETRY_COUNT = 0`)
+}
+
+func TestSetReplicationSourceRetryCountNegative(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+	setReplicationRetryCountFlagForTest(t, "-1")
+
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	ctx := context.Background()
+
+	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, 0, true, true)
+	assert.ErrorContains(t, err, "--replication-retry-count must be >= 0, got -1")
 }
 
 func TestResetReplication(t *testing.T) {
