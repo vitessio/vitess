@@ -38,7 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -986,26 +986,20 @@ func (td *tableDiffer) getSourcePKCols() error {
 	sourceTable := sourceSchema.TableDefinitions[0]
 	if len(sourceTable.PrimaryKeyColumns) == 0 {
 		// We use the columns from a PKE if there is one.
-		executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-			res, err := td.wd.ct.tmc.ExecuteFetchAsApp(ctx, sourceTablet.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
-				Query:   []byte(query),
-				MaxRows: uint64(maxrows),
-			})
+		if sourceTable.Schema != "" {
+			senv := schemadiff.NewEnvWithDefaults(td.wd.ct.vde.env)
+			createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, sourceTable.Schema)
 			if err != nil {
-				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
-					topoproto.TabletAliasString(sourceTablet.Alias), td.table.Name)
+				return vterrors.Wrapf(err, "failed to parse CREATE TABLE schema for table %s from source tablet %s",
+					td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
 			}
-			return sqltypes.Proto3ToResult(res), nil
+			pkeCols, _ := schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
+			if len(pkeCols) > 0 {
+				log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid))
+				sourceTable.PrimaryKeyColumns = pkeCols
+			}
 		}
-		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
-		if err != nil {
-			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
-		}
-		if len(pkeCols) > 0 {
-			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid))
-			sourceTable.PrimaryKeyColumns = pkeCols
-		} else {
+		if len(sourceTable.PrimaryKeyColumns) == 0 {
 			// We use every column together as a substitute PK.
 			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", td.table.Name, td.wd.ct.uuid))
 			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)

@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -162,6 +163,33 @@ func expectUpdateCount(t *testing.T, wantCount int64) int64 {
 		time.Sleep(10 * time.Millisecond)
 	}
 	panic("unreachable")
+}
+
+func TestMapPKEquivalentColsUsesLegacyPKESelection(t *testing.T) {
+	testDB := fakesqldb.New(t)
+	defer testDB.Close()
+
+	dbName := engine.env.Config().DB.DBName
+	query := "SHOW CREATE TABLE " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID("t1")
+	showCreateResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Table|Create Table", "varchar|varchar"),
+		"t1|CREATE TABLE `t1` (\n"+
+			"  `bigint_id` bigint NOT NULL,\n"+
+			"  `tinyint_col` tinyint NOT NULL,\n"+
+			"  PRIMARY KEY (`bigint_id`),\n"+
+			"  UNIQUE KEY `tiny_uid` (`tinyint_col`)\n"+
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+	)
+	testDB.AddQuery(query, showCreateResult)
+
+	table := &binlogdatapb.MinimalTable{
+		Name:   "t1",
+		Fields: sqltypes.MakeTestFields("bigint_id|tinyint_col", "int64|int64"),
+	}
+	pkeCols, err := engine.mapPKEquivalentCols(context.Background(), dbconfigs.New(testDB.ConnParams()), table)
+	require.NoError(t, err)
+	require.Equal(t, []int{1}, pkeCols)
+	require.Equal(t, "tiny_uid", table.PKIndexName)
 }
 
 // TestVStreamerWaitForMySQL tests the wait for MySQL to catch-up
