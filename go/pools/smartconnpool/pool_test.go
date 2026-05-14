@@ -684,6 +684,36 @@ func TestCloseAfterSetCapacityZeroStopsPool(t *testing.T) {
 	require.False(t, p.IsOpen(), "pool should be closed after Close()")
 }
 
+func TestCloseWithExpiredCtxStillClosesIdleConns(t *testing.T) {
+	// CloseWithContext calls setCapacity(ctx, 0) to drain the pool. If ctx
+	// is already expired, the drain loop's ctx.Err() check used to bail out
+	// before even popping idle conns from the stacks, leaving them
+	// physically open. Closing those idle conns is unconditional work and
+	// shouldn't depend on the caller's deadline — only waiting for borrowed
+	// conns to return needs to honor ctx.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+
+	var conns []*Pooled[*TestConn]
+	for range 3 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		conns = append(conns, c)
+	}
+	for _, c := range conns {
+		c.Recycle()
+	}
+	require.EqualValues(t, 3, state.open.Load())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_ = p.CloseWithContext(ctx)
+
+	require.EqualValues(t, 0, state.open.Load(),
+		"idle conns must be physically closed even when the close ctx is already expired")
+}
+
 func TestGetAtZeroCapacityReturnsTimeout(t *testing.T) {
 	// An open pool whose capacity has been drained to 0 is paused, not closed.
 	// Get must distinguish these states: closed pools return ErrConnPoolClosed;

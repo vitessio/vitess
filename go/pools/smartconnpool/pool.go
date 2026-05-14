@@ -1058,23 +1058,27 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 
 	// close connections until we're under capacity
 	for pool.active.Load() > newcap {
-		if err := ctx.Err(); err != nil {
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED,
-				"timed out while waiting for connections to be returned to the pool (capacity=%d, active=%d, borrowed=%d)",
-				pool.capacity.Load(), pool.active.Load(), pool.borrowed.Load())
-		}
-
 		// try closing from connections which are currently idle in the stacks
 		conn := pool.getFromSettingsStack(nil)
 		if conn == nil {
 			conn = pool.pop(&pool.clean)
 		}
-		if conn == nil {
-			time.Sleep(delay)
+		if conn != nil {
+			conn.Close()
+			pool.closedConn()
 			continue
 		}
-		conn.Close()
-		pool.closedConn()
+
+		// Stacks are empty; we have to wait for borrowed conns to return.
+		// Honor the caller's ctx only here — popping idle conns is
+		// unconditional work, and bailing before draining them would
+		// physically leak open MySQL connections.
+		if err := ctx.Err(); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED,
+				"timed out while waiting for connections to be returned to the pool (capacity=%d, active=%d, borrowed=%d)",
+				pool.capacity.Load(), pool.active.Load(), pool.borrowed.Load())
+		}
+		time.Sleep(delay)
 	}
 
 	if newcap > oldcap {
