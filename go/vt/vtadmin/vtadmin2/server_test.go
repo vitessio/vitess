@@ -18,6 +18,7 @@ package vtadmin2
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,6 +36,10 @@ type fakeVTAdminServer struct {
 
 type fakeAuthenticator struct{}
 
+type rejectingAuthenticator struct {
+	called bool
+}
+
 func (fakeAuthenticator) Authenticate(ctx context.Context) (*rbac.Actor, error) {
 	return &rbac.Actor{Name: "cli", Roles: []string{"admin"}}, nil
 }
@@ -43,11 +48,28 @@ func (fakeAuthenticator) AuthenticateHTTP(r *http.Request) (*rbac.Actor, error) 
 	return &rbac.Actor{Name: "browser", Roles: []string{"admin"}}, nil
 }
 
+func (a *rejectingAuthenticator) Authenticate(ctx context.Context) (*rbac.Actor, error) {
+	a.called = true
+	return nil, errors.New("rejected")
+}
+
+func (a *rejectingAuthenticator) AuthenticateHTTP(r *http.Request) (*rbac.Actor, error) {
+	a.called = true
+	return nil, errors.New("rejected")
+}
+
 func TestNewServerRequiresAPI(t *testing.T) {
 	s, err := NewServer(nil, Options{})
 
 	require.ErrorContains(t, err, "requires a VTAdmin server")
 	assert.Nil(t, s)
+}
+
+func TestServerUsesStandardLibraryRouter(t *testing.T) {
+	s, err := NewServer(&fakeVTAdminServer{}, Options{})
+	require.NoError(t, err)
+
+	assert.IsType(t, http.NewServeMux(), s.router)
 }
 
 func TestNewServerRegistersStaticAssets(t *testing.T) {
@@ -72,6 +94,92 @@ func TestRootRedirectsToClusters(t *testing.T) {
 
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
 	assert.Equal(t, "/clusters", rec.Header().Get("Location"))
+}
+
+func TestHeadPageRoutesReturnMethodNotAllowed(t *testing.T) {
+	fake := &pageFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodHead, "/clusters", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.False(t, fake.getClustersCalled)
+}
+
+func TestUnknownPathReturnsNotFound(t *testing.T) {
+	s, err := NewServer(&fakeVTAdminServer{}, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/does-not-exist", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestUnknownPathSkipsAuthentication(t *testing.T) {
+	authenticator := &rejectingAuthenticator{}
+	s, err := NewServer(&fakeVTAdminServer{}, Options{Authenticator: authenticator})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/does-not-exist", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.False(t, authenticator.called)
+}
+
+func TestStaticDirectoryWithoutSlashReturnsNotFound(t *testing.T) {
+	s, err := NewServer(&fakeVTAdminServer{}, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/static", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestStaticAssetsAuthenticateBeforeMethodHandling(t *testing.T) {
+	authenticator := &rejectingAuthenticator{}
+	s, err := NewServer(&fakeVTAdminServer{}, Options{Authenticator: authenticator})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/static/vtadmin2.css", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.True(t, authenticator.called)
+}
+
+func TestNavigationIncludesReadOnlyParitySections(t *testing.T) {
+	s, err := NewServer(&fakeVTAdminServer{}, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/clusters", nil)
+	s.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	assert.Contains(t, body, "href=\"/gates\"")
+	assert.Contains(t, body, "href=\"/vtctlds\"")
+	assert.Contains(t, body, "href=\"/cells\"")
+	assert.Contains(t, body, "href=\"/backups\"")
+	assert.Contains(t, body, "href=\"/topology\"")
+	assert.Contains(t, body, "href=\"/shards\"")
+	assert.Contains(t, body, "href=\"/vschemas\"")
+	assert.Contains(t, body, "href=\"/srvkeyspaces\"")
+	assert.Contains(t, body, "href=\"/srvvschemas\"")
+	assert.Contains(t, body, "href=\"/workflows\"")
+	assert.Contains(t, body, "href=\"/migrations\"")
+	assert.Contains(t, body, "href=\"/transactions\"")
+	assert.Contains(t, body, "href=\"/vtexplain\"")
+	assert.Contains(t, body, "href=\"/vexplain\"")
 }
 
 func TestServerAuthenticatesRequests(t *testing.T) {

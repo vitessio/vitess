@@ -164,6 +164,7 @@ func TestTabletsPageRendersRows(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Tablets")
 	assert.Contains(t, rec.Body.String(), "zone1-0000000100")
+	assert.Contains(t, rec.Body.String(), "/tablet/local/zone1-0000000100")
 	assert.Contains(t, rec.Body.String(), "tablet-100")
 	assert.Contains(t, rec.Body.String(), "PRIMARY")
 }

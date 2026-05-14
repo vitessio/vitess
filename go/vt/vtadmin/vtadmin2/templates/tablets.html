@@ -15,9 +15,11 @@
     <tbody>
       {{ range .Data }}
       {{ $tablet := .GetTablet }}
+      {{ $clusterID := clusterID .GetCluster }}
+      {{ $alias := tabletAlias $tablet.GetAlias }}
       <tr>
-        <td>{{ clusterID .GetCluster }}</td>
-        <td>{{ tabletAlias $tablet.GetAlias }}</td>
+        <td>{{ $clusterID }}</td>
+        <td><a href="/tablet/{{ pathEscape $clusterID }}/{{ pathEscape $alias }}">{{ $alias }}</a></td>
         <td>{{ $tablet.GetHostname }}</td>
         <td>{{ $tablet.GetKeyspace }}</td>
         <td>{{ $tablet.GetShard }}</td>

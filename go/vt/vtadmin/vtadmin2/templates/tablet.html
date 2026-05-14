@@ -1,0 +1,27 @@
+{{ define "tablet.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+{{ $tablet := .Data.Tablet.GetTablet }}
+<div class="toolbar">
+  <h1>{{ .Data.Alias }}</h1>
+  <a href="/tablets">Back to tablets</a>
+</div>
+<div class="card">
+  <dl>
+    <dt>Cluster</dt><dd>{{ .Data.ClusterID }}</dd>
+    <dt>Alias</dt><dd>{{ .Data.Alias }}</dd>
+    <dt>Hostname</dt><dd>{{ $tablet.GetHostname }}</dd>
+    <dt>Keyspace</dt><dd>{{ $tablet.GetKeyspace }}</dd>
+    <dt>Shard</dt><dd>{{ $tablet.GetShard }}</dd>
+    <dt>Type</dt><dd>{{ $tablet.GetType }}</dd>
+    <dt>State</dt><dd>{{ .Data.Tablet.GetState }}</dd>
+  </dl>
+  <p><a href="/tablet/{{ pathEscape .Data.ClusterID }}/{{ pathEscape .Data.Alias }}/full_status">Full Status</a></p>
+</div>
+<div class="card">
+  <h2>Tablet Data</h2>
+  <pre>{{ protoJSON .Data.Tablet }}</pre>
+</div>
+{{ end }}

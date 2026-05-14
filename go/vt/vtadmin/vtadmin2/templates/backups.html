@@ -1,0 +1,32 @@
+{{ define "backups.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Backups</h1>
+  <input class="table-filter" data-table-filter="#backups-table" placeholder="Filter backups" aria-label="Filter backups">
+</div>
+<div class="card">
+  <table id="backups-table">
+    <thead>
+      <tr><th>Cluster</th><th>Name</th><th>Keyspace</th><th>Shard</th><th>Directory</th><th>Engine</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      {{ $backup := .GetBackup }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ $backup.GetName }}</td>
+        <td>{{ $backup.GetKeyspace }}</td>
+        <td>{{ $backup.GetShard }}</td>
+        <td>{{ $backup.GetDirectory }}</td>
+        <td>{{ $backup.GetEngine }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="6">No backups found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

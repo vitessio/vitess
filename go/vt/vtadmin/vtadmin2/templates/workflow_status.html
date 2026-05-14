@@ -1,0 +1,20 @@
+{{ define "workflow_status.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Workflow Status</h1>
+</div>
+<div class="card">
+  <table>
+    <tbody>
+      <tr><th>Cluster</th><td>{{ .Data.ClusterID }}</td></tr>
+      <tr><th>Keyspace</th><td>{{ .Data.Keyspace }}</td></tr>
+      <tr><th>Workflow</th><td>{{ .Data.Name }}</td></tr>
+      <tr><th>Traffic State</th><td>{{ .Data.Response.GetTrafficState }}</td></tr>
+      <tr><th>Details</th><td><pre>{{ protoJSON .Data.Response }}</pre></td></tr>
+    </tbody>
+  </table>
+</div>
+{{ end }}

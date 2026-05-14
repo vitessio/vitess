@@ -1,0 +1,35 @@
+{{ define "workflows.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Workflows</h1>
+  <input class="table-filter" data-table-filter="#workflows-table" placeholder="Filter Workflows" aria-label="Filter Workflows">
+</div>
+<div class="card">
+  <table id="workflows-table">
+    <thead>
+      <tr><th>Cluster</th><th>Keyspace</th><th>Workflow</th><th>Type</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {{ range $clusterID, $clusterWorkflows := .Data }}
+        {{ range $clusterWorkflows.GetWorkflows }}
+        <tr>
+          <td>{{ clusterID .GetCluster }}</td>
+          <td>{{ .GetKeyspace }}</td>
+          <td><a href="/workflow/{{ pathEscape (clusterID .GetCluster) }}/{{ pathEscape .GetKeyspace }}/{{ pathEscape .GetWorkflow.GetName }}">{{ .GetWorkflow.GetName }}</a></td>
+          <td>{{ .GetWorkflow.GetWorkflowType }}</td>
+          <td><a href="/workflow/{{ pathEscape (clusterID .GetCluster) }}/{{ pathEscape .GetKeyspace }}/{{ pathEscape .GetWorkflow.GetName }}/status">Status</a></td>
+        </tr>
+        {{ end }}
+        {{ range $clusterWorkflows.GetWarnings }}
+        <tr><td>{{ $clusterID }}</td><td colspan="4">{{ . }}</td></tr>
+        {{ end }}
+      {{ else }}
+      <tr><td colspan="5">No workflows found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}
