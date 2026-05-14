@@ -656,21 +656,6 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 	if vs == nil {
 		return true
 	}
-<<<<<<< HEAD
-
-	kss.mu.Lock()
-	defer kss.mu.Unlock()
-	var kerr error
-	if kss.moveTablesState, kerr = kss.getMoveTablesStatus(vs); err != nil {
-		log.Errorf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr)
-||||||| parent of e3cc8120b6 (discovery: fix keyspaceState leak for keyspaces missing in localCell (#19993))
-
-	kss.mu.Lock()
-	defer kss.mu.Unlock()
-	var kerr error
-	if kss.moveTablesState, kerr = kss.getMoveTablesStatus(vs); err != nil {
-		log.Error(fmt.Sprintf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr))
-=======
 	// Use a local for the new state — getMoveTablesStatus returns (nil, err)
 	// on failure, and assigning directly into kss.moveTablesState would
 	// silently clobber the previously-tracked state on a transient topo blip.
@@ -678,7 +663,6 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 	if kerr != nil {
 		log.Error(fmt.Sprintf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr))
 		return true
->>>>>>> e3cc8120b6 (discovery: fix keyspaceState leak for keyspaces missing in localCell (#19993))
 	}
 	kss.moveTablesState = newState
 	if kss.moveTablesState != nil && kss.moveTablesState.Typ != MoveTablesNone {
