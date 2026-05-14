@@ -76,7 +76,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) routes() {
 	s.handleFunc("GET /{$}", s.redirectRoot)
 	s.handleFunc("GET /clusters", s.clusters)
-	s.handleFunc("GET /gates", s.gates)
+	s.handleFunc("GET /vtgates", s.gates)
 	s.handleFunc("GET /vtctlds", s.vtctlds)
 	s.handleFunc("GET /keyspaces", s.keyspaces)
 	s.handleFunc("GET /keyspaces/create", s.createKeyspaceForm)

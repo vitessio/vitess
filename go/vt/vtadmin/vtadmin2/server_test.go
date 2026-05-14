@@ -179,7 +179,7 @@ func TestNavigationIncludesReadOnlyParitySections(t *testing.T) {
 	s.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	assert.Contains(t, body, "href=\"/gates\"")
+	assert.Contains(t, body, "href=\"/vtgates\"")
 	assert.Contains(t, body, "href=\"/vtctlds\"")
 	assert.Contains(t, body, "href=\"/cells\"")
 	assert.Contains(t, body, "href=\"/backups\"")
