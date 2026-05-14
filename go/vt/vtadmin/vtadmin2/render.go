@@ -61,9 +61,12 @@ func parseTemplates() (*templateSet, error) {
 		tmpl, err := template.New("").Funcs(template.FuncMap{
 			"clusterID":        clusterID,
 			"keyspaceName":     keyspaceName,
+			"pathEscape":       pathEscape,
+			"protoJSON":        protoJSON,
 			"schemaTableCount": schemaTableCount,
 			"sortedShardNames": sortedShardNames,
 			"tabletAlias":      tabletAlias,
+			"urlQueryEscape":   urlQueryEscape,
 		}).ParseFS(assets, "templates/layout.html", page)
 		if err != nil {
 			return nil, err

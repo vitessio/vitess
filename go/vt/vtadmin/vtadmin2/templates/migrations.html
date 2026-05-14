@@ -1,0 +1,40 @@
+{{ define "migrations.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Migrations</h1>
+  <input class="table-filter" data-table-filter="#migrations-table" placeholder="Filter Migrations" aria-label="Filter Migrations">
+</div>
+<div class="card">
+  <form method="get" action="/migrations" class="form-grid">
+    <label>Cluster <input name="cluster_id"></label>
+    <label>Keyspace <input name="keyspace"></label>
+    <label>UUID <input name="uuid"></label>
+    <button type="submit">Filter Migrations</button>
+  </form>
+</div>
+<div class="card">
+  <table id="migrations-table">
+    <thead>
+      <tr><th>Cluster</th><th>UUID</th><th>Keyspace</th><th>Shard</th><th>Table</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ .GetSchemaMigration.GetUuid }}</td>
+        <td>{{ .GetSchemaMigration.GetKeyspace }}</td>
+        <td>{{ .GetSchemaMigration.GetShard }}</td>
+        <td>{{ .GetSchemaMigration.GetTable }}</td>
+        <td>{{ .GetSchemaMigration.GetStatus }}</td>
+      </tr>
+      <tr><td colspan="6"><pre>{{ protoJSON .GetSchemaMigration }}</pre></td></tr>
+      {{ else }}
+      <tr><td colspan="6">No migrations found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

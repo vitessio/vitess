@@ -1,0 +1,28 @@
+{{ define "vtctlds.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Vtctlds</h1>
+  <input class="table-filter" data-table-filter="#vtctlds-table" placeholder="Filter Vtctlds" aria-label="Filter Vtctlds">
+</div>
+<div class="card">
+  <table id="vtctlds-table">
+    <thead>
+      <tr><th>Cluster</th><th>Hostname</th><th>FQDN</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ .GetHostname }}</td>
+        <td>{{ .GetFQDN }}</td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="3">No Vtctlds found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

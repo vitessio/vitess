@@ -19,8 +19,6 @@ package vtadmin2
 import (
 	"net/http"
 
-	"github.com/gorilla/mux"
-
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -55,10 +53,9 @@ func (s *Server) keyspaces(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) keyspace(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
 	ks, err := s.api.GetKeyspace(r.Context(), &vtadminpb.GetKeyspaceRequest{
-		ClusterId: vars["cluster_id"],
-		Keyspace:  vars["name"],
+		ClusterId: r.PathValue("cluster_id"),
+		Keyspace:  r.PathValue("name"),
 	})
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "Keyspace", err)

@@ -17,13 +17,39 @@ limitations under the License.
 package vtadmin2
 
 import (
+	"net/http"
+	"net/url"
 	"sort"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
+
+func queryValues(r *http.Request, name string) []string { return r.URL.Query()[name] }
+
+func queryValue(r *http.Request, name string) string { return r.URL.Query().Get(name) }
+
+func pathEscape(value string) string { return url.PathEscape(value) }
+
+func urlQueryEscape(value string) string { return url.QueryEscape(value) }
+
+func protoJSON(v any) string {
+	msg, ok := v.(proto.Message)
+	if !ok || msg == nil {
+		return ""
+	}
+
+	b, err := protojson.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(msg)
+	if err != nil {
+		return err.Error()
+	}
+	return string(b)
+}
 
 func keyspaceName(ks *vtadminpb.Keyspace) string {
 	if ks == nil || ks.GetKeyspace() == nil {

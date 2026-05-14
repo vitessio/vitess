@@ -70,6 +70,15 @@ a { color: var(--vt-color-primary); }
   padding: 1rem;
 }
 
+.nav-section {
+  color: var(--vt-color-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 1rem 0 0.35rem;
+  text-transform: uppercase;
+}
+
 .nav a {
   border-radius: 0.4rem;
   color: var(--vt-color-text);
