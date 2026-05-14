@@ -585,30 +585,34 @@ func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
 		"refresh worker stopped ticking after first triggered reopen")
 }
 
-func TestSetCapacityOnUnopenedPoolFails(t *testing.T) {
-	// Without Open(), pool.config.connect is nil. SetCapacity should refuse
-	// rather than silently arming a capacity that a subsequent Get would use
-	// to invoke the nil connect function.
+func TestSetCapacityOnUnopenedPoolArmsCapacity(t *testing.T) {
+	// SetCapacity is allowed before Open so callers can pre-configure the
+	// pool. The value is just stored; Get still refuses until the pool is
+	// opened (the close pointer is what gates lifecycle, not capacity).
 	p := NewPool(&Config[*TestConn]{Capacity: 5})
 
-	err := p.SetCapacity(t.Context(), 1)
-	require.ErrorIs(t, err, ErrConnPoolClosed)
-	require.EqualValues(t, 0, p.Capacity())
+	require.NoError(t, p.SetCapacity(t.Context(), 1))
+	require.EqualValues(t, 1, p.Capacity())
 	require.False(t, p.IsOpen())
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
 }
 
-func TestSetCapacityAfterCloseFails(t *testing.T) {
-	// After Close(), workers are gone and the close channel pointer is nil.
-	// SetCapacity must not silently resurrect the capacity, because Get would
-	// then serve connections from a pool with no idle/refresh workers.
+func TestSetCapacityAfterCloseArmsCapacity(t *testing.T) {
+	// SetCapacity after Close is also allowed: the capacity field is config,
+	// not lifecycle. Gets still return ErrConnPoolClosed because the close
+	// pointer is nil.
 	var state TestState
 	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
 	p.Close()
 
-	err := p.SetCapacity(t.Context(), 1)
-	require.ErrorIs(t, err, ErrConnPoolClosed)
-	require.EqualValues(t, 0, p.Capacity())
+	require.NoError(t, p.SetCapacity(t.Context(), 1))
+	require.EqualValues(t, 1, p.Capacity())
 	require.False(t, p.IsOpen())
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
 }
 
 func TestCloseAfterSetCapacityZeroStopsPool(t *testing.T) {
