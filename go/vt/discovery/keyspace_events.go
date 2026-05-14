@@ -646,6 +646,14 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 
 	kss.mu.Lock()
 	defer kss.mu.Unlock()
+	// If onSrvKeyspace has already marked this keyspace deleted (NoNode in
+	// localCell), unregister this listener too. onSrvVSchema otherwise always
+	// returns true, so the resilient SrvVSchema watcher would keep the
+	// closure — and the orphan keyspaceState it captures — alive forever and
+	// re-run this callback's work on every SrvVSchema update.
+	if kss.deleted {
+		return false
+	}
 	var kerr error
 	if kss.moveTablesState, kerr = kss.getMoveTablesStatus(vs); err != nil {
 		log.Error(fmt.Sprintf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr))

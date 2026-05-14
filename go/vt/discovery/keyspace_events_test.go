@@ -781,3 +781,26 @@ func TestKeyspaceEventWatcherMissingKeyspaceCache(t *testing.T) {
 	assert.Equal(t, int64(0), sts.watchSrvVSchemaCalls.Load(),
 		"WatchSrvVSchema must still not be called after re-probing a missing keyspace")
 }
+
+// TestOnSrvVSchemaUnregistersAfterDelete covers the async-deletion path: a
+// keyspace exists in localCell when newKeyspaceState registers onSrvVSchema,
+// then later disappears. onSrvKeyspace marks the state deleted and returns
+// false (reaping itself), but onSrvVSchema must also return false on its next
+// invocation. Otherwise the resilient SrvVSchema watcher keeps the closure
+// (and the orphan keyspaceState it captures) in its listeners slice forever
+// and re-runs the callback's work on every SrvVSchema update.
+func TestOnSrvVSchemaUnregistersAfterDelete(t *testing.T) {
+	kss := &keyspaceState{
+		keyspace: "ks1",
+		shards:   make(map[string]*shardState),
+	}
+
+	// Simulate the async deletion: SrvKeyspace returns NoNode for localCell.
+	require.False(t, kss.onSrvKeyspace(nil, topo.NewError(topo.NoNode, "ks1")),
+		"onSrvKeyspace must return false on NoNode so the SrvKeyspace watcher reaps it")
+	require.True(t, kss.isDeleted())
+
+	// The next SrvVSchema update must reap the orphan listener.
+	require.False(t, kss.onSrvVSchema(&vschemapb.SrvVSchema{}, nil),
+		"onSrvVSchema must return false once the keyspace is deleted, otherwise the listener pins an orphan keyspaceState")
+}
