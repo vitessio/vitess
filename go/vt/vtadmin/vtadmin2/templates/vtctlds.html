@@ -17,7 +17,7 @@
       <tr>
         <td>{{ clusterID .GetCluster }}</td>
         <td>{{ if .GetHostname }}<a href="{{ externalURL .GetHostname }}" target="_blank" rel="noopener noreferrer">{{ .GetHostname }}</a>{{ end }}</td>
-        <td>{{ if .GetFQDN }}<a href="{{ externalURL .GetFQDN }}" target="_blank" rel="noopener noreferrer">{{ .GetFQDN }}</a>{{ end }}</td>
+        <td>{{ if .GetFQDN }}<a href="{{ externalURL (printf "%s/debug/status" .GetFQDN) }}" target="_blank" rel="noopener noreferrer">{{ .GetFQDN }}</a>{{ end }}</td>
       </tr>
       {{ else }}
       <tr><td colspan="3">No VTCtlds found.</td></tr>

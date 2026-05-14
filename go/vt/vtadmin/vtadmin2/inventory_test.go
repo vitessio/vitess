@@ -42,7 +42,7 @@ func (f *inventoryFakeServer) GetGates(ctx context.Context, req *vtadminpb.GetGa
 }
 
 func (f *inventoryFakeServer) GetVtctlds(ctx context.Context, req *vtadminpb.GetVtctldsRequest) (*vtadminpb.GetVtctldsResponse, error) {
-	return &vtadminpb.GetVtctldsResponse{Vtctlds: []*vtadminpb.Vtctld{{Cluster: &vtadminpb.Cluster{Id: "local", Name: "Local"}, Hostname: "vtctld-1"}}}, nil
+	return &vtadminpb.GetVtctldsResponse{Vtctlds: []*vtadminpb.Vtctld{{Cluster: &vtadminpb.Cluster{Id: "local", Name: "Local"}, Hostname: "vtctld-1", FQDN: "vtctld-1.example.com:15000"}}}, nil
 }
 
 func (f *inventoryFakeServer) GetCellInfos(ctx context.Context, req *vtadminpb.GetCellInfosRequest) (*vtadminpb.GetCellInfosResponse, error) {
@@ -65,7 +65,7 @@ func TestGatesPageRendersRows(t *testing.T) {
 	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/gates", nil)
+	req := httptest.NewRequest(http.MethodGet, "/vtgates", nil)
 	s.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
@@ -86,7 +86,7 @@ func TestVtctldsPageRendersRows(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "VTCtlds")
 	assert.NotContains(t, rec.Body.String(), "Vtctlds")
-	assert.Contains(t, rec.Body.String(), `href="http://vtctld-1" target="_blank" rel="noopener noreferrer"`)
+	assert.Contains(t, rec.Body.String(), `href="http://vtctld-1.example.com:15000/debug/status" target="_blank" rel="noopener noreferrer"`)
 	assert.Contains(t, rec.Body.String(), "vtctld-1")
 }
 
