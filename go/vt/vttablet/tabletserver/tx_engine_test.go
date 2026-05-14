@@ -46,7 +46,7 @@ import (
 func TestTxEngineClose(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.DB = newDBConfigs(db)
 	cfg.TxPool.Size = 10
@@ -79,9 +79,7 @@ func TestTxEngineClose(t *testing.T) {
 	// Immediate close.
 	te.AcceptReadOnly()
 	c, _, _, err = te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	c.Unlock()
 	start = time.Now()
 	te.Close()
@@ -126,10 +124,10 @@ func TestTxEngineClose(t *testing.T) {
 	start = time.Now()
 	te.Close()
 	if diff := time.Since(start); diff > 250*time.Millisecond {
-		t.Errorf("Close time: %v, must be under 0.25s", diff)
+		assert.Failf(t, "close time too long", "Close time: %v, must be under 0.25s", diff)
 	}
 	if diff := time.Since(start); diff < 100*time.Millisecond {
-		t.Errorf("Close time: %v, must be over 0.1", diff)
+		assert.Failf(t, "close time too short", "Close time: %v, must be over 0.1", diff)
 	}
 
 	// Normal close with Reserved connection timeout wait.
@@ -747,7 +745,7 @@ func TestWithInnerTests(outerT *testing.T) {
 				err := startTx(te, false)
 				require.Error(t, err)
 			default:
-				t.Fatalf("don't know how to [%v]", test.tx)
+				require.Failf(t, "unknown tx type", "don't know how to [%v]", test.tx)
 			}
 
 			wg := sync.WaitGroup{}
@@ -918,7 +916,7 @@ func TestCheckReceivedError(t *testing.T) {
 			if tc.expQuery != "" {
 				db.AddQuery(tc.expQuery, &sqltypes.Result{})
 			}
-			nonRetryable := te.checkErrorAndMarkFailed(context.Background(), "aa", tc.receivedErr, "")
+			nonRetryable := te.checkErrorAndMarkFailed(t.Context(), "aa", tc.receivedErr, "")
 			require.NotEqual(t, tc.retryable, nonRetryable)
 			if !tc.retryable {
 				require.Equal(t, errPrepFailed, te.preparedPool.reserved["aa"])
@@ -1044,7 +1042,7 @@ func TestPrepareTx(t *testing.T) {
 			te := NewTxEngine(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TabletServerTest"), nil)
 			te.AcceptReadWrite()
 			db.ResetQueryLog()
-			failed, err := te.prepareTx(context.Background(), tt.preparedTx)
+			failed, err := te.prepareTx(t.Context(), tt.preparedTx)
 			require.EqualValues(t, tt.requireFailure, failed)
 			if tt.errWanted != "" {
 				require.ErrorContains(t, err, tt.errWanted)

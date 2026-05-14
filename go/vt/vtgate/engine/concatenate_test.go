@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -134,7 +133,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 				}
 			}
 			t.Run(fmt.Sprintf("%s-%s-Exec", txStr, tc.testName), func(t *testing.T) {
-				qr, err := concatenate.TryExecute(context.Background(), vcursor, nil, true)
+				qr, err := concatenate.TryExecute(t.Context(), vcursor, nil, true)
 				checkResult(t, qr, err)
 			})
 
@@ -157,7 +156,7 @@ func TestConcatenate_WithErrors(t *testing.T) {
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 		}, nil,
 	)
-	_, err := concatenate.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	_, err := concatenate.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
 
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
@@ -170,7 +169,7 @@ func TestConcatenate_WithErrors(t *testing.T) {
 			&fakePrimitive{results: []*sqltypes.Result{fake, fake}},
 		}, nil)
 
-	_, err = concatenate.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	_, err = concatenate.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
@@ -201,7 +200,7 @@ func TestConcatenateTypes(t *testing.T) {
 				}, nil,
 			)
 
-			res, err := concatenate.GetFields(context.Background(), &noopVCursor{}, nil)
+			res, err := concatenate.GetFields(t.Context(), &noopVCursor{}, nil)
 			require.NoError(t, err)
 
 			require.Equal(t, test.expected, res.Fields)

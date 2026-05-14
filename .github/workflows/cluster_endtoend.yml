@@ -76,7 +76,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
         with:
           egress-policy: audit
 
@@ -138,20 +138,24 @@ jobs:
 
       - name: Tune the OS
         if: steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 5
         uses: ./.github/actions/tune-os
 
       - name: Setup MySQL
         if: steps.changes.outputs.end_to_end == 'true' && !contains(matrix.needs, 'xtrabackup')
+        timeout-minutes: 8
         uses: ./.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
 
       - name: Setup Percona Apt repository
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
+        timeout-minutes: 5
         uses: ./.github/actions/setup-percona-repo
 
       - name: Setup Percona Server and XtraBackup
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'xtrabackup')
+        timeout-minutes: 5
         run: |
           sudo percona-release setup pdps8.0
           sudo percona-release setup pxb-80
@@ -178,10 +182,21 @@ jobs:
 
       - name: Install Minio
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'minio')
+        timeout-minutes: 5
         uses: ./.github/actions/setup-minio
+
+      # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
+      # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
+      - name: Cache ZooKeeper
+        if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: dist/vt-zookeeper-*
+          key: zookeeper-${{ hashFiles('build.env', 'bootstrap.sh') }}
 
       - name: Install Consul and ZooKeeper
         if: steps.changes.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
+        timeout-minutes: 5
         run: make BUILD_PROTOC=0 tools
 
       - name: Setup launchable dependencies

@@ -26,6 +26,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
@@ -62,9 +63,8 @@ func findContractedCollations(t testing.TB, unique bool) (result []CollationWith
 		}
 
 		var meta collationMetadata
-		if err := json.NewDecoder(rf).Decode(&meta); err != nil {
-			t.Fatal(err)
-		}
+		err = json.NewDecoder(rf).Decode(&meta)
+		require.NoError(t, err)
 		rf.Close()
 
 		if unique {

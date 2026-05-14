@@ -82,7 +82,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 
@@ -91,14 +91,14 @@ func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	copy(dataWithHeader[PacketHeaderSize:], data)
 
 	if err := cConn.writePacket(dataWithHeader); err != nil {
-		t.Fatalf("writePacket failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
 func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 	cConn.startWriterBuffering()
@@ -107,21 +107,21 @@ func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 	buf, pos := cConn.startEphemeralPacketWithHeader(len(data))
 	copy(buf[pos:], data)
 	if err := cConn.writeEphemeralPacket(); err != nil {
-		t.Fatalf("writeEphemeralPacket(false) failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
 func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 
 	buf, pos := cConn.startEphemeralPacketWithHeader(len(data))
 	copy(buf[pos:], data)
 	if err := cConn.writeEphemeralPacket(); err != nil {
-		t.Fatalf("writeEphemeralPacket(true) failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
@@ -140,7 +140,7 @@ func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 
 	received, err := read()
 	if err != nil || !bytes.Equal(data, received) {
-		t.Fatalf("ReadPacket failed: %v %v", received, err)
+		require.Failf(t, "ReadPacket failed", "ReadPacket failed: %v %v", received, err)
 	}
 	wg.Wait()
 }
@@ -784,7 +784,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		_, _, isInt := readLenEncInt(bytes, 0)
 		isEOF := cConn.isEOFPacket(bytes)
 		if (isInt && isEOF) || (!isInt && !isEOF) {
-			t.Fatalf("0xfe bytestring is EOF xor Int. Bytes %v", bytes)
+			require.Failf(t, "0xfe bytestring should be EOF xor Int", "0xfe bytestring is EOF xor Int. Bytes %v", bytes)
 		}
 	}
 }
@@ -1188,7 +1188,7 @@ func randSeq(n int) string {
 func TestPrepareAndExecute(t *testing.T) {
 	// this test starts a lot of clients that all send prepared statement parameter values
 	// and check that the handler received the correct input
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	for i := range 100 {
 		startGoRoutine(ctx, t, fmt.Sprintf("%d:%s", i, randSeq(i)))
@@ -1219,21 +1219,35 @@ func startGoRoutine(ctx context.Context, t *testing.T, s string) {
 		mockData := preparePacket(t, sql)
 
 		err := cConn.writePacket(mockData)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		handler := &testRun{paramCounts: 1}
 
 		ok := sConn.handleNextCommand(handler)
-		require.True(t, ok, "error handling command for id: %s", s)
+		if !assert.True(t, ok, "error handling command for id: %s", s) {
+			return
+		}
 
 		prepareData, ok := sConn.PrepareData[sConn.StatementID]
-		require.True(t, ok, "prepare data not found for id: %d", sConn.StatementID)
-		require.Equal(t, uint16(1), prepareData.ParamsCount)
-		require.NotNil(t, prepareData.BindVars)
+		if !assert.True(t, ok, "prepare data not found for id: %d", sConn.StatementID) {
+			return
+		}
+		if !assert.Equal(t, uint16(1), prepareData.ParamsCount) {
+			return
+		}
+		if !assert.NotNil(t, prepareData.BindVars) {
+			return
+		}
 
 		resp, err := cConn.ReadPacket()
-		require.NoError(t, err)
-		require.EqualValues(t, 0, resp[0])
+		if !assert.NoError(t, err) {
+			return
+		}
+		if !assert.EqualValues(t, 0, resp[0]) {
+			return
+		}
 
 		for count := 0; ; count++ {
 			select {

@@ -61,9 +61,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				Decimals:     uint32(tc.prec),
 			}
 			weight := TinyWeighter(field, tc.col)
-			if weight == nil {
-				t.Fatalf("could not generate Tiny Weight function")
-			}
+			require.NotNil(t, weight, "could not generate Tiny Weight function")
 
 			items := make([]sqltypes.Value, 0, Length)
 			for range Length {
@@ -95,7 +93,7 @@ func TestTinyWeightStrings(t *testing.T) {
 				require.NoError(t, err)
 
 				if cmp > 0 {
-					t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]\n%v | %032b\n%v | %032b", a, i, b, i+1, a, a.TinyWeight(), b, b.TinyWeight())
+					require.Failf(t, "out of order", "expected %v [pos=%d] to come after %v [pos=%d]\n%v | %032b\n%v | %032b", a, i, b, i+1, a, a.TinyWeight(), b, b.TinyWeight())
 				}
 			}
 
@@ -171,7 +169,7 @@ func TestWeightStrings(t *testing.T) {
 					require.NoError(t, err)
 
 					if cmp > 0 {
-						t.Fatalf("expected %v [pos=%d] to come after %v [pos=%d]\nav = %v\nbv = %v",
+						require.Failf(t, "out of order", "expected %v [pos=%d] to come after %v [pos=%d]\nav = %v\nbv = %v",
 							a.value, i, b.value, i+1,
 							[]byte(a.weight), []byte(b.weight),
 						)

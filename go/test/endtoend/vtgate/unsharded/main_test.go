@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -185,7 +184,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--warn-sharded-only") + "=true"}
+		clusterInstance.VtGateExtraArgs = []string{"--warn-sharded-only" + "=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Error(err.Error())
 			os.Exit(1)
@@ -431,7 +430,7 @@ func TestNumericPrecisionScale(t *testing.T) {
 }
 
 func TestDeleteAlias(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -440,7 +439,7 @@ func TestDeleteAlias(t *testing.T) {
 }
 
 func TestFloatValueDefault(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

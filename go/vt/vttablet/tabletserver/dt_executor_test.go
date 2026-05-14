@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -479,9 +478,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	got, err := txe.ReadTransaction("aa")
 	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
-	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "ReadTransaction: %v, want %v", got, want)
 
 	txResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -525,9 +522,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}
-	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "ReadTransaction: %v, want %v", got, want)
 
 	txResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -545,9 +540,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	want.State = querypb.TransactionState_COMMIT
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "ReadTransaction: %v, want %v", got, want)
 
 	txResult = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -565,9 +558,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = txe.ReadTransaction("aa")
 	require.NoError(t, err)
-	if !proto.Equal(got, want) {
-		t.Errorf("ReadTransaction: %v, want %v", got, want)
-	}
+	assert.True(t, proto.Equal(got, want), "ReadTransaction: %v, want %v", got, want)
 }
 
 func TestExecutorReadAllTransactions(t *testing.T) {
@@ -602,9 +593,7 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 			Shard:    "shard01",
 		}},
 	}}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReadAllTransactions:\n%s, want\n%s", jsonStr(got), jsonStr(want))
-	}
+	assert.Equalf(t, want, got, "ReadAllTransactions:\n%s, want\n%s", jsonStr(got), jsonStr(want))
 }
 
 // TestTransactionNotifier tests that the transaction notifier is called
@@ -629,7 +618,7 @@ func TestTransactionNotifier(t *testing.T) {
 	}
 	select {
 	case <-notifyCh:
-		t.Error("unresolved transaction notifier call unexpected")
+		assert.Fail(t, "unresolved transaction notifier call unexpected")
 	case <-time.After(1 * time.Second):
 	}
 
@@ -640,7 +629,7 @@ func TestTransactionNotifier(t *testing.T) {
 	select {
 	case <-notifyCh:
 	case <-time.After(1 * time.Second):
-		t.Error("unresolved transaction notifier expected but not received")
+		assert.Fail(t, "unresolved transaction notifier expected but not received")
 	}
 }
 

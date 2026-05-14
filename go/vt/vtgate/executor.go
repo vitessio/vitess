@@ -115,9 +115,12 @@ type (
 		Normalize  bool
 		StreamSize int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
-		AllowScatter        bool
-		WarmingReadsPercent int
-		QueryLogToFile      string
+		AllowScatter bool
+		// PreventCrossKeyspaceReads will fail planning if set to true and a plan contains any cross-keyspace joins or UNIONs.
+		// The zero value (false) preserves the historical behavior of allowing cross-keyspace reads by default.
+		PreventCrossKeyspaceReads bool
+		WarmingReadsPercent       int
+		QueryLogToFile            string
 	}
 
 	Executor struct {
@@ -397,6 +400,11 @@ func (e *Executor) StreamExecute(
 
 		// 5: Log and add statistics
 		logStats.TablesUsed = plan.TablesUsed
+		executedRoot := vc.ExecutedPrimitive()
+		if executedRoot == nil {
+			executedRoot = plan.Instructions
+		}
+		logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
 		logStats.ActiveKeyspace = vc.GetKeyspace()
@@ -1567,9 +1575,10 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 
 		DBDDLPlugin: dbDDLPlugin,
 
-		WarmingReadsPercent:   e.config.WarmingReadsPercent,
-		WarmingReadsTimeout:   warmingReadsQueryTimeout,
-		WarmingReadsSemaphore: e.warmingReadsSemaphore,
+		PreventCrossKeyspaceReads: e.config.PreventCrossKeyspaceReads,
+		WarmingReadsPercent:       e.config.WarmingReadsPercent,
+		WarmingReadsTimeout:       warmingReadsQueryTimeout,
+		WarmingReadsSemaphore:     e.warmingReadsSemaphore,
 	}
 }
 

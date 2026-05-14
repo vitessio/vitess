@@ -26,8 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/utils"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -49,7 +48,7 @@ func TestRowStreamerQuery(t *testing.T) {
 	})
 	// We need to StreamRows, to get an initialized RowStreamer.
 	// Note that the query passed into StreamRows is overwritten while running the test.
-	err := engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		type testCase struct {
 			directives      string
 			sendQuerySuffix string
@@ -266,21 +265,17 @@ func TestStreamRowsUnicode(t *testing.T) {
 	})
 	defer engine.Close()
 	// We need a latin1 connection.
-	conn, err := env.Mysqld.GetDbaConnection(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	conn, err := env.Mysqld.GetDbaConnection(t.Context())
+	require.NoError(t, err)
 	defer conn.Close()
 
-	if _, err := conn.ExecuteFetch("set names latin1", 10000, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = conn.ExecuteFetch("set names latin1", 10000, false)
+	require.NoError(t, err)
 	// This will get "Mojibaked" into the utf8 column.
-	if _, err := conn.ExecuteFetch("insert into t1 values(1, '👍')", 10000, false); err != nil {
-		t.Fatal(err)
-	}
+	_, err = conn.ExecuteFetch("insert into t1 values(1, '👍')", 10000, false)
+	require.NoError(t, err)
 
-	err = engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		// Skip fields.
 		if len(rows.Rows) == 0 {
 			return nil
@@ -288,9 +283,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 		got := fmt.Sprintf("%q", rows.Rows[0].Values)
 		// We should expect a "Mojibaked" version of the string.
 		want := `"1ðŸ‘\u008d"`
-		if got != want {
-			t.Errorf("rows.Rows[0].Values: %s, want %s", got, want)
-		}
+		assert.Equalf(t, want, got, "rows.Rows[0].Values: %s, want %s", got, want)
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -301,9 +294,7 @@ func TestStreamRowsKeyRange(t *testing.T) {
 		t.Skip()
 	}
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -360,9 +351,7 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	engine.rowStreamerNumPackets.Reset()
 	engine.rowStreamerNumRows.Reset()
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -392,9 +381,7 @@ func TestStreamRowsFilterBetween(t *testing.T) {
 	engine.rowStreamerNumPackets.Reset()
 	engine.rowStreamerNumRows.Reset()
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -439,9 +426,7 @@ func TestStreamRowsFilterIn(t *testing.T) {
 	engine.rowStreamerNumPackets.Reset()
 	engine.rowStreamerNumRows.Reset()
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -469,9 +454,7 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 		t.Skip()
 	}
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, env.SetVSchema(shardedVSchema))
 	defer env.SetVSchema("{}")
 
 	execStatements(t, []string{
@@ -560,24 +543,21 @@ func TestStreamRowsCancel(t *testing.T) {
 		"drop table t1",
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	var options binlogdatapb.VStreamOptions
 	options.ConfigOverrides = make(map[string]string)
 
 	// Support both formats for backwards compatibility
-	// TODO(v25): Remove underscore versions
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", "10")
+	options.ConfigOverrides["vstream-dynamic-packet-size"] = "false"
+	options.ConfigOverrides["vstream-packet-size"] = "10"
 
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		cancel()
 		return nil
 	}, &options)
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("err: %v, want context.Canceled", err)
-	}
+	assert.ErrorIsf(t, err, context.Canceled, "err: %v, want context.Canceled", err)
 }
 
 func TestStreamRowsSendError(t *testing.T) {
@@ -595,19 +575,14 @@ func TestStreamRowsSendError(t *testing.T) {
 
 	var options binlogdatapb.VStreamOptions
 	options.ConfigOverrides = make(map[string]string)
-
-	// Support both formats for backwards compatibility
-	// TODO(v25): Remove underscore versions
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", "10")
+	options.ConfigOverrides["vstream-dynamic-packet-size"] = "false"
+	options.ConfigOverrides["vstream-packet-size"] = "10"
 
 	sendErr := errors.New("send failed")
 	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		return sendErr
 	}, &options)
-	if !errors.Is(err, sendErr) {
-		t.Errorf("err: %v, want %v", err, sendErr)
-	}
+	assert.ErrorIsf(t, err, sendErr, "err: %v, want %v", err, sendErr)
 }
 
 func TestStreamRowsHeartbeat(t *testing.T) {
@@ -648,11 +623,8 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 
 	var options binlogdatapb.VStreamOptions
 	options.ConfigOverrides = make(map[string]string)
-
-	// Support both formats for backwards compatibility
-	// TODO(v25): Remove underscore versions
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", "false")
-	utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", "1")
+	options.ConfigOverrides["vstream-dynamic-packet-size"] = "false"
+	options.ConfigOverrides["vstream-packet-size"] = "1"
 
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if rows.Heartbeat {
@@ -678,22 +650,19 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		return nil
 	}, &options)
-
 	// We expect context canceled error since we cancel after receiving heartbeats
 	if err != nil && !errors.Is(err, context.Canceled) {
-		t.Errorf("unexpected error: %v", err)
+		require.FailNowf(t, "unexpected error type (expected context.Canceled)", "got: %v", err)
 	}
 
 	// Verify we received data
-	if !dataReceived {
-		t.Error("expected to receive data rows")
-	}
+	assert.True(t, dataReceived, "expected to receive data rows")
 
 	// This is the critical test: we should receive multiple heartbeats
 	// Without the fix (missing for loop), we would only get 1 heartbeat
 	// With the fix, we should get at least 3 heartbeats
 	if atomic.LoadInt32(&heartbeatCount) < 3 {
-		t.Errorf("expected at least 3 heartbeats, got %d. This indicates the heartbeat goroutine is not running continuously", heartbeatCount)
+		assert.Failf(t, "expected at least 3 heartbeats", "expected at least 3 heartbeats, got %d. This indicates the heartbeat goroutine is not running continuously", heartbeatCount)
 	}
 
 	require.Never(t, func() bool {
@@ -717,11 +686,10 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 		options.ConfigOverrides = make(map[string]string)
 
 		// Support both formats for backwards compatibility
-		// TODO(v25): Remove underscore versions
-		utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-dynamic-packet-size", strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize))
-		utils.SetFlagVariantsForTests(options.ConfigOverrides, "vstream-packet-size", strconv.Itoa(vttablet.VStreamerDefaultPacketSize))
+		options.ConfigOverrides["vstream-dynamic-packet-size"] = strconv.FormatBool(vttablet.VStreamerUseDynamicPacketSize)
+		options.ConfigOverrides["vstream-packet-size"] = strconv.Itoa(vttablet.VStreamerDefaultPacketSize)
 
-		err := engine.StreamRows(context.Background(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		err := engine.StreamRows(t.Context(), query, lastpk, func(rows *binlogdatapb.VStreamRowsResponse) error {
 			if first {
 				if rows.Gtid == "" {
 					ch <- errors.New("stream gtid is empty")
@@ -754,18 +722,14 @@ func checkStream(t *testing.T, query string, lastpk []sqltypes.Value, wantQuery 
 		}
 	}()
 	for err := range ch {
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 }
 
 func expectStreamError(t *testing.T, query string, want string) {
 	t.Helper()
-	ch := make(chan error)
-	go func() {
-		defer close(ch)
-		err := engine.StreamRows(context.Background(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
-			return nil
-		}, nil)
-		require.EqualError(t, err, want, "Got incorrect error")
-	}()
+	err := engine.StreamRows(t.Context(), query, nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		return nil
+	}, nil)
+	require.EqualError(t, err, want, "Got incorrect error")
 }

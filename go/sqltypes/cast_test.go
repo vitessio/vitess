@@ -17,8 +17,9 @@ limitations under the License.
 package sqltypes
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -110,14 +111,13 @@ func TestCast(t *testing.T) {
 	for _, tcase := range tcases {
 		got, err := Cast(tcase.v, tcase.typ)
 		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("Cast(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
+			// vterrors.Print panics on nil; only call when the assertion fails.
+			assert.Fail(t, "Cast error mismatch", "Cast(%v) error: %v, want %v", tcase.v, vterrors.Print(err), vterrors.Print(tcase.err))
 		}
 		if tcase.err != nil {
 			continue
 		}
 
-		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("Cast(%v): %v, want %v", tcase.v, got, tcase.out)
-		}
+		assert.Equalf(t, tcase.out, got, "Cast(%v): %v, want %v", tcase.v, got, tcase.out)
 	}
 }
