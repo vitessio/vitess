@@ -341,15 +341,15 @@ func addActiveCommit(ctx context.Context, conn *StatefulConnection, te *TxEngine
 	qd := NewQueryDetail(ctx, conn)
 	if err := te.activeCommits.Add(qd); err != nil {
 		// If we've received an error here, it means a shutdown is in progress, and
-		// we should close the connection (and transaction) before returning it to
-		// the pool.
+		// we should close the connection and its transaction before releasing it.
 		conn.Close()
 
-		// If we were in a transaction, also clean it up before returning the connection
-		// to the pool.
+		// If we were in a transaction, also clean it up before releasing the connection.
 		if conn.IsInTransaction() {
-			te.txPool.txComplete(conn, tx.TxCommit)
+			te.txPool.txComplete(conn, tx.TxKill)
 		}
+
+		conn.Release(tx.TxKill)
 
 		return nil, err
 	}

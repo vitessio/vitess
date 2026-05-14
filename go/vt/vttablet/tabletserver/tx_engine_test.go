@@ -193,6 +193,45 @@ func TestActiveCommits(t *testing.T) {
 	require.ErrorContains(t, err, "QueryList.TerminateAll()")
 }
 
+// TestCommitRejectedByClusterActionRecordsKill verifies that COMMIT requests rejected
+// during shutdown are accounted as killed transactions rather than successful commits.
+func TestCommitRejectedByClusterActionRecordsKill(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	ctx := t.Context()
+
+	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	txStats := txEngine.txPool.txStats.Counts()
+	initialCommits := txStats["TabletServerTest.commit"]
+	initialKills := txStats["TabletServerTest.kill"]
+
+	db.ResetQueryLog()
+
+	txEngine.SetClusterAction(ClusterActionInProgress)
+	txEngine.SetClusterAction(ClusterActionNoQueries)
+
+	_, _, err = txEngine.Commit(ctx, txID)
+	require.ErrorContains(t, err, vterrors.ShuttingDown)
+
+	require.NotContains(t, db.QueryLog(), "commit")
+
+	txStats = txEngine.txPool.txStats.Counts()
+	require.Equal(t, initialCommits, txStats["TabletServerTest.commit"])
+	require.Equal(t, initialKills+1, txStats["TabletServerTest.kill"])
+
+	_, err = txEngine.txPool.GetAndLock(txID, "after aborted commit")
+	require.ErrorContains(t, err, "kill")
+	require.NotContains(t, err.Error(), "transaction committed")
+}
+
 // TestActiveCommitsIncludesDTExecutorInternalTransactions verifies that internal 2PC metadata
 // commits can be interrupted during shutdown.
 func TestActiveCommitsIncludesDTExecutorInternalTransactions(t *testing.T) {
