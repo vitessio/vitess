@@ -533,11 +533,25 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.borrowed.Add(-1)
 
+	// On a closed pool there's no future use for the conn — Get refuses
+	// new requests and no worker will rotate it. Close it outright so we
+	// don't leak an open DB connection in the idle stack. (SetCapacity on
+	// a closed pool can arm idleCount > 0, which would otherwise make
+	// closeOnIdleLimitReached push the returned conn instead of closing
+	// it.)
+	if pool.close.Load() == nil {
+		if conn != nil {
+			conn.Close()
+		}
+		pool.closedConn()
+		return
+	}
+
 	if conn == nil {
-		// Short-circuit if the pool is closed or drained: there's nothing for
-		// the new conn to do, and the connector may not honor our cancelled
+		// Short-circuit if the pool is drained: there's nothing for the
+		// new conn to do, and the connector may not honor our cancelled
 		// closeContext anyway. Skip the connect outright.
-		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+		if pool.capacity.Load() == 0 {
 			pool.closedConn()
 			return
 		}

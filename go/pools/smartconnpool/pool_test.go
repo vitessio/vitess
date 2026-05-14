@@ -599,6 +599,40 @@ func TestSetCapacityOnUnopenedPoolArmsCapacity(t *testing.T) {
 	require.ErrorIs(t, err, ErrConnPoolClosed)
 }
 
+func TestRecycleOnClosedPoolClosesConn(t *testing.T) {
+	// On a closed pool, a conn returned via Recycle must be physically
+	// closed — pushing it back onto an idle stack with no workers running
+	// and Get refusing requests would leak the underlying DB connection.
+	// The scenario surfaces specifically when SetCapacity has armed
+	// capacity / idleCount > 0 after Close, which makes
+	// closeOnIdleLimitReached decide to push rather than close.
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Close with a tight ctx so the close returns despite the held conn.
+	closeCtx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	_ = p.CloseWithContext(closeCtx)
+	require.False(t, p.IsOpen())
+	require.EqualValues(t, 1, p.Active())
+
+	// Arm idleCount > 0 on the closed pool. This is what would make a
+	// returning conn get pushed to the stack instead of closed.
+	require.NoError(t, p.SetCapacity(t.Context(), 3))
+	require.EqualValues(t, 3, p.IdleCount())
+
+	held.Recycle()
+
+	require.EqualValues(t, 0, state.open.Load(),
+		"recycle on a closed pool must close the conn, not push it to the idle stack")
+	require.EqualValues(t, 0, p.Active())
+	require.Nil(t, p.clean.Peek(), "no conn should sit in the idle stack of a closed pool")
+}
+
 func TestSetCapacityOnClosedPoolDoesNotDrain(t *testing.T) {
 	// SetCapacity on a closed pool must update the capacity field without
 	// entering setCapacity's drain loop. If a prior CloseWithContext timed
