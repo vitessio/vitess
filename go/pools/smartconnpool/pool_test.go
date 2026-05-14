@@ -751,17 +751,9 @@ func TestWaitTimeRecordedOnTimeout(t *testing.T) {
 
 func TestReopenRetiresStaleConnections(t *testing.T) {
 	// reopen() is invoked when the pool needs to retire all open connections
-	// (e.g., after a DNS change). If a borrowed conn isn't returned before
-	// setCapacity(ctx, 0) times out, the conn survives the reopen window and
-	// could later return to the pool. It should be retired instead, because
-	// the very reason for reopen is that the old conns are no longer trusted.
-
-	// Shorten the close timeout so the reopen path returns quickly when a
-	// held conn prevents setCapacity(ctx, 0) from draining the pool.
-	old := PoolCloseTimeout
-	PoolCloseTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { PoolCloseTimeout = old })
-
+	// (e.g., after a DNS change). A borrowed conn outlives reopen by definition;
+	// the test confirms that the conn is retired (not pushed back into the
+	// pool) when its holder eventually recycles it.
 	var state TestState
 	p := NewPool(&Config[*TestConn]{
 		Capacity: 1,
@@ -772,8 +764,8 @@ func TestReopenRetiresStaleConnections(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, state.open.Load())
 
-	// Trigger a reopen synchronously. setCapacity(0) will time out because
-	// the held conn isn't returned, but reopen continues and restores capacity.
+	// Trigger a reopen synchronously. The held conn survives in the user's
+	// hands; the gen check on Recycle retires it.
 	p.reopen()
 
 	require.EqualValues(t, 1, p.Capacity())
@@ -962,15 +954,10 @@ func TestGetReturnsErrConnPoolClosedDuringCloseWindow(t *testing.T) {
 	<-closeDone
 }
 
-func TestReopenDrainsBeforeBumpingGeneration(t *testing.T) {
-	// reopen() must drain the connection stacks BEFORE bumping
-	// pool.generation. If gen bumps first, a Get that races reopen between
-	// the bump and setCapacity(0)'s capacity.Swap could pop a conn whose
-	// generation already mismatches the pool's — handing the caller a
-	// stale-at-acquisition conn.
-	//
-	// The hook fires immediately after pool.generation is incremented. At
-	// that point the stacks must already be empty.
+func TestReopenPreservesCapacity(t *testing.T) {
+	// reopen() retires the pool's connections without temporarily setting
+	// capacity to 0. Capacity must be observable as the original value
+	// before and after, and idle conns must be physically closed.
 	var state TestState
 	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
 	t.Cleanup(p.Close)
@@ -985,23 +972,84 @@ func TestReopenDrainsBeforeBumpingGeneration(t *testing.T) {
 		c.Recycle()
 	}
 
-	var stacksEmpty atomic.Bool
-	reopenAfterGenBumpHook = func() {
-		empty := p.clean.Peek() == nil
-		for i := range p.settings {
-			if p.settings[i].Peek() != nil {
-				empty = false
-				break
-			}
-		}
-		stacksEmpty.Store(empty)
-	}
-	t.Cleanup(func() { reopenAfterGenBumpHook = nil })
+	require.EqualValues(t, 5, p.Capacity())
+	require.EqualValues(t, 5, p.Active())
+	require.EqualValues(t, 5, state.open.Load())
 
 	p.reopen()
 
-	require.True(t, stacksEmpty.Load(),
-		"stacks must be drained before pool.generation is bumped; otherwise a racing Get can pop a stale-at-acquisition conn")
+	require.EqualValues(t, 5, p.Capacity(), "reopen must not change capacity")
+	require.EqualValues(t, 0, p.Active(), "stale idle conn slots must be released")
+	require.EqualValues(t, 0, state.open.Load(), "old idle conns must be physically closed")
+}
+
+func TestReopenViaPopClosesStaleStackedConns(t *testing.T) {
+	// After reopen bumps the generation, idle conns left in the stacks are
+	// stale. A racing Get's pop() must close them rather than surface them to
+	// the caller. This exercises the generation guard on the acquisition path
+	// that lets reopen safely "bump gen first, sweep stacks after".
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 2}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	var seeds []*Pooled[*TestConn]
+	for range 2 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		seeds = append(seeds, c)
+	}
+	initialIDs := map[int64]bool{seeds[0].Conn.num: true, seeds[1].Conn.num: true}
+	for _, c := range seeds {
+		c.Recycle()
+	}
+	require.EqualValues(t, 2, state.open.Load())
+
+	// Simulate the post-gen-bump pre-drain state: bump generation directly so
+	// the stacked conns are now stale. A racing Get's pop must close them.
+	p.generation.Add(1)
+
+	conn := p.pop(&p.clean)
+	require.Nil(t, conn, "pop must close stale-gen conns and return nil for an empty fresh stack")
+	require.EqualValues(t, 0, p.Active(), "stale conns must release their active slot")
+	require.EqualValues(t, 0, state.open.Load(), "stale conns must be physically closed")
+
+	fresh, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.False(t, initialIDs[fresh.Conn.num], "Get after reopen must open a fresh conn")
+	fresh.Recycle()
+}
+
+func TestReopenDoesNotWakeWaiters(t *testing.T) {
+	// reopen() must not perturb capacity, so parked waiters should not be
+	// artificially woken. The previous implementation called setCapacity(0)
+	// + setCapacity(original), which woke all waiters via the cap-zero
+	// notification loop.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	defer held.Recycle()
+
+	waiterReturned := make(chan struct{})
+	go func() {
+		_, _ = p.Get(t.Context(), nil)
+		close(waiterReturned)
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, time.Second, time.Millisecond)
+
+	p.reopen()
+
+	select {
+	case <-waiterReturned:
+		require.Fail(t, "reopen must not wake parked waiters")
+	case <-time.After(100 * time.Millisecond):
+		// Expected: waiter still parked.
+	}
 }
 
 func TestSetCapacityUpdatesIdleCountBeforeDraining(t *testing.T) {

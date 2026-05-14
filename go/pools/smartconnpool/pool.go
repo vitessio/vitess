@@ -115,13 +115,6 @@ type Config[C Connection] struct {
 // the number of stacks must always be a power of two
 const stackMask = 7
 
-// reopenAfterGenBumpHook is a test-only seam invoked by reopen() immediately
-// after pool.generation is incremented. Production builds leave it nil.
-// It exists so tests can observe whether the stacks have already been drained
-// by the time the generation bump becomes visible — the ordering invariant
-// that prevents a racing Get from popping a stale-at-acquisition conn.
-var reopenAfterGenBumpHook func()
-
 type closeCtxState struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -323,11 +316,9 @@ func (pool *ConnPool[C]) Close() {
 // CloseWithContext behaves like Close but allows passing in a Context to time out the
 // pool closing operation
 func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
-	// Cancel the pool's close context first, before taking capacityMu. Any
-	// concurrent reopen holding the mutex derives its setCapacity ctx from
-	// this same context; cancelling it now lets reopen abort and release the
-	// mutex. Worker reconnects (closeIdleResources, put) read the same ctx
-	// and also abort.
+	// Cancel the pool's close context first, before taking capacityMu. Worker
+	// reconnects (closeIdleResources, put) read this context and abort when
+	// it fires, so workers.Wait() unblocks promptly inside this function.
 	closeState := pool.closeCtx.Swap(nil)
 	if closeState == nil {
 		// already closed
@@ -352,70 +343,47 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	return err
 }
 
-// reopen retires the pool's current connections and restores capacity. It's
-// invoked by the refresh worker when the refresh callback reports that the
-// pool's connections are no longer trusted (e.g., a DNS change for the
+// reopen retires the pool's current connections without changing capacity.
+// It's invoked by the refresh worker when the refresh callback reports that
+// the pool's connections are no longer trusted (e.g., a DNS change for the
 // underlying MySQL endpoint).
 //
-// The contract is cooperative — there is no atomic way to atomically replace
-// every in-flight connection. Each conn category is handled differently:
+// The contract is cooperative — there is no atomic way to replace every
+// in-flight connection. Each conn category is handled differently:
 //
-//   - Idle conns in the stacks at reopen-time: closed before reopen returns
-//     by setCapacity(0)'s drain loop.
+//   - Idle conns in the stacks at reopen-time: bumping the generation makes
+//     them stale; this function then pops them off the stacks and pop()'s
+//     generation guard closes each one. Any conn pushed onto a stack between
+//     the bump and the sweep is also caught by pop()'s guard when the next
+//     Get touches it.
 //   - Conns borrowed at reopen-time: retired when they return via the
 //     generation check in tryReturnConn.
-//   - Conns whose connect was in flight at reopen-time: handled like borrowed
-//     conns if the drain loop waits for them to land. If the drain TIMES OUT
-//     (PoolCloseTimeout exceeded), the in-flight connect finishes with the
-//     pre-reopen generation tag and Get briefly returns that conn to the
-//     caller. It is then retired on Recycle by tryReturnConn's gen check.
-//     This residual race is bounded — the conn is well-formed, the slot is
-//     reclaimed on Recycle, no leak — but the caller may use one stale conn
-//     across the reopen boundary. Closing this fully would require an
-//     acquisition-side gen check that itself has the same kind of window
-//     (between check and use), so it isn't worth the hot-path cost.
-//
-// Ordering note: setCapacity(0) MUST drain the stacks before pool.generation
-// is bumped. Otherwise a racing Get could pop a stack conn between the bump
-// and capacity.Swap(0), which would be a stale-at-acquisition conn (the
-// pool's generation already advertises the new value). See
-// TestReopenDrainsBeforeBumpingGeneration.
+//   - Conns whose connect was in flight at reopen-time: their generation is
+//     captured before the connect call, so they land with the pre-reopen
+//     generation and are retired by tryReturnConn on Recycle. Capacity is
+//     never dipped, so parked waiters are not woken artificially.
 func (pool *ConnPool[C]) reopen() {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
 
-	capacity := pool.capacity.Load()
-	if capacity == 0 {
+	if pool.close.Load() == nil {
 		return
 	}
 
-	// Derive from closeContext so a concurrent Close can short-circuit our
-	// setCapacity calls and release capacityMu promptly.
-	ctx, cancel := context.WithTimeout(pool.closeContext(), PoolCloseTimeout)
-	defer cancel()
-
-	// To re-open the connection pool, first set the capacity to 0 so we close
-	// all the existing connections, as they're now connected to a stale MySQL
-	// instance. We drain BEFORE bumping the generation counter so that at no
-	// point are the connection stacks holding conns whose generation already
-	// mismatches the pool's — otherwise a racing Get could pop a
-	// stale-at-acquisition conn between the bump and the capacity Swap.
-	if err := pool.setCapacity(ctx, 0); err != nil {
-		log.Error(fmt.Sprintf("failed to reopen pool %q: %v", pool.Name, err))
-	}
-
-	// Bump generation now that the stacks are empty. Any conn still borrowed
-	// at this point keeps the previous generation and will be retired via
-	// tryReturnConn when it returns. Conns established from this point on
-	// (by getNew or connReopen) capture the new generation.
+	// Bump the generation first. Any conn already in the stacks is now stale;
+	// pop()'s generation guard will close it when this function sweeps the
+	// stacks below (and also catches stale conns pushed back onto a stack
+	// concurrently). Borrowed conns retain the previous generation and are
+	// retired by tryReturnConn when they return.
 	pool.generation.Add(1)
-	if reopenAfterGenBumpHook != nil {
-		reopenAfterGenBumpHook()
-	}
 
-	// the second call to setCapacity cannot fail because it's only increasing the number
-	// of connections and doesn't need to shut down any
-	_ = pool.setCapacity(ctx, capacity)
+	// Sweep stale idle conns out of the stacks. pop() closes any stale-gen
+	// conn it pops and returns nil only when the stack is empty, so a single
+	// call drains the stack of stale entries.
+	pool.pop(&pool.clean)
+	for i := range pool.settings {
+		pool.pop(&pool.settings[i])
+	}
 }
 
 // IsOpen returns whether the pool is open
@@ -596,11 +564,22 @@ func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
 	// as stale and is in the process of shutting it down. If we successfully mark
 	// the timeout as borrowed, we know that background workers will not be able
 	// to expire this connection (even if it's still visible to them), so it's
-	// safe to return it
+	// safe to return it.
+	//
+	// A conn whose generation predates the pool's was established before the
+	// most recent reopen and must not be handed out. Close it here and keep
+	// popping. This guard lets reopen bump the generation first and sweep the
+	// stacks after — without it, a Get racing between the bump and the sweep
+	// could surface a stale-at-acquisition conn.
 	for conn, ok := stack.Pop(); ok; conn, ok = stack.Pop() {
 		if !conn.timeUsed.borrow() {
 			// Ignore the connection that couldn't be borrowed;
 			// it's being closed by the idle worker and replaced by a new connection.
+			continue
+		}
+		if conn.generation != pool.generation.Load() {
+			conn.Close()
+			pool.closedConn()
 			continue
 		}
 
