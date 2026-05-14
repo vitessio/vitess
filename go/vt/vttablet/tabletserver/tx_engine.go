@@ -153,8 +153,8 @@ func NewTxEngine(env tabletenv.Env, dxNotifier func()) *TxEngine {
 	return te
 }
 
-// SetClusterAction marks whether cluster actions should allow new commits into
-// the active commit list.
+// SetClusterAction sets the cluster action on the active commits query list. When set to in-progress,
+// active commits are not allowed to be added.
 func (te *TxEngine) SetClusterAction(ca ClusterActionState) {
 	te.activeCommits.SetClusterAction(ca)
 }
