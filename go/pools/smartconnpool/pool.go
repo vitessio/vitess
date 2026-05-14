@@ -607,6 +607,19 @@ func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
 	if pool.closeOnIdleLimitReached(conn) {
 		return false
 	}
+
+	// Re-check the close pointer before pushing onto the stack. put() does
+	// an initial check at entry, but a CloseWithContext can fire between
+	// that check and this point — and if SetCapacity has armed idleCount
+	// above 0 on the closed pool, closeOnIdleLimitReached above wouldn't
+	// have closed the conn either. Catch the race here so the conn can't
+	// land in an idle stack of a closed pool.
+	if pool.close.Load() == nil {
+		conn.Close()
+		pool.closedConn()
+		return false
+	}
+
 	connSetting := conn.Conn.Setting()
 	if connSetting == nil {
 		pool.clean.Push(conn)

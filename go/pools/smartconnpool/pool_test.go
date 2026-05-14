@@ -599,6 +599,46 @@ func TestSetCapacityOnUnopenedPoolArmsCapacity(t *testing.T) {
 	require.ErrorIs(t, err, ErrConnPoolClosed)
 }
 
+func TestTryReturnConnClosesOnClosedPool(t *testing.T) {
+	// put() guards against Recycles that arrive after Close at the top,
+	// but it only checks pool.close once. A Recycle that passes the check
+	// then proceeds through tryReturnConn can race a CloseWithContext that
+	// fires before the push lands — the conn would otherwise end up in an
+	// idle stack of a closed pool (especially when SetCapacity has armed
+	// idleCount > 0).
+	//
+	// This test exercises that race directly by invoking tryReturnConn on
+	// a closed pool with a still-fresh conn — exactly the state a racing
+	// Recycle would reach after put's initial close check.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Close with a tight ctx so the close returns despite the held conn.
+	closeCtx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	_ = p.CloseWithContext(closeCtx)
+	require.False(t, p.IsOpen())
+	require.EqualValues(t, 1, p.Active())
+
+	// Arm idleCount > 0 so closeOnIdleLimitReached would otherwise push
+	// rather than close.
+	require.NoError(t, p.SetCapacity(t.Context(), 3))
+	require.EqualValues(t, 3, p.IdleCount())
+
+	// Mimic put()'s borrowed-- and then enter tryReturnConn directly,
+	// matching the state of a racing Recycle that passed put's close
+	// check but reached tryReturnConn after close cleared pool.close.
+	p.borrowed.Add(-1)
+	p.tryReturnConn(held)
+
+	require.EqualValues(t, 0, state.open.Load(), "tryReturnConn must close the conn when pool is closed")
+	require.EqualValues(t, 0, p.Active())
+	require.Nil(t, p.clean.Peek(), "no conn should remain in the stack of a closed pool")
+}
+
 func TestRecycleOnClosedPoolClosesConn(t *testing.T) {
 	// On a closed pool, a conn returned via Recycle must be physically
 	// closed — pushing it back onto an idle stack with no workers running
