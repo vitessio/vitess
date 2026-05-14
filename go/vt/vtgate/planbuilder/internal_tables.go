@@ -30,6 +30,8 @@ func internalTableModificationError(tableName string) error {
 	return vterrors.VT09033(tableName)
 }
 
+// isInternalOperationTableName reports whether tableName is reserved for
+// internal Vitess operations.
 func isInternalOperationTableName(tableName string) bool {
 	return schema.IsInternalOperationTableName(strings.ToLower(tableName))
 }
@@ -62,39 +64,76 @@ func rejectInternalTableDML(stmt sqlparser.Statement) error {
 // rejectInternalTableLoad returns an error when a LOAD DATA statement targets a
 // Vitess internal operation table.
 func rejectInternalTableLoad(query string, parser *sqlparser.Parser) error {
+	return rejectInternalTableLoadStatements(query, parser, true)
+}
+
+// rejectInternalTableLoadStatements scans LOAD DATA statements and returns an
+// error when any target a Vitess internal operation table.
+func rejectInternalTableLoadStatements(query string, parser *sqlparser.Parser, stopAfterFirstLoad bool) error {
 	tokenizer := parser.NewStringTokenizer(query)
 
 	for {
 		token, _ := nextNonCommentToken(tokenizer)
+
+		switch token {
+		case sqlparser.LEX_ERROR, 0:
+			return nil
+		case sqlparser.LOAD:
+			token, _ = nextNonCommentToken(tokenizer)
+			if token != sqlparser.DATA {
+				continue
+			}
+
+			tableName, ok := loadDataTableName(tokenizer)
+			if ok && isInternalOperationTableName(tableName) {
+				return internalTableModificationError(tableName)
+			}
+
+			if stopAfterFirstLoad {
+				return nil
+			}
+		}
+	}
+}
+
+// loadDataTableName returns the target table named by a LOAD DATA statement.
+func loadDataTableName(tokenizer *sqlparser.Tokenizer) (string, bool) {
+	for {
+		token, _ := nextNonCommentToken(tokenizer)
+
 		switch token {
 		case sqlparser.LEX_ERROR, 0, ';':
-			return nil
+			return "", false
 		case sqlparser.INTO:
 			token, _ = nextNonCommentToken(tokenizer)
 			if token != sqlparser.TABLE {
 				continue
 			}
 
-			token, value := nextNonCommentToken(tokenizer)
-			tableName, ok := loadDataIdentifier(token, value)
-			if !ok {
-				continue
-			}
+			tableName, ok := loadDataTableIdentifier(tokenizer)
+			skipLoadDataStatement(tokenizer)
 
-			token, _ = nextNonCommentToken(tokenizer)
-			if token == '.' {
-				token, value = nextNonCommentToken(tokenizer)
-				tableName, ok = loadDataIdentifier(token, value)
-				if !ok {
-					continue
-				}
-			}
-
-			if isInternalOperationTableName(tableName) {
-				return internalTableModificationError(tableName)
-			}
+			return tableName, ok
 		}
 	}
+}
+
+// loadDataTableIdentifier reads the table identifier after LOAD DATA ... INTO
+// TABLE.
+func loadDataTableIdentifier(tokenizer *sqlparser.Tokenizer) (string, bool) {
+	token, value := nextNonCommentToken(tokenizer)
+	tableName, ok := loadDataIdentifier(token, value)
+	if !ok {
+		return "", false
+	}
+
+	token, _ = nextNonCommentToken(tokenizer)
+	if token != '.' {
+		return tableName, true
+	}
+
+	token, value = nextNonCommentToken(tokenizer)
+	return loadDataIdentifier(token, value)
 }
 
 // loadDataIdentifier converts a tokenizer token into a table identifier.
@@ -109,6 +148,17 @@ func loadDataIdentifier(token int, value string) (string, bool) {
 	}
 
 	return tableName, true
+}
+
+// skipLoadDataStatement consumes the rest of a LOAD DATA statement after its
+// target table has already been read.
+func skipLoadDataStatement(tokenizer *sqlparser.Tokenizer) {
+	for {
+		token, _ := nextNonCommentToken(tokenizer)
+		if token == sqlparser.LEX_ERROR || token == 0 || token == ';' {
+			return
+		}
+	}
 }
 
 // nextNonCommentToken skips SQL comments when scanning a statement manually.
@@ -155,7 +205,11 @@ func rejectInternalTableDMLTableExpr(tableExpr sqlparser.TableExpr) error {
 
 // rejectInternalTableDDL returns an error when the supplied DDL statement
 // targets a Vitess internal operation table.
-func rejectInternalTableDDL(stmt sqlparser.DDLStatement) error {
+func rejectInternalTableDDL(
+	stmt sqlparser.DDLStatement,
+	query string,
+	parser *sqlparser.Parser,
+) error {
 	for _, tableName := range stmt.AffectedTables() {
 		if err := rejectInternalTableName(tableName); err != nil {
 			return err
@@ -166,7 +220,7 @@ func rejectInternalTableDDL(stmt sqlparser.DDLStatement) error {
 	case *sqlparser.AlterTable:
 		return rejectInternalTableExchangePartition(stmt)
 	case *sqlparser.CreateProcedure:
-		return rejectInternalTableCreateProcedure(stmt)
+		return rejectInternalTableCreateProcedure(stmt, query, parser)
 	default:
 		return nil
 	}
@@ -183,9 +237,15 @@ func rejectInternalTableExchangePartition(alterTable *sqlparser.AlterTable) erro
 	return rejectInternalTableName(partitionSpec.TableName)
 }
 
-// rejectInternalTableCreateProcedure returns an error when a stored procedure
-// body contains DML that would write to a Vitess internal operation table.
-func rejectInternalTableCreateProcedure(stmt *sqlparser.CreateProcedure) error {
+// rejectInternalTableCreateProcedure returns an error when a stored procedure body
+// contains a statement that would modify a Vitess internal operation table.
+func rejectInternalTableCreateProcedure(
+	stmt *sqlparser.CreateProcedure,
+	query string,
+	parser *sqlparser.Parser,
+) error {
+	loadChecked := false
+
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Insert:
@@ -194,6 +254,16 @@ func rejectInternalTableCreateProcedure(stmt *sqlparser.CreateProcedure) error {
 			return false, rejectInternalTableDML(node)
 		case *sqlparser.Delete:
 			return false, rejectInternalTableDML(node)
+		case sqlparser.DDLStatement:
+			return false, rejectInternalTableDDL(node, query, parser)
+		case *sqlparser.Load:
+			if loadChecked {
+				return false, nil
+			}
+
+			loadChecked = true
+
+			return false, rejectInternalTableLoadStatements(query, parser, false)
 		default:
 			return true, nil
 		}
