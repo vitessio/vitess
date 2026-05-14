@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -60,6 +61,7 @@ func TestCreateKeyspaceFormRendersClusters(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "Create keyspace")
 	assert.Contains(t, rec.Body.String(), "local")
 	assert.Contains(t, rec.Body.String(), "name=\"name\"")
+	assert.Contains(t, rec.Body.String(), "name=\"csrf_token\"")
 }
 
 func TestCreateKeyspacePostCallsServerAndRedirects(t *testing.T) {
@@ -67,13 +69,16 @@ func TestCreateKeyspacePostCallsServerAndRedirects(t *testing.T) {
 	s, err := NewServer(fake, Options{})
 	require.NoError(t, err)
 
+	csrfToken := createKeyspaceCSRFToken(t, s)
 	form := url.Values{}
 	form.Set("cluster_id", "local")
 	form.Set("name", "commerce")
 	form.Set("force", "on")
+	form.Set("csrf_token", csrfToken)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/keyspaces/create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfToken})
 	s.ServeHTTP(rec, req)
 
 	require.NotNil(t, fake.createKeyspaceRequest)
@@ -82,7 +87,26 @@ func TestCreateKeyspacePostCallsServerAndRedirects(t *testing.T) {
 	assert.True(t, fake.createKeyspaceRequest.GetOptions().GetForce())
 	assert.Equal(t, http.StatusSeeOther, rec.Code)
 	assert.Contains(t, rec.Header().Get("Location"), "/keyspace/local/commerce")
-	assert.Contains(t, rec.Header().Get("Location"), "flash=success")
+	assert.NotContains(t, rec.Header().Get("Location"), "flash=success")
+	assert.NotEmpty(t, findCookie(rec, flashCookieName).Value)
+}
+
+func TestCreateKeyspacePostRejectsMissingCSRFToken(t *testing.T) {
+	fake := &actionFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	form := url.Values{}
+	form.Set("cluster_id", "local")
+	form.Set("name", "commerce")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/keyspaces/create", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.ServeHTTP(rec, req)
+
+	assert.Nil(t, fake.createKeyspaceRequest)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Contains(t, rec.Body.String(), "invalid CSRF token")
 }
 
 func TestCreateKeyspacePostValidatesRequiredFields(t *testing.T) {
@@ -90,15 +114,19 @@ func TestCreateKeyspacePostValidatesRequiredFields(t *testing.T) {
 	s, err := NewServer(fake, Options{})
 	require.NoError(t, err)
 
+	csrfToken := createKeyspaceCSRFToken(t, s)
 	form := url.Values{}
 	form.Set("cluster_id", "local")
+	form.Set("csrf_token", csrfToken)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/keyspaces/create", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfToken})
 	s.ServeHTTP(rec, req)
 
 	assert.Nil(t, fake.createKeyspaceRequest)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
 	assert.Contains(t, rec.Body.String(), "keyspace name is required")
 }
 
@@ -111,5 +139,32 @@ func TestCreateKeyspaceHiddenInReadOnlyMode(t *testing.T) {
 	s.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
 	assert.Contains(t, rec.Body.String(), "read-only")
+}
+
+func createKeyspaceCSRFToken(t *testing.T, s *Server) string {
+	t.Helper()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/keyspaces/create", nil)
+	s.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	csrfCookie := findCookie(rec, csrfCookieName)
+	require.NotNil(t, csrfCookie)
+
+	matches := regexp.MustCompile(`name="csrf_token" value="([^"]+)"`).FindStringSubmatch(rec.Body.String())
+	require.Len(t, matches, 2)
+	assert.Equal(t, csrfCookie.Value, matches[1])
+	return matches[1]
+}
+
+func findCookie(rec *httptest.ResponseRecorder, name string) *http.Cookie {
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == name {
+			return cookie
+		}
+	}
+	return nil
 }

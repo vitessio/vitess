@@ -33,6 +33,7 @@ type (
 		Title         string
 		Active        string
 		ReadOnly      bool
+		CSRFToken     string
 		Flash         *Flash
 		Data          any
 		DocumentTitle string
@@ -81,12 +82,15 @@ func staticFS() fs.FS {
 	return static
 }
 
-func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data PageData) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, data PageData) {
 	if data.DocumentTitle == "" {
 		data.DocumentTitle = s.opts.DocumentTitle
 	}
 	data.ReadOnly = s.opts.ReadOnly
-	if flash := flashFromRequest(r); flash != nil {
+	if data.CSRFToken == "" {
+		data.CSRFToken = csrfToken(w, r)
+	}
+	if flash := flashFromRequest(w, r); flash != nil {
 		data.Flash = flash
 	}
 
@@ -96,14 +100,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		http.Error(w, "template not found: "+name, http.StatusInternalServerError)
 		return
 	}
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+	}
 	if err := tmpl.ExecuteTemplate(w, name, data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 func (s *Server) renderError(w http.ResponseWriter, r *http.Request, status int, title string, err error) {
-	w.WriteHeader(status)
-	s.render(w, r, "index.html", PageData{
+	s.render(w, r, status, "index.html", PageData{
 		Title: title,
 		Flash: &Flash{
 			Kind:    "error",
@@ -113,22 +119,11 @@ func (s *Server) renderError(w http.ResponseWriter, r *http.Request, status int,
 }
 
 func (s *Server) renderReadOnly(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusForbidden)
-	s.render(w, r, "index.html", PageData{
+	s.render(w, r, http.StatusForbidden, "index.html", PageData{
 		Title: "Read-only",
 		Flash: &Flash{
 			Kind:    "error",
 			Message: "vtadmin2 is running in read-only mode",
 		},
 	})
-}
-
-func flashFromRequest(r *http.Request) *Flash {
-	q := r.URL.Query()
-	kind := q.Get("flash")
-	message := q.Get("message")
-	if kind == "" || message == "" {
-		return nil
-	}
-	return &Flash{Kind: kind, Message: message}
 }

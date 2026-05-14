@@ -9,6 +9,7 @@
 </div>
 <div class="card">
   <form class="form-grid" method="post" action="/keyspaces/create">
+    <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
     <label>
       Cluster
       <select name="cluster_id" required>

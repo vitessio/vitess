@@ -99,6 +99,18 @@ func TestKeyspacesPageRendersRowsAndCreateLink(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "/keyspaces/create")
 }
 
+func TestKeyspacesPageIgnoresQueryStringFlash(t *testing.T) {
+	s, err := NewServer(&pageFakeServer{}, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/keyspaces?flash=success&message=Keyspace+deleted", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "Keyspace deleted")
+}
+
 func TestKeyspaceDetailRendersShardNames(t *testing.T) {
 	s, err := NewServer(&pageFakeServer{}, Options{})
 	require.NoError(t, err)

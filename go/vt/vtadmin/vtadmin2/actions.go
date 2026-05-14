@@ -17,6 +17,7 @@ limitations under the License.
 package vtadmin2
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -33,6 +34,10 @@ func (s *Server) createKeyspace(w http.ResponseWriter, r *http.Request) {
 
 	if err := r.ParseForm(); err != nil {
 		s.renderFormError(w, r, "Create keyspace", err.Error())
+		return
+	}
+	if !validCSRFToken(r) {
+		s.renderError(w, r, http.StatusForbidden, "Create keyspace", errors.New("invalid CSRF token"))
 		return
 	}
 
@@ -69,8 +74,7 @@ func (s *Server) createKeyspace(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderFormError(w http.ResponseWriter, r *http.Request, title string, message string) {
-	w.WriteHeader(http.StatusBadRequest)
-	s.render(w, r, "index.html", PageData{
+	s.render(w, r, http.StatusBadRequest, "index.html", PageData{
 		Title: title,
 		Flash: &Flash{
 			Kind:    "error",
@@ -80,13 +84,6 @@ func (s *Server) renderFormError(w http.ResponseWriter, r *http.Request, title s
 }
 
 func redirectWithFlash(w http.ResponseWriter, r *http.Request, target string, flash Flash) {
-	values := url.Values{}
-	values.Set("flash", flash.Kind)
-	values.Set("message", flash.Message)
-	if strings.Contains(target, "?") {
-		target += "&" + values.Encode()
-	} else {
-		target += "?" + values.Encode()
-	}
+	setFlash(w, flash)
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }

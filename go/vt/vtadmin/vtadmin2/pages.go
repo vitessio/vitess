@@ -31,7 +31,7 @@ func (s *Server) clusters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "clusters.html", PageData{
+	s.render(w, r, http.StatusOK, "clusters.html", PageData{
 		Title:  "Clusters",
 		Active: "clusters",
 		Data:   resp.GetClusters(),
@@ -47,7 +47,7 @@ func (s *Server) keyspaces(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "keyspaces.html", PageData{
+	s.render(w, r, http.StatusOK, "keyspaces.html", PageData{
 		Title:  "Keyspaces",
 		Active: "keyspaces",
 		Data:   resp.GetKeyspaces(),
@@ -69,7 +69,7 @@ func (s *Server) keyspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "keyspace.html", PageData{
+	s.render(w, r, http.StatusOK, "keyspace.html", PageData{
 		Title:  keyspaceName(ks),
 		Active: "keyspaces",
 		Data:   ks,
@@ -85,7 +85,7 @@ func (s *Server) tablets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "tablets.html", PageData{
+	s.render(w, r, http.StatusOK, "tablets.html", PageData{
 		Title:  "Tablets",
 		Active: "tablets",
 		Data:   resp.GetTablets(),
@@ -101,7 +101,7 @@ func (s *Server) schemas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "schemas.html", PageData{
+	s.render(w, r, http.StatusOK, "schemas.html", PageData{
 		Title:  "Schemas",
 		Active: "schemas",
 		Data:   resp.GetSchemas(),
@@ -120,7 +120,7 @@ func (s *Server) createKeyspaceForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "keyspace_create.html", PageData{
+	s.render(w, r, http.StatusOK, "keyspace_create.html", PageData{
 		Title:  "Create keyspace",
 		Active: "keyspaces",
 		Data:   resp.GetClusters(),
