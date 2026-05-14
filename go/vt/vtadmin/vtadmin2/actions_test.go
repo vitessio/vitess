@@ -18,6 +18,7 @@ package vtadmin2
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -91,6 +92,28 @@ func TestCreateKeyspacePostCallsServerAndRedirects(t *testing.T) {
 	assert.NotEmpty(t, findCookie(rec, flashCookieName).Value)
 }
 
+func TestCreateKeyspacePostMarksFlashCookieSecureOnTLS(t *testing.T) {
+	fake := &actionFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	csrfToken := createKeyspaceCSRFToken(t, s)
+	form := url.Values{}
+	form.Set("cluster_id", "local")
+	form.Set("name", "commerce")
+	form.Set("csrf_token", csrfToken)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/keyspaces/create", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfToken})
+	req.TLS = &tls.ConnectionState{}
+	s.ServeHTTP(rec, req)
+
+	flashCookie := findCookie(rec, flashCookieName)
+	require.NotNil(t, flashCookie)
+	assert.True(t, flashCookie.Secure)
+}
+
 func TestCreateKeyspacePostRejectsMissingCSRFToken(t *testing.T) {
 	fake := &actionFakeServer{}
 	s, err := NewServer(fake, Options{})
@@ -136,11 +159,39 @@ func TestCreateKeyspaceHiddenInReadOnlyMode(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/keyspaces/create", nil)
+	req.AddCookie(&http.Cookie{Name: flashCookieName, Value: encodeFlash(Flash{Kind: "success", Message: "created keyspace stale"})})
 	s.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
 	assert.Contains(t, rec.Body.String(), "read-only")
+	assert.NotContains(t, rec.Body.String(), "created keyspace stale")
+}
+
+func TestCreateKeyspaceFormSetsCSRFCookieOnlyOnForm(t *testing.T) {
+	s, err := NewServer(&actionFakeServer{}, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/keyspaces/create", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.NotNil(t, findCookie(rec, csrfCookieName))
+}
+
+func TestCreateKeyspaceFormMarksCSRFCookieSecureOnTLS(t *testing.T) {
+	s, err := NewServer(&actionFakeServer{}, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/keyspaces/create", nil)
+	req.TLS = &tls.ConnectionState{}
+	s.ServeHTTP(rec, req)
+
+	csrfCookie := findCookie(rec, csrfCookieName)
+	require.NotNil(t, csrfCookie)
+	assert.True(t, csrfCookie.Secure)
 }
 
 func createKeyspaceCSRFToken(t *testing.T, s *Server) string {

@@ -19,7 +19,7 @@
       {{ range .Data }}
       <tr>
         <td>{{ clusterID .GetCluster }}</td>
-        <td><a href="/keyspace/{{ clusterID .GetCluster }}/{{ keyspaceName . }}">{{ keyspaceName . }}</a></td>
+        <td><a href="/keyspace/{{ pathEscape (clusterID .GetCluster) }}/{{ pathEscape (keyspaceName .) }}">{{ keyspaceName . }}</a></td>
         <td>{{ len .GetShards }}</td>
       </tr>
       {{ else }}

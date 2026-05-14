@@ -96,7 +96,7 @@ func TestRootRedirectsToClusters(t *testing.T) {
 	assert.Equal(t, "/clusters", rec.Header().Get("Location"))
 }
 
-func TestHeadPageRoutesReturnMethodNotAllowed(t *testing.T) {
+func TestHeadPageRoutesUseGetHandler(t *testing.T) {
 	fake := &pageFakeServer{}
 	s, err := NewServer(fake, Options{})
 	require.NoError(t, err)
@@ -105,8 +105,8 @@ func TestHeadPageRoutesReturnMethodNotAllowed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodHead, "/clusters", nil)
 	s.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
-	assert.False(t, fake.getClustersCalled)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, fake.getClustersCalled)
 }
 
 func TestUnknownPathReturnsNotFound(t *testing.T) {
@@ -153,8 +153,21 @@ func TestStaticAssetsAuthenticateBeforeMethodHandling(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/static/vtadmin2.css", nil)
 	s.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	assert.True(t, authenticator.called)
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.False(t, authenticator.called)
+}
+
+func TestStaticAssetsSkipAuthentication(t *testing.T) {
+	authenticator := &rejectingAuthenticator{}
+	s, err := NewServer(&fakeVTAdminServer{}, Options{Authenticator: authenticator})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/static/vtadmin2.css", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, authenticator.called)
 }
 
 func TestNavigationIncludesReadOnlyParitySections(t *testing.T) {

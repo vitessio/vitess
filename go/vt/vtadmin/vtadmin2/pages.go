@@ -145,8 +145,9 @@ func (s *Server) createKeyspaceForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, http.StatusOK, "keyspace_create.html", PageData{
-		Title:  "Create keyspace",
-		Active: "keyspaces",
-		Data:   resp.GetClusters(),
+		Title:     "Create keyspace",
+		Active:    "keyspaces",
+		NeedsCSRF: true,
+		Data:      resp.GetClusters(),
 	})
 }

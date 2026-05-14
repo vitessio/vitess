@@ -64,8 +64,8 @@ func TestClustersPageCallsServerAndRendersRows(t *testing.T) {
 func (f *pageFakeServer) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesRequest) (*vtadminpb.GetKeyspacesResponse, error) {
 	return &vtadminpb.GetKeyspacesResponse{Keyspaces: []*vtadminpb.Keyspace{
 		{
-			Cluster:  &vtadminpb.Cluster{Id: "local", Name: "Local"},
-			Keyspace: &vtctldatapb.Keyspace{Name: "commerce"},
+			Cluster:  &vtadminpb.Cluster{Id: "local cluster", Name: "Local"},
+			Keyspace: &vtctldatapb.Keyspace{Name: "commerce/customer"},
 			Shards: map[string]*vtctldatapb.Shard{
 				"0": {Name: "0"},
 			},
@@ -94,9 +94,21 @@ func TestKeyspacesPageRendersRowsAndCreateLink(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Keyspaces")
-	assert.Contains(t, rec.Body.String(), "commerce")
-	assert.Contains(t, rec.Body.String(), "/keyspace/local/commerce")
+	assert.Contains(t, rec.Body.String(), "commerce/customer")
+	assert.Contains(t, rec.Body.String(), "/keyspace/local%20cluster/commerce%2Fcustomer")
 	assert.Contains(t, rec.Body.String(), "/keyspaces/create")
+}
+
+func TestPageRenderDoesNotMintCSRFCookieOnReadOnlyPages(t *testing.T) {
+	s, err := NewServer(&pageFakeServer{}, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/keyspaces", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Nil(t, findCookie(rec, csrfCookieName))
 }
 
 func TestKeyspacesPageIgnoresQueryStringFlash(t *testing.T) {

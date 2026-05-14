@@ -84,6 +84,6 @@ func (s *Server) renderFormError(w http.ResponseWriter, r *http.Request, title s
 }
 
 func redirectWithFlash(w http.ResponseWriter, r *http.Request, target string, flash Flash) {
-	setFlash(w, flash)
+	setFlash(w, r, flash)
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }

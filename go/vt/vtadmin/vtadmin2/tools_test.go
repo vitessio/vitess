@@ -230,7 +230,7 @@ func TestVTExplainReturnsNotFoundForNilResponse(t *testing.T) {
 	require.NotNil(t, fake.vtExplainRequest)
 }
 
-func TestVTExplainHeadReturnsMethodNotAllowed(t *testing.T) {
+func TestVTExplainHeadUsesGetHandler(t *testing.T) {
 	fake := &toolsFakeServer{}
 	s, err := NewServer(fake, Options{})
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestVTExplainHeadReturnsMethodNotAllowed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodHead, "/vtexplain", nil)
 	s.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Nil(t, fake.vtExplainRequest)
 }
 
@@ -394,7 +394,7 @@ func TestVExplainReturnsNotFoundForNilResponse(t *testing.T) {
 	require.NotNil(t, fake.vExplainRequest)
 }
 
-func TestVExplainHeadReturnsMethodNotAllowed(t *testing.T) {
+func TestVExplainHeadUsesGetHandler(t *testing.T) {
 	fake := &toolsFakeServer{}
 	s, err := NewServer(fake, Options{})
 	require.NoError(t, err)
@@ -403,6 +403,6 @@ func TestVExplainHeadReturnsMethodNotAllowed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodHead, "/vexplain", nil)
 	s.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Nil(t, fake.vExplainRequest)
 }
