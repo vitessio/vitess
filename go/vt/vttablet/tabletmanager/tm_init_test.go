@@ -138,9 +138,19 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
 	assert.Contains(t, err.Error(), "unknown TabletType bad")
 
-	initTabletType = "primary"
-	_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
-	assert.Contains(t, err.Error(), "invalid init-tablet-type PRIMARY")
+	for _, invalidType := range []string{"primary", "backup", "restore", "drained"} {
+		initTabletType = invalidType
+		_, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
+		require.Error(t, err, "expected tablet type %q to be invalid", invalidType)
+		assert.Contains(t, err.Error(), "invalid init-tablet-type")
+	}
+
+	for _, validType := range []string{"replica", "rdonly", "spare", "experimental"} {
+		initTabletType = validType
+		gotTablet, err = BuildTabletFromInput(alias, port, grpcport, nil, collations.MySQL8())
+		require.NoError(t, err, "expected tablet type %q to be valid", validType)
+		assert.NotNil(t, gotTablet)
+	}
 }
 
 func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
