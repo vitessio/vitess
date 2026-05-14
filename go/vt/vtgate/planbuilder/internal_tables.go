@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -26,6 +28,10 @@ import (
 // that targets a Vitess internal table.
 func internalTableModificationError(tableName string) error {
 	return vterrors.VT09033(tableName)
+}
+
+func isInternalOperationTableName(tableName string) bool {
+	return schema.IsInternalOperationTableName(strings.ToLower(tableName))
 }
 
 // rejectInternalTableDML returns an error when the supplied DML statement
@@ -84,7 +90,7 @@ func rejectInternalTableLoad(query string, parser *sqlparser.Parser) error {
 				}
 			}
 
-			if schema.IsInternalOperationTableName(tableName) {
+			if isInternalOperationTableName(tableName) {
 				return internalTableModificationError(tableName)
 			}
 		}
@@ -125,7 +131,7 @@ func rejectInternalTableDMLTableExpr(tableExpr sqlparser.TableExpr) error {
 			return nil
 		}
 
-		if !schema.IsInternalOperationTableName(tableName.Name.String()) {
+		if !isInternalOperationTableName(tableName.Name.String()) {
 			return nil
 		}
 
@@ -175,7 +181,7 @@ func rejectInternalTableDDL(stmt sqlparser.DDLStatement) error {
 // table name.
 func rejectInternalTableName(tableName sqlparser.TableName) error {
 	name := tableName.Name.String()
-	if !schema.IsInternalOperationTableName(name) {
+	if !isInternalOperationTableName(name) {
 		return nil
 	}
 

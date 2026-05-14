@@ -5003,6 +5003,12 @@
     "skip_e2e": true
   },
   {
+    "comment": "Unsupported insert into mixed-case internal operation table",
+    "query": "insert into main._VT_HLD_6ACE8BCEF73211EA87E9F875A4D24E90_20200915120410_ (id) values (1)",
+    "plan": "VT09033: modification of internal table '_VT_HLD_6ACE8BCEF73211EA87E9F875A4D24E90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
     "comment": "Unsupported replace into internal operation table",
     "query": "replace into main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ (id) values (1)",
     "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
