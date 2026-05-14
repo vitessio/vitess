@@ -615,6 +615,24 @@ func isRetryableError(err error) bool {
 		sqlErr := sqlerror.NewSQLErrorFromError(err)
 		// Connection errors are retryable
 		return sqlerror.IsConnErr(sqlErr)
+	case vtrpcpb.Code_CLUSTER_EVENT:
+		return isRetryableClusterEvent(err)
+	default:
+		return false
+	}
+}
+
+// isRetryableClusterEvent reports whether the error came from a tablet state
+// transition.
+func isRetryableClusterEvent(err error) bool {
+	root := vterrors.RootCause(err)
+	if root == nil {
+		return false
+	}
+
+	switch root.Error() {
+	case vterrors.NotServing, vterrors.ShuttingDown:
+		return true
 	default:
 		return false
 	}

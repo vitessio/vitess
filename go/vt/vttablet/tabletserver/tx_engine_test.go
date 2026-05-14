@@ -880,6 +880,18 @@ func TestCheckReceivedError(t *testing.T) {
 		retryable:   true,
 		expQuery:    `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = _binary'aa'`,
 	}, {
+		receivedErr: vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'operation not allowed in state SHUTTING_DOWN' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'operation not allowed in state NOT_SERVING' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown+" after cleanup failed"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'operation not allowed in state SHUTTING_DOWN after cleanup failed' where dtid = _binary'aa'`,
+	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
 		retryable:   true,
 		expQuery:    `update _vt.redo_state set state = 1, message = 'Lost connection to MySQL server during query (errno 2013) (sqlstate HY000)' where dtid = _binary'aa'`,
