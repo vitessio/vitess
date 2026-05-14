@@ -998,6 +998,38 @@ func TestReopenPreservesCapacity(t *testing.T) {
 	require.EqualValues(t, 0, state.open.Load(), "old idle conns must be physically closed")
 }
 
+func TestReopenPreservesFreshGenConnsInStack(t *testing.T) {
+	// reopen() bumps the generation then sweeps the stacks. A fresh-gen conn
+	// can land on a stack between the bump and the sweep — e.g.
+	// closeIdleResources's connReopen captures the new generation, succeeds,
+	// then calls tryReturnConn which pushes the new conn onto the stack.
+	// reopen's sweep must not drop those: they're valid post-reopen conns,
+	// and dropping them leaks an active slot.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 2}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 1, p.generation.Load())
+
+	// Craft a conn whose generation matches what pool.generation will be
+	// after the upcoming reopen's bump (1 -> 2). This simulates a fresh
+	// conn pushed onto the stack between reopen's bump and its sweep.
+	fresh, err := p.connNew(t.Context())
+	require.NoError(t, err)
+	p.active.Add(1)
+	fresh.generation = 2
+	p.clean.Push(fresh)
+
+	require.EqualValues(t, 1, state.open.Load())
+	require.EqualValues(t, 1, p.Active())
+
+	p.reopen()
+
+	require.EqualValues(t, 1, state.open.Load(), "fresh-gen conn must not be closed by reopen")
+	require.EqualValues(t, 1, p.Active(), "fresh-gen conn's active slot must be preserved")
+	require.NotNil(t, p.clean.Peek(), "fresh-gen conn must remain reachable in the stack")
+}
+
 func TestReopenViaPopClosesStaleStackedConns(t *testing.T) {
 	// After reopen bumps the generation, idle conns left in the stacks are
 	// stale. A racing Get's pop() must close them rather than surface them to

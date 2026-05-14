@@ -369,10 +369,10 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 // in-flight connection. Each conn category is handled differently:
 //
 //   - Idle conns in the stacks at reopen-time: bumping the generation makes
-//     them stale; this function then pops them off the stacks and pop()'s
-//     generation guard closes each one. Any conn pushed onto a stack between
-//     the bump and the sweep is also caught by pop()'s guard when the next
-//     Get touches it.
+//     them stale; the sweep below drains each stack and closes any stale
+//     entry. A stale conn pushed onto a stack after the sweep — e.g. by an
+//     idle worker that captured the pre-reopen generation — is caught by
+//     pop()'s generation guard the next time Get touches it.
 //   - Conns borrowed at reopen-time: retired when they return via the
 //     generation check in tryReturnConn.
 //   - Conns whose connect was in flight at reopen-time: their generation is
@@ -387,19 +387,46 @@ func (pool *ConnPool[C]) reopen() {
 		return
 	}
 
-	// Bump the generation first. Any conn already in the stacks is now stale;
-	// pop()'s generation guard will close it when this function sweeps the
-	// stacks below (and also catches stale conns pushed back onto a stack
-	// concurrently). Borrowed conns retain the previous generation and are
-	// retired by tryReturnConn when they return.
+	// Bump the generation first. Any conn already in the stacks is now
+	// stale; borrowed conns retain the previous generation and are retired
+	// by tryReturnConn when they return.
 	pool.generation.Add(1)
 
-	// Sweep stale idle conns out of the stacks. pop() closes any stale-gen
-	// conn it pops and returns nil only when the stack is empty, so a single
-	// call drains the stack of stale entries.
-	pool.pop(&pool.clean)
+	pool.sweepStaleConns(&pool.clean)
 	for i := range pool.settings {
-		pool.pop(&pool.settings[i])
+		pool.sweepStaleConns(&pool.settings[i])
+	}
+}
+
+// sweepStaleConns drains a connection stack, closing every conn whose
+// generation predates the pool's current generation. Fresh-generation conns
+// — for example, those pushed by closeIdleResources's connReopen after the
+// generation bump — are pushed back into the pool instead of being dropped;
+// they're valid post-reopen conns and discarding them would leak an active
+// slot.
+func (pool *ConnPool[C]) sweepStaleConns(stack *connStack[C]) {
+	var fresh []*Pooled[C]
+	for {
+		conn, ok := stack.Pop()
+		if !ok {
+			break
+		}
+		if !conn.timeUsed.borrow() {
+			// The idle worker already marked this conn as expired and is
+			// closing it; let that finish without our interference.
+			continue
+		}
+		if conn.generation != pool.generation.Load() {
+			conn.Close()
+			pool.closedConn()
+			continue
+		}
+		fresh = append(fresh, conn)
+	}
+	for _, conn := range fresh {
+		// Clear the borrow we took above so the conn is usable again.
+		conn.timeUsed.update()
+		pool.tryReturnConn(conn)
 	}
 }
 
