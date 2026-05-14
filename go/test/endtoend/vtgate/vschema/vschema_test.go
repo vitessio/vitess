@@ -74,21 +74,17 @@ func TestMain(m *testing.M) {
 		}
 
 		// List of users authorized to execute vschema ddl operations
-		if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
-			timeNow := time.Now().Unix()
-			configFile = path.Join(os.TempDir(), fmt.Sprintf("vtgate-config-%d.json", timeNow))
-			err := writeConfig(configFile, map[string]string{
-				"vschema_ddl_authorized_users": "%",
-			})
-			if err != nil {
-				return 1, err
-			}
-			defer os.Remove(configFile)
-
-			clusterInstance.VtGateExtraArgs = []string{"--config-file=" + configFile, "--schema-change-signal" + "=false"}
-		} else {
-			clusterInstance.VtGateExtraArgs = []string{"--vschema-ddl-authorized-users=%", "--schema-change-signal=false"}
+		timeNow := time.Now().Unix()
+		configFile = path.Join(os.TempDir(), fmt.Sprintf("vtgate-config-%d.json", timeNow))
+		err := writeConfig(configFile, map[string]string{
+			"vschema_ddl_authorized_users": "%",
+		})
+		if err != nil {
+			return 1, err
 		}
+		defer os.Remove(configFile)
+
+		clusterInstance.VtGateExtraArgs = []string{"--config-file=" + configFile, "--schema-change-signal=false"}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -167,35 +163,29 @@ func TestVSchema(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
-	if utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
-		// Don't allow any users to modify the vschema via the SQL API
-		// in order to test that behavior.
+	// Don't allow any users to modify the vschema via the SQL API
+	// in order to test that behavior.
+	writeConfig(configFile, map[string]string{
+		"vschema_ddl_authorized_users": "",
+	})
+	// Allow anyone to modify the vschema via the SQL API again when
+	// the test completes.
+	defer func() {
 		writeConfig(configFile, map[string]string{
-			"vschema_ddl_authorized_users": "",
+			"vschema_ddl_authorized_users": "%",
 		})
-		// Allow anyone to modify the vschema via the SQL API again when
-		// the test completes.
-		defer func() {
-			writeConfig(configFile, map[string]string{
-				"vschema_ddl_authorized_users": "%",
-			})
-		}()
-		require.EventuallyWithT(t, func(t *assert.CollectT) {
-			_, err = conn.ExecuteFetch("ALTER VSCHEMA DROP TABLE main", 1000, false)
-			assert.Error(t, err)
-			assert.ErrorContains(t, err, "is not authorized to perform vschema operations")
-		}, 5*time.Second, 100*time.Millisecond)
-	}
+	}()
+	require.EventuallyWithT(t, func(t *assert.CollectT) {
+		_, err = conn.ExecuteFetch("ALTER VSCHEMA DROP TABLE main", 1000, false)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "is not authorized to perform vschema operations")
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 // TestVSchemaSQLAPIConcurrency tests that we prevent lost writes when we have
 // concurrent vschema changes being made via the SQL API.
 func TestVSchemaSQLAPIConcurrency(t *testing.T) {
-	if !utils.BinaryIsAtLeastAtVersion(22, "vtgate") {
-		t.Skip("This test requires vtgate version 22 or higher")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

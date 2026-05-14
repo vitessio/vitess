@@ -651,13 +651,13 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := econtext.NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(context.Background(), nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(t.Context(), nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
-	sc.ExecuteMultiShard(context.Background(), nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(t.Context(), nil, rss0, queries, session, false, false, nullResultsObserver{}, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
-	sc.ExecuteMultiShard(context.Background(), nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
+	sc.ExecuteMultiShard(t.Context(), nil, rss1, queries, session, false, false, nullResultsObserver{}, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Commit(ctx, session)

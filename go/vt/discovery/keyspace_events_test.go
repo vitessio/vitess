@@ -82,7 +82,7 @@ func TestKeyspaceEventConcurrency(t *testing.T) {
 	updates.Store(0)
 	wg := sync.WaitGroup{}
 	concurrency := 100
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	go func() {
 		for {
@@ -394,7 +394,7 @@ func TestWaitForConsistentKeyspaces(t *testing.T) {
 			// We don't want the unit tests to wait, so we only test the first
 			// iteration of whether the keyspace event watcher returns
 			// that the keyspaces are consistent or not.
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 			kew := KeyspaceEventWatcher{
 				keyspaces:        tt.ksMap,

@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -103,11 +103,11 @@ func TestScatterErrsAsWarns(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("test kills primary on source shard, but query will be on target shard so it will be skipped")
 	}
-	oltp, err := mysql.Connect(context.Background(), &vtParams)
+	oltp, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer oltp.Close()
 
-	olap, err := mysql.Connect(context.Background(), &vtParams)
+	olap, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer olap.Close()
 
@@ -170,5 +170,5 @@ func assertContainsOneOf(t *testing.T, conn *mysql.Conn, query string, expected 
 		}
 	}
 
-	t.Errorf("%s\n did not match any of %v", got, expected)
+	assert.Failf(t, "no match", "%s\n did not match any of %v", got, expected)
 }

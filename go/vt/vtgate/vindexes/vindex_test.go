@@ -17,7 +17,6 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
 	"sort"
 	"testing"
 
@@ -84,7 +83,7 @@ func TestVindexMap(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
-	got, err := Map(context.Background(), ge, nil, [][]sqltypes.Value{{
+	got, err := Map(t.Context(), ge, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}})
 	assert.NoError(t, err)
@@ -97,7 +96,7 @@ func TestVindexMap(t *testing.T) {
 	hash, err := CreateVindex("hash", "hash", nil)
 	assert.NoError(t, err)
 	require.Empty(t, hash.(ParamValidating).UnknownParams())
-	got, err = Map(context.Background(), hash, nil, [][]sqltypes.Value{{
+	got, err = Map(t.Context(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}})
 	assert.NoError(t, err)
@@ -112,7 +111,7 @@ func TestVindexVerify(t *testing.T) {
 	assert.NoError(t, err)
 	require.Empty(t, ge.(ParamValidating).UnknownParams())
 
-	got, err := Verify(context.Background(), ge, nil, [][]sqltypes.Value{{
+	got, err := Verify(t.Context(), ge, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}}, [][]byte{
 		[]byte("\x01\x16k@\xb4J\xbaK\xd6"),
@@ -125,7 +124,7 @@ func TestVindexVerify(t *testing.T) {
 	hash, err := CreateVindex("hash", "hash", nil)
 	require.Empty(t, hash.(ParamValidating).UnknownParams())
 	assert.NoError(t, err)
-	got, err = Verify(context.Background(), hash, nil, [][]sqltypes.Value{{
+	got, err = Verify(t.Context(), hash, nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
 	}}, [][]byte{
 		[]byte("\x16k@\xb4J\xbaK\xd6"),

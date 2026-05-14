@@ -78,12 +78,12 @@ func TestRefreshAllInformation(t *testing.T) {
 	require.False(t, discoveredOnce)
 
 	// Create a memory topo-server and create the keyspace and shard records
-	ts = memorytopo.NewServer(context.Background(), cell1)
-	_, err := ts.GetOrCreateShard(context.Background(), keyspace, shard)
+	ts = memorytopo.NewServer(t.Context(), cell1)
+	_, err := ts.GetOrCreateShard(t.Context(), keyspace, shard)
 	require.NoError(t, err)
 
 	// Test error
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // cancel context to simulate timeout
 	require.Error(t, refreshAllInformation(ctx))
 	require.False(t, process.FirstDiscoveryCycleComplete.Load())

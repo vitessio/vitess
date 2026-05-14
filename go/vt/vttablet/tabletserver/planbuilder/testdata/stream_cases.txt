@@ -78,13 +78,7 @@
 "select get_lock('foo', 10) from dual"
 {
   "PlanID": "SelectStream",
-  "TableName": "dual",
-  "Permissions": [
-    {
-      "TableName": "dual",
-      "Role": 0
-    }
-  ],
+  "TableName": "",
   "FullQuery": "select get_lock('foo', 10) from dual",
   "NeedsReservedConn": true
 }

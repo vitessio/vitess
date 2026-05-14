@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -196,15 +197,12 @@ func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
 func startExternalVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelr func()) {
 	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0, false)
 	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return func() {
 		t.Helper()
 		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
+		_, err := playerEngine.Exec(query)
+		require.NoError(t, err)
 		expectDeleteQueries(t)
 	}
 }

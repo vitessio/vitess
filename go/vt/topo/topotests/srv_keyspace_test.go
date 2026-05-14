@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -38,7 +39,7 @@ import (
 // waitForInitialSrvKeyspace waits for the initial SrvKeyspace to
 // appear, and match the provided srvKeyspace.
 func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) (current *topo.WatchSrvKeyspaceData, changes <-chan *topo.WatchSrvKeyspaceData, cancel context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	start := time.Now()
 	var err error
 	for {
@@ -47,14 +48,14 @@ func waitForInitialSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace str
 		case topo.IsErrType(err, topo.NoNode):
 			// hasn't appeared yet
 			if time.Since(start) > 10*time.Second {
-				t.Fatalf("time out waiting for file to appear")
+				require.Fail(t, "time out waiting for file to appear")
 			}
 			time.Sleep(10 * time.Millisecond)
 			continue
 		case err == nil:
 			return
 		default:
-			t.Fatalf("watch failed: %v", err)
+			require.NoError(t, err)
 		}
 	}
 }
@@ -68,22 +69,20 @@ func TestWatchSrvKeyspaceNoNode(t *testing.T) {
 
 	// No SrvKeyspace -> ErrNoNode
 	_, _, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", err)
-	}
+	assert.True(t, topo.IsErrType(err, topo.NoNode), "expected NoNode error, got: %v", err)
 }
 
 func TestWatchSrvKeyspace(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 
 	// Create initial value
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, &topodatapb.SrvKeyspace{}); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Starting the watch should now work, and return an empty
@@ -91,30 +90,26 @@ func TestWatchSrvKeyspace(t *testing.T) {
 	wanted := &topodatapb.SrvKeyspace{}
 	current, changes, cancel := waitForInitialSrvKeyspace(t, ts, cell, keyspace)
 	if !proto.Equal(current.Value, wanted) {
-		t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
+		require.Equalf(t, wanted, current.Value, "got bad data")
 	}
 
 	// Update the value with bad data, wait until error.
 	conn, err := ts.ConnForCell(ctx, cell)
-	if err != nil {
-		t.Fatalf("ConnForCell failed: %v", err)
-	}
+	require.NoError(t, err)
 	if _, err := conn.Update(ctx, "/keyspaces/"+keyspace+"/SrvKeyspace", []byte("BAD PROTO DATA"), nil); err != nil {
-		t.Fatalf("Update(/keyspaces/ks1/SrvKeyspace) failed: %v", err)
+		require.NoError(t, err)
 	}
 	for {
 		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if wd.Err != nil {
 			if strings.Contains(wd.Err.Error(), "error unpacking SrvKeyspace object") {
 				break
 			}
-			t.Fatalf("watch channel unexpectedly got unknown error: %v", wd.Err)
+			require.Failf(t, "watch channel unexpectedly got unknown error", "%v", wd.Err)
 		}
 		if !proto.Equal(wd.Value, wanted) {
-			t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
+			require.Equalf(t, wanted, wd.Value, "got bad data")
 		}
 		t.Log("got duplicate right value, skipping.")
 	}
@@ -124,13 +119,11 @@ func TestWatchSrvKeyspace(t *testing.T) {
 
 	// Bad data in topo, setting the watch should now fail.
 	_, _, err = ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if err == nil || !strings.Contains(err.Error(), "error unpacking initial SrvKeyspace object") {
-		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", err)
-	}
+	require.ErrorContains(t, err, "error unpacking initial SrvKeyspace object")
 
 	// Update content, wait until Watch works again
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 	start := time.Now()
 	for {
@@ -139,36 +132,34 @@ func TestWatchSrvKeyspace(t *testing.T) {
 			if strings.Contains(err.Error(), "error unpacking initial SrvKeyspace object") {
 				// hasn't changed yet
 				if time.Since(start) > 10*time.Second {
-					t.Fatalf("time out waiting for file to appear")
+					require.Fail(t, "time out waiting for file to appear")
 				}
 				time.Sleep(10 * time.Millisecond)
 				continue
 			}
-			t.Fatalf("got unexpected error while setting watch: %v", err)
+			require.NoError(t, err)
 		}
 		if !proto.Equal(current.Value, wanted) {
-			t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
+			require.Equalf(t, wanted, current.Value, "got bad data")
 		}
 		break
 	}
 
 	// Delete node, wait for error (skip any duplicate).
 	if err := ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil {
-		t.Fatalf("DeleteSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 	for {
 		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if topo.IsErrType(wd.Err, topo.NoNode) {
 			break
 		}
 		if wd.Err != nil {
-			t.Fatalf("watch channel unexpectedly got unknown error: %v", wd.Err)
+			require.Failf(t, "watch channel unexpectedly got unknown error", "%v", wd.Err)
 		}
 		if !proto.Equal(wd.Value, wanted) {
-			t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
+			require.Equalf(t, wanted, wd.Value, "got bad data")
 		}
 		t.Log("got duplicate right value, skipping.")
 	}
@@ -177,44 +168,40 @@ func TestWatchSrvKeyspace(t *testing.T) {
 func TestWatchSrvKeyspaceCancel(t *testing.T) {
 	cell := "cell1"
 	keyspace := "ks1"
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, cell)
 	defer ts.Close()
 
 	// No SrvKeyspace -> ErrNoNode
 	_, _, err := ts.WatchSrvKeyspace(ctx, cell, keyspace)
-	if !topo.IsErrType(err, topo.NoNode) {
-		t.Errorf("Got invalid result from WatchSrvKeyspace(not there): %v", err)
-	}
+	assert.True(t, topo.IsErrType(err, topo.NoNode), "expected NoNode error, got: %v", err)
 
 	// Create initial value
 	wanted := &topodatapb.SrvKeyspace{}
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, wanted); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Starting the watch should now work.
 	current, changes, cancel := waitForInitialSrvKeyspace(t, ts, cell, keyspace)
 	if !proto.Equal(current.Value, wanted) {
-		t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
+		require.Equalf(t, wanted, current.Value, "got bad data")
 	}
 
 	// Cancel watch, wait for error.
 	cancel()
 	for {
 		wd, ok := <-changes
-		if !ok {
-			t.Fatalf("watch channel unexpectedly closed")
-		}
+		require.True(t, ok, "watch channel unexpectedly closed")
 		if topo.IsErrType(wd.Err, topo.Interrupted) {
 			break
 		}
 		if wd.Err != nil {
-			t.Fatalf("watch channel unexpectedly got unknown error: %v", wd.Err)
+			require.Failf(t, "watch channel unexpectedly got unknown error", "%v", wd.Err)
 		}
 		if !proto.Equal(wd.Value, wanted) {
-			t.Fatalf("got bad data: %v expected: %v", wd.Value, wanted)
+			require.Equalf(t, wanted, wd.Value, "got bad data")
 		}
 		t.Log("got duplicate right value, skipping.")
 	}
@@ -233,7 +220,7 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 
 	keyRange, err := key.ParseShardingSpec("-")
 	if err != nil || len(keyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(keyRange))
 	}
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
@@ -251,26 +238,26 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	ks := &topodatapb.Keyspace{}
 	if err := ts.CreateKeyspace(ctx, keyspace, ks); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 
 	targetKs := &topodatapb.SrvKeyspace{
@@ -301,32 +288,24 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	ctx, unlock, err := ts.LockKeyspace(ctx, keyspace, "Locking for tests")
-	if err != nil {
-		t.Fatalf("LockKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer unlock(&err)
 
 	if err := ts.AddSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, []string{cell}); err != nil {
-		t.Fatalf("AddSrvKeyspacePartitions() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err := json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err := json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("AddSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "AddSrvKeyspacePartitions() failure")
 	}
 
 	// removing works
@@ -345,26 +324,20 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	if err = ts.DeleteSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, []string{cell}); err != nil {
-		t.Fatalf("DeleteSrvKeyspacePartitions() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("DeleteSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "DeleteSrvKeyspacePartitions() failure")
 	}
 
 	// You can add to partitions that do not exist
@@ -396,71 +369,53 @@ func TestUpdateSrvKeyspacePartitions(t *testing.T) {
 	}
 
 	if err = ts.AddSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_REPLICA, []string{cell}); err != nil {
-		t.Fatalf("AddSrvKeyspacePartitions() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("SrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "SrvKeyspacePartitions() failure")
 	}
 
 	// it works in multiple cells
 
 	if err = ts.AddSrvKeyspacePartitions(ctx, keyspace, shards, topodatapb.TabletType_REPLICA, nil); err != nil {
-		t.Fatalf("AddSrvKeyspacePartitions() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("AddSrvKeyspacePartitions() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "AddSrvKeyspacePartitions() failure")
 	}
 
 	// Now let's get the srvKeyspace in cell2. Partition should have been added there too.
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell2, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("GetSrvKeyspace() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "GetSrvKeyspace() failure")
 	}
 }
 
@@ -474,12 +429,12 @@ func TestUpdateUpdateDisableQueryService(t *testing.T) {
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(rightKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
@@ -501,16 +456,16 @@ func TestUpdateUpdateDisableQueryService(t *testing.T) {
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	ks := &topodatapb.Keyspace{}
 	if err := ts.CreateKeyspace(ctx, keyspace, ks); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	targetKs := &topodatapb.SrvKeyspace{
@@ -549,52 +504,38 @@ func TestUpdateUpdateDisableQueryService(t *testing.T) {
 	}
 
 	ctx, unlock, err := ts.LockKeyspace(ctx, keyspace, "Locking for tests")
-	if err != nil {
-		t.Fatalf("LockKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer unlock(&err)
 
 	if err := ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, []string{cell}, true /* disableQueryService */); err != nil {
-		t.Fatalf("UpdateDisableQueryService() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err := json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err := json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("UpdateDisableQueryService() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "UpdateDisableQueryService() failure")
 	}
 
 	// cell2 is untouched
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell2, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(initial)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("UpdateDisableQueryService() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "UpdateDisableQueryService() failure")
 	}
 
 	// You can enable query service
@@ -634,26 +575,20 @@ func TestUpdateUpdateDisableQueryService(t *testing.T) {
 	}
 
 	if err := ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_PRIMARY, []string{cell}, false /* disableQueryService */); err != nil {
-		t.Fatalf("UpdateDisableQueryService() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("UpdateDisableQueryService() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "UpdateDisableQueryService() failure")
 	}
 }
 
@@ -667,12 +602,12 @@ func TestGetShardServingTypes(t *testing.T) {
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(rightKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
@@ -712,42 +647,38 @@ func TestGetShardServingTypes(t *testing.T) {
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	ks := &topodatapb.Keyspace{}
 	if err := ts.CreateKeyspace(ctx, keyspace, ks); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	shardInfo := topo.NewShardInfo(keyspace, "-80", &topodatapb.Shard{KeyRange: leftKeyRange[0]}, nil)
 
 	got, err := ts.GetShardServingTypes(ctx, shardInfo)
-	if err != nil {
-		t.Fatalf("GetShardServingTypes() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RDONLY}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetShardServingTypes() failure. Got %v, want: %v", got, want)
+		assert.Equalf(t, want, got, "GetShardServingTypes() failure")
 	}
 
 	shardInfo = topo.NewShardInfo(keyspace, "80-", &topodatapb.Shard{KeyRange: rightKeyRange[0]}, nil)
 
 	got, err = ts.GetShardServingTypes(ctx, shardInfo)
-	if err != nil {
-		t.Fatalf("GetShardServingTypes() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want = []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetShardServingTypes() failure. Got %v, want: %v", got, want)
+		assert.Equalf(t, want, got, "GetShardServingTypes() failure")
 	}
 
 	keyRange, _ := key.ParseShardingSpec("-")
@@ -755,14 +686,12 @@ func TestGetShardServingTypes(t *testing.T) {
 	shardInfo = topo.NewShardInfo(keyspace, "-", &topodatapb.Shard{KeyRange: keyRange[0]}, nil)
 
 	got, err = ts.GetShardServingTypes(ctx, shardInfo)
-	if err != nil {
-		t.Fatalf("GetShardServingTypes() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want = []topodatapb.TabletType{}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetShardServingTypes() failure. Got %v, want: %v", got, want)
+		assert.Equalf(t, want, got, "GetShardServingTypes() failure")
 	}
 }
 
@@ -776,12 +705,12 @@ func TestGetShardServingCells(t *testing.T) {
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(rightKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
@@ -823,51 +752,45 @@ func TestGetShardServingCells(t *testing.T) {
 	shardInfo := topo.NewShardInfo(keyspace, "-80", &topodatapb.Shard{KeyRange: leftKeyRange[0]}, nil)
 
 	got, err := ts.GetShardServingCells(ctx, shardInfo)
-	if err != nil {
-		t.Fatalf("GetShardServingTypes() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want := []string{}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetShardServingCells() failure. Got %v, want: %v", got, want)
+		assert.Equalf(t, want, got, "GetShardServingCells() failure")
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	ks := &topodatapb.Keyspace{}
 	if err := ts.CreateKeyspace(ctx, keyspace, ks); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	got, err = ts.GetShardServingCells(ctx, shardInfo)
-	if err != nil {
-		t.Fatalf("GetShardServingCells() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want = []string{cell}
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetShardServingCells() failure. Got %v, want: %v", got, want)
+		assert.Equalf(t, want, got, "GetShardServingCells() failure")
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	got, err = ts.GetShardServingCells(ctx, shardInfo)
-	if err != nil {
-		t.Fatalf("GetShardServingCells() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want = []string{cell, cell2}
 
 	sort.Strings(got)
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetShardServingTypes() failure. Got %v, want: %v", got, want)
+		assert.Equalf(t, want, got, "GetShardServingTypes() failure")
 	}
 }
 
@@ -881,17 +804,17 @@ func TestMasterMigrateServedType(t *testing.T) {
 
 	initialKeyRange, err := key.ParseShardingSpec("-")
 	if err != nil || len(initialKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(initialKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(initialKeyRange))
 	}
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(rightKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 	// Create initial value
 	initial := &topodatapb.SrvKeyspace{
@@ -941,11 +864,11 @@ func TestMasterMigrateServedType(t *testing.T) {
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, initial); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	sourceShards := []*topo.ShardInfo{
@@ -959,21 +882,17 @@ func TestMasterMigrateServedType(t *testing.T) {
 
 	ks := &topodatapb.Keyspace{}
 	if err := ts.CreateKeyspace(ctx, keyspace, ks); err != nil {
-		t.Fatalf("CreateKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	ctx, unlock, err := ts.LockKeyspace(ctx, keyspace, "Locking for tests")
-	if err != nil {
-		t.Fatalf("LockKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer unlock(&err)
 
 	// You can migrate a single cell at a time
 
 	err = ts.MigrateServedType(ctx, keyspace, destinationShards, sourceShards, topodatapb.TabletType_RDONLY, []string{cell})
-	if err != nil {
-		t.Fatalf("MigrateServedType() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	targetKs := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
@@ -1026,67 +945,47 @@ func TestMasterMigrateServedType(t *testing.T) {
 	}
 
 	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err := json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err := json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("MigrateServedType() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "MigrateServedType() failure")
 	}
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell2, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(initial)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("MigrateServedType() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "MigrateServedType() failure")
 	}
 
 	// migrating all cells
 
 	err = ts.MigrateServedType(ctx, keyspace, destinationShards, sourceShards, topodatapb.TabletType_RDONLY, nil)
-	if err != nil {
-		t.Fatalf("MigrateServedType() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell2, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("MigrateServedType() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "MigrateServedType() failure")
 	}
 
 	// migrating primary type cleans up shard tablet controls records
@@ -1132,27 +1031,19 @@ func TestMasterMigrateServedType(t *testing.T) {
 	}
 
 	err = ts.MigrateServedType(ctx, keyspace, destinationShards, sourceShards, topodatapb.TabletType_PRIMARY, nil)
-	if err != nil {
-		t.Fatalf("MigrateServedType() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	srvKeyspace, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
-	if err != nil {
-		t.Fatalf("GetSrvKeyspace() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	got, err = json2.MarshalPB(srvKeyspace)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	want, err = json2.MarshalPB(targetKs)
-	if err != nil {
-		t.Fatalf("MarshalPB() failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	if string(got) != string(want) {
-		t.Errorf("MigrateServedType() failure. Got %v, want: %v", string(got), string(want))
+		assert.Equalf(t, string(want), string(got), "MigrateServedType() failure")
 	}
 }
 
@@ -1166,12 +1057,12 @@ func TestValidateSrvKeyspace(t *testing.T) {
 
 	leftKeyRange, err := key.ParseShardingSpec("-80")
 	if err != nil || len(leftKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
 	}
 
 	rightKeyRange, err := key.ParseShardingSpec("80-")
 	if err != nil || len(rightKeyRange) != 1 {
-		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+		require.Failf(t, "ParseShardingSpec failed", "Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
 	}
 
 	correct := &topodatapb.SrvKeyspace{
@@ -1207,11 +1098,11 @@ func TestValidateSrvKeyspace(t *testing.T) {
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, correct); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, incorrect); err != nil {
-		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+		require.NoError(t, err)
 	}
 	errMsg := "keyspace partition for PRIMARY in cell cell2 does not start with min key"
 	err = ts.ValidateSrvKeyspace(ctx, keyspace, "cell1,cell2")

@@ -95,7 +95,7 @@ func setupMoveTables(t *testing.T, ctx context.Context) *testEnv {
 // TestWorkflowStateMoveTables tests the logic used to determine the state of a MoveTables workflow based on the
 // routing rules. We setup two workflows with the same table in both source and target keyspaces.
 func TestWorkflowStateMoveTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	te := setupMoveTables(t, ctx)
 	require.NotNil(t, te)
 	type testCase struct {

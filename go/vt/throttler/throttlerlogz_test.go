@@ -47,9 +47,7 @@ func TestThrottlerlogzHandler_NonExistantThrottler(t *testing.T) {
 
 func TestThrottlerlogzHandler(t *testing.T) {
 	f := &managerTestFixture{}
-	if err := f.setUp(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, f.setUp())
 	defer f.tearDown()
 
 	testcases := []struct {

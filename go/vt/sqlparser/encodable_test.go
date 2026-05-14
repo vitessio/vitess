@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -75,8 +77,6 @@ func TestEncodable(t *testing.T) {
 	for _, tcase := range tcases {
 		buf := new(strings.Builder)
 		tcase.in.EncodeSQL(buf)
-		if out := buf.String(); out != tcase.out {
-			t.Errorf("EncodeSQL(%v): %s, want %s", tcase.in, out, tcase.out)
-		}
+		assert.Equalf(t, tcase.out, buf.String(), "EncodeSQL(%v)", tcase.in)
 	}
 }

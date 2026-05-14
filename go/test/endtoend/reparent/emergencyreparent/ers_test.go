@@ -17,7 +17,6 @@ limitations under the License.
 package emergencyreparent
 
 import (
-	"context"
 	"fmt"
 	"os/exec"
 	"sync"
@@ -140,10 +139,6 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 
-	if clusterInstance.VtTabletMajorVersion < 24 {
-		t.Skip("Skipping test since `DemotePrimary` on earlier versions does not handle blocked primaries correctly")
-	}
-
 	// start vtgate w/disabled buffering
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
 		"--enable-buffer=false",
@@ -170,16 +165,16 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		utils.RunSQL(ctx, t, "STOP REPLICA IO_THREAD", tablet)
 
 		// Disable semi-sync on replicas to simulate blocking
-		semisyncType, err := utils.SemiSyncExtensionLoaded(context.Background(), tablet)
+		semisyncType, err := utils.SemiSyncExtensionLoaded(t.Context(), tablet)
 		require.NoError(t, err)
 		switch semisyncType {
 		case mysql.SemiSyncTypeSource:
-			utils.RunSQL(context.Background(), t, "SET GLOBAL rpl_semi_sync_replica_enabled = false", tablet)
+			utils.RunSQL(t.Context(), t, "SET GLOBAL rpl_semi_sync_replica_enabled = false", tablet)
 		case mysql.SemiSyncTypeMaster:
-			utils.RunSQL(context.Background(), t, "SET GLOBAL rpl_semi_sync_slave_enabled = false", tablet)
+			utils.RunSQL(t.Context(), t, "SET GLOBAL rpl_semi_sync_slave_enabled = false", tablet)
 		}
 
-		utils.RunSQL(context.Background(), t, "START REPLICA IO_THREAD", tablet)
+		utils.RunSQL(t.Context(), t, "START REPLICA IO_THREAD", tablet)
 	}
 
 	// Try performing a write and ensure that it blocks.
@@ -220,14 +215,14 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		defer wg.Done()
 
 		// Ensure the write (other goroutine above) is blocked waiting on ACKs on the primary.
-		utils.WaitForQueryWithStateInProcesslist(context.Background(), t, tablets[0], writeSQL, "Waiting for semi-sync ACK from replica", time.Second*20)
+		utils.WaitForQueryWithStateInProcesslist(t.Context(), t, tablets[0], writeSQL, "Waiting for semi-sync ACK from replica", time.Second*20)
 
 		// Send SIGSTOP to primary to simulate it being unresponsive.
 		tablets[0].VttabletProcess.Stop()
 
 		// Run forced reparent operation, this should now proceed unimpeded.
 		out, err := utils.Ers(clusterInstance, tablets[1], "15s", waitReplicasTimeout.String())
-		require.NoError(t, err, out)
+		assert.NoError(t, err, out)
 	}()
 
 	wg.Wait()
@@ -494,12 +489,12 @@ func TestNoReplicationStatusAndIOThreadStopped(t *testing.T) {
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 	require.NoError(t, err, out)
 	// Verify that the tablet has the inserted value
-	err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+	err = utils.CheckInsertedValues(t.Context(), t, tablets[3], insertedVal)
 	require.NoError(t, err)
 	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
 	utils.ConfirmReplication(t, tablets[3], tablets[:1])
 	// Confirm that tablets[2] which had no replication status initially now has its replication started
-	utils.CheckReplicationStatus(context.Background(), t, tablets[1], true, true)
+	utils.CheckReplicationStatus(t.Context(), t, tablets[1], true, true)
 }
 
 // TestERSForInitialization tests whether calling ERS in the beginning sets up the cluster properly or not
@@ -528,11 +523,9 @@ func TestERSForInitialization(t *testing.T) {
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
 	require.NoError(t, err)
-	if clusterInstance.VtctlMajorVersion >= 14 {
-		vtctldClientProcess := cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
-		out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
-		require.NoError(t, err, out)
-	}
+	vtctldClientProcess := cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
+	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspace.Name, "--durability-policy=semi_sync")
+	require.NoError(t, err, out)
 
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
@@ -546,9 +539,8 @@ func TestERSForInitialization(t *testing.T) {
 	}
 	// Wait for mysql processes to start
 	for _, proc := range mysqlCtlProcessList {
-		if err := proc.Wait(); err != nil {
-			t.Fatalf("Error starting mysql: %s", err.Error())
-		}
+		err := proc.Wait()
+		require.NoError(t, err, "Error starting mysql")
 	}
 
 	for _, tablet := range tablets {
@@ -567,7 +559,7 @@ func TestERSForInitialization(t *testing.T) {
 
 	utils.ValidateTopology(t, clusterInstance, true)
 	// create Tables
-	utils.RunSQL(context.Background(), t, "create table vt_insert_test (id bigint, msg varchar(64), primary key (id)) Engine=InnoDB", tablets[0])
+	utils.RunSQL(t.Context(), t, "create table vt_insert_test (id bigint, msg varchar(64), primary key (id)) Engine=InnoDB", tablets[0])
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.WaitForReplicationToStart(t, clusterInstance, utils.KeyspaceName, utils.ShardName, len(tablets), true)
@@ -620,7 +612,7 @@ func TestERSFailFast(t *testing.T) {
 	go func() {
 		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
 		out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
-		require.Error(t, err)
+		assert.Error(t, err)
 		select {
 		case strChan <- out:
 			return
@@ -662,10 +654,10 @@ func TestReplicationStopped(t *testing.T) {
 	out, err := utils.Ers(clusterInstance, tablets[3], "60s", "30s")
 	require.NoError(t, err, out)
 	// Verify that the tablet has the inserted value
-	err = utils.CheckInsertedValues(context.Background(), t, tablets[3], insertedVal)
+	err = utils.CheckInsertedValues(t.Context(), t, tablets[3], insertedVal)
 	require.NoError(t, err)
 	// Confirm that replication is setup correctly from tablets[3] to tablets[0]
 	utils.ConfirmReplication(t, tablets[3], tablets[:1])
 	// Confirm that tablets[2] which had replication stopped initially still has its replication stopped
-	utils.CheckReplicationStatus(context.Background(), t, tablets[2], false, false)
+	utils.CheckReplicationStatus(t.Context(), t, tablets[2], false, false)
 }
