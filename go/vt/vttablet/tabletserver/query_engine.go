@@ -538,16 +538,53 @@ func (qe *QueryEngine) ForEachPlan(each func(plan *TabletPlan) bool) {
 // IsMySQLReachable returns an error if it cannot connect to MySQL.
 // This can be called before opening the QueryEngine.
 func (qe *QueryEngine) IsMySQLReachable() error {
-	conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.Config().DB.AppWithDB())
-	if err != nil {
-		if sqlerror.IsTooManyConnectionsErr(err) {
+	return isMySQLReachable(func() error {
+		conn, err := dbconnpool.NewDBConnection(context.TODO(), qe.env.Config().DB.DbaWithDB())
+		if err != nil {
+			return err
+		}
+		conn.Close()
+		return nil
+	})
+}
+
+func isMySQLReachable(connect func() error) error {
+	var lastErr error
+	for attempt := range healthCheckMaxRetries {
+		lastErr = connect()
+		if lastErr == nil {
 			return nil
 		}
-		return err
+		if sqlerror.IsTooManyConnectionsErr(lastErr) {
+			return nil
+		}
+		if !isTransientConnErr(lastErr) {
+			return lastErr
+		}
+		if attempt < healthCheckMaxRetries-1 {
+			time.Sleep(healthCheckRetryBaseDelay << attempt)
+		}
 	}
-	conn.Close()
-	return nil
+	return lastErr
 }
+
+func isTransientConnErr(err error) bool {
+	sqlErr, ok := err.(*sqlerror.SQLError)
+	if !ok {
+		return false
+	}
+	switch sqlErr.Number() {
+	case sqlerror.CRConnectionError, sqlerror.CRConnHostError:
+		return true
+	default:
+		return false
+	}
+}
+
+var (
+	healthCheckMaxRetries     = 3
+	healthCheckRetryBaseDelay = 100 * time.Millisecond
+)
 
 func (qe *QueryEngine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []*schema.Table, _ bool) {
 	qe.schemaMu.Lock()
