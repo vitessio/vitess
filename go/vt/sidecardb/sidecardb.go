@@ -24,7 +24,6 @@ import (
 	"log/slog"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -190,15 +189,6 @@ func loadSchemaDefinitions(parser *sqlparser.Parser) {
 	}
 }
 
-// printCallerDetails is a helper for dev debugging.
-func printCallerDetails() {
-	pc, _, line, ok := runtime.Caller(2)
-	details := runtime.FuncForPC(pc)
-	if ok && details != nil {
-		log.Info(fmt.Sprintf("%s schema init called from %s:%d\n", sidecar.GetName(), details.Name(), line))
-	}
-}
-
 type schemaInit struct {
 	ctx       context.Context
 	env       *vtenv.Environment
@@ -240,7 +230,6 @@ func getDDLErrorHistory() []*ddlError {
 // Init creates or upgrades the sidecar database based on
 // the declarative schema defined for all tables.
 func Init(ctx context.Context, env *vtenv.Environment, exec Exec) error {
-	printCallerDetails() // for debug purposes only, remove in v17
 	log.Info("Starting sidecardb.Init()")
 
 	once.Do(func() {

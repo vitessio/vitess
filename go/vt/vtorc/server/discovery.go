@@ -31,9 +31,7 @@ import (
 // validateCell checks that the provided cell exists.
 func validateCell(cell string) error {
 	if cell == "" {
-		// TODO: remove warning in v25+, make flag required.
-		log.Warn("WARNING: --cell will become a required vtorc flag in v25 and up")
-		return nil
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "--cell is required")
 	}
 
 	// TODO: pass a single *topo.Server into VTOrc down from StartVTOrcDiscovery().
