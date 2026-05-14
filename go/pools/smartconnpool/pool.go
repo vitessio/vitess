@@ -455,6 +455,12 @@ func (pool *ConnPool[C]) recordWaitDuration(start time.Time) {
 // If there are no connections in the pool to be returned, Get blocks until one
 // is returned, or until the given ctx is cancelled.
 // The connection must be returned to the pool once it's not needed by calling Pooled.Recycle
+//
+// ctx is honored on a best-effort basis: Get may return a usable connection
+// even if ctx has been cancelled in a narrow window around the return (the
+// pool can't atomically observe cancellation that happens after the wait
+// completes but before it returns). Callers that need strict cancellation
+// must re-check ctx.Err() after Get returns and recycle the conn if so.
 func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C], error) {
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
