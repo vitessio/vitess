@@ -237,13 +237,8 @@ func (pool *ConnPool[C]) runWorker(close <-chan struct{}, interval time.Duration
 }
 
 func (pool *ConnPool[C]) open() {
-	// Serialize with CloseWithContext via capacityMu so a concurrent Close
-	// can't observe partially-initialized state (e.g. closeCtx == nil while
-	// pool.close is already set) and silently no-op.
-	pool.capacityMu.Lock()
-	defer pool.capacityMu.Unlock()
-
-	if pool.close.Load() != nil {
+	closeChan := make(chan struct{})
+	if !pool.close.CompareAndSwap(nil, &closeChan) {
 		// already open
 		return
 	}
@@ -253,16 +248,14 @@ func (pool *ConnPool[C]) open() {
 	// returns to this re-opened pool.
 	pool.generation.Add(1)
 
-	// Install the close context before any worker spawns or the close
-	// pointer is published, so observers that see pool.close non-nil also
-	// see a valid closeCtx.
+	// Install the close context before starting any workers so they can read
+	// it race-free. CloseWithContext cancels it before signalling close-chan,
+	// so in-flight worker reconnects abort promptly.
 	ctx, cancel := context.WithCancel(context.Background())
 	pool.closeCtx.Store(&closeCtxState{ctx: ctx, cancel: cancel})
 
 	pool.capacity.Store(pool.config.maxCapacity)
 	pool.setIdleCount()
-
-	closeChan := make(chan struct{})
 
 	idleTimeout := pool.IdleTimeout()
 	if idleTimeout != 0 {
@@ -289,15 +282,18 @@ func (pool *ConnPool[C]) open() {
 			return true
 		})
 	}
-
-	// Publish pool.close last as the "fully open" marker: any reader that
-	// observes pool.close non-nil also sees closeCtx, capacity, and workers
-	// already installed.
-	pool.close.Store(&closeChan)
 }
 
 // Open starts the background workers that manage the pool and gets it ready
 // to start serving out connections.
+//
+// Open is NOT safe to call concurrently with Close, CloseWithContext, or
+// another Open. The lifecycle pointers (pool.close, pool.closeCtx) and the
+// workers sync.WaitGroup are updated without a mutex; racing them violates
+// sync.WaitGroup's contract (Add must not be called once a Wait may be
+// running concurrently). Callers are responsible for serializing lifecycle
+// transitions — in Vitess, the state-manager and tx-engine state locks do
+// this for the smartconnpool wrappers.
 func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnPool[C] {
 	if pool.close.Load() != nil {
 		// already open
@@ -316,6 +312,9 @@ func (pool *ConnPool[C]) Open(connect Connector[C], refresh RefreshCheck) *ConnP
 // returned connection is then closed on Pooled.Recycle. ConnPool.Put remains
 // valid throughout. This function will not return until all of the pool's
 // connections have been returned or the default PoolCloseTimeout has elapsed.
+//
+// Close is NOT safe to call concurrently with Open or another Close — see
+// CloseWithContext for details.
 func (pool *ConnPool[C]) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), PoolCloseTimeout)
 	defer cancel()
@@ -326,15 +325,17 @@ func (pool *ConnPool[C]) Close() {
 }
 
 // CloseWithContext behaves like Close but allows passing in a Context to time out the
-// pool closing operation
+// pool closing operation.
+//
+// CloseWithContext is NOT safe to call concurrently with Open or with another
+// CloseWithContext (it manipulates the pool's lifecycle pointers and the
+// workers sync.WaitGroup without a mutex). Callers are responsible for
+// serializing lifecycle transitions — in Vitess this is handled by the
+// state-manager / tx-engine state locks.
 func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
-	// Acquire capacityMu before inspecting lifecycle state so we serialize
-	// with a concurrent open() (which also takes the mutex). Otherwise a
-	// Close that ran mid-init could observe closeCtx == nil and silently
-	// return while open went on to finish publishing pool.close.
-	pool.capacityMu.Lock()
-	defer pool.capacityMu.Unlock()
-
+	// Cancel the pool's close context first, before taking capacityMu. Worker
+	// reconnects (closeIdleResources, put) read this context and abort when
+	// it fires, so workers.Wait() unblocks promptly inside this function.
 	closeState := pool.closeCtx.Swap(nil)
 	if closeState == nil {
 		// already closed
@@ -346,6 +347,9 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	if closeChan != nil {
 		close(*closeChan)
 	}
+
+	pool.capacityMu.Lock()
+	defer pool.capacityMu.Unlock()
 
 	// close all the connections in the pool; if we time out while waiting for
 	// users to return our connections, we still want to finish the shutdown

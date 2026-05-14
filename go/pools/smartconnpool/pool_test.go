@@ -969,50 +969,6 @@ func TestTryReturnConnRejectsStaleGeneration(t *testing.T) {
 	require.EqualValues(t, 0, p.Active(), "tryReturnConn must release the slot")
 }
 
-func TestOpenAndCloseRaceLeavesPoolConsistent(t *testing.T) {
-	// CloseWithContext used to race with open(): in the window between
-	// open's CAS of pool.close and its Store of pool.closeCtx, a concurrent
-	// CloseWithContext could see closeCtx==nil and silently return — while
-	// open went on to publish closeCtx, store capacity, and start workers,
-	// leaving the pool effectively open behind a "we closed it" success
-	// return.
-	//
-	// Reproducing the silent no-op deterministically requires reaching into
-	// the init window. Instead, this stress test races the two paths many
-	// times; with the mu-based serialization in place we expect every
-	// iteration to terminate cleanly and end in a fully-closed state.
-	var state TestState
-
-	for range 200 {
-		p := NewPool(&Config[*TestConn]{
-			Capacity:    1,
-			IdleTimeout: 5 * time.Millisecond,
-		})
-
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			p.Open(newConnector(&state), nil)
-		}()
-		go func() {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			_ = p.CloseWithContext(ctx)
-		}()
-		wg.Wait()
-
-		// A final Close must always succeed, even if the racing Close
-		// silently no-op'd or actually closed the pool. workers.Wait()
-		// inside it surfaces any worker leak as a hang.
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		require.NoError(t, p.CloseWithContext(ctx))
-		cancel()
-		require.False(t, p.IsOpen())
-	}
-}
-
 func TestReopenPreservesCapacity(t *testing.T) {
 	// reopen() retires the pool's connections without temporarily setting
 	// capacity to 0. Capacity must be observable as the original value
