@@ -491,13 +491,18 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
 	}
-	// Reject when the pool is logically closed (close pointer cleared) or
-	// drained (capacity == 0). The close-pointer is cleared before
-	// CloseWithContext takes capacityMu and runs setCapacity(0), so checking
-	// it covers the window where capacity is still > 0 but the pool is on
-	// its way out.
-	if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+	// Closed pools return ErrConnPoolClosed; the close-pointer is cleared
+	// before CloseWithContext takes capacityMu, so checking it covers the
+	// window where capacity is still > 0 but the pool is on its way out.
+	if pool.close.Load() == nil {
 		return nil, ErrConnPoolClosed
+	}
+	// A pool with capacity 0 is paused (e.g., via SetCapacity(0)) but still
+	// open. Surface that as ErrTimeout — the same signal callers get when
+	// nobody returns a conn in time — so a paused pool can resume without
+	// callers treating it as terminally closed.
+	if pool.capacity.Load() == 0 {
+		return nil, ErrTimeout
 	}
 	if setting == nil {
 		return pool.get(ctx)
@@ -765,6 +770,13 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 }
 
 func (pool *ConnPool[C]) shouldRetryWait() bool {
+	// If the pool was paused (capacity dropped to 0) after we entered the
+	// waitlist but before setCapacity's wake-all loop reached our slot, the
+	// waiter would otherwise stay parked. Bail out so the get loop can
+	// observe capacity == 0 and return ErrTimeout.
+	if pool.capacity.Load() == 0 {
+		return true
+	}
 	if pool.active.Load() < pool.capacity.Load() {
 		return true
 	}
@@ -784,8 +796,11 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
 
 	for {
-		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+		if pool.close.Load() == nil {
 			return nil, ErrConnPoolClosed
+		}
+		if pool.capacity.Load() == 0 {
+			return nil, ErrTimeout
 		}
 
 		// best case: if there's a connection in the clean stack, return it right away
@@ -829,9 +844,13 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 		if conn == nil {
 			continue
 		}
-		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+		if pool.close.Load() == nil {
 			pool.discardConn(conn)
 			return nil, ErrConnPoolClosed
+		}
+		if pool.capacity.Load() == 0 {
+			pool.discardConn(conn)
+			return nil, ErrTimeout
 		}
 
 		// if the connection we've acquired has a Setting applied, we must reset it before returning
@@ -859,8 +878,11 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	pool.Metrics.getWithSettingsCount.Add(1)
 
 	for {
-		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+		if pool.close.Load() == nil {
 			return nil, ErrConnPoolClosed
+		}
+		if pool.capacity.Load() == 0 {
+			return nil, ErrTimeout
 		}
 
 		var err error
@@ -908,9 +930,13 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 		if conn == nil {
 			continue
 		}
-		if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+		if pool.close.Load() == nil {
 			pool.discardConn(conn)
 			return nil, ErrConnPoolClosed
+		}
+		if pool.capacity.Load() == 0 {
+			pool.discardConn(conn)
+			return nil, ErrTimeout
 		}
 
 		// ensure that the setting applied to the connection matches the one we want

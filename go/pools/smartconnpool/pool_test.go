@@ -629,6 +629,98 @@ func TestCloseAfterSetCapacityZeroStopsPool(t *testing.T) {
 	require.False(t, p.IsOpen(), "pool should be closed after Close()")
 }
 
+func TestGetAtZeroCapacityReturnsTimeout(t *testing.T) {
+	// An open pool whose capacity has been drained to 0 is paused, not closed.
+	// Get must distinguish these states: closed pools return ErrConnPoolClosed;
+	// paused pools return ErrTimeout (the same signal callers see when nobody
+	// returns a conn within the deadline).
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+	require.True(t, p.IsOpen())
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrTimeout)
+	require.NotErrorIs(t, err, ErrConnPoolClosed)
+}
+
+func TestSetCapacityZeroWakesExistingWaiters(t *testing.T) {
+	// A waiter parked in the waitlist must be woken when capacity drops to 0,
+	// otherwise it stays blocked until ctx fires. The wake-up should surface
+	// as ErrTimeout because the pool is paused, not closed.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	waiterErr := make(chan error, 1)
+	go func() {
+		_, err := p.Get(t.Context(), nil)
+		waiterErr <- err
+	}()
+
+	// Give the waiter time to enter the waitlist before draining.
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, time.Second, time.Millisecond)
+
+	// SetCapacity(0) blocks until active drains; the held conn keeps it
+	// blocked. We only care that the waiter wakes up — release the held conn
+	// afterwards so SetCapacity can finish.
+	setCapDone := make(chan struct{})
+	go func() {
+		defer close(setCapDone)
+		_ = p.SetCapacity(t.Context(), 0)
+	}()
+
+	select {
+	case err := <-waiterErr:
+		require.ErrorIs(t, err, ErrTimeout)
+		require.NotErrorIs(t, err, ErrConnPoolClosed)
+	case <-time.After(2 * time.Second):
+		require.Fail(t, "waiter was not woken when capacity dropped to 0")
+	}
+
+	held.Recycle()
+	<-setCapDone
+}
+
+func TestSetCapacityResumesAfterZero(t *testing.T) {
+	// SetCapacity(0) pauses the pool; SetCapacity to a positive value must
+	// resume it. Gets should succeed again with no Close/Open dance required.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrTimeout, "paused pool should refuse Gets")
+
+	require.NoError(t, p.SetCapacity(t.Context(), 2))
+	require.EqualValues(t, 2, p.Capacity())
+
+	conn, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	conn.Recycle()
+}
+
+func TestGetAfterCloseReturnsErrConnPoolClosed(t *testing.T) {
+	// After Close(), the pool is no longer open and Get must surface that
+	// explicitly so callers (which can recover from ErrTimeout) don't confuse
+	// a terminal close with a transient pause.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	p.Close()
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+}
+
 func TestWaitTimeRecordedOnTimeout(t *testing.T) {
 	// A Get that enters the waitlist and times out should still count toward
 	// WaitTime. Otherwise pool stress is invisible to monitoring exactly when
