@@ -642,7 +642,7 @@ func (pool *ConnPool[C]) closeContext() context.Context {
 
 func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 	maxLifetime := pool.config.maxLifetime.Load()
-	if maxLifetime == 0 {
+	if maxLifetime <= 0 {
 		return 0
 	}
 	return time.Duration(maxLifetime) + time.Duration(rand.Int64N(maxLifetime))

@@ -1396,6 +1396,22 @@ func TestExtendedMaxLifetimeJitter(t *testing.T) {
 		"no sample in %d tries exceeded %s; jitter appears truncated", maxAttempts, threshold)
 }
 
+func TestExtendedMaxLifetimeNegativeDisables(t *testing.T) {
+	// MaxLifetime is a time.Duration sourced from user config. A negative
+	// value is a misconfiguration, but it must not panic the process —
+	// rand.Int64N panics on non-positive bounds. Treat it like the zero
+	// case: lifetime tracking disabled.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: -1 * time.Second,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 0, p.extendedMaxLifetime())
+}
+
 // TestMaxIdleCount tests the MaxIdleCount setting, to check if the pool closes
 // the idle connections when the number of idle connections exceeds the limit.
 func TestMaxIdleCount(t *testing.T) {
