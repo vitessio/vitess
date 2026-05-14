@@ -1009,10 +1009,23 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 // SetCapacity may be called before Open or after Close — the capacity field
 // is configurable independently of lifecycle. A closed pool with capacity > 0
 // still refuses Gets (they return ErrConnPoolClosed); the capacity is just
-// pre-armed for the next Open.
+// pre-armed for the next Open. On a closed pool SetCapacity skips the drain
+// loop: there are no in-flight Gets to throttle, and any lingering active
+// slots from a timed-out CloseWithContext belong to lifecycle teardown, not
+// to capacity configuration.
 func (pool *ConnPool[C]) SetCapacity(ctx context.Context, newcap int64) error {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
+
+	if newcap < 0 {
+		panic("negative capacity")
+	}
+
+	if pool.close.Load() == nil {
+		pool.capacity.Store(newcap)
+		pool.setIdleCount()
+		return nil
+	}
 	return pool.setCapacity(ctx, newcap)
 }
 

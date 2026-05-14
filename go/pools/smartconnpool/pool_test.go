@@ -599,6 +599,57 @@ func TestSetCapacityOnUnopenedPoolArmsCapacity(t *testing.T) {
 	require.ErrorIs(t, err, ErrConnPoolClosed)
 }
 
+func TestSetCapacityOnClosedPoolDoesNotDrain(t *testing.T) {
+	// SetCapacity on a closed pool must update the capacity field without
+	// entering setCapacity's drain loop. If a prior CloseWithContext timed
+	// out with conns still borrowed, the drain would otherwise block on
+	// those conns — but the pool is no longer serving connections, so
+	// draining is lifecycle teardown's job, not capacity configuration's.
+
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
+
+	var held []*Pooled[*TestConn]
+	for range 3 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		held = append(held, c)
+	}
+
+	// Close with a short timeout; the held conns keep active > 0 so close's
+	// drain times out. The pool ends up logically closed but with active
+	// slots still booked.
+	p.Close()
+	require.False(t, p.IsOpen())
+	require.EqualValues(t, 3, p.Active(), "held conns still count as active after timed-out close")
+
+	// SetCapacity(1) with active=3 would otherwise enter setCapacity's drain
+	// loop and block until the held conns return (or the ctx fires). On a
+	// closed pool we should just set the field and return.
+	done := make(chan error, 1)
+	go func() {
+		done <- p.SetCapacity(t.Context(), 1)
+	}()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(500 * time.Millisecond):
+		require.Fail(t, "SetCapacity on closed pool blocked on drain loop")
+	}
+
+	require.EqualValues(t, 1, p.Capacity())
+
+	// Release held conns so the test exits cleanly.
+	for _, c := range held {
+		c.Recycle()
+	}
+}
+
 func TestSetCapacityAfterCloseArmsCapacity(t *testing.T) {
 	// SetCapacity after Close is also allowed: the capacity field is config,
 	// not lifecycle. Gets still return ErrConnPoolClosed because the close
