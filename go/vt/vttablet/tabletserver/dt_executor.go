@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -139,25 +140,54 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 	// write failed.
 	localConn, _, _, err := dte.te.txPool.Begin(dte.ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
-		return err
+		return wrapPrepareError(err, "failed to begin redo transaction for prepare %s", dtid)
 	}
 	defer dte.te.txPool.RollbackAndRelease(dte.ctx, localConn)
 
 	err = dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, queries)
 	if err != nil {
-		return err
+		return wrapPrepareError(err, "failed to save redo for prepare %s", dtid)
 	}
 
 	remove, err := addActiveCommit(dte.ctx, localConn, dte.te)
 	if err != nil {
-		return err
+		return wrapPrepareError(err, "failed to track redo commit for prepare %s", dtid)
 	}
 	defer remove()
 
 	dte.te.preparedPool.MarkRedoCommitStarted(dtid)
 
 	_, err = dte.te.txPool.Commit(dte.ctx, localConn)
-	return err
+	if err != nil {
+		return wrapPrepareError(err, "failed to commit redo for prepare %s", dtid)
+	}
+
+	return nil
+}
+
+// wrapPrepareError wraps the prepare error with the given context.
+func wrapPrepareError(err error, format string, args ...any) error {
+	if err == nil {
+		return nil
+	}
+
+	message := fmt.Sprintf(format, args...)
+
+	sqlErr, ok := err.(*sqlerror.SQLError)
+	if !ok {
+		return vterrors.Wrap(err, message)
+	}
+
+	wrapped := sqlerror.NewSQLErrorf(
+		sqlErr.Number(),
+		sqlErr.SQLState(),
+		"%s: %s",
+		message,
+		sqlErr.Message,
+	)
+	wrapped.Query = sqlErr.Query
+
+	return wrapped
 }
 
 // CommitPrepared commits a prepared transaction. If the operation

@@ -37,7 +37,9 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -99,6 +101,35 @@ func TestTxExecutorPrepare(t *testing.T) {
 	// A retry  with no original id should also succeed.
 	err = txe.RollbackPrepared("aa", 0)
 	require.NoError(t, err)
+}
+
+// TestWrapPrepareErrorPreservesVitessCode verifies that prepare errors keep
+// their Vitess code after adding the failed prepare stage.
+func TestWrapPrepareErrorPreservesVitessCode(t *testing.T) {
+	err := vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
+
+	got := wrapPrepareError(err, "failed to begin redo transaction for prepare %s", "aa")
+
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(got))
+	require.EqualError(t, got, "failed to begin redo transaction for prepare aa: transaction pool connection limit exceeded")
+}
+
+// TestWrapPrepareErrorPreservesSQLError verifies that prepare errors keep
+// their SQL code and state after adding the failed prepare stage.
+func TestWrapPrepareErrorPreservesSQLError(t *testing.T) {
+	err := sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, sqlerror.SSUnknownSQLState, "lock wait timeout exceeded")
+	err.Query = "insert into _vt.redo_state"
+
+	got := wrapPrepareError(err, "failed to save redo for prepare %s", "aa")
+
+	gotSQL, ok := got.(*sqlerror.SQLError)
+	require.True(t, ok, "wrapPrepareError returned %T, want *sqlerror.SQLError", got)
+	require.Equal(t, sqlerror.ERLockWaitTimeout, gotSQL.Number())
+	require.Equal(t, sqlerror.SSUnknownSQLState, gotSQL.SQLState())
+	require.Equal(t, "insert into _vt.redo_state", gotSQL.Query)
+	require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, gotSQL.VtRpcErrorCode())
+	require.Contains(t, gotSQL.Message, "failed to save redo for prepare aa")
+	require.Contains(t, gotSQL.Message, "lock wait timeout exceeded")
 }
 
 // TestTxExecutorPrepareResevedConn tests the case where a reserved connection is used for prepare.
