@@ -39,6 +39,7 @@ func csrfToken(w http.ResponseWriter, r *http.Request) string {
 		Name:     csrfCookieName,
 		Value:    token,
 		Path:     "/",
+		Secure:   r.TLS != nil,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	})
@@ -57,11 +58,12 @@ func validCSRFToken(r *http.Request) bool {
 	return subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(formToken)) == 1
 }
 
-func setFlash(w http.ResponseWriter, flash Flash) {
+func setFlash(w http.ResponseWriter, r *http.Request, flash Flash) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     flashCookieName,
 		Value:    encodeFlash(flash),
 		Path:     "/",
+		Secure:   r.TLS != nil,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -73,7 +75,7 @@ func flashFromRequest(w http.ResponseWriter, r *http.Request) *Flash {
 		return nil
 	}
 
-	clearFlash(w)
+	clearFlash(w, r)
 	flash := decodeFlash(cookie.Value)
 	if flash == nil || !validFlashKind(flash.Kind) || flash.Message == "" {
 		return nil
@@ -81,12 +83,13 @@ func flashFromRequest(w http.ResponseWriter, r *http.Request) *Flash {
 	return flash
 }
 
-func clearFlash(w http.ResponseWriter) {
+func clearFlash(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     flashCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
+		Secure:   r.TLS != nil,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})

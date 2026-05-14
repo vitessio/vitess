@@ -34,6 +34,7 @@ type (
 		Active        string
 		ReadOnly      bool
 		CSRFToken     string
+		NeedsCSRF     bool
 		Flash         *Flash
 		Data          any
 		DocumentTitle string
@@ -91,11 +92,15 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		data.DocumentTitle = s.opts.DocumentTitle
 	}
 	data.ReadOnly = s.opts.ReadOnly
-	if data.CSRFToken == "" {
+	if data.NeedsCSRF && data.CSRFToken == "" {
 		data.CSRFToken = csrfToken(w, r)
 	}
-	if flash := flashFromRequest(w, r); flash != nil {
-		data.Flash = flash
+	if data.Flash == nil {
+		if flash := flashFromRequest(w, r); flash != nil {
+			data.Flash = flash
+		}
+	} else {
+		clearFlash(w, r)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
