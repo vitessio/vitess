@@ -77,6 +77,9 @@ To make sure tests are easy to read, we use `github.com/stretchr/testify/assert`
 - CI timeouts must be generous (30s+) — GitHub Actions runners can be resource-starved with multi-second pauses; sub-second timeouts cause flakiness with no recourse but retry
 - Do not use t.Fatal or t.Error in tests, but instead require and assert
 
+### Test Honesty
+- A test must actually exercise the condition its name and doc claim, must fail on `main` without the fix it guards, and must not duplicate coverage that a unit test already pins down precisely. Tests that pass identically with or without the fix waste CI time and create false confidence.
+
 ## :rotating_light: Error Handling Excellence
 
 Error handling is not an afterthought - it's core to reliable software.
@@ -162,7 +165,7 @@ return user.NeedsMigration() && migrate(user) || user
 
 ### 4. Zero-Value / Default Behavior Safety
 - New struct fields must not change behavior for existing callers who omit them
-- Prefer negative-polarity booleans (`NoCrossKeyspaceJoins` not `AllowCrossKeyspaceJoins`) so the zero-value preserves existing behavior
+- Prefer negative-polarity booleans (`PreventCrossKeyspaceReads` not `AllowCrossKeyspaceReads`) so the zero-value preserves existing behavior
 - When a flag value of `0` or empty previously meant "disabled," don't change it to mean "unlimited" — preserve the existing semantic or make the change explicit
 - Validate mutually exclusive flags in `PreRunE` and add unit tests for invalid combinations
 

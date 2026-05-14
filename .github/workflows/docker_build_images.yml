@@ -253,7 +253,7 @@ jobs:
     if: ${{ failure() }}
     steps:
     - name: Slack Workflow Notification
-      uses: Gamesight/slack-workflow-status@68bf00d0dbdbcb206c278399aa1ef6c14f74347a # v1.3.0
+      uses: Gamesight/slack-workflow-status@2e709ce51fd47f02b7221db8547e6e6f49f81f1d # v2.0.0
       with:
         repo_token: ${{secrets.GITHUB_TOKEN}}
         slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
