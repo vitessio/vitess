@@ -80,10 +80,31 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	require.NotEmpty(t, clusterInstance.Keyspaces)
+	require.NotEmpty(t, clusterInstance.Keyspaces[0].Shards)
+
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	require.NotEmpty(t, tablets)
+
+	var primary *cluster.Vttablet
+	var replicas []*cluster.Vttablet
+
+	for _, tablet := range tablets {
+		switch tablet.Type {
+		case "primary":
+			require.Nil(t, primary, "expected only one primary tablet")
+			primary = tablet
+
+		case "replica":
+			replicas = append(replicas, tablet)
+		}
+	}
+
+	require.NotNil(t, primary)
+	require.NotEmpty(t, replicas)
 
 	// Stop every replica so COMMITs are blocked waiting on semi-sync.
-	for _, tablet := range tablets[1:] {
+	for _, tablet := range replicas {
 		err := tablet.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 
@@ -109,7 +130,7 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 
 	// Wait until the commit is stuck waiting on semi-sync.
 	require.Eventually(t, func() bool {
-		qr, err := tablets[0].VttabletProcess.QueryTablet(
+		qr, err := primary.VttabletProcess.QueryTablet(
 			"select State, Info from information_schema.processlist",
 			keyspace.Name,
 			false,
@@ -132,7 +153,7 @@ func TestChangeTypePrimaryCompletesWithBlockedCommit(t *testing.T) {
 		return false
 	}, 20*time.Second, 100*time.Millisecond, "query with state not in processlist")
 
-	oldPrimary, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
+	oldPrimary, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
