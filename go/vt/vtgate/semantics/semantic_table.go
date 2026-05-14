@@ -288,6 +288,79 @@ func (st *SemTable) RemoveParentForeignKey(fkToIgnore string) error {
 	return nil
 }
 
+// Determine if we need to emulate foreign key checks on the vtgate side.
+//
+// We need to do this if:
+//   - Any of the foreign keys (parent or child) are cross shard.
+//   - Any of the foreign keys (parent or child) are cross keyspace.
+//   - Any of the child foreign keys have an action (ON DELETE for DELETE/REPLACE,
+//     ON UPDATE for UPDATE) that is not treated as RESTRICT (see
+//     sqlparser.ReferenceAction.IsRestrict).
+//
+// getAction selects which child foreign key action to inspect and should match
+// the one passed to RemoveNonRequiredForeignKeys for the same statement.
+func (st *SemTable) RequiresForeignKeyEmulation(getAction func(fk vindexes.ChildFKInfo) sqlparser.ReferenceAction) bool {
+	if !st.ForeignKeysPresent() {
+		return false
+	}
+
+	for ts, parentFks := range st.parentForeignKeysInvolved {
+		if len(parentFks) == 0 {
+			continue
+		}
+		if ts.NumberOfTables() != 1 {
+			// Ambiguous or unresolved table for the involved foreign keys (for
+			// example, a derived table whose projection spans multiple base
+			// tables). Conservatively require emulation rather than pushing to
+			// MySQL.
+			return true
+		}
+		updatedTable := st.Tables[ts.TableOffset()].GetVindexTable()
+		for _, parentFk := range parentFks {
+			// Cross-keyspace foreign keys require verification.
+			if parentFk.Table.Keyspace.Name != updatedTable.Keyspace.Name {
+				return true
+			}
+			// Non shard-scoped foreign keys require verification.
+			if !isShardScoped(parentFk.Table, updatedTable, parentFk.ParentColumns, parentFk.ChildColumns) {
+				return true
+			}
+		}
+	}
+
+	for ts, childFks := range st.childForeignKeysInvolved {
+		if len(childFks) == 0 {
+			continue
+		}
+		if ts.NumberOfTables() != 1 {
+			return true
+		}
+		updatedTable := st.Tables[ts.TableOffset()].GetVindexTable()
+		for _, childFk := range childFks {
+			// Cross-keyspace foreign keys require verification.
+			if updatedTable.Keyspace.Name != childFk.Table.Keyspace.Name {
+				return true
+			}
+			// Non shard-scoped foreign keys require verification.
+			if !isShardScoped(updatedTable, childFk.Table, childFk.ParentColumns, childFk.ChildColumns) {
+				return true
+			}
+			// If the action is other than RESTRICT / NO ACTION / DEFAULT,
+			// we need to verify.
+			if !getAction(childFk).IsRestrict() {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func (st *SemTable) ClearForeignKeys() {
+	clear(st.childForeignKeysInvolved)
+	clear(st.parentForeignKeysInvolved)
+}
+
 // RemoveNonRequiredForeignKeys prunes the list of foreign keys that the query involves.
 // This function considers whether VTGate needs to validate all foreign keys
 // or can delegate some of the responsibility to MySQL.
@@ -420,12 +493,14 @@ func (st *SemTable) HasNonLiteralForeignKeyUpdate(updExprs sqlparser.UpdateExprs
 		if sqlparser.IsLiteral(updateExpr.Expr) {
 			continue
 		}
+
 		parentFks := st.parentForeignKeysInvolved[st.RecursiveDeps(updateExpr.Name)]
 		for _, parentFk := range parentFks {
 			if parentFk.ChildColumns.FindColumn(updateExpr.Name.Name) >= 0 {
 				return true
 			}
 		}
+
 		childFks := st.childForeignKeysInvolved[st.RecursiveDeps(updateExpr.Name)]
 		for _, childFk := range childFks {
 			if childFk.ParentColumns.FindColumn(updateExpr.Name.Name) >= 0 {

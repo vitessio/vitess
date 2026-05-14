@@ -282,7 +282,7 @@ func setupBenchmark(b *testing.B, maxValForId int, maxValForCol int, insertShare
 	// Clear out all the data to ensure we start with a clean slate.
 	startBenchmark(b)
 	// Create a fuzzer to generate and store a certain set of queries.
-	fz := newFuzzer(1, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, SQLQueries, nil)
+	fz := newFuzzer(1, maxValForId, maxValForCol, insertShare, deleteShare, updateShare, SQLQueries, nil, false)
 	fz.noFkSetVar = true
 	var queries []string
 	for range numQueries {
