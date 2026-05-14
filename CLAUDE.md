@@ -21,7 +21,6 @@ Always discuss first:
 
 **Only do exactly what I ask for - nothing more, nothing less.**
 
-- Do NOT proactively update documentation unless explicitly requested
 - Do NOT add explanatory comments unless asked
 - Do NOT make "improvements" or "clean up" code beyond the specific task
 - Do NOT add features, optimizations, or enhancements I didn't mention
@@ -76,6 +75,9 @@ To make sure tests are easy to read, we use `github.com/stretchr/testify/assert`
 - Use the `_test.go` suffix for mocks and test helpers that are only used by the current package's tests; if helpers or mocks need to be imported by other packages' tests or fuzz harnesses, put them in a normal reusable package such as `testlib` or `testutil`
 - CI timeouts must be generous (30s+) — GitHub Actions runners can be resource-starved with multi-second pauses; sub-second timeouts cause flakiness with no recourse but retry
 - Do not use t.Fatal or t.Error in tests, but instead require and assert
+
+### Test Honesty
+- A test must actually exercise the condition its name and doc claim, must fail on `main` without the fix it guards, and must not duplicate coverage that a unit test already pins down precisely. Tests that pass identically with or without the fix waste CI time and create false confidence.
 
 ## :rotating_light: Error Handling Excellence
 
