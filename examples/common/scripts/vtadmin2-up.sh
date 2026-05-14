@@ -31,7 +31,6 @@ output "\n\033[1;32mStarting vtadmin2 on http://${case_insensitive_hostname}:${v
 
 vtadmin2 \
   --addr "${case_insensitive_hostname}:${vtadmin2_port}" \
-  --http-tablet-url-tmpl "http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
   --logtostderr \
   --alsologtostderr \
   --rbac \

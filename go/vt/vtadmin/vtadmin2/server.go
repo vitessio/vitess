@@ -23,6 +23,8 @@ import (
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -32,6 +34,7 @@ type (
 		ReadOnly        bool
 		DocumentTitle   string
 		EnableDebugJSON bool
+		Authenticator   rbac.Authenticator
 	}
 
 	Server struct {
@@ -63,6 +66,9 @@ func NewServer(api vtadminpb.VTAdminServer, opts Options) (*Server, error) {
 		router:    mux.NewRouter(),
 	}
 	s.routes()
+	if opts.Authenticator != nil {
+		s.router.Use(vthandlers.NewAuthenticationHandler(opts.Authenticator))
+	}
 	return s, nil
 }
 
