@@ -19,7 +19,9 @@ package throttle
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,7 +30,6 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -392,12 +393,12 @@ func TestApplyThrottlerConfig(t *testing.T) {
 	runThrottler(t, ctx, throttler, 10*time.Second, func(t *testing.T, ctx context.Context) {
 		defer cancel() // early termination
 		assert.True(t, throttler.IsEnabled())
-		assert.Equal(t, 1, throttler.throttledApps.ItemCount(), "expecting always-throttled-app: %v", maps.Keys(throttler.throttledApps.Items()))
+		assert.Equal(t, 1, throttler.throttledApps.ItemCount(), "expecting always-throttled-app: %v", slices.Collect(maps.Keys(throttler.throttledApps.Items())))
 		throttler.applyThrottlerConfig(ctx, throttlerConfig)
 	})
 
 	sleepTillThresholdApplies()
-	assert.Equal(t, 3, throttler.throttledApps.ItemCount(), "expecting online-ddl, tablegc, and always-throttled-app: %v", maps.Keys(throttler.throttledApps.Items()))
+	assert.Equal(t, 3, throttler.throttledApps.ItemCount(), "expecting online-ddl, tablegc, and always-throttled-app: %v", slices.Collect(maps.Keys(throttler.throttledApps.Items())))
 	assert.False(t, throttler.IsEnabled())
 	assert.Equal(t, float64(14), throttler.GetMetricsThreshold())
 	assert.Equal(t, 2, throttler.appCheckedMetrics.ItemCount())

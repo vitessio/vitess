@@ -985,7 +985,7 @@ func (se *Engine) RegisterNotifier(name string, f notifier, runNotifier bool) {
 		created = append(created, table)
 	}
 	if runNotifier {
-		s := maps.Clone(se.tables)
+		s := maps0.Clone(se.tables)
 		f(s, created, nil, nil, true)
 	}
 }
@@ -1014,7 +1014,7 @@ func (se *Engine) broadcast(created, altered, dropped []*Table, udfsChanged bool
 
 	se.notifierMu.Lock()
 	defer se.notifierMu.Unlock()
-	s := maps.Clone(se.tables)
+	s := maps0.Clone(se.tables)
 	for _, f := range se.notifiers {
 		f(s, created, altered, dropped, udfsChanged)
 	}
@@ -1047,7 +1047,7 @@ func (se *Engine) TableCount() int {
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	tables := maps.Clone(se.tables)
+	tables := maps0.Clone(se.tables)
 	return tables
 }
 

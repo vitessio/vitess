@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -31,7 +32,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -837,9 +837,9 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 					// are unsopported and can be rejected.
 					onUpdateAction = sqlparser.NoAction
 				}
-				b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction]))
+				fmt.Fprintf(&b, sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction])
 			default:
-				b.WriteString(fmt.Sprintf(sql, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction]))
+				fmt.Fprintf(&b, sql, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction])
 			}
 			b.WriteString(";")
 		}

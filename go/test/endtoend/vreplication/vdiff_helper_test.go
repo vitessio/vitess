@@ -309,7 +309,7 @@ func generateMoreCustomers(t *testing.T, keyspace string, numCustomers int64) {
 	i := int64(0)
 	for i < numCustomers {
 		i++
-		insert.WriteString(fmt.Sprintf("(%d, 'Testy (Bot) McTester', 'soho')", startingID+i))
+		fmt.Fprintf(&insert, "(%d, 'Testy (Bot) McTester', 'soho')", startingID+i)
 		if i != numCustomers {
 			insert.WriteString(", ")
 		}

@@ -173,7 +173,7 @@ func (path ASTPath) DebugString() string {
 			}
 			offset, readBytes := binary.Varint(remaining)
 			remaining = remaining[readBytes:]
-			sb.WriteString(fmt.Sprintf("(%d)", offset))
+			fmt.Fprintf(&sb, "(%d)", offset)
 		}
 	}
 
