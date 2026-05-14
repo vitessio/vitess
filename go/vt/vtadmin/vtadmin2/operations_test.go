@@ -42,6 +42,7 @@ type operationsFakeServer struct {
 	getTransactionInfoRequest        *vtadminpb.GetTransactionInfoRequest
 	getTransactionInfoError          error
 	getTransactionInfoNil            bool
+	getClustersError                 error
 }
 
 func (f *operationsFakeServer) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchemaMigrationsRequest) (*vtadminpb.GetSchemaMigrationsResponse, error) {
@@ -63,6 +64,21 @@ func (f *operationsFakeServer) GetSchemaMigrations(ctx context.Context, req *vta
 			},
 		},
 	}, nil
+}
+
+func (f *operationsFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
+	if f.getClustersError != nil {
+		return nil, f.getClustersError
+	}
+	return &vtadminpb.GetClustersResponse{Clusters: []*vtadminpb.Cluster{{Id: "local", Name: "Local"}, {Id: "prod", Name: "Prod"}}}, nil
+}
+
+func (f *operationsFakeServer) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesRequest) (*vtadminpb.GetKeyspacesResponse, error) {
+	return &vtadminpb.GetKeyspacesResponse{Keyspaces: []*vtadminpb.Keyspace{
+		{Cluster: &vtadminpb.Cluster{Id: "local", Name: "Local"}, Keyspace: &vtctldatapb.Keyspace{Name: "commerce"}},
+		{Cluster: &vtadminpb.Cluster{Id: "local", Name: "Local"}, Keyspace: &vtctldatapb.Keyspace{Name: "customer"}},
+		{Cluster: &vtadminpb.Cluster{Id: "prod", Name: "Prod"}, Keyspace: &vtctldatapb.Keyspace{Name: "commerce_prod"}},
+	}}, nil
 }
 
 func (f *operationsFakeServer) GetUnresolvedTransactions(ctx context.Context, req *vtadminpb.GetUnresolvedTransactionsRequest) (*vtctldatapb.GetUnresolvedTransactionsResponse, error) {
@@ -119,6 +135,23 @@ func TestMigrationsPagePassesFiltersAndRendersRows(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "commerce")
 }
 
+func TestMigrationsPageDefaultsClusterAndKeyspaceSelects(t *testing.T) {
+	fake := &operationsFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/migrations", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `<select name="cluster_id" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="local" selected>Local (local)</option>`)
+	assert.Contains(t, rec.Body.String(), `<select name="keyspace" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="commerce" selected>commerce</option>`)
+	assert.Nil(t, fake.getSchemaMigrationsRequest)
+}
+
 func TestMigrationsPageRejectsEmptyClusterID(t *testing.T) {
 	fake := &operationsFakeServer{}
 	s, err := NewServer(fake, Options{})
@@ -144,6 +177,21 @@ func TestMigrationsPageRequiresClusterID(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "cluster_id")
+	assert.Nil(t, fake.getSchemaMigrationsRequest)
+}
+
+func TestMigrationsPageValidatesSubmissionBeforeLoadingFormOptions(t *testing.T) {
+	fake := &operationsFakeServer{getClustersError: errors.New("cluster options failed")}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/migrations?keyspace=commerce", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "cluster_id")
+	assert.NotContains(t, rec.Body.String(), "cluster options failed")
 	assert.Nil(t, fake.getSchemaMigrationsRequest)
 }
 
@@ -194,6 +242,23 @@ func TestTransactionsPagePassesFiltersAndRendersRows(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "/transaction/local/dtid-1/info")
 }
 
+func TestTransactionsPageDefaultsClusterAndKeyspaceSelects(t *testing.T) {
+	fake := &operationsFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `<select name="cluster_id" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="local" selected>Local (local)</option>`)
+	assert.Contains(t, rec.Body.String(), `<select name="keyspace" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="commerce" selected>commerce</option>`)
+	assert.Nil(t, fake.getUnresolvedTransactionsRequest)
+}
+
 func TestTransactionsPageRequiresKeyspace(t *testing.T) {
 	fake := &operationsFakeServer{}
 	s, err := NewServer(fake, Options{})
@@ -219,6 +284,21 @@ func TestTransactionsPageRequiresClusterID(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "cluster_id")
+	assert.Nil(t, fake.getUnresolvedTransactionsRequest)
+}
+
+func TestTransactionsPageValidatesSubmissionBeforeLoadingFormOptions(t *testing.T) {
+	fake := &operationsFakeServer{getClustersError: errors.New("cluster options failed")}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/transactions?keyspace=commerce", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "cluster_id")
+	assert.NotContains(t, rec.Body.String(), "cluster options failed")
 	assert.Nil(t, fake.getUnresolvedTransactionsRequest)
 }
 

@@ -4,8 +4,8 @@
 
 {{ define "content" }}
 <div class="toolbar">
-  <h1>Vtctlds</h1>
-  <input class="table-filter" data-table-filter="#vtctlds-table" placeholder="Filter Vtctlds" aria-label="Filter Vtctlds">
+  <h1>VTCtlds</h1>
+  <input class="table-filter" data-table-filter="#vtctlds-table" placeholder="Filter VTCtlds" aria-label="Filter VTCtlds">
 </div>
 <div class="card">
   <table id="vtctlds-table">
@@ -16,11 +16,11 @@
       {{ range .Data }}
       <tr>
         <td>{{ clusterID .GetCluster }}</td>
-        <td>{{ .GetHostname }}</td>
-        <td>{{ .GetFQDN }}</td>
+        <td>{{ if .GetHostname }}<a href="{{ externalURL .GetHostname }}" target="_blank" rel="noopener noreferrer">{{ .GetHostname }}</a>{{ end }}</td>
+        <td>{{ if .GetFQDN }}<a href="{{ externalURL .GetFQDN }}" target="_blank" rel="noopener noreferrer">{{ .GetFQDN }}</a>{{ end }}</td>
       </tr>
       {{ else }}
-      <tr><td colspan="3">No Vtctlds found.</td></tr>
+      <tr><td colspan="3">No VTCtlds found.</td></tr>
       {{ end }}
     </tbody>
   </table>

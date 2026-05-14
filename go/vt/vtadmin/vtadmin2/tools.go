@@ -30,6 +30,7 @@ type (
 		Keyspace string
 		SQL      string
 		Response *vtadminpb.VTExplainResponse
+		Form     formOptions
 	}
 
 	vExplainData struct {
@@ -37,6 +38,7 @@ type (
 		Keyspace  string
 		SQL       string
 		Response  *vtadminpb.VExplainResponse
+		Form      formOptions
 	}
 )
 
@@ -44,21 +46,28 @@ func (s *Server) vtExplain(w http.ResponseWriter, r *http.Request) {
 	clusterID := queryValue(r, "cluster_id")
 	keyspace := queryValue(r, "keyspace")
 	sql := queryValue(r, "sql")
-	data := vtExplainData{Cluster: clusterID, Keyspace: keyspace, SQL: sql}
+	if len(r.URL.Query()) > 0 {
+		if clusterID == "" {
+			s.renderError(w, r, http.StatusBadRequest, "VTExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
+			return
+		}
+		if keyspace == "" {
+			s.renderError(w, r, http.StatusBadRequest, "VTExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace query parameter is required"))
+			return
+		}
+		if sql == "" {
+			s.renderError(w, r, http.StatusBadRequest, "VTExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql query parameter is required"))
+			return
+		}
+	}
+	form, err := s.loadFormOptions(r.Context(), clusterID, keyspace)
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "VTExplain", err)
+		return
+	}
+	data := vtExplainData{Cluster: form.SelectedCluster, Keyspace: form.SelectedKeyspace, SQL: sql, Form: form}
 	if len(r.URL.Query()) == 0 {
 		s.render(w, r, http.StatusOK, "vtexplain.html", PageData{Title: "VTExplain", Active: "vtexplain", Data: data})
-		return
-	}
-	if clusterID == "" {
-		s.renderError(w, r, http.StatusBadRequest, "VTExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
-		return
-	}
-	if keyspace == "" {
-		s.renderError(w, r, http.StatusBadRequest, "VTExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace query parameter is required"))
-		return
-	}
-	if sql == "" {
-		s.renderError(w, r, http.StatusBadRequest, "VTExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql query parameter is required"))
 		return
 	}
 
@@ -84,21 +93,28 @@ func (s *Server) vExplain(w http.ResponseWriter, r *http.Request) {
 	clusterID := queryValue(r, "cluster_id")
 	keyspace := queryValue(r, "keyspace")
 	sql := queryValue(r, "sql")
-	data := vExplainData{ClusterID: clusterID, Keyspace: keyspace, SQL: sql}
+	if len(r.URL.Query()) > 0 {
+		if clusterID == "" {
+			s.renderError(w, r, http.StatusBadRequest, "VExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
+			return
+		}
+		if keyspace == "" {
+			s.renderError(w, r, http.StatusBadRequest, "VExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace query parameter is required"))
+			return
+		}
+		if sql == "" {
+			s.renderError(w, r, http.StatusBadRequest, "VExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql query parameter is required"))
+			return
+		}
+	}
+	form, err := s.loadFormOptions(r.Context(), clusterID, keyspace)
+	if err != nil {
+		s.renderError(w, r, http.StatusInternalServerError, "VExplain", err)
+		return
+	}
+	data := vExplainData{ClusterID: form.SelectedCluster, Keyspace: form.SelectedKeyspace, SQL: sql, Form: form}
 	if len(r.URL.Query()) == 0 {
 		s.render(w, r, http.StatusOK, "vexplain.html", PageData{Title: "VExplain", Active: "vexplain", Data: data})
-		return
-	}
-	if clusterID == "" {
-		s.renderError(w, r, http.StatusBadRequest, "VExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cluster_id query parameter is required"))
-		return
-	}
-	if keyspace == "" {
-		s.renderError(w, r, http.StatusBadRequest, "VExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace query parameter is required"))
-		return
-	}
-	if sql == "" {
-		s.renderError(w, r, http.StatusBadRequest, "VExplain", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql query parameter is required"))
 		return
 	}
 

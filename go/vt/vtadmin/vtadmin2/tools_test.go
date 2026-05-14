@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 type toolsFakeServer struct {
@@ -38,6 +39,7 @@ type toolsFakeServer struct {
 	vExplainRequest  *vtadminpb.VExplainRequest
 	vExplainError    error
 	vExplainNil      bool
+	getClustersError error
 }
 
 func (f *toolsFakeServer) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) (*vtadminpb.VTExplainResponse, error) {
@@ -62,6 +64,21 @@ func (f *toolsFakeServer) VExplain(ctx context.Context, req *vtadminpb.VExplainR
 	return &vtadminpb.VExplainResponse{Response: "vttablet plan"}, nil
 }
 
+func (f *toolsFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
+	if f.getClustersError != nil {
+		return nil, f.getClustersError
+	}
+	return &vtadminpb.GetClustersResponse{Clusters: []*vtadminpb.Cluster{{Id: "local", Name: "Local"}, {Id: "prod", Name: "Prod"}}}, nil
+}
+
+func (f *toolsFakeServer) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesRequest) (*vtadminpb.GetKeyspacesResponse, error) {
+	return &vtadminpb.GetKeyspacesResponse{Keyspaces: []*vtadminpb.Keyspace{
+		{Cluster: &vtadminpb.Cluster{Id: "local", Name: "Local"}, Keyspace: &vtctldatapb.Keyspace{Name: "commerce"}},
+		{Cluster: &vtadminpb.Cluster{Id: "local", Name: "Local"}, Keyspace: &vtctldatapb.Keyspace{Name: "customer"}},
+		{Cluster: &vtadminpb.Cluster{Id: "prod", Name: "Prod"}, Keyspace: &vtctldatapb.Keyspace{Name: "commerce_prod"}},
+	}}, nil
+}
+
 func TestVTExplainFormOnlyRendersWithoutCallingBackend(t *testing.T) {
 	fake := &toolsFakeServer{}
 	s, err := NewServer(fake, Options{})
@@ -77,6 +94,23 @@ func TestVTExplainFormOnlyRendersWithoutCallingBackend(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `name="cluster_id"`)
 	assert.Contains(t, rec.Body.String(), `name="keyspace"`)
 	assert.Contains(t, rec.Body.String(), `name="sql"`)
+	assert.Nil(t, fake.vtExplainRequest)
+}
+
+func TestVTExplainDefaultsClusterAndKeyspaceSelects(t *testing.T) {
+	fake := &toolsFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/vtexplain", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `<select name="cluster_id" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="local" selected>Local (local)</option>`)
+	assert.Contains(t, rec.Body.String(), `<select name="keyspace" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="commerce" selected>commerce</option>`)
 	assert.Nil(t, fake.vtExplainRequest)
 }
 
@@ -109,6 +143,21 @@ func TestVTExplainRequiresClusterForSubmittedSQL(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "cluster")
+	assert.Nil(t, fake.vtExplainRequest)
+}
+
+func TestVTExplainValidatesSubmissionBeforeLoadingFormOptions(t *testing.T) {
+	fake := &toolsFakeServer{getClustersError: errors.New("cluster options failed")}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/vtexplain?keyspace=commerce&sql=select+1", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "cluster_id")
+	assert.NotContains(t, rec.Body.String(), "cluster options failed")
 	assert.Nil(t, fake.vtExplainRequest)
 }
 
@@ -212,6 +261,23 @@ func TestVExplainFormOnlyRendersWithoutCallingBackend(t *testing.T) {
 	assert.Nil(t, fake.vExplainRequest)
 }
 
+func TestVExplainDefaultsClusterAndKeyspaceSelects(t *testing.T) {
+	fake := &toolsFakeServer{}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/vexplain", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `<select name="cluster_id" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="local" selected>Local (local)</option>`)
+	assert.Contains(t, rec.Body.String(), `<select name="keyspace" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="commerce" selected>commerce</option>`)
+	assert.Nil(t, fake.vExplainRequest)
+}
+
 func TestVExplainPassesQueryFieldsAndRendersResponse(t *testing.T) {
 	fake := &toolsFakeServer{}
 	s, err := NewServer(fake, Options{})
@@ -241,6 +307,21 @@ func TestVExplainRequiresClusterIDForSubmittedSQL(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "cluster_id")
+	assert.Nil(t, fake.vExplainRequest)
+}
+
+func TestVExplainValidatesSubmissionBeforeLoadingFormOptions(t *testing.T) {
+	fake := &toolsFakeServer{getClustersError: errors.New("cluster options failed")}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/vexplain?keyspace=commerce&sql=select+1", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "cluster_id")
+	assert.NotContains(t, rec.Body.String(), "cluster options failed")
 	assert.Nil(t, fake.vExplainRequest)
 }
 

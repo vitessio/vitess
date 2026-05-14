@@ -133,9 +133,11 @@ func (f *pageFakeServer) GetTablets(ctx context.Context, req *vtadminpb.GetTable
 				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 				Hostname: "tablet-100",
 				Keyspace: "commerce",
+				PortMap:  map[string]int32{"vt": 15100},
 				Shard:    "0",
 				Type:     topodatapb.TabletType_PRIMARY,
 			},
+			FQDN:  "localhost:15101",
 			State: vtadminpb.Tablet_SERVING,
 		},
 	}}, nil
@@ -165,7 +167,8 @@ func TestTabletsPageRendersRows(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "Tablets")
 	assert.Contains(t, rec.Body.String(), "zone1-0000000100")
 	assert.Contains(t, rec.Body.String(), "/tablet/local/zone1-0000000100")
-	assert.Contains(t, rec.Body.String(), "tablet-100")
+	assert.Contains(t, rec.Body.String(), "FQDN")
+	assert.Contains(t, rec.Body.String(), `<a href="http://localhost:15101" target="_blank" rel="noopener noreferrer">localhost:15101</a>`)
 	assert.Contains(t, rec.Body.String(), "PRIMARY")
 }
 

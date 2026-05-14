@@ -36,6 +36,10 @@ type topologyFakeServer struct {
 	getTopologyPathNil               bool
 }
 
+func (f *topologyFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
+	return &vtadminpb.GetClustersResponse{Clusters: []*vtadminpb.Cluster{{Id: "local", Name: "Local"}, {Id: "prod", Name: "Prod"}}}, nil
+}
+
 func (f *topologyFakeServer) GetTopologyPath(ctx context.Context, req *vtadminpb.GetTopologyPathRequest) (*vtctldatapb.GetTopologyPathResponse, error) {
 	f.topologyPathRequest = req
 	if f.getTopologyPathNil {
@@ -82,7 +86,7 @@ func TestTopologyPathPageCallsServerAndRendersResponse(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "keyspaces")
 }
 
-func TestTopologyPathPageRequiresClusterID(t *testing.T) {
+func TestTopologyPathPageDefaultsClusterSelect(t *testing.T) {
 	fake := &topologyFakeServer{}
 	s, err := NewServer(fake, Options{})
 	require.NoError(t, err)
@@ -91,9 +95,13 @@ func TestTopologyPathPageRequiresClusterID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/topology", nil)
 	s.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "cluster_id is required")
-	assert.Nil(t, fake.topologyPathRequest)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, fake.topologyPathRequest)
+	assert.Equal(t, "local", fake.topologyPathRequest.GetClusterId())
+	assert.Equal(t, "/", fake.topologyPathRequest.GetPath())
+	assert.Contains(t, rec.Body.String(), `<select name="cluster_id" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="local" selected>Local (local)</option>`)
+	assert.Contains(t, rec.Body.String(), `<option value="prod">Prod (prod)</option>`)
 }
 
 func TestTopologyPathNilResponseReturnsNotFound(t *testing.T) {

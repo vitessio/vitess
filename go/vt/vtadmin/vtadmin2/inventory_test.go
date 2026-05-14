@@ -70,6 +70,8 @@ func TestGatesPageRendersRows(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "VTGates")
+	assert.NotContains(t, rec.Body.String(), ">Gates<")
+	assert.Contains(t, rec.Body.String(), `href="http://vtgate-1" target="_blank" rel="noopener noreferrer"`)
 	assert.Contains(t, rec.Body.String(), "vtgate-1")
 }
 
@@ -82,7 +84,9 @@ func TestVtctldsPageRendersRows(t *testing.T) {
 	s.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), "Vtctlds")
+	assert.Contains(t, rec.Body.String(), "VTCtlds")
+	assert.NotContains(t, rec.Body.String(), "Vtctlds")
+	assert.Contains(t, rec.Body.String(), `href="http://vtctld-1" target="_blank" rel="noopener noreferrer"`)
 	assert.Contains(t, rec.Body.String(), "vtctld-1")
 }
 

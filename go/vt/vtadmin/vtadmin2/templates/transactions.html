@@ -9,9 +9,25 @@
 </div>
 <div class="card">
   <form method="get" action="/transactions" class="form-grid">
-    <label>Cluster <input name="cluster_id" value="{{ .Data.ClusterID }}"></label>
-    <label>Keyspace <input name="keyspace"></label>
-    <label>Abandon Age <input name="abandon_age"></label>
+    <label>
+      Cluster
+      <select name="cluster_id" required>
+        {{ range .Data.Form.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $.Data.Form.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Keyspace
+      <select name="keyspace" required>
+        {{ range .Data.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $.Data.Form.SelectedCluster }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $.Data.Form.SelectedKeyspace }} selected{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
+    <label>Abandon Age <input name="abandon_age" value="{{ .Data.AbandonAge }}"></label>
     <button type="submit">Filter Transactions</button>
   </form>
 </div>

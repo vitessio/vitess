@@ -18,6 +18,7 @@ package vtadmin2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,7 @@ type workflowFakeServer struct {
 	getWorkflowStatusRequest *vtadminpb.GetWorkflowStatusRequest
 	vdiffShowRequest         *vtadminpb.VDiffShowRequest
 	getWorkflowError         error
+	getClustersError         error
 }
 
 func (f *workflowFakeServer) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsRequest) (*vtadminpb.GetWorkflowsResponse, error) {
@@ -73,6 +75,21 @@ func (f *workflowFakeServer) GetWorkflow(ctx context.Context, req *vtadminpb.Get
 func (f *workflowFakeServer) GetWorkflowStatus(ctx context.Context, req *vtadminpb.GetWorkflowStatusRequest) (*vtctldatapb.WorkflowStatusResponse, error) {
 	f.getWorkflowStatusRequest = req
 	return &vtctldatapb.WorkflowStatusResponse{TrafficState: "Reads Not Switched"}, nil
+}
+
+func (f *workflowFakeServer) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
+	if f.getClustersError != nil {
+		return nil, f.getClustersError
+	}
+	return &vtadminpb.GetClustersResponse{Clusters: []*vtadminpb.Cluster{{Id: "local", Name: "Local"}, {Id: "prod", Name: "Prod"}}}, nil
+}
+
+func (f *workflowFakeServer) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesRequest) (*vtadminpb.GetKeyspacesResponse, error) {
+	return &vtadminpb.GetKeyspacesResponse{Keyspaces: []*vtadminpb.Keyspace{
+		{Cluster: &vtadminpb.Cluster{Id: "local", Name: "Local"}, Keyspace: &vtctldatapb.Keyspace{Name: "commerce"}},
+		{Cluster: &vtadminpb.Cluster{Id: "local", Name: "Local"}, Keyspace: &vtctldatapb.Keyspace{Name: "customer"}},
+		{Cluster: &vtadminpb.Cluster{Id: "prod", Name: "Prod"}, Keyspace: &vtctldatapb.Keyspace{Name: "commerce_prod"}},
+	}}, nil
 }
 
 func (f *workflowFakeServer) VDiffShow(ctx context.Context, req *vtadminpb.VDiffShowRequest) (*vtadminpb.VDiffShowResponse, error) {
@@ -174,6 +191,8 @@ func TestVDiffShowPagePassesRequestAndRendersResponse(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "VDiff")
 	assert.Contains(t, rec.Body.String(), "commerce")
 	assert.Contains(t, rec.Body.String(), "wf1")
+	assert.Contains(t, rec.Body.String(), `<select name="keyspace" required>`)
+	assert.Contains(t, rec.Body.String(), `<option value="commerce" selected>commerce</option>`)
 	assert.Contains(t, rec.Body.String(), "completed")
 }
 
@@ -188,6 +207,21 @@ func TestVDiffShowPageRequiresKeyspace(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "keyspace")
+	assert.Nil(t, fake.vdiffShowRequest)
+}
+
+func TestVDiffShowPageValidatesSubmissionBeforeLoadingFormOptions(t *testing.T) {
+	fake := &workflowFakeServer{getClustersError: errors.New("cluster options failed")}
+	s, err := NewServer(fake, Options{})
+	require.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/vdiff/local/show?workflow=wf1", nil)
+	s.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "keyspace")
+	assert.NotContains(t, rec.Body.String(), "cluster options failed")
 	assert.Nil(t, fake.vdiffShowRequest)
 }
 

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -30,6 +31,13 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
+type formOptions struct {
+	Clusters         []*vtadminpb.Cluster
+	Keyspaces        []*vtadminpb.Keyspace
+	SelectedCluster  string
+	SelectedKeyspace string
+}
+
 func queryValues(r *http.Request, name string) []string { return r.URL.Query()[name] }
 
 func queryValue(r *http.Request, name string) string { return r.URL.Query().Get(name) }
@@ -37,6 +45,38 @@ func queryValue(r *http.Request, name string) string { return r.URL.Query().Get(
 func pathEscape(value string) string { return url.PathEscape(value) }
 
 func urlQueryEscape(value string) string { return url.QueryEscape(value) }
+
+func externalURL(value string) string {
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		return value
+	}
+	return "http://" + value
+}
+
+func selectedClusterID(clusters []*vtadminpb.Cluster, requested string) string {
+	if requested != "" {
+		return requested
+	}
+	if len(clusters) == 0 {
+		return ""
+	}
+	return clusters[0].GetId()
+}
+
+func selectedKeyspaceName(keyspaces []*vtadminpb.Keyspace, selectedCluster string, requested string) string {
+	if requested != "" {
+		return requested
+	}
+	for _, ks := range keyspaces {
+		if selectedCluster == "" || clusterID(ks.GetCluster()) == selectedCluster {
+			return keyspaceName(ks)
+		}
+	}
+	return ""
+}
 
 func protoJSON(v any) string {
 	msg, ok := v.(proto.Message)

@@ -16,10 +16,10 @@
       {{ range .Data }}
       <tr>
         <td>{{ clusterID .GetCluster }}</td>
-        <td>{{ .GetHostname }}</td>
+        <td>{{ if .GetHostname }}<a href="{{ externalURL .GetHostname }}" target="_blank" rel="noopener noreferrer">{{ .GetHostname }}</a>{{ end }}</td>
         <td>{{ .GetCell }}</td>
         <td>{{ .GetPool }}</td>
-        <td>{{ .GetFQDN }}</td>
+        <td>{{ if .GetFQDN }}<a href="{{ externalURL .GetFQDN }}" target="_blank" rel="noopener noreferrer">{{ .GetFQDN }}</a>{{ end }}</td>
       </tr>
       {{ else }}
       <tr><td colspan="5">No VTGates found.</td></tr>

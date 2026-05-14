@@ -9,7 +9,16 @@
 <div class="card">
   <form method="get" action="/vdiff/{{ pathEscape .Data.ClusterID }}/show" class="form-grid">
     <label>Cluster <input name="cluster_id" value="{{ .Data.ClusterID }}" disabled></label>
-    <label>Keyspace <input name="keyspace" value="{{ .Data.Keyspace }}"></label>
+    <label>
+      Keyspace
+      <select name="keyspace" required>
+        {{ range .Data.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $.Data.ClusterID }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $.Data.Keyspace }} selected{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
     <label>Workflow <input name="workflow" value="{{ .Data.Workflow }}"></label>
     <label>Arg <input name="arg" value="{{ .Data.Arg }}"></label>
     <button type="submit">Show VDiff</button>
