@@ -2578,6 +2578,88 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	require.NoError(t, err)
 }
 
+func TestWaitForPreparedTwoPCTransactionsDoesNotDrainCoordinatorDtState(t *testing.T) {
+	ctx := t.Context()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	require.True(t, tsv.te.preparedPool.IsEmpty(),
+		"prepared pool should be empty for the coordinator role")
+
+	db.AddQueryPattern(
+		`select count\(\*\) from _vt\.dt_state where time_created.*`,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("count(*)", "int64"),
+			"1",
+		),
+	)
+
+	waitCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+	err := tsv.WaitForPreparedTwoPCTransactions(waitCtx)
+	require.Error(t, err,
+		"WaitForPreparedTwoPCTransactions must not declare success while _vt.dt_state still "+
+			"has coordinator entries; otherwise SwitchWrites can disable the source primary "+
+			"with in-flight 2PC where this shard is the MM, stranding participant redo logs")
+}
+
+func TestWaitForPreparedTwoPCTransactionsTwoPCDisabled(t *testing.T) {
+	ctx := t.Context()
+	_, tsv, db := newNoTwopcExecutor(t, ctx)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// 2PC disabled: WaitForPreparedTwoPCTransactions must short-circuit
+	// without issuing a count query against the unopened TwoPC read pool.
+	waitCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+	err := tsv.WaitForPreparedTwoPCTransactions(waitCtx)
+	require.NoError(t, err,
+		"WaitForPreparedTwoPCTransactions should return immediately when 2PC is disabled, "+
+			"without querying _vt.dt_state on an unopened pool")
+}
+
+func TestWaitForPreparedTwoPCTransactionsSQLError(t *testing.T) {
+	ctx := t.Context()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	require.True(t, tsv.te.preparedPool.IsEmpty(),
+		"prepared pool should be empty for the coordinator role")
+
+	// Inject a failure for the dt_state count query. The wait function must
+	// not silently claim drained on a query error; it should keep waiting and
+	// time out with FAILED_PRECONDITION.
+	db.RejectQueryPattern(
+		`select count\(\*\) from _vt\.dt_state where time_created.*`,
+		"simulated MySQL outage during cutover",
+	)
+
+	waitCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+	err := tsv.WaitForPreparedTwoPCTransactions(waitCtx)
+	require.Error(t, err,
+		"WaitForPreparedTwoPCTransactions must not declare success when the count query fails")
+	require.ErrorContains(t, err, "Prepared transactions have not been resolved yet")
+}
+
+func TestHasUnresolvedTwoPCTransactionsSQLError(t *testing.T) {
+	ctx := t.Context()
+	_, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	db.RejectQueryPattern(
+		`select count\(\*\) from _vt\.dt_state where time_created.*`,
+		"simulated MySQL outage",
+	)
+
+	has, err := tsv.hasUnresolvedTwoPCTransactions(ctx)
+	require.Error(t, err)
+	require.False(t, has,
+		"on count-query failure, the predicate must return (false, err) so callers "+
+			"don't claim drained on inconclusive data")
+}
+
 func setupTabletServerTest(t testing.TB, ctx context.Context, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	cfg := tabletenv.NewDefaultConfig()
 	return setupTabletServerTestCustom(t, ctx, cfg, keyspaceName, vtenv.NewTestEnv())

@@ -1434,7 +1434,7 @@ func TestSemiSyncRequiredWithTwoPC(t *testing.T) {
 	utils.Exec(t, conn, "insert into twopc_t1(id, col) values(9, 4)")
 	_, err = utils.ExecAllowError(t, conn, "commit")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "two-pc is enabled, but semi-sync is not")
+	require.ErrorContains(t, err, "2pc is enabled, but not currently allowed")
 
 	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err)
