@@ -122,16 +122,16 @@ export const Workflows = () => {
                             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
                             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                                 if (streamState in row.streams) {
-                                    var numThrottled = 0;
-                                    var throttledApp: string | undefined = '';
+                                    let numThrottled = 0;
+                                    let throttledApp: string | undefined = '';
                                     const streamCount = row.streams[streamState].length;
-                                    var streamDescription: string;
+                                    let streamDescription: string;
                                     switch (streamState) {
                                         case 'Error':
                                             streamDescription = 'failed';
                                             break;
                                         case 'Running':
-                                        case 'Copying':
+                                        case 'Copying': {
                                             const streams = row.streams[streamState];
                                             if (streams !== undefined && streams !== null) {
                                                 for (const stream of streams) {
@@ -157,6 +157,7 @@ export const Workflows = () => {
                                                 streamState = 'Throttled';
                                             }
                                             break;
+                                        }
                                         default:
                                             streamDescription = streamState.toLocaleLowerCase();
                                     }
