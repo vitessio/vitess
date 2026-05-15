@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -198,16 +199,20 @@ func transformInsertionSelection(ctx *plancontext.PlanningContext, op *operators
 	}
 
 	ins := dmlOp.(*operators.Insert)
+	ic := engine.InsertCommon{
+		Keyspace:          rb.Routing.Keyspace(),
+		TableName:         ins.VTable.Name.String(),
+		Ignore:            ins.Ignore,
+		ForceNonStreaming:  op.ForceNonStreaming,
+		Generate:          autoIncGenerate(ins.AutoIncrement),
+		ColVindexes:       ins.ColVindexes,
+		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
+	}
+	if len(ins.ColVindexes) == 0 && ins.VTable.Pinned != nil {
+		ic.TargetDestination = key.DestinationKeyspaceID(ins.VTable.Pinned)
+	}
 	eins := &engine.InsertSelect{
-		InsertCommon: engine.InsertCommon{
-			Keyspace:          rb.Routing.Keyspace(),
-			TableName:         ins.VTable.Name.String(),
-			Ignore:            ins.Ignore,
-			ForceNonStreaming: op.ForceNonStreaming,
-			Generate:          autoIncGenerate(ins.AutoIncrement),
-			ColVindexes:       ins.ColVindexes,
-			FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
-		},
+		InsertCommon:      ic,
 		VindexValueOffset: ins.VindexValueOffset,
 	}
 
@@ -679,6 +684,9 @@ func buildInsertPrimitive(
 		Generate:          autoIncGenerate(ins.AutoIncrement),
 		ColVindexes:       ins.ColVindexes,
 		FetchLastInsertID: ctx.SemTable.ShouldFetchLastInsertID(),
+	}
+	if len(ins.ColVindexes) == 0 && ins.VTable.Pinned != nil {
+		ic.TargetDestination = key.DestinationKeyspaceID(ins.VTable.Pinned)
 	}
 	if hints != nil {
 		ic.MultiShardAutocommit = hints.multiShardAutocommit

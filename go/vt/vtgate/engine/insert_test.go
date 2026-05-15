@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -165,6 +166,27 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 
 	// The insert id returned by ExecuteMultiShard should be overwritten by processGenerateFromValues.
 	expectResult(t, result, &sqltypes.Result{InsertID: 4})
+}
+
+func TestInsertShardedPinned(t *testing.T) {
+	ins := newQueryInsert(
+		InsertSharded,
+		&vindexes.Keyspace{
+			Name:    "sharded",
+			Sharded: true,
+		},
+		"insert into t1(vkey, pkey) values (71, 81000)",
+	)
+	ins.TargetDestination = key.DestinationKeyspaceID([]byte{0x00})
+
+	vc := newTestVCursor("-20", "20-")
+
+	_, err := ins.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(00)`,
+		`ExecuteMultiShard sharded.-20: insert into t1(vkey, pkey) values (71, 81000) {} true true`,
+	})
 }
 
 func TestInsertShardedSimple(t *testing.T) {
