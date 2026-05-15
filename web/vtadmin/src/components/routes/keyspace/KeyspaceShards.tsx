@@ -155,7 +155,6 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
         <div className={style.container}>
             <QueryLoadingPlaceholder query={tq} />
             <DataFilter
-                autoFocus
                 onChange={(e) => updateFilter(e.target.value)}
                 onClear={() => updateFilter('')}
                 placeholder="Filter shards"
