@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -399,9 +400,10 @@ func TestWaitForConsistentKeyspaces(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			kew := KeyspaceEventWatcher{
-				keyspaces: tt.ksMap,
-				mu:        sync.Mutex{},
-				ts:        &fakeTopoServer{},
+				keyspaces:        tt.ksMap,
+				missingKeyspaces: make(map[string]time.Time),
+				mu:               sync.Mutex{},
+				ts:               &fakeTopoServer{},
 			}
 			err := kew.WaitForConsistentKeyspaces(ctx, tt.ksList)
 			if tt.errExpected != "" {
@@ -705,4 +707,119 @@ func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace st
 func (f *fakeTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	sv, err := f.GetSrvVSchema(ctx, cell)
 	callback(sv, err)
+}
+
+// fakeMissingKeyspaceTopoServer is a fakeTopoServer whose WatchSrvKeyspace
+// returns NoNode for keyspaces in the missing set, simulating a keyspace
+// that exists in the cluster but has no SrvKeyspace in the local cell.
+// It also counts how many times each Watch is invoked so tests can assert
+// the negative cache and the SrvVSchema-skip behavior in
+// KeyspaceEventWatcher.
+type fakeMissingKeyspaceTopoServer struct {
+	fakeTopoServer
+	missing               map[string]struct{}
+	watchSrvKeyspaceCalls atomic.Int64
+	watchSrvVSchemaCalls  atomic.Int64
+}
+
+func (f *fakeMissingKeyspaceTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	f.watchSrvKeyspaceCalls.Add(1)
+	if _, ok := f.missing[keyspace]; ok {
+		callback(nil, topo.NewError(topo.NoNode, keyspace))
+		return
+	}
+	f.fakeTopoServer.WatchSrvKeyspace(ctx, cell, keyspace, callback)
+}
+
+func (f *fakeMissingKeyspaceTopoServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
+	f.watchSrvVSchemaCalls.Add(1)
+	f.fakeTopoServer.WatchSrvVSchema(ctx, cell, callback)
+}
+
+// TestKeyspaceEventWatcherMissingKeyspaceCache verifies that healthchecks for
+// a keyspace whose SrvKeyspace does not exist in the local cell don't allocate
+// a new keyspaceState (and don't register a SrvVSchema listener) on every
+// event. Without the negative cache and the SrvVSchema-skip, this path used
+// to fire on every healthcheck event and pin orphan keyspaceStates in the
+// SrvVSchema watcher's listeners slice (onSrvVSchema always returns true,
+// so the listener was never reaped).
+func TestKeyspaceEventWatcherMissingKeyspaceCache(t *testing.T) {
+	cell := "cell1"
+	missing := "missing-keyspace"
+
+	sts := &fakeMissingKeyspaceTopoServer{
+		missing: map[string]struct{}{missing: {}},
+	}
+	hc := NewFakeHealthCheck(make(chan *TabletHealth))
+	t.Cleanup(func() { hc.Close() })
+
+	kew := &KeyspaceEventWatcher{
+		hc:               hc,
+		ts:               sts,
+		localCell:        cell,
+		keyspaces:        make(map[string]*keyspaceState),
+		missingKeyspaces: make(map[string]time.Time),
+		subs:             make(map[chan *KeyspaceEvent]struct{}),
+	}
+
+	const lookups = 100
+	for range lookups {
+		require.Nil(t, kew.getKeyspaceStatus(t.Context(), missing),
+			"getKeyspaceStatus must return nil for a keyspace missing from localCell")
+	}
+
+	assert.Equal(t, int64(1), sts.watchSrvKeyspaceCalls.Load(),
+		"WatchSrvKeyspace should be called at most once within missingKeyspaceTTL — the negative cache should short-circuit subsequent lookups")
+	assert.Equal(t, int64(0), sts.watchSrvVSchemaCalls.Load(),
+		"WatchSrvVSchema must never be called when SrvKeyspace returns NoNode synchronously — otherwise onSrvVSchema (always returning true) pins an orphan keyspaceState in the listeners slice")
+
+	// Force expiry of the negative cache and confirm exactly one re-allocation.
+	kew.mu.Lock()
+	for k := range kew.missingKeyspaces {
+		kew.missingKeyspaces[k] = time.Now().Add(-2 * missingKeyspaceTTL)
+	}
+	kew.mu.Unlock()
+
+	require.Nil(t, kew.getKeyspaceStatus(t.Context(), missing))
+	assert.Equal(t, int64(2), sts.watchSrvKeyspaceCalls.Load(),
+		"after the negative-cache TTL elapses, the next lookup should re-probe SrvKeyspace exactly once")
+	assert.Equal(t, int64(0), sts.watchSrvVSchemaCalls.Load(),
+		"WatchSrvVSchema must still not be called after re-probing a missing keyspace")
+}
+
+// TestOnSrvVSchemaUnregistersAfterDelete covers the async-deletion path: a
+// keyspace exists in localCell when newKeyspaceState registers onSrvVSchema,
+// then later disappears. onSrvKeyspace marks the state deleted and returns
+// false (reaping itself), but onSrvVSchema must also return false on its next
+// invocation — for every payload shape, including the nil "server shutting
+// down" case. Otherwise the resilient SrvVSchema watcher keeps the closure
+// (and the orphan keyspaceState it captures) in its listeners slice forever
+// and re-runs the callback's work on every SrvVSchema update.
+func TestOnSrvVSchemaUnregistersAfterDelete(t *testing.T) {
+	cases := []struct {
+		name string
+		vs   *vschemapb.SrvVSchema
+		err  error
+	}{
+		{"non-nil payload", &vschemapb.SrvVSchema{}, nil},
+		{"nil payload (server shutdown)", nil, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			kss := &keyspaceState{
+				keyspace: "ks1",
+				shards:   make(map[string]*shardState),
+			}
+
+			// Simulate the async deletion: SrvKeyspace returns NoNode for localCell.
+			require.False(t, kss.onSrvKeyspace(nil, topo.NewError(topo.NoNode, "ks1")),
+				"onSrvKeyspace must return false on NoNode so the SrvKeyspace watcher reaps it")
+			require.True(t, kss.isDeleted())
+
+			// The next SrvVSchema update must reap the orphan listener
+			// regardless of payload shape.
+			require.False(t, kss.onSrvVSchema(tc.vs, tc.err),
+				"onSrvVSchema must return false once the keyspace is deleted, otherwise the listener pins an orphan keyspaceState")
+		})
+	}
 }
