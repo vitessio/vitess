@@ -656,12 +656,11 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 	if vs == nil {
 		return true
 	}
-	// Use a local for the new state — getMoveTablesStatus returns (nil, err)
-	// on failure, and assigning directly into kss.moveTablesState would
-	// silently clobber the previously-tracked state on a transient topo blip.
+	// Use a local for the new state so transient topo errors do not clobber
+	// the previously-tracked move tables state.
 	newState, kerr := kss.getMoveTablesStatus(vs)
 	if kerr != nil {
-		log.Error(fmt.Sprintf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr))
+		log.Errorf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr)
 		return true
 	}
 	kss.moveTablesState = newState
