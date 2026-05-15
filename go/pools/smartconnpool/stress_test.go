@@ -18,7 +18,9 @@ package smartconnpool
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/rand/v2"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -69,6 +71,52 @@ func (b *StressConn) IsClosed() bool {
 
 func (b *StressConn) Close() {
 	b.closed.Store(true)
+}
+
+type stressAccounting struct {
+	nextID, connectAttempts, open, closed atomic.Int64
+}
+
+type accountingStressConn struct {
+	mu      sync.Mutex
+	setting *Setting
+	owner   atomic.Int32
+	closed  atomic.Bool
+	state   *stressAccounting
+	id      int64
+}
+
+var _ Connection = (*accountingStressConn)(nil)
+
+func (c *accountingStressConn) ApplySetting(ctx context.Context, setting *Setting) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setting = setting
+	return nil
+}
+
+func (c *accountingStressConn) ResetSetting(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setting = nil
+	return nil
+}
+
+func (c *accountingStressConn) Setting() *Setting {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.setting
+}
+
+func (c *accountingStressConn) IsClosed() bool {
+	return c.closed.Load()
+}
+
+func (c *accountingStressConn) Close() {
+	if c.closed.CompareAndSwap(false, true) {
+		c.state.open.Add(-1)
+		c.state.closed.Add(1)
+	}
 }
 
 func TestStackRace(t *testing.T) {
@@ -158,4 +206,159 @@ func TestStress(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	stop.Store(true)
 	require.NoError(t, wg.Wait())
+}
+
+func TestStressLifecycleCapacityAccounting(t *testing.T) {
+	const (
+		maxCapacity = int64(8)
+		clients     = 16
+		runFor      = 2 * time.Second
+	)
+
+	var state stressAccounting
+	connect := func(ctx context.Context) (*accountingStressConn, error) {
+		attempt := state.connectAttempts.Add(1)
+		delay := time.Duration(attempt%4) * time.Millisecond
+		if delay != 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				return nil, context.Cause(ctx)
+			case <-timer.C:
+			}
+		}
+
+		state.open.Add(1)
+		return &accountingStressConn{
+			state: &state,
+			id:    state.nextID.Add(1),
+		}, nil
+	}
+
+	pool := NewPool[*accountingStressConn](&Config[*accountingStressConn]{
+		Capacity:     maxCapacity,
+		MaxIdleCount: maxCapacity / 2,
+		MaxWaiters:   uint(clients * 2),
+	}).Open(connect, nil)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	defer pool.Close()
+
+	settings := []*Setting{
+		nil,
+		NewSetting("set stress_a=1", "reset stress_a"),
+		NewSetting("set stress_b=1", "reset stress_b"),
+	}
+
+	var stop atomic.Bool
+	var wg errgroup.Group
+
+	for client := range clients {
+		tid := int32(client + 1)
+		wg.Go(func() error {
+			rng := rand.New(rand.NewPCG(uint64(tid), uint64(tid)+1))
+			for !stop.Load() {
+				setting := settings[rng.IntN(len(settings))]
+				conn, err := pool.Get(ctx, setting)
+				if err != nil {
+					if ctx.Err() != nil ||
+						errors.Is(err, ErrConnPoolClosed) ||
+						errors.Is(err, ErrTimeout) ||
+						errors.Is(err, ErrPoolWaiterCapReached) {
+						runtime.Gosched()
+						continue
+					}
+					return err
+				}
+
+				previousOwner := conn.Conn.owner.Swap(tid)
+				if previousOwner != 0 {
+					conn.Recycle()
+					return fmt.Errorf("owner race on conn %d: %d with %d", conn.Conn.id, tid, previousOwner)
+				}
+				if got := conn.Conn.Setting(); got != setting {
+					conn.Conn.owner.Store(0)
+					conn.Recycle()
+					return fmt.Errorf("conn %d setting mismatch: got %p want %p", conn.Conn.id, got, setting)
+				}
+
+				for range rng.IntN(3) + 1 {
+					runtime.Gosched()
+				}
+
+				previousOwner = conn.Conn.owner.Swap(0)
+				if previousOwner != tid {
+					conn.Recycle()
+					return fmt.Errorf("owner race on conn %d: %d released by %d", conn.Conn.id, previousOwner, tid)
+				}
+				conn.Recycle()
+			}
+			return nil
+		})
+	}
+
+	wg.Go(func() error {
+		rng := rand.New(rand.NewPCG(0x5151, 0x9191))
+		for !stop.Load() {
+			switch rng.IntN(10) {
+			case 0:
+				pool.Close()
+				if !stop.Load() {
+					pool.Open(connect, nil)
+				}
+			default:
+				if err := pool.SetCapacity(ctx, int64(rng.IntN(int(maxCapacity+1)))); err != nil {
+					return err
+				}
+			}
+
+			timer := time.NewTimer(time.Duration(rng.IntN(5)+1) * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				return nil
+			case <-timer.C:
+			}
+		}
+		return nil
+	})
+
+	time.Sleep(runFor)
+	stop.Store(true)
+	cancel()
+	require.NoError(t, wg.Wait())
+
+	require.Eventually(t, func() bool {
+		return pool.InUse() == 0 &&
+			pool.pendingOpen.Load() == 0 &&
+			pool.connecting.Load() == 0 &&
+			pool.wait.waiting() == 0 &&
+			pool.Active() == state.open.Load()
+	}, 30*time.Second, 10*time.Millisecond)
+
+	pool.Close()
+	require.EqualValues(t, 0, pool.InUse())
+	require.EqualValues(t, 0, pool.Active())
+	require.EqualValues(t, 0, pool.pendingOpen.Load())
+	require.EqualValues(t, 0, pool.connecting.Load())
+	require.EqualValues(t, 0, pool.wait.waiting())
+
+	// Leak check: every connection successfully returned by the connector must
+	// have been closed exactly once after the final pool close.
+	created := state.nextID.Load()
+	closed := state.closed.Load()
+	require.EqualValues(t, 0, state.open.Load())
+	require.Equal(t, created, closed)
 }

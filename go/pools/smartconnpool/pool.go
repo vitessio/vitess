@@ -98,6 +98,13 @@ func (m *Metrics) WaiterCapRejected() int64 {
 }
 
 type (
+	// Connector opens a new connection for the pool.
+	//
+	// The context is the pool lifecycle context, not necessarily the caller's
+	// Get context. A connector may therefore continue running after the
+	// requester has timed out. Implementations must either honor ctx promptly
+	// or enforce their own bounded connect timeout; otherwise an in-flight open
+	// can reserve pool capacity until the pool is closed.
 	Connector[C Connection] func(ctx context.Context) (C, error)
 	RefreshCheck            func() (bool, error)
 )
@@ -116,26 +123,23 @@ type Config[C Connection] struct {
 // the number of stacks must always be a power of two
 const stackMask = 7
 
+const (
+	maxConcurrentOpens = int64(16)
+	openRetryDelay     = 10 * time.Millisecond
+)
+
 type lifecycleState struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
-// alreadyCanceledCtx is returned by closeContext when the pool is not open;
-// it ensures connect callbacks fail fast without checking pool state again.
-var alreadyCanceledCtx = func() context.Context {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	return ctx
-}()
-
 // ConnPool is a connection pool for generic connections
 type ConnPool[C Connection] struct {
 	// clean is a connections stack for connections with no Setting applied
-	clean connStack[C]
+	clean *connStack[C]
 	// settings are N connection stacks for connections with a Setting applied
 	// connections are distributed between stacks based on their Setting.bucket
-	settings [stackMask + 1]connStack[C]
+	settings [stackMask + 1]*connStack[C]
 	// freshSettingStack is the index in settings to the last stack when a connection
 	// was pushed, or -1 if no connection with a Setting has been opened in this pool
 	freshSettingsStack atomic.Int64
@@ -145,8 +149,10 @@ type ConnPool[C Connection] struct {
 	// borrowed is the number of connections that the pool has given out to clients
 	// and that haven't been returned yet
 	borrowed atomic.Int64
-	// active is the number of connections that the pool has opened; this includes connections
-	// in the pool and borrowed by clients
+	// active is the number of connections that the pool has opened or is opening;
+	// this includes connections in the pool and borrowed by clients. It is not
+	// reset across Close/Open: borrowed old-generation conns are still physical
+	// connections and consume capacity until they are recycled and closed.
 	active atomic.Int64
 	// capacity is the maximum number of connections that this pool can open
 	capacity atomic.Int64
@@ -160,6 +166,11 @@ type ConnPool[C Connection] struct {
 	// put-driven reconnects abort promptly.
 	lifecycle  atomic.Pointer[lifecycleState]
 	capacityMu sync.Mutex
+	// openSignal wakes the opener worker. pendingOpens counts open requests
+	// that have not yet reserved an active slot.
+	openSignal  chan struct{}
+	pendingOpen atomic.Int64
+	connecting  atomic.Int64
 	// generation is bumped on every reopen so that borrowed connections from
 	// before the reopen can be identified and retired when they return.
 	generation atomic.Int64
@@ -195,6 +206,11 @@ type ConnPool[C Connection] struct {
 // The pool must be ConnPool.Open before it can start giving out connections
 func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
 	pool := &ConnPool[C]{}
+	pool.clean = &connStack[C]{}
+	for i := range pool.settings {
+		pool.settings[i] = &connStack[C]{}
+	}
+	pool.openSignal = make(chan struct{}, 1)
 	pool.config.maxCapacity = config.Capacity
 	pool.config.maxIdleCount = config.MaxIdleCount
 	pool.config.maxLifetime.Store(config.MaxLifetime.Nanoseconds())
@@ -214,13 +230,10 @@ func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
 }
 
 func (pool *ConnPool[C]) runWorker(closed <-chan struct{}, interval time.Duration, worker func(now time.Time) bool) {
-	pool.workers.Add(1)
-
-	go func() {
+	pool.workers.Go(func() {
 		tick := time.NewTicker(interval)
 
 		defer tick.Stop()
-		defer pool.workers.Done()
 
 		for {
 			select {
@@ -232,7 +245,21 @@ func (pool *ConnPool[C]) runWorker(closed <-chan struct{}, interval time.Duratio
 				return
 			}
 		}
-	}()
+	})
+}
+
+func (pool *ConnPool[C]) runOpener(ctx context.Context) {
+	pool.workers.Go(func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-pool.openSignal:
+				for pool.startPendingOpen(ctx) {
+				}
+			}
+		}
+	})
 }
 
 func (pool *ConnPool[C]) open() {
@@ -250,7 +277,11 @@ func (pool *ConnPool[C]) open() {
 	pool.generation.Add(1)
 
 	pool.capacity.Store(pool.config.maxCapacity)
+	pool.pendingOpen.Store(0)
+	pool.connecting.Store(0)
 	pool.setIdleCount()
+
+	pool.runOpener(state.ctx)
 
 	idleTimeout := pool.IdleTimeout()
 	if idleTimeout != 0 {
@@ -272,7 +303,7 @@ func (pool *ConnPool[C]) open() {
 				log.Error(fmt.Sprint(err))
 			}
 			if refresh {
-				go pool.reopen()
+				go pool.reopen(state)
 			}
 			return true
 		})
@@ -316,9 +347,15 @@ func (pool *ConnPool[C]) Close() {
 	}
 }
 
-// CloseWithContext behaves like Close. The context is accepted for compatibility;
-// CloseWithContext does not wait for borrowed connections and therefore does not
-// use ctx as a borrowed-connection drain deadline.
+// CloseWithContext behaves like Close. The context is accepted for compatibility,
+// but it is not used as a close deadline. CloseWithContext cancels the pool
+// lifecycle, drains idle connections, and waits for pool-owned worker goroutines
+// to exit. Those workers should exit promptly when their lifecycle context is
+// cancelled, but a connector, refresh callback, or connection Close method that
+// blocks without honoring cancellation can still make CloseWithContext block.
+//
+// CloseWithContext does not wait for borrowed connections; borrowed connections
+// are closed when recycled.
 //
 // CloseWithContext is NOT safe to call concurrently with Open or with another
 // CloseWithContext (it manipulates the pool's lifecycle pointer and the
@@ -328,9 +365,12 @@ func (pool *ConnPool[C]) Close() {
 func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	_ = ctx
 
-	// Clear and cancel the lifecycle state before taking capacityMu. Worker
-	// reconnects (closeIdleResources, put) read this context and abort when
-	// it fires, so workers.Wait() unblocks promptly inside this function.
+	// Clear the lifecycle before cancelling it so new Get fast paths cannot
+	// pop idle conns during shutdown. A waiter that receives a conn in the
+	// small window before state.cancel closes closeChan is still filtered by
+	// get/getWithSetting's post-wait lifecycle check and discards that conn.
+	// Worker reconnects (closeIdleResources, put) read this context and abort
+	// when it fires, so workers.Wait() unblocks promptly inside this function.
 	state := pool.lifecycle.Swap(nil)
 	if state == nil {
 		// already closed
@@ -366,11 +406,11 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 //     captured before the connect call, so they land with the pre-reopen
 //     generation and are retired by tryReturnConn on Recycle. Capacity is
 //     never dipped, so parked waiters are not woken artificially.
-func (pool *ConnPool[C]) reopen() {
+func (pool *ConnPool[C]) reopen(state *lifecycleState) {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
 
-	if pool.lifecycle.Load() == nil {
+	if state == nil || pool.lifecycle.Load() != state {
 		return
 	}
 
@@ -379,29 +419,23 @@ func (pool *ConnPool[C]) reopen() {
 	// by tryReturnConn when they return.
 	pool.generation.Add(1)
 
-	pool.sweepStaleConns(&pool.clean)
+	pool.sweepStaleConns(pool.clean)
 	for i := range pool.settings {
-		pool.sweepStaleConns(&pool.settings[i])
+		pool.sweepStaleConns(pool.settings[i])
 	}
 }
 
 // sweepStaleConns drains a connection stack, closing every conn whose
 // generation predates the pool's current generation. Fresh-generation conns
-// — for example, those pushed by closeIdleResources's connReopen after the
-// generation bump — are pushed back into the pool instead of being dropped;
-// they're valid post-reopen conns and discarding them would leak an active
-// slot.
+// that raced onto the stack after the generation bump are pushed back into
+// the pool instead of being dropped; they're valid post-reopen conns and
+// discarding them would leak an active slot.
 func (pool *ConnPool[C]) sweepStaleConns(stack *connStack[C]) {
 	var fresh []*Pooled[C]
 	for {
 		conn, ok := stack.Pop()
 		if !ok {
 			break
-		}
-		if !conn.timeUsed.borrow() {
-			// The idle worker already marked this conn as expired and is
-			// closing it; let that finish without our interference.
-			continue
 		}
 		if conn.generation != pool.generation.Load() {
 			conn.Close()
@@ -411,7 +445,8 @@ func (pool *ConnPool[C]) sweepStaleConns(stack *connStack[C]) {
 		fresh = append(fresh, conn)
 	}
 	for _, conn := range fresh {
-		// Clear the borrow we took above so the conn is usable again.
+		// Keep the previous behavior of refreshing fresh-generation conns
+		// before returning them to waiters or an idle stack.
 		conn.timeUsed.update()
 		pool.tryReturnConn(conn)
 	}
@@ -487,6 +522,9 @@ func (pool *ConnPool[C]) recordWaitDuration(start time.Time) {
 // is returned, or until the given ctx is cancelled.
 // The connection must be returned to the pool once it's not needed by calling Pooled.Recycle
 //
+// Opening a new connection reserves pool capacity while the connector is
+// running, even if the caller's ctx times out before the open completes.
+//
 // ctx is honored on a best-effort basis: Get may return a usable connection
 // even if ctx has been cancelled in a narrow window around the return (the
 // pool can't atomically observe cancellation that happens after the wait
@@ -538,12 +576,9 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 		if pool.releaseSlotIfOverCapacity() {
 			return
 		}
-		var err error
-		conn, err = pool.connNew(pool.closeContext())
-		if err != nil {
-			pool.closedConn()
-			return
-		}
+		pool.closedConn()
+		pool.requestOpen()
+		return
 	} else {
 		// A conn whose generation predates the pool's was established before
 		// the most recent reopen and must not return to the pool — the reason
@@ -551,6 +586,7 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 		if conn.generation != pool.generation.Load() {
 			conn.Close()
 			pool.closedConn()
+			pool.requestOpen()
 			return
 		}
 
@@ -560,10 +596,9 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 		if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
 			pool.Metrics.maxLifetimeClosed.Add(1)
 			conn.Close()
-			if err := pool.connReopen(pool.closeContext(), conn, conn.timeUsed.get()); err != nil {
-				pool.closedConn()
-				return
-			}
+			pool.closedConn()
+			pool.requestOpen()
+			return
 		}
 	}
 
@@ -571,12 +606,6 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 }
 
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
-	if pool.lifecycle.Load() == nil {
-		conn.Close()
-		pool.closedConn()
-		return false
-	}
-
 	// Ownership gate: a conn whose generation predates the pool's belongs to
 	// a previous reopen window. Reject before any handoff (waiter, idle-limit,
 	// stack push) so a stale conn never reaches another caller. This catches
@@ -601,29 +630,41 @@ func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
 		return false
 	}
 
-	if pool.lifecycle.Load() == nil {
-		conn.Close()
-		pool.closedConn()
-		return false
-	}
 	if pool.closeConnIfOverCapacity(conn) {
 		return false
 	}
 
 	connSetting := conn.Conn.Setting()
+	var preferredStack *connStack[C]
 	if connSetting == nil {
 		pool.clean.Push(conn)
 	} else {
 		stack := connSetting.bucket & stackMask
-		pool.settings[stack].Push(conn)
+		preferredStack = pool.settings[stack]
+		preferredStack.Push(conn)
 		pool.freshSettingsStack.Store(int64(stack))
 	}
 	if pool.lifecycle.Load() == nil {
 		pool.closeIdleConns()
 		return false
 	}
+
 	_ = pool.closeIdleConnIfOverCapacity()
+
 	if pool.wait.waiting() != 0 {
+		// This is a best-effort handoff, not an identity-preserving transfer:
+		// another goroutine may push or pop while we are here, so the conn
+		// handed to a waiter can differ from the conn this call just pushed.
+		if preferredStack != nil {
+			if conn := pool.pop(preferredStack); conn != nil {
+				conn.timeUsed.update()
+				return pool.tryReturnConn(conn)
+			}
+			// The waiter check is only a demand hint. Another goroutine can
+			// consume the pushed conn before this re-pop; in that case waiter
+			// progress relies on that owner returning the conn or releasing
+			// capacity through the normal notification path.
+		}
 		return pool.tryReturnAnyConn()
 	}
 	return false
@@ -661,12 +702,12 @@ func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
 }
 
 func (pool *ConnPool[C]) tryReturnAnyConn() bool {
-	if conn := pool.pop(&pool.clean); conn != nil {
+	if conn := pool.pop(pool.clean); conn != nil {
 		conn.timeUsed.update()
 		return pool.tryReturnConn(conn)
 	}
 	for u := 0; u <= stackMask; u++ {
-		if conn := pool.pop(&pool.settings[u]); conn != nil {
+		if conn := pool.pop(pool.settings[u]); conn != nil {
 			conn.timeUsed.update()
 			return pool.tryReturnConn(conn)
 		}
@@ -688,28 +729,21 @@ func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 		if idle <= pool.idleCount.Load() {
 			return false
 		}
+		// waiting() is a best-effort demand hint. A waiter that races in
+		// after this check but before the close below recovers through the
+		// normal capacity notification / async-open path.
+		if pool.wait.waiting() != 0 {
+			return false
+		}
 		if pool.active.CompareAndSwap(open, open-1) {
 			if pool.capacity.Load() > 0 {
 				pool.Metrics.idleClosed.Add(1)
 			}
 			conn.Close()
+			pool.notifyWaitersForAvailableCapacity(1)
 			return true
 		}
 	}
-}
-
-// closeContext returns the pool-wide context that is cancelled when the pool
-// starts closing. Returns an already-cancelled context if the pool is not
-// open, so callers that race with close fail fast.
-//
-// Used by background workers and by put() so that in-flight reconnects abort
-// when CloseWithContext fires, instead of pinning workers.Wait(). The context
-// is owned by the pool — do not cancel it.
-func (pool *ConnPool[C]) closeContext() context.Context {
-	if state := pool.lifecycle.Load(); state != nil {
-		return state.ctx
-	}
-	return alreadyCanceledCtx
 }
 
 func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
@@ -720,33 +754,9 @@ func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 	return time.Duration(maxLifetime) + time.Duration(rand.Int64N(maxLifetime))
 }
 
-func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now time.Duration) (err error) {
-	// Capture generation before the connect so a reopen that races with this
-	// call doesn't mark our stale-server conn as fresh. tryReturnConn will
-	// reject the conn on the way back if generation has moved on.
-	generation := pool.generation.Load()
-
-	dbconn.Conn, err = pool.config.connect(ctx)
-	if err != nil {
-		return err
-	}
-
-	if setting := dbconn.Conn.Setting(); setting != nil {
-		err = dbconn.Conn.ApplySetting(ctx, setting)
-		if err != nil {
-			dbconn.Close()
-			return err
-		}
-	}
-
-	dbconn.timeCreated.set(now)
-	dbconn.timeUsed.set(now)
-	dbconn.generation = generation
-	return nil
-}
-
 func (pool *ConnPool[C]) connNew(ctx context.Context) (*Pooled[C], error) {
-	// Capture generation before the connect; see connReopen.
+	// Capture generation before the connect so a reopen that races with this
+	// call doesn't mark the pre-reopen connection as fresh.
 	generation := pool.generation.Load()
 
 	conn, err := pool.config.connect(ctx)
@@ -774,7 +784,7 @@ func (pool *ConnPool[C]) getFromSettingsStack(setting *Setting) *Pooled[C] {
 
 	for i := uint32(0); i <= stackMask; i++ {
 		pos := (i + start) & stackMask
-		if conn := pool.pop(&pool.settings[pos]); conn != nil {
+		if conn := pool.pop(pool.settings[pos]); conn != nil {
 			return conn
 		}
 	}
@@ -790,7 +800,7 @@ func (pool *ConnPool[C]) popAnyIdleConn() *Pooled[C] {
 	if conn := pool.getFromSettingsStack(nil); conn != nil {
 		return conn
 	}
-	return pool.pop(&pool.clean)
+	return pool.pop(pool.clean)
 }
 
 func (pool *ConnPool[C]) releaseSlotIfOverCapacity() bool {
@@ -855,7 +865,7 @@ func (pool *ConnPool[C]) closedConn() {
 
 func (pool *ConnPool[C]) notifyWaitersForAvailableCapacity(limit int64) {
 	for range limit {
-		if pool.active.Load() >= pool.capacity.Load() {
+		if pool.active.Load()+pool.pendingOpen.Load() >= pool.capacity.Load() {
 			return
 		}
 		if !pool.wait.tryNotifyWaiter() {
@@ -864,22 +874,123 @@ func (pool *ConnPool[C]) notifyWaitersForAvailableCapacity(limit int64) {
 	}
 }
 
-func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
+func (pool *ConnPool[C]) signalOpener() {
+	select {
+	case pool.openSignal <- struct{}{}:
+	default:
+	}
+}
+
+func (pool *ConnPool[C]) requestOpen() bool {
 	for {
-		open := pool.active.Load()
-		if open >= pool.capacity.Load() {
-			return nil, nil
+		if pool.lifecycle.Load() == nil {
+			return false
 		}
 
-		if pool.active.CompareAndSwap(open, open+1) {
-			conn, err := pool.connNew(ctx)
-			if err != nil {
-				pool.closedConn()
-				return nil, err
-			}
-			return conn, nil
+		active := pool.active.Load()
+		pending := pool.pendingOpen.Load()
+		capacity := pool.capacity.Load()
+		if capacity == 0 || active+pending >= capacity {
+			return false
+		}
+		if pool.pendingOpen.CompareAndSwap(pending, pending+1) {
+			pool.signalOpener()
+			return true
 		}
 	}
+}
+
+func (pool *ConnPool[C]) consumePendingOpen() bool {
+	for {
+		pending := pool.pendingOpen.Load()
+		if pending <= 0 {
+			return false
+		}
+		if pool.pendingOpen.CompareAndSwap(pending, pending-1) {
+			return true
+		}
+	}
+}
+
+func (pool *ConnPool[C]) reserveOpenSlot() bool {
+	for {
+		active := pool.active.Load()
+		if active >= pool.capacity.Load() {
+			return false
+		}
+		if pool.active.CompareAndSwap(active, active+1) {
+			return true
+		}
+	}
+}
+
+func (pool *ConnPool[C]) maxOpens() int64 {
+	capacity := pool.capacity.Load()
+	if capacity < maxConcurrentOpens {
+		return capacity
+	}
+	return maxConcurrentOpens
+}
+
+func (pool *ConnPool[C]) startPendingOpen(ctx context.Context) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	if pool.connecting.Load() >= pool.maxOpens() {
+		return false
+	}
+	if !pool.consumePendingOpen() {
+		return false
+	}
+	if !pool.reserveOpenSlot() {
+		// Capacity shrank after this open was requested but before the opener
+		// reserved an active slot. The pending open belonged to the old
+		// capacity window, so drop it instead of carrying stale demand forward.
+		// There is no capacity to wake waiters for here; future capacity growth
+		// or slot release is responsible for the next notification.
+		return true
+	}
+	pool.startAsyncOpen(ctx)
+	return true
+}
+
+func (pool *ConnPool[C]) startAsyncOpen(ctx context.Context) {
+	pool.connecting.Add(1)
+
+	pool.workers.Go(func() {
+		defer pool.signalOpener()
+		defer pool.connecting.Add(-1)
+
+		for {
+			conn, err := pool.connNew(ctx)
+			if err == nil {
+				pool.tryReturnConn(conn)
+				return
+			}
+			// wait.waiting is a best-effort demand signal: a waiter can race
+			// into waitForConn just after this load. That waiter recovers via
+			// closedConn notification or waitForConn's shouldRetry path, both
+			// of which can request another async open.
+			if ctx.Err() != nil || pool.lifecycle.Load() == nil || pool.capacity.Load() == 0 || pool.active.Load() > pool.capacity.Load() || pool.wait.waiting() == 0 {
+				pool.closedConn()
+				return
+			}
+
+			timer := time.NewTimer(openRetryDelay)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				pool.closedConn()
+				return
+			case <-timer.C:
+			}
+		}
+	})
 }
 
 func (pool *ConnPool[C]) shouldRetryWait() bool {
@@ -890,9 +1001,6 @@ func (pool *ConnPool[C]) shouldRetryWait() bool {
 	if pool.capacity.Load() == 0 {
 		return true
 	}
-	if pool.active.Load() < pool.capacity.Load() {
-		return true
-	}
 	if pool.clean.Peek() != nil {
 		return true
 	}
@@ -901,6 +1009,9 @@ func (pool *ConnPool[C]) shouldRetryWait() bool {
 			return true
 		}
 	}
+	// This can race with a concurrent direct handoff to this waiter. The open
+	// request is capacity-bounded, and any extra conn becomes pooled capacity.
+	pool.requestOpen()
 	return false
 }
 
@@ -917,20 +1028,15 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 		}
 
 		// best case: if there's a connection in the clean stack, return it right away
-		if conn := pool.pop(&pool.clean); conn != nil {
+		conn := pool.pop(pool.clean)
+		if conn != nil {
 			pool.borrowed.Add(1)
 			return conn, nil
 		}
 
-		// check if we have enough capacity to open a brand-new connection to return
-		conn, err := pool.getNew(ctx)
-		if err != nil {
-			return nil, err
-		}
 		// if we don't have capacity, try popping a connection from any of the setting stacks
-		if conn == nil {
-			conn = pool.getFromSettingsStack(nil)
-		}
+		conn = pool.getFromSettingsStack(nil)
+		var err error
 		// if there are no connections in the setting stacks and we've lent out connections
 		// to other clients, wait until one of the connections is returned
 		if conn == nil {
@@ -973,11 +1079,9 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 			err = conn.Conn.ResetSetting(ctx)
 			if err != nil {
 				conn.Close()
-				err = pool.connReopen(ctx, conn, monotonicNow())
-				if err != nil {
-					pool.closedConn()
-					return nil, err
-				}
+				pool.closedConn()
+				pool.requestOpen()
+				continue
 			}
 		}
 
@@ -998,22 +1102,15 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			return nil, ErrTimeout
 		}
 
-		var err error
 		// best case: check if there's a connection in the setting stack where our Setting belongs
-		conn := pool.pop(&pool.settings[setting.bucket&stackMask])
+		conn := pool.pop(pool.settings[setting.bucket&stackMask])
 		// if there's connection with our setting, try popping a clean connection
 		if conn == nil {
-			conn = pool.pop(&pool.clean)
-		}
-		// otherwise try opening a brand new connection and we'll apply the setting to it
-		if conn == nil {
-			conn, err = pool.getNew(ctx)
-			if err != nil {
-				return nil, err
-			}
+			conn = pool.pop(pool.clean)
 		}
 		// try on the _other_ setting stacks, even if we have to reset the Setting for the returned
 		// connection
+		var err error
 		if conn == nil {
 			conn = pool.getFromSettingsStack(setting)
 		}
@@ -1062,11 +1159,9 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 				err = conn.Conn.ResetSetting(ctx)
 				if err != nil {
 					conn.Close()
-					err = pool.connReopen(ctx, conn, monotonicNow())
-					if err != nil {
-						pool.closedConn()
-						return nil, err
-					}
+					pool.closedConn()
+					pool.requestOpen()
+					continue
 				}
 			}
 			// apply our setting now; if we can't we assume that the conn is broken
@@ -1074,6 +1169,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
 				conn.Close()
 				pool.closedConn()
+				pool.requestOpen()
 				return nil, err
 			}
 		}
@@ -1123,6 +1219,7 @@ func (pool *ConnPool[C]) setCapacity(newcap int64) error {
 	pool.setIdleCount()
 
 	if newcap == 0 {
+		pool.pendingOpen.Store(0)
 		for pool.wait.tryNotifyWaiter() {
 		}
 	}
@@ -1148,19 +1245,9 @@ func (pool *ConnPool[C]) closeIdleConnsForShutdown() {
 // closeIdleResources rotates connections that have been idle longer than
 // IdleTimeout. It's called on a ticker by the idle worker.
 //
-// Design note: the rotation is split into two loops on purpose. The close
-// loop drops pool.active for each expired conn before the reopen loop tries
-// to bring it back up. The visible dip in pool.active is intentional — it's
-// the mechanism by which a concurrent Get can claim the freed slot via
-// getNew during a slow reopen, instead of waiting for the worker to finish.
-// If the Get wins the CAS race for the slot, the reopen-loop's inner check
-// `if open >= pool.capacity.Load() { conn.Close() }` discards the worker's
-// freshly-opened conn rather than exceeding capacity.
-//
-// This trades occasional wasted reopens under contention for non-blocking
-// Get during idle cycling. The contract is pinned by
-// TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity; do not
-// "fix" the dip into an in-place rotation without changing that test too.
+// Expired conns release their active slot before asking the async opener for
+// a replacement. That lets waiters and background replacement share the same
+// non-blocking connect path.
 func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	timeout := pool.IdleTimeout()
 	if timeout == 0 {
@@ -1171,10 +1258,6 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	}
 
 	mono := monotonicFromTime(now)
-
-	// Reconnects must abort when the pool starts closing; otherwise a slow
-	// MySQL connect pins workers.Wait() inside CloseWithContext.
-	connectCtx := pool.closeContext()
 
 	closeInStack := func(s *connStack[C]) {
 		conn, ok := s.Pop()
@@ -1238,35 +1321,14 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 
 			conn.Close()
 			pool.closedConn()
-		}
-
-		for _, conn := range expiredConnections {
-			if pool.active.Load() >= pool.capacity.Load() {
-				break
-			}
-
-			if err := pool.connReopen(connectCtx, conn, mono); err != nil {
-				continue
-			}
-
-			for {
-				open := pool.active.Load()
-				if open >= pool.capacity.Load() {
-					conn.Close()
-					break
-				}
-				if pool.active.CompareAndSwap(open, open+1) {
-					pool.tryReturnConn(conn)
-					break
-				}
-			}
+			pool.requestOpen()
 		}
 	}
 
 	for i := 0; i <= stackMask; i++ {
-		closeInStack(&pool.settings[i])
+		closeInStack(pool.settings[i])
 	}
-	closeInStack(&pool.clean)
+	closeInStack(pool.clean)
 }
 
 func (pool *ConnPool[C]) StatsJSON() map[string]any {

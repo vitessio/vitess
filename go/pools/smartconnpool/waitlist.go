@@ -18,6 +18,7 @@ package smartconnpool
 
 import (
 	"context"
+	"runtime"
 	"sync"
 
 	"vitess.io/vitess/go/list"
@@ -245,6 +246,7 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	// Write into the waiter's buffered channel; this never blocks because the
 	// waiter is the sole receiver and the buffer is sized 1.
 	target.Value.conn <- conn
+	runtime.Gosched()
 
 	return true
 }
@@ -266,6 +268,7 @@ func (wl *waitlist[D]) tryNotifyWaiter() bool {
 	}
 
 	target.Value.conn <- nil
+	runtime.Gosched()
 
 	return true
 }

@@ -22,6 +22,8 @@ import (
 )
 
 type Connection interface {
+	// Implementations must not panic from these methods. Close must be safe
+	// to call more than once.
 	ApplySetting(ctx context.Context, setting *Setting) error
 	ResetSetting(ctx context.Context) error
 	Setting() *Setting
