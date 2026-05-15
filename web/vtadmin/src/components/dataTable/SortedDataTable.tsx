@@ -121,9 +121,9 @@ export const SortedDataTable = <T extends object>({
                 {title && <caption>{title}</caption>}
                 <thead>
                     <tr>
-                        {columns.map((col, cdx) => (
+                        {columns.map((col) => (
                             <SortTableHeader
-                                key={cdx}
+                                key={col.accessor}
                                 col={col}
                                 sortColumn={sortColumn}
                                 sortOrder={sortOrder}
