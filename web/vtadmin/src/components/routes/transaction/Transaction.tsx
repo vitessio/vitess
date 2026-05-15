@@ -95,6 +95,7 @@ export const Transaction = () => {
                             const shard = `${participant.keyspace}/${participant.shard}`;
                             return (
                                 <ShardLink
+                                    key={shard}
                                     clusterID={clusterID}
                                     keyspace={participant.keyspace}
                                     shard={participant.shard}
