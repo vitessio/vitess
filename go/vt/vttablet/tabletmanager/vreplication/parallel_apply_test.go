@@ -4086,9 +4086,7 @@ func TestVPlayerLagSnapshotIsAtomic(t *testing.T) {
 
 	stop := make(chan struct{})
 	var writeWG sync.WaitGroup
-	writeWG.Add(1)
-	go func() {
-		defer writeWG.Done()
+	writeWG.Go(func() {
 		for i := int64(1); ; i++ {
 			select {
 			case <-stop:
@@ -4097,14 +4095,12 @@ func TestVPlayerLagSnapshotIsAtomic(t *testing.T) {
 			}
 			vp.storeLagSnapshot(i, i+sentinelOffset)
 		}
-	}()
+	})
 
 	var readWG sync.WaitGroup
 	mismatches := atomic.Int64{}
-	readWG.Add(1)
-	go func() {
-		defer readWG.Done()
-		for i := 0; i < iterations; i++ {
+	readWG.Go(func() {
+		for range iterations {
 			snap := vp.loadLagSnapshot()
 			if snap.timestampNs == 0 {
 				continue
@@ -4113,7 +4109,7 @@ func TestVPlayerLagSnapshotIsAtomic(t *testing.T) {
 				mismatches.Add(1)
 			}
 		}
-	}()
+	})
 
 	readWG.Wait()
 	close(stop)
