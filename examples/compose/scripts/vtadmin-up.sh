@@ -22,7 +22,6 @@ echo "Starting vtadmin..."
 exec vtadmin \
   --addr "0.0.0.0:14200" \
   --http-origin "http://localhost:14201" \
-  --http-origin "http://localhost:14202" \
   --http-tablet-url-tmpl "http://{{ .Tablet.Hostname }}:15000" \
   --log-format text \
   --rbac \
