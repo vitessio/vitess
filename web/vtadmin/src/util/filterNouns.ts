@@ -54,11 +54,12 @@ export const filterNouns = <T extends { [k: string]: any }>(needle: string | nul
 
     return otherTokens.reduce((acc, token) => {
         switch (token.type) {
-            case SearchTokenTypes.EXACT:
+            case SearchTokenTypes.EXACT: {
                 const needle = token.value;
                 return acc.filter((o: T) => {
                     return Object.values(o).some((val) => val === needle);
                 });
+            }
             case SearchTokenTypes.FUZZY:
                 return acc.filter((o: T) => {
                     return Object.values(o).some((val) => fuzzyCompare(token.value, `${val}`));
