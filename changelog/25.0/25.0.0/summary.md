@@ -12,6 +12,7 @@
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+        - [EXPERIMENTAL tablets now routable through VTGate](#vtgate-experimental-tablet-serving)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
 
@@ -64,6 +65,24 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+#### <a id="vtgate-experimental-tablet-serving"/>EXPERIMENTAL tablets now routable through vtgate</a>
+
+VTGate can now discover and route queries to EXPERIMENTAL tablets. Previously, EXPERIMENTAL tablets were excluded from the serving graph and SrvKeyspace partitions, so VTGate could not route queries to them—attempting to do so returned "No partition found for tabletType experimental".
+
+This enables testing new MySQL or vttablet configurations with production-like query traffic through VTGate, rather than bypassing VTGate with direct gRPC calls to vttablet.
+
+**Deployment steps:**
+
+1. Deploy vtctld with this change
+2. Run `vtctldclient RebuildKeyspaceGraph <keyspace>` for any keyspace with EXPERIMENTAL tablets to regenerate the SrvKeyspace with the EXPERIMENTAL partition
+3. Restart VTGate or wait for its topo watcher to pick up the new SrvKeyspace
+
+Optionally, add `experimental` to `--tablet-types-to-wait` if VTGate should wait for healthy EXPERIMENTAL tablets at startup.
+
+EXPERIMENTAL tablets also now appear in `SHOW VITESS_REPLICATION_STATUS` output.
+
+See [#20115](https://github.com/vitessio/vitess/pull/20115) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
