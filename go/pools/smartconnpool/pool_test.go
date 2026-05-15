@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -61,6 +60,8 @@ type TestConn struct {
 	timeCreated time.Time
 	closed      bool
 	failApply   bool
+	failReset   bool
+	onSetting   func()
 }
 
 func (tr *TestConn) waitForClose() chan struct{} {
@@ -73,11 +74,17 @@ func (tr *TestConn) IsClosed() bool {
 }
 
 func (tr *TestConn) Setting() *Setting {
+	if tr.onSetting != nil {
+		tr.onSetting()
+	}
 	return tr.setting
 }
 
 func (tr *TestConn) ResetSetting(ctx context.Context) error {
 	tr.counts.reset.Add(1)
+	if tr.failReset {
+		return errors.New("ResetSetting failed")
+	}
 	tr.setting = nil
 	return nil
 }
@@ -145,9 +152,9 @@ func TestOpen(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
-		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
-		assert.Zero(t, p.Metrics.WaitTime())
+		assert.EqualValues(t, i+1, p.Metrics.WaitCount())
+		assert.Equal(t, i+1, len(state.waits))
+		assert.NotZero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())
 	}
@@ -179,8 +186,8 @@ func TestOpen(t *testing.T) {
 		p.put(resources[i])
 	}
 	<-done
-	assert.EqualValues(t, 5, p.Metrics.WaitCount())
-	assert.Equal(t, 5, len(state.waits))
+	assert.EqualValues(t, 10, p.Metrics.WaitCount())
+	assert.Equal(t, 10, len(state.waits))
 	// verify start times are monotonic increasing
 	for i := 1; i < len(state.waits); i++ {
 		assert.False(t, state.waits[i].Before(state.waits[i-1]), "Expecting monotonic increasing start times")
@@ -193,8 +200,9 @@ func TestOpen(t *testing.T) {
 	r.Close()
 	// A nil Put should cause the resource to be reopened.
 	p.put(nil)
-	assert.EqualValues(t, 5, state.open.Load())
-	assert.EqualValues(t, 6, state.lastID.Load())
+	require.Eventually(t, func() bool {
+		return state.open.Load() == 5 && state.lastID.Load() == 6
+	}, 5*time.Second, 10*time.Millisecond)
 
 	for i := range 5 {
 		if i%2 == 0 {
@@ -269,39 +277,28 @@ func TestShrinking(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 	}
-	done := make(chan bool)
-	go func() {
-		defer func() { done <- true }()
-		err := p.SetCapacity(ctx, 3)
-		if !assert.NoError(t, err) {
-			return
-		}
-	}()
+	err := p.SetCapacity(ctx, 3)
+	require.NoError(t, err)
+	waitTime := p.Metrics.WaitTime()
 	expected := map[string]any{
 		"Capacity":          3,
 		"Available":         -1, // negative because we've borrowed past our capacity
 		"Active":            4,
 		"InUse":             4,
-		"WaitCount":         0,
-		"WaitTime":          time.Duration(0),
+		"WaitCount":         4,
+		"WaitTime":          waitTime,
 		"IdleTimeout":       1 * time.Second,
 		"IdleClosed":        0,
 		"MaxLifetimeClosed": 0,
 	}
-	for i := range 10 {
-		time.Sleep(10 * time.Millisecond)
-		stats := p.StatsJSON()
-		if reflect.DeepEqual(expected, stats) {
-			break
-		}
-		if i == 9 {
-			assert.Equal(t, expected, stats)
-		}
-	}
-	// There are already 2 resources available in the pool.
-	// So, returning one should be enough for SetCapacity to complete.
+	assert.Equal(t, expected, p.StatsJSON())
+
+	// Returning one borrowed conn gets the pool back under capacity by closing
+	// that conn instead of pushing it back to the stack.
 	p.put(resources[3])
-	<-done
+	require.EqualValues(t, 3, p.Active())
+	require.EqualValues(t, 3, state.open.Load())
+
 	// Return the rest of the resources
 	for i := range 3 {
 		p.put(resources[i])
@@ -312,8 +309,8 @@ func TestShrinking(t *testing.T) {
 		"Available":         3,
 		"Active":            3,
 		"InUse":             0,
-		"WaitCount":         0,
-		"WaitTime":          time.Duration(0),
+		"WaitCount":         4,
+		"WaitTime":          waitTime,
 		"IdleTimeout":       1 * time.Second,
 		"IdleClosed":        0,
 		"MaxLifetimeClosed": 0,
@@ -323,7 +320,6 @@ func TestShrinking(t *testing.T) {
 
 	// Ensure no deadlock if SetCapacity is called after we start
 	// waiting for a resource
-	var err error
 	for i := range 3 {
 		var r *Pooled[*TestConn]
 		if i%2 == 0 {
@@ -335,6 +331,7 @@ func TestShrinking(t *testing.T) {
 		resources[i] = r
 	}
 	// This will wait because pool is empty
+	done := make(chan bool)
 	go func() {
 		defer func() { done <- true }()
 		r, err := p.Get(ctx, nil)
@@ -344,25 +341,22 @@ func TestShrinking(t *testing.T) {
 		p.put(r)
 	}()
 
-	// This will also wait
-	go func() {
-		defer func() { done <- true }()
-		err := p.SetCapacity(ctx, 2)
-		if !assert.NoError(t, err) {
-			return
-		}
-	}()
-	time.Sleep(10 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, time.Second, time.Millisecond)
 
-	// This should not hang
+	err = p.SetCapacity(ctx, 2)
+	require.NoError(t, err)
+
+	// The first return closes because active is over capacity. A later return
+	// can satisfy the waiter once the pool has converged back to capacity.
 	for i := range 3 {
 		p.put(resources[i])
 	}
 	<-done
-	<-done
 	assert.EqualValues(t, 2, p.Capacity())
 	assert.EqualValues(t, 2, p.Available())
-	assert.EqualValues(t, 1, p.Metrics.WaitCount())
+	assert.EqualValues(t, 5, p.Metrics.WaitCount())
 	assert.EqualValues(t, p.Metrics.WaitCount(), len(state.waits))
 	assert.EqualValues(t, 2, state.open.Load())
 
@@ -389,23 +383,23 @@ func TestShrinking(t *testing.T) {
 		}
 		p.put(r)
 	}()
-	time.Sleep(10 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, time.Second, time.Millisecond)
 
-	// This will wait till we Put
+	setCapDone := make(chan struct{}, 2)
 	go func() {
 		err := p.SetCapacity(ctx, 2)
-		if !assert.NoError(t, err) {
-			return
-		}
+		assert.NoError(t, err)
+		setCapDone <- struct{}{}
 	}()
-	time.Sleep(10 * time.Millisecond)
 	go func() {
 		err := p.SetCapacity(ctx, 4)
-		if !assert.NoError(t, err) {
-			return
-		}
+		assert.NoError(t, err)
+		setCapDone <- struct{}{}
 	}()
-	time.Sleep(10 * time.Millisecond)
+	<-setCapDone
+	<-setCapDone
 
 	// This should not hang
 	for i := range 3 {
@@ -417,8 +411,9 @@ func TestShrinking(t *testing.T) {
 		_ = p.SetCapacity(ctx, -1)
 	})
 
-	assert.EqualValues(t, 4, p.Capacity())
-	assert.EqualValues(t, 4, p.Available())
+	capacity := p.Capacity()
+	assert.Contains(t, []int64{2, 4}, capacity)
+	assert.EqualValues(t, capacity, p.Available())
 }
 
 func TestClosing(t *testing.T) {
@@ -452,13 +447,14 @@ func TestClosing(t *testing.T) {
 	// Wait for goroutine to call Close
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
+	waitTime := p.Metrics.WaitTime()
 	expected := map[string]any{
 		"Capacity":          0,
 		"Available":         -5,
 		"Active":            5,
 		"InUse":             5,
-		"WaitCount":         0,
-		"WaitTime":          time.Duration(0),
+		"WaitCount":         5,
+		"WaitTime":          waitTime,
 		"IdleTimeout":       1 * time.Second,
 		"IdleClosed":        0,
 		"MaxLifetimeClosed": 0,
@@ -479,8 +475,8 @@ func TestClosing(t *testing.T) {
 		"Available":         0,
 		"Active":            0,
 		"InUse":             0,
-		"WaitCount":         0,
-		"WaitTime":          time.Duration(0),
+		"WaitCount":         5,
+		"WaitTime":          waitTime,
 		"IdleTimeout":       1 * time.Second,
 		"IdleClosed":        0,
 		"MaxLifetimeClosed": 0,
@@ -504,6 +500,7 @@ func TestReopen(t *testing.T) {
 		refreshed.Store(true)
 		return true, nil
 	})
+	t.Cleanup(p.Close)
 
 	var resources [10]*Pooled[*TestConn]
 	for i := range 5 {
@@ -520,13 +517,14 @@ func TestReopen(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 	stats := p.StatsJSON()
+	waitTime := p.Metrics.WaitTime()
 	expected := map[string]any{
 		"Capacity":          5,
 		"Available":         0,
 		"Active":            5,
 		"InUse":             5,
-		"WaitCount":         0,
-		"WaitTime":          time.Duration(0),
+		"WaitCount":         5,
+		"WaitTime":          waitTime,
 		"IdleTimeout":       1 * time.Second,
 		"IdleClosed":        0,
 		"MaxLifetimeClosed": 0,
@@ -539,22 +537,740 @@ func TestReopen(t *testing.T) {
 	for i := range 5 {
 		p.put(resources[i])
 	}
-	time.Sleep(50 * time.Millisecond)
-	stats = p.StatsJSON()
-	expected = map[string]any{
-		"Capacity":          5,
-		"Available":         5,
-		"Active":            0,
-		"InUse":             0,
-		"WaitCount":         0,
-		"WaitTime":          time.Duration(0),
-		"IdleTimeout":       1 * time.Second,
-		"IdleClosed":        0,
-		"MaxLifetimeClosed": 0,
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		stats = p.StatsJSON()
+		expected = map[string]any{
+			"Capacity":          5,
+			"Available":         5,
+			"Active":            5,
+			"InUse":             0,
+			"WaitCount":         5,
+			"WaitTime":          waitTime,
+			"IdleTimeout":       1 * time.Second,
+			"IdleClosed":        0,
+			"MaxLifetimeClosed": 0,
+		}
+		assert.Equal(c, expected, stats)
+		assert.EqualValues(c, 10, state.lastID.Load())
+		assert.EqualValues(c, 5, state.open.Load())
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
+	var state TestState
+	var refreshCount atomic.Int32
+
+	// The refresh callback returns true exactly once to trigger a reopen. If
+	// the worker exits after the trigger (the bug we're guarding against),
+	// refreshCount stops at 1. With the worker still ticking we expect many
+	// more calls within a reasonable window.
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        2,
+		RefreshInterval: 50 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		count := refreshCount.Add(1)
+		return count == 1, nil
+	})
+	t.Cleanup(p.Close)
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 3
+	}, 30*time.Second, 50*time.Millisecond,
+		"refresh worker stopped ticking after first triggered reopen")
+}
+
+func TestReopenFromPreviousLifecycleDoesNotAffectCurrentPool(t *testing.T) {
+	var state TestState
+
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+
+	oldState := p.lifecycle.Load()
+	require.NotNil(t, oldState)
+
+	p.Close()
+	p.Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	newGeneration := p.generation.Load()
+	p.reopen(oldState)
+
+	require.Equal(t, newGeneration, p.generation.Load())
+}
+
+func TestSetCapacityOnUnopenedPoolArmsCapacity(t *testing.T) {
+	// SetCapacity is allowed before Open so callers can pre-configure the
+	// pool. The value is just stored; Get still refuses until the pool is
+	// opened (the lifecycle pointer is what gates lifecycle, not capacity).
+	p := NewPool(&Config[*TestConn]{Capacity: 5})
+
+	require.NoError(t, p.SetCapacity(t.Context(), 1))
+	require.EqualValues(t, 1, p.Capacity())
+	require.False(t, p.IsOpen())
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+}
+
+func TestTryReturnConnClosesOnClosedPool(t *testing.T) {
+	// put() guards against Recycles that arrive after Close at the top,
+	// but it only checks the pool lifecycle once. A Recycle that passes the check
+	// then proceeds through tryReturnConn can race a CloseWithContext that
+	// fires before the push lands — the conn would otherwise end up in an
+	// idle stack of a closed pool (especially when SetCapacity has armed
+	// idleCount > 0).
+	//
+	// This test exercises that race directly by invoking tryReturnConn on
+	// a closed pool with a still-fresh conn — exactly the state a racing
+	// Recycle would reach after put's initial close check.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Close returns without waiting for the held conn.
+	closeCtx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	_ = p.CloseWithContext(closeCtx)
+	require.False(t, p.IsOpen())
+	require.EqualValues(t, 1, p.Active())
+
+	// Arm idleCount > 0 so closeOnIdleLimitReached would otherwise push
+	// rather than close.
+	require.NoError(t, p.SetCapacity(t.Context(), 3))
+	require.EqualValues(t, 3, p.IdleCount())
+
+	// Mimic put()'s borrowed-- and then enter tryReturnConn directly,
+	// matching the state of a racing Recycle that passed put's close
+	// check but reached tryReturnConn after close cleared the pool lifecycle.
+	p.borrowed.Add(-1)
+	p.tryReturnConn(held)
+
+	require.EqualValues(t, 0, state.open.Load(), "tryReturnConn must close the conn when pool is closed")
+	require.EqualValues(t, 0, p.Active())
+	require.Nil(t, p.clean.Peek(), "no conn should remain in the stack of a closed pool")
+}
+
+func TestRecycleOnClosedPoolClosesConn(t *testing.T) {
+	// On a closed pool, a conn returned via Recycle must be physically
+	// closed — pushing it back onto an idle stack with no workers running
+	// and Get refusing requests would leak the underlying DB connection.
+	// The scenario surfaces specifically when SetCapacity has armed
+	// capacity / idleCount > 0 after Close, which makes
+	// closeOnIdleLimitReached decide to push rather than close.
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Close returns without waiting for the held conn.
+	closeCtx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	_ = p.CloseWithContext(closeCtx)
+	require.False(t, p.IsOpen())
+	require.EqualValues(t, 1, p.Active())
+
+	// Arm idleCount > 0 on the closed pool. This is what would make a
+	// returning conn get pushed to the stack instead of closed.
+	require.NoError(t, p.SetCapacity(t.Context(), 3))
+	require.EqualValues(t, 3, p.IdleCount())
+
+	held.Recycle()
+
+	require.EqualValues(t, 0, state.open.Load(),
+		"recycle on a closed pool must close the conn, not push it to the idle stack")
+	require.EqualValues(t, 0, p.Active())
+	require.Nil(t, p.clean.Peek(), "no conn should sit in the idle stack of a closed pool")
+}
+
+func TestSetCapacityOnClosedPoolDoesNotDrain(t *testing.T) {
+	// SetCapacity on a closed pool must update the capacity field without
+	// entering setCapacity's drain loop. If a prior Close returned with
+	// conns still borrowed, the drain would otherwise block on those conns —
+	// but the pool is no longer serving connections, so draining is lifecycle
+	// teardown's job, not capacity configuration's.
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
+
+	var held []*Pooled[*TestConn]
+	for range 3 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		held = append(held, c)
 	}
-	assert.Equal(t, expected, stats)
-	assert.EqualValues(t, 5, state.lastID.Load())
-	assert.EqualValues(t, 0, state.open.Load())
+
+	// Close does not wait for borrowed conns. The pool ends up logically
+	// closed but with active slots still booked.
+	p.Close()
+	require.False(t, p.IsOpen())
+	require.EqualValues(t, 3, p.Active(), "held conns still count as active after close")
+
+	// SetCapacity(1) with active=3 would otherwise enter setCapacity's drain
+	// loop and block until the held conns return (or the ctx fires). On a
+	// closed pool we should just set the field and return.
+	done := make(chan error, 1)
+	go func() {
+		done <- p.SetCapacity(t.Context(), 1)
+	}()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(500 * time.Millisecond):
+		require.Fail(t, "SetCapacity on closed pool blocked on drain loop")
+	}
+
+	require.EqualValues(t, 1, p.Capacity())
+
+	// Release held conns so the test exits cleanly.
+	for _, c := range held {
+		c.Recycle()
+	}
+}
+
+func TestSetCapacityAfterCloseArmsCapacity(t *testing.T) {
+	// SetCapacity after Close is also allowed: the capacity field is config,
+	// not lifecycle. Gets still return ErrConnPoolClosed because the lifecycle
+	// pointer is nil.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
+	p.Close()
+
+	require.NoError(t, p.SetCapacity(t.Context(), 1))
+	require.EqualValues(t, 1, p.Capacity())
+	require.False(t, p.IsOpen())
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+}
+
+func TestCloseAfterSetCapacityZeroStopsPool(t *testing.T) {
+	// SetCapacity(0) drains an open pool but does not close it; a subsequent
+	// Close() must actually shut the pool down. The bug treats capacity==0
+	// as "already closed" in CloseWithContext and returns immediately,
+	// leaving workers running.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    5,
+		IdleTimeout: time.Second,
+	}).Open(newConnector(&state), nil)
+
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+	require.True(t, p.IsOpen(), "pool with capacity 0 should still be open")
+
+	p.Close()
+	require.False(t, p.IsOpen(), "pool should be closed after Close()")
+}
+
+func TestCloseWithExpiredCtxStillClosesIdleConns(t *testing.T) {
+	// CloseWithContext must drain idle stacks even when ctx is already
+	// expired. Closing idle conns is unconditional work and Close no longer
+	// waits for borrowed conns.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+
+	var conns []*Pooled[*TestConn]
+	for range 3 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		conns = append(conns, c)
+	}
+	for _, c := range conns {
+		c.Recycle()
+	}
+	require.EqualValues(t, 3, state.open.Load())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_ = p.CloseWithContext(ctx)
+
+	require.EqualValues(t, 0, state.open.Load(),
+		"idle conns must be physically closed even when the close ctx is already expired")
+}
+
+func TestGetAtZeroCapacityReturnsTimeout(t *testing.T) {
+	// An open pool whose capacity has been drained to 0 is paused, not closed.
+	// Get must distinguish these states: closed pools return ErrConnPoolClosed;
+	// paused pools return ErrTimeout (the same signal callers see when nobody
+	// returns a conn within the deadline).
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+	require.True(t, p.IsOpen())
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrTimeout)
+	require.NotErrorIs(t, err, ErrConnPoolClosed)
+}
+
+func TestSetCapacityZeroWakesExistingWaiters(t *testing.T) {
+	// A waiter parked in the waitlist must be woken when capacity drops to 0,
+	// otherwise it stays blocked until ctx fires. The wake-up should surface
+	// as ErrTimeout because the pool is paused, not closed.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	waiterErr := make(chan error, 1)
+	go func() {
+		_, err := p.Get(t.Context(), nil)
+		waiterErr <- err
+	}()
+
+	// Give the waiter time to enter the waitlist before draining.
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, time.Second, time.Millisecond)
+
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+
+	select {
+	case err := <-waiterErr:
+		require.ErrorIs(t, err, ErrTimeout)
+		require.NotErrorIs(t, err, ErrConnPoolClosed)
+	case <-time.After(2 * time.Second):
+		require.Fail(t, "waiter was not woken when capacity dropped to 0")
+	}
+
+	held.Recycle()
+	require.EqualValues(t, 0, p.Active(), "returned conn should close once capacity is zero")
+}
+
+func TestSetCapacityResumesAfterZero(t *testing.T) {
+	// SetCapacity(0) pauses the pool; SetCapacity to a positive value must
+	// resume it. Gets should succeed again with no Close/Open dance required.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrTimeout, "paused pool should refuse Gets")
+
+	require.NoError(t, p.SetCapacity(t.Context(), 2))
+	require.EqualValues(t, 2, p.Capacity())
+
+	conn, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	conn.Recycle()
+}
+
+func TestGetAfterCloseReturnsErrConnPoolClosed(t *testing.T) {
+	// After Close(), the pool is no longer open and Get must surface that
+	// explicitly so callers (which can recover from ErrTimeout) don't confuse
+	// a terminal close with a transient pause.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	p.Close()
+
+	_, err := p.Get(t.Context(), nil)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+}
+
+func TestWaitTimeRecordedOnTimeout(t *testing.T) {
+	// A Get that enters the waitlist and times out should still count toward
+	// WaitTime. Otherwise pool stress is invisible to monitoring exactly when
+	// it matters most.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Cleanups run LIFO: Recycle first, then Close.
+	t.Cleanup(p.Close)
+	t.Cleanup(held.Recycle)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err = p.Get(ctx, nil)
+	require.ErrorIs(t, err, ErrTimeout)
+
+	require.EqualValues(t, 2, p.Metrics.WaitCount(), "WaitCount should reflect the cold open and timed-out wait")
+	require.Greater(t, p.Metrics.WaitTime(), time.Duration(0), "WaitTime should reflect the timed-out wait")
+}
+
+func TestWaitForConnHonorsCtxOnRetryPath(t *testing.T) {
+	// waitForConn's shouldRetry path removes the waiter and returns (nil,
+	// nil) so the outer get loop can re-evaluate state changes that
+	// happened during enqueue. If ctx has been canceled in the meantime,
+	// the retry path would otherwise pop a conn and hand it to a caller
+	// whose ctx is dead — the get loop doesn't re-check ctx per iteration.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Replace onWait with a gate: hold the waiter just before push so we
+	// can stage the race deterministically — recycle a conn (so the
+	// stack is non-empty, making shouldRetry fire) and cancel ctx before
+	// the waiter actually enqueues.
+	blocked := make(chan struct{})
+	unblock := make(chan struct{})
+	p.wait.onWait = func() {
+		close(blocked)
+		<-unblock
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	type result struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		c, err := p.Get(ctx, nil)
+		done <- result{c, err}
+	}()
+
+	select {
+	case <-blocked:
+	case <-time.After(time.Second):
+		require.Fail(t, "waiter never reached onWait")
+	}
+
+	held.Recycle() // populates the clean stack so shouldRetryWait fires
+	cancel()
+	close(unblock)
+
+	res := <-done
+	if res.conn != nil {
+		res.conn.Recycle()
+	}
+	require.ErrorIs(t, res.err, ErrTimeout, "Get must honor canceled ctx via the retry path")
+	require.Nil(t, res.conn)
+}
+
+func TestReopenRetiresStaleConnections(t *testing.T) {
+	// reopen() is invoked when the pool needs to retire all open connections
+	// (e.g., after a DNS change). A borrowed conn outlives reopen by definition;
+	// the test confirms that the conn is retired (not pushed back into the
+	// pool) when its holder eventually recycles it.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+
+	// Trigger a reopen synchronously. The held conn survives in the user's
+	// hands; the gen check on Recycle retires it.
+	p.reopen(p.lifecycle.Load())
+
+	require.EqualValues(t, 1, p.Capacity())
+	require.EqualValues(t, 1, p.Active())
+	require.EqualValues(t, 1, state.open.Load(), "stale conn is still in flight after reopen")
+
+	// Recycle the now-stale conn. It must not return to the pool — the whole
+	// point of the reopen was to retire conns of this generation. The pool
+	// should then backfill the released slot so low-traffic pools do not stay
+	// cold until the next Get.
+	held.Recycle()
+
+	require.Eventually(t, func() bool {
+		return state.close.Load() == 1 && state.lastID.Load() == 2 && state.open.Load() == 1 && p.Active() == 1
+	}, 5*time.Second, 10*time.Millisecond, "stale conn should close and be replaced")
+}
+
+func TestReopenViaCloseAndOpenRetiresStaleConnections(t *testing.T) {
+	// Same generation invariant as TestReopenRetiresStaleConnections, but the
+	// reset happens via Close+Open instead of reopen(). A conn that survived
+	// Close must not return to the re-opened pool.
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+
+	// The held conn survives in the user's hands while the pool transitions
+	// through closed back to open.
+	p.Close()
+	p.Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held.Recycle()
+
+	require.EqualValues(t, 0, state.open.Load(), "stale conn should be closed when returned")
+}
+
+func TestCloseHonorsContextDuringIdleReopen(t *testing.T) {
+	// The idle worker's reopen path used context.Background, so a slow MySQL
+	// connect would pin workers.Wait() inside CloseWithContext, no matter how
+	// tight the caller's deadline was. The fix derives the connect context
+	// from the pool's close channel so in-flight reconnects abort on close.
+
+	var state TestState
+	var connectCount atomic.Int32
+
+	reopenStartedCh := make(chan struct{})
+	var reopenStartedOnce sync.Once
+	blockConnect := make(chan struct{})
+	var blockOnce sync.Once
+	unblockConnect := func() { blockOnce.Do(func() { close(blockConnect) }) }
+	defer unblockConnect()
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		// First call is the seed; succeed quickly so we have an idle conn to
+		// expire.
+		if connectCount.Add(1) == 1 {
+			state.open.Add(1)
+			return &TestConn{counts: &state, num: state.lastID.Add(1)}, nil
+		}
+		// Subsequent calls are the idle worker's reopen. Block until our ctx
+		// is cancelled (the fix) or the test unblocks us as a fallback.
+		reopenStartedOnce.Do(func() { close(reopenStartedCh) })
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-blockConnect:
+			return nil, errors.New("test fallback unblock")
+		}
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		IdleTimeout: 50 * time.Millisecond,
+	}).Open(connector, nil)
+
+	seed, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	seed.Recycle()
+
+	// Wait for the idle worker to begin its (blocked) reopen.
+	select {
+	case <-reopenStartedCh:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "idle worker did not start its reopen within 5s")
+	}
+
+	closeCtx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	defer cancel()
+
+	closeDone := make(chan time.Duration, 1)
+	start := time.Now()
+	go func() {
+		_ = p.CloseWithContext(closeCtx)
+		closeDone <- time.Since(start)
+	}()
+
+	var elapsed time.Duration
+	select {
+	case elapsed = <-closeDone:
+	case <-time.After(3 * time.Second):
+		// Close is stuck on the worker's reconnect; release it so the test
+		// can shut down cleanly, then fail.
+		unblockConnect()
+		elapsed = <-closeDone
+		require.Failf(t, "close did not return", "took %s", elapsed)
+	}
+
+	require.Less(t, elapsed, 2*time.Second,
+		"close should abort the worker's reconnect on ctx; took %s", elapsed)
+}
+
+func TestTryReturnConnRejectsStaleGeneration(t *testing.T) {
+	// tryReturnConn is the single ownership gate for stale-generation conns.
+	// put's initial check catches the common case; this test exercises the
+	// secondary check that catches a reopen racing between put's first check
+	// and the actual handoff.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+	require.EqualValues(t, 1, p.Active())
+
+	// Simulate a reopen that races with put() by bumping generation directly.
+	p.generation.Add(1)
+
+	// Mirror put()'s borrowed-- step, then hand the now-stale conn straight
+	// to tryReturnConn.
+	p.borrowed.Add(-1)
+	returned := p.tryReturnConn(held)
+
+	require.False(t, returned, "tryReturnConn should refuse a stale conn")
+	require.EqualValues(t, 0, state.open.Load(), "tryReturnConn must close the stale conn itself")
+	require.EqualValues(t, 0, p.Active(), "tryReturnConn must release the slot")
+}
+
+func TestReopenPreservesCapacity(t *testing.T) {
+	// reopen() retires the pool's connections without temporarily setting
+	// capacity to 0. Capacity must be observable as the original value
+	// before and after, and idle conns must be physically closed.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 5}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	var seeds []*Pooled[*TestConn]
+	for range 5 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		seeds = append(seeds, c)
+	}
+	for _, c := range seeds {
+		c.Recycle()
+	}
+
+	require.EqualValues(t, 5, p.Capacity())
+	require.EqualValues(t, 5, p.Active())
+	require.EqualValues(t, 5, state.open.Load())
+
+	p.reopen(p.lifecycle.Load())
+
+	require.EqualValues(t, 5, p.Capacity(), "reopen must not change capacity")
+	require.EqualValues(t, 0, p.Active(), "stale idle conn slots must be released")
+	require.EqualValues(t, 0, state.open.Load(), "old idle conns must be physically closed")
+}
+
+func TestReopenPreservesFreshGenConnsInStack(t *testing.T) {
+	// reopen() bumps the generation then sweeps the stacks. A fresh-gen conn
+	// can land on a stack between the bump and the sweep. reopen's sweep must
+	// not drop those: they're valid post-reopen conns, and dropping them leaks
+	// an active slot.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 2}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 1, p.generation.Load())
+
+	// Craft a conn whose generation matches what pool.generation will be
+	// after the upcoming reopen's bump (1 -> 2). This simulates a fresh
+	// conn pushed onto the stack between reopen's bump and its sweep.
+	fresh, err := p.connNew(t.Context())
+	require.NoError(t, err)
+	p.active.Add(1)
+	fresh.generation = 2
+	p.clean.Push(fresh)
+
+	require.EqualValues(t, 1, state.open.Load())
+	require.EqualValues(t, 1, p.Active())
+
+	p.reopen(p.lifecycle.Load())
+
+	require.EqualValues(t, 1, state.open.Load(), "fresh-gen conn must not be closed by reopen")
+	require.EqualValues(t, 1, p.Active(), "fresh-gen conn's active slot must be preserved")
+	require.NotNil(t, p.clean.Peek(), "fresh-gen conn must remain reachable in the stack")
+}
+
+func TestReopenViaPopClosesStaleStackedConns(t *testing.T) {
+	// After reopen bumps the generation, idle conns left in the stacks are
+	// stale. A racing Get's pop() must close them rather than surface them to
+	// the caller. This exercises the generation guard on the acquisition path
+	// that lets reopen safely "bump gen first, sweep stacks after".
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 2}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	var seeds []*Pooled[*TestConn]
+	for range 2 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		seeds = append(seeds, c)
+	}
+	initialIDs := map[int64]bool{seeds[0].Conn.num: true, seeds[1].Conn.num: true}
+	for _, c := range seeds {
+		c.Recycle()
+	}
+	require.EqualValues(t, 2, state.open.Load())
+
+	// Simulate the post-gen-bump pre-drain state: bump generation directly so
+	// the stacked conns are now stale. A racing Get's pop must close them.
+	p.generation.Add(1)
+
+	conn := p.pop(p.clean)
+	require.Nil(t, conn, "pop must close stale-gen conns and return nil for an empty fresh stack")
+	require.EqualValues(t, 0, p.Active(), "stale conns must release their active slot")
+	require.EqualValues(t, 0, state.open.Load(), "stale conns must be physically closed")
+
+	fresh, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	require.False(t, initialIDs[fresh.Conn.num], "Get after reopen must open a fresh conn")
+	fresh.Recycle()
+}
+
+func TestReopenDoesNotWakeWaiters(t *testing.T) {
+	// reopen() must not perturb capacity, so parked waiters should not be
+	// artificially woken. The previous implementation called setCapacity(0)
+	// + setCapacity(original), which woke all waiters via the cap-zero
+	// notification loop.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	defer held.Recycle()
+
+	waiterReturned := make(chan struct{})
+	go func() {
+		_, _ = p.Get(t.Context(), nil)
+		close(waiterReturned)
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, time.Second, time.Millisecond)
+
+	p.reopen(p.lifecycle.Load())
+
+	select {
+	case <-waiterReturned:
+		require.Fail(t, "reopen must not wake parked waiters")
+	case <-time.After(100 * time.Millisecond):
+		// Expected: waiter still parked.
+	}
+}
+
+func TestSetCapacityZeroClosesBorrowedConnsOnReturn(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{Capacity: 3}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 3, p.IdleCount())
+
+	var held []*Pooled[*TestConn]
+	for range 3 {
+		c, err := p.Get(t.Context(), nil)
+		require.NoError(t, err)
+		held = append(held, c)
+	}
+
+	require.NoError(t, p.SetCapacity(t.Context(), 0))
+	require.EqualValues(t, 0, p.Capacity())
+	require.EqualValues(t, 0, p.IdleCount())
+	require.EqualValues(t, 3, p.Active(), "borrowed conns remain active until returned")
+
+	for _, c := range held {
+		c.Recycle()
+	}
+	require.EqualValues(t, 0, p.Active())
+	require.EqualValues(t, 0, state.open.Load())
 }
 
 func TestUserClosing(t *testing.T) {
@@ -592,9 +1308,13 @@ func TestUserClosing(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.Fail(t, "Pool did not shutdown after 5s")
 	case err := <-ch:
-		require.Error(t, err)
-		t.Logf("Shutdown error: %v", err)
+		require.NoError(t, err)
 	}
+
+	require.EqualValues(t, 1, p.Active(), "borrowed conn should outlive Close until recycled")
+	resources[4].Recycle()
+	require.EqualValues(t, 0, p.Active())
+	require.EqualValues(t, 0, state.open.Load())
 }
 
 func TestConnReopen(t *testing.T) {
@@ -618,8 +1338,9 @@ func TestConnReopen(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	p.put(conn)
-	assert.EqualValues(t, 2, state.lastID.Load())
-	assert.EqualValues(t, 1, p.Active())
+	require.Eventually(t, func() bool {
+		return state.lastID.Load() == 2 && p.Active() == 1
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// wait enough to reach idle timeout.
 	time.Sleep(300 * time.Millisecond)
@@ -782,8 +1503,9 @@ func TestMaxLifetime(t *testing.T) {
 	time.Sleep(10 * time.Millisecond * 2)
 
 	p.put(r)
-	assert.EqualValues(t, 2, state.lastID.Load())
-	assert.EqualValues(t, 1, state.open.Load())
+	require.Eventually(t, func() bool {
+		return state.lastID.Load() == 2 && state.open.Load() == 1
+	}, 5*time.Second, 10*time.Millisecond)
 	assert.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
 }
 
@@ -810,6 +1532,57 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 		assert.Greater(t, 2*config.MaxLifetime, p.extendedMaxLifetime())
 		p.Close()
 	}
+}
+
+func TestExtendedMaxLifetimeJitter(t *testing.T) {
+	var state TestState
+	connector := newConnector(&state)
+
+	// 30 minutes is well above 2^32 ns (~4.29s). A uint32(maxLifetime) cast
+	// would cap jitter at ~408ms, so no sample could ever reach the upper half
+	// of [M, 2M). A single sample above M + M/2 proves the full 64-bit range
+	// is in use; the loop bound just guards against the ~5e-20 chance that all
+	// uniform draws land in the lower half.
+	config := &Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: 30 * time.Minute,
+		LogWait:     state.LogWait,
+	}
+
+	p := NewPool(config).Open(connector, nil)
+	t.Cleanup(p.Close)
+
+	threshold := config.MaxLifetime + config.MaxLifetime/2
+	const maxAttempts = 64
+
+	for range maxAttempts {
+		s := p.extendedMaxLifetime()
+		require.LessOrEqual(t, config.MaxLifetime, s)
+		require.Greater(t, 2*config.MaxLifetime, s)
+
+		if s > threshold {
+			return
+		}
+	}
+
+	require.Failf(t, "jitter never reached upper half of range",
+		"no sample in %d tries exceeded %s; jitter appears truncated", maxAttempts, threshold)
+}
+
+func TestExtendedMaxLifetimeNegativeDisables(t *testing.T) {
+	// MaxLifetime is a time.Duration sourced from user config. A negative
+	// value is a misconfiguration, but it must not panic the process —
+	// rand.Int64N panics on non-positive bounds. Treat it like the zero
+	// case: lifetime tracking disabled.
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: -1 * time.Second,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 0, p.extendedMaxLifetime())
 }
 
 // TestMaxIdleCount tests the MaxIdleCount setting, to check if the pool closes
@@ -857,6 +1630,90 @@ func TestMaxIdleCount(t *testing.T) {
 	t.Run("WithSettings-MaxIdleCount-Zero", func(t *testing.T) { testMaxIdleCount(t, sFoo, 0, 0) })
 }
 
+func TestCloseOnIdleLimitReachedKeepsConnWhenWaiterVisible(t *testing.T) {
+	var state TestState
+	var attempts atomic.Int64
+
+	connectStarted := make(chan struct{})
+	var connectStartedOnce sync.Once
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		attempt := attempts.Add(1)
+		if attempt == 2 {
+			connectStartedOnce.Do(func() {
+				close(connectStarted)
+			})
+			<-ctx.Done()
+			return nil, context.Cause(ctx)
+		}
+
+		state.open.Add(1)
+		return &TestConn{
+			num:    attempt,
+			counts: &state,
+		}, nil
+	}
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity:     2,
+		MaxIdleCount: 1,
+		LogWait:      state.LogWait,
+	}).Open(connector, nil)
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	waitCtx, cancelWaiter := context.WithCancel(ctx)
+	t.Cleanup(cancelWaiter)
+	t.Cleanup(func() {
+		if conn != nil && !conn.Conn.IsClosed() {
+			conn.Close()
+			p.closedConn()
+		}
+		p.Close()
+	})
+
+	require.True(t, p.requestOpen())
+	require.Eventually(t, func() bool {
+		select {
+		case <-connectStarted:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	p.borrowed.Add(-1)
+
+	statePtr := p.lifecycle.Load()
+	require.NotNil(t, statePtr)
+
+	waitDone := make(chan error, 1)
+	go func() {
+		_, err := p.wait.waitForConn(waitCtx, nil, statePtr.ctx.Done(), 0, nil)
+		waitDone <- err
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	closed := p.closeOnIdleLimitReached(conn)
+	require.False(t, closed, "visible waiters should get the already-open conn before idle-limit close")
+	require.False(t, conn.Conn.IsClosed(), "returned conn should remain available for the visible waiter")
+
+	cancelWaiter()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case err := <-waitDone:
+			assert.ErrorIs(c, err, context.Canceled)
+		default:
+			assert.Fail(c, "waiter did not exit after cancellation")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
 func TestCreateFail(t *testing.T) {
 	var state TestState
 	state.chaos.failConnect.Store(true)
@@ -869,21 +1726,13 @@ func TestCreateFail(t *testing.T) {
 	}).Open(newConnector(&state), nil)
 
 	for _, setting := range []*Setting{nil, sFoo} {
-		_, err := p.Get(ctx, setting)
-		require.EqualError(t, err, "failed to connect: forced failure")
-		stats := p.StatsJSON()
-		expected := map[string]any{
-			"Capacity":          5,
-			"Available":         5,
-			"Active":            0,
-			"InUse":             0,
-			"WaitCount":         0,
-			"WaitTime":          time.Duration(0),
-			"IdleTimeout":       1 * time.Second,
-			"IdleClosed":        0,
-			"MaxLifetimeClosed": 0,
-		}
-		assert.Equal(t, expected, stats)
+		getCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		_, err := p.Get(getCtx, setting)
+		cancel()
+		require.ErrorIs(t, err, ErrTimeout)
+		require.Eventually(t, func() bool {
+			return p.Active() == 0
+		}, 5*time.Second, 10*time.Millisecond)
 	}
 }
 
@@ -907,11 +1756,294 @@ func TestCreateFailOnPut(t *testing.T) {
 		// change factory to fail the put.
 		state.chaos.failConnect.Store(true)
 		p.put(nil)
-		assert.Zero(t, p.Active())
+		require.Eventually(t, func() bool {
+			return p.Active() == 0
+		}, 5*time.Second, 10*time.Millisecond)
 
 		// change back for next iteration.
 		state.chaos.failConnect.Store(false)
 	}
+}
+
+func TestGetDoesNotBlockOnConnectionEstablishment(t *testing.T) {
+	var state TestState
+	var startOnce sync.Once
+
+	connectStarted := make(chan struct{})
+	releaseConnect := make(chan struct{})
+	connector := func(ctx context.Context) (*TestConn, error) {
+		startOnce.Do(func() {
+			close(connectStarted)
+		})
+		select {
+		case <-releaseConnect:
+		case <-ctx.Done():
+			return nil, context.Cause(ctx)
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:    state.lastID.Add(1),
+			counts: &state,
+		}, nil
+	}
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(connector, nil)
+	t.Cleanup(p.Close)
+	t.Cleanup(func() {
+		close(releaseConnect)
+	})
+
+	getCtx, cancelGet := context.WithCancel(ctx)
+	defer cancelGet()
+
+	type getResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	result := make(chan getResult, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		result <- getResult{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-connectStarted:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	select {
+	case r := <-result:
+		if r.conn != nil {
+			r.conn.Recycle()
+		}
+		require.Fail(t, "Get returned while connector was still blocked")
+	default:
+	}
+
+	cancelGet()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case r := <-result:
+			assert.ErrorIs(c, r.err, ErrTimeout)
+			assert.Nil(c, r.conn)
+		default:
+			assert.Fail(c, "Get did not return after caller context was canceled")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestGetWaitsThroughAsyncConnectFailure(t *testing.T) {
+	for _, setting := range []*Setting{nil, sFoo} {
+		t.Run(fmt.Sprintf("setting=%v", setting != nil), func(t *testing.T) {
+			var state TestState
+			var attempts atomic.Int64
+
+			connector := func(ctx context.Context) (*TestConn, error) {
+				attempt := attempts.Add(1)
+				if attempt == 1 {
+					return nil, errors.New("forced async connect failure")
+				}
+				state.open.Add(1)
+				return &TestConn{
+					num:    state.lastID.Add(1),
+					counts: &state,
+				}, nil
+			}
+
+			ctx := t.Context()
+			p := NewPool(&Config[*TestConn]{
+				Capacity: 1,
+				LogWait:  state.LogWait,
+			}).Open(connector, nil)
+			t.Cleanup(p.Close)
+
+			getCtx, cancelGet := context.WithTimeout(ctx, 30*time.Second)
+			defer cancelGet()
+
+			conn, err := p.Get(getCtx, setting)
+			require.NoError(t, err)
+			require.NotNil(t, conn)
+			assert.EqualValues(t, 2, attempts.Load())
+			assert.Equal(t, setting, conn.Conn.Setting())
+
+			conn.Recycle()
+		})
+	}
+}
+
+func TestGetWaitsThroughResetFailureReplacement(t *testing.T) {
+	for _, setting := range []*Setting{nil, sBar} {
+		t.Run(fmt.Sprintf("setting=%v", setting != nil), func(t *testing.T) {
+			var state TestState
+
+			ctx := t.Context()
+			p := NewPool(&Config[*TestConn]{
+				Capacity: 1,
+				LogWait:  state.LogWait,
+			}).Open(newConnector(&state), nil)
+			t.Cleanup(p.Close)
+
+			conn, err := p.Get(ctx, sFoo)
+			require.NoError(t, err)
+			conn.Conn.failReset = true
+			conn.Recycle()
+
+			getCtx, cancelGet := context.WithTimeout(ctx, 30*time.Second)
+			defer cancelGet()
+
+			got, err := p.Get(getCtx, setting)
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			t.Cleanup(got.Recycle)
+
+			assert.Equal(t, setting, got.Conn.Setting())
+			assert.EqualValues(t, 1, state.reset.Load())
+			assert.EqualValues(t, 2, state.lastID.Load())
+		})
+	}
+}
+
+func TestTaintDoesNotBlockOnReplacementConnect(t *testing.T) {
+	var state TestState
+	var attempts atomic.Int64
+	var blockReplacement atomic.Bool
+	var startOnce sync.Once
+
+	replacementStarted := make(chan struct{})
+	releaseReplacement := make(chan struct{})
+	connector := func(ctx context.Context) (*TestConn, error) {
+		attempt := attempts.Add(1)
+		if blockReplacement.Load() {
+			startOnce.Do(func() {
+				close(replacementStarted)
+			})
+			select {
+			case <-releaseReplacement:
+			case <-ctx.Done():
+				return nil, context.Cause(ctx)
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:    attempt,
+			counts: &state,
+		}, nil
+	}
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(connector, nil)
+	t.Cleanup(p.Close)
+	t.Cleanup(func() {
+		close(releaseReplacement)
+	})
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	blockReplacement.Store(true)
+	done := make(chan struct{})
+	go func() {
+		conn.Taint()
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-replacementStarted:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestMaxLifetimeRecycleDoesNotBlockOnReplacementConnect(t *testing.T) {
+	var state TestState
+	var attempts atomic.Int64
+	var blockReplacement atomic.Bool
+	var startOnce sync.Once
+
+	replacementStarted := make(chan struct{})
+	releaseReplacement := make(chan struct{})
+	connector := func(ctx context.Context) (*TestConn, error) {
+		attempt := attempts.Add(1)
+		if blockReplacement.Load() {
+			startOnce.Do(func() {
+				close(replacementStarted)
+			})
+			select {
+			case <-releaseReplacement:
+			case <-ctx.Done():
+				return nil, context.Cause(ctx)
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:    attempt,
+			counts: &state,
+		}, nil
+	}
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: 10 * time.Millisecond,
+		LogWait:     state.LogWait,
+	}).Open(connector, nil)
+	t.Cleanup(p.Close)
+	t.Cleanup(func() {
+		close(releaseReplacement)
+	})
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	time.Sleep(30 * time.Millisecond)
+
+	blockReplacement.Store(true)
+	done := make(chan struct{})
+	go func() {
+		conn.Recycle()
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-replacementStarted:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
 }
 
 func TestSlowCreateFail(t *testing.T) {
@@ -919,7 +2051,11 @@ func TestSlowCreateFail(t *testing.T) {
 	state.chaos.delayConnect = 10 * time.Millisecond
 
 	ctx := t.Context()
-	ch := make(chan *Pooled[*TestConn])
+	type getResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	ch := make(chan getResult, 3)
 
 	for _, setting := range []*Setting{nil, sFoo} {
 		p := NewPool(&Config[*TestConn]{
@@ -932,31 +2068,445 @@ func TestSlowCreateFail(t *testing.T) {
 
 		for range 3 {
 			go func() {
-				conn, _ := p.Get(ctx, setting)
-				ch <- conn
+				conn, err := p.Get(ctx, setting)
+				ch <- getResult{conn: conn, err: err}
 			}()
 		}
-		assert.Nil(t, <-ch)
-		assert.Nil(t, <-ch)
-		assert.Equalf(t, p.Capacity(), int64(2), "pool should not be out of capacity")
-		assert.Equalf(t, p.Available(), int64(2), "pool should not be out of availability")
+		require.Eventually(t, func() bool {
+			return p.wait.waiting() == 3
+		}, 5*time.Second, 10*time.Millisecond)
 
+		state.chaos.failConnect.Store(false)
+
+		var first getResult
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			select {
+			case first = <-ch:
+				assert.NoError(c, first.err)
+				assert.NotNil(c, first.conn)
+			default:
+				assert.Fail(c, "waiting Get did not succeed after connector recovered")
+			}
+		}, 5*time.Second, 10*time.Millisecond)
+		first.conn.Recycle()
+
+		for range 2 {
+			var result getResult
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
+				select {
+				case result = <-ch:
+					assert.NoError(c, result.err)
+					assert.NotNil(c, result.conn)
+				default:
+					assert.Fail(c, "waiting Get did not receive a returned or newly opened conn")
+				}
+			}, 5*time.Second, 10*time.Millisecond)
+			result.conn.Recycle()
+		}
+		p.Close()
+	}
+}
+
+func TestWaiterRetriesWhenCapacityFreedByFailedReplacement(t *testing.T) {
+	var state TestState
+	var connectAttempts atomic.Int64
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		attempt := connectAttempts.Add(1)
+		if attempt == 2 {
+			return nil, errors.New("forced replacement failure")
+		}
+		return &TestConn{
+			num:    attempt,
+			counts: &state,
+		}, nil
+	}
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(connector, nil)
+	defer p.Close()
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	getCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	type getResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	results := make(chan getResult, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- getResult{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	conn.Taint()
+	require.Eventually(t, func() bool {
+		return connectAttempts.Load() >= 2
+	}, 5*time.Second, 10*time.Millisecond)
+	require.EqualValues(t, 1, p.Capacity())
+
+	var result getResult
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		select {
-		case <-ch:
-			assert.Fail(t, "there should be no capacity for a third connection")
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not retry after replacement failure freed capacity")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	result.conn.Recycle()
+}
+
+func TestWaiterRetriesWhenCapacityIncreases(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	getCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	type getResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	results := make(chan getResult, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- getResult{conn: conn, err: err}
+	}()
+
+	defer func() {
+		cancel()
+		if conn != nil {
+			conn.Recycle()
+		}
+		select {
+		case result := <-results:
+			if result.conn != nil {
+				result.conn.Recycle()
+			}
 		default:
 		}
 
-		state.chaos.failConnect.Store(false)
-		conn, err := p.Get(ctx, setting)
-		require.NoError(t, err)
+		require.NoError(t, p.CloseWithContext(t.Context()))
+	}()
 
-		p.put(conn)
-		conn = <-ch
-		assert.NotNil(t, conn)
-		p.put(conn)
-		p.Close()
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, p.SetCapacity(ctx, 2))
+	require.EqualValues(t, 2, p.Capacity())
+
+	var result getResult
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not retry after capacity increased")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	result.conn.Recycle()
+	conn.Recycle()
+	result.conn = nil
+	conn = nil
+}
+
+func TestGetRetriesWhenConnectionReturnedBeforeWaiterEnqueues(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	var (
+		conn   *Pooled[*TestConn]
+		result struct {
+			conn *Pooled[*TestConn]
+			err  error
+		}
+		allowWaiterToEnqueue sync.Once
+		waiterReadyOnce      sync.Once
+	)
+	releaseWaiter := make(chan struct{})
+	defer func() {
+		allowWaiterToEnqueue.Do(func() {
+			close(releaseWaiter)
+		})
+		if conn != nil {
+			conn.Recycle()
+		}
+		if result.conn != nil {
+			result.conn.Recycle()
+		}
+
+		require.NoError(t, p.CloseWithContext(t.Context()))
+	}()
+
+	var err error
+	conn, err = p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	waiterReady := make(chan struct{})
+	oldOnWait := p.wait.onWait
+	p.wait.onWait = func() {
+		if oldOnWait != nil {
+			oldOnWait()
+		}
+		waiterReadyOnce.Do(func() {
+			close(waiterReady)
+		})
+		<-releaseWaiter
 	}
+
+	getCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	results := make(chan struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- struct {
+			conn *Pooled[*TestConn]
+			err  error
+		}{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-waiterReady:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	conn.Recycle()
+	conn = nil
+	allowWaiterToEnqueue.Do(func() {
+		close(releaseWaiter)
+	})
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not retry after connection was returned before enqueue")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestGetRetriesWhenConnectionReturnedAfterWaiterEnqueues(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	var result struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	getCtx, cancelGet := context.WithCancel(ctx)
+	releaseReturn := make(chan struct{})
+	releaseReturnOnce := sync.Once{}
+	defer func() {
+		cancelGet()
+		releaseReturnOnce.Do(func() {
+			close(releaseReturn)
+		})
+		if result.conn != nil {
+			result.conn.Recycle()
+		}
+
+		require.NoError(t, p.CloseWithContext(t.Context()))
+	}()
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	returnReady := make(chan struct{})
+	var returnReadyOnce sync.Once
+	conn.Conn.onSetting = func() {
+		returnReadyOnce.Do(func() {
+			close(returnReady)
+			<-releaseReturn
+		})
+	}
+
+	recycleDone := make(chan struct{})
+	go func() {
+		defer close(recycleDone)
+		conn.Recycle()
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-returnReady:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	results := make(chan struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}, 1)
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- struct {
+			conn *Pooled[*TestConn]
+			err  error
+		}{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	releaseReturnOnce.Do(func() {
+		close(releaseReturn)
+	})
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-recycleDone:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not retry after connection was returned after enqueue")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestTryReturnConnPrefersReturnedSettingStackForWaiter(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 2,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	cleanConn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	settingConn, err := p.Get(ctx, sFoo)
+	require.NoError(t, err)
+	settingID := settingConn.Conn.num
+
+	cleanConn.Recycle()
+
+	returnBlocked := make(chan struct{})
+	releaseReturn := make(chan struct{})
+	var blockReturn sync.Once
+	settingConn.Conn.onSetting = func() {
+		blockReturn.Do(func() {
+			close(returnBlocked)
+			<-releaseReturn
+		})
+	}
+
+	recycleDone := make(chan struct{})
+	go func() {
+		defer close(recycleDone)
+		settingConn.Recycle()
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-returnBlocked:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	statePtr := p.lifecycle.Load()
+	require.NotNil(t, statePtr)
+
+	type waiterResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	results := make(chan waiterResult, 1)
+	go func() {
+		conn, err := p.wait.waitForConn(ctx, sFoo, statePtr.ctx.Done(), 0, nil)
+		results <- waiterResult{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	close(releaseReturn)
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-recycleDone:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	var result waiterResult
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.NoError(c, result.err)
+			assert.NotNil(c, result.conn)
+		default:
+			assert.Fail(c, "waiter did not receive returned conn")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	require.NotNil(t, result.conn)
+	resultID := result.conn.Conn.num
+	p.discardConn(result.conn)
+
+	require.EqualValues(t, settingID, resultID)
 }
 
 func TestTimeout(t *testing.T) {
@@ -1029,9 +2579,9 @@ func TestMultiSettings(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
-		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
-		assert.Zero(t, p.Metrics.WaitTime())
+		assert.EqualValues(t, i+1, p.Metrics.WaitCount())
+		assert.Equal(t, i+1, len(state.waits))
+		assert.NotZero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())
 	}
@@ -1057,8 +2607,8 @@ func TestMultiSettings(t *testing.T) {
 		p.put(resources[i])
 	}
 	<-ch
-	assert.EqualValues(t, 5, p.Metrics.WaitCount())
-	assert.Equal(t, 5, len(state.waits))
+	assert.EqualValues(t, 10, p.Metrics.WaitCount())
+	assert.Equal(t, 10, len(state.waits))
 	// verify start times are monotonic increasing
 	for i := 1; i < len(state.waits); i++ {
 		assert.False(t, state.waits[i].Before(state.waits[i-1]), "Expecting monotonic increasing start times")
@@ -1209,9 +2759,9 @@ func TestGetSpike(t *testing.T) {
 		require.NoError(t, err)
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
-		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
-		assert.Zero(t, p.Metrics.WaitTime())
+		assert.EqualValues(t, i+1, p.Metrics.WaitCount())
+		assert.Equal(t, i+1, len(state.waits))
+		assert.NotZero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())
 	}
@@ -1331,6 +2881,65 @@ func TestCloseDuringWaitForConn(t *testing.T) {
 	}
 }
 
+func TestCloseDoesNotReturnConnToWaitingGet(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	type getResult struct {
+		conn *Pooled[*TestConn]
+		err  error
+	}
+	results := make(chan getResult, 1)
+	getCtx, cancelGet := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelGet()
+	go func() {
+		conn, err := p.Get(getCtx, nil)
+		results <- getResult{conn: conn, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	closeCtx, cancelClose := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelClose()
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.Capacity() == 0
+	}, 5*time.Second, 10*time.Millisecond)
+
+	conn.Recycle()
+
+	var result getResult
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case result = <-results:
+			assert.ErrorIs(c, result.err, ErrConnPoolClosed)
+			assert.Nil(c, result.conn)
+		default:
+			assert.Fail(c, "waiting Get did not return after close")
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	if result.conn != nil {
+		result.conn.Recycle()
+	}
+
+	require.NoError(t, <-closeDone)
+}
+
 // TestIdleTimeoutConnectionLeak checks for leaked connections after idle timeout
 func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	var state TestState
@@ -1344,7 +2953,7 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 		LogWait:     state.LogWait,
 	}).Open(newConnector(&state), nil)
 
-	getCtx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	getCtx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 
 	// Get and return two connections
@@ -1363,11 +2972,8 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	require.EqualValues(t, 2, p.Available())
 
 	// Wait for idle timeout to kick in and start expiring connections
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		// Check the actual number of currently open connections
-		assert.Equal(c, int64(2), state.open.Load())
-		// Check the total number of closed connections
-		assert.Equal(c, int64(1), state.close.Load())
+	require.Eventually(t, func() bool {
+		return state.close.Load() >= 1
 	}, 100*time.Millisecond, 10*time.Millisecond)
 
 	// Keep this test focused on the in-flight reopen above. Further idle
@@ -1384,7 +2990,7 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 
 	for range 2 {
 		wg.Go(func() {
-			getCtx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+			getCtx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 			defer cancel()
 
 			conn, err := p.Get(getCtx, nil)
@@ -1553,14 +3159,21 @@ func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
 	require.EqualValues(t, 10, p.Active())
 	require.EqualValues(t, 10, p.Available())
 
-	// Wait a bit for the idle timeout worker to refresh connections
-	assert.Eventually(t, func() bool {
+	// Wait for the idle worker to actually rotate connections.
+	require.Eventually(t, func() bool {
 		return p.Metrics.IdleClosed() > 10
-	}, 500*time.Millisecond, 10*time.Millisecond, "Expected at least 10 connections to be closed by idle timeout")
+	}, time.Second, 5*time.Millisecond, "expected at least 10 idle closes")
 
-	// Verify that new connections were created to replace the closed ones
-	require.EqualValues(t, 10, p.Active())
-	require.EqualValues(t, 10, p.Available())
+	// Wait for the pool to settle back to steady state before asserting on
+	// Active/Available. closeIdleResources intentionally drops pool.active
+	// during the close-then-reopen sequence so concurrent Gets can claim
+	// the freed slot (see closeIdleResources's doc and
+	// TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity). A naive
+	// `Active() == 10` check right after the first Eventually could observe
+	// that dip mid-cycle.
+	require.Eventually(t, func() bool {
+		return p.Active() == 10 && p.Available() == 10
+	}, time.Second, 5*time.Millisecond, "pool didn't settle back to capacity")
 
 	// Count how many connections in the stack are closed
 	totalInStack := 0

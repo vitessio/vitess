@@ -47,12 +47,26 @@ type waitlist[C Connection] struct {
 // or until the given context expires.
 // If maxWaiters is > 0 and the waitlist already has that many waiters, it returns
 // ErrPoolWaiterCapReached immediately without blocking.
-// The returned connection may _not_ have the requested Setting. This function can
-// also return a `nil` connection even if our context has expired, if the pool has
-// forced an expiration of all waiters in the waitlist.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint) (*Pooled[C], error) {
+// The returned connection may _not_ have the requested Setting. A nil connection
+// with nil error means the caller should retry acquisition.
+// If a non-nil error is returned, any conn that was already in flight to this
+// waiter is discarded internally — callers never need to handle (conn, err).
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint, shouldRetry func() bool) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
-	defer wl.nodes.Put(elem)
+	defer func() {
+		// Defensive drain. Every branch below already either returns the
+		// conn to the caller or discards it explicitly, but a leftover in
+		// this element's buffered channel would surface as a phantom conn
+		// for the next user pulling this Element out of the sync.Pool.
+		select {
+		case conn := <-elem.Value.conn:
+			if conn != nil {
+				conn.pool.discardConn(conn)
+			}
+		default:
+		}
+		wl.nodes.Put(elem)
+	}()
 
 	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting}
 
@@ -78,6 +92,31 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
 
+	if shouldRetry != nil && shouldRetry() {
+		removed := false
+
+		wl.mu.Lock()
+		for e := wl.list.Front(); e != nil; e = e.Next() {
+			if e == elem {
+				wl.list.Remove(elem)
+				removed = true
+				break
+			}
+		}
+		wl.mu.Unlock()
+
+		if removed {
+			// The retry signal asks the outer get loop to re-evaluate; that
+			// loop doesn't re-check ctx, so if it was canceled while we were
+			// enqueuing we'd otherwise let the retry hand a conn to a dead
+			// caller. Surface the cancellation here.
+			if err := ctx.Err(); err != nil {
+				return nil, context.Cause(ctx)
+			}
+			return nil, nil
+		}
+	}
+
 	select {
 	case <-closeChan:
 		// Pool was closed while we were waiting.
@@ -98,9 +137,13 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 			return nil, ErrConnPoolClosed
 		}
 
-		// if we weren't able to remove ourselves from the waitlist, it means
-		// another goroutine is trying to hand us a connection
-		return <-elem.Value.conn, nil
+		// We lost the race to remove ourselves: another goroutine handed us a
+		// connection we can no longer use. Drain it from the channel and
+		// discard so the conn isn't leaked.
+		if conn := <-elem.Value.conn; conn != nil {
+			conn.pool.discardConn(conn)
+		}
+		return nil, ErrConnPoolClosed
 
 	case <-ctx.Done():
 		// Context expired. We need to try to remove ourselves from the waitlist to
@@ -122,36 +165,37 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 			return nil, context.Cause(ctx)
 		}
 
-		// if we weren't able to remove ourselves from the waitlist, it means
-		// another goroutine is trying to hand us a connection
-		return <-elem.Value.conn, nil
+		// We lost the race to remove ourselves: drain the handed-off conn
+		// and discard so it isn't leaked to a caller whose ctx is already dead.
+		if conn := <-elem.Value.conn; conn != nil {
+			conn.pool.discardConn(conn)
+		}
+		return nil, context.Cause(ctx)
 
 	case conn := <-elem.Value.conn:
+		if conn == nil {
+			if err := ctx.Err(); err != nil {
+				return nil, context.Cause(ctx)
+			}
+			select {
+			case <-closeChan:
+				return nil, ErrConnPoolClosed
+			default:
+			}
+			return nil, nil
+		}
+		select {
+		case <-closeChan:
+			conn.pool.discardConn(conn)
+			return nil, ErrConnPoolClosed
+		default:
+		}
 		return conn, nil
 	}
 }
 
 func (wl *waitlist[C]) aboveWaiterCap(maxWaiters uint) bool {
 	return maxWaiters > 0 && wl.list.Len() >= int(maxWaiters)
-}
-
-func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
-	if wl.list.Len() == 0 {
-		return
-	}
-
-	wl.mu.Lock()
-	defer wl.mu.Unlock()
-
-	// iterate the waitlist looking for waiters with an expired Context,
-	// or remove everything if force is true
-	for e := wl.list.Front(); e != nil; e = e.Next() {
-		if e.Value.age == 0 {
-			maybeStarving++
-		}
-	}
-
-	return
 }
 
 // tryReturnConn tries handing over a connection to one of the waiters in the pool.
@@ -199,10 +243,31 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 		return false
 	}
 
-	// if we have a target to return the connection to, simply write the connection
-	// into the waiter's channel.
+	// Write into the waiter's buffered channel; this never blocks because the
+	// waiter is the sole receiver and the buffer is sized 1.
 	target.Value.conn <- conn
-	// Allow the goroutine waiting on the channel to start running _now_.
+	runtime.Gosched()
+
+	return true
+}
+
+func (wl *waitlist[D]) tryNotifyWaiter() bool {
+	if wl.list.Len() == 0 {
+		return false
+	}
+
+	wl.mu.Lock()
+	target := wl.list.Front()
+	if target != nil {
+		wl.list.Remove(target)
+	}
+	wl.mu.Unlock()
+
+	if target == nil {
+		return false
+	}
+
+	target.Value.conn <- nil
 	runtime.Gosched()
 
 	return true
@@ -210,8 +275,12 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 
 func (wl *waitlist[C]) init() {
 	wl.nodes.New = func() any {
+		// Buffer of 1 so tryReturnConnSlow / tryNotifyWaiter never block on
+		// the send. A receiver that bails on ctx.Done or closeChan picks up
+		// the queued conn via the blocking drain in waitForConn's
+		// not-removed branches (and a defensive drain on the way out).
 		return &list.Element[waiter[C]]{
-			Value: waiter[C]{conn: make(chan *Pooled[C])},
+			Value: waiter[C]{conn: make(chan *Pooled[C], 1)},
 		}
 	}
 	wl.list.Init()
