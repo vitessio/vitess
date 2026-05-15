@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -82,7 +83,31 @@ var (
 	transitionGracePeriod               time.Duration
 	enableReplicationReporter           bool
 	queryThrottlerConfigRefreshInterval time.Duration
+
+	// schemaUserTablesFreeSpaceMetricsEnabled controls whether vttablet
+	// publishes the SchemaTableDataFreeBytes per-table gauge (DATA_FREE bytes
+	// reclaimable via OPTIMIZE) for every user table on each schema reload.
+	// Operators consume the metric and apply their own thresholds for
+	// alerting; vttablet has no opinion on what counts as "too much" free
+	// space. This value is backed by viper so it can be toggled at runtime
+	// via the dynamic config file.
+	schemaUserTablesFreeSpaceMetricsEnabled = viperutil.Configure(
+		"schema_user_tables_free_space_metrics_enabled",
+		viperutil.Options[bool]{
+			FlagName: "schema-user-tables-free-space-metrics-enabled",
+			Default:  true,
+			Dynamic:  true,
+		},
+	)
 )
+
+// SchemaUserTablesFreeSpaceMetricsEnabled returns the current
+// schema-user-tables-free-space-metrics-enabled value. It reads the live
+// viper-backed setting, so runtime updates to the config file are picked up
+// on the next call.
+func SchemaUserTablesFreeSpaceMetricsEnabled() bool {
+	return schemaUserTablesFreeSpaceMetricsEnabled.Get()
+}
 
 func init() {
 	currentConfig = *NewDefaultConfig()
@@ -140,6 +165,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.DurationVar(&currentConfig.SchemaReloadInterval, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadInterval, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
 	fs.DurationVar(&currentConfig.SchemaChangeReloadTimeout, "schema-change-reload-timeout", defaultConfig.SchemaChangeReloadTimeout, "query server schema change reload timeout, this is how long to wait for the signaled schema reload operation to complete before giving up")
+	fs.Bool("schema-user-tables-free-space-metrics-enabled", schemaUserTablesFreeSpaceMetricsEnabled.Default(), "publish DATA_FREE bytes (reclaimable via OPTIMIZE) for every user table via the SchemaTableDataFreeBytes metric on each schema reload. Dynamically reloadable via the viper config file.")
+	viperutil.BindFlags(fs, schemaUserTablesFreeSpaceMetricsEnabled)
 	fs.BoolVar(&currentConfig.SignalWhenSchemaChange, "queryserver-config-schema-change-signal", defaultConfig.SignalWhenSchemaChange, "query server schema signal, will signal connected vtgates that schema has changed whenever this is detected. VTGates will need to have -schema-change-signal enabled for this to work")
 	fs.DurationVar(&currentConfig.Olap.TxTimeout, "queryserver-config-olap-transaction-timeout", defaultConfig.Olap.TxTimeout, "query server transaction timeout (in seconds), after which a transaction in an OLAP session will be killed")
 	fs.DurationVar(&currentConfig.Oltp.QueryTimeout, "queryserver-config-query-timeout", defaultConfig.Oltp.QueryTimeout, "query server query timeout, this is the query timeout in vttablet side. If a query takes more than this timeout, it will be killed.")

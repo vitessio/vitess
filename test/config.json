@@ -1223,6 +1223,21 @@
       "Tags": [],
       "Needs": []
     },
+    "vtgate_schematracker_optimize_gtid_executed": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/vt/vttablet/endtoend"
+      ],
+      "Args": [
+        "-run",
+        "TestSchemaEngineOptimizeGtidExecutedOnReplica"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_schema_tracker",
+      "Tags": [],
+      "Needs": []
+    },
     "vtgate_schematracker_restarttablet": {
       "File": "unused.go",
       "Packages": [

@@ -248,10 +248,17 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction) error {
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		if action == DBActionSetReadWrite {
+			se := ts.tm.QueryServiceControl.SchemaEngine()
+			if se != nil {
+				se.BeginPrimaryPromotion()
+			}
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// We call SetReadOnly only after the topo has been updated to avoid
 			// situations where two tablets are primary at the DB level but not at the vitess level
 			if err := ts.tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+				if se != nil {
+					se.AbortPrimaryPromotion()
+				}
 				return err
 			}
 		}
