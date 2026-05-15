@@ -205,11 +205,16 @@ func rejectInternalTableDMLTableExpr(tableExpr sqlparser.TableExpr) error {
 
 // rejectInternalTableDDL returns an error when the supplied DDL statement
 // targets a Vitess internal operation table.
-func rejectInternalTableDDL(
-	stmt sqlparser.DDLStatement,
-	query string,
-	parser *sqlparser.Parser,
-) error {
+func rejectInternalTableDDL(stmt sqlparser.DDLStatement, query string, parser *sqlparser.Parser) error {
+	switch stmt := stmt.(type) {
+	case *sqlparser.CreateProcedure:
+		// Procedure names live outside the table namespace, so only the body
+		// can modify an internal operation table.
+		return rejectInternalTableCreateProcedure(stmt, query, parser)
+	case *sqlparser.DropProcedure:
+		return nil
+	}
+
 	for _, tableName := range stmt.AffectedTables() {
 		if err := rejectInternalTableName(tableName); err != nil {
 			return err
@@ -219,8 +224,6 @@ func rejectInternalTableDDL(
 	switch stmt := stmt.(type) {
 	case *sqlparser.AlterTable:
 		return rejectInternalTableExchangePartition(stmt)
-	case *sqlparser.CreateProcedure:
-		return rejectInternalTableCreateProcedure(stmt, query, parser)
 	default:
 		return nil
 	}
