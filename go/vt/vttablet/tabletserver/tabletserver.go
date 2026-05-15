@@ -256,7 +256,12 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.registerQueryzHandler()
 	tsv.registerQuerylogzHandler()
 	tsv.registerTxlogzHandler()
-	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
+	tsv.registerQueryListHandlers([]*QueryList{
+		tsv.statelessql,
+		tsv.statefulql,
+		tsv.olapql,
+		tsv.te.activeCommits,
+	})
 	tsv.registerTwopczHandler()
 	tsv.registerThrottlerHandlers()
 	tsv.registerDebugEnvHandler()

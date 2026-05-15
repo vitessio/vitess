@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -134,9 +135,59 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return vterrors.VT10002("cannot prepare the transaction on a closed connection")
 	}
 
-	return dte.inTransaction(func(localConn *StatefulConnection) error {
-		return dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, queries)
-	})
+	// RollbackPrepared needs to know if we sent a commit for the redo write.
+	// After that, an error might mean we lost the reply, not that the redo
+	// write failed.
+	localConn, _, _, err := dte.te.txPool.Begin(dte.ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+	if err != nil {
+		return wrapPrepareError(err, "failed to begin redo transaction for prepare %s", dtid)
+	}
+	defer dte.te.txPool.RollbackAndRelease(dte.ctx, localConn)
+
+	err = dte.te.twoPC.SaveRedo(dte.ctx, localConn, dtid, queries)
+	if err != nil {
+		return wrapPrepareError(err, "failed to save redo for prepare %s", dtid)
+	}
+
+	remove, err := addActiveCommit(dte.ctx, localConn, dte.te)
+	if err != nil {
+		return wrapPrepareError(err, "failed to track redo commit for prepare %s", dtid)
+	}
+	defer remove()
+
+	dte.te.preparedPool.MarkRedoCommitStarted(dtid)
+
+	_, err = dte.te.txPool.Commit(dte.ctx, localConn)
+	if err != nil {
+		return wrapPrepareError(err, "failed to commit redo for prepare %s", dtid)
+	}
+
+	return nil
+}
+
+// wrapPrepareError wraps the prepare error with the given context.
+func wrapPrepareError(err error, format string, args ...any) error {
+	if err == nil {
+		return nil
+	}
+
+	message := fmt.Sprintf(format, args...)
+
+	sqlErr, ok := err.(*sqlerror.SQLError)
+	if !ok {
+		return vterrors.Wrap(err, message)
+	}
+
+	wrapped := sqlerror.NewSQLErrorf(
+		sqlErr.Number(),
+		sqlErr.SQLState(),
+		"%s: %s",
+		message,
+		sqlErr.Message,
+	)
+	wrapped.Query = sqlErr.Query
+
+	return wrapped
 }
 
 // CommitPrepared commits a prepared transaction. If the operation
@@ -180,7 +231,7 @@ func (dte *DTExecutor) CommitPrepared(dtid string) (err error) {
 	if err = dte.te.twoPC.DeleteRedo(ctx, conn, dtid); err != nil {
 		return err
 	}
-	if _, err = dte.te.txPool.Commit(ctx, conn); err != nil {
+	if _, err = dte.te.commit(ctx, conn); err != nil {
 		return err
 	}
 	dte.te.preparedPool.Forget(dtid)
@@ -210,7 +261,16 @@ func (dte *DTExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "2pc is not enabled")
 	}
 	defer dte.te.env.Stats().QueryTimings.Record("ROLLBACK_PREPARED", time.Now())
+
+	redoDeleted := false
+	redoCommitStarted := dte.te.preparedPool.RedoCommitStarted(dtid)
+
 	defer func() {
+		// If redo might be durable, wait for confirmed redo deletion before rollback.
+		if redoCommitStarted && !redoDeleted {
+			return
+		}
+
 		if preparedConn := dte.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
 			dte.te.txPool.RollbackAndRelease(dte.ctx, preparedConn)
 		}
@@ -218,9 +278,16 @@ func (dte *DTExecutor) RollbackPrepared(dtid string, originalID int64) error {
 			dte.te.Rollback(dte.ctx, originalID)
 		}
 	}()
-	return dte.inTransaction(func(conn *StatefulConnection) error {
+
+	err := dte.inTransaction(func(conn *StatefulConnection) error {
 		return dte.te.twoPC.DeleteRedo(dte.ctx, conn, dtid)
 	})
+	if err != nil {
+		return err
+	}
+
+	redoDeleted = true
+	return nil
 }
 
 // CreateTransaction creates the metadata for a 2PC transaction.
@@ -262,7 +329,7 @@ func (dte *DTExecutor) StartCommit(transactionID int64, dtid string) (querypb.St
 	if err != nil {
 		return querypb.StartCommitState_Fail, err
 	}
-	if _, err = dte.te.txPool.Commit(dte.ctx, conn); err != nil {
+	if _, err = dte.te.commit(dte.ctx, conn); err != nil {
 		return querypb.StartCommitState_Unknown, err
 	}
 	return querypb.StartCommitState_Success, nil
@@ -348,7 +415,7 @@ func (dte *DTExecutor) inTransaction(f func(*StatefulConnection) error) error {
 		return err
 	}
 
-	_, err = dte.te.txPool.Commit(dte.ctx, conn)
+	_, err = dte.te.commit(dte.ctx, conn)
 	if err != nil {
 		return err
 	}

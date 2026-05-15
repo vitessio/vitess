@@ -37,7 +37,9 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -101,6 +103,35 @@ func TestTxExecutorPrepare(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestWrapPrepareErrorPreservesVitessCode verifies that prepare errors keep
+// their Vitess code after adding the failed prepare stage.
+func TestWrapPrepareErrorPreservesVitessCode(t *testing.T) {
+	err := vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
+
+	got := wrapPrepareError(err, "failed to begin redo transaction for prepare %s", "aa")
+
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(got))
+	require.EqualError(t, got, "failed to begin redo transaction for prepare aa: transaction pool connection limit exceeded")
+}
+
+// TestWrapPrepareErrorPreservesSQLError verifies that prepare errors keep
+// their SQL code and state after adding the failed prepare stage.
+func TestWrapPrepareErrorPreservesSQLError(t *testing.T) {
+	err := sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, sqlerror.SSUnknownSQLState, "lock wait timeout exceeded")
+	err.Query = "insert into _vt.redo_state"
+
+	got := wrapPrepareError(err, "failed to save redo for prepare %s", "aa")
+
+	gotSQL, ok := got.(*sqlerror.SQLError)
+	require.True(t, ok, "wrapPrepareError returned %T, want *sqlerror.SQLError", got)
+	require.Equal(t, sqlerror.ERLockWaitTimeout, gotSQL.Number())
+	require.Equal(t, sqlerror.SSUnknownSQLState, gotSQL.SQLState())
+	require.Equal(t, "insert into _vt.redo_state", gotSQL.Query)
+	require.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, gotSQL.VtRpcErrorCode())
+	require.Contains(t, gotSQL.Message, "failed to save redo for prepare aa")
+	require.Contains(t, gotSQL.Message, "lock wait timeout exceeded")
+}
+
 // TestTxExecutorPrepareResevedConn tests the case where a reserved connection is used for prepare.
 func TestDTExecutorPrepareResevedConn(t *testing.T) {
 	ctx := t.Context()
@@ -160,6 +191,26 @@ func TestTxExecutorPrepareRedoFail(t *testing.T) {
 	require.Contains(t, err.Error(), "is not supported")
 }
 
+// TestTxExecutorRollbackPreparedCleansUpAfterSaveRedoFailure verifies that a
+// failed prepare can still be cleaned up when redo was never durably written.
+func TestTxExecutorRollbackPreparedCleansUpAfterSaveRedoFailure(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	txid := newTxForPrep(ctx, tsv)
+
+	err := txe.Prepare(txid, "bb")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not supported")
+	require.Len(t, txe.te.preparedPool.conns, 1)
+
+	err = txe.RollbackPrepared("bb", txid)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is not supported")
+	require.Empty(t, txe.te.preparedPool.conns)
+}
+
 func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	ctx := t.Context()
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
@@ -167,9 +218,13 @@ func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err := txe.Prepare(txid, "aa")
-	defer txe.RollbackPrepared("aa", 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "commit fail")
+
+	db.DeleteRejectedQuery("commit")
+
+	err = txe.RollbackPrepared("aa", 0)
+	require.NoError(t, err)
 }
 
 func TestExecutorPrepareRuleFailure(t *testing.T) {
@@ -274,38 +329,64 @@ func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
-	defer txe.RollbackPrepared("aa", 0)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err = txe.CommitPrepared("aa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "commit fail")
+
+	db.DeleteRejectedQuery("commit")
+
+	err = txe.RollbackPrepared("aa", 0)
+	require.NoError(t, err)
 }
 
 func TestTxExecutorRollbackBeginFail(t *testing.T) {
 	ctx := t.Context()
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
+
 	txid := newTxForPrep(ctx, tsv)
+
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
+
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err = txe.RollbackPrepared("aa", txid)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "begin fail")
+
+	// Retry after the injected failure so the prepared transaction does not
+	// remain in doubt when the test shuts the tabletserver down.
+	db.DeleteRejectedQuery("begin")
+
+	err = txe.RollbackPrepared("aa", 0)
+	require.NoError(t, err)
 }
 
 func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	ctx := t.Context()
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
+
 	txid := newTxForPrep(ctx, tsv)
+
 	// Allow all additions to redo logs to succeed
 	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
+
 	err := txe.Prepare(txid, "bb")
 	require.NoError(t, err)
+
 	err = txe.RollbackPrepared("bb", txid)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "is not supported")
+
+	// Add the missing redo deletes before retrying so the cleanup path can
+	// prove the prepared transaction is released after redo is gone.
+	db.AddQuery("delete from _vt.redo_state where dtid = _binary'bb'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'bb'", &sqltypes.Result{})
+
+	err = txe.RollbackPrepared("bb", 0)
+	require.NoError(t, err)
 }
 
 func TestExecutorCreateTransaction(t *testing.T) {
