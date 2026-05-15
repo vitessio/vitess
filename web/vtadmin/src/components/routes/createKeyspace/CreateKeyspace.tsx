@@ -66,7 +66,7 @@ export const CreateKeyspace = () => {
     );
 
     let selectedCluster = null;
-    if (!!formData.clusterID) {
+    if (formData.clusterID) {
         selectedCluster = clusters.find((c) => c.id === formData.clusterID);
     }
 
