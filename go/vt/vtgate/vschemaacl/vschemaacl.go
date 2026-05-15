@@ -61,9 +61,10 @@ func (a *authorizedDDLUsers) String() string {
 
 // AuthorizedDDLUsers specifies the users that can perform ddl operations
 var AuthorizedDDLUsers = viperutil.Configure(
-	"vschema_ddl_authorized_users",
+	"vschema-ddl-authorized-users",
 	viperutil.Options[*authorizedDDLUsers]{
 		FlagName: "vschema-ddl-authorized-users",
+		Aliases:  []string{"vschema_ddl_authorized_users"},
 		Default:  &authorizedDDLUsers{},
 		Dynamic:  true,
 		GetFunc: func(v *viper.Viper) func(key string) *authorizedDDLUsers {
