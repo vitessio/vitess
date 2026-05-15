@@ -985,25 +985,45 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 	if plan == nil {
 		return false, nil
 	}
-	identityColSet := make(map[string]struct{}, len(plan.IdentityColumns))
-	for _, col := range plan.IdentityColumns {
-		identityColSet[col] = struct{}{}
-	}
 	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
 	if err != nil {
 		return false, err
 	}
-	if tableSpec == nil {
-		return false, nil
+	return hasExtraUniqueSecondaryIndexFromSpec(plan, tableSpec), nil
+}
+
+// hasExtraUniqueSecondaryIndexFromSpec is the pure-logic core of
+// hasExtraUniqueSecondaryIndex, separated so the conflict-detection rules
+// can be unit-tested without a live mysqld schema fetch.
+func hasExtraUniqueSecondaryIndexFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec) bool {
+	if plan == nil || tableSpec == nil {
+		return false
 	}
 	secondaryKeys := extractSecondaryKeys(tableSpec)
 	if len(secondaryKeys) == 0 {
-		return false, nil
+		return false
 	}
 
 	identityCols := plan.IdentityColumns
 	if len(identityCols) == 0 {
-		return false, nil
+		// No usable identity but the table has secondary indexes that may
+		// enforce uniqueness we cannot reason about via PK-based writeset
+		// keys. Force serialization (return true) for any unique-not-null
+		// secondary so two parallel inserts cannot collide at apply time.
+		for _, secondaryKey := range secondaryKeys {
+			if secondaryKey == nil || secondaryKey.Info == nil {
+				continue
+			}
+			if secondaryKey.Info.IsUnique() {
+				return true
+			}
+		}
+		return false
+	}
+
+	identityColSet := make(map[string]struct{}, len(identityCols))
+	for _, col := range identityCols {
+		identityColSet[col] = struct{}{}
 	}
 
 	primaryKeyMatchesIdentity := true
@@ -1015,7 +1035,7 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 		}
 		primaryKeyColumnCount = len(index.Columns)
 		if primaryKeyColumnCount != len(identityCols) {
-			return true, nil
+			return true
 		}
 		for i, idxCol := range index.Columns {
 			if idxCol.Expression != nil {
@@ -1039,7 +1059,7 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 		break
 	}
 	if primaryKeyColumnCount > 0 && !primaryKeyMatchesIdentity && !primaryKeyMatchesIdentitySet {
-		return true, nil
+		return true
 	}
 
 	for _, secondaryKey := range secondaryKeys {
@@ -1067,7 +1087,7 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 			indexColSet[idxCol.Column.Lowered()] = struct{}{}
 		}
 		if hasDerivedColumn {
-			return true, nil
+			return true
 		}
 		containsIdentity := true
 		for _, col := range identityCols {
@@ -1079,9 +1099,9 @@ func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableNa
 		if containsIdentity {
 			continue
 		}
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
 
 func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {

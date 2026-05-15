@@ -83,10 +83,13 @@ type vplayer struct {
 	// timeLastSaved tracks when the latest pending position was durably saved.
 	// Older saves behind a later unsavedEvent must not refresh it.
 	timeLastSaved time.Time
-	// lastTimestampNs is the last timestamp seen so far.
-	lastTimestampNs *atomic.Int64
-	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
-	timeOffsetNs *atomic.Int64
+	// lagSnapshot packs the last timestamp seen and the clock offset to the
+	// source tablet into a single atomic struct. Storing them together (vs
+	// two independent atomic.Int64 fields) prevents the parallel applier's
+	// throttled-path lag estimator from seeing a torn pair (new ts with
+	// stale offset, or vice versa) when the commitLoop's updateLag races
+	// with the scheduleLoop's reader.
+	lagSnapshot *atomic.Pointer[lagSnapshot]
 	// numAccumulatedHeartbeats keeps track of how many heartbeats have been received since we updated the time_updated column of _vt.vreplication
 	numAccumulatedHeartbeats int
 
@@ -128,6 +131,33 @@ type vplayer struct {
 	// idStr is vp.idStr, cached to avoid repeated
 	// conversions on every lag gauge update.
 	idStr string
+}
+
+// lagSnapshot pairs the most-recent source-side timestamp seen by the
+// applier with the corresponding clock offset to the source. It is stored
+// behind an atomic.Pointer so readers always see a consistent (ts, offset)
+// pair instead of a torn mix from two concurrent writers.
+type lagSnapshot struct {
+	timestampNs int64
+	offsetNs    int64
+}
+
+// loadLagSnapshot returns the latest snapshot, or a zero-value snapshot if
+// nothing has been stored yet. Callers can compare timestampNs against zero
+// to detect "no data yet".
+func (vp *vplayer) loadLagSnapshot() lagSnapshot {
+	snap := vp.lagSnapshot.Load()
+	if snap == nil {
+		return lagSnapshot{}
+	}
+	return *snap
+}
+
+// storeLagSnapshot atomically replaces the lag snapshot with a new (ts, offset)
+// pair. A reader's loadLagSnapshot will either see the entire previous
+// snapshot or the entire new one — never a mix.
+func (vp *vplayer) storeLagSnapshot(timestampNs, offsetNs int64) {
+	vp.lagSnapshot.Store(&lagSnapshot{timestampNs: timestampNs, offsetNs: offsetNs})
 }
 
 // NoForeignKeyCheckFlagBitmask is the bitmask for the 2nd bit (least significant) of the flags in a binlog row event.
@@ -187,8 +217,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		saveStop:                  saveStop,
 		copyState:                 copyState,
 		timeLastSaved:             time.Now(),
-		lastTimestampNs:           &atomic.Int64{},
-		timeOffsetNs:              &atomic.Int64{},
+		lagSnapshot:               &atomic.Pointer[lagSnapshot]{},
 		tablePlansMu:              &sync.RWMutex{},
 		tablePlans:                make(map[string]*TablePlan),
 		tablePlansVersion:         &atomic.Int64{},
@@ -614,7 +643,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
 	estimateLag := func() {
-		behind := time.Now().UnixNano() - vp.lastTimestampNs.Load() - vp.timeOffsetNs.Load()
+		snap := vp.loadLagSnapshot()
+		behind := time.Now().UnixNano() - snap.timestampNs - snap.offsetNs
 		behindSecs := behind / 1e9
 		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
 		vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, behindSecs)
@@ -711,10 +741,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// determine the actual lag, as the vstreamer is fully throttled, and we
 					// will estimate it after processing the batch.
 					if event.Type != binlogdatapb.VEventType_HEARTBEAT || !event.Throttled {
-						vp.lastTimestampNs.Store(event.Timestamp * 1e9)
+						tsNs := event.Timestamp * 1e9
 						now := time.Now().UnixNano()
-						vp.timeOffsetNs.Store(now - event.CurrentTime)
-						lag = now - vp.lastTimestampNs.Load() - vp.timeOffsetNs.Load()
+						offset := now - event.CurrentTime
+						vp.storeLagSnapshot(tsNs, offset)
+						lag = now - tsNs - offset
 					}
 				}
 			}

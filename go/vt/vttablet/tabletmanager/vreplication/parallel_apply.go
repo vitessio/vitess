@@ -803,6 +803,16 @@ func computeLastEventTimestamp(events []*binlogdatapb.VEvent) (timestamp, curren
 	return 0, 0
 }
 
+// txnNeedsWorker reports whether a transaction has work for a worker connection.
+func txnNeedsWorker(events []*binlogdatapb.VEvent) bool {
+	for _, ev := range events {
+		if ev.Type != binlogdatapb.VEventType_ROWS_QUERY {
+			return true
+		}
+	}
+	return false
+}
+
 // applyEventsParallel is the top-level orchestrator for the parallel applier.
 // It creates N worker goroutines and a commitLoop goroutine, then runs
 // scheduleLoop on the calling goroutine. On exit, it tears down the pipeline
@@ -1074,11 +1084,10 @@ func (vp *vplayer) scheduleLoop(ctx context.Context, relay *relayLog, scheduler 
 			vp.serialMu.Lock()
 			_ = vp.vr.updateTimeThrottled(throttlerapp.VPlayerName, checkResult.Summary())
 			vp.serialMu.Unlock()
-			lastTs := vp.lastTimestampNs.Load()
-			offset := vp.timeOffsetNs.Load()
+			snap := vp.loadLagSnapshot()
 			// Estimate lag while throttled, same as the serial applier.
-			if lastTs > 0 {
-				behind := time.Now().UnixNano() - lastTs - offset
+			if snap.timestampNs > 0 {
+				behind := time.Now().UnixNano() - snap.timestampNs - snap.offsetNs
 				if behind >= 0 {
 					behindSecs := behind / 1e9
 					vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
@@ -1435,10 +1444,15 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		if state.batchMissingCommitMeta && state.curHasCommitMeta && state.curSequence > 0 {
 			txn.mergedSequences = append(txn.mergedSequences, state.curSequence)
 		}
-		if err := scheduler.enqueue(txn); err != nil {
-			return err
-		}
-		if refreshedTables := extractFieldRefreshTables(payload.events); len(refreshedTables) != 0 {
+		// Increment pendingFieldRefreshTables BEFORE scheduler.enqueue so the
+		// counter is visible to commitLoop's matching decrement (parallel_apply.go
+		// ~L2148-2160). Otherwise a worker could pick up this txn and commitLoop
+		// could observe an empty map (no-op decrement) before this increment
+		// runs, leaving the counter permanently stuck at 1 — every future ROW
+		// txn touching this table would then be force-serialized for the
+		// lifetime of the workflow.
+		refreshedTables := extractFieldRefreshTables(payload.events)
+		if len(refreshedTables) != 0 {
 			if pendingFieldRefreshTables == nil {
 				pendingFieldRefreshTables = make(map[string]int, len(refreshedTables))
 			}
@@ -1451,6 +1465,27 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				vp.pendingFieldRefreshTables[tableName]++
 			}
 			vp.serialMu.Unlock()
+		}
+		if err := scheduler.enqueue(txn); err != nil {
+			// Roll back the increment so a transient enqueue error
+			// (scheduler closed during teardown, ctx cancellation) does not
+			// leave the table permanently force-serialized after restart.
+			if len(refreshedTables) != 0 {
+				vp.serialMu.Lock()
+				for tableName := range refreshedTables {
+					pendingFieldRefreshTables[tableName]--
+					if pendingFieldRefreshTables[tableName] <= 0 {
+						delete(pendingFieldRefreshTables, tableName)
+					}
+					if remaining := vp.pendingFieldRefreshTables[tableName] - 1; remaining > 0 {
+						vp.pendingFieldRefreshTables[tableName] = remaining
+					} else {
+						delete(vp.pendingFieldRefreshTables, tableName)
+					}
+				}
+				vp.serialMu.Unlock()
+			}
+			return err
 		}
 		// Pre-allocate with capacity 16 to avoid the nil→1→2→4→8 growth
 		// pattern on the hot path. We can't reuse the old slice via [:0]
@@ -1499,7 +1534,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 			case binlogdatapb.VEventType_COMMIT:
 				posReached := stopPosReached(state.curPos)
 				state.curMustSave = posReached
-				if len(state.curEvents) == 0 {
+				if !txnNeedsWorker(state.curEvents) {
 					if state.curMustSave {
 						eventCopy := event
 						if err := vp.enqueueCommitOnly(ctx, scheduler, eventCopy, true, true, state.curSequence, state.curCommitParent, state.curHasCommitMeta); err != nil {
@@ -1720,6 +1755,11 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					(event.Type == binlogdatapb.VEventType_DDL && vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_IGNORE)
 				txn.payload = payload
 				if err := scheduler.enqueue(txn); err != nil {
+					// Return the unsent txn to the pool so a retry storm
+					// (scheduler close + workflow restart in a tight loop)
+					// does not defeat the pool by leaking one applyTxn +
+					// payload per failed enqueue.
+					releaseApplyTxn(txn)
 					return err
 				}
 				// DDL that is actually executed on the target (EXEC, EXEC_IGNORE)
@@ -1781,10 +1821,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				// Update lag from heartbeat timestamp.
 				if event.Timestamp != 0 && !event.Throttled {
 					tsNs := event.Timestamp * 1e9
-					vp.lastTimestampNs.Store(tsNs)
 					now := time.Now().UnixNano()
 					offset := now - event.CurrentTime
-					vp.timeOffsetNs.Store(offset)
+					vp.storeLagSnapshot(tsNs, offset)
 					lag := now - tsNs - offset
 					if lag >= 0 {
 						lagSecs := lag / 1e9
@@ -1795,10 +1834,9 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					// When the vstreamer is throttled, we can't determine the
 					// actual lag from the event. Estimate it from the last known
 					// timestamp, matching the serial applier's estimateLag().
-					lastTs := vp.lastTimestampNs.Load()
-					offset := vp.timeOffsetNs.Load()
-					if lastTs > 0 {
-						behind := time.Now().UnixNano() - lastTs - offset
+					snap := vp.loadLagSnapshot()
+					if snap.timestampNs > 0 {
+						behind := time.Now().UnixNano() - snap.timestampNs - snap.offsetNs
 						if behind >= 0 {
 							behindSecs := behind / 1e9
 							vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
@@ -1865,7 +1903,13 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 	txn.payload = payload
 	// done is nil for commitOnly transactions; workers send them
 	// directly to commitCh without waiting for completion.
-	return scheduler.enqueue(txn)
+	if err := scheduler.enqueue(txn); err != nil {
+		// Match the DDL/OTHER/JOURNAL branch above: return the unsent txn
+		// to the pool so retry storms don't leak per-call.
+		releaseApplyTxn(txn)
+		return err
+	}
+	return nil
 }
 
 // workerLoop runs on each of the N worker goroutines. It blocks on
@@ -2049,10 +2093,9 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	updateLag := func(payload *applyTxnPayload) {
 		if payload.lastEventTimestamp != 0 {
 			tsNs := payload.lastEventTimestamp * 1e9
-			vp.lastTimestampNs.Store(tsNs)
 			now := time.Now().UnixNano()
 			offset := now - payload.lastEventCurrentTime
-			vp.timeOffsetNs.Store(offset)
+			vp.storeLagSnapshot(tsNs, offset)
 			lag := now - tsNs - offset
 			if lag >= 0 {
 				lagSecs := lag / 1e9
@@ -2061,7 +2104,8 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 				return
 			}
 		}
-		behind := time.Now().UnixNano() - vp.lastTimestampNs.Load() - vp.timeOffsetNs.Load()
+		snap := vp.loadLagSnapshot()
+		behind := time.Now().UnixNano() - snap.timestampNs - snap.offsetNs
 		behindSecs := behind / 1e9
 		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
 		vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, behindSecs)
@@ -2377,11 +2421,14 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 				return ctx.Err()
 			}
 			if txn.order == 0 {
-				if err := commitTxn(txn); err != nil {
-					return err
-				}
-				releaseApplyTxn(txn)
-				continue
+				// All production enqueue paths assign order via
+				// vp.parallelOrder.Add(1), which is monotonic and starts at 1.
+				// Reaching here means a regression introduced an unordered
+				// txn — silently committing it would bypass strict ordering
+				// and break the monotonic position invariant on
+				// _vt.vreplication.pos. Fail fast so the workflow restarts
+				// cleanly from the last durable position.
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "parallel apply commit txn missing order: payload=%+v", txn.payload)
 			}
 			// Add the new transaction to be committed and then drain all pending ones.
 			pending[txn.order] = txn

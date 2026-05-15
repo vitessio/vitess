@@ -74,13 +74,18 @@ func writesetDigestInit(d *xxhash.Digest, tableName string) {
 }
 
 // writesetDigestAddValue folds a sqltypes.Value into the digest by writing
-// its type discriminator (1 byte) followed by its raw bytes.
+// its type discriminator (2 bytes, little-endian) followed by its raw bytes.
+// querypb.Type is a 16-bit enum and using a 1-byte discriminator would let
+// future types whose low byte collides (e.g. a hypothetical Type=N and
+// Type=N+256) hash to the same key — silently letting truly conflicting
+// transactions run in parallel.
 func writesetDigestAddValue(d *xxhash.Digest, v sqltypes.Value) {
 	var scratch [8]byte
 	raw := v.Raw()
-	binary.LittleEndian.PutUint64(scratch[:], uint64(1+len(raw)))
+	binary.LittleEndian.PutUint64(scratch[:], uint64(2+len(raw)))
 	d.Write(scratch[:])
-	d.Write([]byte{byte(v.Type())})
+	binary.LittleEndian.PutUint16(scratch[:2], uint16(v.Type()))
+	d.Write(scratch[:2])
 	d.Write(raw)
 }
 
@@ -474,6 +479,14 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 		if rowEvent == nil {
 			continue
 		}
+		// tablePlans is keyed by the FIELD event's source TableName. We rely
+		// on vstreamer emitting identical-case TableName for both the FIELD
+		// and the subsequent ROW events of the same table — they share a
+		// single per-stream cache. We do NOT canonicalize via
+		// canonicalTargetTableName here because that operates on TARGET
+		// names; the SOURCE-name space is independent and a case-insensitive
+		// fold could conflate distinct source tables on case-sensitive
+		// filesystems (lower_case_table_names=0).
 		plan := tablePlans[rowEvent.TableName]
 		if plan == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing table plan for %s", rowEvent.TableName)
@@ -520,11 +533,16 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 			// Fail closed until writeset reconstruction becomes bitmap-aware.
 			isPartialRow := change.DataColumns != nil || change.JsonPartialValues != nil
 			if !isPartialRow && plan.Fields != nil {
-				isPartialRow = (change.Before != nil && len(change.Before.Lengths) < len(plan.Fields)) ||
-					(change.After != nil && len(change.After.Lengths) < len(plan.Fields))
+				// Use != (not <) so an over-sized row image — which can arise
+				// from a stale plan that's missing a column the source still
+				// streams — also fails closed instead of running MakeRowTrusted
+				// past the end of plan.Fields and nil-derefing.
+				isPartialRow = (change.Before != nil && len(change.Before.Lengths) != len(plan.Fields)) ||
+					(change.After != nil && len(change.After.Lengths) != len(plan.Fields))
 			}
 			if !isPartialRow {
-				isPartialRow = beforeRowHasNegativeRelevantLengths(change.Before, plan, fieldIdx, refs, pRefs)
+				isPartialRow = rowHasNegativeRelevantLengths(change.Before, plan, fieldIdx, refs, pRefs) ||
+					rowHasNegativeRelevantLengths(change.After, plan, fieldIdx, refs, pRefs)
 			}
 			if isPartialRow {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "partial row image on table %s: forcing serialization", rowEvent.TableName)
@@ -564,13 +582,14 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 	return keys, nil
 }
 
-// beforeRowHasNegativeRelevantLengths returns true when a BEFORE image has
-// -1 (omitted) lengths for any column the writeset depends on (PK or
-// FK-joined column). vstreamer encodes omitted columns as -1 length without
-// publishing a DataColumns bitmap on BEFORE rows, so the sentinel is the
-// only signal we have. Treating those as partial images lets us fail closed
-// and serialize instead of hashing against wrong-slot values.
-func beforeRowHasNegativeRelevantLengths(row *querypb.Row, plan *TablePlan, fieldIdx map[string]int, refs []fkConstraintRef, pRefs []parentFKRef) bool {
+// rowHasNegativeRelevantLengths returns true when a row image has -1
+// (omitted) lengths for any column the writeset depends on (PK or FK-joined
+// column). vstreamer encodes omitted columns as -1 length without publishing
+// a DataColumns bitmap on BEFORE rows, and the same sentinel can appear on
+// AFTER rows under partial-image producers that do not set a bitmap. Treating
+// those as partial images lets us fail closed and serialize instead of
+// hashing against wrong-slot (NULL) values.
+func rowHasNegativeRelevantLengths(row *querypb.Row, plan *TablePlan, fieldIdx map[string]int, refs []fkConstraintRef, pRefs []parentFKRef) bool {
 	if row == nil {
 		return false
 	}

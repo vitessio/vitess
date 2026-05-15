@@ -481,8 +481,7 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 		tablePlansVersion: &atomic.Int64{},
 		serialMu:          &sync.Mutex{},
 		parallelOrder:     &atomic.Int64{},
-		lastTimestampNs:   &atomic.Int64{},
-		timeOffsetNs:      &atomic.Int64{},
+		lagSnapshot:       &atomic.Pointer[lagSnapshot]{},
 		timeLastSaved:     time.Now(),
 		idStr:             "1",
 		query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
@@ -1536,6 +1535,41 @@ func TestScheduleItems_VERSIONIsIgnoredLikeEmptyTransaction(t *testing.T) {
 	vp.serialMu.Lock()
 	assert.Equal(t, commitEvent, vp.unsavedEvent)
 	vp.serialMu.Unlock()
+}
+
+func TestScheduleItems_ROWSQUERYOnlyTransactionIsEmpty(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	gtidEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+	}
+	beginEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_BEGIN,
+	}
+	rowsQueryEvent := &binlogdatapb.VEvent{
+		Type:      binlogdatapb.VEventType_ROWS_QUERY,
+		Statement: "update t1 set id = id where id = 1",
+		Timestamp: 100,
+	}
+	commitEvent := &binlogdatapb.VEvent{
+		Type:      binlogdatapb.VEventType_COMMIT,
+		Timestamp: 100,
+	}
+
+	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{gtidEvent, beginEvent, rowsQueryEvent, commitEvent}})
+	require.NoError(t, err)
+
+	vp.serialMu.Lock()
+	assert.Equal(t, commitEvent, vp.unsavedEvent)
+	vp.serialMu.Unlock()
+
+	scheduler.mu.Lock()
+	assert.Equal(t, 0, scheduler.pendingCount)
+	scheduler.mu.Unlock()
 }
 
 func TestScheduleItems_EmptyTxnWithCommitMeta_AdvancesSequence(t *testing.T) {
@@ -4034,6 +4068,143 @@ func TestApplyEvent_JournalRawEventGtidIsDurablySavedBeforeTermination(t *testin
 	require.Contains(t, vp.vr.vre.journaler, "wf:1")
 }
 
+// TestVPlayerLagSnapshotIsAtomic pins the invariant that lag-state reads
+// never observe a torn pair of (lastTimestampNs, timeOffsetNs). The two
+// values are written together (commitLoop.updateLag and the heartbeat
+// store path), and the throttled-path lag estimator reads them both. If
+// they were independent atomics, a reader could see (new ts, old offset)
+// and report nonsense lag values. We pack them into a single atomic
+// snapshot so loads are naturally consistent.
+//
+// The test pairs ts and offset (offset = ts + sentinelOffset) on every
+// write, then a concurrent reader checks the relationship on every load.
+// A torn read would produce a pair that violates the invariant.
+func TestVPlayerLagSnapshotIsAtomic(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	const sentinelOffset = int64(0xDEADBEEF)
+	const iterations = 50_000
+
+	stop := make(chan struct{})
+	var writeWG sync.WaitGroup
+	writeWG.Add(1)
+	go func() {
+		defer writeWG.Done()
+		for i := int64(1); ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			vp.storeLagSnapshot(i, i+sentinelOffset)
+		}
+	}()
+
+	var readWG sync.WaitGroup
+	mismatches := atomic.Int64{}
+	readWG.Add(1)
+	go func() {
+		defer readWG.Done()
+		for i := 0; i < iterations; i++ {
+			snap := vp.loadLagSnapshot()
+			if snap.timestampNs == 0 {
+				continue
+			}
+			if snap.offsetNs != snap.timestampNs+sentinelOffset {
+				mismatches.Add(1)
+			}
+		}
+	}()
+
+	readWG.Wait()
+	close(stop)
+	writeWG.Wait()
+
+	require.Equal(t, int64(0), mismatches.Load(), "lag snapshot reads must always observe a consistent ts/offset pair")
+}
+
+// TestScheduleItems_FIELDIncrementsPendingRefreshBeforeEnqueue pins the
+// ordering invariant: when scheduleItems processes a FIELD event, the
+// vp.pendingFieldRefreshTables increment must happen BEFORE the txn is
+// enqueued into the scheduler. Otherwise a worker can pick up the txn and
+// commitLoop's matching decrement loop can run with an empty map (no-op),
+// leaving the counter permanently stuck at 1 and force-serializing every
+// future ROW txn that touches this table.
+//
+// The test stubs the scheduler-dispatch path by reading the increment via a
+// nextReady call from the same goroutine immediately after scheduleItems
+// returns; the contract is that pendingFieldRefreshTables must be visible
+// before the txn becomes pickable. We additionally assert that on a
+// scheduler-closed enqueue error, the speculative increment is rolled back
+// so a transient teardown does not poison the next workflow restart.
+func TestScheduleItems_FIELDIncrementsPendingRefreshBeforeEnqueue(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	gtidEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+	}
+	fieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: "t1",
+			Fields:    []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		},
+		Timestamp: 100,
+	}
+	commitEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT}
+
+	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{gtidEvent, fieldEvent, commitEvent}})
+	require.NoError(t, err)
+
+	// As a worker would: pull the txn out of the scheduler. By the time the
+	// scheduler hands a worker any txn that carries a FIELD refresh, the
+	// pendingFieldRefreshTables count for that table MUST already be at
+	// least 1 — otherwise commitLoop's decrement could race past the
+	// increment and leave the counter permanently stuck.
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	vp.serialMu.Lock()
+	count := vp.pendingFieldRefreshTables["t1"]
+	vp.serialMu.Unlock()
+	require.GreaterOrEqual(t, count, 1, "pendingFieldRefreshTables[t1] must be incremented before the txn is dispatched to a worker")
+}
+
+func TestScheduleItems_FIELDRollsBackPendingRefreshOnEnqueueError(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	// Close the scheduler so any subsequent enqueue returns io.EOF.
+	require.ErrorIs(t, scheduler.close(), io.EOF)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	gtidEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+	}
+	fieldEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: "t1",
+			Fields:    []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+		},
+		Timestamp: 100,
+	}
+	commitEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT}
+
+	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{gtidEvent, fieldEvent, commitEvent}})
+	require.ErrorIs(t, err, io.EOF)
+
+	vp.serialMu.Lock()
+	count := vp.pendingFieldRefreshTables["t1"]
+	vp.serialMu.Unlock()
+	require.Equal(t, 0, count, "pendingFieldRefreshTables[t1] must roll back to 0 when enqueue fails")
+}
+
 func TestScheduleItems_FIELDEventDoesNotForceGlobal(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
@@ -5031,7 +5202,7 @@ func TestScheduleItems_HeartbeatUpdatesLag(t *testing.T) {
 	err := vp.scheduleItems(ctx, scheduler, state, items)
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(100*1e9), vp.lastTimestampNs.Load())
+	assert.Equal(t, int64(100*1e9), vp.loadLagSnapshot().timestampNs)
 	assert.Equal(t, 2, vp.numAccumulatedHeartbeats)
 }
 
@@ -5048,8 +5219,7 @@ func TestScheduleItems_ThrottledHeartbeatEstimatesLag(t *testing.T) {
 	vp.numAccumulatedHeartbeats = 1
 
 	// Set last known timestamp so estimateLag works
-	vp.lastTimestampNs.Store(time.Now().Add(-5 * time.Second).UnixNano())
-	vp.timeOffsetNs.Store(0)
+	vp.storeLagSnapshot(time.Now().Add(-5*time.Second).UnixNano(), 0)
 
 	// updateTimeThrottled calls dbClient.ExecuteFetch
 	mockDB.AddInvariant("update _vt.vreplication set", &sqltypes.Result{})
@@ -5266,7 +5436,13 @@ func TestCommitLoop_OutOfOrderReordering(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestCommitLoop_ZeroOrderNoReordering(t *testing.T) {
+// TestCommitLoop_ZeroOrderIsRejected pins the invariant that every txn
+// reaching commitLoop must carry a positive order. All production enqueue
+// paths use parallelOrder.Add(1) (>= 1), so an order==0 txn indicates a
+// regression that would silently bypass strict commit ordering — and silently
+// regress the monotonic position invariant on _vt.vreplication.pos. Fail
+// fast so the workflow restarts cleanly instead of corrupting position state.
+func TestCommitLoop_ZeroOrderIsRejected(t *testing.T) {
 	vp, mockDB := testVPlayer(t)
 	ctx := testCtx(t)
 	scheduler := newApplyScheduler(ctx)
@@ -5279,7 +5455,6 @@ func TestCommitLoop_ZeroOrderNoReordering(t *testing.T) {
 
 	pos1, _ := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
 
-	// Order=0 → committed immediately without reordering
 	txn := &applyTxn{
 		order: 0,
 		payload: &applyTxnPayload{
@@ -5295,7 +5470,8 @@ func TestCommitLoop_ZeroOrderNoReordering(t *testing.T) {
 	close(commitCh)
 
 	err := vp.commitLoop(ctx, scheduler, commitCh)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parallel apply commit txn missing order")
 }
 
 func TestCommitLoop_PendingLeftover(t *testing.T) {
@@ -6150,6 +6326,44 @@ func TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites(t *testing.T
 		"vreplication_log INSERT must be sent exactly once. Queries: %v", recording.queries)
 	assert.Equal(t, 1, strings.Count(joined, "update _vt.vreplication set pos="),
 		"position UPDATE must be sent exactly once. Queries: %v", recording.queries)
+}
+
+// TestSetStateImmediate_FollowedByAddQueryToTrxBatchPreservesNoDuplicate
+// covers the failure mode the immediate path was designed to defeat:
+// after setStateWithDBClientImmediate flushes pre-batched queries and
+// runs the state UPDATE on the wire, queriesPos is advanced. A subsequent
+// AddQueryToTrxBatch (the natural pattern: immediate write, then more
+// batched work, then commit) must NOT replay the immediate queries when
+// CommitTrxQueryBatch sends queries[queriesPos:]. If a future regression
+// removed the markTrxBatchedQueriesFlushed call inside
+// setStateWithDBClient, this test would catch it because the state UPDATE
+// would appear twice in the recorded queries.
+func TestSetStateImmediate_FollowedByAddQueryToTrxBatchPreservesNoDuplicate(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	recording := &recordingDBClient{}
+
+	dbClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	vp.vr.dbClient = dbClient
+	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Running
+	dbClient.maxBatchSize = 1024
+
+	require.NoError(t, dbClient.Begin())
+	require.NoError(t, dbClient.AddQueryToTrxBatch(
+		"update _vt.vreplication set pos='MySQL56/x:1-5', time_updated=1 where id=1"))
+	require.NoError(t, vp.vr.setStateWithDBClientImmediate(
+		dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at position foo"))
+	// Future-style follow-up batched work after the immediate write.
+	require.NoError(t, dbClient.AddQueryToTrxBatch(
+		"insert into _vt.vreplication_log(vrepl_id, type, message) values (1, 'Note', 'after')"))
+	require.NoError(t, dbClient.CommitTrxQueryBatch())
+
+	joined := strings.Join(recording.queries, ";")
+	assert.Equal(t, 1, strings.Count(joined, "update _vt.vreplication set state='Stopped'"),
+		"state UPDATE must be sent exactly once even with later batched work. Queries: %v", recording.queries)
+	// We expect 2 vreplication_log inserts: one from the immediate setState
+	// (LogStateChange) and one from the follow-up AddQueryToTrxBatch.
+	assert.Equal(t, 2, strings.Count(joined, "insert into _vt.vreplication_log"),
+		"each vreplication_log INSERT must be sent exactly once. Queries: %v", recording.queries)
 }
 
 // ---------- enqueueCommitOnly tests ----------

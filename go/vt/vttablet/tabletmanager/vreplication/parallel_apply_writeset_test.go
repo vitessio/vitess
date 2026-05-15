@@ -157,6 +157,83 @@ func TestBuildTxnWritesetRejectsPartialRowImageWithoutFKRefs(t *testing.T) {
 	assert.NotEqual(t, []uint64{testWritesetHash("t1", sqltypes.NewInt64(3))}, keys)
 }
 
+// TestWritesetDigestAddValueDistinguishesTypesAcrossByteBoundary pins the
+// invariant that the writeset type discriminator distinguishes types whose
+// values modulo-256 collide. querypb.Type is a 16-bit enum and the encoding
+// MUST not silently lose the high byte — otherwise two rows with conflicting
+// PK values but distinct types would hash to the same key, letting truly
+// conflicting transactions run in parallel and corrupt downstream apply.
+func TestWritesetDigestAddValueDistinguishesTypesAcrossByteBoundary(t *testing.T) {
+	// Two synthetic types whose low bytes are identical: 1 and 1+256.
+	// All current named querypb.Type values stay below the collision
+	// threshold, but the encoding must defend against future additions.
+	v1 := sqltypes.MakeTrusted(querypb.Type(1), []byte{0x42})
+	v2 := sqltypes.MakeTrusted(querypb.Type(1+256), []byte{0x42})
+
+	var d1, d2 xxhash.Digest
+	writesetDigestInit(&d1, "t")
+	writesetDigestInit(&d2, "t")
+	writesetDigestAddValue(&d1, v1)
+	writesetDigestAddValue(&d2, v2)
+
+	require.NotEqual(t, d1.Sum64(), d2.Sum64(), "writeset digest must distinguish types whose low byte collides")
+}
+
+// TestBuildTxnWritesetRejectsSparseAfterImageOnRelevantPKColumn covers an
+// AFTER image that carries a -1 (omitted) length in a PK column without
+// publishing a DataColumns bitmap. Before the fix, only BEFORE images were
+// scanned for negative relevant lengths, so this case fell through to
+// MakeRowTrusted and silently hashed the PK as a NULL/zero value — making the
+// row collide with any other row whose AFTER image was similarly sparse.
+func TestBuildTxnWritesetRejectsSparseAfterImageOnRelevantPKColumn(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "name", Type: querypb.Type_VARCHAR},
+		},
+		PKIndices: []bool{true, false},
+	}
+	// AFTER image omits the PK column (length=-1) but does not publish a
+	// DataColumns bitmap — only the "name" value is present.
+	change := &binlogdatapb.RowChange{
+		After: &querypb.Row{Values: []byte("john"), Lengths: []int64{-1, 4}},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "partial row image")
+	require.Nil(t, keys)
+}
+
+// TestBuildTxnWritesetRejectsRowImageWithExtraLengths covers the case where the
+// row image carries more length entries than the plan has fields. This can
+// happen if the table plan cache is stale relative to a schema that dropped a
+// column. The writeset builder must fail closed instead of indexing into
+// plan.Fields out of bounds (which would nil-deref in MakeRowTrusted).
+func TestBuildTxnWritesetRejectsRowImageWithExtraLengths(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true},
+	}
+	// Row has 2 length entries, but plan only knows 1 field.
+	change := &binlogdatapb.RowChange{
+		After: &querypb.Row{Values: []byte("12"), Lengths: []int64{1, 1}},
+	}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "t1", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "partial row image")
+	require.Nil(t, keys)
+}
+
 func TestBuildTxnWritesetAllowsBeforeImageWithNullValue(t *testing.T) {
 	plan := &TablePlan{
 		TargetName: "t1",
