@@ -1,0 +1,53 @@
+{{ define "layout" }}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }} | {{ .DocumentTitle }}</title>
+  <link rel="stylesheet" href="/static/vtadmin2.css">
+  <script src="/static/vtadmin2.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/clusters">
+      <img class="brand-logo" src="/static/vitess-stacked.png" alt="Vitess">
+      <span>VTAdmin2</span>
+    </a>
+    {{ if .ReadOnly }}<span class="badge">Read-only</span>{{ end }}
+  </header>
+  <div class="shell">
+    <nav class="nav" aria-label="Primary navigation">
+      <div class="nav-section">Overview</div>
+      <a href="/clusters" class="{{ if eq .Active "clusters" }}active{{ end }}">Clusters</a>
+      <a href="/vtgates" class="{{ if eq .Active "gates" }}active{{ end }}">VTGates</a>
+      <a href="/vtctlds" class="{{ if eq .Active "vtctlds" }}active{{ end }}">VTCtlds</a>
+      <div class="nav-section">Topology</div>
+      <a href="/keyspaces" class="{{ if eq .Active "keyspaces" }}active{{ end }}">Keyspaces</a>
+      <a href="/shards" class="{{ if eq .Active "shards" }}active{{ end }}">Shards</a>
+      <a href="/topology" class="{{ if eq .Active "topology" }}active{{ end }}">Topology</a>
+      <a href="/cells" class="{{ if eq .Active "cells" }}active{{ end }}">Cells</a>
+      <div class="nav-section">Serving</div>
+      <a href="/tablets" class="{{ if eq .Active "tablets" }}active{{ end }}">Tablets</a>
+      <a href="/schemas" class="{{ if eq .Active "schemas" }}active{{ end }}">Schemas</a>
+      <a href="/vschemas" class="{{ if eq .Active "vschemas" }}active{{ end }}">VSchema</a>
+      <a href="/srvkeyspaces" class="{{ if eq .Active "srvkeyspaces" }}active{{ end }}">SrvKeyspaces</a>
+      <a href="/srvvschemas" class="{{ if eq .Active "srvvschemas" }}active{{ end }}">SrvVSchemas</a>
+      <div class="nav-section">Operations</div>
+      <a href="/workflows" class="{{ if eq .Active "workflows" }}active{{ end }}">Workflows</a>
+      <a href="/migrations" class="{{ if eq .Active "migrations" }}active{{ end }}">Migrations</a>
+      <a href="/transactions" class="{{ if eq .Active "transactions" }}active{{ end }}">Transactions</a>
+      <a href="/backups" class="{{ if eq .Active "backups" }}active{{ end }}">Backups</a>
+      <a href="/cells_aliases" class="{{ if eq .Active "cells_aliases" }}active{{ end }}">Cell Aliases</a>
+      <div class="nav-section">Tools</div>
+      <a href="/vtexplain" class="{{ if eq .Active "vtexplain" }}active{{ end }}">VTExplain</a>
+      <a href="/vexplain" class="{{ if eq .Active "vexplain" }}active{{ end }}">VExplain</a>
+    </nav>
+    <main class="content">
+      {{ if .Flash }}<div class="flash {{ .Flash.Kind }}">{{ .Flash.Message }}</div>{{ end }}
+      {{ template "content" . }}
+    </main>
+  </div>
+</body>
+</html>
+{{ end }}

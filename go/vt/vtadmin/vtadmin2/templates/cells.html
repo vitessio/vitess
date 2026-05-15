@@ -1,0 +1,28 @@
+{{ define "cells.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Cells</h1>
+  <input class="table-filter" data-table-filter="#cells-table" placeholder="Filter cells" aria-label="Filter cells">
+</div>
+<div class="card">
+  <table id="cells-table">
+    <thead>
+      <tr><th>Cluster</th><th>Name</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ .GetName }}</td>
+        <td><pre>{{ protoJSON .GetCellInfo }}</pre></td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="3">No cells found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

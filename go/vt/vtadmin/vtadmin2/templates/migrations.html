@@ -1,0 +1,56 @@
+{{ define "migrations.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Migrations</h1>
+  <input class="table-filter" data-table-filter="#migrations-table" placeholder="Filter Migrations" aria-label="Filter Migrations">
+</div>
+<div class="card">
+  <form method="get" action="/migrations" class="form-grid">
+    <label>
+      Cluster
+      <select name="cluster_id" required>
+        {{ range .Data.Form.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $.Data.Form.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Keyspace
+      <select name="keyspace" required>
+        {{ range .Data.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $.Data.Form.SelectedCluster }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $.Data.Form.SelectedKeyspace }} selected{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
+    <label>UUID <input name="uuid" value="{{ .Data.UUID }}"></label>
+    <button type="submit">Filter Migrations</button>
+  </form>
+</div>
+<div class="card">
+  <table id="migrations-table">
+    <thead>
+      <tr><th>Cluster</th><th>UUID</th><th>Keyspace</th><th>Shard</th><th>Table</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data.Migrations }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ .GetSchemaMigration.GetUuid }}</td>
+        <td>{{ .GetSchemaMigration.GetKeyspace }}</td>
+        <td>{{ .GetSchemaMigration.GetShard }}</td>
+        <td>{{ .GetSchemaMigration.GetTable }}</td>
+        <td>{{ .GetSchemaMigration.GetStatus }}</td>
+      </tr>
+      <tr><td colspan="6"><pre>{{ protoJSON .GetSchemaMigration }}</pre></td></tr>
+      {{ else }}
+      <tr><td colspan="6">No migrations found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

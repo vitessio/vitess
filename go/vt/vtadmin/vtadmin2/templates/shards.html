@@ -1,0 +1,29 @@
+{{ define "shards.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Shards</h1>
+  <input class="table-filter" data-table-filter="#shards-table" placeholder="Filter shards" aria-label="Filter shards">
+</div>
+<div class="card">
+  <table id="shards-table">
+    <thead>
+      <tr><th>Cluster</th><th>Keyspace</th><th>Shard</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data }}
+      <tr>
+        <td>{{ clusterID .GetCluster }}</td>
+        <td>{{ .GetKeyspace }}</td>
+        <td>{{ .GetShard }}</td>
+        <td><pre>{{ protoJSON .GetPositionInfo }}</pre></td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="4">No shards found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

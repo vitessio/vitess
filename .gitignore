@@ -78,3 +78,5 @@ report
 /errors/
 go/flags/endtoend/count_flags.sh
 /coverage.out
+
+/.superpowers/
