@@ -260,7 +260,11 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 		if err := rsm.abort(); err != nil {
 			logger.Errorf("Failed to abort restore: %v", err)
 		}
-		return "", vterrors.Wrap(err, "can't restore backup")
+		var engine string
+		if backupManifest != nil {
+			engine = backupManifest.BackupMethod
+		}
+		return engine, vterrors.Wrap(err, "can't restore backup")
 	}
 
 	if params.IsIncrementalRecovery() && !params.DryRun {
@@ -425,19 +429,17 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error, b
 		h.ExtraEnv["TM_RESTORE_DATA_ERROR"] = err.Error()
 	}
 
-	// vttablet_restore_done is best-effort (for now?).
-	go func() {
-		// Package vthook already logs the stdout/stderr of hooks when they
-		// are run, so we don't duplicate that here.
-		hr := h.Execute()
-		switch hr.ExitStatus {
-		case hook.HOOK_SUCCESS:
-		case hook.HOOK_DOES_NOT_EXIST:
-			log.Info("No vttablet_restore_done hook.")
-		default:
-			log.Warn("vttablet_restore_done hook failed")
-		}
-	}()
+	// Run the hook synchronously to ensure it completes before the process
+	// exits. The caller (tm_init.go) calls os.Exit immediately after a failed
+	// restore, which would kill a background goroutine before the hook runs.
+	hr := h.Execute()
+	switch hr.ExitStatus {
+	case hook.HOOK_SUCCESS:
+	case hook.HOOK_DOES_NOT_EXIST:
+		log.Info("No vttablet_restore_done hook.")
+	default:
+		log.Warn("vttablet_restore_done hook failed")
+	}
 }
 
 type replicationAction int

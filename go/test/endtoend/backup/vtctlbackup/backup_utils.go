@@ -406,6 +406,10 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 			method: terminatedRestore,
 		}, //
 		{
+			name:   "TestRestoreDoneHookOnFailure",
+			method: testRestoreDoneHookOnFailure,
+		}, //
+		{
 			name:   "DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup",
 			method: doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup,
 		}, //
@@ -1647,4 +1651,85 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, backupMsg, result.Named().Row().AsString("msg", ""))
 	})
+}
+
+// testRestoreDoneHookOnFailure verifies that the vttablet_restore_done hook
+// fires synchronously even when the restore fails and the process exits.
+// This is a regression test for a bug where the hook was launched in a
+// goroutine that was killed by os.Exit(1) before it could complete.
+func testRestoreDoneHookOnFailure(t *testing.T) {
+	// 1. Install a vttablet_restore_done hook that writes env vars to a file.
+	vtroot := os.Getenv("VTROOT")
+	require.NotEmpty(t, vtroot, "VTROOT must be set")
+
+	hookDir := path.Join(vtroot, "vthook")
+	require.NoError(t, os.MkdirAll(hookDir, 0o755))
+
+	hookOutputFile := path.Join(localCluster.CurrentVTDATAROOT, "hook_restore_done_output")
+	hookScript := path.Join(hookDir, "vttablet_restore_done")
+	hookContent := fmt.Sprintf("#!/bin/bash\nenv > %s\n", hookOutputFile)
+	require.NoError(t, os.WriteFile(hookScript, []byte(hookContent), 0o755))
+	t.Cleanup(func() {
+		os.Remove(hookScript)
+		os.Remove(hookOutputFile)
+	})
+
+	// 2. Take a backup (using replica1 which is already running).
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
+	require.Len(t, backups, 1)
+
+	// 3. Corrupt the backup by truncating one of its data files.
+	backupDir := path.Join(replica1.VttabletProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[0])
+	entries, err := os.ReadDir(backupDir)
+	require.NoError(t, err)
+
+	corrupted := false
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() == "MANIFEST" {
+			continue
+		}
+		// Truncate a data file to cause a checksum/read error during restore.
+		require.NoError(t, os.Truncate(path.Join(backupDir, entry.Name()), 1))
+		corrupted = true
+		break
+	}
+	require.True(t, corrupted, "expected at least one data file to corrupt in backup")
+
+	// 4. Start replica3 — it will attempt to restore from the corrupted backup.
+	//    The restore will fail and the process will exit with os.Exit(1).
+	replica3.VttabletProcess.ExtraArgs = commonTabletArg
+	replica3.VttabletProcess.ServingStatus = "SERVING"
+	err = replica3.VttabletProcess.Setup()
+	require.Error(t, err, "expected vttablet to exit due to failed restore")
+	require.Contains(t, err.Error(), "exited prematurely")
+
+	// 5. Verify the hook output file exists and contains the expected env vars.
+	//    Before the fix, this file would not exist because the hook goroutine was
+	//    killed by os.Exit(1) before it could complete.
+	hookOutput, err := os.ReadFile(hookOutputFile)
+	require.NoError(t, err, "hook output file must exist — hook should fire synchronously before os.Exit")
+
+	output := string(hookOutput)
+	assert.Contains(t, output, "TM_RESTORE_DATA_ERROR=")
+	assert.Contains(t, output, "TM_RESTORE_DATA_START_TS=")
+	assert.Contains(t, output, "TM_RESTORE_DATA_STOP_TS=")
+	assert.Contains(t, output, "TM_RESTORE_DATA_DURATION=")
+	assert.Contains(t, output, "TABLET_ALIAS=")
+	assert.Contains(t, output, "KEYSPACE="+keyspaceName)
+	assert.Contains(t, output, "SHARD="+shardName)
+
+	// With the backup engine fix, the engine should be reported even on failure.
+	switch currentSetupType {
+	case BuiltinBackup:
+		assert.Contains(t, output, "TM_RESTORE_DATA_BACKUP_ENGINE=builtin")
+	case XtraBackup:
+		assert.Contains(t, output, "TM_RESTORE_DATA_BACKUP_ENGINE=xtrabackup")
+	case MySQLShell:
+		assert.Contains(t, output, "TM_RESTORE_DATA_BACKUP_ENGINE=mysqlshell")
+	}
+
+	// Clean up: remove all backups so other tests aren't affected.
+	localCluster.RemoveAllBackups(t, shardKsName)
 }
