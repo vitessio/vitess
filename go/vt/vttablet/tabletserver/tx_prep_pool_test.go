@@ -96,13 +96,40 @@ func TestPrepFetchAll(t *testing.T) {
 	pp := createAndOpenPreparedPool(2)
 	conn1 := &StatefulConnection{}
 	conn2 := &StatefulConnection{}
+
 	pp.Put(conn1, "aa")
 	pp.Put(conn2, "bb")
+
 	got := pp.FetchAllForRollback()
 	require.Len(t, got, 2)
 	require.Len(t, pp.conns, 0)
+
 	_, err := pp.FetchForCommit("aa")
 	require.ErrorContains(t, err, "pool is shutdown")
+}
+
+// TestPrepFetchAllKeepsRedoStartedDTIDsInDoubt verifies that shutdown rollback
+// does not make durable redo dtids look committed.
+func TestPrepFetchAllKeepsRedoStartedDTIDsInDoubt(t *testing.T) {
+	pp := createAndOpenPreparedPool(2)
+	conn1 := &StatefulConnection{}
+	conn2 := &StatefulConnection{}
+
+	pp.Put(conn1, "aa")
+	pp.Put(conn2, "bb")
+	pp.MarkRedoCommitStarted("aa")
+
+	got := pp.FetchAllForRollback()
+	require.ElementsMatch(t, []*StatefulConnection{conn1, conn2}, got)
+	require.Empty(t, pp.conns)
+	require.Equal(t, errPrepRolledBackForShutdown, pp.reserved["aa"])
+	require.True(t, pp.RedoCommitStarted("aa"))
+	require.False(t, pp.RedoCommitStarted("bb"))
+
+	pp.Open()
+
+	require.Empty(t, pp.reserved)
+	require.False(t, pp.RedoCommitStarted("aa"))
 }
 
 // createAndOpenPreparedPool creates a new transaction prepared pool and opens it.

@@ -218,9 +218,13 @@ func TestTxExecutorPrepareRedoCommitFail(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err := txe.Prepare(txid, "aa")
-	defer txe.RollbackPrepared("aa", 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "commit fail")
+
+	db.DeleteRejectedQuery("commit")
+
+	err = txe.RollbackPrepared("aa", 0)
+	require.NoError(t, err)
 }
 
 func TestExecutorPrepareRuleFailure(t *testing.T) {
@@ -325,38 +329,64 @@ func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 	txid := newTxForPrep(ctx, tsv)
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
-	defer txe.RollbackPrepared("aa", 0)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err = txe.CommitPrepared("aa")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "commit fail")
+
+	db.DeleteRejectedQuery("commit")
+
+	err = txe.RollbackPrepared("aa", 0)
+	require.NoError(t, err)
 }
 
 func TestTxExecutorRollbackBeginFail(t *testing.T) {
 	ctx := t.Context()
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
+
 	txid := newTxForPrep(ctx, tsv)
+
 	err := txe.Prepare(txid, "aa")
 	require.NoError(t, err)
+
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err = txe.RollbackPrepared("aa", txid)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "begin fail")
+
+	// Retry after the injected failure so the prepared transaction does not
+	// remain in doubt when the test shuts the tabletserver down.
+	db.DeleteRejectedQuery("begin")
+
+	err = txe.RollbackPrepared("aa", 0)
+	require.NoError(t, err)
 }
 
 func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	ctx := t.Context()
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
+
 	txid := newTxForPrep(ctx, tsv)
+
 	// Allow all additions to redo logs to succeed
 	db.AddQueryPattern("insert into _vt\\.redo_state.*", &sqltypes.Result{})
+
 	err := txe.Prepare(txid, "bb")
 	require.NoError(t, err)
+
 	err = txe.RollbackPrepared("bb", txid)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "is not supported")
+
+	// Add the missing redo deletes before retrying so the cleanup path can
+	// prove the prepared transaction is released after redo is gone.
+	db.AddQuery("delete from _vt.redo_state where dtid = _binary'bb'", &sqltypes.Result{})
+	db.AddQuery("delete from _vt.redo_statement where dtid = _binary'bb'", &sqltypes.Result{})
+
+	err = txe.RollbackPrepared("bb", 0)
+	require.NoError(t, err)
 }
 
 func TestExecutorCreateTransaction(t *testing.T) {

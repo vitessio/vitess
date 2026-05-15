@@ -266,6 +266,32 @@ func TestActiveCommitsIncludesDTExecutorInternalTransactions(t *testing.T) {
 	require.ErrorContains(t, err, "QueryList.TerminateAll()")
 }
 
+// TestRollbackPreparedKeepsRedoStartedTransactionInDoubt verifies that forced
+// shutdown cleanup does not let a dtid with durable redo look committed.
+func TestRollbackPreparedKeepsRedoStartedTransactionInDoubt(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	txid := newTxForPrep(ctx, tsv)
+
+	err := txe.Prepare(txid, "aa")
+	require.NoError(t, err)
+
+	db.ResetQueryLog()
+
+	txe.te.RollbackPrepared()
+
+	requireLogs(
+		t,
+		db.QueryLog(),
+		"rollback",
+	)
+	require.Empty(t, txe.te.preparedPool.conns)
+	require.Equal(t, errPrepRolledBackForShutdown, txe.te.preparedPool.reserved["aa"])
+	require.True(t, txe.te.preparedPool.RedoCommitStarted("aa"))
+}
+
 func TestTxEngineBegin(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)

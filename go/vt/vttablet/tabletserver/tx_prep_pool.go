@@ -26,8 +26,9 @@ import (
 )
 
 var (
-	errPrepCommitting = vterrors.VT09025("locked for committing")
-	errPrepFailed     = vterrors.VT09025("failed to commit")
+	errPrepCommitting            = vterrors.VT09025("locked for committing")
+	errPrepFailed                = vterrors.VT09025("failed to commit")
+	errPrepRolledBackForShutdown = vterrors.VT09025("rolled back for shutdown")
 )
 
 // TxPreparedPool manages connections for prepared transactions.
@@ -39,7 +40,8 @@ type TxPreparedPool struct {
 	reserved map[string]error
 
 	// redoCommitStarted tracks dtids whose redo metadata transaction reached
-	// COMMIT. Such dtids must not be rolled back until redo deletion succeeds.
+	// COMMIT. Such dtids may need redo recovery and must not be treated as
+	// resolved until redo deletion succeeds.
 	redoCommitStarted map[string]struct{}
 
 	// open tells if the prepared pool is open for accepting transactions.
@@ -65,10 +67,13 @@ func NewTxPreparedPool(capacity int, twoPCEnabled bool) *TxPreparedPool {
 	}
 }
 
-// Open marks the prepared pool open for use.
+// Open marks the prepared pool open for use and clears shutdown-only state.
 func (pp *TxPreparedPool) Open() {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+
+	pp.reserved = make(map[string]error)
+	pp.redoCommitStarted = make(map[string]struct{})
 	pp.open = true
 }
 
@@ -190,19 +195,31 @@ func (pp *TxPreparedPool) Forget(dtid string) {
 	delete(pp.redoCommitStarted, dtid)
 }
 
-// FetchAllForRollback removes all connections and returns them as a list.
-// It also forgets all reserved dtids.
+// FetchAllForRollback removes prepared connections and returns them as a list.
+// Dtids whose redo commit started are kept as in-doubt reservations until the
+// pool is reopened and redo recovery rebuilds the prepared state from durable metadata.
 func (pp *TxPreparedPool) FetchAllForRollback() []*StatefulConnection {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+
 	pp.open = false
+
 	conns := make([]*StatefulConnection, 0, len(pp.conns))
-	for _, c := range pp.conns {
-		conns = append(conns, c)
+	reserved := make(map[string]error)
+	redoCommitStarted := make(map[string]struct{}, len(pp.redoCommitStarted))
+
+	for dtid, conn := range pp.conns {
+		conns = append(conns, conn)
+
+		if _, ok := pp.redoCommitStarted[dtid]; ok {
+			reserved[dtid] = errPrepRolledBackForShutdown
+			redoCommitStarted[dtid] = struct{}{}
+		}
 	}
+
 	pp.conns = make(map[string]*StatefulConnection, pp.capacity)
-	pp.reserved = make(map[string]error)
-	pp.redoCommitStarted = make(map[string]struct{})
+	pp.reserved = reserved
+	pp.redoCommitStarted = redoCommitStarted
 
 	return conns
 }
