@@ -92,7 +92,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: 
             Error: 0,
         };
         streamList.forEach((stream) => {
-            var isThrottled =
+            const isThrottled =
                 Number(stream.throttler_status?.time_throttled?.seconds) > Date.now() / 1000 - ThrottleThresholdSeconds;
             const streamState = isThrottled ? 'Throttled' : stream.state;
             if (streamState) {
@@ -164,7 +164,7 @@ export const WorkflowDetails = ({ clusterID, keyspace, name, refetchInterval }: 
                     ? `/workflow/${clusterID}/${keyspace}/${name}/stream/${row.tablet.cell}/${row.tablet.uid}/${row.id}`
                     : null;
 
-            var isThrottled =
+            const isThrottled =
                 Number(row?.throttler_status?.time_throttled?.seconds) > Date.now() / 1000 - ThrottleThresholdSeconds;
             const rowState = isThrottled ? 'Throttled' : row.state;
             return (

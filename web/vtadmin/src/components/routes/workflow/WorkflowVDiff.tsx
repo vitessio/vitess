@@ -62,7 +62,7 @@ export const WorkflowVDiff = ({ clusterID, keyspace, name }: Props) => {
         createVDiffMutation.mutate();
     };
 
-    let hasMutationRun = !!createVDiffMutation.data || !!createVDiffMutation.error;
+    const hasMutationRun = !!createVDiffMutation.data || !!createVDiffMutation.error;
 
     const closeDialog = () => {
         setDialogOpen(false);
