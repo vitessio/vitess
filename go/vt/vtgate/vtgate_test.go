@@ -976,3 +976,62 @@ func TestBinlogDumpGTID(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+// TestParseSchemaChangeKeyspaces covers the parsing of the
+// --schema-change-keyspaces flag value. An unset (empty) value preserves the
+// "track all keyspaces" default by returning a nil allowlist; a populated
+// value returns an allowlist with whitespace trimmed and empty entries
+// dropped; a value that contains only whitespace and/or commas is rejected so
+// a misconfigured flag does not silently fall back to tracking everything.
+func TestParseSchemaChangeKeyspaces(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    map[string]bool
+		wantErr bool
+	}{
+		{
+			name: "empty value tracks all keyspaces",
+			raw:  "",
+			want: nil,
+		},
+		{
+			name: "single keyspace",
+			raw:  "ks1",
+			want: map[string]bool{"ks1": true},
+		},
+		{
+			name: "multiple keyspaces",
+			raw:  "ks1,ks2,ks3",
+			want: map[string]bool{"ks1": true, "ks2": true, "ks3": true},
+		},
+		{
+			name: "trims whitespace and drops empty entries between commas",
+			raw:  " ks1 , ,ks2,",
+			want: map[string]bool{"ks1": true, "ks2": true},
+		},
+		{
+			name:    "whitespace-only value is rejected",
+			raw:     "   ",
+			wantErr: true,
+		},
+		{
+			name:    "commas and whitespace only is rejected",
+			raw:     " , , ,",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseSchemaChangeKeyspaces(tc.raw)
+			if tc.wantErr {
+				require.Error(t, err, "expected an error for input %q", tc.raw)
+				assert.Nil(t, got)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

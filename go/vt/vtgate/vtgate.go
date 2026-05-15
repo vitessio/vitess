@@ -165,6 +165,12 @@ var (
 	enableViews              = true
 	enableUdfs               bool
 
+	// schemaChangeKeyspaces is a comma-separated allowlist of keyspaces the
+	// schema tracker should follow. Empty (the default) tracks all keyspaces.
+	// Cells with hundreds of keyspaces can otherwise spend many minutes in
+	// addKeyspacesToTracker on startup, exceeding kubelet liveness thresholds.
+	schemaChangeKeyspaces string
+
 	// vtgate views flags
 	queryTimeout int
 
@@ -211,6 +217,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("enable-direct-ddl", enableDirectDDL.Default(), "Allow users to submit direct DDL statements")
 	fs.Bool("enable-binlog-dump", enableBinlogDump.Default(), "Allow users to perform binlog dump operations for CDC/replication")
 	utils.SetFlagBoolVar(fs, &enableSchemaChangeSignal, "schema-change-signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
+	utils.SetFlagStringVar(fs, &schemaChangeKeyspaces, "schema-change-keyspaces", schemaChangeKeyspaces, "Comma-separated allowlist of keyspaces the schema tracker should follow. If empty, all keyspaces are tracked.")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
 	utils.SetFlagStringVar(fs, &queryLogToFile, "log-queries-to-file", queryLogToFile, "Enable query logging to the specified file")
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
@@ -399,7 +406,12 @@ func Init(
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe(schemaTrackerHcName), enableViews, enableUdfs, env.Parser())
+		keyspacesToTrackSchemaFor, err := parseSchemaChangeKeyspaces(schemaChangeKeyspaces)
+		if err != nil {
+			log.Error(fmt.Sprintf("Invalid --schema-change-keyspaces value: %v", err))
+			os.Exit(1)
+		}
+		st = vtschema.NewTracker(gw.hc.Subscribe(schemaTrackerHcName), enableViews, enableUdfs, env.Parser(), keyspacesToTrackSchemaFor)
 		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -505,6 +517,27 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 	return nil
 }
 
+// parseSchemaChangeKeyspaces parses the comma-separated value of
+// --schema-change-keyspaces into an allowlist set. A blank input returns nil
+// (meaning "track all keyspaces"). A non-blank input that contains only
+// whitespace and commas returns an error so a misconfigured flag does not
+// silently fall back to tracking every keyspace.
+func parseSchemaChangeKeyspaces(raw string) (map[string]bool, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	allowlist := map[string]bool{}
+	for ks := range strings.SplitSeq(raw, ",") {
+		if ks = strings.TrimSpace(ks); ks != "" {
+			allowlist[ks] = true
+		}
+	}
+	if len(allowlist) == 0 {
+		return nil, fmt.Errorf("flag is set but contains no keyspace names: %q", raw)
+	}
+	return allowlist, nil
+}
+
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
 	if err != nil {
@@ -515,6 +548,9 @@ func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, s
 		log.Info("No keyspace to load")
 	}
 	for _, keyspace := range keyspaces {
+		if !st.ShouldTrackKeyspace(keyspace) {
+			continue
+		}
 		resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
 	}
 }
