@@ -449,9 +449,16 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		backupstats.Component(backupstats.BackupEngine),
 		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
+	// Read the backup manifest before restoring so we can report metadata
+	// (such as the backup engine) even if the restore fails.
+	backupManifest, merr := GetBackupManifest(ctx, bh)
+	if merr != nil {
+		return nil, vterrors.Wrap(merr, "Failed to read backup MANIFEST")
+	}
+
 	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	if re.ShouldStartMySQLAfterRestore() { // all engines except mysqlshell since MySQL is always running there

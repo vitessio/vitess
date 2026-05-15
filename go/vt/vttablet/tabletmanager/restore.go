@@ -260,7 +260,11 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 		if err := rsm.abort(); err != nil {
 			logger.Errorf("Failed to abort restore: %v", err)
 		}
-		return "", vterrors.Wrap(err, "can't restore backup")
+		var engine string
+		if backupManifest != nil {
+			engine = backupManifest.BackupMethod
+		}
+		return engine, vterrors.Wrap(err, "can't restore backup")
 	}
 
 	if params.IsIncrementalRecovery() && !params.DryRun {
