@@ -1100,6 +1100,51 @@ func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
 	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
+func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id", "int64")
+	input := []*sqltypes.Result{
+		{Fields: fields},
+		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}},
+		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}},
+	}
+	var results []*sqltypes.Result
+	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+		results = append(results, result)
+		return nil
+	})
+
+	for _, result := range input {
+		require.NoError(t, callback(result))
+	}
+
+	require.Nil(t, deferredResult())
+	assertOLAPRowChunksAfterFields(t, fields, results)
+}
+
+func TestDeferFirstOKOnlyResultDefersOnlyFirstOKResult(t *testing.T) {
+	okResult := &sqltypes.Result{RowsAffected: 1}
+	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+		require.Failf(t, "callback called for deferred OK-only result", "%v", result)
+		return nil
+	})
+
+	err := callback(okResult)
+	require.NoError(t, err)
+	assert.Same(t, okResult, deferredResult())
+}
+
+func assertOLAPRowChunksAfterFields(t *testing.T, fields []*querypb.Field, results []*sqltypes.Result) {
+	t.Helper()
+
+	require.Len(t, results, 3)
+	assert.Equal(t, fields, results[0].Fields)
+	assert.Empty(t, results[0].Rows)
+	assert.Empty(t, results[1].Fields)
+	assert.Equal(t, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, results[1].Rows)
+	assert.Empty(t, results[2].Fields)
+	assert.Equal(t, [][]sqltypes.Value{{sqltypes.NewInt64(2)}}, results[2].Rows)
+}
+
 func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
@@ -1192,6 +1237,46 @@ func TestSlowQueryStatusFlagsStreamExecuteMultiOLAP(t *testing.T) {
 	require.NotNil(t, session)
 	assert.True(t, seenOKOnly)
 	assert.Equal(t, []bool{true, false}, mysqlCtx.slowQueryStates)
+}
+
+func TestStreamExecuteMultiOLAPTimeoutUsesParentContextPerStatement(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldTimeout := mysqlQueryTimeout
+	mysqlQueryTimeout = time.Second
+	sbc1.ExecDelayResponse = time.Millisecond
+	t.Cleanup(func() {
+		mysqlQueryTimeout = oldTimeout
+		sbc1.ExecDelayResponse = 0
+	})
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	mysqlConn := mysql.GetTestServerConn(&mysql.Listener{})
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: mysqlConn}
+	session := &vtgatepb.Session{
+		Autocommit:           true,
+		EnableSystemSettings: true,
+		TargetString:         "TestExecutor",
+		Options: &querypb.ExecuteOptions{
+			Workload: querypb.ExecuteOptions_OLAP,
+		},
+	}
+
+	var moreFlags []bool
+	session, err := vh.streamExecuteMultiQuery(t.Context(), mysqlConn, mysqlCtx, session, "select id from user where id = 1; select id from user where id = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if qr.QueryError != nil {
+			return qr.QueryError
+		}
+		if firstPacket {
+			moreFlags = append(moreFlags, more)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, session)
+	assert.Equal(t, []bool{true, false}, moreFlags)
 }
 
 func TestGracefulShutdown(t *testing.T) {

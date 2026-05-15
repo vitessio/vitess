@@ -330,20 +330,14 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		var deferredResult *sqltypes.Result
-		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
-			if len(result.Fields) == 0 {
-				deferredResult = result
-				return nil
-			}
-			return callback(result)
-		})
+		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
+		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
-		if deferredResult != nil {
-			return callback(deferredResult)
+		if result := deferredResult(); result != nil {
+			return callback(result)
 		}
 		return nil
 	}
@@ -449,17 +443,18 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 	if len(queries) == 0 {
 		return session, sqlparser.ErrEmpty
 	}
-	var cancel context.CancelFunc
 	for idx, query := range queries {
 		firstPacket := true
 		more := idx < len(queries)-1
 		var deferredResult *sqltypes.Result
 		func() {
+			queryCtx := ctx
+			var cancel context.CancelFunc
 			if mysqlQueryTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				queryCtx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
 				defer cancel()
 			}
-			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
 				if firstPacket && len(result.Fields) == 0 {
 					deferredResult = result
 					firstPacket = false
@@ -607,20 +602,14 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		var deferredResult *sqltypes.Result
-		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, func(result *sqltypes.Result) error {
-			if len(result.Fields) == 0 {
-				deferredResult = result
-				return nil
-			}
-			return callback(result)
-		})
+		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
+		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
-		if deferredResult != nil {
-			return callback(deferredResult)
+		if result := deferredResult(); result != nil {
+			return callback(result)
 		}
 		return nil
 	}
@@ -631,6 +620,25 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	fillInTxStatusFlags(c, session)
 
 	return callback(qr)
+}
+
+func deferFirstOKOnlyResult(callback func(*sqltypes.Result) error) (func(*sqltypes.Result) error, func() *sqltypes.Result) {
+	firstPacket := true
+	var deferredResult *sqltypes.Result
+
+	streamCallback := func(result *sqltypes.Result) error {
+		if firstPacket {
+			firstPacket = false
+			if len(result.Fields) == 0 {
+				deferredResult = result
+				return nil
+			}
+		}
+		return callback(result)
+	}
+	return streamCallback, func() *sqltypes.Result {
+		return deferredResult
+	}
 }
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
