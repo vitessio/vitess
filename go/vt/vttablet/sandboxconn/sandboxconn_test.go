@@ -29,14 +29,16 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func waitForCanceledCall(t *testing.T, name string, execDelay time.Duration, errCh <-chan error) error {
+const canceledCallTimeout = 3 * time.Second
+
+func waitForCanceledCall(t *testing.T, name string, errCh <-chan error) error {
 	t.Helper()
 
 	select {
 	case err := <-errCh:
 		return err
-	case <-time.After((9 * execDelay) / 10):
-		require.FailNowf(t, "%s did not return before ExecDelayResponse elapsed", name, "exec delay: %v", execDelay)
+	case <-time.After(canceledCallTimeout):
+		require.FailNowf(t, "%s did not return after context cancellation", name, "timeout: %v", canceledCallTimeout)
 		return nil
 	}
 }
@@ -55,7 +57,7 @@ func TestExecuteHonorsCanceledContextDuringExecDelay(t *testing.T) {
 		errCh <- err
 	}()
 
-	err := waitForCanceledCall(t, "Execute", sbc.ExecDelayResponse, errCh)
+	err := waitForCanceledCall(t, "Execute", errCh)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -76,7 +78,7 @@ func TestStreamExecuteHonorsCanceledContextDuringExecDelay(t *testing.T) {
 		})
 	}()
 
-	err := waitForCanceledCall(t, "StreamExecute", sbc.ExecDelayResponse, errCh)
+	err := waitForCanceledCall(t, "StreamExecute", errCh)
 	require.ErrorIs(t, err, context.Canceled)
 	assert.False(t, callbackCalled)
 

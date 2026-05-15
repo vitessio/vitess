@@ -396,12 +396,22 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 			session, err = vh.streamExecuteMultiQuery(ctx, c, mysqlCtx, session, sql, callback)
 		} else {
 			firstPacket := true
+			var deferredResult *sqltypes.Result
 			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+				if firstPacket && len(result.Fields) == 0 {
+					deferredResult = result
+					firstPacket = false
+					return nil
+				}
 				defer func() {
 					firstPacket = false
 				}()
 				return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
 			})
+			if err == nil && deferredResult != nil {
+				fillInTxStatusFlags(c, session)
+				return callback(sqltypes.QueryResponse{QueryResult: deferredResult}, false, true)
+			}
 		}
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
@@ -471,6 +481,7 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 		}()
 		if err != nil {
 			if firstPacket {
+				applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
 				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
 			}
 			return session, err
