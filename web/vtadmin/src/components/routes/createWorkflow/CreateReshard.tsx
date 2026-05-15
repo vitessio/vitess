@@ -116,12 +116,12 @@ export const CreateReshard = () => {
     );
 
     let selectedCluster = null;
-    if (!!formData.clusterID) {
+    if (formData.clusterID) {
         selectedCluster = clusters.find((c) => c.id === formData.clusterID);
     }
 
     let selectedKeyspace = null;
-    if (!!formData.keyspace) {
+    if (formData.keyspace) {
         selectedKeyspace = keyspaces.find((ks) => ks.keyspace?.name === formData.keyspace);
     }
 
