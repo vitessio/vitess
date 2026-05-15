@@ -59,7 +59,7 @@ func IsTrivialTypeChange(oldTabletType, newTabletType topodatapb.TabletType) boo
 // IsInServingGraph returns if a tablet appears in the serving graph
 func IsInServingGraph(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL:
 		return true
 	}
 	return false
@@ -78,7 +78,7 @@ func IsRunningQueryService(tt topodatapb.TabletType) bool {
 // RPC service.
 func IsRunningUpdateStream(tt topodatapb.TabletType) bool {
 	switch tt {
-	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL:
 		return true
 	}
 	return false
