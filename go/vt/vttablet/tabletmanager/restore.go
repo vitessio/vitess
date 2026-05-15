@@ -323,7 +323,9 @@ func (tm *TabletManager) restoreFromCloneLocked(
 	}
 
 	tablet := tm.Tablet()
-	pos, err := mysqlctl.CloneFromDonor(ctx, tm.TopoServer, tm.MysqlDaemon, tablet.Keyspace, tablet.Shard)
+	// Pass tm.Cnf so clone restore can fall back to a local mysqld restart if
+	// CLONE completes but MySQL cannot restart itself.
+	pos, err := mysqlctl.CloneFromDonor(ctx, tm.TopoServer, tm.MysqlDaemon, tm.Cnf, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		err = vterrors.Wrap(err, "failed to clone from donor")
 		if err := rsm.abort(); err != nil {

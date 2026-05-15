@@ -17,6 +17,7 @@ limitations under the License.
 package common
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,6 +43,8 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
+
+const reverseWorkflowKeepDataHelpSuffix = " Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided."
 
 var (
 	client     vtctldclient.VtctldClient
@@ -108,6 +111,30 @@ func SetCommandCtx(ctx context.Context) {
 
 func GetCommandCtx() context.Context {
 	return commandCtx
+}
+
+func OptionalBoolFromFlag(cmd *cobra.Command, flagName string, value bool) *bool {
+	flag := cmd.Flags().Lookup(flagName)
+	if flag == nil || !flag.Changed {
+		return nil
+	}
+
+	return &value
+}
+
+func AppendWarnings(buf *bytes.Buffer, warnings []string) {
+	if len(warnings) == 0 {
+		return
+	}
+
+	for _, warning := range warnings {
+		fmt.Fprintf(buf, "WARNING: %s\n", warning)
+	}
+	buf.WriteByte('\n')
+}
+
+func ReverseWorkflowKeepDataHelpText(base string) string {
+	return base + reverseWorkflowKeepDataHelpSuffix
 }
 
 func ParseCells(cmd *cobra.Command) error {

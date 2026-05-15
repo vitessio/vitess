@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/throttler"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -105,11 +104,11 @@ func TestMain(m *testing.M) {
 
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
-			utils.GetFlagVariantForTests("--enable-replication-reporter"),
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), onDemandHeartbeatDuration.String(),
+			"--lock-tables-timeout", "5s",
+			"--watch-replication-stream",
+			"--enable-replication-reporter",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", onDemandHeartbeatDuration.String(),
 		}
 
 		// Start keyspace
@@ -206,6 +205,11 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
+	// Use context.Background() because this helper is called from goroutines that
+	// can outlive the test/sub-test that spawned them (see TestCustomQuery's
+	// "generate running queries" sub-test, which spawns goroutines that run while
+	// other sub-tests proceed). t.Context() would be cancelled when its sub-test
+	// returned, leaving the goroutines to call require.* on a completed *testing.T.
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)

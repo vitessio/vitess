@@ -232,6 +232,9 @@ type PrepareData struct {
 	BindVars    map[string]*querypb.BindVariable
 	StatementID uint32
 	ParamsCount uint16
+	// SpanContext caches the extracted VT_SPAN_CONTEXT value from PrepareStmt.
+	// nil means not yet extracted; non-nil stores the cached value (empty string = no context found).
+	SpanContext *string
 }
 
 // execResult is an enum signifying the result of executing a query

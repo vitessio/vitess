@@ -49,7 +49,7 @@ func TestResilientQueryGetCurrentValueInitialization(t *testing.T) {
 	}
 
 	// Create a context and a cell.
-	ctx := context.Background()
+	ctx := t.Context()
 	cell := cellName("cell-1")
 
 	// Hammer the resilient query with multiple get requests just as it is created.

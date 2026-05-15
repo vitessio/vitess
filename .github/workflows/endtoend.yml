@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+      uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
       with:
         egress-policy: audit
 
@@ -59,16 +59,19 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 8
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.0
 
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
@@ -79,11 +82,13 @@ jobs:
 
     - name: Run make minimaltools
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         make minimaltools
 
     - name: Build
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
       run: |
         NOVTADMINBUILD=1 make build
 

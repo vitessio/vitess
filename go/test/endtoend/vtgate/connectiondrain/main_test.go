@@ -17,7 +17,6 @@ limitations under the License.
 package connectiondrain
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"os"
@@ -29,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -61,7 +59,7 @@ func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams)
 	require.NoError(t, err)
 
 	// Start vtgate
-	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-drain-onterm", vtutils.GetFlagVariantForTests("--onterm-timeout"), "30s")
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--mysql-server-drain-onterm", "--onterm-timeout", "30s")
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 
@@ -70,7 +68,7 @@ func setupCluster(t *testing.T) (*cluster.LocalProcessCluster, mysql.ConnParams)
 }
 
 func start(t *testing.T, vtParams mysql.ConnParams) (*mysql.Conn, func()) {
-	vtConn, err := mysql.Connect(context.Background(), &vtParams)
+	vtConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {
@@ -98,7 +96,7 @@ func TestConnectionDrainCloseConnections(t *testing.T) {
 	defer closer()
 
 	// Create a second connection, this connection will be used to create a transaction.
-	vtConn2, err := mysql.Connect(context.Background(), &vtParams)
+	vtConn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	// Start the transaction with the second connection
@@ -125,7 +123,7 @@ func TestConnectionDrainCloseConnections(t *testing.T) {
 	defer func() {
 		vtParams.ConnectTimeoutMs = 0
 	}()
-	_, err = mysql.Connect(context.Background(), &vtParams)
+	_, err = mysql.Connect(t.Context(), &vtParams)
 	require.Error(t, err)
 
 	// Idle connections should be allowed to execute queries until they are drained
@@ -159,9 +157,9 @@ func TestConnectionDrainOnTermTimeout(t *testing.T) {
 	defer clusterInstance.Teardown()
 
 	// Connect to vtgate again, this should work
-	vtConn, err := mysql.Connect(context.Background(), &vtParams)
+	vtConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
-	vtConn2, err := mysql.Connect(context.Background(), &vtParams)
+	vtConn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	defer func() {

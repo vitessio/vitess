@@ -83,8 +83,9 @@ var (
 	maxPayloadSize  int
 	warnPayloadSize int
 
-	noScatter          bool
-	enableShardRouting bool
+	noScatter                 bool
+	preventCrossKeyspaceReads bool
+	enableShardRouting        bool
 
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
@@ -92,8 +93,9 @@ var (
 	healthCheckTimeout = time.Minute
 
 	// System settings related flags
-	sysVarSetEnabled = true
-	setVarEnabled    = true
+	sysVarSetEnabled      = true
+	setVarEnabled         = true
+	deniedSystemVariables []string
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = 5 * time.Second
@@ -193,6 +195,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &defaultDDLStrategy, "ddl-strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	utils.SetFlagStringVar(fs, &dbDDLPlugin, "dbddl-plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 	utils.SetFlagBoolVar(fs, &noScatter, "no-scatter", noScatter, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	utils.SetFlagBoolVar(fs, &preventCrossKeyspaceReads, "prevent-cross-keyspace-reads", preventCrossKeyspaceReads, "when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs")
 	fs.BoolVar(&enableShardRouting, "enable-partial-keyspace-migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
 	utils.SetFlagDurationVar(fs, &healthCheckRetryDelay, "healthcheck-retry-delay", healthCheckRetryDelay, "health check retry delay")
 	utils.SetFlagDurationVar(fs, &healthCheckTimeout, "healthcheck-timeout", healthCheckTimeout, "the health check timeout period")
@@ -200,6 +203,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagIntVar(fs, &warnPayloadSize, "warn-payload-size", warnPayloadSize, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 	utils.SetFlagBoolVar(fs, &sysVarSetEnabled, "enable-system-settings", sysVarSetEnabled, "This will enable the system settings to be changed per session at the database connection level")
 	utils.SetFlagBoolVar(fs, &setVarEnabled, "enable-set-var", setVarEnabled, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
+	fs.StringSliceVar(&deniedSystemVariables, "denied-system-variables", deniedSystemVariables, "Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.")
 	utils.SetFlagDurationVar(fs, &lockHeartbeatTime, "lock-heartbeat-time", lockHeartbeatTime, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 	utils.SetFlagBoolVar(fs, &warnShardedOnly, "warn-sharded-only", warnShardedOnly, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 	utils.SetFlagStringVar(fs, &foreignKeyMode, "foreign-key-mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
@@ -403,11 +407,12 @@ func Init(
 	plans := DefaultPlanCache()
 
 	eConfig := ExecutorConfig{
-		Normalize:           normalizeQueries,
-		StreamSize:          streamBufferSize,
-		AllowScatter:        !noScatter,
-		WarmingReadsPercent: warmingReadsPercent,
-		QueryLogToFile:      queryLogToFile,
+		Normalize:                 normalizeQueries,
+		StreamSize:                streamBufferSize,
+		AllowScatter:              !noScatter,
+		PreventCrossKeyspaceReads: preventCrossKeyspaceReads,
+		WarmingReadsPercent:       warmingReadsPercent,
+		QueryLogToFile:            queryLogToFile,
 	}
 
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)

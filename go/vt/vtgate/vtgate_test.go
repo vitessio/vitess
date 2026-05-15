@@ -67,16 +67,12 @@ func TestVTGateExecute(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	assert.NoError(t, err)
 
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &want, qr)
-	if !proto.Equal(sbc.Options[0], executeOptions) {
-		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
-	}
+	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 
 	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
@@ -140,9 +136,7 @@ func TestVTGatePrepare(t *testing.T) {
 
 	want := sandboxconn.SingleRowResult.Fields
 	utils.MustMatch(t, want, qr)
-	if !proto.Equal(sbc.Options[0], executeOptions) {
-		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
-	}
+	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 
 	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
@@ -199,9 +193,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	assert.NoError(t, err)
 	wantQr := *sandboxconn.SingleRowResult
 	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &wantQr, qr)
@@ -231,9 +223,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	assert.NoError(t, err)
 	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace/shard.
@@ -277,9 +267,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 		Rows:   sandboxconn.StreamRowResult.Rows,
 	}}
 	utils.MustMatch(t, want, qrs)
-	if !proto.Equal(sbc.Options[0], executeOptions) {
-		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
-	}
+	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 }
 
 func TestVTGateBindVarError(t *testing.T) {
@@ -317,9 +305,8 @@ func TestVTGateBindVarError(t *testing.T) {
 		},
 	}}
 	for _, tcase := range tcases {
-		if err := tcase.f(); err == nil || !strings.Contains(err.Error(), want) {
-			t.Errorf("%v error: %v, must contain %s", tcase.name, err, want)
-		}
+		err := tcase.f()
+		assert.ErrorContainsf(t, err, want, "%v error", tcase.name)
 	}
 }
 
@@ -340,13 +327,8 @@ func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs [
 		nil,
 		false,
 	)
-	if err == nil {
-		t.Errorf("error %v not propagated for Execute", expected)
-	} else {
-		ec := vterrors.Code(err)
-		if ec != expected {
-			t.Errorf("unexpected error, got code %v err %v, want %v", ec, err, expected)
-		}
+	if assert.Errorf(t, err, "error %v not propagated for Execute", expected) {
+		assert.Equalf(t, expected, vterrors.Code(err), "unexpected error code, err %v", err)
 	}
 	for _, sbc := range sbcs {
 		after(sbc)
@@ -366,13 +348,8 @@ func testErrorPropagation(t *testing.T, ctx context.Context, vtg *VTGate, sbcs [
 			return nil
 		},
 	)
-	if err == nil {
-		t.Errorf("error %v not propagated for StreamExecute", expected)
-	} else {
-		ec := vterrors.Code(err)
-		if ec != expected {
-			t.Errorf("unexpected error, got %v want %v: %v", ec, expected, err)
-		}
+	if assert.Errorf(t, err, "error %v not propagated for StreamExecute", expected) {
+		assert.Equalf(t, expected, vterrors.Code(err), "unexpected error code, err %v", err)
 	}
 	for _, sbc := range sbcs {
 		after(sbc)
@@ -472,24 +449,14 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.Code_ABORTED case.
 	session, _, err := vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
-	if sbc.RollbackCount.Load() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, sbc.RollbackCount.Load())
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err == nil {
-		t.Fatalf("want error but got nil")
-	}
-	if sbc.RollbackCount.Load() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
-	}
+	require.Error(t, err, "want error but got nil")
+	assert.EqualValues(t, 1, sbc.RollbackCount.Load())
 	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 
@@ -497,24 +464,14 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should trigger a rollback:
 	// vtrpcpb.ErrorCode_RESOURCE_EXHAUSTED case.
 	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
-	if sbc.RollbackCount.Load() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, sbc.RollbackCount.Load())
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err == nil {
-		t.Fatalf("want error but got nil")
-	}
-	if sbc.RollbackCount.Load() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
-	}
+	require.Error(t, err, "want error but got nil")
+	assert.EqualValues(t, 1, sbc.RollbackCount.Load())
 	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 
@@ -522,24 +479,14 @@ func TestErrorIssuesRollback(t *testing.T) {
 	// Simulate an error that should *not* trigger a rollback:
 	// vtrpcpb.Code_ALREADY_EXISTS case.
 	session, _, err = vtg.Execute(ctx, nil, &vtgatepb.Session{TargetString: KsTestUnsharded + "@primary"}, "begin", nil, false)
-	if err != nil {
-		t.Fatalf("cannot start a transaction: %v", err)
-	}
+	require.NoError(t, err)
 	session, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err != nil {
-		t.Fatalf("want nil, got %v", err)
-	}
-	if sbc.RollbackCount.Load() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
-	}
+	require.NoError(t, err)
+	assert.EqualValues(t, 0, sbc.RollbackCount.Load())
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	_, _, err = vtg.Execute(ctx, nil, session, "select id from t1", nil, false)
-	if err == nil {
-		t.Fatalf("want error but got nil")
-	}
-	if sbc.RollbackCount.Load() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
-	}
+	require.Error(t, err, "want error but got nil")
+	assert.EqualValues(t, 0, sbc.RollbackCount.Load())
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 }
 
@@ -905,7 +852,7 @@ func TestRebuildTopoGraphs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			ts, factory := memorytopo.NewServerAndFactory(ctx, cell)
 			err := tt.setupFunc(ctx, ts, factory)

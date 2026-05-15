@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -44,12 +43,12 @@ var (
 	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
 	dbCredentialFile string
 	commonTabletArg  = []string{
-		vtutils.GetFlagVariantForTests("--vreplication-retry-delay"), "1s",
-		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
-		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
-		vtutils.GetFlagVariantForTests("--enable-replication-reporter"),
-		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
+		"--vreplication-retry-delay", "1s",
+		"--degraded-threshold", "5s",
+		"--lock-tables-timeout", "5s",
+		"--watch-replication-stream",
+		"--enable-replication-reporter",
+		"--serving-state-grace-period", "1s",
 	}
 )
 
@@ -136,14 +135,8 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		if localCluster.VtTabletMajorVersion >= 16 {
-			// If vttablets are any lower than version 16, then they are running the replication manager.
-			// Running VTOrc and replication manager sometimes creates the situation where VTOrc has set up semi-sync on the primary,
-			// but the replication manager starts replication on the replica without setting semi-sync. This hangs the primary.
-			// Even if VTOrc fixes it, since there is no ongoing traffic, the state remains blocked.
-			if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
-				return 1, err
-			}
+		if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
+			return 1, err
 		}
 
 		return m.Run(), nil

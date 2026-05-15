@@ -17,7 +17,6 @@ limitations under the License.
 package discovery
 
 import (
-	"context"
 	"errors"
 	"math/rand/v2"
 	"testing"
@@ -67,7 +66,7 @@ func TestStartAndCloseTopoWatcher(t *testing.T) {
 	fhc := NewFakeHealthCheck(nil)
 	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 100*time.Microsecond, true)
+	tw := NewTopologyWatcher(t.Context(), ts, fhc, nil, "aa", 100*time.Microsecond, true)
 
 	done := make(chan bool, 3)
 	result := make(chan bool, 1)
@@ -126,7 +125,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	logger := logutil.NewMemoryLogger()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, filter, "aa", 10*time.Minute, refreshKnownTablets)
+	tw := NewTopologyWatcher(t.Context(), ts, fhc, filter, "aa", 10*time.Minute, refreshKnownTablets)
 
 	counts = checkOpCounts(t, counts, map[string]int64{})
 	checkChecksum(t, tw, 0)
@@ -144,7 +143,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	}
-	require.NoError(t, ts.CreateTablet(context.Background(), tablet), "CreateTablet failed for %v", tablet.Alias)
+	require.NoError(t, ts.CreateTablet(t.Context(), tablet), "CreateTablet failed for %v", tablet.Alias)
 
 	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
@@ -170,7 +169,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	}
-	require.NoError(t, ts.CreateTablet(context.Background(), tablet2), "CreateTablet failed for %v", tablet2.Alias)
+	require.NoError(t, ts.CreateTablet(t.Context(), tablet2), "CreateTablet failed for %v", tablet2.Alias)
 	tw.loadTablets()
 
 	// Confirm second tablet triggers ListTablets + AddTablet calls.
@@ -190,7 +189,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		Keyspace: "excluded",
 		Shard:    "shard",
 	}
-	require.NoError(t, ts.CreateTablet(context.Background(), tablet3), "CreateTablet failed for %v", tablet3.Alias)
+	require.NoError(t, ts.CreateTablet(t.Context(), tablet3), "CreateTablet failed for %v", tablet3.Alias)
 	tw.loadTablets()
 
 	// Confirm filtered tablet did not trigger an AddTablet call.
@@ -213,7 +212,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	origTablet := tablet.CloneVT()
 	origKey := TabletToMapKey(tablet)
 	tablet.PortMap["vt"] = 456
-	_, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+	_, err := ts.UpdateTabletFields(t.Context(), tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.PortMap["vt"] = 456
 		return nil
 	})
@@ -245,14 +244,14 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	if refreshKnownTablets {
 		origTablet := tablet.CloneVT()
 		origTablet2 := tablet2.CloneVT()
-		_, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
+		_, err := ts.UpdateTabletFields(t.Context(), tablet2.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = tablet.Hostname
 			t.PortMap = tablet.PortMap
 			tablet2 = t
 			return nil
 		})
 		require.Nil(t, err, "UpdateTabletFields failed")
-		_, err = ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+		_, err = ts.UpdateTabletFields(t.Context(), tablet.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = "host3"
 			tablet = t
 			return nil
@@ -265,7 +264,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		assert.Contains(t, allTablets, key2, "tablet was lost because it's reusing an address recently used by another tablet: %v", key2)
 
 		// Change tablets back to avoid altering later tests.
-		_, err = ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
+		_, err = ts.UpdateTabletFields(t.Context(), tablet2.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = origTablet2.Hostname
 			t.PortMap = origTablet2.PortMap
 			tablet2 = t
@@ -273,7 +272,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		})
 		require.Nil(t, err, "UpdateTabletFields failed")
 
-		_, err = ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+		_, err = ts.UpdateTabletFields(t.Context(), tablet.Alias, func(t *topodatapb.Tablet) error {
 			t.Hostname = origTablet.Hostname
 			tablet = t
 			return nil
@@ -285,9 +284,9 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	}
 
 	// Remove the tablet and check that it is detected as being gone.
-	require.NoError(t, ts.DeleteTablet(context.Background(), tablet.Alias))
+	require.NoError(t, ts.DeleteTablet(t.Context(), tablet.Alias))
 
-	_, err = topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard")
+	_, err = topo.FixShardReplication(t.Context(), ts, logger, "aa", "keyspace", "shard")
 	require.Nil(t, err, "FixShardReplication failed")
 	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
@@ -304,9 +303,9 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 
 	// Remove the other tablets and check that it is detected as being gone.
 	// Deleting the filtered tablet should not trigger a RemoveTablet call.
-	require.NoError(t, ts.DeleteTablet(context.Background(), tablet2.Alias))
-	require.NoError(t, ts.DeleteTablet(context.Background(), tablet3.Alias))
-	_, err = topo.FixShardReplication(context.Background(), ts, logger, "aa", "keyspace", "shard")
+	require.NoError(t, ts.DeleteTablet(t.Context(), tablet2.Alias))
+	require.NoError(t, ts.DeleteTablet(t.Context(), tablet3.Alias))
+	_, err = topo.FixShardReplication(t.Context(), ts, logger, "aa", "keyspace", "shard")
 	require.Nil(t, err, "FixShardReplication failed")
 	tw.loadTablets()
 	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
@@ -420,7 +419,7 @@ func TestFilterByKeyspace(t *testing.T) {
 	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
 	ts := memorytopo.NewServer(ctx, testCell)
 	defer ts.Close()
-	tw := NewTopologyWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true)
+	tw := NewTopologyWatcher(t.Context(), ts, hc, f, testCell, 10*time.Minute, true)
 
 	for _, test := range testFilterByKeyspace {
 		// Add a new tablet to the topology.
@@ -441,7 +440,7 @@ func TestFilterByKeyspace(t *testing.T) {
 		assert.Equal(t, test.expected, f.IsIncluded(tablet))
 
 		// Make this fatal because there is no point continuing if CreateTablet fails
-		require.NoError(t, ts.CreateTablet(context.Background(), tablet))
+		require.NoError(t, ts.CreateTablet(t.Context(), tablet))
 
 		tw.loadTablets()
 		key := TabletToMapKey(tablet)
@@ -468,7 +467,7 @@ func TestFilterByKeyspace(t *testing.T) {
 			Shard:    testShard,
 		}
 		assert.Equal(t, test.expected, f.IsIncluded(tabletReplacement))
-		require.NoError(t, ts.CreateTablet(context.Background(), tabletReplacement))
+		require.NoError(t, ts.CreateTablet(t.Context(), tabletReplacement))
 
 		tw.loadTablets()
 		key = TabletToMapKey(tabletReplacement)
@@ -482,7 +481,7 @@ func TestFilterByKeyspace(t *testing.T) {
 		assert.Equal(t, test.expected, proto.Equal(tabletReplacement, allTablets[key]))
 
 		// Delete the tablet
-		require.NoError(t, ts.DeleteTablet(context.Background(), tabletReplacement.Alias))
+		require.NoError(t, ts.DeleteTablet(t.Context(), tabletReplacement.Alias))
 	}
 }
 
@@ -494,7 +493,7 @@ func TestLoadTablets(t *testing.T) {
 	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
 	ts := memorytopo.NewServer(ctx, testCell)
 	defer ts.Close()
-	tw := NewTopologyWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true)
+	tw := NewTopologyWatcher(t.Context(), ts, hc, f, testCell, 10*time.Minute, true)
 
 	// Add 2 tablets from 2 different tracked keyspaces to the topology.
 	tablet1 := &topodatapb.Tablet{
@@ -566,7 +565,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
 	f := TabletFilters{NewFilterByKeyspace(testKeyspacesToWatch)}
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, f, "aa", 10*time.Minute, false /*refreshKnownTablets*/)
+	tw := NewTopologyWatcher(t.Context(), ts, fhc, f, "aa", 10*time.Minute, false /*refreshKnownTablets*/)
 
 	counts = checkOpCounts(t, counts, map[string]int64{})
 	checkChecksum(t, tw, 0)
@@ -584,7 +583,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 		Keyspace: "ks1",
 		Shard:    "shard",
 	}
-	require.NoError(t, ts.CreateTablet(context.Background(), tablet))
+	require.NoError(t, ts.CreateTablet(t.Context(), tablet))
 
 	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "AddTablet": 1})
@@ -609,7 +608,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 		Keyspace: "ks3",
 		Shard:    "shard",
 	}
-	require.NoError(t, ts.CreateTablet(context.Background(), tablet2))
+	require.NoError(t, ts.CreateTablet(t.Context(), tablet2))
 
 	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
@@ -629,7 +628,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 
 	// With refreshKnownTablets set to false, changes to the port map for the same tablet alias
 	// should not be reflected in the HealtCheck state
-	_, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+	_, err := ts.UpdateTabletFields(t.Context(), tablet.Alias, func(t *topodatapb.Tablet) error {
 		t.PortMap["vt"] = 456
 		return nil
 	})
@@ -649,7 +648,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	assert.NotContains(t, allTablets, keyWithNewPort)
 
 	// Remove the tracked tablet from the topo and check that it is detected as being gone.
-	require.NoError(t, ts.DeleteTablet(context.Background(), tablet.Alias))
+	require.NoError(t, ts.DeleteTablet(t.Context(), tablet.Alias))
 
 	tw.loadTablets()
 	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0, "RemoveTablet": 1})
@@ -657,7 +656,7 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	assert.Empty(t, fhc.GetAllTablets())
 
 	// Remove ignored tablet and check that we didn't try to remove it from the health check
-	require.NoError(t, ts.DeleteTablet(context.Background(), tablet2.Alias))
+	require.NoError(t, ts.DeleteTablet(t.Context(), tablet2.Alias))
 
 	tw.loadTablets()
 	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
@@ -703,7 +702,7 @@ func TestGetTabletErrorDoesNotRemoveFromHealthcheck(t *testing.T) {
 	defer fhc.Close()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
-	tw := NewTopologyWatcher(context.Background(), ts, fhc, nil, "aa", 10*time.Minute, true)
+	tw := NewTopologyWatcher(t.Context(), ts, fhc, nil, "aa", 10*time.Minute, true)
 	defer tw.Stop()
 
 	// Force fallback to getting tablets individually.

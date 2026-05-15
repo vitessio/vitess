@@ -437,6 +437,7 @@ func (m *VStreamFlags) CloneVT() *VStreamFlags {
 	r.IncludeReshardJournalEvents = m.IncludeReshardJournalEvents
 	r.ExcludeKeyspaceFromTableName = m.ExcludeKeyspaceFromTableName
 	r.TransactionChunkSize = m.TransactionChunkSize
+	r.MaxStreamAgeSeconds = m.MaxStreamAgeSeconds
 	if rhs := m.TablesToCopy; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1894,6 +1895,11 @@ func (m *VStreamFlags) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.MaxStreamAgeSeconds != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.MaxStreamAgeSeconds))
+		i--
+		dAtA[i] = 0x60
+	}
 	if m.TransactionChunkSize != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TransactionChunkSize))
 		i--
@@ -2984,6 +2990,9 @@ func (m *VStreamFlags) SizeVT() (n int) {
 	}
 	if m.TransactionChunkSize != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.TransactionChunkSize))
+	}
+	if m.MaxStreamAgeSeconds != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.MaxStreamAgeSeconds))
 	}
 	n += len(m.unknownFields)
 	return n
@@ -6781,6 +6790,25 @@ func (m *VStreamFlags) UnmarshalVT(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.TransactionChunkSize |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 12:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field MaxStreamAgeSeconds", wireType)
+			}
+			m.MaxStreamAgeSeconds = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.MaxStreamAgeSeconds |= uint32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

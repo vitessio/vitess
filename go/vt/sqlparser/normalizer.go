@@ -575,18 +575,7 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 	if !ok {
 		return false
 	}
-	if len(selct.From) != 1 {
-		return false
-	}
-	aliasedTable, ok := selct.From[0].(*AliasedTableExpr)
-	if !ok {
-		return false
-	}
-	tableName, ok := aliasedTable.Expr.(TableName)
-	if !ok {
-		return false
-	}
-	return tableName.Name.String() == "dual"
+	return len(selct.From) == 0
 }
 
 // rewriteUnion sets the SELECT limit for UNION statements if not already set.
@@ -600,12 +589,6 @@ func (nz *normalizer) rewriteUnion(node *Union) {
 func (nz *normalizer) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr) {
 	aliasTableName, ok := node.Expr.(TableName)
 	if !ok {
-		return
-	}
-
-	// Do not add qualifiers to the dual table.
-	tblName := aliasTableName.Name.String()
-	if tblName == "dual" {
 		return
 	}
 
@@ -816,21 +799,13 @@ func (nz *normalizer) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	if len(sel.SelectExprs.Exprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
 		sel.GroupBy != nil ||
-		len(sel.From) != 1 ||
+		len(sel.From) != 0 ||
 		sel.Where != nil ||
 		sel.Having != nil ||
 		sel.Limit != nil || sel.Lock != NoLock {
 		return
 	}
 
-	aliasedTable, ok := sel.From[0].(*AliasedTableExpr)
-	if !ok {
-		return
-	}
-	table, ok := aliasedTable.Expr.(TableName)
-	if !ok || table.Name.String() != "dual" {
-		return
-	}
 	expr, ok := sel.SelectExprs.Exprs[0].(*AliasedExpr)
 	if !ok {
 		return

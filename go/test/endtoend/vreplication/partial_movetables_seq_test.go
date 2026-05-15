@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -231,10 +230,9 @@ func (tc *vrepTestCase) setupKeyspaces(keyspaces []string) {
 
 func (tc *vrepTestCase) setupKeyspace(ks *keyspace) {
 	t := tc.t
-	if _, err := tc.vc.AddKeyspace(t, []*Cell{tc.vc.Cells["zone1"]}, ks.name, strings.Join(ks.shards, ","),
-		ks.vschema, ks.schema, 0, 0, int(ks.baseID), nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := tc.vc.AddKeyspace(t, []*Cell{tc.vc.Cells["zone1"]}, ks.name, strings.Join(ks.shards, ","),
+		ks.vschema, ks.schema, 0, 0, int(ks.baseID), nil)
+	require.NoError(t, err)
 	if tc.vtgate == nil {
 		defaultCellName := "zone1"
 		defaultCell := tc.vc.Cells[defaultCellName]
@@ -311,7 +309,7 @@ func TestSequenceResetOnSwitchTraffic(t *testing.T) {
 	origExtraVTGateArgs := extraVTGateArgs
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		"--schema_change_signal=false",
+		"--schema-change-signal=false",
 	}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs
@@ -395,7 +393,7 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	origExtraVTGateArgs := extraVTGateArgs
 	extraVTGateArgs = append(extraVTGateArgs, []string{
 		"--enable-partial-keyspace-migration",
-		utils.GetFlagVariantForTests("--schema-change-signal") + "=false",
+		"--schema-change-signal" + "=false",
 	}...)
 	defer func() {
 		extraVTGateArgs = origExtraVTGateArgs

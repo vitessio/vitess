@@ -30,7 +30,7 @@ func TestWaitlistPoolCloseWithMultipleWaiters(t *testing.T) {
 	wait := waitlist[*TestConn]{}
 	wait.init()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 
 	poolClose := make(chan struct{})
@@ -79,7 +79,7 @@ func TestWaitlistWaiterCap(t *testing.T) {
 	errs := make(chan error, maxWaiters)
 	for i := 1; i <= maxWaiters; i++ {
 		go func() {
-			_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters)
+			_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
 			errs <- err
 		}()
 
@@ -88,7 +88,7 @@ func TestWaitlistWaiterCap(t *testing.T) {
 		}, time.Second, 5*time.Millisecond)
 	}
 
-	_, err := wl.waitForConn(context.Background(), nil, poolClose, maxWaiters)
+	_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
 	assert.ErrorIs(t, err, ErrPoolWaiterCapReached)
 	assert.Equal(t, maxWaiters, wl.waiting())
 

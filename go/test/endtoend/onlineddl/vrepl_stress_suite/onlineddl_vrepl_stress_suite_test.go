@@ -51,7 +51,6 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 type testcase struct {
@@ -426,18 +425,18 @@ func TestMain(m *testing.M) {
 			"--schema-change-check-interval", "1s",
 		}
 
-		// --vstream_packet_size is set to a small value that ensures we get multiple stream iterations,
+		// --vstream-packet-size is set to a small value that ensures we get multiple stream iterations,
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
+			"--ddl-strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -516,7 +515,7 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 				hintStatement := fmt.Sprintf(alterHintStatement, hintText)
 				fullStatement := fmt.Sprintf("%s, %s", hintStatement, testcase.alterStatement)
 
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				var wg sync.WaitGroup
 				wg.Go(func() {
 					runMultipleConnections(ctx, t, testcase.autoIncInsert)
@@ -599,7 +598,7 @@ func checkTable(t *testing.T, showTableName string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
 	for {

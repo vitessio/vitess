@@ -46,9 +46,7 @@ func TestGRPCTabletConn(t *testing.T) {
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := listener.Addr().(*net.TCPAddr).Port
 
@@ -80,9 +78,7 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 
 	// listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	host := listener.Addr().(*net.TCPAddr).IP.String()
 	port := listener.Addr().(*net.TCPAddr).Port
 
@@ -102,16 +98,11 @@ func TestGRPCTabletAuthConn(t *testing.T) {
         }`
 
 	f, err := os.CreateTemp("", "static_auth_creds.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(f.Name())
-	if _, err := io.WriteString(f, authJSON); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
+	_, err = io.WriteString(f, authJSON)
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
 
 	ctx := t.Context()
 	// run the test suite
@@ -194,47 +185,47 @@ func TestGoRoutineLeakPrevention(t *testing.T) {
 		cc: &grpc.ClientConn{},
 		c:  mqc,
 	}
-	_ = qc.StreamExecute(context.Background(), nil, nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
+	_ = qc.StreamExecute(t.Context(), nil, nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.BeginStreamExecute(context.Background(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.BeginStreamExecute(t.Context(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveBeginStreamExecute(context.Background(), nil, nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveBeginStreamExecute(t.Context(), nil, nil, nil, nil, "", nil, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_, _ = qc.ReserveStreamExecute(context.Background(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
+	_, _ = qc.ReserveStreamExecute(t.Context(), nil, nil, nil, "", nil, 0, nil, func(result *sqltypes.Result) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.VStream(context.Background(), &binlogdatapb.VStreamRequest{}, func(events []*binlogdatapb.VEvent) error {
+	_ = qc.VStream(t.Context(), &binlogdatapb.VStreamRequest{}, func(events []*binlogdatapb.VEvent) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.VStreamRows(context.Background(), &binlogdatapb.VStreamRowsRequest{}, func(response *binlogdatapb.VStreamRowsResponse) error {
+	_ = qc.VStreamRows(t.Context(), &binlogdatapb.VStreamRowsRequest{}, func(response *binlogdatapb.VStreamRowsResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.VStreamResults(context.Background(), nil, "", func(response *binlogdatapb.VStreamResultsResponse) error {
+	_ = qc.VStreamResults(t.Context(), nil, "", func(response *binlogdatapb.VStreamResultsResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.VStreamTables(context.Background(), &binlogdatapb.VStreamTablesRequest{}, func(response *binlogdatapb.VStreamTablesResponse) error {
+	_ = qc.VStreamTables(t.Context(), &binlogdatapb.VStreamTablesRequest{}, func(response *binlogdatapb.VStreamTablesResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
 
-	_ = qc.GetSchema(context.Background(), nil, querypb.SchemaTableType_TABLES, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+	_ = qc.GetSchema(t.Context(), nil, querypb.SchemaTableType_TABLES, nil, func(schemaRes *querypb.GetSchemaResponse) error {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())

@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -157,13 +156,13 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
-			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-interval", "250ms",
+			"--heartbeat-on-demand-duration", "5s",
+			"--migration-check-interval", "5s",
+			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
+			"--ddl-strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -866,7 +865,7 @@ func testRevert(t *testing.T) {
 			// This specific test is similar to `onlineddl_vrepl_stress` endtond tests.
 			// If it fails, it has nothing to do with revert.
 			// We run this test because we expect its functionality to work in the next step.
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			var wg sync.WaitGroup
 			wg.Go(func() {
@@ -893,7 +892,7 @@ func testRevert(t *testing.T) {
 	t.Run("revert ALTER TABLE", func(t *testing.T) {
 		// This reverts the last ALTER TABLE.
 		// And we run traffic on the table during the revert
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
 		wg.Go(func() {
@@ -919,7 +918,7 @@ func testRevert(t *testing.T) {
 	t.Run("revert revert ALTER TABLE", func(t *testing.T) {
 		// This reverts the last revert (reapplying the last ALTER TABLE).
 		// And we run traffic on the table during the revert
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
 		wg.Go(func() {
@@ -945,7 +944,7 @@ func testRevert(t *testing.T) {
 	t.Run("revert revert revert ALTER TABLE", func(t *testing.T) {
 		// For good measure, let's verify that revert-revert-revert works...
 		// So this again pulls us back to first ALTER
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
 		wg.Go(func() {
@@ -970,7 +969,7 @@ func testRevert(t *testing.T) {
 	})
 	testPostponedRevert := func(t *testing.T, expectStatuses ...schema.OnlineDDLStatus) {
 		require.NotEmpty(t, expectStatuses)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
 		wg.Go(func() {

@@ -7,9 +7,6 @@ Usage of vtctlclient:
       --config-path strings                                         Paths to search for config files in. (default [{{ .Workdir }}])
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
-      --datadog-agent-host string                                   host to send spans to. if empty, no tracing will be done
-      --datadog-agent-port string                                   port to send spans to. if empty, no tracing will be done
-      --datadog-trace-debug-mode                                    enable debug mode for datadog tracing
       --grpc-auth-static-client-creds string                        When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
@@ -21,7 +18,6 @@ Usage of vtctlclient:
       --grpc-max-message-size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
       --grpc-prometheus                                             Enable gRPC monitoring with Prometheus.
   -h, --help                                                        display usage and exit
-      --jaeger-agent-host string                                    host and port to send spans to. if empty, no tracing will be done
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --log-err-stacks                                              log stack traces for errors
@@ -44,8 +40,7 @@ Usage of vtctlclient:
       --stderrthreshold severityFlag                                logs at or above this threshold go to stderr (default 1)
       --tracer string                                               tracing service to use (default "noop")
       --tracing-enable-logging                                      whether to enable logging in the tracing service
-      --tracing-sampling-rate float                                 sampling parameter for traces; for jaeger this is passed as the sampler parameter (see --tracing-sampling-type), for opentelemetry/datadog it is a probability between 0.0 and 1.0 (default 0.1)
-      --tracing-sampling-type string                                sampling strategy to use for jaeger. possible values are 'const', 'probabilistic', 'rateLimiting', or 'remote' (default "const")
+      --tracing-sampling-rate float                                 sampling rate for traces as a probability between 0.0 and 1.0 (default 0.1)
       --v Level                                                     log level for V logs
   -v, --version                                                     print binary version
       --vmodule vModuleFlag                                         comma-separated list of pattern=N settings for file-filtered logging

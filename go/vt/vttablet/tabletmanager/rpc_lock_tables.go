@@ -113,9 +113,6 @@ func (tm *TabletManager) lockTablesUsingLockTables(conn *dbconnpool.DBConnection
 	tables := se.GetSchema()
 	tableNames := make([]string, 0, len(tables))
 	for name := range tables {
-		if name == "dual" {
-			continue
-		}
 		tableNames = append(tableNames, sqlescape.EscapeID(name)+" READ")
 	}
 	lockStatement := fmt.Sprintf("LOCK TABLES %v", strings.Join(tableNames, ", "))

@@ -23,7 +23,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+      uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
       with:
         egress-policy: audit
 
@@ -82,9 +82,15 @@ jobs:
 
         PACKAGE_DIRS=$(echo "$CHANGED_GO_FILES" | xargs -n1 dirname | sort -u)
 
-        # Validate as Go packages and exclude endtoend tests
+        # Validate as Go packages and exclude endtoend tests. Only consider
+        # paths under go/; anything else (e.g. ".", "changelog", ".github")
+        # would expand to ./.../... and pull in the full endtoend suite.
         PACKAGES=""
         for dir in $PACKAGE_DIRS; do
+          case "$dir" in
+            go/*) ;;
+            *) continue ;;
+          esac
           case "$dir" in
             */endtoend*|go/cmd/vttestserver*) continue ;;
           esac
@@ -105,16 +111,19 @@ jobs:
 
     - name: Tune the OS
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Setup MySQL
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 8
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 5
       run: |
         export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
@@ -126,6 +135,7 @@ jobs:
 
     - name: Run make tools
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+      timeout-minutes: 10
       run: |
         make BUILD_JAVA=0 BUILD_PROTOC=0 tools
 

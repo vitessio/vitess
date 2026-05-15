@@ -61,13 +61,17 @@ func (node *Select) FormatFast(buf *TrackedBuffer) {
 	}
 
 	node.SelectExprs.FormatFast(buf)
-	buf.WriteString(" from ")
 
-	prefix := ""
-	for _, expr := range node.From {
-		buf.WriteString(prefix)
-		expr.FormatFast(buf)
-		prefix = ", "
+	if len(node.From) == 0 {
+		buf.WriteString(" from dual")
+	} else {
+		buf.WriteString(" from ")
+		prefix := ""
+		for _, expr := range node.From {
+			buf.WriteString(prefix)
+			expr.FormatFast(buf)
+			prefix = ", "
+		}
 	}
 
 	node.Where.FormatFast(buf)
@@ -1812,11 +1816,7 @@ func (node TableName) FormatFast(buf *TrackedBuffer) {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
-	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
-		buf.WriteString("dual")
-	} else {
-		node.Name.FormatFast(buf)
-	}
+	node.Name.FormatFast(buf)
 }
 
 // FormatFast formats the node.

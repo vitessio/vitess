@@ -17,10 +17,8 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"math/rand/v2"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,17 +47,13 @@ func columnSize(cs collations.ID, size uint32) uint32 {
 
 // Test the SQL query part of the API.
 func TestQueries(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Try a simple error case.
 	_, err = conn.ExecuteFetch("select * from aa", 1000, true)
-	if err == nil || !strings.Contains(err.Error(), "Table 'vttest.aa' doesn't exist") {
-		t.Fatalf("expected error but got: %v", err)
-	}
+	require.ErrorContains(t, err, "Table 'vttest.aa' doesn't exist")
 
 	// Try a simple DDL.
 	result, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false)
@@ -71,7 +65,7 @@ func TestQueries(t *testing.T) {
 	require.NoError(t, err, "insert failed: %v", err)
 
 	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
+		assert.Failf(t, "unexpected insert result", "unexpected result for insert: %v", result)
 	}
 
 	// And re-read what we inserted.
@@ -138,11 +132,9 @@ func TestQueries(t *testing.T) {
 }
 
 func TestLargeQueries(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	randString := func(n int) string {
@@ -161,7 +153,7 @@ func TestLargeQueries(t *testing.T) {
 			require.NoError(t, err, "ExecuteFetch failed: %v", err)
 
 			if len(result.Rows) != 1 || len(result.Rows[0]) != 1 || result.Rows[0][0].IsNull() {
-				t.Fatalf("ExecuteFetch on large query returned poorly-formed result. " +
+				require.Fail(t, "ExecuteFetch on large query returned poorly-formed result. "+
 					"Expected single row single column string.")
 			}
 			require.Equal(t, expectedString, result.Rows[0][0].ToString(), "Result row was incorrect. Suppressing large string")
@@ -172,7 +164,7 @@ func TestLargeQueries(t *testing.T) {
 func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 	// Start the streaming query.
 	if err := conn.ExecuteStreamFetch("select * from a"); err != nil {
-		t.Fatalf("ExecuteStreamFetch failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Check the fields.
@@ -232,7 +224,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 }
 
 func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF
 
@@ -269,7 +261,7 @@ func TestWarningsNoDeprecateEOF(t *testing.T) {
 }
 
 func TestSysInfo(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()

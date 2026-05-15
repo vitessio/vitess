@@ -17,7 +17,6 @@ limitations under the License.
 package readafterwrite
 
 import (
-	"context"
 	"flag"
 	"os"
 	"testing"
@@ -28,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -126,7 +124,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{vtutils.GetFlagVariantForTests("--lock-heartbeat-time"), "2s"}
+		clusterInstance.VtGateExtraArgs = []string{"--lock-heartbeat-time", "2s"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {
@@ -143,7 +141,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestRAWSettings(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

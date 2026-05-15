@@ -62,22 +62,18 @@ func startEtcd(t *testing.T, port int) (string, *exec.Cmd) {
 		"-initial-cluster", initialCluster,
 		"-data-dir", dataDir)
 	err := cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start etcd: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Create a client to connect to the created etcd.
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{clientAddr},
 		DialTimeout: 5 * time.Second,
 	})
-	if err != nil {
-		t.Fatalf("newCellClient(%v) failed: %v", clientAddr, err)
-	}
+	require.NoErrorf(t, err, "newCellClient(%v) failed", clientAddr)
 	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	start := time.Now()
 	for {
@@ -85,7 +81,7 @@ func startEtcd(t *testing.T, port int) (string, *exec.Cmd) {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start etcd daemon in time")
+			require.FailNow(t, "Failed to start etcd daemon in time")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -136,14 +132,10 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	err := cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start etcd: %v", err)
-	}
+	require.NoError(t, err)
 
 	tlsConfig, err := newTLSConfig(certs.ClientCert, certs.ClientKey, certs.ServerCA)
-	if err != nil {
-		t.Fatalf("failed to get tls.Config: %v", err)
-	}
+	require.NoError(t, err)
 
 	var cli *clientv3.Client
 	// Create client
@@ -160,14 +152,14 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 		}
 		t.Logf("error establishing client for etcd tls test: %v", err)
 		if time.Since(start) > 60*time.Second {
-			t.Fatalf("failed to start client for etcd tls test in time")
+			require.FailNow(t, "failed to start client for etcd tls test in time")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	start = time.Now()
 	for {
@@ -175,7 +167,7 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 			break
 		}
 		if time.Since(start) > 60*time.Second {
-			t.Fatalf("failed to start etcd daemon in time")
+			require.FailNow(t, "failed to start etcd daemon in time")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -202,25 +194,17 @@ func TestEtcd2TLS(t *testing.T) {
 
 	// Create the server on the new root.
 	server, err := NewServerWithOpts(clientAddr, testRoot, certs.ClientCert, certs.ClientKey, certs.ServerCA)
-	if err != nil {
-		t.Fatalf("NewServerWithOpts failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer server.Close()
 
-	testCtx := context.Background()
+	testCtx := t.Context()
 	testKey := "testkey"
 	testVal := "testval"
 	_, err = server.Create(testCtx, testKey, []byte(testVal))
-	if err != nil {
-		t.Fatalf("Failed to set key value pair: %v", err)
-	}
+	require.NoError(t, err)
 	val, _, err := server.Get(testCtx, testKey)
-	if err != nil {
-		t.Fatalf("Failed to retrieve value at key we just set: %v", err)
-	}
-	if string(val) != testVal {
-		t.Fatalf("Value returned doesn't match %s, err: %v", testVal, err)
-	}
+	require.NoError(t, err)
+	require.Equalf(t, testVal, string(val), "Value returned doesn't match %s, err: %v", testVal, err)
 }
 
 func TestEtcd2Topo(t *testing.T) {
@@ -235,16 +219,14 @@ func TestEtcd2Topo(t *testing.T) {
 
 		// Create the server on the new root.
 		ts, err := topo.OpenServer("etcd2", clientAddr, path.Join(testRoot, topo.GlobalCell))
-		if err != nil {
-			t.Fatalf("OpenServer() failed: %v", err)
-		}
+		require.NoError(t, err)
 
 		// Create the CellInfo.
-		if err := ts.CreateCellInfo(context.Background(), test.LocalCellName, &topodatapb.CellInfo{
+		if err := ts.CreateCellInfo(t.Context(), test.LocalCellName, &topodatapb.CellInfo{
 			ServerAddress: clientAddr,
 			Root:          path.Join(testRoot, test.LocalCellName),
 		}); err != nil {
-			t.Fatalf("CreateCellInfo() failed: %v", err)
+			require.NoError(t, err)
 		}
 
 		return ts
@@ -266,7 +248,7 @@ func TestEtcd2Topo(t *testing.T) {
 // correctly when etcd2 is used along with the normal vtctldclient <-> vtctld client/server
 // path.
 func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cells := []string{"cell1", "cell2"}
 	root := "/vitess"
 	// Start three etcd instances in the background. One will serve the global topo data
@@ -380,7 +362,7 @@ func TestEtcd2TopoServerClosed(t *testing.T) {
 	require.NoError(t, err, "OpenServer() failed: %v", err)
 
 	// Create the CellInfo first.
-	ctx := context.Background()
+	ctx := t.Context()
 	err = ts.CreateCellInfo(ctx, "test_cell", &topodatapb.CellInfo{
 		ServerAddress: clientAddr,
 		Root:          path.Join(testRoot, "test_cell"),
@@ -440,35 +422,29 @@ func TestEtcd2TopoServerClosed(t *testing.T) {
 // Note TTL granularity is in seconds, even though the API uses time.Duration.
 // So we have to wait a long time in these tests.
 func testKeyspaceLock(t *testing.T, ts *topo.Server) {
-	ctx := context.Background()
+	ctx := t.Context()
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
-		t.Fatalf("CreateKeyspace: %v", err)
+		require.NoError(t, err)
 	}
 
 	conn, err := ts.ConnForCell(ctx, topo.GlobalCell)
-	if err != nil {
-		t.Fatalf("ConnForCell failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Long TTL, unlock before lease runs out.
 	leaseTTL = 1000
 	lockDescriptor, err := conn.Lock(ctx, keyspacePath, "ttl")
-	if err != nil {
-		t.Fatalf("Lock failed: %v", err)
-	}
+	require.NoError(t, err)
 	if err := lockDescriptor.Unlock(ctx); err != nil {
-		t.Fatalf("Unlock failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Short TTL, make sure it doesn't expire.
 	leaseTTL = 1
 	lockDescriptor, err = conn.Lock(ctx, keyspacePath, "short ttl")
-	if err != nil {
-		t.Fatalf("Lock failed: %v", err)
-	}
+	require.NoError(t, err)
 	time.Sleep(2 * time.Second)
 	if err := lockDescriptor.Unlock(ctx); err != nil {
-		t.Fatalf("Unlock failed: %v", err)
+		require.NoError(t, err)
 	}
 }

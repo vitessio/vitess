@@ -17,12 +17,10 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -169,14 +167,12 @@ func TestTrailingComment(t *testing.T) {
 		_, err := client.Execute(query, bindVars)
 		require.NoError(t, err)
 		v2 := framework.Server.QueryPlanCacheLen()
-		if v2 != v1+1 {
-			t.Errorf("QueryEnginePlanCacheLength(%s): %d, want %d", query, v2, v1+1)
-		}
+		assert.Equalf(t, v1+1, v2, "QueryEnginePlanCacheLength(%s): %d, want %d", query, v2, v1+1)
 	}
 }
 
 func TestSchemaReload(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -185,7 +181,7 @@ func TestSchemaReload(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop table vitess_temp", 10, false)
 
-	framework.Server.ReloadSchema(context.Background())
+	framework.Server.ReloadSchema(t.Context())
 	client := framework.NewClient()
 	waitTime := 50 * time.Millisecond
 	for range 10 {
@@ -197,15 +193,15 @@ func TestSchemaReload(t *testing.T) {
 		}
 		want := "table vitess_temp not found in schema"
 		if err.Error() != want {
-			t.Errorf("Error: %v, want %s", err, want)
+			assert.Failf(t, "unexpected error", "Error: %v, want %s", err, want)
 			return
 		}
 	}
-	t.Error("schema did not reload")
+	assert.Fail(t, "schema did not reload")
 }
 
 func TestSidecarTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -221,9 +217,9 @@ func TestSidecarTables(t *testing.T) {
 }
 
 func TestConsolidation(t *testing.T) {
-	defer framework.Server.SetPoolSize(context.Background(), framework.Server.PoolSize())
+	defer framework.Server.SetPoolSize(t.Context(), framework.Server.PoolSize())
 
-	err := framework.Server.SetPoolSize(context.Background(), 1)
+	err := framework.Server.SetPoolSize(t.Context(), 1)
 	require.NoError(t, err)
 
 	const tag = "Waits/Histograms/Consolidations/Count"
@@ -249,7 +245,7 @@ func TestConsolidation(t *testing.T) {
 		}
 		t.Logf("Consolidation didn't succeed with sleep for %v, trying a longer sleep", sleep)
 	}
-	t.Error("DebugVars for consolidation not incremented")
+	assert.Fail(t, "DebugVars for consolidation not incremented")
 }
 
 func TestBindInSelect(t *testing.T) {
@@ -282,9 +278,7 @@ func TestBindInSelect(t *testing.T) {
 	wantMaria.Fields[0].Type = sqltypes.Int32
 	wantMaria.Rows[0][0] = sqltypes.NewInt32(1)
 
-	if !qr.Equal(want57) && !qr.Equal(want80) && !qr.Equal(wantMaria) {
-		t.Errorf("Execute:\n%v, want\n%v,\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want57), prettyPrint(*want80), prettyPrint(*wantMaria))
-	}
+	assert.True(t, qr.Equal(want57) || qr.Equal(want80) || qr.Equal(wantMaria), "Execute:\n%v, want\n%v,\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want57), prettyPrint(*want80), prettyPrint(*wantMaria))
 
 	// String bind var.
 	qr, err = client.Execute(
@@ -308,9 +302,7 @@ func TestBindInSelect(t *testing.T) {
 	}
 	// MariaDB 10.3 has different behavior.
 	qr.Fields[0].Decimals = 0
-	if !qr.Equal(want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
-	}
+	assert.True(t, qr.Equal(want), "Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 
 	// Binary bind var.
 	qr, err = client.Execute(
@@ -334,9 +326,7 @@ func TestBindInSelect(t *testing.T) {
 	}
 	// MariaDB 10.3 has different behavior.
 	qr.Fields[0].Decimals = 0
-	if !qr.Equal(want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
-	}
+	assert.True(t, qr.Equal(want), "Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(*want))
 }
 
 func TestHealth(t *testing.T) {
@@ -345,23 +335,18 @@ func TestHealth(t *testing.T) {
 	defer response.Body.Close()
 	result, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
-	if string(result) != "ok" {
-		t.Errorf("Health check: %s, want ok", result)
-	}
+	assert.Equalf(t, "ok", string(result), "Health check: %s, want ok", result)
 }
 
 func TestStreamHealth(t *testing.T) {
 	var health *querypb.StreamHealthResponse
 	framework.Server.BroadcastHealth()
-	if err := framework.Server.StreamHealth(context.Background(), func(shr *querypb.StreamHealthResponse) error {
+	err := framework.Server.StreamHealth(t.Context(), func(shr *querypb.StreamHealthResponse) error {
 		health = shr
 		return io.EOF
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if !proto.Equal(health.Target, framework.Target) {
-		t.Errorf("Health: %+v, want %+v", health.Target, framework.Target)
-	}
+	})
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(health.Target, framework.Target), "Health: %+v, want %+v", health.Target, framework.Target)
 }
 
 func TestQueryStats(t *testing.T) {
@@ -371,16 +356,15 @@ func TestQueryStats(t *testing.T) {
 	start := time.Now()
 	query := "select /* query_stats */ eid from vitess_a where eid = :eid"
 	bv := map[string]*querypb.BindVariable{"eid": sqltypes.Int64BindVariable(1)}
-	if _, err := client.Execute(query, bv); err != nil {
-		t.Fatal(err)
-	}
+	_, err := client.Execute(query, bv)
+	require.NoError(t, err)
 	stat := framework.QueryStats()[query]
 	duration := int(time.Since(start))
 	if stat.Time <= 0 || stat.Time > duration {
-		t.Errorf("stat.Time: %d, must be between 0 and %d", stat.Time, duration)
+		assert.Failf(t, "stat.Time out of range", "stat.Time: %d, must be between 0 and %d", stat.Time, duration)
 	}
 	if stat.MysqlTime <= 0 || stat.MysqlTime > duration {
-		t.Errorf("stat.MysqlTime: %d, must be between 0 and %d", stat.MysqlTime, duration)
+		assert.Failf(t, "stat.MysqlTime out of range", "stat.MysqlTime: %d, must be between 0 and %d", stat.MysqlTime, duration)
 	}
 	stat.Time = 0
 	stat.MysqlTime = 0
@@ -491,18 +475,15 @@ func TestQueryStats(t *testing.T) {
 
 	// Ensure BeginExecute also updates the stats and strips comments.
 	query = "select /* begin_execute */ 1 /* trailing comment */"
-	if _, err := client.BeginExecute(query, bv, nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := client.Rollback(); err != nil {
-		t.Fatal(err)
-	}
+	_, err = client.BeginExecute(query, bv, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Rollback())
 	if _, ok := framework.QueryStats()[query]; ok {
-		t.Errorf("query stats included trailing comments for BeginExecute: %v", framework.QueryStats())
+		assert.Failf(t, "query stats included trailing comments", "query stats included trailing comments for BeginExecute: %v", framework.QueryStats())
 	}
 	stripped := "select /* begin_execute */ 1"
 	if _, ok := framework.QueryStats()[stripped]; !ok {
-		t.Errorf("query stats did not get updated for BeginExecute: %v", framework.QueryStats())
+		assert.Failf(t, "query stats not updated", "query stats did not get updated for BeginExecute: %v", framework.QueryStats())
 	}
 }
 
@@ -512,9 +493,7 @@ func TestDBAStatements(t *testing.T) {
 	qr, err := client.Execute("show variables like 'version'", nil)
 	require.NoError(t, err)
 	wantCol := sqltypes.NewVarChar("version")
-	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {
-		t.Errorf("Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
-	}
+	assert.Equal(t, wantCol, qr.Rows[0][0], "Execute: \n%#v, want \n%#v", qr.Rows[0][0], wantCol)
 
 	qr, err = client.Execute("describe vitess_a", nil)
 	require.NoError(t, err)
@@ -565,32 +544,23 @@ func (tl *testLogger) getLog(i int) string {
 
 func TestClientFoundRows(t *testing.T) {
 	client := framework.NewClient()
-	if _, err := client.Execute("insert into vitess_test(intval, charval) values(124, 'aa')", nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := client.Execute("insert into vitess_test(intval, charval) values(124, 'aa')", nil)
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_test where intval= 124", nil)
 
 	// CLIENT_FOUND_ROWS flag is off.
-	if err := client.Begin(false); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, client.Begin(false))
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(qr.Rows))
-	if err := client.Rollback(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, client.Rollback())
 
 	// CLIENT_FOUND_ROWS flag is on.
-	if err := client.Begin(true); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, client.Begin(true))
 	qr, err = client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, qr.RowsAffected)
-	if err := client.Rollback(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, client.Rollback())
 }
 
 func TestLastInsertId(t *testing.T) {
@@ -633,15 +603,14 @@ func TestAppDebugRequest(t *testing.T) {
 
 	// Insert with normal user works
 
-	if _, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+	require.NoError(t, err)
 
 	defer client.Execute("delete from vitess_test where intval= 124", nil)
 
 	// Set vt_appdebug
 	ctx := callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "vt_appdebug"})
 
@@ -651,10 +620,10 @@ func TestAppDebugRequest(t *testing.T) {
 
 	// Start a transaction. This test the other flow that a client can use to insert a value.
 	client.Begin(false)
-	_, err := client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
+	_, err = client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
 
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, want prefix %s", err, want)
+		assert.Failf(t, "unexpected error", "Error: %v, want prefix %s", err, want)
 	}
 
 	// Normal flow, when a client is trying to insert a value and the insert is not in the
@@ -662,12 +631,12 @@ func TestAppDebugRequest(t *testing.T) {
 	_, err = client.Execute("insert into vitess_test_debuguser(intval, charval) values(124, 'aa')", nil)
 
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, want prefix %s", err, want)
+		assert.Failf(t, "unexpected error", "Error: %v, want prefix %s", err, want)
 	}
 
 	_, err = client.Execute("select * from vitess_test_debuguser where intval=1", nil)
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, want prefix %s", err, want)
+		assert.Failf(t, "unexpected error", "Error: %v, want prefix %s", err, want)
 	}
 }
 
@@ -818,7 +787,7 @@ func TestHexAndBitBindVar(t *testing.T) {
 
 // Test will validate drop view ddls.
 func TestShowTablesWithSizes(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -970,7 +939,7 @@ func newTestSchemaEngine(connParams *mysql.ConnParams) *schema.Engine {
 }
 
 func TestEngineReload(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -1137,7 +1106,7 @@ func TestEngineReload(t *testing.T) {
 }
 
 func TestUpdateTableIndexMetrics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()

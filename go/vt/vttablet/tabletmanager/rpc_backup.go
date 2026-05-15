@@ -54,7 +54,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
 	if !req.AllowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
-		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
+		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
 	}
 
 	backupEngine := ""
@@ -72,7 +72,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		return err
 	}
 	if !req.AllowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
-		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow_primary")
+		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
 	}
 
 	// Create the logger: tee to console and source.

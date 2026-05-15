@@ -45,6 +45,10 @@ const (
 	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no_scatter`.
 	DirectiveAllowScatter = "ALLOW_SCATTER"
+	// DirectiveAllowCrossKeyspaceReads lets cross-keyspace read plans (joins and UNIONs) pass through
+	// even when they are turned off by the `--prevent-cross-keyspace-reads` vtgate flag or the
+	// `prevent_cross_keyspace_reads` vschema keyspace setting.
+	DirectiveAllowCrossKeyspaceReads = "ALLOW_CROSS_KEYSPACE_READS"
 	// DirectiveAllowHashJoin lets the planner use hash join if possible
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 	// DirectiveQueryPlanner lets the user specify per query which planner should be used
@@ -296,6 +300,44 @@ func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 	return ""
 }
 
+// GetMySQLSetVarNames gets the variable names used in /*+ SET_VAR() */ MySQL optimizer hints.
+func (c *ParsedComments) GetMySQLSetVarNames() []string {
+	if c == nil {
+		return nil
+	}
+	for _, commentStr := range c.comments {
+		if commentStr[0:3] != queryOptimizerPrefix {
+			continue
+		}
+
+		var names []string
+		pos := 4
+		for pos < len(commentStr) {
+			finalPos, ohNameStart, ohNameEnd, ohContentStart, ohContentEnd := getOptimizerHint(pos, commentStr)
+			pos = finalPos + 1
+			if ohContentEnd == -1 {
+				break
+			}
+
+			ohName := commentStr[ohNameStart:ohNameEnd]
+			ohContent := commentStr[ohContentStart:ohContentEnd]
+			if strings.EqualFold(strings.TrimSpace(ohName), OptimizerHintSetVar) {
+				setVarName, _, isValid := strings.Cut(ohContent, "=")
+				if !isValid {
+					continue
+				}
+				setVarName = strings.TrimSpace(setVarName)
+				if setVarName != "" {
+					names = append(names, setVarName)
+				}
+			}
+		}
+
+		return names
+	}
+	return nil
+}
+
 // SetMySQLSetVarValue updates or sets the value of the given variable as part of a /*+ SET_VAR() */ MySQL optimizer hint.
 func (c *ParsedComments) SetMySQLSetVarValue(key string, value string) (newComments Comments) {
 	if c == nil {
@@ -532,6 +574,11 @@ func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
 // AllowScatterDirective returns true if the allow scatter override is set to true
 func AllowScatterDirective(stmt Statement) bool {
 	return checkDirective(stmt, DirectiveAllowScatter)
+}
+
+// AllowCrossKeyspaceReadsDirective returns true if the allow cross-keyspace reads override is set to true
+func AllowCrossKeyspaceReadsDirective(stmt Statement) bool {
+	return checkDirective(stmt, DirectiveAllowCrossKeyspaceReads)
 }
 
 func checkDirective(stmt Statement, key string) bool {

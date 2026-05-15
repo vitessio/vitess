@@ -18,7 +18,6 @@ package topo
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,29 +35,21 @@ func TestAddCells(t *testing.T) {
 
 	// no restriction + no restriction -> no restrictions
 	cells = addCells(cells, nil)
-	if cells != nil {
-		t.Fatalf("addCells(no restriction)+no restriction should be no restriction")
-	}
+	require.Nil(t, cells, "addCells(no restriction)+no restriction should be no restriction")
 
 	// no restriction + cells -> no restrictions
 	cells = addCells(cells, []string{"c1", "c2"})
-	if cells != nil {
-		t.Fatalf("addCells(no restriction)+restriction should be no restriction")
-	}
+	require.Nil(t, cells, "addCells(no restriction)+restriction should be no restriction")
 
 	// cells + no restriction -> no restrictions
 	cells = []string{"c1", "c2"}
 	cells = addCells(cells, nil)
-	if cells != nil {
-		t.Fatalf("addCells(restriction)+no restriction should be no restriction")
-	}
+	require.Nil(t, cells, "addCells(restriction)+no restriction should be no restriction")
 
 	// cells + cells -> union
 	cells = []string{"c1", "c2"}
 	cells = addCells(cells, []string{"c2", "c3"})
-	if !reflect.DeepEqual(cells, []string{"c1", "c2", "c3"}) {
-		t.Fatalf("addCells(restriction)+restriction failed: got %v", cells)
-	}
+	require.Equalf(t, []string{"c1", "c2", "c3"}, cells, "addCells(restriction)+restriction failed: got %v", cells)
 }
 
 func TestRemoveCellsFromList(t *testing.T) {
@@ -67,15 +58,11 @@ func TestRemoveCellsFromList(t *testing.T) {
 
 	// remove from empty list should return allCells - what we remove
 	cells = removeCellsFromList([]string{"second"}, allCells)
-	if !reflect.DeepEqual(cells, []string{"first", "third"}) {
-		t.Fatalf("removeCells(full)-second failed: got %v", allCells)
-	}
+	require.Equalf(t, []string{"first", "third"}, cells, "removeCells(full)-second failed: got %v", allCells)
 
 	// removethe next two cells, should return empty list
 	cells = removeCellsFromList(cells, []string{"first", "third"})
-	if len(cells) != 0 {
-		t.Fatalf("removeCells(full)-first-third is not empty: %v", cells)
-	}
+	require.Emptyf(t, cells, "removeCells(full)-first-third is not empty: %v", cells)
 }
 
 // fakeLockDescriptor implements the topo.LockDescriptor interface
@@ -163,7 +150,7 @@ func TestUpdateSourcePrimaryDeniedTables(t *testing.T) {
 
 func TestUpdateSourceDeniedTables(t *testing.T) {
 	si := NewShardInfo("ks", "sh", &topodatapb.Shard{}, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 	ctxWithLock := lockedKeyspaceContext("ks")
 
 	type testCase struct {

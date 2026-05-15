@@ -117,6 +117,7 @@ Flags:
       --port int                                                         Port to use for vtcombo. If this is 0, a random port will be chosen.
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
+      --prevent-cross-keyspace-reads                                     when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs
       --proto-topo string                                                Define the fake cluster topology as a compact text format encoded vttest proto. See vttest.proto for more information.
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --queryserver-config-transaction-timeout duration                  query server transaction timeout, a transaction will be killed if it takes longer than this value (default 30s)

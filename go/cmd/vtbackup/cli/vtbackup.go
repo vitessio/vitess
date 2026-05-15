@@ -306,7 +306,7 @@ func run(cc *cobra.Command, args []string) error {
 		return fmt.Errorf("Can't take backup: %w", err)
 	}
 	if doBackup {
-		if err := takeBackup(ctx, cc.Context(), topoServer, backupStorage); err != nil {
+		if err := takeBackup(ctx, topoServer, backupStorage); err != nil {
 			return fmt.Errorf("Failed to take backup: %w", err)
 		}
 	}
@@ -328,7 +328,9 @@ func run(cc *cobra.Command, args []string) error {
 	return nil
 }
 
-func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
+// takeBackup restores or clones the shard data into a temporary mysqld,
+// catches replication up to the primary, and writes a new backup.
+func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
 	// This is an imaginary tablet alias. The value doesn't matter for anything,
 	// except that we generate a random UID to ensure the target backup
 	// directory is unique if multiple vtbackup instances are launched for the
@@ -359,19 +361,29 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}
-	ctx, cancelCtx := context.WithCancel(ctx)
-	backgroundCtx, cancelBackgroundCtx := context.WithCancel(backgroundCtx)
-	defer func() {
-		cancelCtx()
-		cancelBackgroundCtx()
-	}()
-	mysqld.OnTerm(func() {
-		log.Warn("Cancelling vtbackup as MySQL has terminated")
-		cancelCtx()
-		cancelBackgroundCtx()
-	})
 
-	initCtx, initCancel := context.WithTimeout(ctx, mysqlTimeout)
+	// shutdownCtx is a separate context for local mysqld work in this function.
+	// We do not use the main job context for this because mysqld can stop as
+	// part of normal CLONE work. Local mysqld calls should stop when that
+	// happens, but allow the rest of the backup job to continue.
+	shutdownCtx, cancelShutdownCtx := context.WithCancel(ctx)
+
+	// cleanupCtx is only for cleanup work at the end.
+	cleanupCtx, cancelCleanupCtx := context.WithCancel(ctx)
+
+	defer func() {
+		cancelShutdownCtx()
+		cancelCleanupCtx()
+	}()
+
+	mysqlTermHandler := newMySQLTermHandler(func() {
+		log.Warn("Cancelling vtbackup as MySQL has terminated")
+		cancelShutdownCtx()
+		cancelCleanupCtx()
+	})
+	mysqld.OnTerm(mysqlTermHandler.onTerm)
+
+	initCtx, initCancel := context.WithTimeout(shutdownCtx, mysqlTimeout)
 	defer initCancel()
 	initMysqldAt := time.Now()
 	if err := mysqld.Init(initCtx, mycnf, initDBSQLFile); err != nil {
@@ -380,9 +392,8 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	deprecatedDurationByPhase.Set("InitMySQLd", int64(time.Since(initMysqldAt).Seconds()))
 	// Shut down mysqld when we're done.
 	defer func() {
-		// Be careful use the background context, not the init one, because we don't want to
-		// skip shutdown just because we timed out waiting for init.
-		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(backgroundCtx, mysqlShutdownTimeout+10*time.Second)
+		// Use cleanupCtx here so we still try to clean up even if startup timed out.
+		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(cleanupCtx, mysqlShutdownTimeout+10*time.Second)
 		defer mysqlShutdownCancel()
 		if err := mysqld.Shutdown(mysqlShutdownCtx, mycnf, false, mysqlShutdownTimeout); err != nil {
 			log.Error(fmt.Sprintf("failed to shutdown mysqld: %v", err))
@@ -426,11 +437,11 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		// produces a result that can be used to skip InitShardPrimary entirely.
 		// This involves resetting replication (to erase any history) and then
 		// creating the main database and some Vitess system tables.
-		if err := mysqld.ResetReplication(ctx); err != nil {
+		if err := mysqld.ResetReplication(shutdownCtx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
 		// We need to switch off super_read_only before we create the database.
-		resetFunc, err := mysqld.SetSuperReadOnly(ctx, false)
+		resetFunc, err := mysqld.SetSuperReadOnly(shutdownCtx, false)
 		if err != nil {
 			return fmt.Errorf("failed to disable super_read_only during backup: %v", err)
 		}
@@ -443,7 +454,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			}()
 		}
 		cmd := mysqlctl.GenerateInitialBinlogEntry()
-		if err := mysqld.ExecuteSuperQueryList(ctx, []string{cmd}); err != nil {
+		if err := mysqld.ExecuteSuperQueryList(shutdownCtx, []string{cmd}); err != nil {
 			return err
 		}
 
@@ -451,7 +462,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		// Now we're ready to take the backup.
 		phase.Set(phaseNameInitialBackup, int64(1))
 		defer phase.Set(phaseNameInitialBackup, int64(0))
-		if err := mysqlctl.Backup(ctx, backupParams); err != nil {
+		if err := mysqlctl.Backup(shutdownCtx, backupParams); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
 		deprecatedDurationByPhase.Set("InitialBackup", int64(time.Since(backupParams.BackupTime).Seconds()))
@@ -460,50 +471,96 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 		return nil
 	}
 
-	var restorePos replication.Position
+	// Set up the context for the restore phase. If we are restoring from
+	// backup, use shutdownCtx so local mysqld work stops if mysqld exits. If
+	// we are cloning, use the main job context because CLONE makes mysqld
+	// restart on purpose and we do not want the restore to stop for that.
+	restoreCtx := shutdownCtx
 	if restoreWithClone {
-		restorePos, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, initKeyspace, initShard)
-		if err != nil {
-			return vterrors.Wrap(err, "restore with clone failed")
-		}
-	} else {
-		phase.Set(phaseNameRestoreLastBackup, int64(1))
-		defer phase.Set(phaseNameRestoreLastBackup, int64(0))
-		backupDir := mysqlctl.GetBackupDir(initKeyspace, initShard)
-		log.Info(fmt.Sprintf("Restoring latest backup from directory %v", backupDir))
-		restoreAt := time.Now()
-		params := mysqlctl.RestoreParams{
-			Cnf:                  mycnf,
-			Mysqld:               mysqld,
-			Logger:               logutil.NewConsoleLogger(),
-			Concurrency:          concurrency,
-			HookExtraEnv:         extraEnv,
-			DeleteBeforeRestore:  true,
-			DbName:               dbName,
-			Keyspace:             initKeyspace,
-			Shard:                initShard,
-			Stats:                backupstats.RestoreStats(),
-			MysqlShutdownTimeout: mysqlShutdownTimeout,
-		}
-		backupManifest, err := mysqlctl.Restore(ctx, params)
-		switch err {
-		case nil:
-			// if err is nil, we expect backupManifest to be non-nil
-			restorePos = backupManifest.Position
-			log.Info(fmt.Sprintf("Successfully restored from backup at replication position %v", restorePos))
-		case mysqlctl.ErrNoBackup:
-			// There is no backup found, but we may be taking the initial backup of a shard
-			if !allowFirstBackup {
-				return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial_backup flag was not enabled")
-			}
-			restorePos = replication.Position{}
-		default:
-			return vterrors.Wrap(err, "can't restore from backup")
-		}
-		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-		phase.Set(phaseNameRestoreLastBackup, int64(0))
+		restoreCtx = ctx
 	}
 
+	restorePos, err := restoreForBackup(restoreCtx, mysqlTermHandler, topoServer, mysqld, mycnf, dbName, extraEnv)
+	if err != nil {
+		return err
+	}
+
+	if err := runBackup(shutdownCtx, topoServer, mysqld, mycnf, restorePos, &backupParams); err != nil {
+		return err
+	}
+
+	log.Info("Backup successful.")
+	return nil
+}
+
+// restoreForBackup runs the restore step and returns the position the rest of
+// the backup job should use.
+func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, mycnf *mysqlctl.Mycnf, dbName string, extraEnv map[string]string) (replication.Position, error) {
+	if restoreWithClone {
+		var restorePos replication.Position
+
+		// CLONE intentionally restarts mysqld. Suppress the resulting OnTerm
+		// cancellation and pass mycnf so CloneFromDonor can restart mysqld
+		// itself if no process supervisor does.
+		err := mysqlTermHandler.ignoreTermsFor(func() error {
+			var err error
+
+			restorePos, err = mysqlctl.CloneFromDonor(ctx, topoServer, mysqld, mycnf, initKeyspace, initShard)
+
+			return err
+		})
+		if err != nil {
+			return replication.Position{}, vterrors.Wrap(err, "restore with clone failed")
+		}
+
+		return restorePos, nil
+	}
+
+	phase.Set(phaseNameRestoreLastBackup, int64(1))
+	defer phase.Set(phaseNameRestoreLastBackup, int64(0))
+
+	backupDir := mysqlctl.GetBackupDir(initKeyspace, initShard)
+	log.Info(fmt.Sprintf("Restoring latest backup from directory %v", backupDir))
+
+	restoreAt := time.Now()
+
+	params := mysqlctl.RestoreParams{
+		Cnf:                  mycnf,
+		Mysqld:               mysqld,
+		Logger:               logutil.NewConsoleLogger(),
+		Concurrency:          concurrency,
+		HookExtraEnv:         extraEnv,
+		DeleteBeforeRestore:  true,
+		DbName:               dbName,
+		Keyspace:             initKeyspace,
+		Shard:                initShard,
+		Stats:                backupstats.RestoreStats(),
+		MysqlShutdownTimeout: mysqlShutdownTimeout,
+	}
+
+	backupManifest, err := mysqlctl.Restore(ctx, params)
+	switch err {
+	case nil:
+		// If err is nil, we expect backupManifest to be non-nil.
+		log.Info(fmt.Sprintf("Successfully restored from backup at replication position %v", backupManifest.Position))
+		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
+		return backupManifest.Position, nil
+	case mysqlctl.ErrNoBackup:
+		// There is no backup found, but we may be taking the initial backup of a shard.
+		if !allowFirstBackup {
+			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial_backup flag was not enabled")
+		}
+
+		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
+		return replication.Position{}, nil
+	default:
+		return replication.Position{}, vterrors.Wrap(err, "can't restore from backup")
+	}
+}
+
+// runBackup starts replication from the restore position, catches up to the
+// current primary position, and takes a new backup.
+func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, restorePos replication.Position, backupParams *mysqlctl.BackupParams) error {
 	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
 	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
 	// loading data into a new MySQL instance. Disabling redo logging speeds up
@@ -534,17 +591,20 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	// catch up to live changes, we'd rather take a backup of something rather
 	// than timing out.
 	tmc := tmclient.NewTabletManagerClient()
+
 	// Keep retrying if we can't contact the primary. The primary might be
 	// changing, moving, or down temporarily.
 	var primaryPos replication.Position
-	err = retryOnError(ctx, func() error {
+	err := retryOnError(ctx, func() error {
 		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
 		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
 		defer optCancel()
+
 		pos, err := getPrimaryPosition(opCtx, tmc, topoServer)
 		if err != nil {
 			return fmt.Errorf("can't get the primary replication position: %v", err)
 		}
+
 		primaryPos = pos
 		return nil
 	})
@@ -554,6 +614,75 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 
 	log.Info("takeBackup: primary position is: " + primaryPos.String())
 
+	status, err := catchUpReplicationForBackup(ctx, topoServer, mysqld, restorePos, primaryPos)
+	if err != nil {
+		return err
+	}
+
+	// Re-enable redo logging before running init SQL, so that init SQL
+	// queries run with full crash safety.
+	if disabledRedoLog {
+		if err := mysqld.EnableRedoLog(ctx); err != nil {
+			return fmt.Errorf("failed to re-enable redo log: %v", err)
+		}
+	}
+
+	// Perform any requested backup initialization queries after catch-up replication.
+	if err := mysqlctl.ExecuteBackupInitSQL(ctx, backupParams); err != nil {
+		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
+	}
+
+	// Set BackupTime after catch-up and init SQL, so the timestamp on the
+	// backup postdates any changes made by init SQL queries.
+	backupParams.BackupTime = time.Now()
+
+	if restartBeforeBackup {
+		restartAt := time.Now()
+		log.Info("Proceeding with clean MySQL shutdown and startup to flush all buffers.")
+
+		// Prep for full/clean shutdown (not typically the default)
+		if err := mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
+			return fmt.Errorf("Could not prep for full shutdown: %v", err)
+		}
+
+		// Shutdown, waiting for it to finish
+		if err := mysqld.Shutdown(ctx, mycnf, true, mysqlShutdownTimeout); err != nil {
+			return fmt.Errorf("Something went wrong during full MySQL shutdown: %v", err)
+		}
+
+		// Start MySQL, waiting for it to come up
+		if err := mysqld.Start(ctx, mycnf); err != nil {
+			return fmt.Errorf("Could not start MySQL after full shutdown: %v", err)
+		}
+
+		deprecatedDurationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
+	}
+
+	// Now we can take a new backup.
+	backupAt := time.Now()
+	phase.Set(phaseNameTakeNewBackup, int64(1))
+	defer phase.Set(phaseNameTakeNewBackup, int64(0))
+
+	if err := mysqlctl.Backup(ctx, *backupParams); err != nil {
+		return fmt.Errorf("error taking backup: %v", err)
+	}
+
+	deprecatedDurationByPhase.Set("TakeNewBackup", int64(time.Since(backupAt).Seconds()))
+	phase.Set(phaseNameTakeNewBackup, int64(0))
+
+	// Return a non-zero exit code if we didn't meet the replication position
+	// goal, even though we took a backup that pushes the high-water mark up.
+	if !status.Position.AtLeast(primaryPos) {
+		return fmt.Errorf("replication caught up to %v but didn't make it to the goal of %v; a backup was taken anyway to save partial progress, but the operation should still be retried since not all expected data is backed up", status.Position, primaryPos)
+	}
+
+	return nil
+}
+
+// catchUpReplicationForBackup catches a restored mysqld up to the current
+// primary position and returns the final replication status after it stops
+// replication again.
+func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos, primaryPos replication.Position) (replication.ReplicationStatus, error) {
 	// Wait for replication to catch up.
 	phase.Set(phaseNameCatchupReplication, int64(1))
 	defer phase.Set(phaseNameCatchupReplication, int64(0))
@@ -569,12 +698,12 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 	lastErr := vterrors.NewLastError("replication catch up", timeoutWaitingForReplicationStatus)
 	for {
 		if !lastErr.ShouldRetry() {
-			return fmt.Errorf("timeout waiting for replication status after %.0f seconds", timeoutWaitingForReplicationStatus.Seconds())
+			return replication.ReplicationStatus{}, fmt.Errorf("timeout waiting for replication status after %.0f seconds", timeoutWaitingForReplicationStatus.Seconds())
 		}
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("error in replication catch up: %v", ctx.Err())
+			return replication.ReplicationStatus{}, fmt.Errorf("error in replication catch up: %v", ctx.Err())
 		case <-time.After(time.Second):
 		}
 
@@ -585,6 +714,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			log.Warn(fmt.Sprintf("Error getting replication status: %v", statusErr))
 			continue
 		}
+
 		if status.Position.AtLeast(primaryPos) {
 			// We're caught up on replication to at least the point the primary
 			// was at when this vtbackup run started.
@@ -592,6 +722,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			deprecatedDurationByPhase.Set("CatchUpReplication", int64(time.Since(waitStartTime).Seconds()))
 			break
 		}
+
 		if !lastStatus.Position.IsZero() {
 			if status.Position.Equal(lastStatus.Position) {
 				phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 1)
@@ -599,6 +730,7 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 				phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 			}
 		}
+
 		if !status.Healthy() {
 			errStr := "Replication has stopped before backup could be taken. Trying to restart replication."
 			log.Warn(errStr)
@@ -612,77 +744,29 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 		}
 	}
+
 	phase.Set(phaseNameCatchupReplication, int64(0))
 
 	// Stop replication and see where we are.
 	if err := mysqld.StopReplication(ctx, nil); err != nil {
-		return fmt.Errorf("can't stop replication: %v", err)
+		return replication.ReplicationStatus{}, fmt.Errorf("can't stop replication: %v", err)
 	}
 
 	// Did we make any progress?
 	status, statusErr = mysqld.ReplicationStatus(ctx)
 	if statusErr != nil {
-		return fmt.Errorf("can't get replication status: %v", err)
+		return replication.ReplicationStatus{}, fmt.Errorf("can't get replication status: %v", statusErr)
 	}
+
 	log.Info(fmt.Sprintf("Replication caught up to %v", status.Position))
 	if !status.Position.AtLeast(primaryPos) && status.Position.Equal(restorePos) {
-		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
+		return replication.ReplicationStatus{}, fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
+
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 
-	// Re-enable redo logging before running init SQL, so that init SQL
-	// queries run with full crash safety.
-	if disabledRedoLog {
-		if err := mysqld.EnableRedoLog(ctx); err != nil {
-			return fmt.Errorf("failed to re-enable redo log: %v", err)
-		}
-	}
-
-	// Perform any requested backup initialization queries after catch-up replication.
-	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
-		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
-	}
-
-	// Set BackupTime after catch-up and init SQL, so the timestamp on the
-	// backup postdates any changes made by init SQL queries.
-	backupParams.BackupTime = time.Now()
-
-	if restartBeforeBackup {
-		restartAt := time.Now()
-		log.Info("Proceeding with clean MySQL shutdown and startup to flush all buffers.")
-		// Prep for full/clean shutdown (not typically the default)
-		if err := mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL innodb_fast_shutdown=0"); err != nil {
-			return fmt.Errorf("Could not prep for full shutdown: %v", err)
-		}
-		// Shutdown, waiting for it to finish
-		if err := mysqld.Shutdown(ctx, mycnf, true, mysqlShutdownTimeout); err != nil {
-			return fmt.Errorf("Something went wrong during full MySQL shutdown: %v", err)
-		}
-		// Start MySQL, waiting for it to come up
-		if err := mysqld.Start(ctx, mycnf); err != nil {
-			return fmt.Errorf("Could not start MySQL after full shutdown: %v", err)
-		}
-		deprecatedDurationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
-	}
-
-	// Now we can take a new backup.
-	backupAt := time.Now()
-	phase.Set(phaseNameTakeNewBackup, int64(1))
-	defer phase.Set(phaseNameTakeNewBackup, int64(0))
-	if err := mysqlctl.Backup(ctx, backupParams); err != nil {
-		return fmt.Errorf("error taking backup: %v", err)
-	}
-	deprecatedDurationByPhase.Set("TakeNewBackup", int64(time.Since(backupAt).Seconds()))
-	phase.Set(phaseNameTakeNewBackup, int64(0))
-
-	// Return a non-zero exit code if we didn't meet the replication position
-	// goal, even though we took a backup that pushes the high-water mark up.
-	if !status.Position.AtLeast(primaryPos) {
-		return fmt.Errorf("replication caught up to %v but didn't make it to the goal of %v; a backup was taken anyway to save partial progress, but the operation should still be retried since not all expected data is backed up", status.Position, primaryPos)
-	}
-	log.Info("Backup successful.")
-	return nil
+	return status, nil
 }
 
 func resetReplication(ctx context.Context, pos replication.Position, mysqld mysqlctl.MysqlDaemon) error {

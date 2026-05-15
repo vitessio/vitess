@@ -28,6 +28,38 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+func TestResolveWorkflowKeepData(t *testing.T) {
+	t.Run("non-reverse workflow keeps existing default", func(t *testing.T) {
+		keepData, warnings := resolveWorkflowKeepData("wf1", nil)
+		require.False(t, keepData)
+		require.Empty(t, warnings)
+	})
+
+	t.Run("reverse workflow defaults to keeping data", func(t *testing.T) {
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", nil)
+		require.True(t, keepData)
+		require.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "wf1_reverse")
+		assert.Contains(t, warnings[0], "keeping data by default")
+		assert.Contains(t, warnings[0], "keep_data=false")
+		assert.Contains(t, warnings[0], "--keep-data=false")
+	})
+
+	t.Run("explicit false on reverse workflow is honored", func(t *testing.T) {
+		keepDataValue := false
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
+		require.False(t, keepData)
+		require.Empty(t, warnings)
+	})
+
+	t.Run("explicit true on reverse workflow is honored", func(t *testing.T) {
+		keepDataValue := true
+		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
+		require.True(t, keepData)
+		require.Empty(t, warnings)
+	})
+}
+
 // TestCreateDefaultShardRoutingRules confirms that the default shard routing rules are created correctly for sharded
 // and unsharded keyspaces.
 func TestCreateDefaultShardRoutingRules(t *testing.T) {
@@ -125,7 +157,7 @@ func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
 		t.Skip()
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
@@ -176,7 +208,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 }
 
 func update(t *testing.T, ts *topo.Server, id int) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
@@ -225,7 +257,7 @@ func startEtcd(t *testing.T) string {
 	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	start := time.Now()
 	for {
@@ -282,7 +314,7 @@ func TestValidateSourceTablesExist(t *testing.T) {
 }
 
 func TestLegacyBuildTargets(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"

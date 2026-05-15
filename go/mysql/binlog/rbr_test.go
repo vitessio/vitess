@@ -551,14 +551,14 @@ func TestCellLengthAndData(t *testing.T) {
 		// Test cellLength.
 		l, err := CellLength(padded, 1, tcase.typ, tcase.metadata)
 		if err != nil || l != len(tcase.data) {
-			t.Errorf("testcase cellLength(%v,%v) returned unexpected result: %v %v was expected %v <nil>",
+			assert.Failf(t, "cellLength mismatch", "testcase cellLength(%v,%v) returned unexpected result: %v %v was expected %v <nil>",
 				tcase.typ, tcase.data, l, err, len(tcase.data))
 		}
 
 		// Test CellValue.
 		out, l, err := CellValue(padded, 1, tcase.typ, tcase.metadata, &querypb.Field{Type: tcase.styp}, false)
 		if err != nil || l != len(tcase.data) || out.Type() != tcase.out.Type() || !bytes.Equal(out.Raw(), tcase.out.Raw()) {
-			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>\nwant: %s\ngot:  %s",
+			assert.Failf(t, "cellData mismatch", "testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>\nwant: %s\ngot:  %s",
 				tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data), tcase.out.Raw(), out.Raw())
 		}
 	}

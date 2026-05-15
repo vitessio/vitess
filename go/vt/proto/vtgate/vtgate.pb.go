@@ -1349,8 +1349,15 @@ type VStreamFlags struct {
 	// Events are still chunked to prevent OOM. Transactions smaller than this are sent
 	// without locking for better parallelism.
 	TransactionChunkSize int64 `protobuf:"varint,11,opt,name=transaction_chunk_size,json=transactionChunkSize,proto3" json:"transaction_chunk_size,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// Maximum duration (in seconds) a VStream runs before the server terminates it with
+	// UNAVAILABLE. This is best-effort: if a send to the client is in-flight when the age is reached,
+	// the server waits for it to complete before returning.
+	// The client is expected to reconnect.
+	// A random jitter of +/-10% is added to spread out reconnections.
+	// 0 means no maximum age.
+	MaxStreamAgeSeconds uint32 `protobuf:"varint,12,opt,name=max_stream_age_seconds,json=maxStreamAgeSeconds,proto3" json:"max_stream_age_seconds,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *VStreamFlags) Reset() {
@@ -1456,6 +1463,13 @@ func (x *VStreamFlags) GetExcludeKeyspaceFromTableName() bool {
 func (x *VStreamFlags) GetTransactionChunkSize() int64 {
 	if x != nil {
 		return x.TransactionChunkSize
+	}
+	return 0
+}
+
+func (x *VStreamFlags) GetMaxStreamAgeSeconds() uint32 {
+	if x != nil {
+		return x.MaxStreamAgeSeconds
 	}
 	return 0
 }
@@ -2206,7 +2220,7 @@ const file_vtgate_proto_rawDesc = "" +
 	"\x19ResolveTransactionRequest\x12,\n" +
 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x12\x12\n" +
 	"\x04dtid\x18\x02 \x01(\tR\x04dtid\"\x1c\n" +
-	"\x1aResolveTransactionResponse\"\x93\x04\n" +
+	"\x1aResolveTransactionResponse\"\xc8\x04\n" +
 	"\fVStreamFlags\x12#\n" +
 	"\rminimize_skew\x18\x01 \x01(\bR\fminimizeSkew\x12-\n" +
 	"\x12heartbeat_interval\x18\x02 \x01(\rR\x11heartbeatInterval\x12&\n" +
@@ -2219,7 +2233,8 @@ const file_vtgate_proto_rawDesc = "" +
 	"\x0etables_to_copy\x18\t \x03(\tR\ftablesToCopy\x12F\n" +
 	" exclude_keyspace_from_table_name\x18\n" +
 	" \x01(\bR\x1cexcludeKeyspaceFromTableName\x124\n" +
-	"\x16transaction_chunk_size\x18\v \x01(\x03R\x14transactionChunkSize\"\xf6\x01\n" +
+	"\x16transaction_chunk_size\x18\v \x01(\x03R\x14transactionChunkSize\x123\n" +
+	"\x16max_stream_age_seconds\x18\f \x01(\rR\x13maxStreamAgeSeconds\"\xf6\x01\n" +
 	"\x0eVStreamRequest\x12,\n" +
 	"\tcaller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\bcallerId\x125\n" +
 	"\vtablet_type\x18\x02 \x01(\x0e2\x14.topodata.TabletTypeR\n" +

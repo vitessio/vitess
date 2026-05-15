@@ -52,6 +52,7 @@ type VSchemaWrapper struct {
 	TabletType_           topodatapb.TabletType
 	Dest                  key.ShardDestination
 	SysVarEnabled         bool
+	DeniedSysVars         map[string]struct{}
 	ForeignKeyChecksState *bool
 	Version               plancontext.PlannerVersion
 	EnableViews           bool
@@ -169,6 +170,13 @@ func (vw *VSchemaWrapper) ForeignKeyMode(keyspace string) (vschemapb.Keyspace_Fo
 	return defaultFkMode, nil
 }
 
+func (vw *VSchemaWrapper) AllowCrossKeyspaceReads(keyspace string) (bool, error) {
+	if vw.V.Keyspaces[keyspace] != nil {
+		return !vw.V.Keyspaces[keyspace].PreventCrossKeyspaceReads, nil
+	}
+	return true, nil
+}
+
 func (vw *VSchemaWrapper) KeyspaceError(keyspace string) error {
 	return nil
 }
@@ -221,6 +229,18 @@ func (vw *VSchemaWrapper) KeyspaceExists(keyspace string) bool {
 
 func (vw *VSchemaWrapper) SysVarSetEnabled() bool {
 	return vw.SysVarEnabled
+}
+
+func (vw *VSchemaWrapper) IsSystemVariableDenied(name string) bool {
+	if len(vw.DeniedSysVars) == 0 {
+		return false
+	}
+	_, denied := vw.DeniedSysVars[strings.ToLower(name)]
+	return denied
+}
+
+func (vw *VSchemaWrapper) HasDeniedSystemVariables() bool {
+	return len(vw.DeniedSysVars) > 0
 }
 
 func (vw *VSchemaWrapper) TargetDestination(qualifier string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
