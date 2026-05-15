@@ -984,3 +984,47 @@ func TestThrottlerAppNames(t *testing.T) {
 	assert.Contains(t, vc.throttlerAppName, "vcopier")
 	assert.NotContains(t, vc.throttlerAppName, "vplayer")
 }
+
+// TestLoadSettingsResyncsInMemoryState ensures that loadSettings reconciles
+// the in-memory state metric with the row read from _vt.vreplication. This
+// recovers the metric on a successful retry after a previous setState attempt
+// advanced stats.State to "Error" but the DB UPDATE failed (e.g., a transient
+// read-only window on the target). Without this, the stream silently resumes
+// copying while metrics keep reporting Error.
+func TestLoadSettingsResyncsInMemoryState(t *testing.T) {
+	stats := binlogplayer.NewStats()
+	defer stats.Stop()
+	stats.State.Store(binlogdatapb.VReplicationWorkflowState_Error.String())
+
+	mockDBClient := binlogplayer.NewMockDBClient(t)
+	defer mockDBClient.Close()
+
+	settingsResp := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"pos|stop_pos|max_tps|max_replication_lag|state|workflow_type|workflow|workflow_sub_type|defer_secondary_keys|options",
+			"varbinary|varbinary|int64|int64|varbinary|int64|varchar|int64|int64|varchar",
+		),
+		"MySQL56/1b03758e-0dd0-4d39-b0dc-bb7acede17c1:1-1083||9223372036854775807|9223372036854775807|Copying|1|wf|0|0|{}",
+	)
+	mockDBClient.ExpectRequest(binlogplayer.TestGetWorkflowQueryId1, settingsResp, nil)
+	mockDBClient.ExpectRequest("select count(distinct table_name) from _vt.copy_state where vrepl_id=1",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("count", "int64"),
+			"0",
+		), nil)
+
+	vr := &vreplicator{
+		id:       1,
+		stats:    stats,
+		dbClient: newVDBClient(mockDBClient, stats, vttablet.DefaultVReplicationConfig.RelayLogMaxItems),
+		state:    binlogdatapb.VReplicationWorkflowState_Error,
+	}
+
+	settings, _, err := vr.loadSettings(context.Background(), vr.dbClient)
+	require.NoError(t, err)
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying, settings.State)
+	assert.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying.String(), stats.State.Load(),
+		"stats.State must be resynced to the freshly read DB state")
+	assert.Equal(t, binlogdatapb.VReplicationWorkflowState_Copying, vr.state,
+		"vr.state must be resynced to the freshly read DB state")
+}

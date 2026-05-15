@@ -496,6 +496,15 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
+		// Reconcile in-memory state with the row we just read from
+		// _vt.vreplication. A previous setState attempt can advance
+		// stats.State (and vr.state) before the DB UPDATE is sent, so
+		// when that UPDATE fails (e.g., target MySQL is read-only) the
+		// in-memory state ends up out of sync with the persisted row.
+		// On every successful retry that reaches loadSettings we resync
+		// from the source of truth.
+		vr.state = settings.State
+		vr.stats.State.Store(settings.State.String())
 	}
 	return settings, numTablesToCopy, err
 }
