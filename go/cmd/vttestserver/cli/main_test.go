@@ -374,11 +374,13 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
 }
 
+func reservedPort() int {
+	return (&cluster.LocalProcessCluster{}).GetAndReservePort()
+}
+
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
 	flags = append(flags, []string{
 		"--persistent-mode",
-		// FIXME: if port is not provided, data_dir is not respected
-		fmt.Sprintf("--port=%d", randomPort()),
 		"--data-dir=" + dir,
 	}...)
 	return startCluster(flags...)
@@ -395,8 +397,9 @@ func startCluster(flags ...string) (cluster vttest.LocalCluster, err error) {
 	tabletHostname := "--tablet-hostname" + "=localhost"
 	keyspaceArg := "--keyspaces=" + strings.Join(clusterKeyspaces, ",")
 	numShardsArg := "--num-shards=2,2"
+	portArg := fmt.Sprintf("--port=%d", reservedPort())
 	vschemaDDLAuthorizedUsers := "--vschema-ddl-authorized-users=%"
-	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
+	args = append(args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, portArg, vschemaDDLAuthorizedUsers}...)
 	args = append(args, flags...)
 
 	if err = New().ParseFlags(args); err != nil {

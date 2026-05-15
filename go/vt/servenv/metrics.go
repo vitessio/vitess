@@ -35,3 +35,9 @@ func getMemoryUsage() float64 {
 	}
 	return -1
 }
+
+// MemoryUsage returns the current process memory utilization ratio. It prefers
+// cgroup-backed values when available and falls back to host memory usage.
+func MemoryUsage() float64 {
+	return getMemoryUsage()
+}

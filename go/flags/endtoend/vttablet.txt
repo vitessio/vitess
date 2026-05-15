@@ -146,6 +146,7 @@ Flags:
       --enable-consolidator-replicas                                     This option enables the query consolidator only on replicas.
       --enable-hot-row-protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.
       --enable-hot-row-protection-dry-run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
+      --enable-memory-pressure-backpressure                              If true, vttablet rejects new work with RESOURCE_EXHAUSTED when process memory utilization crosses configured thresholds.
       --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
       --enable-replication-reporter                                      Use polling to track replication lag.
       --enable-transaction-limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
@@ -224,6 +225,9 @@ Flags:
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-concurrent-online-ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
+      --memory-pressure-hard-threshold float                             Process memory utilization ratio (0-1) at which vttablet rejects most new work. (default 0.9)
+      --memory-pressure-resume-threshold float                           Process memory utilization ratio (0-1) below which vttablet resumes admitting work after memory-pressure backpressure has engaged. (default 0.7)
+      --memory-pressure-soft-threshold float                             Process memory utilization ratio (0-1) at which vttablet starts rejecting new transaction-start and streaming work. (default 0.8)
       --migration-check-interval duration                                Interval between migration checks (default 1m0s)
       --mycnf-bin-log-path string                                        mysql binlog path
       --mycnf-data-dir string                                            data directory for mysql

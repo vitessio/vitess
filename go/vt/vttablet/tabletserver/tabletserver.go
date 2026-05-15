@@ -145,6 +145,7 @@ type TabletServer struct {
 	env *vtenv.Environment
 
 	queryThrottler *querythrottler.QueryThrottler
+	memoryPressure *memoryPressureController
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -174,6 +175,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 		alias:                  alias.CloneVT(),
 		env:                    env,
 	}
+	tsv.memoryPressure = newMemoryPressureController(&config.MemoryPressure, exporter, servenv.MemoryUsage)
 	tsv.QueryTimeout.Store(config.Oltp.QueryTimeout.Nanoseconds())
 
 	srvTopoServer := srvtopo.NewResilientServer(ctx, topoServer, srvTopoCounts)
@@ -1309,12 +1311,18 @@ func (tsv *TabletServer) VStream(ctx context.Context, request *binlogdatapb.VStr
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
+	if err := tsv.memoryPressure.reject("VStream"); err != nil {
+		return err
+	}
 	return tsv.vstreamer.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, request.Options)
 }
 
 // VStreamRows streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
+		return err
+	}
+	if err := tsv.memoryPressure.reject("VStreamRows"); err != nil {
 		return err
 	}
 	var row []sqltypes.Value
@@ -1333,12 +1341,18 @@ func (tsv *TabletServer) VStreamTables(ctx context.Context, request *binlogdatap
 	if err := tsv.sm.VerifyTarget(ctx, request.Target); err != nil {
 		return err
 	}
+	if err := tsv.memoryPressure.reject("VStreamTables"); err != nil {
+		return err
+	}
 	return tsv.vstreamer.StreamTables(ctx, send, request.Options)
 }
 
 // VStreamResults streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
+		return err
+	}
+	if err := tsv.memoryPressure.reject("VStreamResults"); err != nil {
 		return err
 	}
 	return tsv.vstreamer.StreamResults(ctx, query, send)
@@ -1857,6 +1871,10 @@ func (tsv *TabletServer) execRequest(
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVariables)
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
 
+	if err = tsv.memoryPressure.reject(requestName); err != nil {
+		return tsv.convertAndLogError(ctx, sql, bindVariables, err, logStats)
+	}
+
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
 		return err
 	}
@@ -2311,6 +2329,12 @@ func (tsv *TabletServer) SetConsolidatorMode(mode string) {
 // ConsolidatorMode returns the consolidator mode.
 func (tsv *TabletServer) ConsolidatorMode() string {
 	return tsv.qe.consolidatorMode.Load().(string)
+}
+
+// SetMemoryPressureForTests overrides memory-pressure admission settings for tests.
+func (tsv *TabletServer) SetMemoryPressureForTests(cfg tabletenv.MemoryPressureConfig, getMemoryUsage func() float64) {
+	tsv.config.MemoryPressure = cfg
+	tsv.memoryPressure.setForTests(cfg, getMemoryUsage)
 }
 
 // queryAsString returns a readable normalized version of the query.

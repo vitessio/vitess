@@ -19,8 +19,12 @@ limitations under the License.
 package servenv
 
 import (
+	"os"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,8 +43,12 @@ func TestGetCgroupMemoryUsageMetrics(t *testing.T) {
 
 func TestErrHandlingWithCgroups(t *testing.T) {
 	origCgroupManager := cgroupManager
+	origCgroupMemoryPath := cgroupMemoryPath
+	origCgroupMemoryLimit := cgroupMemoryLimit.Load()
 	defer func() {
 		cgroupManager = origCgroupManager
+		cgroupMemoryPath = origCgroupMemoryPath
+		cgroupMemoryLimit.Store(origCgroupMemoryLimit)
 	}()
 
 	cpu, err := getCgroupCpuUsage()
@@ -49,6 +57,8 @@ func TestErrHandlingWithCgroups(t *testing.T) {
 	validateMem(t, mem, err)
 
 	cgroupManager = nil
+	cgroupMemoryPath = ""
+	cgroupMemoryLimit.Store(0)
 	require.Nil(t, cgroupManager)
 
 	cpu, err = getCgroupCpuUsage()
@@ -57,4 +67,81 @@ func TestErrHandlingWithCgroups(t *testing.T) {
 	mem, err = getCgroupMemoryUsage()
 	require.ErrorContains(t, err, errCgroupMetricsNotAvailable.Error())
 	require.Equal(t, int(mem), -1)
+}
+
+func TestGetCgroupMemoryUsageAtPath(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "memory.current"), []byte("100\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "memory.max"), []byte("200\n"), 0o644))
+
+	var cachedLimit atomic.Uint64
+	usage, err := getCgroupMemoryUsageAtPath(dir, &cachedLimit)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.5, usage, 0.000001)
+	require.Equal(t, uint64(200), cachedLimit.Load())
+}
+
+func TestGetCgroupMemoryLimitAtPathCachesLimit(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "memory.max"), []byte("200\n"), 0o644))
+
+	var cachedLimit atomic.Uint64
+	limit, err := getCgroupMemoryLimitAtPath(dir, &cachedLimit)
+	require.NoError(t, err)
+	require.Equal(t, uint64(200), limit)
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "memory.max"), []byte("400\n"), 0o644))
+	limit, err = getCgroupMemoryLimitAtPath(dir, &cachedLimit)
+	require.NoError(t, err)
+	require.Equal(t, uint64(200), limit)
+}
+
+func TestReadCgroupMemoryValue(t *testing.T) {
+	dir := t.TempDir()
+
+	t.Run("numeric", func(t *testing.T) {
+		path := filepath.Join(dir, "memory.current")
+		require.NoError(t, os.WriteFile(path, []byte("123\n"), 0o644))
+		value, err := readCgroupMemoryValue(path)
+		require.NoError(t, err)
+		require.Equal(t, uint64(123), value)
+	})
+
+	t.Run("max", func(t *testing.T) {
+		path := filepath.Join(dir, "memory.max")
+		require.NoError(t, os.WriteFile(path, []byte("max\n"), 0o644))
+		value, err := readCgroupMemoryValue(path)
+		require.NoError(t, err)
+		require.Equal(t, ^uint64(0), value)
+	})
+}
+
+func TestCgroupMemoryPathForGroupPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		groupPath string
+		want      string
+	}{
+		{
+			name:      "absolute path",
+			groupPath: "/kubepods.slice/pod123/container456",
+			want:      "/sys/fs/cgroup/kubepods.slice/pod123/container456",
+		},
+		{
+			name:      "relative path",
+			groupPath: "kubepods.slice/pod123/container456",
+			want:      "/sys/fs/cgroup/kubepods.slice/pod123/container456",
+		},
+		{
+			name:      "root path",
+			groupPath: "/",
+			want:      "/sys/fs/cgroup",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, cgroupMemoryPathForGroupPath(tt.groupPath))
+		})
+	}
 }
