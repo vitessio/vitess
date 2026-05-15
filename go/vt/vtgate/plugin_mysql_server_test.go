@@ -1053,6 +1053,47 @@ func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPWire(t *testing.T) {
 	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
+func TestSlowQueryStatusFlagsComQueryMultiOKOnlyOLAPFallbackWire(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	oldDefaultWorkload := mysqlDefaultWorkload
+	slowQueryThreshold = 5 * time.Millisecond
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		mysqlDefaultWorkload = oldDefaultWorkload
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("update user set name = 'foo' where id = 1", 100, true)
+	require.NoError(t, err)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
 func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 
@@ -1237,6 +1278,55 @@ func TestSlowQueryStatusFlagsStreamExecuteMultiOLAP(t *testing.T) {
 	require.NotNil(t, session)
 	assert.True(t, seenOKOnly)
 	assert.Equal(t, []bool{true, false}, mysqlCtx.slowQueryStates)
+}
+
+func TestSlowQueryStatusFlagsComQueryMultiOLAPErrorAfterSlowRowsWire(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	oldDefaultWorkload := mysqlDefaultWorkload
+	slowQueryThreshold = 5 * time.Millisecond
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		mysqlDefaultWorkload = oldDefaultWorkload
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select id from user where id = 1; select from", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.Error(t, err)
+	assert.False(t, more)
+	assert.Nil(t, result)
 }
 
 func TestStreamExecuteMultiOLAPTimeoutUsesParentContextPerStatement(t *testing.T) {
