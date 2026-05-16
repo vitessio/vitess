@@ -167,21 +167,46 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 	}
 }
 
+var (
+	prefixJSONObject = []byte("JSON_OBJECT(")
+	prefixJSONArray  = []byte("JSON_ARRAY(")
+	prefixCAST       = []byte("CAST(")
+)
+
+func preserializedJSONSQL(raw []byte) (trimmed []byte, ok bool) {
+	trimmed = bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return trimmed, false
+	}
+	switch trimmed[0] {
+	case '{', '[', '"':
+		return trimmed, false
+	}
+	if bytes.HasPrefix(trimmed, prefixJSONObject) {
+		return trimmed, true
+	}
+	if bytes.HasPrefix(trimmed, prefixJSONArray) {
+		return trimmed, true
+	}
+	if bytes.HasPrefix(trimmed, prefixCAST) {
+		return trimmed, true
+	}
+	return trimmed, false
+}
+
 // IsPreserializedJSONSQL reports whether raw is a SQL JSON expression produced by
 // Value.MarshalSQLTo on the vstreamer binlog path, as opposed to standard JSON text.
 func IsPreserializedJSONSQL(raw []byte) bool {
-	raw = bytes.TrimSpace(raw)
-	return bytes.HasPrefix(raw, []byte("JSON_OBJECT(")) ||
-		bytes.HasPrefix(raw, []byte("JSON_ARRAY(")) ||
-		bytes.HasPrefix(raw, []byte("CAST("))
+	_, ok := preserializedJSONSQL(raw)
+	return ok
 }
 
 // JSONSQLValue converts JSON column bytes for VReplication into a bindable SQL value.
 // Bytes from the vstreamer binlog path are already SQL expressions; text JSON from
 // table copy or older streams is converted via MarshalSQLValue.
 func JSONSQLValue(raw []byte) (*sqltypes.Value, error) {
-	if IsPreserializedJSONSQL(raw) {
-		v := sqltypes.MakeTrusted(querypb.Type_RAW, bytes.TrimSpace(raw))
+	if trimmed, ok := preserializedJSONSQL(raw); ok {
+		v := sqltypes.MakeTrusted(querypb.Type_RAW, trimmed)
 		return &v, nil
 	}
 	return MarshalSQLValue(raw)
@@ -190,8 +215,8 @@ func JSONSQLValue(raw []byte) (*sqltypes.Value, error) {
 // AppendJSONSQL writes a JSON column value as SQL into buf, preserving values that
 // were already encoded with MarshalSQLTo on the vstreamer binlog path.
 func AppendJSONSQL(buf *bytes2.Buffer, raw []byte) error {
-	if IsPreserializedJSONSQL(raw) {
-		buf.Write(bytes.TrimSpace(raw))
+	if trimmed, ok := preserializedJSONSQL(raw); ok {
+		buf.Write(trimmed)
 		return nil
 	}
 	return AppendMarshalSQL(buf, raw)

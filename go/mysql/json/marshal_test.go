@@ -33,6 +33,10 @@ func TestIsPreserializedJSONSQL(t *testing.T) {
 	assert.True(t, IsPreserializedJSONSQL([]byte(`CAST(date '2015-01-15' as JSON)`)))
 	assert.False(t, IsPreserializedJSONSQL([]byte(`{"a": 1}`)))
 	assert.False(t, IsPreserializedJSONSQL([]byte(`[1, 2]`)))
+	assert.False(t, IsPreserializedJSONSQL([]byte(`"scalar"`)))
+	assert.False(t, IsPreserializedJSONSQL([]byte(`  {"a": 1}`)))
+	assert.False(t, IsPreserializedJSONSQL(nil))
+	assert.False(t, IsPreserializedJSONSQL([]byte(`   `)))
 }
 
 func TestJSONSQLValue(t *testing.T) {
