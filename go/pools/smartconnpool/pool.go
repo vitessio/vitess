@@ -869,14 +869,29 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			pool.Metrics.idleClosed.Add(1)
 
 			conn.Close()
+			pool.closedConn()
+		}
 
-			err := pool.connReopen(context.Background(), conn, mono)
-			if err != nil {
-				pool.closedConn()
+		for _, conn := range expiredConnections {
+			if pool.active.Load() >= pool.capacity.Load() {
+				break
+			}
+
+			if err := pool.connReopen(context.Background(), conn, mono); err != nil {
 				continue
 			}
 
-			pool.tryReturnConn(conn)
+			for {
+				open := pool.active.Load()
+				if open >= pool.capacity.Load() {
+					conn.Close()
+					break
+				}
+				if pool.active.CompareAndSwap(open, open+1) {
+					pool.tryReturnConn(conn)
+					break
+				}
+			}
 		}
 	}
 
