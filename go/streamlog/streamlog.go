@@ -42,11 +42,13 @@ var (
 	deliveredCount = stats.NewCountersWithMultiLabels(
 		"StreamlogDelivered",
 		"Stream log delivered",
-		[]string{"Log", "Subscriber"})
+		[]string{"Log", "Subscriber"},
+	)
 	deliveryDropCount = stats.NewCountersWithMultiLabels(
 		"StreamlogDeliveryDroppedMessages",
 		"Dropped messages by streamlog delivery",
-		[]string{"Log", "Subscriber"})
+		[]string{"Log", "Subscriber"},
+	)
 )
 
 const (
@@ -290,6 +292,13 @@ func (qlConfig QueryLogConfig) shouldSampleQuery() bool {
 // It also returns an EmitReason which is a comma-separated-string to indicate all the conditions triggered for log emit.
 // If both TimeThreshold and FilterTag condition are met, EmitReason will be time,filtertag
 func (qlConfig QueryLogConfig) ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64, totalTime time.Duration, hasError bool) (bool, string) {
+	// MySQL 8.4+ clients send "select $$" at connection time to probe dollar-quote
+	// syntax support. This is hardcoded client behavior that cannot be disabled;
+	// suppress it to avoid log noise.
+	if strings.EqualFold(strings.TrimSpace(sql), "select $$") {
+		return false, ""
+	}
+
 	var aMatch, allMatches bool
 	var aReason string
 	reasons := []string{}
