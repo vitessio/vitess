@@ -526,10 +526,10 @@ func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 
 func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 	maxLifetime := pool.config.maxLifetime.Load()
-	if maxLifetime == 0 {
+	if maxLifetime <= 0 {
 		return 0
 	}
-	return time.Duration(maxLifetime) + time.Duration(rand.Uint32N(uint32(maxLifetime)))
+	return time.Duration(maxLifetime) + time.Duration(rand.Int64N(maxLifetime))
 }
 
 func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now time.Duration) (err error) {
