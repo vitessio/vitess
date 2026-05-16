@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -152,4 +153,51 @@ func TestInvokeRestoreDoneHook_Timestamps(t *testing.T) {
 			assert.NotEmpty(t, duration)
 		}
 	}
+}
+
+func TestDisableReplicationRecoversFromRecoverableReplicationInitError(t *testing.T) {
+	fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+	fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"FAKE RESET REPLICA ALL",
+		"FAKE SET SOURCE",
+		"FAKE RESET REPLICA ALL",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+	}
+
+	setSourceCalls := 0
+	fakeMysqlDaemon.SetReplicationSourceFunc = func(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {
+		setSourceCalls++
+
+		require.Equal(t, "//", host)
+		require.Zero(t, port)
+		require.Zero(t, heartbeatInterval)
+		require.False(t, stopReplicationBefore)
+		require.False(t, startReplicationAfter)
+
+		if setSourceCalls == 1 {
+			require.NoError(t, fakeMysqlDaemon.ExecuteSuperQueryList(ctx, []string{"FAKE SET SOURCE"}))
+			return recoverableReplicationInitError()
+		}
+
+		if setSourceCalls == 2 {
+			require.NoError(t, fakeMysqlDaemon.ExecuteSuperQueryList(ctx, []string{"FAKE SET SOURCE"}))
+			fakeMysqlDaemon.CurrentSourceHost = host
+			fakeMysqlDaemon.CurrentSourcePort = port
+			return nil
+		}
+
+		return errors.New("unexpected SetReplicationSource call")
+	}
+
+	tm := newTestTabletManager(t)
+	tm.MysqlDaemon = fakeMysqlDaemon
+
+	err := tm.disableReplication(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 2, setSourceCalls)
+	require.Equal(t, "//", fakeMysqlDaemon.CurrentSourceHost)
+	require.Zero(t, fakeMysqlDaemon.CurrentSourcePort)
+	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }

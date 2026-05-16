@@ -46,6 +46,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 
@@ -56,6 +58,272 @@ import (
 type testcase struct {
 	input  any
 	output [][]string
+}
+
+func TestParseEventsDrainsBufferedEventsBeforeTerminalError(t *testing.T) {
+	f := mysql.NewMySQL56BinlogFormat()
+	s := mysql.NewFakeBinlogStream()
+	s.ServerID = 62344
+
+	input := []mysql.BinlogEvent{
+		mysql.NewRotateEvent(f, s, 0, ""),
+		mysql.NewFormatDescriptionEvent(f, s),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewXIDEvent(f, s),
+	}
+
+	streamErr := errors.New("stream ended after buffered events")
+	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
+	vse := &Engine{keyspace: testenv.DBName, shard: testenv.DefaultShard}
+
+	for i := range 64 {
+		events := make(chan mysql.BinlogEvent, len(input))
+		errs := make(chan error, 1)
+		for _, ev := range input {
+			events <- ev
+		}
+		close(events)
+		errs <- streamErr
+		close(errs)
+
+		var got [][]*binlogdatapb.VEvent
+		vs := &vstreamer{
+			ctx: t.Context(),
+			cp:  cp,
+			send: func(vevents []*binlogdatapb.VEvent) error {
+				got = append(got, vevents)
+				return nil
+			},
+			vse: vse,
+		}
+
+		err := vs.parseEvents(t.Context(), events, errs)
+		require.ErrorIs(t, err, streamErr, "iteration %d", i)
+		require.Len(t, got, 1, "iteration %d", i)
+		require.Len(t, got[0], 2, "iteration %d", i)
+		require.Equal(t, binlogdatapb.VEventType_GTID, got[0][0].Type, "iteration %d", i)
+		require.Equal(t, binlogdatapb.VEventType_COMMIT, got[0][1].Type, "iteration %d", i)
+		require.Equal(t, testenv.DBName, got[0][0].Keyspace, "iteration %d", i)
+		require.Equal(t, testenv.DefaultShard, got[0][0].Shard, "iteration %d", i)
+		require.Equal(t, testenv.DBName, got[0][1].Keyspace, "iteration %d", i)
+		require.Equal(t, testenv.DefaultShard, got[0][1].Shard, "iteration %d", i)
+	}
+}
+
+func TestParseEventsDrainsBufferedEventsBeforeTerminalErrorWhenThrottled(t *testing.T) {
+	f := mysql.NewMySQL56BinlogFormat()
+	s := mysql.NewFakeBinlogStream()
+	s.ServerID = 62344
+
+	input := []mysql.BinlogEvent{
+		mysql.NewRotateEvent(f, s, 0, ""),
+		mysql.NewFormatDescriptionEvent(f, s),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewXIDEvent(f, s),
+	}
+
+	streamErr := errors.New("stream ended after buffered events")
+	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
+	vse := &Engine{
+		keyspace:        testenv.DBName,
+		shard:           testenv.DefaultShard,
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.VStreamerName, throttlebase.UndefinedScope),
+	}
+
+	events := make(chan mysql.BinlogEvent, len(input))
+	for _, ev := range input {
+		events <- ev
+	}
+	close(events)
+	errCh := make(chan error, 1)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	var got [][]*binlogdatapb.VEvent
+	vs := &vstreamer{
+		ctx:          ctx,
+		cp:           cp,
+		throttlerApp: throttlerapp.TestingAlwaysThrottledName,
+		send: func(vevents []*binlogdatapb.VEvent) error {
+			got = append(got, vevents)
+			return nil
+		},
+		vse: vse,
+	}
+
+	go func() {
+		done <- vs.parseEvents(ctx, events, errCh)
+	}()
+	go func() {
+		tmr := time.NewTimer(100 * time.Millisecond)
+		defer tmr.Stop()
+		select {
+		case <-ctx.Done():
+		case <-tmr.C:
+			errCh <- streamErr
+			close(errCh)
+		}
+	}()
+
+	var err error
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-done:
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, 50*time.Millisecond)
+	require.ErrorIs(t, err, streamErr)
+	require.Len(t, got, 1)
+	require.Len(t, got[0], 2)
+	require.Equal(t, binlogdatapb.VEventType_GTID, got[0][0].Type)
+	require.Equal(t, binlogdatapb.VEventType_COMMIT, got[0][1].Type)
+}
+
+func TestParseEventsReturnsNilOnClientEOF(t *testing.T) {
+	f := mysql.NewMySQL56BinlogFormat()
+	s := mysql.NewFakeBinlogStream()
+	s.ServerID = 62344
+
+	input := []mysql.BinlogEvent{
+		mysql.NewRotateEvent(f, s, 0, ""),
+		mysql.NewFormatDescriptionEvent(f, s),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewXIDEvent(f, s),
+	}
+
+	events := make(chan mysql.BinlogEvent, len(input))
+	for _, ev := range input {
+		events <- ev
+	}
+	close(events)
+	errCh := make(chan error)
+	close(errCh)
+
+	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
+	vse := &Engine{keyspace: testenv.DBName, shard: testenv.DefaultShard}
+
+	sendCalls := 0
+	vs := &vstreamer{
+		ctx: t.Context(),
+		cp:  cp,
+		send: func(vevents []*binlogdatapb.VEvent) error {
+			sendCalls++
+			return io.EOF
+		},
+		vse: vse,
+	}
+
+	err := vs.parseEvents(t.Context(), events, errCh)
+	require.NoError(t, err)
+	require.Equal(t, 1, sendCalls)
+}
+
+func TestParseEventsClientEOFDuringThrottleDoesNotPanicAfterReturn(t *testing.T) {
+	origTimeout := fullyThrottledTimeout
+	origHeartbeatTime := HeartbeatTime
+	fullyThrottledTimeout = -time.Second
+	HeartbeatTime = 10 * time.Millisecond
+	t.Cleanup(func() {
+		fullyThrottledTimeout = origTimeout
+		HeartbeatTime = origHeartbeatTime
+	})
+
+	events := make(chan mysql.BinlogEvent)
+	close(events)
+	errCh := make(chan error)
+
+	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
+	vse := &Engine{
+		keyspace:        testenv.DBName,
+		shard:           testenv.DefaultShard,
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.VStreamerName, throttlebase.UndefinedScope),
+	}
+
+	vs := &vstreamer{
+		ctx:          t.Context(),
+		cp:           cp,
+		throttlerApp: throttlerapp.TestingAlwaysThrottledName,
+		send: func(vevents []*binlogdatapb.VEvent) error {
+			require.Len(t, vevents, 1)
+			require.Equal(t, binlogdatapb.VEventType_HEARTBEAT, vevents[0].Type)
+			return io.EOF
+		},
+		vse: vse,
+	}
+
+	err := vs.parseEvents(t.Context(), events, errCh)
+	require.NoError(t, err)
+
+	// Give the throttling goroutine time to hit its fully-throttled timeout path.
+	// The background client sleeps once per throttle check, so the sender needs
+	// two iterations before it reaches the send. Before the fix, parseEvents
+	// closed throttlerErrs on return, so the sender panicked here with
+	// "send on closed channel".
+	time.Sleep(750 * time.Millisecond)
+}
+
+func TestParseEventsReturnsPendingSourceErrorAfterFullyThrottledTimeout(t *testing.T) {
+	origTimeout := fullyThrottledTimeout
+	origHeartbeatTime := HeartbeatTime
+	fullyThrottledTimeout = -time.Second
+	HeartbeatTime = time.Hour
+	t.Cleanup(func() {
+		fullyThrottledTimeout = origTimeout
+		HeartbeatTime = origHeartbeatTime
+	})
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	t.Cleanup(cancel)
+
+	streamErr := errors.New("stream ended while throttler wait was sleeping")
+	events := make(chan mysql.BinlogEvent)
+	errCh := make(chan error, 1)
+	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
+	vse := &Engine{
+		keyspace:        testenv.DBName,
+		shard:           testenv.DefaultShard,
+		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.VStreamerName, throttlebase.UndefinedScope),
+	}
+
+	vs := &vstreamer{
+		ctx:          ctx,
+		cp:           cp,
+		throttlerApp: throttlerapp.TestingAlwaysThrottledName,
+		send: func(vevents []*binlogdatapb.VEvent) error {
+			return nil
+		},
+		vse: vse,
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- vs.parseEvents(ctx, events, errCh)
+	}()
+	go func() {
+		tmr := time.NewTimer(400 * time.Millisecond)
+		defer tmr.Stop()
+		select {
+		case <-ctx.Done():
+		case <-tmr.C:
+			close(events)
+			errCh <- streamErr
+			close(errCh)
+		}
+	}()
+
+	var err error
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-done:
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, 10*time.Millisecond)
+	require.ErrorIs(t, err, streamErr)
 }
 
 func checkIfOptionIsSupported(t *testing.T, variable string) bool {

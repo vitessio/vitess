@@ -39,11 +39,38 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/sqlparser"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
+
+// TestHasExtraUniqueSecondaryIndexFromSpec_NoIdentityWithUniqueSecondary
+// pins the defensive behavior for tables that reach the parallel applier
+// without any identity columns but DO have unique-not-null secondary
+// indexes. The PK-based writeset can't reason about uniqueness on those
+// columns, so two parallel inserts could collide at apply time. Force
+// serialization (return true) instead of letting them race.
+func TestHasExtraUniqueSecondaryIndexFromSpec_NoIdentityWithUniqueSecondary(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	parsedDDL, err := parser.ParseStrictDDL(
+		"create table t1 (id int, email varchar(64) not null, unique key uk_email(email))",
+	)
+	require.NoError(t, err)
+	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+	require.True(t, ok)
+	tableSpec := createTable.GetTableSpec()
+	require.NotNil(t, tableSpec)
+
+	plan := &TablePlan{
+		TargetName:      "t1",
+		IdentityColumns: nil, // no usable identity
+	}
+
+	got := hasExtraUniqueSecondaryIndexFromSpec(plan, tableSpec)
+	require.True(t, got, "no identity + unique secondary index must force serialization")
+}
 
 func TestMaxQuerySize(t *testing.T) {
 	makeVR := func(dbClient binlogplayer.DBClient, relayLogMaxSize int) *vreplicator {

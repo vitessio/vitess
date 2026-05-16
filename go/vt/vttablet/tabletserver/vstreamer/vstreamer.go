@@ -24,6 +24,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -260,11 +261,27 @@ func (vs *vstreamer) refreshHistorianForStartup(ctx context.Context) error {
 
 // parseEvents parses and sends events.
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent, errs <-chan error) error {
+	ctx, cancel := context.WithCancel(ctx)
 	// bufferAndTransmit uses bufferedEvents and curSize to buffer events.
 	var (
 		bufferedEvents []*binlogdatapb.VEvent
 		curSize        int
 	)
+	var pendingStreamErr error
+	drainSourceEvents := make(chan struct{})
+	var drainSourceEventsOnce sync.Once
+	signalDrainSourceEvents := func() {
+		drainSourceEventsOnce.Do(func() {
+			close(drainSourceEvents)
+		})
+	}
+	recordSourceStreamErr := func(err error, ok bool) {
+		if ok && err != nil && pendingStreamErr == nil {
+			pendingStreamErr = err
+			signalDrainSourceEvents()
+		}
+		errs = nil
+	}
 
 	// Only the following patterns are possible:
 	// BEGIN->ROWs or Statements->GTID->COMMIT. In the case of large transactions, this can be broken into chunks.
@@ -400,28 +417,44 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		wfNameLog = " in workflow " + vs.filter.WorkflowName
 	}
 	throttlerErrs := make(chan error, 1) // How we share the error when we've been fully throttled too long
-	defer close(throttlerErrs)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
+		drainingAfterSourceError := false
 		throttledTime := atomic.Int64{}
 		for {
-			// Check throttler.
-			if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
-				// Make sure to leave if context is cancelled.
+			if !drainingAfterSourceError {
 				select {
-				case <-ctx.Done():
-					return
+				case <-drainSourceEvents:
+					drainingAfterSourceError = true
 				default:
-					// Do nothing special.
 				}
-				curtime := time.Now().Unix()
-				if !throttledTime.CompareAndSwap(0, curtime) {
-					if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
-						throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeout)
+			}
+			// Check throttler.
+			if !drainingAfterSourceError {
+				if checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(ctx, vs.throttlerApp); !ok {
+					// Make sure to leave if context is cancelled.
+					select {
+					case <-ctx.Done():
 						return
+					default:
+						// Do nothing special.
 					}
+					select {
+					case <-drainSourceEvents:
+						drainingAfterSourceError = true
+						throttledTime.Store(0)
+						continue
+					default:
+					}
+					curtime := time.Now().Unix()
+					if !throttledTime.CompareAndSwap(0, curtime) {
+						if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
+							throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeout)
+							return
+						}
+					}
+					logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
+					continue
 				}
-				logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
-				continue
 			}
 			throttledTime.Store(0) // We are no longer fully throttled
 			select {
@@ -445,7 +478,32 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// throttledEvents pulls data from events, but throttles pulling data,
 	// which in turn blocks the BinlogConnection from pushing events to the channel
 	throttledEvents := make(chan mysql.BinlogEvent)
-	go throttleEvents(throttledEvents)
+	throttleEventsDone := make(chan struct{})
+	go func() {
+		defer close(throttleEventsDone)
+		throttleEvents(throttledEvents)
+	}()
+	defer func() {
+		cancel()
+		<-throttleEventsDone
+	}()
+	handleThrottledEvent := func(ev mysql.BinlogEvent) error {
+		vevents, err := vs.parseEvent(ev, bufferAndTransmit)
+		if err != nil {
+			vs.vse.errorCounts.Add("ParseEvent", 1)
+			return err
+		}
+		for _, vevent := range vevents {
+			if err := bufferAndTransmit(vevent); err != nil {
+				if err == io.EOF {
+					return err
+				}
+				vs.vse.errorCounts.Add("BufferAndTransmit", 1)
+				return vterrors.Wrapf(err, "error sending event: %+v", vevent)
+			}
+		}
+		return nil
+	}
 
 	for {
 		hbTimer.Reset(HeartbeatTime)
@@ -458,48 +516,67 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		select {
 		case ev, ok := <-throttledEvents:
 			if !ok {
+				if pendingStreamErr != nil {
+					return pendingStreamErr
+				}
+				if errs != nil {
+					select {
+					case err, ok := <-errs:
+						recordSourceStreamErr(err, ok)
+					default:
+					}
+				}
+				if pendingStreamErr != nil {
+					return pendingStreamErr
+				}
 				select {
-				case err := <-errs:
-					return err
 				case <-ctx.Done():
 					return nil
 				default:
 				}
 				return vterrors.Errorf(vtrpcpb.Code_ABORTED, "unexpected server EOF while parsing events")
 			}
-			vevents, err := vs.parseEvent(ev, bufferAndTransmit)
-			if err != nil {
-				vs.vse.errorCounts.Add("ParseEvent", 1)
-				return err
-			}
-			for _, vevent := range vevents {
-				if err := bufferAndTransmit(vevent); err != nil {
-					if err == io.EOF {
-						return nil
-					}
-					vs.vse.errorCounts.Add("BufferAndTransmit", 1)
-					return vterrors.Wrapf(err, "error sending event: %+v", vevent)
+			if err := func() error {
+				return handleThrottledEvent(ev)
+			}(); err != nil {
+				if err == io.EOF {
+					return nil
 				}
+				return err
 			}
 		case vs.vschema = <-vs.vevents:
-			select {
-			case err := <-errs:
-				return err
-			case <-ctx.Done():
-				return nil
-			default:
-				if err := vs.rebuildPlans(); err != nil {
-					return vterrors.Wrap(err, "failed to rebuild replication plans after vschema change notification")
+			if pendingStreamErr != nil {
+				continue
+			}
+			if errs != nil {
+				select {
+				case err, ok := <-errs:
+					recordSourceStreamErr(err, ok)
+					if pendingStreamErr != nil {
+						continue
+					}
+				case <-ctx.Done():
+					return nil
+				default:
 				}
 			}
-		case err := <-errs:
-			return err
+			if err := vs.rebuildPlans(); err != nil {
+				return vterrors.Wrap(err, "failed to rebuild replication plans after vschema change notification")
+			}
+		case err, ok := <-errs:
+			recordSourceStreamErr(err, ok)
 		case throttlerErr := <-throttlerErrs:
+			if pendingStreamErr != nil {
+				continue
+			}
 			vs.vse.errorCounts.Add(fullyThrottledMetricLabel, 1)
 			return throttlerErr
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:
+			if pendingStreamErr != nil {
+				continue
+			}
 			checkResult, ok := vs.vse.throttlerClient.ThrottleCheckOK(ctx, vs.throttlerApp)
 			if err := injectHeartbeat(!ok, checkResult.Summary()); err != nil {
 				if err == io.EOF {

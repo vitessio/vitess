@@ -236,3 +236,4 @@ formatters:
     paths:
       - examples$
       - ^go/vt/proto/
+      - ^test/antithesis/

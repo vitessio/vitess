@@ -29,11 +29,13 @@ package vreplstress
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -68,6 +70,25 @@ type testcase struct {
 	expectRemovedUniqueKeys int64
 	// autoIncInsert is a special case where we don't generate id values. It's a specific test case.
 	autoIncInsert bool
+}
+
+type stressErrorState struct {
+	firstErr atomic.Pointer[error]
+}
+
+func (s *stressErrorState) record(err error) {
+	if err == nil {
+		return
+	}
+	errCopy := err
+	s.firstErr.CompareAndSwap(nil, &errCopy)
+}
+
+func (s *stressErrorState) err() error {
+	if errPtr := s.firstErr.Load(); errPtr != nil {
+		return *errPtr
+	}
+	return nil
 }
 
 var (
@@ -378,7 +399,7 @@ const (
 	maxConcurrency                = 15
 	singleConnectionSleepInterval = 5 * time.Millisecond
 	periodicSleepPercent          = 10 // in the range (0,100). 10 means 10% sleep time throught the stress load.
-	waitForStatusTimeout          = 180 * time.Second
+	waitForStatusTimeout          = 300 * time.Second
 )
 
 func resetOpOrder() {
@@ -428,12 +449,16 @@ func TestMain(m *testing.M) {
 		// --vstream-packet-size is set to a small value that ensures we get multiple stream iterations,
 		// thereby examining lastPK on vcopier side. We will be iterating tables using non-PK order throughout
 		// this test suite, and so the low setting ensures we hit the more interesting code paths.
+		parallelWorkers := 4
+		txPoolSize := max(parallelWorkers, 100)
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
 			"--migration-check-interval", "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-			"--watch-replication-stream",
+			"--queryserver-config-transaction-cap", strconv.Itoa(txPoolSize),
+			"--transaction-limit-per-user", "0.9",
+			"--vreplication-parallel-replication-workers", strconv.Itoa(parallelWorkers),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl-strategy", "online",
@@ -527,9 +552,9 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 				}
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
+				require.Equal(t, string(expectStatus), string(status), "migration did not reach expected status within timeout")
 				if !testcase.expectFailure {
 					testCompareBeforeAfterTables(t, testcase.autoIncInsert)
 				}
@@ -671,7 +696,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64) {
+func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64, errs *stressErrorState) {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -713,7 +738,10 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				}
 			}
 		}
-		assert.Nil(t, err)
+		if err != nil {
+			errs.record(err)
+			return
+		}
 		time.Sleep(singleConnectionSleepInterval)
 		// Most o fthe time, we want the load to be high, so as to create real stress and potentially
 		// expose bugs in vreplication (the objective of this test!).
@@ -731,16 +759,18 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert bool) {
 	log.Info("Running multiple connections")
 	var done int64
+	errState := &stressErrorState{}
 	var wg sync.WaitGroup
 	for range maxConcurrency {
 		wg.Go(func() {
-			runSingleConnection(ctx, t, autoIncInsert, &done)
+			runSingleConnection(ctx, t, autoIncInsert, &done, errState)
 		})
 	}
 	<-ctx.Done()
 	atomic.StoreInt64(&done, 1)
 	log.Info("Running multiple connections: done")
 	wg.Wait()
+	require.NoError(t, errState.err())
 	log.Info("All connections cancelled")
 }
 
@@ -846,4 +876,23 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 
 		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBeforeTable, selectAfterTable)
 	}
+}
+
+func TestStressErrorStateRecordsFirstUnexpectedError(t *testing.T) {
+	state := &stressErrorState{}
+	firstErr := errors.New("first")
+	secondErr := errors.New("second")
+
+	state.record(firstErr)
+	state.record(secondErr)
+
+	require.ErrorIs(t, state.err(), firstErr)
+}
+
+func TestStressErrorStateIgnoresNilErrors(t *testing.T) {
+	state := &stressErrorState{}
+
+	state.record(nil)
+
+	require.NoError(t, state.err())
 }

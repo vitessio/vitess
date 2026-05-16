@@ -165,7 +165,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		source:          source,
 		sourceVStreamer: sourceVStreamer,
 		stats:           stats,
-		dbClient:        newVDBClient(dbClient, stats, workflowConfig.RelayLogMaxItems),
+		dbClient:        newVDBClientWithID(dbClient, stats, workflowConfig.RelayLogMaxItems, id),
 		mysqld:          mysqld,
 		workflowConfig:  workflowConfig,
 	}
@@ -559,6 +559,24 @@ func (vr *vreplicator) insertLog(typ, message string) {
 }
 
 func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, message string) error {
+	return vr.setStateWithDBClient(vr.dbClient, state, message, false)
+}
+
+// setStateWithDBClientImmediate updates the stream state using the supplied
+// connection immediately, even when the connection is in batch mode. The
+// commitLoop uses this after a worker has already flushed its batch but before
+// COMMIT so the stop-state write stays in the same transaction as the row
+// changes and position update.
+func (vr *vreplicator) setStateWithDBClientImmediate(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string) error {
+	return vr.setStateWithDBClient(dbClient, state, message, true)
+}
+
+// setStateWithDBClient writes the workflow's state/message row to
+// _vt.vreplication using the supplied connection. The immediate flag
+// forces a direct ExecuteFetch even when the connection is mid-batch,
+// which the parallel commitLoop uses so the stop-state write lands in
+// the same transaction as the worker's row updates and position save.
+func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string, immediate bool) error {
 	if message != "" {
 		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
@@ -567,20 +585,41 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
-	// If we're batching a transaction, then include the state update
-	// in the current transaction batch.
-	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
-		vr.dbClient.AddQueryToTrxBatch(query)
-	} else { // Otherwise, send it down the wire
-		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+	// In batch-commit mode the immediate path runs queries via ExecuteFetch,
+	// which executes them on the wire AND appends them to the trx batch
+	// buffer (for Retry). CommitTrxQueryBatch would then replay them in a
+	// fresh MySQL transaction, doubling the state UPDATE and vreplication_log
+	// INSERT and breaking atomicity with the position write. Flush any
+	// already-batched queries first so they share the same MySQL transaction
+	// as the upcoming immediate writes, then mark the immediate writes as
+	// flushed before returning so the caller's CommitTrxQueryBatch only
+	// sends "commit".
+	batchedImmediate := immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0
+	if batchedImmediate {
+		if _, err := dbClient.ExecuteTrxQueryBatch(); err != nil {
+			return fmt.Errorf("could not flush pending batched queries before set state: %v: %v", query, err)
+		}
+	}
+	if !immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0 {
+		if err := dbClient.AddQueryToTrxBatch(query); err != nil {
+			return fmt.Errorf("could not set state: %v: %v", query, err)
+		}
+	} else {
+		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 			return fmt.Errorf("could not set state: %v: %v", query, err)
 		}
 	}
 	if state == vr.state {
+		if batchedImmediate {
+			dbClient.markTrxBatchedQueriesFlushed()
+		}
 		return nil
 	}
-	insertLog(vr.dbClient, LogStateChange, vr.id, state.String(), message)
+	insertLog(dbClient, LogStateChange, vr.id, state.String(), message)
 	vr.state = state
+	if batchedImmediate {
+		dbClient.markTrxBatchedQueriesFlushed()
+	}
 
 	return nil
 }
@@ -861,30 +900,22 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 }
 
 func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName string) ([]*sqlparser.IndexDefinition, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
-	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
-	// schema should never be nil, but check to be extra safe.
-	if schema == nil || len(schema.TableDefinitions) != 1 {
-		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
-			tableName, len(schema.TableDefinitions))
-	}
-	tableSchema := schema.TableDefinitions[0].Schema
-	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
-	if err != nil {
-		return secondaryKeys, err
-	}
-	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
-	// createTable or createTable.TableSpec should never be nil
-	// if it was a valid cast, but check to be extra safe.
-	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
-		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
-	}
+	return extractSecondaryKeys(tableSpec), nil
+}
 
-	tableSpec := createTable.GetTableSpec()
+// extractSecondaryKeys returns the non-PK, non-FK-backed secondary
+// indexes on a parsed CreateTable. Indexes that exist only to satisfy
+// a foreign-key constraint are filtered out because dropping them
+// would break the constraint.
+func extractSecondaryKeys(tableSpec *sqlparser.TableSpec) []*sqlparser.IndexDefinition {
+	if tableSpec == nil {
+		return nil
+	}
+	var secondaryKeys []*sqlparser.IndexDefinition
 	fkIndexCols := make(map[string]bool)
 	for _, constraint := range tableSpec.Constraints {
 		if fkDef, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition); ok {
@@ -908,7 +939,169 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 			secondaryKeys = append(secondaryKeys, index)
 		}
 	}
-	return secondaryKeys, err
+	return secondaryKeys
+}
+
+// getTargetTableSpec fetches the target-side CREATE TABLE for the
+// named table and returns its parsed TableSpec. Used by helpers that
+// need to reason about target structure after the stream is running —
+// e.g. detecting extra unique secondary indexes that affect the
+// parallel applier's conflict detection.
+func (vr *vreplicator) getTargetTableSpec(ctx context.Context, tableName string) (*sqlparser.TableSpec, error) {
+	if vr.mysqld == nil || vr.vre == nil || vr.vre.env == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "missing schema lookup dependencies for %s", tableName)
+	}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	if err != nil {
+		return nil, err
+	}
+	// schema should never be nil, but check to be extra safe.
+	if schema == nil || len(schema.TableDefinitions) != 1 {
+		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
+			tableName, len(schema.TableDefinitions))
+	}
+	tableSchema := schema.TableDefinitions[0].Schema
+	parsedDDL, err := vr.vre.env.Parser().ParseStrictDDL(tableSchema)
+	if err != nil {
+		return nil, err
+	}
+	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+	// createTable or createTable.TableSpec should never be nil
+	// if it was a valid cast, but check to be extra safe.
+	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
+		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
+	}
+	return createTable.GetTableSpec(), nil
+}
+
+// hasExtraUniqueSecondaryIndex reports whether the target table has a
+// unique secondary index whose column set is not already covered by
+// the plan's identity columns. The parallel applier needs this signal
+// because writeset keys derived from the PK alone would miss
+// conflicts enforced by such an index, which could otherwise let two
+// conflicting inserts schedule in parallel and deadlock at apply time.
+func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableName string, plan *TablePlan) (bool, error) {
+	if plan == nil {
+		return false, nil
+	}
+	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
+	if err != nil {
+		return false, err
+	}
+	return hasExtraUniqueSecondaryIndexFromSpec(plan, tableSpec), nil
+}
+
+// hasExtraUniqueSecondaryIndexFromSpec is the pure-logic core of
+// hasExtraUniqueSecondaryIndex, separated so the conflict-detection rules
+// can be unit-tested without a live mysqld schema fetch.
+func hasExtraUniqueSecondaryIndexFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec) bool {
+	if plan == nil || tableSpec == nil {
+		return false
+	}
+	secondaryKeys := extractSecondaryKeys(tableSpec)
+	if len(secondaryKeys) == 0 {
+		return false
+	}
+
+	identityCols := plan.IdentityColumns
+	if len(identityCols) == 0 {
+		// No usable identity but the table has secondary indexes that may
+		// enforce uniqueness we cannot reason about via PK-based writeset
+		// keys. Force serialization (return true) for any unique-not-null
+		// secondary so two parallel inserts cannot collide at apply time.
+		for _, secondaryKey := range secondaryKeys {
+			if secondaryKey == nil || secondaryKey.Info == nil {
+				continue
+			}
+			if secondaryKey.Info.IsUnique() {
+				return true
+			}
+		}
+		return false
+	}
+
+	identityColSet := make(map[string]struct{}, len(identityCols))
+	for _, col := range identityCols {
+		identityColSet[col] = struct{}{}
+	}
+
+	primaryKeyMatchesIdentity := true
+	primaryKeyMatchesIdentitySet := len(identityColSet) == len(identityCols)
+	primaryKeyColumnCount := 0
+	for _, index := range tableSpec.Indexes {
+		if index == nil || index.Info == nil || index.Info.Type != sqlparser.IndexTypePrimary {
+			continue
+		}
+		primaryKeyColumnCount = len(index.Columns)
+		if primaryKeyColumnCount != len(identityCols) {
+			return true
+		}
+		for i, idxCol := range index.Columns {
+			if idxCol.Expression != nil {
+				primaryKeyMatchesIdentity = false
+				primaryKeyMatchesIdentitySet = false
+				break
+			}
+			if idxCol.Length != nil {
+				primaryKeyMatchesIdentity = false
+				primaryKeyMatchesIdentitySet = false
+				break
+			}
+			colName := idxCol.Column.Lowered()
+			if colName != identityCols[i] {
+				primaryKeyMatchesIdentity = false
+			}
+			if _, ok := identityColSet[colName]; !ok {
+				primaryKeyMatchesIdentitySet = false
+			}
+		}
+		break
+	}
+	if primaryKeyColumnCount > 0 && !primaryKeyMatchesIdentity && !primaryKeyMatchesIdentitySet {
+		return true
+	}
+
+	for _, secondaryKey := range secondaryKeys {
+		if secondaryKey == nil || secondaryKey.Info == nil || !secondaryKey.Info.IsUnique() {
+			continue
+		}
+		// A unique secondary index can only enforce conflicts beyond the
+		// identity if its raw column set does not contain the identity. If
+		// the index covers (id, anything-else) and id is the identity, two
+		// rows with different identity values cannot collide on the index.
+		// Functional expressions and prefix lengths break that reasoning
+		// because uniqueness is enforced over a derived value rather than
+		// the raw column, so identity uniqueness no longer implies index
+		// uniqueness.
+		indexColSet := make(map[string]struct{}, len(secondaryKey.Columns))
+		hasDerivedColumn := false
+		for _, idxCol := range secondaryKey.Columns {
+			if idxCol == nil {
+				continue
+			}
+			if idxCol.Expression != nil || idxCol.Length != nil {
+				hasDerivedColumn = true
+				break
+			}
+			indexColSet[idxCol.Column.Lowered()] = struct{}{}
+		}
+		if hasDerivedColumn {
+			return true
+		}
+		containsIdentity := true
+		for _, col := range identityCols {
+			if _, ok := indexColSet[col]; !ok {
+				containsIdentity = false
+				break
+			}
+		}
+		if containsIdentity {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {
@@ -1177,7 +1370,7 @@ func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, err
 	if err := dbc.Connect(); err != nil {
 		return nil, vterrors.Wrap(err, "can't connect to database")
 	}
-	dbClient := newVDBClient(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems)
+	dbClient := newVDBClientWithID(dbc, vr.stats, vr.workflowConfig.RelayLogMaxItems, vr.id)
 	if _, err := vr.setSQLMode(ctx, dbClient); err != nil {
 		return nil, vterrors.Wrap(err, "failed to set sql_mode")
 	}
