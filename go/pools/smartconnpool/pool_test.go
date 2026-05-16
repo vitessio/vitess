@@ -62,6 +62,8 @@ type TestConn struct {
 	failApply   bool
 	failReset   bool
 	onSetting   func()
+	onReset     func(context.Context) error
+	onApply     func(context.Context, *Setting) error
 }
 
 func (tr *TestConn) waitForClose() chan struct{} {
@@ -82,6 +84,11 @@ func (tr *TestConn) Setting() *Setting {
 
 func (tr *TestConn) ResetSetting(ctx context.Context) error {
 	tr.counts.reset.Add(1)
+	if tr.onReset != nil {
+		if err := tr.onReset(ctx); err != nil {
+			return err
+		}
+	}
 	if tr.failReset {
 		return errors.New("ResetSetting failed")
 	}
@@ -90,6 +97,11 @@ func (tr *TestConn) ResetSetting(ctx context.Context) error {
 }
 
 func (tr *TestConn) ApplySetting(ctx context.Context, setting *Setting) error {
+	if tr.onApply != nil {
+		if err := tr.onApply(ctx, setting); err != nil {
+			return err
+		}
+	}
 	if tr.failApply {
 		return errors.New("ApplySetting failed")
 	}
@@ -956,6 +968,104 @@ func TestWaitForConnHonorsCtxOnRetryPath(t *testing.T) {
 	}
 	require.ErrorIs(t, res.err, ErrTimeout, "Get must honor canceled ctx via the retry path")
 	require.Nil(t, res.conn)
+}
+
+func TestGetStopsWhenResetCancelsContext(t *testing.T) {
+	for _, targetSetting := range []*Setting{nil, sBar} {
+		t.Run(fmt.Sprintf("targetSetting=%v", targetSetting != nil), func(t *testing.T) {
+			var state TestState
+			var connectCount atomic.Int64
+			var blockReplacement atomic.Bool
+
+			connector := func(ctx context.Context) (*TestConn, error) {
+				if connectCount.Add(1) > 2 && blockReplacement.Load() {
+					<-ctx.Done()
+					return nil, context.Cause(ctx)
+				}
+				state.open.Add(1)
+				return &TestConn{
+					num:    state.lastID.Add(1),
+					counts: &state,
+				}, nil
+			}
+
+			p := NewPool(&Config[*TestConn]{Capacity: 2}).Open(connector, nil)
+			t.Cleanup(p.Close)
+
+			conns := make([]*Pooled[*TestConn], 0, 2)
+			for range 2 {
+				conn, err := p.Get(t.Context(), sFoo)
+				require.NoError(t, err)
+				conns = append(conns, conn)
+			}
+
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			var cancelOnce sync.Once
+			for _, conn := range conns {
+				conn.Conn.onReset = func(ctx context.Context) error {
+					cancelOnce.Do(cancel)
+					return nil
+				}
+				conn.Recycle()
+			}
+			blockReplacement.Store(true)
+
+			conn, err := p.Get(ctx, targetSetting)
+			if conn != nil {
+				conn.Recycle()
+			}
+
+			require.ErrorIs(t, err, ErrTimeout)
+			require.Nil(t, conn)
+			require.EqualValues(t, 1, state.reset.Load())
+			require.EqualValues(t, 1, state.close.Load())
+		})
+	}
+}
+
+func TestGetStopsWhenApplyCancelsContext(t *testing.T) {
+	var state TestState
+	var connectCount atomic.Int64
+	var blockReplacement atomic.Bool
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		if connectCount.Add(1) > 1 && blockReplacement.Load() {
+			<-ctx.Done()
+			return nil, context.Cause(ctx)
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:    state.lastID.Add(1),
+			counts: &state,
+		}, nil
+	}
+
+	p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(connector, nil)
+	t.Cleanup(p.Close)
+
+	conn, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	conn.Conn.onApply = func(ctx context.Context, setting *Setting) error {
+		cancel()
+		return nil
+	}
+	conn.Recycle()
+	blockReplacement.Store(true)
+
+	conn, err = p.Get(ctx, sFoo)
+	if conn != nil {
+		conn.Recycle()
+	}
+
+	require.ErrorIs(t, err, ErrTimeout)
+	require.Nil(t, conn)
+	require.EqualValues(t, 1, state.close.Load())
 }
 
 func TestReopenRetiresStaleConnections(t *testing.T) {

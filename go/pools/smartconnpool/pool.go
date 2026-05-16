@@ -517,6 +517,25 @@ func (pool *ConnPool[C]) recordWaitDuration(start time.Time) {
 	}
 }
 
+func (pool *ConnPool[C]) returnConnIfContextCanceled(ctx context.Context, conn *Pooled[C]) bool {
+	if ctx.Err() == nil {
+		return false
+	}
+	conn.timeUsed.update()
+	pool.tryReturnConn(conn)
+	return true
+}
+
+func (pool *ConnPool[C]) closeConnIfContextCanceled(ctx context.Context, conn *Pooled[C]) bool {
+	if ctx.Err() == nil {
+		return false
+	}
+	conn.Close()
+	pool.closedConn()
+	pool.requestOpen()
+	return true
+}
+
 // Get returns a connection from the pool with the given Setting applied.
 // If there are no connections in the pool to be returned, Get blocks until one
 // is returned, or until the given ctx is cancelled.
@@ -1020,6 +1039,9 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
 
 	for {
+		if ctx.Err() != nil {
+			return nil, ErrTimeout
+		}
 		if pool.lifecycle.Load() == nil {
 			return nil, ErrConnPoolClosed
 		}
@@ -1071,6 +1093,9 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 			pool.discardConn(conn)
 			return nil, ErrTimeout
 		}
+		if pool.returnConnIfContextCanceled(ctx, conn) {
+			return nil, ErrTimeout
+		}
 
 		// if the connection we've acquired has a Setting applied, we must reset it before returning
 		if conn.Conn.Setting() != nil {
@@ -1081,7 +1106,13 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 				conn.Close()
 				pool.closedConn()
 				pool.requestOpen()
+				if ctx.Err() != nil {
+					return nil, ErrTimeout
+				}
 				continue
+			}
+			if pool.closeConnIfContextCanceled(ctx, conn) {
+				return nil, ErrTimeout
 			}
 		}
 
@@ -1095,6 +1126,9 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	pool.Metrics.getWithSettingsCount.Add(1)
 
 	for {
+		if ctx.Err() != nil {
+			return nil, ErrTimeout
+		}
 		if pool.lifecycle.Load() == nil {
 			return nil, ErrConnPoolClosed
 		}
@@ -1148,6 +1182,9 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			pool.discardConn(conn)
 			return nil, ErrTimeout
 		}
+		if pool.returnConnIfContextCanceled(ctx, conn) {
+			return nil, ErrTimeout
+		}
 
 		// ensure that the setting applied to the connection matches the one we want
 		connSetting := conn.Conn.Setting()
@@ -1161,16 +1198,34 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 					conn.Close()
 					pool.closedConn()
 					pool.requestOpen()
+					if ctx.Err() != nil {
+						return nil, ErrTimeout
+					}
 					continue
 				}
+				if pool.closeConnIfContextCanceled(ctx, conn) {
+					return nil, ErrTimeout
+				}
 			}
+
+			if pool.returnConnIfContextCanceled(ctx, conn) {
+				return nil, ErrTimeout
+			}
+
 			// apply our setting now; if we can't we assume that the conn is broken
 			// and close it without returning to the pool
 			if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
 				conn.Close()
 				pool.closedConn()
 				pool.requestOpen()
+				if ctx.Err() != nil {
+					return nil, ErrTimeout
+				}
 				return nil, err
+			}
+
+			if pool.closeConnIfContextCanceled(ctx, conn) {
+				return nil, ErrTimeout
 			}
 		}
 
