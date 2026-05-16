@@ -1094,6 +1094,48 @@ func TestSlowQueryStatusFlagsComQueryMultiOKOnlyOLAPFallbackWire(t *testing.T) {
 	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
+func TestComQueryMultiOLAPDeferredOKRefreshesTransactionStatusWire(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	oldDefaultWorkload := mysqlDefaultWorkload
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		mysqlDefaultWorkload = oldDefaultWorkload
+	})
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select 1; begin", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotEmpty(t, result.Fields)
+	assert.Zero(t, result.StatusFlags&mysql.ServerStatusInTrans)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerStatusInTrans)
+}
+
 func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
 	executor, sbc1, _, _, _ := createExecutorEnv(t)
 

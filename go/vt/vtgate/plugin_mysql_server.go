@@ -487,7 +487,9 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 			return session, err
 		}
 		if deferredResult != nil {
-			applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
+			previousStatusFlags := c.StatusFlags
+			fillInTxStatusFlags(c, session)
+			applyMultiQueryStatusFlagsWithPrevious(c, mysqlCtx.slowQueryStates, idx, previousStatusFlags)
 			if err := callback(sqltypes.QueryResponse{QueryResult: deferredResult}, more, true); err != nil {
 				return session, err
 			}
@@ -514,8 +516,12 @@ func setSlowQueryStatus(c *mysql.Conn, slow bool) {
 }
 
 func applyMultiQueryStatusFlags(c *mysql.Conn, slowQueryStates []bool, idx int) {
+	applyMultiQueryStatusFlagsWithPrevious(c, slowQueryStates, idx, c.StatusFlags)
+}
+
+func applyMultiQueryStatusFlagsWithPrevious(c *mysql.Conn, slowQueryStates []bool, idx int, previousStatusFlags uint16) {
 	if idx > 0 && idx-1 < len(slowQueryStates) {
-		c.SetPendingMultiResultStatusFlags(slowQueryStatusFlags(c.StatusFlags, slowQueryStates[idx-1]))
+		c.SetPendingMultiResultStatusFlags(slowQueryStatusFlags(previousStatusFlags, slowQueryStates[idx-1]))
 	}
 	if idx < len(slowQueryStates) {
 		setSlowQueryStatus(c, slowQueryStates[idx])
