@@ -647,7 +647,7 @@ func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, a
 					fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
 			}
 		default: // A JSON value (which may be a JSON null literal value)
-			newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
+			newVal, err = vjson.JSONSQLValue(afterVals[i].Raw())
 			if err != nil {
 				return err
 			}
@@ -783,7 +783,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 						// If the JSON column was NOT updated then the JSON column is marked as partial
 						// and the diff is empty as a way to exclude it from the AFTER image. So we
 						// want to use the BEFORE image value.
-						beforeVal, err := vjson.MarshalSQLValue(bindvars["b_"+field.Name].Value)
+						beforeVal, err := vjson.JSONSQLValue(bindvars["b_"+field.Name].Value)
 						if err != nil {
 							return nil, vterrors.Wrapf(err, "failed to convert JSON to SQL field value for %s.%s when building insert query",
 								tp.TargetName, field.Name)
@@ -945,7 +945,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 				if vals[n].IsNull() { // An SQL NULL and not an actual JSON value
 					jsVal = &sqltypes.NULL
 				} else { // A JSON value (which may be a JSON null literal value)
-					jsVal, err = vjson.MarshalSQLValue(vals[n].Raw())
+					jsVal, err = vjson.JSONSQLValue(vals[n].Raw())
 					if err != nil {
 						return nil, err
 					}
@@ -1066,7 +1066,7 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 				buf.WriteString(sqltypes.NullStr)
 			} else {
 				raw := row.Values[offset : offset+length]
-				if err := vjson.AppendMarshalSQL(buf, raw); err != nil {
+				if err := vjson.AppendJSONSQL(buf, raw); err != nil {
 					return err
 				}
 			}

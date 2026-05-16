@@ -410,7 +410,7 @@ func TestCellLengthAndData(t *testing.T) {
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98,
 		},
 		out: sqltypes.MakeTrusted(sqltypes.Expression,
-			[]byte(`{"a": "b"}`)),
+			[]byte(`JSON_OBJECT(_utf8mb4'a', _utf8mb4'b')`)),
 	}, {
 		typ:      TypeJSON,
 		metadata: 4,
@@ -419,7 +419,13 @@ func TestCellLengthAndData(t *testing.T) {
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98,
 		},
 		out: sqltypes.MakeTrusted(sqltypes.Expression,
-			[]byte(`{"a": "b"}`)),
+			[]byte(`JSON_OBJECT(_utf8mb4'a', _utf8mb4'b')`)),
+	}, {
+		typ:      TypeJSON,
+		metadata: 2,
+		data:     []byte{0x0b, 0x00, 15, 10, 8, 0, 0, 0, 0, 0, 30, 149, 25},
+		out: sqltypes.MakeTrusted(sqltypes.Expression,
+			[]byte(`CAST(date '2015-01-15' as JSON)`)),
 	}, {
 		typ:      TypeEnum,
 		metadata: 1,

@@ -17,6 +17,7 @@ limitations under the License.
 package json
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -164,6 +165,36 @@ func (v *Value) marshalSQLInternal(top bool, dst []byte) []byte {
 	default:
 		panic(fmt.Errorf("BUG: unexpected Value type: %d", v.t))
 	}
+}
+
+// IsPreserializedJSONSQL reports whether raw is a SQL JSON expression produced by
+// Value.MarshalSQLTo on the vstreamer binlog path, as opposed to standard JSON text.
+func IsPreserializedJSONSQL(raw []byte) bool {
+	raw = bytes.TrimSpace(raw)
+	return bytes.HasPrefix(raw, []byte("JSON_OBJECT(")) ||
+		bytes.HasPrefix(raw, []byte("JSON_ARRAY(")) ||
+		bytes.HasPrefix(raw, []byte("CAST("))
+}
+
+// JSONSQLValue converts JSON column bytes for VReplication into a bindable SQL value.
+// Bytes from the vstreamer binlog path are already SQL expressions; text JSON from
+// table copy or older streams is converted via MarshalSQLValue.
+func JSONSQLValue(raw []byte) (*sqltypes.Value, error) {
+	if IsPreserializedJSONSQL(raw) {
+		v := sqltypes.MakeTrusted(querypb.Type_RAW, bytes.TrimSpace(raw))
+		return &v, nil
+	}
+	return MarshalSQLValue(raw)
+}
+
+// AppendJSONSQL writes a JSON column value as SQL into buf, preserving values that
+// were already encoded with MarshalSQLTo on the vstreamer binlog path.
+func AppendJSONSQL(buf *bytes2.Buffer, raw []byte) error {
+	if IsPreserializedJSONSQL(raw) {
+		buf.Write(bytes.TrimSpace(raw))
+		return nil
+	}
+	return AppendMarshalSQL(buf, raw)
 }
 
 // MarshalSQLValue converts text JSON bytes into a SQL expression using

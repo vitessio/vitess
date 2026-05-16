@@ -1321,6 +1321,52 @@ func TestAppendFromRowLargeJSON(t *testing.T) {
 	assert.Contains(t, result, "JSON_ARRAY(")
 }
 
+func TestAppendFromRowPreserializedJSON(t *testing.T) {
+	sqlExpr := `JSON_OBJECT(_utf8mb4'created', CAST(date '2024-01-15' as JSON))`
+	tp := &TablePlan{
+		BulkInsertValues: sqlparser.BuildParsedQuery("(%a)",
+			":c1",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_JSON},
+		},
+		FieldsToSkip: map[string]bool{},
+	}
+
+	row := sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(sqlExpr)),
+	})
+
+	buf := &bytes2.Buffer{}
+	err := tp.appendFromRow(buf, row)
+	require.NoError(t, err)
+	result := buf.String()
+	assert.Contains(t, result, "CAST(date '2024-01-15' as JSON)")
+	assert.NotContains(t, result, "JSON_QUOTE")
+}
+
+func TestBindAfterJSONFieldValsPreservesMySQLJSONTypes(t *testing.T) {
+	sqlExpr := `JSON_OBJECT(_utf8mb4'created', CAST(date '2024-01-15' as JSON))`
+	tp := &TablePlan{
+		Insert: sqlparser.BuildParsedQuery("insert into t(id, doc) values (%a, %a)",
+			":a_id", ":a_doc",
+		),
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "doc", Type: querypb.Type_JSON},
+		},
+	}
+	afterVals := sqltypes.MakeRowTrusted(tp.Fields, sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")),
+		sqltypes.MakeTrusted(querypb.Type_JSON, []byte(sqlExpr)),
+	}))
+	bindvars := make(map[string]*querypb.BindVariable)
+	err := tp.bindAfterJSONFieldVals(&binlogdatapb.RowChange{}, afterVals, bindvars)
+	require.NoError(t, err)
+	assert.Contains(t, string(bindvars["a_doc"].Value), "CAST(date '2024-01-15' as JSON)")
+	assert.NotContains(t, string(bindvars["a_doc"].Value), "JSON_QUOTE")
+}
+
 func TestAppendFromRowSmallJSON(t *testing.T) {
 	// Verify that small JSON values use the tree encoding (JSON_OBJECT/JSON_ARRAY).
 	tp := &TablePlan{
