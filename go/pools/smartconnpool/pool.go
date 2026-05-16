@@ -750,7 +750,7 @@ func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 		}
 		// waiting() is a best-effort demand hint. A waiter that races in
 		// after this check but before the close below recovers through the
-		// normal capacity notification / async-open path.
+		// normal capacity release / async-open path.
 		if pool.wait.waiting() != 0 {
 			return false
 		}
@@ -759,7 +759,7 @@ func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 				pool.Metrics.idleClosed.Add(1)
 			}
 			conn.Close()
-			pool.notifyWaitersForAvailableCapacity(1)
+			pool.requestOpensForAvailableCapacity(1)
 			return true
 		}
 	}
@@ -829,7 +829,7 @@ func (pool *ConnPool[C]) releaseSlotIfOverCapacity() bool {
 			return false
 		}
 		if pool.active.CompareAndSwap(active, active-1) {
-			pool.notifyWaitersForAvailableCapacity(1)
+			pool.requestOpensForAvailableCapacity(1)
 			return true
 		}
 	}
@@ -860,7 +860,7 @@ func (pool *ConnPool[C]) closeIdleConnIfOverCapacity() bool {
 		}
 		if pool.active.CompareAndSwap(active, active-1) {
 			conn.Close()
-			pool.notifyWaitersForAvailableCapacity(1)
+			pool.requestOpensForAvailableCapacity(1)
 			return true
 		}
 	}
@@ -879,15 +879,15 @@ func (pool *ConnPool[C]) closeIdleConns() {
 
 func (pool *ConnPool[C]) closedConn() {
 	_ = pool.active.Add(-1)
-	pool.notifyWaitersForAvailableCapacity(1)
+	pool.requestOpensForAvailableCapacity(1)
 }
 
-func (pool *ConnPool[C]) notifyWaitersForAvailableCapacity(limit int64) {
+func (pool *ConnPool[C]) requestOpensForAvailableCapacity(limit int64) {
 	for range limit {
-		if pool.active.Load()+pool.pendingOpen.Load() >= pool.capacity.Load() {
+		if pool.wait.waiting() == 0 {
 			return
 		}
-		if !pool.wait.tryNotifyWaiter() {
+		if !pool.requestOpen() {
 			return
 		}
 	}
@@ -965,8 +965,8 @@ func (pool *ConnPool[C]) startPendingOpen(ctx context.Context) bool {
 		// Capacity shrank after this open was requested but before the opener
 		// reserved an active slot. The pending open belonged to the old
 		// capacity window, so drop it instead of carrying stale demand forward.
-		// There is no capacity to wake waiters for here; future capacity growth
-		// or slot release is responsible for the next notification.
+		// There is no capacity to serve waiters here; future capacity growth or
+		// slot release is responsible for the next open request.
 		return true
 	}
 	pool.startAsyncOpen(ctx)
@@ -1283,7 +1283,7 @@ func (pool *ConnPool[C]) setCapacity(newcap int64) error {
 	}
 
 	if newcap > oldcap {
-		pool.notifyWaitersForAvailableCapacity(newcap - oldcap)
+		pool.requestOpensForAvailableCapacity(newcap - oldcap)
 	}
 
 	return nil
@@ -1323,28 +1323,17 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 
 		activeConnections := pool.Active()
 
-		// Only expire up to ~half of the active connections at a time. This should
-		// prevent us from closing too many connections in one go which could lead to
-		// a lot of `.Get` calls being added to the waitlist if there's a sudden spike
-		// coming in _after_ connections were popped off the stack but _before_ being
-		// returned back to the pool. This is unlikely to happen, but better safe than sorry.
-		//
-		// We always expire at least one connection per stack per iteration to ensure
-		// that idle connections are eventually closed even in small pools.
-		//
-		// We will expire any additional connections in the next iteration of the idle closer.
-		expiredConnections := make([]*Pooled[C], 0, max(activeConnections/2, 1))
+		// Drain the stack and close every expired conn found in this sweep.
+		// Leaving expired conns behind with their old timeUsed value would
+		// let a racing Get borrow and return them to callers. Replacement
+		// concurrency is bounded by the async opener.
+		expiredConnections := make([]*Pooled[C], 0)
 		validConnections := make([]*Pooled[C], 0, activeConnections)
 
 		// Pop out connections from the stack until we get a `nil` connection
 		for ok {
 			if conn.timeUsed.expired(mono, timeout) {
 				expiredConnections = append(expiredConnections, conn)
-
-				if len(expiredConnections) == cap(expiredConnections) {
-					// We have collected enough connections for this iteration to expire
-					break
-				}
 			} else {
 				validConnections = append(validConnections, conn)
 			}

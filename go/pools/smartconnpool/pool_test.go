@@ -916,6 +916,130 @@ func TestWaitTimeRecordedOnTimeout(t *testing.T) {
 	require.Greater(t, p.Metrics.WaitTime(), time.Duration(0), "WaitTime should reflect the timed-out wait")
 }
 
+func TestCapacityReleaseRequestsOpenWithoutRequeueingWaiter(t *testing.T) {
+	var (
+		state           TestState
+		attempts        atomic.Int64
+		replacementOnce sync.Once
+		waitAttempts    atomic.Int64
+		secondWaitOnce  sync.Once
+		releaseOnce     sync.Once
+		waitResult      struct {
+			conn *Pooled[*TestConn]
+			err  error
+		}
+	)
+	replacementStarted := make(chan struct{})
+	releaseReplacement := make(chan struct{})
+	secondWaitStarted := make(chan struct{})
+	releaseSecondWait := make(chan struct{})
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		attempt := attempts.Add(1)
+		if attempt > 1 {
+			replacementOnce.Do(func() {
+				close(replacementStarted)
+			})
+			select {
+			case <-releaseReplacement:
+			case <-ctx.Done():
+				return nil, context.Cause(ctx)
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:    attempt,
+			counts: &state,
+		}, nil
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(connector, nil)
+
+	ctx := t.Context()
+	conn, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	waitCtx, cancelWait := context.WithCancel(ctx)
+	defer func() {
+		cancelWait()
+		releaseOnce.Do(func() {
+			close(releaseSecondWait)
+			close(releaseReplacement)
+		})
+		if conn != nil {
+			conn.Recycle()
+		}
+		if waitResult.conn != nil {
+			waitResult.conn.Recycle()
+		}
+		require.NoError(t, p.CloseWithContext(t.Context()))
+	}()
+
+	oldOnWait := p.wait.onWait
+	p.wait.onWait = func() {
+		if oldOnWait != nil {
+			oldOnWait()
+		}
+		if waitAttempts.Add(1) == 2 {
+			secondWaitOnce.Do(func() {
+				close(secondWaitStarted)
+			})
+			<-releaseSecondWait
+		}
+	}
+
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+		waitResult.conn, waitResult.err = p.Get(waitCtx, nil)
+	}()
+
+	require.Eventually(t, func() bool {
+		return waitAttempts.Load() == 1 && p.wait.waiting() == 1
+	}, 5*time.Second, 10*time.Millisecond)
+
+	conn.Taint()
+	conn = nil
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-replacementStarted:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+
+	assert.EqualValues(t, 1, p.wait.waiting())
+	assert.EqualValues(t, 2, p.Metrics.WaitCount())
+	select {
+	case <-secondWaitStarted:
+		assert.Fail(t, "waiter was requeued after capacity release")
+	default:
+	}
+
+	cancelWait()
+	releaseOnce.Do(func() {
+		close(releaseSecondWait)
+		close(releaseReplacement)
+	})
+	require.Eventually(t, func() bool {
+		select {
+		case <-waitDone:
+			return true
+		default:
+			return false
+		}
+	}, 5*time.Second, 10*time.Millisecond)
+	if waitResult.conn != nil {
+		waitResult.conn.Recycle()
+		waitResult.conn = nil
+	}
+}
+
 func TestWaitForConnHonorsCtxOnRetryPath(t *testing.T) {
 	// waitForConn's shouldRetry path removes the waiter and returns (nil,
 	// nil) so the outer get loop can re-evaluate state changes that
@@ -1522,6 +1646,70 @@ func TestIdleTimeout(t *testing.T) {
 
 	t.Run("WithoutSettings", func(t *testing.T) { testTimeout(t, nil) })
 	t.Run("WithSettings", func(t *testing.T) { testTimeout(t, sFoo) })
+}
+
+func TestIdleSweepDoesNotLeaveExpiredConnsBorrowable(t *testing.T) {
+	var (
+		state             TestState
+		blockReplacements atomic.Bool
+		releaseConnect    = make(chan struct{})
+	)
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		if blockReplacements.Load() {
+			select {
+			case <-releaseConnect:
+			case <-ctx.Done():
+				return nil, context.Cause(ctx)
+			}
+		}
+
+		state.open.Add(1)
+		return &TestConn{
+			num:    state.lastID.Add(1),
+			counts: &state,
+		}, nil
+	}
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 4,
+	}).Open(connector, nil)
+	t.Cleanup(func() {
+		close(releaseConnect)
+		p.Close()
+	})
+
+	var conns []*Pooled[*TestConn]
+	oldIDs := make(map[int64]bool)
+	for range 4 {
+		conn, err := p.Get(ctx, nil)
+		require.NoError(t, err)
+		oldIDs[conn.Conn.num] = true
+		conns = append(conns, conn)
+	}
+	for _, conn := range conns {
+		conn.Recycle()
+	}
+
+	p.SetIdleTimeout(5 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	blockReplacements.Store(true)
+	p.closeIdleResources(time.Now())
+
+	require.EqualValues(t, 4, state.close.Load(), "one idle sweep should close every expired conn it finds")
+
+	getCtx, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+
+	conn, err := p.Get(getCtx, nil)
+	if err != nil {
+		require.ErrorIs(t, err, ErrTimeout)
+		return
+	}
+	t.Cleanup(conn.Recycle)
+	require.False(t, oldIDs[conn.Conn.num], "Get returned an expired idle conn")
 }
 
 func TestIdleTimeoutCreateFail(t *testing.T) {

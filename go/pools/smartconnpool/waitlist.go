@@ -77,10 +77,6 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 		return nil, ErrPoolWaiterCapReached
 	}
 
-	if wl.onWait != nil {
-		wl.onWait()
-	}
-
 	wl.mu.Lock()
 	if wl.aboveWaiterCap(maxWaiters) {
 		wl.mu.Unlock()
@@ -91,6 +87,10 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	}
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
+
+	if wl.onWait != nil {
+		wl.onWait()
+	}
 
 	if shouldRetry != nil && shouldRetry() {
 		removed := false

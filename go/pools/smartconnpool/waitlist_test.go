@@ -75,6 +75,10 @@ func TestWaitlistWaiterCap(t *testing.T) {
 	poolClose := make(chan struct{})
 
 	const maxWaiters = 3
+	var waitCount atomic.Int64
+	wl.onWait = func() {
+		waitCount.Add(1)
+	}
 
 	errs := make(chan error, maxWaiters)
 	for i := 1; i <= maxWaiters; i++ {
@@ -91,10 +95,40 @@ func TestWaitlistWaiterCap(t *testing.T) {
 	_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters, nil)
 	assert.ErrorIs(t, err, ErrPoolWaiterCapReached)
 	assert.Equal(t, maxWaiters, wl.waiting())
+	assert.EqualValues(t, maxWaiters, waitCount.Load())
 
 	close(poolClose)
 
 	for range maxWaiters {
 		assert.NotErrorIs(t, <-errs, ErrPoolWaiterCapReached)
 	}
+}
+
+func TestWaitlistOnWaitRunsAfterEnqueue(t *testing.T) {
+	wl := waitlist[*TestConn]{}
+	wl.init()
+
+	poolClose := make(chan struct{})
+	waitingAtOnWait := make(chan int, 1)
+	wl.onWait = func() {
+		waitingAtOnWait <- wl.waiting()
+	}
+
+	errs := make(chan error, 1)
+	go func() {
+		_, err := wl.waitForConn(t.Context(), nil, poolClose, 1, nil)
+		errs <- err
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case got := <-waitingAtOnWait:
+			assert.Equal(c, 1, got)
+		default:
+			assert.Fail(c, "waiter did not reach onWait")
+		}
+	}, time.Second, 5*time.Millisecond)
+
+	close(poolClose)
+	assert.NotErrorIs(t, <-errs, ErrPoolWaiterCapReached)
 }
