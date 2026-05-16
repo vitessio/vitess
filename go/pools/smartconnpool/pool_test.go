@@ -576,6 +576,47 @@ func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
 	}, 30*time.Second, 50*time.Millisecond)
 }
 
+func TestRefreshWorkerDoesNotQueueReopens(t *testing.T) {
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	var refreshCount atomic.Int32
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        1,
+		RefreshInterval: 20 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		refreshCount.Add(1)
+		return true, nil
+	})
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if held != nil {
+			held.Recycle()
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() == 1
+	}, 5*time.Second, time.Millisecond)
+
+	require.Never(t, func() bool {
+		return refreshCount.Load() > 1
+	}, 100*time.Millisecond, 5*time.Millisecond)
+
+	held.Recycle()
+	held = nil
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 2
+	}, 5*time.Second, 5*time.Millisecond)
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 
