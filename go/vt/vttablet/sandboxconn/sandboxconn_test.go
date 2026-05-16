@@ -30,6 +30,7 @@ import (
 )
 
 const canceledCallTimeout = 3 * time.Second
+const canceledCallExecDelay = canceledCallTimeout * 2
 
 func waitForCanceledCall(t *testing.T, name string, errCh <-chan error) error {
 	t.Helper()
@@ -45,7 +46,7 @@ func waitForCanceledCall(t *testing.T, name string, errCh <-chan error) error {
 
 func TestExecuteHonorsCanceledContextDuringExecDelay(t *testing.T) {
 	sbc := NewSandboxConn(&topodatapb.Tablet{Type: topodatapb.TabletType_PRIMARY})
-	sbc.ExecDelayResponse = time.Second
+	sbc.ExecDelayResponse = canceledCallExecDelay
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -63,7 +64,7 @@ func TestExecuteHonorsCanceledContextDuringExecDelay(t *testing.T) {
 
 func TestStreamExecuteHonorsCanceledContextDuringExecDelay(t *testing.T) {
 	sbc := NewSandboxConn(&topodatapb.Tablet{Type: topodatapb.TabletType_PRIMARY})
-	sbc.ExecDelayResponse = time.Second
+	sbc.ExecDelayResponse = canceledCallExecDelay
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
 	ctx, cancel := context.WithCancel(t.Context())
