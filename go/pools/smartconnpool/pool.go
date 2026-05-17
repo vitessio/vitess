@@ -225,6 +225,13 @@ func (pool *ConnPool[C]) open() {
 	pool.capacity.Store(pool.config.maxCapacity)
 	pool.setIdleCount()
 
+	pool.runWorker(closeChan, 100*time.Millisecond, func(_ time.Time) bool {
+		waiting := pool.wait.waiting()
+		for n := 0; n < waiting && pool.tryReturnAnyConn(); n++ {
+		}
+		return true
+	})
+
 	idleTimeout := pool.IdleTimeout()
 	if idleTimeout != 0 {
 		// The idle worker takes care of closing connections that have been idle too long
@@ -612,30 +619,11 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 	}
 }
 
-func (pool *ConnPool[C]) shouldRetryWait() bool {
-	if pool.active.Load() < pool.capacity.Load() {
-		return true
-	}
-	if pool.clean.Peek() != nil {
-		return true
-	}
-	for i := range pool.settings {
-		if pool.settings[i].Peek() != nil {
-			return true
-		}
-	}
-	return false
-}
-
 // get returns a pooled connection with no Setting applied
 func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
 
 	for {
-		if pool.capacity.Load() == 0 {
-			return nil, ErrConnPoolClosed
-		}
-
 		// best case: if there's a connection in the clean stack, return it right away
 		if conn := pool.pop(&pool.clean); conn != nil {
 			pool.borrowed.Add(1)
@@ -661,7 +649,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 				return nil, ErrConnPoolClosed
 			}
 
-			conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters, pool.shouldRetryWait)
+			conn, err = pool.wait.waitForConn(ctx, nil, *closeChan, pool.config.maxWaiters)
 			if err != nil {
 				if errors.Is(err, ErrPoolWaiterCapReached) || errors.Is(err, ErrConnPoolClosed) {
 					return nil, err
@@ -703,10 +691,6 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 	pool.Metrics.getWithSettingsCount.Add(1)
 
 	for {
-		if pool.capacity.Load() == 0 {
-			return nil, ErrConnPoolClosed
-		}
-
 		var err error
 		// best case: check if there's a connection in the setting stack where our Setting belongs
 		conn := pool.pop(&pool.settings[setting.bucket&stackMask])
@@ -736,7 +720,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 				return nil, ErrConnPoolClosed
 			}
 
-			conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters, pool.shouldRetryWait)
+			conn, err = pool.wait.waitForConn(ctx, setting, *closeChan, pool.config.maxWaiters)
 			if err != nil {
 				if errors.Is(err, ErrPoolWaiterCapReached) || errors.Is(err, ErrConnPoolClosed) {
 					return nil, err

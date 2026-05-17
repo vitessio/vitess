@@ -51,7 +51,7 @@ type waitlist[C Connection] struct {
 // with nil error means the caller should retry acquisition.
 // If a non-nil error is returned, any conn that was already in flight to this
 // waiter is discarded internally.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint, shouldRetry func() bool) (*Pooled[C], error) {
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	defer func() {
 		select {
@@ -87,27 +87,6 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	}
 	wl.list.PushBackValue(elem)
 	wl.mu.Unlock()
-
-	if shouldRetry != nil && shouldRetry() {
-		removed := false
-
-		wl.mu.Lock()
-		for e := wl.list.Front(); e != nil; e = e.Next() {
-			if e == elem {
-				wl.list.Remove(elem)
-				removed = true
-				break
-			}
-		}
-		wl.mu.Unlock()
-
-		if removed {
-			if err := ctx.Err(); err != nil {
-				return nil, context.Cause(ctx)
-			}
-			return nil, nil
-		}
-	}
 
 	select {
 	case <-closeChan:

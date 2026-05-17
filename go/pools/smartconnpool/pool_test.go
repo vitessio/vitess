@@ -1097,13 +1097,7 @@ func TestGetRetriesWhenConnectionReturnedBeforeWaiterEnqueues(t *testing.T) {
 	p := NewPool(&Config[*TestConn]{
 		Capacity: 1,
 		LogWait:  state.LogWait,
-	})
-	p.config.connect = newConnector(&state)
-	p.capacity.Store(1)
-	p.setIdleCount()
-
-	closeChan := make(chan struct{})
-	p.close.Store(&closeChan)
+	}).Open(newConnector(&state), nil)
 
 	var (
 		conn   *Pooled[*TestConn]
