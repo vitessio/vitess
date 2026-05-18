@@ -255,24 +255,25 @@ func (s *TabletThrottlerStrategy) refreshCache() {
 }
 
 // getCachedThrottleResult returns the current cached throttle check result.
-// Always returns a valid result by falling back to direct calls when needed.
-func (s *TabletThrottlerStrategy) getCachedThrottleResult(ctx context.Context) (*throttle.CheckResult, bool) {
-	if s.running.Load() {
-		// Use cached results for better performance with single atomic load
-		state := s.cachedState.Load()
-
-		// If cache is running but state is nil (not initialized yet), fall back to direct call
-		if state == nil {
-			cacheMisses.Add(1)
-			return s.throttlerClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
-		}
-
-		cacheHits.Add(1)
-		return state.result, state.ok
+// If the cache is not yet primed (state is nil) or the strategy is not running,
+// it fails open (returns checkOk=true) instead of making a synchronous throttler
+// call. This avoids latency spikes in the query hot path during the brief
+// cache-priming window after Start() or when Evaluate() is called outside the
+// running lifecycle.
+func (s *TabletThrottlerStrategy) getCachedThrottleResult() (*throttle.CheckResult, bool) {
+	if !s.running.Load() {
+		cacheMisses.Add(1)
+		return nil, true
 	}
 
-	// Fallback: direct call if cache not running (e.g., during startup)
-	return s.throttlerClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
+	state := s.cachedState.Load()
+	if state == nil {
+		cacheMisses.Add(1)
+		return nil, true
+	}
+
+	cacheHits.Add(1)
+	return state.result, state.ok
 }
 
 // Evaluate determines whether a given SQL query should be throttled
@@ -361,9 +362,12 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 		}
 	}
 
-	// Step 5: Get cached throttle check results
-	// checkResult is guaranteed to be non-nil now due to fallback logic in getCachedThrottleResult
-	checkResult, checkOk := s.getCachedThrottleResult(ctx)
+	// Step 5: Get cached throttle check results.
+	// When the cache is not primed (state is nil) or the strategy is not running,
+	// this returns checkOk=true (fail open) to avoid synchronous throttler calls
+	// in the hot path. checkResult may be nil in that case, but the early return
+	// on checkOk below skips the metrics evaluation that would dereference it.
+	checkResult, checkOk := s.getCachedThrottleResult()
 	// If check passes, system is not overloaded → allow query
 	if checkOk {
 		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonNoMetricBreach, startTime)

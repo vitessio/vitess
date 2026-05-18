@@ -274,6 +274,10 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 				randFloat64: func() float64 { return tt.giveRandValue },
 				randIntN:    func(n int) int { return tt.givePriorityRandValue },
 			})
+			// Start() primes the cache synchronously so Evaluate() sees the
+			// configured throttle result; without it the hot path fails open.
+			tts.Start()
+			defer tts.Stop()
 
 			decision := tts.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, tt.giveTxnID, toQueryAttributesForTest(tt.giveOptions))
 			if tt.wantErr != "" {
@@ -335,13 +339,13 @@ func TestTabletThrottlerStrategy_CachingBehavior(t *testing.T) {
 
 	options := &querypb.ExecuteOptions{Priority: "100"}
 
+	// Before Start(): the strategy is not running, so Evaluate() must not make
+	// synchronous ThrottleCheckOK calls. getCachedThrottleResult fails open
+	// (returns checkOk=true) to keep the hot path bounded in latency.
 	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
-	require.Equal(t, 1, ftcw.GetCallCount(), "Expected 1 call without cache")
-
 	_ = strategy.Evaluate(context.Background(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT * FROM table"}, 1, toQueryAttributesForTest(options))
-	require.Equal(t, 2, ftcw.GetCallCount(), "Expected 2 calls without cache")
+	require.Equal(t, 0, ftcw.GetCallCount(), "Expected no synchronous throttler calls before Start()")
 
-	ftcw.ResetCallCount()
 	strategy.Start()
 	defer strategy.Stop()
 
@@ -542,27 +546,32 @@ func (f *slowThrottleClientWrapper) GetCallCount() int {
 	return int(f.callCount.Load())
 }
 
-// TestTabletThrottlerStrategy_CacheTimeoutScenarios tests various timeout scenarios.
-func TestTabletThrottlerStrategy_CacheTimeoutScenarios(t *testing.T) {
-	timeoutClient := &slowThrottleClientWrapper{
+// TestTabletThrottlerStrategy_FailOpenWhenCacheNotPrimed verifies that when the
+// strategy is not running (or the cache has not been primed yet),
+// getCachedThrottleResult fails open without making any synchronous throttler
+// call. This protects the query hot path from latency spikes when the throttler
+// is slow or stuck during the brief cache-priming window after Start().
+func TestTabletThrottlerStrategy_FailOpenWhenCacheNotPrimed(t *testing.T) {
+	slowClient := &slowThrottleClientWrapper{
 		checkResult: &throttle.CheckResult{
 			Metrics: map[string]*throttle.MetricResult{
 				"lag": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_OK, Value: 5},
 			},
 		},
 		throttleCheckOK: true,
-		delay:           100 * time.Millisecond,
+		delay:           5 * time.Second,
 	}
 
-	strategy := NewTabletThrottlerStrategy(timeoutClient, &querythrottlerpb.TabletStrategyConfig{}, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
+	strategy := NewTabletThrottlerStrategy(slowClient, &querythrottlerpb.TabletStrategyConfig{}, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
+	start := time.Now()
+	result, ok := strategy.getCachedThrottleResult()
+	elapsed := time.Since(start)
 
-	result, ok := strategy.getCachedThrottleResult(ctx)
-
-	require.False(t, ok)
-	require.Nil(t, result)
+	require.True(t, ok, "Expected fail-open (checkOk=true) when cache is not primed")
+	require.Nil(t, result, "Expected nil checkResult when cache is not primed")
+	require.Less(t, elapsed, 100*time.Millisecond, "Expected fail-open path to return immediately without calling the throttler")
+	require.Equal(t, 0, slowClient.GetCallCount(), "Expected no synchronous ThrottleCheckOK calls from the hot path")
 }
 
 // TestFakeThrottleClientWrapper_ThreadSafety tests that the FakeThrottleClientWrapper is thread-safe
