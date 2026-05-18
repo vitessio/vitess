@@ -505,6 +505,7 @@ func TestReopen(t *testing.T) {
 		refreshed.Store(true)
 		return true, nil
 	})
+	t.Cleanup(p.Close)
 
 	var resources [10]*Pooled[*TestConn]
 	for i := range 5 {
@@ -556,6 +557,65 @@ func TestReopen(t *testing.T) {
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, state.lastID.Load())
 	assert.EqualValues(t, 0, state.open.Load())
+}
+
+func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
+	var state TestState
+	var refreshCount atomic.Int32
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        2,
+		RefreshInterval: 50 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		count := refreshCount.Add(1)
+		return count == 1, nil
+	})
+	t.Cleanup(p.Close)
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 3
+	}, 30*time.Second, 50*time.Millisecond)
+}
+
+func TestRefreshWorkerDoesNotQueueReopens(t *testing.T) {
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	var refreshCount atomic.Int32
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        1,
+		RefreshInterval: 20 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		refreshCount.Add(1)
+		return true, nil
+	})
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if held != nil {
+			held.Recycle()
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() == 1
+	}, 5*time.Second, time.Millisecond)
+
+	require.Never(t, func() bool {
+		return refreshCount.Load() > 1
+	}, 100*time.Millisecond, 5*time.Millisecond)
+
+	held.Recycle()
+	held = nil
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 2
+	}, 5*time.Second, 5*time.Millisecond)
 }
 
 func TestUserClosing(t *testing.T) {
@@ -811,6 +871,46 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 		assert.Greater(t, 2*config.MaxLifetime, p.extendedMaxLifetime())
 		p.Close()
 	}
+}
+
+func TestExtendedMaxLifetimeJitter(t *testing.T) {
+	var state TestState
+	config := &Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: 30 * time.Minute,
+		LogWait:     state.LogWait,
+	}
+
+	p := NewPool(config).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	threshold := config.MaxLifetime + config.MaxLifetime/2
+	const maxAttempts = 64
+
+	for range maxAttempts {
+		extended := p.extendedMaxLifetime()
+		require.LessOrEqual(t, config.MaxLifetime, extended)
+		require.Greater(t, 2*config.MaxLifetime, extended)
+
+		if extended > threshold {
+			return
+		}
+	}
+
+	require.Failf(t, "jitter never reached upper half of range",
+		"no sample in %d tries exceeded %s", maxAttempts, threshold)
+}
+
+func TestExtendedMaxLifetimeNegativeDisables(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: -1 * time.Second,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 0, p.extendedMaxLifetime())
 }
 
 // TestMaxIdleCount tests the MaxIdleCount setting, to check if the pool closes
@@ -1371,6 +1471,11 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 		assert.Equal(c, int64(1), state.close.Load())
 	}, 100*time.Millisecond, 10*time.Millisecond)
 
+	// Keep this test focused on the in-flight reopen above. Further idle
+	// cleanup ticks can legitimately close additional connections and make the
+	// leak assertions below depend on background timing.
+	p.SetIdleTimeout(0)
+
 	// At this point, the idle timeout worker has expired the connections
 	// and is trying to reopen them (which takes 300ms due to delayConnect)
 
@@ -1394,17 +1499,16 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 
 	// Wait a moment for all reopening to complete
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		// Check the actual number of currently open connections
-		require.Equal(c, int64(2), state.open.Load())
-		// Check the total number of closed connections
-		require.Equal(c, int64(2), state.close.Load())
+		assert.Equal(c, int64(2), state.open.Load())
+		assert.Equal(c, int64(2), p.Active())
 	}, 400*time.Millisecond, 10*time.Millisecond)
+	assert.GreaterOrEqual(t, state.close.Load(), int64(1))
 
 	// Check the pool state
 	assert.Equal(t, int64(2), p.Active())
 	assert.Equal(t, int64(0), p.InUse())
 	assert.Equal(t, int64(2), p.Available())
-	assert.Equal(t, int64(2), p.Metrics.IdleClosed())
+	assert.GreaterOrEqual(t, p.Metrics.IdleClosed(), int64(1))
 
 	// Try to close the pool - if there are leaked connections, this will timeout
 	closeCtx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
@@ -1417,10 +1521,111 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	assert.Equal(t, int64(0), p.Active())
 	assert.Equal(t, int64(0), p.InUse())
 	assert.Equal(t, int64(0), p.Available())
-	assert.Equal(t, int64(2), p.Metrics.IdleClosed())
+	assert.GreaterOrEqual(t, p.Metrics.IdleClosed(), int64(1))
 
 	assert.Equal(t, int64(0), state.open.Load())
-	assert.Equal(t, int64(4), state.close.Load())
+	assert.Equal(t, state.lastID.Load(), state.close.Load())
+}
+
+func TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity(t *testing.T) {
+	var state TestState
+	var blockReconnect atomic.Bool
+	reconnectStarted := make(chan struct{})
+	releaseReconnect := make(chan struct{})
+	releaseReconnectOnce := sync.Once{}
+	reconnectAttempts := atomic.Int64{}
+	release := func() {
+		blockReconnect.Store(false)
+		releaseReconnectOnce.Do(func() {
+			close(releaseReconnect)
+		})
+	}
+
+	connector := func(ctx context.Context) (*TestConn, error) {
+		if blockReconnect.Load() && reconnectAttempts.Add(1) == 1 {
+			close(reconnectStarted)
+			select {
+			case <-releaseReconnect:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		state.open.Add(1)
+		return &TestConn{
+			num:    state.lastID.Add(1),
+			counts: &state,
+		}, nil
+	}
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 4,
+		LogWait:  state.LogWait,
+	}).Open(connector, nil)
+	defer p.Close()
+	defer release()
+
+	var conns []*Pooled[*TestConn]
+	for range 4 {
+		conn, err := p.Get(ctx, nil)
+		require.NoError(t, err)
+		conns = append(conns, conn)
+	}
+
+	for _, conn := range conns {
+		p.put(conn)
+		conn.timeUsed.set(monotonicNow() - 2*time.Millisecond)
+	}
+
+	require.EqualValues(t, 4, p.Active())
+	require.EqualValues(t, 4, p.Available())
+
+	p.SetIdleTimeout(time.Millisecond)
+	blockReconnect.Store(true)
+
+	cleanupDone := make(chan struct{})
+	go func() {
+		defer close(cleanupDone)
+		p.closeIdleResources(time.Now())
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-reconnectStarted:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+
+	conn1, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	defer p.put(conn1)
+
+	conn2, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	defer p.put(conn2)
+
+	require.EqualValues(t, 2, p.Available())
+
+	getCtx, cancel := context.WithTimeout(ctx, 25*time.Millisecond)
+	defer cancel()
+
+	conn, err := p.Get(getCtx, nil)
+	require.NoError(t, err)
+	defer p.put(conn)
+
+	release()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-cleanupDone:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {

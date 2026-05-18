@@ -286,8 +286,7 @@ func (pool *ConnPool[C]) open() {
 				log.Error(fmt.Sprint(err))
 			}
 			if refresh {
-				go pool.reopen()
-				return false
+				pool.reopen()
 			}
 			return true
 		})
@@ -578,10 +577,10 @@ func (pool *ConnPool[C]) closeOnIdleLimitReached(conn *Pooled[C]) bool {
 
 func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 	maxLifetime := pool.config.maxLifetime.Load()
-	if maxLifetime == 0 {
+	if maxLifetime <= 0 {
 		return 0
 	}
-	return time.Duration(maxLifetime) + time.Duration(rand.Uint32N(uint32(maxLifetime)))
+	return time.Duration(maxLifetime) + time.Duration(rand.Int64N(maxLifetime))
 }
 
 // connReopen replaces dbconn.Conn with a freshly-connected conn and
@@ -931,22 +930,43 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			pool.tryReturnConn(conn)
 		}
 
-		// Close all the expired connections and open new ones to replace them
-		for _, conn := range expiredConnections {
+		// Close all the expired connections and drop their active slot.
+		// Capture each conn's Setting before close so the reopen below
+		// can land the replacement back in the same settings stack
+		// instead of silently migrating to clean.
+		settings := make([]*Setting, len(expiredConnections))
+		for i, conn := range expiredConnections {
 			pool.Metrics.idleClosed.Add(1)
-
-			// Pass the previous Setting through so the reopened conn lands
-			// back in the same settings stack rather than silently
-			// migrating to clean. The worker context ensures a Close
-			// interrupts any in-flight connect.
-			setting := conn.Conn.Setting()
+			settings[i] = conn.Conn.Setting()
 			conn.Close()
-			if err := pool.connReopen(pool.connectCtx(), conn, setting, mono); err != nil {
-				pool.closedConn()
+			pool.closedConn()
+		}
+
+		// Reopen up to capacity. Each reopen re-acquires its active slot
+		// via CAS; if capacity has been reduced in the meantime, the
+		// freshly connected conn is closed instead of returned to the
+		// pool. The worker context ensures a Close interrupts any
+		// in-flight connect.
+		for i, conn := range expiredConnections {
+			if pool.active.Load() >= pool.capacity.Load() {
+				break
+			}
+
+			if err := pool.connReopen(pool.connectCtx(), conn, settings[i], mono); err != nil {
 				continue
 			}
 
-			pool.tryReturnConn(conn)
+			for {
+				open := pool.active.Load()
+				if open >= pool.capacity.Load() {
+					conn.Close()
+					break
+				}
+				if pool.active.CompareAndSwap(open, open+1) {
+					pool.tryReturnConn(conn)
+					break
+				}
+			}
 		}
 	}
 
