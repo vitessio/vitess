@@ -101,11 +101,11 @@ type (
 	RefreshCheck            func() (bool, error)
 )
 
-// workerLifetime carries the context that bounds the lifetime of the pool's
-// worker goroutines. cancel is invoked at the start of Close so that
-// user-supplied callbacks (e.g. Connector) blocked inside a worker unblock
+// lifetime carries a context that is alive for as long as the pool is
+// open. cancel is invoked at the start of Close so that user-supplied
+// callbacks (e.g. the Connector) blocked anywhere in the pool unblock
 // promptly rather than waiting on a backend timeout.
-type workerLifetime struct {
+type lifetime struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -162,12 +162,12 @@ type ConnPool[C Connection] struct {
 	close      atomic.Pointer[chan struct{}]
 	capacityMu sync.Mutex
 
-	// workerLifetime holds a context that is cancelled when the pool starts
-	// closing. Worker goroutines pass it to user-supplied callbacks (e.g. the
-	// connect Connector) so that calls in flight at shutdown unblock instead
-	// of blocking on the backend's connect timeout. Held behind a pointer to
-	// keep ConnPool's heap footprint stable.
-	workerLifetime atomic.Pointer[workerLifetime]
+	// lifetime holds a context that is cancelled when the pool starts
+	// closing. Code paths that call into user-supplied callbacks (e.g. the
+	// connect Connector) pass it through so that calls in flight at shutdown
+	// unblock instead of blocking on the backend's connect timeout. Held
+	// behind a pointer to keep ConnPool's heap footprint stable.
+	lifetime atomic.Pointer[lifetime]
 
 	config struct {
 		// connect is the callback to create a new connection for the pool
@@ -248,7 +248,7 @@ func (pool *ConnPool[C]) open() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	pool.workerLifetime.Store(&workerLifetime{ctx: ctx, cancel: cancel})
+	pool.lifetime.Store(&lifetime{ctx: ctx, cancel: cancel})
 
 	pool.capacity.Store(pool.config.maxCapacity)
 	pool.setIdleCount()
@@ -331,13 +331,13 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 		return nil
 	}
 
-	// Cancel the workers' context before we start draining: any user
-	// connect callback currently blocked inside a worker (e.g. the idle
-	// worker reopening an expired connection) needs to unblock now so
-	// that setCapacity can observe active dropping to zero and so that
+	// Cancel the pool's lifetime context before we start draining: any user
+	// connect callback currently blocked behind it (e.g. the idle worker
+	// reopening an expired connection) needs to unblock now so that
+	// setCapacity can observe active dropping to zero and so that
 	// workers.Wait below isn't held up by a hung connect.
-	if wl := pool.workerLifetime.Swap(nil); wl != nil {
-		wl.cancel()
+	if lt := pool.lifetime.Swap(nil); lt != nil {
+		lt.cancel()
 	}
 
 	// close all the connections in the pool; if we time out while waiting for
@@ -640,8 +640,8 @@ func (pool *ConnPool[C]) closedConn() {
 // a pre-cancelled context so callers don't block on user-supplied connect
 // callbacks for a pool that's going away.
 func (pool *ConnPool[C]) connectCtx() context.Context {
-	if wl := pool.workerLifetime.Load(); wl != nil {
-		return wl.ctx
+	if lt := pool.lifetime.Load(); lt != nil {
+		return lt.ctx
 	}
 	return alreadyCancelled
 }
