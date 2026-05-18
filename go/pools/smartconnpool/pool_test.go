@@ -1654,22 +1654,16 @@ func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
 	require.EqualValues(t, 10, p.Active())
 	require.EqualValues(t, 10, p.Available())
 
-	// Wait a bit for the idle timeout worker to refresh connections
-	assert.Eventually(t, func() bool {
-		return p.Metrics.IdleClosed() > 10
-	}, 500*time.Millisecond, 10*time.Millisecond, "Expected at least 10 connections to be closed by idle timeout")
-
-	// Verify that new connections were created to replace the closed ones
-	require.EqualValues(t, 10, p.Active())
-	require.EqualValues(t, 10, p.Available())
-
-	// Count how many connections in the stack are closed
-	totalInStack := 0
-	for conn := p.clean.Peek(); conn != nil; conn = conn.next.Load() {
-		totalInStack++
-	}
-
-	require.LessOrEqual(t, totalInStack, 10)
+	// Wait for the idle worker to refresh more than the initial 10 conns
+	// AND for the reopen loop to bring Active back to capacity. These need
+	// to hold simultaneously, so they go in one EventuallyWithT — the
+	// idle worker briefly drops Active between closing expired conns and
+	// re-acquiring slots for the reopened ones.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Greater(c, p.Metrics.IdleClosed(), int64(10))
+		assert.EqualValues(c, 10, p.Active())
+		assert.EqualValues(c, 10, p.Available())
+	}, time.Second, 10*time.Millisecond)
 }
 
 // TestCloseDoesNotHandOffToWaiters verifies that once Close has started
