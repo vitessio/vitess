@@ -1538,29 +1538,20 @@ func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
 func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
 	var state TestState
 
-	// Safety net: unblock any connect that's still parked after the test
-	// exits (e.g. if the assertion below fires before Close cancels the
-	// worker context).
-	released := make(chan struct{})
-	t.Cleanup(func() {
-		select {
-		case <-released:
-		default:
-			close(released)
-		}
-	})
+	ctx := t.Context()
 
 	var connectCalls atomic.Int64
-	customConnector := func(ctx context.Context) (*TestConn, error) {
+	customConnector := func(connectCtx context.Context) (*TestConn, error) {
 		call := connectCalls.Add(1)
 		if call > 1 {
-			// Block until ctx is cancelled (the behavior under test) or the
-			// test's cleanup releases us.
+			// Block until connectCtx is cancelled (the behavior under test)
+			// or the test exits. t.Context is cancelled just before t.Cleanup
+			// runs, so a failed assertion still unblocks us.
 			select {
+			case <-connectCtx.Done():
+				return nil, connectCtx.Err()
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-released:
-				return nil, errors.New("test cleanup")
 			}
 		}
 		state.open.Add(1)
@@ -1576,8 +1567,6 @@ func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
 		IdleTimeout: 20 * time.Millisecond,
 	}).Open(customConnector, nil)
 	t.Cleanup(p.Close)
-
-	ctx := t.Context()
 	c, err := p.Get(ctx, nil)
 	require.NoError(t, err)
 	c.Recycle()
