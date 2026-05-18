@@ -18,8 +18,10 @@ package vtctld
 
 import (
 	"path"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -38,12 +40,8 @@ func TestHandlePathRoot(t *testing.T) {
 	defer ts.Close()
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	if got := result.Children; !reflect.DeepEqual(got, want) {
-		t.Errorf("HandlePath(%q) = %v, want %v", input, got, want)
-	}
-	if got := result.Error; got != "" {
-		t.Errorf("HandlePath(%q).Error = %v", input, got)
-	}
+	assert.Equalf(t, want, result.Children, "HandlePath(%q)", input)
+	assert.Emptyf(t, result.Error, "HandlePath(%q).Error", input)
 }
 
 func TestHandlePathKeyspace(t *testing.T) {
@@ -56,44 +54,30 @@ func TestHandlePathKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer(ctx, cells...)
 	defer ts.Close()
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
-		t.Fatalf("CreateKeyspace error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "10-20"); err != nil {
-		t.Fatalf("CreateShard error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "20-30"); err != nil {
-		t.Fatalf("CreateShard error: %v", err)
+		require.NoError(t, err)
 	}
 
 	ex := newBackendExplorer(ts)
 
 	// Test the Keyspace object itself.
 	input := path.Join("/global", "keyspaces", "test_keyspace", "Keyspace")
-	want := "keyspace_type:SNAPSHOT"
 	result := ex.HandlePath(input, nil)
-	if got := result.Data; got != want {
-		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
-	}
-	if got, want := result.Children, []string(nil); !reflect.DeepEqual(got, want) {
-		t.Errorf("Children = %v, want %v", got, want)
-	}
-	if got := result.Error; got != "" {
-		t.Errorf("HandlePath(%q).Error = %v", input, got)
-	}
+	assert.Equalf(t, "keyspace_type:SNAPSHOT", result.Data, "HandlePath(%q)", input)
+	assert.Equal(t, []string(nil), result.Children, "Children")
+	assert.Emptyf(t, result.Error, "HandlePath(%q).Error", input)
 
 	// Test the shards path.
 	input = path.Join("/global", "keyspaces", "test_keyspace", "shards")
 	result = ex.HandlePath(input, nil)
-	want = ""
-	if got := result.Data; got != want {
-		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
-	}
-	if got, want := result.Children, []string{"10-20", "20-30"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("Children = %v, want %v", got, want)
-	}
-	if got := result.Error; got != "" {
-		t.Errorf("HandlePath(%q).Error = %v", input, got)
-	}
+	assert.Equalf(t, "", result.Data, "HandlePath(%q)", input)
+	assert.Equal(t, []string{"10-20", "20-30"}, result.Children, "Children")
+	assert.Emptyf(t, result.Error, "HandlePath(%q).Error", input)
 }
 
 func TestHandlePathShard(t *testing.T) {
@@ -107,30 +91,24 @@ func TestHandlePathShard(t *testing.T) {
 	defer ts.Close()
 
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", keyspace); err != nil {
-		t.Fatalf("CreateKeyspace error: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.CreateShard(ctx, "test_keyspace", "-80"); err != nil {
-		t.Fatalf("CreateShard error: %v", err)
+		require.NoError(t, err)
 	}
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "-80", func(si *topo.ShardInfo) error {
 		// Set cells, reset other fields so printout is easier to compare.
 		si.KeyRange = nil
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardFields error: %v", err)
+		require.NoError(t, err)
 	}
 
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	if got := result.Data; got != want {
-		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
-	}
-	if got, want := result.Children, []string(nil); !reflect.DeepEqual(got, want) {
-		t.Errorf("Children = %v, want %v", got, want)
-	}
-	if got := result.Error; got != "" {
-		t.Errorf("HandlePath(%q).Error = %v", input, got)
-	}
+	assert.Equalf(t, want, result.Data, "HandlePath(%q)", input)
+	assert.Equal(t, []string(nil), result.Children, "Children")
+	assert.Emptyf(t, result.Error, "HandlePath(%q).Error", input)
 }
 
 func TestHandlePathTablet(t *testing.T) {
@@ -153,20 +131,14 @@ func TestHandlePathTablet(t *testing.T) {
 	defer ts.Close()
 
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet error: %v", err)
+		require.NoError(t, err)
 	}
 
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	if got := result.Data; got != want.String() {
-		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
-	}
-	if got, want := result.Children, []string(nil); !reflect.DeepEqual(got, want) {
-		t.Errorf("Children = %v, want %v", got, want)
-	}
-	if got := result.Error; got != "" {
-		t.Errorf("HandlePath(%q).Error = %v", input, got)
-	}
+	assert.Equalf(t, want.String(), result.Data, "HandlePath(%q)", input)
+	assert.Equal(t, []string(nil), result.Children, "Children")
+	assert.Emptyf(t, result.Error, "HandlePath(%q).Error", input)
 }
 
 func TestHandleBadPath(t *testing.T) {
@@ -180,7 +152,5 @@ func TestHandleBadPath(t *testing.T) {
 
 	ex := newBackendExplorer(ts)
 	result := ex.HandlePath(input, nil)
-	if got := result.Error; !reflect.DeepEqual(got, want) {
-		t.Errorf("HandlePath(%q) = %v, want %v", input, got, want)
-	}
+	assert.Equalf(t, want, result.Error, "HandlePath(%q)", input)
 }

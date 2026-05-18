@@ -91,7 +91,7 @@ func (fake *fakeTMC) VReplicationExec(ctx context.Context, tablet *topodatapb.Ta
 func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: "zone1",
@@ -197,7 +197,7 @@ func TestCheckReshardingJournalExistsOnTablet(t *testing.T) {
 }
 
 func TestMoveTablesComplete(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -614,7 +614,7 @@ func TestMoveTablesComplete(t *testing.T) {
 }
 
 func TestWorkflowDelete(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -1514,7 +1514,7 @@ func TestWorkflowDelete(t *testing.T) {
 }
 
 func TestMoveTablesTrafficSwitching(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -1936,7 +1936,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 }
 
 func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	const (
@@ -2014,28 +2014,28 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 	}, ts, state, time.Second, false)
 	require.NoError(t, err)
 
-	rules, err := topotools.GetRoutingRules(context.Background(), env.ts)
+	rules, err := topotools.GetRoutingRules(t.Context(), env.ts)
 	require.NoError(t, err)
 	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[tableName])
 	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[sourceKeyspaceName+"."+tableName])
 
-	sourceShard, err := env.ts.GetShard(context.Background(), sourceKeyspaceName, "0")
+	sourceShard, err := env.ts.GetShard(t.Context(), sourceKeyspaceName, "0")
 	require.NoError(t, err)
 	require.Len(t, sourceShard.TabletControls, 1)
 	require.Equal(t, []string{tableName}, sourceShard.TabletControls[0].DeniedTables)
 
-	targetShard, err := env.ts.GetShard(context.Background(), targetKeyspaceName, "0")
+	targetShard, err := env.ts.GetShard(t.Context(), targetKeyspaceName, "0")
 	require.NoError(t, err)
 	require.Empty(t, targetShard.TabletControls)
 
-	tsAfter, stateAfter, err := env.ws.getWorkflowState(context.Background(), targetKeyspaceName, workflowName)
+	tsAfter, stateAfter, err := env.ws.getWorkflowState(t.Context(), targetKeyspaceName, workflowName)
 	require.NoError(t, err)
 	require.True(t, stateAfter.WritesSwitched, "expected writes to remain switched after the original context was canceled")
 	require.True(t, tsAfter.frozen, "expected the target workflow to be frozen even though the original context was canceled")
 }
 
 func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	const (
 		workflowName       = "wf1"
@@ -2094,7 +2094,7 @@ func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing
 }
 
 func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -2298,7 +2298,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 }
 
 func TestMirrorTraffic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceKs := "source"
 	sourceShards := []string{"-"}
 	targetKs := "target"
@@ -2924,7 +2924,7 @@ func createReadVReplicationWorkflowFunc(t *testing.T, workflowType binlogdatapb.
 // Test checks that we don't include logs from non-existent streams in the result.
 // Ensures that we just skip the logs from non-existent streams and include the rest.
 func TestGetWorkflowsStreamLogs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := "source_keyspace"
 	targetKeyspace := "target_keyspace"
@@ -2981,7 +2981,7 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 }
 
 func TestWorkflowStatus(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := "source_keyspace"
 	targetKeyspace := "target_keyspace"
@@ -3055,7 +3055,7 @@ func TestWorkflowStatus(t *testing.T) {
 }
 
 func TestDeleteShard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
@@ -3086,7 +3086,7 @@ func TestDeleteShard(t *testing.T) {
 }
 
 func TestCopySchemaShard(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-"}}
@@ -3135,7 +3135,7 @@ func TestCopySchemaShard(t *testing.T) {
 }
 
 func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
@@ -3204,7 +3204,7 @@ func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
 }
 
 func TestWorkflowUpdate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
@@ -3312,7 +3312,7 @@ func TestWorkflowUpdate(t *testing.T) {
 }
 
 func TestFinalizeMigrateWorkflow(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	workflowName := "wf1"
 	tableName1 := "t1"
@@ -3406,7 +3406,7 @@ func TestFinalizeMigrateWorkflow(t *testing.T) {
 }
 
 func TestMaterializeAddTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{"source_keyspace", []string{"-"}}
 	targetKeyspace := &testKeyspace{"target_keyspace", []string{"-80", "80-"}}
@@ -3572,7 +3572,7 @@ func TestMaterializeAddTables(t *testing.T) {
 }
 
 func TestMoveTablesPreventsSourceEqualsTarget(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	ts := memorytopo.NewServer(ctx, "cell1")
@@ -3587,7 +3587,7 @@ func TestMoveTablesPreventsSourceEqualsTarget(t *testing.T) {
 }
 
 func TestMigrateAllowsSourceEqualsTarget(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	ts := memorytopo.NewServer(ctx, "cell1")

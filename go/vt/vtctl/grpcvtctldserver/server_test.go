@@ -100,7 +100,7 @@ func TestPanicHandler(t *testing.T) {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
 	})
 
-	_, err := vtctld.AddCellInfo(context.Background(), nil)
+	_, err := vtctld.AddCellInfo(t.Context(), nil)
 	assert.Error(t, err)
 }
 
@@ -204,7 +204,7 @@ func TestAddCellsAlias(t *testing.T) {
 			name: "alias overlaps",
 			ts:   memorytopo.NewServer(ctx, "zone1", "zone2", "zone3"),
 			setup: func(ts *topo.Server) error {
-				return ts.CreateCellsAlias(context.Background(), "zone_a", &topodatapb.CellsAlias{
+				return ts.CreateCellsAlias(t.Context(), "zone_a", &topodatapb.CellsAlias{
 					Cells: []string{"zone1", "zone3"},
 				})
 			},
@@ -5496,8 +5496,8 @@ func TestGetUnresolvedTransactions(t *testing.T) {
 		Shard:    "80-",
 		Type:     topodatapb.TabletType_PRIMARY,
 	}}
-	ts := memorytopo.NewServer(context.Background(), "zone1")
-	testutil.AddTablets(context.Background(), t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
+	ts := memorytopo.NewServer(t.Context(), "zone1")
+	testutil.AddTablets(t.Context(), t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -5584,8 +5584,8 @@ func TestConcludeTransaction(t *testing.T) {
 		Shard:    "80-",
 		Type:     topodatapb.TabletType_PRIMARY,
 	}}
-	ts := memorytopo.NewServer(context.Background(), "zone1")
-	testutil.AddTablets(context.Background(), t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
+	ts := memorytopo.NewServer(t.Context(), "zone1")
+	testutil.AddTablets(t.Context(), t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -5685,8 +5685,8 @@ func TestGetTransactionInfo(t *testing.T) {
 		Shard:    "80-",
 		Type:     topodatapb.TabletType_PRIMARY,
 	}}
-	ts := memorytopo.NewServer(context.Background(), "zone1")
-	testutil.AddTablets(context.Background(), t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
+	ts := memorytopo.NewServer(t.Context(), "zone1")
+	testutil.AddTablets(t.Context(), t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true}, tablets...)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -8282,7 +8282,7 @@ func TestGetTablets(t *testing.T) {
 				err  error
 			)
 			if len(tt.unreachableCells) > 0 {
-				gtCtx, gtCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				gtCtx, gtCancel := context.WithTimeout(t.Context(), 2*time.Second)
 				defer gtCancel()
 				resp, err = vtctld.GetTablets(gtCtx, tt.req)
 			} else {
@@ -8418,7 +8418,7 @@ func TestGetTopologyPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 			resp, err := vtctld.GetTopologyPath(ctx, tt.req)
 
 			if tt.shouldErr {
@@ -9084,7 +9084,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 			return NewVtctldServer(vtenv.NewTestEnv(), ts)
 		})
 
-		_, err := vtctld.RebuildKeyspaceGraph(context.Background(), &vtctldatapb.RebuildKeyspaceGraphRequest{
+		_, err := vtctld.RebuildKeyspaceGraph(t.Context(), &vtctldatapb.RebuildKeyspaceGraphRequest{
 			Keyspace: "testkeyspace",
 		})
 		assert.Error(t, err)
@@ -9123,7 +9123,7 @@ func TestRebuildKeyspaceGraph(t *testing.T) {
 			return NewVtctldServer(vtenv.NewTestEnv(), ts)
 		})
 
-		lctx, unlock, lerr := ts.LockKeyspace(context.Background(), "testkeyspace", "test lock")
+		lctx, unlock, lerr := ts.LockKeyspace(t.Context(), "testkeyspace", "test lock")
 		require.NoError(t, lerr, "could not lock keyspace for testing")
 
 		defer unlock(&lerr)

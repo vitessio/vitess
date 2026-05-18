@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -81,7 +80,7 @@ func TestFilterPass(t *testing.T) {
 				Predicate: pred,
 				Input:     &fakePrimitive{results: []*sqltypes.Result{tc.res}},
 			}
-			qr, err := filter.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+			qr, err := filter.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
 			require.Equal(t, tc.expRes, fmt.Sprintf("%v", qr.Rows))
 		})
@@ -140,7 +139,7 @@ func TestFilterStreaming(t *testing.T) {
 				Input:     &fakePrimitive{results: tc.res, async: true},
 			}
 			qr := &sqltypes.Result{}
-			err = filter.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(result *sqltypes.Result) error {
+			err = filter.TryStreamExecute(t.Context(), &noopVCursor{}, nil, false, func(result *sqltypes.Result) error {
 				qr.Rows = append(qr.Rows, result.Rows...)
 				return nil
 			})

@@ -283,7 +283,7 @@ func Test_waitForCloneComplete(t *testing.T) {
 
 			executor := &CloneExecutor{}
 
-			err := executor.waitForCloneComplete(context.Background(), fmd, 5*time.Second)
+			err := executor.waitForCloneComplete(t.Context(), fmd, 5*time.Second)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.errorContain)
@@ -308,7 +308,7 @@ func Test_waitForCloneComplete_Timeout(t *testing.T) {
 
 	executor := &CloneExecutor{}
 
-	err := executor.waitForCloneComplete(context.Background(), fmd, 100*time.Millisecond)
+	err := executor.waitForCloneComplete(t.Context(), fmd, 100*time.Millisecond)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "timeout")
 }
@@ -327,7 +327,7 @@ func Test_waitForCloneComplete_ContextCanceled(t *testing.T) {
 
 	executor := &CloneExecutor{}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // Cancel immediately
 
 	err := executor.waitForCloneComplete(ctx, fmd, 5*time.Second)
@@ -397,7 +397,7 @@ func TestValidateRecipient(t *testing.T) {
 				UseSSL:        false,
 			}
 
-			err := executor.validateRecipient(context.Background(), fmd)
+			err := executor.validateRecipient(t.Context(), fmd)
 			if tt.expectError {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.errorContain)
@@ -421,7 +421,7 @@ type cloneFromDonorTestEnv struct {
 }
 
 func createCloneFromDonorTestEnv(t *testing.T, donorHost string, donorPort int) *cloneFromDonorTestEnv {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	// Create in-memory topo server with a test cell

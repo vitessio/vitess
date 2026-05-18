@@ -466,7 +466,7 @@ func waitForReplicaCatchup(t *testing.T, ctx context.Context, replica *cluster.V
 }
 
 func waitForReplicationCatchup(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
@@ -944,7 +944,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 // waitForTable waits until table is seen in VTGate
 func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -977,7 +977,7 @@ func checkTable(t *testing.T, showTableName string, expectHint string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%s';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
 	for {

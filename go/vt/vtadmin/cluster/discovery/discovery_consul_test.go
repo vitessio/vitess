@@ -17,7 +17,6 @@ limitations under the License.
 package discovery
 
 import (
-	"context"
 	"sort"
 	"testing"
 	"text/template"
@@ -230,7 +229,7 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -339,7 +338,7 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -435,7 +434,7 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

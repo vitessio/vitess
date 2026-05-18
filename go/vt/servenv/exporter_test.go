@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
 )
@@ -38,16 +39,18 @@ func TestURLPrefix(t *testing.T) {
 func TestHandleFunc(t *testing.T) {
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
-	defer listener.Close()
+	require.NoError(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
+	// Capture HTTPServe's error so an unexpected early failure doesn't
+	// silently let the rest of the test pass against a dead server.
+	// HTTPServe converts the expected listener-close errors to nil.
+	serveErr := make(chan error, 1)
 	go func() {
-		err := HTTPServe(listener)
-		if err != nil {
-			t.Errorf("HTTPServe returned: %v", err)
-		}
+		serveErr <- HTTPServe(listener)
+	}()
+	defer func() {
+		listener.Close()
+		assert.NoError(t, <-serveErr)
 	}()
 
 	ebd := NewExporter("", "")
@@ -91,15 +94,11 @@ func httpGet(t *testing.T, url string) string {
 	t.Helper()
 
 	resp, err := http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return string(body)
 }
 

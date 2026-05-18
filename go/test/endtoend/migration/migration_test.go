@@ -18,7 +18,6 @@ package migration
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"os"
 	"path"
@@ -187,7 +186,7 @@ func TestMigration(t *testing.T) {
 		Host: clusterInstance.Hostname,
 		Port: clusterInstance.VtgateMySQLPort,
 	}
-	conn, err := mysql.Connect(context.Background(), vtParams)
+	conn, err := mysql.Connect(t.Context(), vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -225,9 +224,7 @@ func startCluster(t *testing.T) string {
 	clusterInstance = cluster.NewCluster(cell, "localhost")
 
 	err := clusterInstance.StartTopo()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	createKeyspace(t, legacyCustomer, []string{"0"})
 	createKeyspace(t, legacyProduct, []string{"0"})
@@ -263,7 +260,7 @@ func populate(t *testing.T, socket, sql string) {
 		UnixSocket: socket,
 		Uname:      "vt_app",
 	}
-	conn, err := mysql.Connect(context.Background(), params)
+	conn, err := mysql.Connect(t.Context(), params)
 	require.NoError(t, err)
 	defer conn.Close()
 	lines := strings.SplitSeq(sql, "\n")
@@ -287,16 +284,14 @@ func waitForVReplicationToCatchup(t *testing.T, vttablet *cluster.VttabletProces
 		waitDuration := 100 * time.Millisecond
 		for {
 			qr, err := vttablet.QueryTablet(query, "", false)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			if len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
 				break
 			}
 			time.Sleep(waitDuration)
 			duration -= waitDuration
 			if duration <= 0 {
-				t.Fatalf("waitForVReplicationToCatchup timed out, query: %v, result: %v", query, qr)
+				require.Failf(t, "vreplication catchup timeout", "waitForVReplicationToCatchup timed out, query: %v, result: %v", query, qr)
 			}
 		}
 	}

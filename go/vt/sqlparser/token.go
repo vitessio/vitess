@@ -356,10 +356,6 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
 		return keywordID, keywordName
 	}
-	// dual must always be case-insensitive
-	if keywordASCIIMatch(keywordName, "dual") {
-		return ID, "dual"
-	}
 	return ID, keywordName
 }
 

@@ -18,14 +18,12 @@ package logstats
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -54,7 +52,7 @@ func testFormat(t *testing.T, stats *LogStats, params url.Values) string {
 }
 
 func TestLogStatsFormat(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "suuid", nil, streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", "sql1", "suuid", nil, streamlog.NewQueryLogConfigForTest())
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	logStats.TablesUsed = []string{"ks1.tbl1", "ks2.tbl2"}
@@ -143,7 +141,7 @@ func TestLogStatsFormat(t *testing.T) {
 }
 
 func TestLogStatsRoutingIndexesUsed(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "suuid", nil, streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", "sql1", "suuid", nil, streamlog.NewQueryLogConfigForTest())
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
 	logStats.RoutingIndexesUsed = [][3]string{
@@ -164,7 +162,7 @@ func TestLogStatsRoutingIndexesUsed(t *testing.T) {
 }
 
 func TestLogStatsFilter(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "",
+	logStats := NewLogStats(t.Context(), "test", "sql1 /* LOG_THIS_QUERY */", "",
 		map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}, streamlog.NewQueryLogConfigForTest())
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
@@ -186,7 +184,7 @@ func TestLogStatsFilter(t *testing.T) {
 }
 
 func TestLogStatsRowThreshold(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "",
+	logStats := NewLogStats(t.Context(), "test", "sql1 /* LOG_THIS_QUERY */", "",
 		map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}, streamlog.NewQueryLogConfigForTest())
 	logStats.StartTime = time.Date(2017, time.January, 1, 1, 2, 3, 0, time.UTC)
 	logStats.EndTime = time.Date(2017, time.January, 1, 1, 2, 4, 1234, time.UTC)
@@ -206,7 +204,7 @@ func TestLogStatsRowThreshold(t *testing.T) {
 }
 
 func TestLogStatsTimeThreshold(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "",
+	logStats := NewLogStats(t.Context(), "test", "sql1 /* LOG_THIS_QUERY */", "",
 		map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}, streamlog.NewQueryLogConfigForTest())
 	// Query total time is 1 second and 1234 nanosecond, TimeShreshold is 1024 ns
 	logStats.Config.TimeThreshold = 1024
@@ -229,7 +227,7 @@ func TestLogStatsTimeThreshold(t *testing.T) {
 }
 
 func TestLogStatsEmimtOnAnyConditionMet(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1 /* LOG_THIS_QUERY */", "",
+	logStats := NewLogStats(t.Context(), "test", "sql1 /* LOG_THIS_QUERY */", "",
 		map[string]*querypb.BindVariable{"intVal": sqltypes.Int64BindVariable(1)}, streamlog.NewQueryLogConfigForTest())
 	// Query total time is 1 second and 1234 nanosecond, TimeShreshold is 1024 ns
 	logStats.Config.FilterTag = "LOG_THIS_QUERY"
@@ -260,46 +258,32 @@ func TestLogStatsContextHTML(t *testing.T) {
 	callInfo := &fakecallinfo.FakeCallInfo{
 		Html: testconversions.MakeHTMLForTest(html),
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callinfo.NewContext(t.Context(), callInfo)
 	logStats := NewLogStats(ctx, "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
-	if logStats.ContextHTML().String() != html {
-		t.Fatalf("expect to get html: %s, but got: %s", html, logStats.ContextHTML().String())
-	}
+	require.Equalf(t, html, logStats.ContextHTML().String(), "expect to get html: %s, but got: %s", html, logStats.ContextHTML().String())
 }
 
 func TestLogStatsErrorStr(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
-	if logStats.ErrorStr() != "" {
-		t.Fatalf("should not get error in stats, but got: %s", logStats.ErrorStr())
-	}
+	logStats := NewLogStats(t.Context(), "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
+	require.Emptyf(t, logStats.ErrorStr(), "should not get error in stats, but got: %s", logStats.ErrorStr())
 	errStr := "unknown error"
 	logStats.Error = errors.New(errStr)
-	if !strings.Contains(logStats.ErrorStr(), errStr) {
-		t.Fatalf("expect string '%s' in error message, but got: %s", errStr, logStats.ErrorStr())
-	}
+	require.Containsf(t, logStats.ErrorStr(), errStr, "expect string '%s' in error message, but got: %s", errStr, logStats.ErrorStr())
 }
 
 func TestLogStatsMirrorTargetErrorStr(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
-	if logStats.MirrorTargetErrorStr() != "" {
-		t.Fatalf("should not get error in stats, but got: %s", logStats.ErrorStr())
-	}
+	logStats := NewLogStats(t.Context(), "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
+	require.Emptyf(t, logStats.MirrorTargetErrorStr(), "should not get error in stats, but got: %s", logStats.ErrorStr())
 	errStr := "unknown error"
 	logStats.MirrorTargetError = errors.New(errStr)
-	if !strings.Contains(logStats.MirrorTargetErrorStr(), errStr) {
-		t.Fatalf("expect string '%s' in error message, but got: %s", errStr, logStats.ErrorStr())
-	}
+	require.Containsf(t, logStats.MirrorTargetErrorStr(), errStr, "expect string '%s' in error message, but got: %s", errStr, logStats.ErrorStr())
 }
 
 func TestLogStatsRemoteAddrUsername(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
 	addr, user := logStats.RemoteAddrUsername()
-	if addr != "" {
-		t.Fatalf("remote addr should be empty")
-	}
-	if user != "" {
-		t.Fatalf("username should be empty")
-	}
+	require.Empty(t, addr, "remote addr should be empty")
+	require.Empty(t, user, "username should be empty")
 
 	remoteAddr := "1.2.3.4"
 	username := "vt"
@@ -307,20 +291,16 @@ func TestLogStatsRemoteAddrUsername(t *testing.T) {
 		Remote: remoteAddr,
 		User:   username,
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callinfo.NewContext(t.Context(), callInfo)
 	logStats = NewLogStats(ctx, "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
 	addr, user = logStats.RemoteAddrUsername()
-	if addr != remoteAddr {
-		t.Fatalf("expected to get remote addr: %s, but got: %s", remoteAddr, addr)
-	}
-	if user != username {
-		t.Fatalf("expected to get username: %s, but got: %s", username, user)
-	}
+	require.Equalf(t, remoteAddr, addr, "expected to get remote addr: %s, but got: %s", remoteAddr, addr)
+	require.Equalf(t, username, user, "expected to get username: %s, but got: %s", username, user)
 }
 
 // TestLogStatsErrorsOnly tests that LogStats only logs errors when the query log mode is set to errors only for VTGate.
 func TestLogStatsErrorsOnly(t *testing.T) {
-	logStats := NewLogStats(context.Background(), "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
+	logStats := NewLogStats(t.Context(), "test", "sql1", "", map[string]*querypb.BindVariable{}, streamlog.NewQueryLogConfigForTest())
 	logStats.Config.Mode = streamlog.QueryLogModeError
 
 	// no error, should not log

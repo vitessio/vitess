@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -126,7 +125,7 @@ func TestAnalyzeExecuteFetchAsDbaMultiQuery(t *testing.T) {
 }
 
 func TestTabletManager_MysqlHostMetricsNilCnf(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	// When using external MySQL (e.g. Cloud SQL, RDS), Cnf is nil because
 	// vttablet skips loading my.cnf when connection parameters are specified.
 	// MysqlHostMetrics should return an empty response instead of panicking.
@@ -140,7 +139,7 @@ func TestTabletManager_MysqlHostMetricsNilCnf(t *testing.T) {
 }
 
 func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})

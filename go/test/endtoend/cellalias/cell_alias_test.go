@@ -22,7 +22,6 @@ Then we add an alias, and these tablets should be routable
 package binlog
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -343,7 +342,7 @@ func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.V
 }
 
 func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int, shouldFail bool) {
-	qr, err := localCluster.ExecOnVTGate(context.Background(),
+	qr, err := localCluster.ExecOnVTGate(t.Context(),
 		fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
 		"@"+tabletType,
 		"select * from "+tableName, nil, nil,

@@ -205,6 +205,11 @@ func waitForThrottleCheckStatus(t *testing.T, tablet *cluster.Vttablet, wantCode
 func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
 	t.Helper()
 
+	// Use context.Background() because this helper is called from goroutines that
+	// can outlive the test/sub-test that spawned them (see TestCustomQuery's
+	// "generate running queries" sub-test, which spawns goroutines that run while
+	// other sub-tests proceed). t.Context() would be cancelled when its sub-test
+	// returned, leaving the goroutines to call require.* on a completed *testing.T.
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)

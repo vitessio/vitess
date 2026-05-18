@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -42,7 +41,7 @@ func newTestTabletManager(t *testing.T) *TabletManager {
 		Shard:    "-80",
 	}
 	tm := &TabletManager{
-		BatchCtx:    context.Background(),
+		BatchCtx:    t.Context(),
 		tabletAlias: tablet.Alias,
 	}
 	tm.tmState = newTMState(tm, tablet)

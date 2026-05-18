@@ -4201,13 +4201,11 @@ func TestParallelValid(t *testing.T) {
 				}
 				tree, err := parser.Parse(tcase.input)
 				if err != nil {
-					t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
+					assert.Failf(t, "parse failed", "Parse(%q) err: %v, want nil", tcase.input, err)
 					continue
 				}
 				out := String(tree)
-				if out != tcase.output {
-					t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
-				}
+				assert.Equalf(t, tcase.output, out, "Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
 			}
 		}()
 	}
@@ -4255,6 +4253,9 @@ func TestInvalid(t *testing.T) {
 		}, {
 			input: "select next 2 values from seq, seq",
 			err:   "syntax error at position 31",
+		}, {
+			input: "select next 2 values from dual",
+			err:   "syntax error at position 31 near 'dual'",
 		}, {
 			input: "select 1, next value from seq",
 			err:   "syntax error",
@@ -4654,13 +4655,11 @@ func TestCaseSensitivity(t *testing.T) {
 		}
 		tree, err := parser.Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "out: %s, want %s", out, tcase.output)
 	}
 }
 
@@ -4754,13 +4753,11 @@ func TestKeywords(t *testing.T) {
 		}
 		tree, err := parser.Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "out: %s, want %s", out, tcase.output)
 	}
 }
 
@@ -4832,13 +4829,11 @@ func TestConvert(t *testing.T) {
 		}
 		tree, err := parser.Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "out: %s, want %s", out, tcase.output)
 	}
 
 	invalidSQL := []struct {
@@ -4875,9 +4870,7 @@ func TestConvert(t *testing.T) {
 
 	for _, tcase := range invalidSQL {
 		_, err := parser.Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		assert.EqualErrorf(t, err, tcase.output, "%s: %v, want %s", tcase.input, err, tcase.output)
 	}
 }
 
@@ -4942,9 +4935,7 @@ func TestSelectInto(t *testing.T) {
 
 	for _, tcase := range invalidSQL {
 		_, err := parser.Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		assert.EqualErrorf(t, err, tcase.output, "%s: %v, want %s", tcase.input, err, tcase.output)
 	}
 }
 
@@ -4984,9 +4975,9 @@ func TestPositionedErr(t *testing.T) {
 		_, err := parse(tkn)
 
 		if posErr, ok := err.(PositionedErr); !ok {
-			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
+			assert.Failf(t, "expected PositionedErr", "%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
 		} else if posErr.Pos != tcase.output.Pos || posErr.Near != tcase.output.Near || err.Error() != tcase.output.Error() {
-			t.Errorf("%s: %v, want: %v", tcase.input, err, tcase.output)
+			assert.Failf(t, "PositionedErr mismatch", "%s: %v, want: %v", tcase.input, err, tcase.output)
 		}
 	}
 }
@@ -5035,13 +5026,11 @@ func TestSubStr(t *testing.T) {
 		}
 		tree, err := parser.Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "out: %s, want %s", out, tcase.output)
 	}
 }
 
@@ -6347,13 +6336,12 @@ func TestCreateTableLike(t *testing.T) {
 	for _, tcase := range testCases {
 		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		assert.True(t, tree.(*CreateTable).FullyParsed)
-		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
-			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
-		}
+		got, want := String(tree.(*CreateTable)), tcase.output
+		assert.Equalf(t, want, got, "Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 	}
 }
 
@@ -6457,14 +6445,13 @@ partition by range (id)
 	for _, tcase := range testCases {
 		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		assert.True(t, tree.(*CreateTable).FullyParsed)
 		assert.NotNil(t, tree.(*CreateTable).Select, "Select field should not be nil")
-		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
-			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
-		}
+		got, want := String(tree.(*CreateTable)), tcase.output
+		assert.Equalf(t, want, got, "Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 	}
 }
 
@@ -6489,12 +6476,11 @@ func TestCreateTableEscaped(t *testing.T) {
 	for _, tcase := range testCases {
 		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
-			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
-		}
+		got, want := String(tree.(*CreateTable)), tcase.output
+		assert.Equalf(t, want, got, "Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 	}
 }
 
@@ -6694,9 +6680,7 @@ func TestSkipToEnd(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		_, err := parser.Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		assert.EqualErrorf(t, err, tcase.output, "%s: %v, want %s", tcase.input, err, tcase.output)
 	}
 }
 
@@ -6708,9 +6692,7 @@ func loadQueries(t testing.TB, filename string) (queries []string) {
 	var read io.Reader
 	if strings.HasSuffix(filename, ".gz") {
 		gzread, err := gzip.NewReader(file)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		defer gzread.Close()
 		read = gzread
 	} else {
@@ -6728,9 +6710,7 @@ func TestParseDjangoQueries(t *testing.T) {
 	parser := NewTestParser()
 	for _, query := range loadQueries(t, "django_queries.txt") {
 		_, err := parser.Parse(query)
-		if err != nil {
-			t.Errorf("failed to parse %q: %v", query, err)
-		}
+		assert.NoErrorf(t, err, "failed to parse %q: %v", query, err)
 	}
 }
 
@@ -6738,9 +6718,7 @@ func TestParseLobstersQueries(t *testing.T) {
 	parser := NewTestParser()
 	for _, query := range loadQueries(t, "lobsters.sql.gz") {
 		_, err := parser.Parse(query)
-		if err != nil {
-			t.Errorf("failed to parse %q: %v", query, err)
-		}
+		assert.NoErrorf(t, err, "failed to parse %q: %v", query, err)
 	}
 }
 
@@ -7045,19 +7023,19 @@ func testFile(t *testing.T, filename, tempDir string) {
 					}
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
-						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)
+						assert.Failf(t, "error mismatch", "File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)
 					}
 				} else {
 					if err != nil {
 						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
 						fail = true
-						t.Errorf("File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
+						assert.Failf(t, "unexpected parse error", "File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					} else {
 						out := String(tree)
 						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
 						if tcase.output != out {
 							fail = true
-							t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
+							assert.Failf(t, "parsing failed", "Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 						}
 					}
 				}

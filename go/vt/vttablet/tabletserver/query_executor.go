@@ -504,10 +504,6 @@ func (qre *QueryExecutor) checkPermissions() error {
 	default:
 		// no rules against this query. Good to proceed
 	}
-	// Skip ACL check for queries against the dummy dual table
-	if qre.plan.TableName().String() == "dual" {
-		return nil
-	}
 
 	// Skip the ACL check if the connecting user is an exempted superuser.
 	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(&querypb.VTGateCallerID{Username: username}) {
@@ -547,11 +543,6 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	if !authorized.IsMember(callerID) {
 		if qre.tsv.qe.enableTableACLDryRun {
 			aclState = acl.ACLPseudoDenied
-			return nil
-		}
-
-		// Skip ACL check for queries against the dummy dual table
-		if tableName == "dual" {
 			return nil
 		}
 

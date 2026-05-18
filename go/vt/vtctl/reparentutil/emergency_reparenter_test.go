@@ -2741,7 +2741,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	waitReplicasTimeout := 50 * time.Millisecond
 	tests := []struct {
@@ -4811,7 +4811,7 @@ func TestParentContextCancelled(t *testing.T) {
 	keyspace := "testkeyspace"
 	shard := "-"
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
@@ -5926,7 +5926,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
 			require.True(t, isGtid)
-			candidates, err := erp.findErrantGTIDs(context.Background(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second)
+			candidates, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return

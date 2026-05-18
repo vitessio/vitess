@@ -77,7 +77,7 @@ func TestReverseWorkflowName(t *testing.T) {
 // executed against the source between the stop source writes and wait for
 // catchup steps, that we have the correct position and do not lose the write(s).
 func TestTrafficSwitchPositionHandling(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -143,7 +143,7 @@ func TestTrafficSwitchPositionHandling(t *testing.T) {
 }
 
 func TestAddTenantFilter(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -197,7 +197,7 @@ func TestAddTenantFilter(t *testing.T) {
 }
 
 func TestChangeShardRouting(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -277,7 +277,7 @@ func TestChangeShardRouting(t *testing.T) {
 }
 
 func TestAddParticipatingTablesToKeyspace(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -333,7 +333,7 @@ func TestAddParticipatingTablesToKeyspace(t *testing.T) {
 }
 
 func TestCancelMigration_TABLES(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -393,7 +393,7 @@ func TestCancelMigration_TABLES(t *testing.T) {
 }
 
 func TestCancelMigration_SHARDS(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -455,7 +455,7 @@ func TestCancelMigration_SHARDS(t *testing.T) {
 }
 
 func TestDeleteRoutingRulesPreservesUnrelated(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -510,7 +510,7 @@ func TestDeleteRoutingRulesPreservesUnrelated(t *testing.T) {
 }
 
 func TestDeleteShardRoutingRulesPreservesUnrelated(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -562,7 +562,7 @@ func TestDeleteShardRoutingRulesPreservesUnrelated(t *testing.T) {
 }
 
 func TestDeleteKeyspaceRoutingRulesPreservesUnrelated(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"

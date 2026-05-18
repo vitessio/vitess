@@ -195,7 +195,7 @@ func TestTrackerNoLock(t *testing.T) {
 		select {
 		case ch <- th:
 		case <-time.After(50 * time.Millisecond):
-			t.Fatalf("failed to send health check to tracker")
+			require.Fail(t, "failed to send health check to tracker")
 		}
 	}
 	require.GreaterOrEqual(t, sbc.GetSchemaCount.Load(), int64(1), "GetSchema rpc should be called")

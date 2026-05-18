@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,16 +25,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
-
-	"vitess.io/vitess/go/vt/callerid"
 )
 
 func TestQuerylogzHandlerFormatting(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
-	logStats := logstats.NewLogStats(context.Background(), "Execute",
+	logStats := logstats.NewLogStats(t.Context(), "Execute",
 		"select name, 'inject <script>alert();</script>' from test_table limit 1000", "suuid", nil, streamlog.NewQueryLogConfigForTest())
 	logStats.StmtType = "select"
 	logStats.RowsAffected = 1000
@@ -45,7 +45,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	logStats.ExecuteTime = 2 * time.Millisecond
 	logStats.CommitTime = 3 * time.Millisecond
 	logStats.Ctx = callerid.NewContext(
-		context.Background(),
+		t.Context(),
 		callerid.NewEffectiveCallerID("effective-caller", "component", "subcomponent"),
 		callerid.NewImmediateCallerID("immediate-caller"),
 	)
@@ -152,7 +152,5 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *logstats.LogStats, page []byte) {
 	t.Helper()
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
-	if !matcher.Match(page) {
-		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
-	}
+	require.Truef(t, matcher.Match(page), "querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
 }

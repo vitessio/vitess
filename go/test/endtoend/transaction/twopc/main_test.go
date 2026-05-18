@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -263,7 +264,9 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 			if err == io.EOF || ctx.Err() != nil {
 				return
 			}
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 
 			for _, ev := range evs {
 				// Mark VGTID event from each shard seen.

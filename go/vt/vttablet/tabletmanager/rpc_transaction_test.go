@@ -17,7 +17,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,7 +27,7 @@ import (
 )
 
 func TestTabletManager_UnresolvedTransactions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	qsc := tabletservermock.NewController()
 	tm := &TabletManager{
@@ -46,7 +45,7 @@ func TestTabletManager_UnresolvedTransactions(t *testing.T) {
 }
 
 func TestTabletManager_ReadTransaction(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	qsc := tabletservermock.NewController()
 	tm := &TabletManager{
@@ -66,7 +65,7 @@ func TestTabletManager_ReadTransaction(t *testing.T) {
 }
 
 func TestTabletManager_ConcludeTransaction(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	qsc := tabletservermock.NewController()
 	tm := &TabletManager{

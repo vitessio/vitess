@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/testutil"
@@ -30,15 +31,12 @@ import (
 
 func TestGoldenWeights(t *testing.T) {
 	gllGoldenTests, err := filepath.Glob("testdata/wiki_*.gob.gz")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	for _, goldenPath := range gllGoldenTests {
 		golden := &testutil.GoldenTest{}
-		if err := golden.DecodeFromFile(goldenPath); err != nil {
-			t.Fatal(err)
-		}
+		err := golden.DecodeFromFile(goldenPath)
+		require.NoError(t, err)
 
 		for _, goldenCase := range golden.Cases {
 			t.Run(fmt.Sprintf("%s (%s)", golden.Name, goldenCase.Lang), func(t *testing.T) {
@@ -46,9 +44,7 @@ func TestGoldenWeights(t *testing.T) {
 					coll := testcollation(t, coll)
 
 					input, err := charset.ConvertFromUTF8(nil, coll.Charset(), goldenCase.Text)
-					if err != nil {
-						t.Fatal(err)
-					}
+					require.NoError(t, err)
 
 					result := coll.WeightString(nil, input, 0)
 					assert.True(t, bytes.Equal(expected, result), "mismatch for collation=%s\noriginal: %s\ninput:    %#v\nexpected: %v\nactual:   %v", coll.Name(), string(goldenCase.Text), input, expected, result)

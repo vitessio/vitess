@@ -24,7 +24,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+      uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
       with:
         egress-policy: audit
 
@@ -75,6 +75,7 @@ jobs:
 
     - name: Tune the OS
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/tune-os
 
     - name: Set up python
@@ -83,12 +84,14 @@ jobs:
 
     - name: Setup MySQL
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 8
       uses: ./.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Setup Percona Apt repository
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       uses: ./.github/actions/setup-percona-repo
 
     - name: Get base dependencies
@@ -124,6 +127,7 @@ jobs:
 
     - name: Get dependencies for the last release
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         go mod download
 
@@ -153,11 +157,13 @@ jobs:
 
     - name: Get dependencies for this commit
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         go mod download
 
     - name: Run make minimaltools
       if: steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 5
       run: |
         make minimaltools
 

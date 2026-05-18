@@ -515,7 +515,7 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 				hintStatement := fmt.Sprintf(alterHintStatement, hintText)
 				fullStatement := fmt.Sprintf("%s, %s", hintStatement, testcase.alterStatement)
 
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				var wg sync.WaitGroup
 				wg.Go(func() {
 					runMultipleConnections(ctx, t, testcase.autoIncInsert)
@@ -598,7 +598,7 @@ func checkTable(t *testing.T, showTableName string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
 	for {

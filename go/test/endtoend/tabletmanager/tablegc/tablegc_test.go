@@ -188,7 +188,7 @@ func tableExists(exprs ...string) (exists bool, tableName string, err error) {
 }
 
 func validateTableDoesNotExist(t *testing.T, tableExpr string) {
-	ctx, cancel := context.WithTimeout(context.Background(), waitForTransitionTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), waitForTransitionTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
@@ -210,7 +210,7 @@ func validateTableDoesNotExist(t *testing.T, tableExpr string) {
 }
 
 func validateTableExists(t *testing.T, tableExpr string) {
-	ctx, cancel := context.WithTimeout(context.Background(), waitForTransitionTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), waitForTransitionTimeout)
 	defer cancel()
 
 	ticker := time.NewTicker(time.Second)
@@ -234,7 +234,7 @@ func validateTableExists(t *testing.T, tableExpr string) {
 func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableGCState) {
 	t.Run(fmt.Sprintf("validateAnyState: expectNumRows=%v, states=%v", expectNumRows, states), func(t *testing.T) {
 		timeout := gc.NextChecksIntervals[len(gc.NextChecksIntervals)-1] + 5*time.Second
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(t.Context(), timeout)
 		defer cancel()
 
 		ticker := time.NewTicker(time.Second)

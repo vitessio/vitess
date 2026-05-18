@@ -78,9 +78,7 @@ func TestBackfillDuplicates(t *testing.T) {
 
 			key := testkey("testkey")
 			for i := 0; i < tt.enqueueCount; i++ {
-				if !c.EnqueueBackfill(key) {
-					assert.Fail(t, "failed to enqueue backfill for key %s", key)
-				}
+				assert.Truef(t, c.EnqueueBackfill(key), "failed to enqueue backfill for key %s", key)
 
 				time.Sleep(tt.enqueueInterval)
 			}
@@ -179,9 +177,7 @@ func TestBackfillTTL(t *testing.T) {
 
 			key := testkey("testkey")
 			for i := 0; i < tt.enqueueCount; i++ {
-				if !c.EnqueueBackfill(key) {
-					assert.Fail(t, "failed to enqueue backfill for key %s", key)
-				}
+				assert.Truef(t, c.EnqueueBackfill(key), "failed to enqueue backfill for key %s", key)
 			}
 
 			time.Sleep(tt.fillSleep * time.Duration(tt.enqueueCount))

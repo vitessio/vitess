@@ -47,16 +47,12 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 		select {
 		case vschema := <-watch:
 			_, ok = vschema.Keyspaces[ks].Vindexes[name]
-			if !ok {
-				t.Errorf("updated vschema did not contain %s", name)
-			}
+			assert.True(t, ok, "updated vschema did not contain %s", name)
 		default:
 			time.Sleep(time.Millisecond)
 		}
 	}
-	if !ok {
-		t.Errorf("vschema was not updated as expected")
-	}
+	assert.True(t, ok, "vschema was not updated as expected")
 
 	// Wait up to 100ms until the vindex manager gets notified of the update
 	for range 10 {
@@ -68,7 +64,7 @@ func waitForVindex(t *testing.T, ks, name string, watch chan *vschemapb.SrvVSche
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	t.Fatalf("updated vschema did not contain %s", name)
+	require.Failf(t, "vschema missing vindex", "updated vschema did not contain %s", name)
 	return nil, nil
 }
 
@@ -96,7 +92,7 @@ func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Ex
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	t.Fatalf("updated vschema did not contain tables %v", tables)
+	require.Failf(t, "vschema missing tables", "updated vschema did not contain tables %v", tables)
 	return nil
 }
 
@@ -128,7 +124,7 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 		time.Sleep(time.Millisecond)
 	}
 
-	t.Fatalf("updated vschema did not contain vindexes %v on table %s", names, table)
+	require.Failf(t, "vschema missing vindexes", "updated vschema did not contain vindexes %v on table %s", names, table)
 	return nil
 }
 
@@ -148,9 +144,7 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 
 	vschema := <-vschemaUpdates
 	_, ok := vschema.Keyspaces["TestExecutor"].Vindexes["test_vindex"]
-	if ok {
-		t.Fatalf("test_vindex should not exist in original vschema")
-	}
+	require.False(t, ok, "test_vindex should not exist in original vschema")
 
 	stmt := "alter vschema create vindex TestExecutor.test_vindex using hash"
 	_, err := executorExecSession(ctx, executor, session, stmt, nil)
@@ -176,9 +170,7 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 
 	vschema := <-vschemaUpdates
 	_, ok := vschema.Keyspaces[ks].Vindexes["test_vindex"]
-	if ok {
-		t.Fatalf("test_vindex should not exist in original vschema")
-	}
+	require.False(t, ok, "test_vindex should not exist in original vschema")
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema create vindex test_vindex using hash"
@@ -187,17 +179,15 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 
 	_, vindex := waitForVindex(t, ks, "test_vindex", vschemaUpdates, executor)
 	if vindex == nil || vindex.Type != "hash" {
-		t.Errorf("updated vschema did not contain test_vindex")
+		assert.Fail(t, "updated vschema did not contain test_vindex")
 	}
 
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	wantErr := "vindex test_vindex already exists in keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("create duplicate vindex: %v, want %s", err, wantErr)
-	}
+	assert.EqualErrorf(t, err, wantErr, "create duplicate vindex: %v, want %s", err, wantErr)
 	select {
 	case <-vschemaUpdates:
-		t.Error("vschema should not be updated on error")
+		assert.Fail(t, "vschema should not be updated on error")
 	default:
 	}
 }
@@ -218,24 +208,18 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 
 	vschema := <-vschemaUpdates
 	_, ok := vschema.Keyspaces[ks].Vindexes["test_vindex"]
-	if ok {
-		t.Fatalf("test_vindex should not exist in original vschema")
-	}
+	require.False(t, ok, "test_vindex should not exist in original vschema")
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt := "alter vschema drop vindex test_vindex"
 	_, err := executorExecSession(ctx, executor, session, stmt, nil)
 	wantErr := "vindex test_vindex does not exists in keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("want error %v got %v", wantErr, err)
-	}
+	assert.EqualErrorf(t, err, wantErr, "want error %v got %v", wantErr, err)
 
 	stmt = "alter vschema drop vindex TestExecutor.test_vindex"
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	wantErr = "vindex test_vindex does not exists in keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("want error %v got %v", wantErr, err)
-	}
+	assert.EqualErrorf(t, err, wantErr, "want error %v got %v", wantErr, err)
 
 	// add one vindex that has never been used by the tables
 	stmt = "alter vschema create vindex test_vindex using hash"
@@ -244,7 +228,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 
 	_, vindex := waitForVindex(t, ks, "test_vindex", vschemaUpdates, executor)
 	if vindex == nil || vindex.Type != "hash" {
-		t.Errorf("updated vschema did not contain test_vindex")
+		assert.Fail(t, "updated vschema did not contain test_vindex")
 	}
 
 	// drop an existing vindex that has never been used by the tables
@@ -253,20 +237,16 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 	require.NoError(t, err)
 	vschema = <-vschemaUpdates
 	_, ok = vschema.Keyspaces[ks].Vindexes["test_vindex"]
-	if ok {
-		t.Fatalf("test_vindex should not exist after droping it")
-	}
+	require.False(t, ok, "test_vindex should not exist after droping it")
 
 	// drop an existing vindex that is used by at least one table
 	stmt = "alter vschema drop vindex TestExecutor.keyspace_id"
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	wantErr = "can not drop vindex cause keyspace_id still defined on table ksid_table"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("drop vindex still defined: %v, want %s", err, wantErr)
-	}
+	assert.EqualErrorf(t, err, wantErr, "drop vindex still defined: %v, want %s", err, wantErr)
 	select {
 	case <-vschemaUpdates:
-		t.Error("vschema should not be updated on error")
+		assert.Fail(t, "vschema should not be updated on error")
 	default:
 	}
 }
@@ -287,9 +267,7 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 
 	vschema := <-vschemaUpdates
 	_, ok := vschema.Keyspaces[ks].Tables["test_table"]
-	if ok {
-		t.Fatalf("test_table should not exist in original vschema")
-	}
+	require.False(t, ok, "test_table should not exist in original vschema")
 
 	vschemaTables := []string{}
 	for t := range vschema.Keyspaces[ks].Tables {
@@ -312,9 +290,7 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	stmt = "alter vschema add table test_table"
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	wantErr := "add vschema table: unsupported on sharded keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("want error %v got %v", wantErr, err)
-	}
+	assert.EqualErrorf(t, err, wantErr, "want error %v got %v", wantErr, err)
 
 	// No queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
@@ -323,9 +299,7 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 		sbc2.ExecCount.Load(),
 		sbclookup.ExecCount.Load(),
 	}
-	if !reflect.DeepEqual(gotCount, wantCount) {
-		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-	}
+	assert.Equalf(t, wantCount, gotCount, "Exec %s: %v, want %v", stmt, gotCount, wantCount)
 }
 
 func TestExecutorAddSequenceDDL(t *testing.T) {
@@ -352,7 +326,7 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	table := vschema.Keyspaces[ks].Tables["test_seq"]
 	wantType := "sequence"
 	if table.Type != wantType {
-		t.Errorf("want table type sequence got %v", table)
+		assert.Failf(t, "wrong table type", "want table type sequence got %v", table)
 	}
 
 	// Should fail adding a table on a sharded keyspace
@@ -363,29 +337,23 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 
 	wantErr := "add sequence table: unsupported on sharded keyspace TestExecutor"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("want error %v got %v", wantErr, err)
-	}
+	assert.EqualErrorf(t, err, wantErr, "want error %v got %v", wantErr, err)
 
 	// Should be able to add autoincrement to table in sharded keyspace
 	stmt = "alter vschema on test_table add vindex hash_index (id)"
-	if _, err = executorExecSession(ctx, executor, session, stmt, nil); err != nil {
-		t.Error(err)
-	}
+	_, err = executorExecSession(ctx, executor, session, stmt, nil)
+	assert.NoError(t, err)
 	time.Sleep(10 * time.Millisecond)
 
 	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
-	if _, err = executorExecSession(ctx, executor, session, stmt, nil); err != nil {
-		t.Error(err)
-	}
+	_, err = executorExecSession(ctx, executor, session, stmt, nil)
+	assert.NoError(t, err)
 	time.Sleep(10 * time.Millisecond)
 
 	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
 	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ksSharded].Tables["test_table"].AutoIncrement
 
-	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
-		t.Errorf("want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
-	}
+	assert.Equalf(t, wantAutoInc, gotAutoInc, "want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
 }
 
 func TestExecutorDropSequenceDDL(t *testing.T) {
@@ -399,9 +367,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	vschema := executor.vm.GetCurrentSrvVschema()
 
 	_, ok := vschema.Keyspaces[ks].Tables["test_seq"]
-	if ok {
-		t.Fatalf("test_seq should not exist in original vschema")
-	}
+	require.False(t, ok, "test_seq should not exist in original vschema")
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
 
@@ -423,9 +389,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	require.NoError(t, err)
 
-	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
-		t.Fatalf("vschema did not drop the sequene 'test_seq'")
-	}
+	require.True(t, waitForNewerVSchema(ctx, executor, ts, 5*time.Second), "vschema did not drop the sequene 'test_seq'")
 
 	// Should fail dropping a non-existing test sequence
 	session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: ks})
@@ -434,9 +398,7 @@ func TestExecutorDropSequenceDDL(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 
 	wantErr := "vschema does not contain sequence test_seq in keyspace TestUnsharded"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("want error %v got %v", wantErr, err)
-	}
+	assert.EqualErrorf(t, err, wantErr, "want error %v got %v", wantErr, err)
 }
 
 func TestExecutorDropAutoIncDDL(t *testing.T) {
@@ -459,9 +421,7 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	require.NoError(t, err)
-	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
-		t.Fatalf("vschema did not update with auto_increment for 'test_table'")
-	}
+	require.True(t, waitForNewerVSchema(ctx, executor, ts, 5*time.Second), "vschema did not update with auto_increment for 'test_table'")
 	ts = executor.VSchema().GetCreated()
 
 	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
@@ -473,11 +433,9 @@ func TestExecutorDropAutoIncDDL(t *testing.T) {
 	_, err = executorExecSession(ctx, executor, session, stmt, nil)
 	require.NoError(t, err)
 
-	if !waitForNewerVSchema(ctx, executor, ts, 5*time.Second) {
-		t.Fatalf("vschema did not drop the auto_increment for 'test_table'")
-	}
+	require.True(t, waitForNewerVSchema(ctx, executor, ts, 5*time.Second), "vschema did not drop the auto_increment for 'test_table'")
 	if executor.vm.GetCurrentSrvVschema().Keyspaces[ks].Tables["test_table"].AutoIncrement != nil {
-		t.Errorf("auto increment should be nil after drop")
+		assert.Fail(t, "auto increment should be nil after drop")
 	}
 }
 
@@ -559,13 +517,13 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
 		if len(table.ColumnVindexes) != 2 {
-			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+			require.Failf(t, "wrong number of vindexes", "table vindexes want 1 got %d", len(table.ColumnVindexes))
 		}
 		if table.ColumnVindexes[1].Name != "test_lookup" {
-			t.Fatalf("table vindexes didn't contain test_lookup")
+			require.Fail(t, "table vindexes didn't contain test_lookup")
 		}
 	} else {
-		t.Fatalf("table test not defined in vschema")
+		require.Fail(t, "table test not defined in vschema")
 	}
 
 	qr, err = executorExecSession(ctx, executor, session, "show vschema vindexes on TestExecutor.test", nil)
@@ -588,13 +546,13 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	if table, ok := vschema.Keyspaces[ks].Tables["test"]; ok {
 		if len(table.ColumnVindexes) != 3 {
-			t.Fatalf("table vindexes want 1 got %d", len(table.ColumnVindexes))
+			require.Failf(t, "wrong number of vindexes", "table vindexes want 1 got %d", len(table.ColumnVindexes))
 		}
 		if table.ColumnVindexes[2].Name != "test_hash_id2" {
-			t.Fatalf("table vindexes didn't contain test_hash_id2")
+			require.Fail(t, "table vindexes didn't contain test_hash_id2")
 		}
 	} else {
-		t.Fatalf("table test not defined in vschema")
+		require.Fail(t, "table test not defined in vschema")
 	}
 
 	qr, err = executorExecSession(ctx, executor, session, "show vschema vindexes on TestExecutor.test", nil)
@@ -747,14 +705,10 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	// test when all users are enabled
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("%"))
 	_, err = executorExecSession(ctxRedUser, executor, session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	assert.NoError(t, err)
 	stmt = "alter vschema create vindex test_hash2 using hash"
 	_, err = executorExecSession(ctxBlueUser, executor, session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	assert.NoError(t, err)
 
 	// test when only one user is enabled
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers("orangeUser, blueUser, greenUser"))
@@ -763,9 +717,7 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 
 	stmt = "alter vschema create vindex test_hash3 using hash"
 	_, err = executorExecSession(ctxBlueUser, executor, session, stmt, nil)
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
-	}
+	assert.NoError(t, err)
 
 	// restore the disallowed state
 	vschemaacl.AuthorizedDDLUsers.Set(vschemaacl.NewAuthorizedDDLUsers(""))

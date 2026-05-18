@@ -350,7 +350,7 @@ func TestInitThrottler(t *testing.T) {
 }
 
 func TestApplyThrottlerConfig(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	timeNow := time.Now()
@@ -437,7 +437,7 @@ func TestApplyThrottlerConfig(t *testing.T) {
 // TestApplyThrottlerConfigMetricThresholds applies a specific 'lag' metric threshold,
 // and validates that it overrides the default threshold.
 func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	throttler := newTestThrottler()
@@ -529,7 +529,7 @@ func TestApplyThrottlerConfigMetricThresholds(t *testing.T) {
 
 // TestApplyThrottlerConfigAppCheckedMetrics applies different metrics to the "test" app and checks the result
 func TestApplyThrottlerConfigAppCheckedMetrics(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	throttler := newTestThrottler()
@@ -1272,7 +1272,7 @@ func TestIsAppExempted(t *testing.T) {
 // On a replica tablet, that list is expect to probe the tablet itself.
 // On the PRIMARY, the list includes all shard tablets, including the PRIMARY itself.
 func TestRefreshInventory(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1393,7 +1393,7 @@ func runThrottler(t *testing.T, ctx context.Context, throttler *Throttler, timeo
 // TestRace merely lets the throttler run with aggressive intervals for a few seconds, so as to detect race conditions.
 // This is relevant to `go test -race`
 func TestRace(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1403,7 +1403,7 @@ func TestRace(t *testing.T) {
 
 // TestProbes enables a throttler for a few seconds, and afterwards expects to find probes and metrics.
 func TestProbesWhileOperating(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1695,7 +1695,7 @@ func TestProbesWhileOperating(t *testing.T) {
 
 // TestProbesPostDisable runs the throttler for some time, and then investigates the internal throttler maps and values.
 func TestProbesPostDisable(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1733,7 +1733,7 @@ func TestProbesPostDisable(t *testing.T) {
 }
 
 func TestDormant(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -1755,7 +1755,8 @@ func TestDormant(t *testing.T) {
 
 			select {
 			case <-ctx.Done():
-				require.FailNow(t, "context expired before testing completed")
+				assert.Fail(t, "context expired before testing completed")
+				return
 			case <-time.After(time.Second):
 				assert.True(t, throttler.isDormant())
 				assert.EqualValues(t, 1, heartbeatWriter.Requests()) // "vitess" name does not cause heartbeat requests
@@ -1763,7 +1764,8 @@ func TestDormant(t *testing.T) {
 			throttler.Check(ctx, throttlerapp.ThrottlerStimulatorName.String(), nil, flags)
 			select {
 			case <-ctx.Done():
-				require.FailNow(t, "context expired before testing completed")
+				assert.Fail(t, "context expired before testing completed")
+				return
 			case <-time.After(time.Second):
 				assert.False(t, throttler.isDormant())
 				assert.Greater(t, heartbeatWriter.Requests(), int64(1))
@@ -1771,7 +1773,8 @@ func TestDormant(t *testing.T) {
 			throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
 			select {
 			case <-ctx.Done():
-				require.FailNow(t, "context expired before testing completed")
+				assert.Fail(t, "context expired before testing completed")
+				return
 			case <-time.After(time.Second):
 				assert.False(t, throttler.isDormant())
 				assert.Greater(t, heartbeatWriter.Requests(), int64(2))
@@ -1780,7 +1783,8 @@ func TestDormant(t *testing.T) {
 			// Dormant period
 			select {
 			case <-ctx.Done():
-				require.FailNow(t, "context expired before testing completed")
+				assert.Fail(t, "context expired before testing completed")
+				return
 			case <-time.After(throttler.dormantPeriod + 2*recentCheckRateLimiterInterval):
 				assert.True(t, throttler.isDormant())
 			}
@@ -1789,7 +1793,7 @@ func TestDormant(t *testing.T) {
 }
 
 func TestChecks(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -2041,7 +2045,7 @@ func TestChecks(t *testing.T) {
 }
 
 func TestReplica(t *testing.T) {
-	ctx := context.Background() // for development, replace with	ctx := utils.LeakCheckContext(t)
+	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -2076,19 +2080,23 @@ func TestReplica(t *testing.T) {
 			t.Run("checks", func(t *testing.T) {
 				select {
 				case <-ctx.Done():
-					require.FailNow(t, "context expired before testing completed")
+					assert.Fail(t, "context expired before testing completed")
+					return
 				case <-time.After(time.Second):
 					assert.Empty(t, tmClient.AppNames())
 				}
 				t.Run("validate stimulator", func(t *testing.T) {
 					checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
-					require.NotNil(t, checkResult)
+					if !assert.NotNil(t, checkResult) {
+						return
+					}
 					assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 					assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 					assert.Len(t, checkResult.Metrics, 1)
 					select {
 					case <-ctx.Done():
-						require.FailNow(t, "context expired before testing completed")
+						assert.Fail(t, "context expired before testing completed")
+						return
 					case <-time.After(time.Second):
 						appNames := tmClient.AppNames()
 						// The replica reports to the primary that it had been checked, by issuing a CheckThrottler
@@ -2099,7 +2107,9 @@ func TestReplica(t *testing.T) {
 				t.Run("validate stimulator", func(t *testing.T) {
 					{
 						checkResult := throttler.Check(ctx, throttlerapp.OnlineDDLName.String(), nil, flags)
-						require.NotNil(t, checkResult)
+						if !assert.NotNil(t, checkResult) {
+							return
+						}
 						assert.EqualValues(t, 0.3, checkResult.Value) // self lag value
 						assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
 						assert.Len(t, checkResult.Metrics, 1)
@@ -2107,7 +2117,9 @@ func TestReplica(t *testing.T) {
 						assert.True(t, throttler.recentlyChecked())
 						{
 							recentApp, ok := throttler.recentAppsSnapshot()[throttlerapp.OnlineDDLName.String()]
-							require.True(t, ok)
+							if !assert.True(t, ok) {
+								return
+							}
 							assert.EqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, recentApp.ResponseCode)
 						}
 					}
@@ -2126,7 +2138,8 @@ func TestReplica(t *testing.T) {
 					}
 					select {
 					case <-ctx.Done():
-						require.FailNow(t, "context expired before testing completed")
+						assert.Fail(t, "context expired before testing completed")
+						return
 					case <-time.After(time.Second):
 						// Due to stimulation rate limiting, we shouldn't see a 2nd CheckThrottler request.
 						appNames := tmClient.AppNames()
@@ -2135,7 +2148,9 @@ func TestReplica(t *testing.T) {
 				})
 				t.Run("validate multi-metric results", func(t *testing.T) {
 					checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), nil, flags)
-					require.NotNil(t, checkResult)
+					if !assert.NotNil(t, checkResult) {
+						return
+					}
 					// loadavg value exceeds threshold. This will show up in the check result as an error.
 					assert.EqualValues(t, 2.718, checkResult.Value, "unexpected result: %+v", checkResult) // self lag value
 					assert.NotEqualValues(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode, "unexpected result: %+v", checkResult)
@@ -2146,7 +2161,9 @@ func TestReplica(t *testing.T) {
 			t.Run("metrics", func(t *testing.T) {
 				// See which metrics are available
 				checkResult := throttler.Check(ctx, throttlerapp.VitessName.String(), base.KnownMetricNames, flags)
-				require.NotNil(t, checkResult)
+				if !assert.NotNil(t, checkResult) {
+					return
+				}
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
 				for metricName, metricResult := range checkResult.Metrics {
@@ -2177,7 +2194,9 @@ func TestReplica(t *testing.T) {
 			})
 			t.Run("metrics not named", func(t *testing.T) {
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
-				require.NotNil(t, checkResult)
+				if !assert.NotNil(t, checkResult) {
+					return
+				}
 				assert.Len(t, checkResult.Metrics, 1)
 				for metricName, metricResult := range checkResult.Metrics {
 					assert.Equal(t, base.LagMetricName, throttler.metricNameUsedAsDefault())
@@ -2195,7 +2214,9 @@ func TestReplica(t *testing.T) {
 				throttler.appCheckedMetrics.Set(testAppName.String(), base.MetricNames{base.LoadAvgMetricName, base.LagMetricName, base.ThreadsRunningMetricName}, cache.DefaultExpiration)
 				defer throttler.appCheckedMetrics.Delete(testAppName.String())
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
-				require.NotNil(t, checkResult)
+				if !assert.NotNil(t, checkResult) {
+					return
+				}
 				assert.Len(t, checkResult.Metrics, 3)
 			})
 			t.Run("client, OK", func(t *testing.T) {
@@ -2233,7 +2254,9 @@ func TestReplica(t *testing.T) {
 					throttler.refreshInventory(ctx)
 				})
 				checkResult = throttler.Check(ctx, testAppName.String(), base.KnownMetricNames, flags)
-				require.NotNil(t, checkResult)
+				if !assert.NotNil(t, checkResult) {
+					return
+				}
 				assert.Equal(t, len(base.KnownMetricNames), len(checkResult.Metrics))
 
 				assert.Equal(t, base.LagMetricName, throttler.metricNameUsedAsDefault())

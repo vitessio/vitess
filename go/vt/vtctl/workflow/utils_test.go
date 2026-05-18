@@ -157,7 +157,7 @@ func TestConcurrentKeyspaceRoutingRulesUpdates(t *testing.T) {
 		t.Skip()
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ts := memorytopo.NewServer(ctx, "zone1")
 	defer ts.Close()
@@ -208,7 +208,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 }
 
 func update(t *testing.T, ts *topo.Server, id int) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
@@ -257,7 +257,7 @@ func startEtcd(t *testing.T) string {
 	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	start := time.Now()
 	for {
@@ -314,7 +314,7 @@ func TestValidateSourceTablesExist(t *testing.T) {
 }
 
 func TestLegacyBuildTargets(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"

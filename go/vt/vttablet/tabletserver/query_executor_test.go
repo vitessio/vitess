@@ -328,7 +328,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			for _, dbr := range tcase.dbResponses {
 				db.AddQuery(dbr.query, dbr.result)
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			tsv := newTestTabletServer(ctx, noFlags, db)
 			if tcase.txThrottler != nil {
 				tsv.txThrottler = tcase.txThrottler
@@ -430,7 +430,7 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 			callerID := &querypb.VTGateCallerID{
 				Username: "u1",
 			}
-			ctx := callerid.NewContext(context.Background(), nil, callerID)
+			ctx := callerid.NewContext(t.Context(), nil, callerID)
 			tsv := newTestTabletServer(ctx, noFlags, db)
 			tsv.config.DB.DBName = "ks"
 			tsv.config.AnnotateQueries = true
@@ -507,7 +507,7 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			for _, dbr := range tcase.dbResponses {
 				db.AddQuery(dbr.query, dbr.result)
 			}
-			ctx := context.Background()
+			ctx := t.Context()
 			tsv := newTestTabletServer(ctx, noFlags, db)
 			defer tsv.StopService()
 
@@ -543,7 +543,7 @@ func TestDisableOnlineDDL(t *testing.T) {
 	db.SetNeverFail(true)
 	defer db.SetNeverFail(false)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -640,7 +640,7 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 			// through execDDL.
 			db.AddQueryPattern("create.*", &sqltypes.Result{})
 
-			ctx := context.Background()
+			ctx := t.Context()
 			tsv := newTestTabletServer(ctx, noFlags, db)
 			defer tsv.StopService()
 
@@ -777,7 +777,7 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 			for _, dbr := range tcase.dbResponses {
 				db.AddQuery(dbr.query, dbr.result)
 			}
-			ctx := callerid.NewContext(context.Background(), callerid.NewEffectiveCallerID("a", "b", "c"), callerid.NewImmediateCallerID("d"))
+			ctx := callerid.NewContext(t.Context(), callerid.NewEffectiveCallerID("a", "b", "c"), callerid.NewImmediateCallerID("d"))
 			tsv := newTestTabletServer(ctx, smallResultSize, db)
 			defer tsv.StopService()
 
@@ -834,7 +834,7 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	db.AddQuery("select * from test_table limit 10001 for update", &sqltypes.Result{
 		Fields: getTestTableFields(),
 	})
-	ctx := context.Background()
+	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
@@ -859,15 +859,13 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	})
 	updateQuery := "update seq set next_id = 4 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
-	ctx := context.Background()
+	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
 	assert.Equal(t, planbuilder.PlanNextval, qre.plan.PlanID)
 	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
+	require.NoError(t, err)
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
@@ -884,9 +882,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	db.DeleteQuery(selQuery)
 	qre = newTestQueryExecutor(ctx, tsv, "select next 1 values from seq", 0)
 	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
+	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
@@ -896,9 +892,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(2),
 		}},
 	}
-	if !got.Equal(want) {
-		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
-	}
+	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 
 	// NextVal==3, LastVal==4
 	// Let's try the next 2 values.
@@ -916,9 +910,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	qre = newTestQueryExecutor(ctx, tsv, "select next 2 values from seq", 0)
 	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
+	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
@@ -928,9 +920,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(3),
 		}},
 	}
-	if !got.Equal(want) {
-		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
-	}
+	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 
 	// NextVal==5, LastVal==7
 	// Let's try jumping a full cache range.
@@ -948,9 +938,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	db.AddQuery(updateQuery, &sqltypes.Result{})
 	qre = newTestQueryExecutor(ctx, tsv, "select next 6 values from seq", 0)
 	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
+	require.NoError(t, err)
 	want = &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "nextval",
@@ -960,9 +948,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(5),
 		}},
 	}
-	if !got.Equal(want) {
-		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
-	}
+	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
@@ -979,7 +965,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		}},
 	}
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	db := setUpQueryExecutorTest(t)
@@ -989,9 +975,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	defer tsv.StopService()
 
 	plan, err := tsv.qe.GetMessageStreamPlan("msg")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	callerID := &querypb.VTGateCallerID{
 		Username: "u1",
@@ -1009,24 +993,20 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	err = qre.MessageStream(func(qr *sqltypes.Result) error {
 		return io.EOF
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	callerID = &querypb.VTGateCallerID{
 		Username: "u2",
 		Groups:   []string{"non-admin"},
 	}
-	qre.ctx = callerid.NewContext(context.Background(), nil, callerID)
+	qre.ctx = callerid.NewContext(t.Context(), nil, callerID)
 	// Should fail because u2 does not have permission.
 	err = qre.MessageStream(func(qr *sqltypes.Result) error {
 		return io.EOF
 	})
 
 	assert.EqualError(t, err, `MessageStream command denied to user 'u2', in groups [non-admin], for table 'msg' (ACL check error)`)
-	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
-		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
-	}
+	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 }
 
 func TestQueryExecutorTableAcl(t *testing.T) {
@@ -1048,7 +1028,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	callerID := &querypb.VTGateCallerID{
 		Username: username,
 	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
 			Name:                 "group01",
@@ -1057,7 +1037,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 		}},
 	}
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	tsv := newTestTabletServer(ctx, noFlags, db)
@@ -1065,12 +1045,8 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("got: %v, want nil", err)
-	}
-	if !got.Equal(want) {
-		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
-	}
+	require.NoError(t, err)
+	require.Truef(t, got.Equal(want), "qre.Execute() = %v, want: %v", got, want)
 }
 
 func TestQueryExecutorTableAclNoPermission(t *testing.T) {
@@ -1092,7 +1068,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	callerID := &querypb.VTGateCallerID{
 		Username: username,
 	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
 			Name:                 "group02",
@@ -1102,19 +1078,15 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	}
 
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 	// without enabling Config.StrictTableAcl
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("got: %v, want nil", err)
-	}
-	if !got.Equal(want) {
-		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
-	}
+	require.NoError(t, err)
+	require.Truef(t, got.Equal(want), "qre.Execute() = %v, want: %v", got, want)
 	tsv.StopService()
 
 	// enable Config.StrictTableAcl
@@ -1124,12 +1096,8 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
 	_, err = qre.Execute()
-	if err == nil {
-		t.Fatal("got: nil, want: error")
-	}
-	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
-		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
-	}
+	require.Error(t, err, "got: nil, want: error")
+	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 }
 
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
@@ -1142,14 +1110,14 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	callerID := &querypb.VTGateCallerID{
 		Username: "basic_username",
 	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
 
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{},
 	}
 
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// enable Config.StrictTableAcl
@@ -1160,28 +1128,86 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	assert.Equal(t, planbuilder.PlanSelectImpossible, qre.plan.PlanID)
 	// query should fail because nobody has read access to test_table
 	_, err := qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
-		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
-	}
+	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 
 	assert.EqualError(t, err, `SelectImpossible command denied to user 'basic_username' for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored when querying against dual table
 	query = "select @@version_comment from dual limit 1"
-	ctx = callerid.NewContext(context.Background(), nil, callerID)
+	ctx = callerid.NewContext(t.Context(), nil, callerID)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute: %v, want: nil", err)
-	}
+	require.NoError(t, err)
 
 	query = "(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1)"
-	ctx = callerid.NewContext(context.Background(), nil, callerID)
+	ctx = callerid.NewContext(t.Context(), nil, callerID)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute: %v, want: nil", err)
+	require.NoError(t, err)
+}
+
+// TestQueryExecutorTableAclUserTableNamedDual verifies that a real user table
+// named `dual` (referenced via backticks per the parser) is subject to ACL like
+// any other table — it does NOT inherit the placeholder-dual ACL bypass.
+func TestQueryExecutorTableAclUserTableNamedDual(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	// Add a real user table named `dual` to the schema fixtures. The default
+	// setUpQueryExecutorTest doesn't include it; we layer it on top.
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			mysql.BaseShowTablesRow("dual", false, ""),
+		},
+	})
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowPrimaryRow("test_table", "pk"),
+			mysql.ShowPrimaryRow("seq", "id"),
+			mysql.ShowPrimaryRow("msg", "id"),
+			mysql.ShowPrimaryRow("dual", "pk"),
+		},
+	})
+	db.MockQueriesForTable("dual", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+
+	username := "basic_username"
+	callerID := &querypb.VTGateCallerID{Username: username}
+	ctx := callerid.NewContext(context.Background(), nil, callerID)
+
+	// ACL config exists but does not authorize this caller for the `dual` table.
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group01",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{username},
+		}},
 	}
+	require.NoErrorf(t, tableacl.InitFromProto(config), "unable to load tableacl config")
+
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	defer tsv.StopService()
+
+	// Backtick-quoted form references the user table (post-#19579), not the
+	// placeholder. ACL must apply.
+	query := "select * from `dual` limit 1000"
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err := qre.Execute()
+	require.Error(t, err, "ACL should deny access to user table `dual`")
+	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
+	assert.EqualError(t, err, `Select command denied to user 'basic_username' for table 'dual' (ACL check error)`)
 }
 
 func TestQueryExecutorTableAclExemptACL(t *testing.T) {
@@ -1205,7 +1231,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 		Username: username,
 		Groups:   []string{"eng", "beta"},
 	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
 
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
@@ -1216,7 +1242,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	}
 
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	// enable Config.StrictTableAcl
@@ -1226,27 +1252,23 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
-		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
-	}
+	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 	assert.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
 	f, _ := tableacl.GetCurrentACLFactory()
 	if tsv.qe.exemptACL, err = f.New([]string{username}); err != nil {
-		t.Fatalf("Cannot load exempt ACL for Table ACL: %v", err)
+		require.NoError(t, err)
 	}
 	callerID = &querypb.VTGateCallerID{
 		Username: username,
 	}
-	ctx = callerid.NewContext(context.Background(), nil, callerID)
+	ctx = callerid.NewContext(t.Context(), nil, callerID)
 
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
-	if err != nil {
-		t.Fatal("qre.Execute: nil, want: error")
-	}
+	require.NoError(t, err, "qre.Execute: nil, want: error")
 }
 
 func TestQueryExecutorTableAclDryRun(t *testing.T) {
@@ -1269,7 +1291,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	callerID := &querypb.VTGateCallerID{
 		Username: username,
 	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
 
 	config := &tableaclpb.Config{
 		TableGroups: []*tableaclpb.TableGroupSpec{{
@@ -1280,7 +1302,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	}
 
 	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	tableACLStatsKey := strings.Join([]string{
@@ -1298,13 +1320,9 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	beforeCount := tsv.stats.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want: nil", err)
-	}
+	require.NoError(t, err)
 	afterCount := tsv.stats.TableaclPseudoDenied.Counts()[tableACLStatsKey]
-	if afterCount-beforeCount != 1 {
-		t.Fatalf("table acl pseudo denied count should increase by one. got: %d, want: %d", afterCount, beforeCount+1)
-	}
+	require.Equalf(t, beforeCount+1, afterCount, "table acl pseudo denied count should increase by one. got: %d, want: %d", afterCount, beforeCount+1)
 }
 
 func TestQueryExecutorDenyListQRFail(t *testing.T) {
@@ -1340,14 +1358,14 @@ func TestQueryExecutorDenyListQRFail(t *testing.T) {
 		Remote: bannedAddr,
 		User:   bannedUser,
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callinfo.NewContext(t.Context(), callInfo)
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 	tsv.qe.queryRuleSources.RegisterSource(rulesName)
 	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 
 	if err := tsv.qe.queryRuleSources.SetRules(rulesName, rules); err != nil {
-		t.Fatalf("failed to set rule, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -1356,9 +1374,7 @@ func TestQueryExecutorDenyListQRFail(t *testing.T) {
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// execute should fail because query has a table which is part of the denylist
 	_, err := qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
-		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
+	require.Equalf(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_INVALID_ARGUMENT)
 }
 
 func TestQueryExecutorDenyListQRRetry(t *testing.T) {
@@ -1394,14 +1410,14 @@ func TestQueryExecutorDenyListQRRetry(t *testing.T) {
 		Remote: bannedAddr,
 		User:   bannedUser,
 	}
-	ctx := callinfo.NewContext(context.Background(), callInfo)
+	ctx := callinfo.NewContext(t.Context(), callInfo)
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 	tsv.qe.queryRuleSources.RegisterSource(rulesName)
 	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
 
 	if err := tsv.qe.queryRuleSources.SetRules(rulesName, rules); err != nil {
-		t.Fatalf("failed to set rule, error: %v", err)
+		require.NoError(t, err)
 	}
 
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -1409,9 +1425,7 @@ func TestQueryExecutorDenyListQRRetry(t *testing.T) {
 
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	_, err := qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION {
-		t.Fatalf("tsv.qe.queryRuleSources.SetRules: %v, want %v", code, vtrpcpb.Code_FAILED_PRECONDITION)
-	}
+	require.Equalf(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "tsv.qe.queryRuleSources.SetRules: %v, want %v", vterrors.Code(err), vtrpcpb.Code_FAILED_PRECONDITION)
 }
 
 func TestReplaceSchemaName(t *testing.T) {
@@ -1430,7 +1444,7 @@ func TestReplaceSchemaName(t *testing.T) {
 		db.Name(),
 	))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 
@@ -1546,7 +1560,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			db := setUpQueryExecutorTest(t)
 			defer db.Close()
 
-			ctx := context.Background()
+			ctx := t.Context()
 			flags := noFlags
 			if tcase.consolidatorEnabledByDefault {
 				flags = enableConsolidator
@@ -1558,7 +1572,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			fakeConsolidator := sync2.NewFakeConsolidator()
 			tsv.qe.consolidator = fakeConsolidator
 
-			qre := newTestQueryExecutor(context.Background(), tsv, tcase.input, 0)
+			qre := newTestQueryExecutor(t.Context(), tsv, tcase.input, 0)
 			qre.options = &querypb.ExecuteOptions{Consolidator: tcase.consolidatorExecuteOption}
 
 			result := &sqltypes.Result{
@@ -1617,7 +1631,7 @@ func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, enableConsolidator, db)
 	defer tsv.StopService()
 
@@ -1652,7 +1666,7 @@ func TestQueryExecutorConsolidatorWaiterCapFallback(t *testing.T) {
 	// Set up database query/response for fallback execution
 	db.AddQuery(input, result)
 
-	qre := newTestQueryExecutor(context.Background(), tsv, input, 0)
+	qre := newTestQueryExecutor(t.Context(), tsv, input, 0)
 	qre.options = &querypb.ExecuteOptions{Consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED}
 
 	// Execute query
@@ -1687,7 +1701,7 @@ func TestGetConnectionLogStats(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	input := "select * from test_table limit 1"
 
@@ -2065,7 +2079,7 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 	}}
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	tsv := newTestTabletServer(context.Background(), noFlags, db)
+	tsv := newTestTabletServer(t.Context(), noFlags, db)
 	tsv.config.DB.DBName = "ks"
 	defer tsv.StopService()
 	for _, tcase := range testcases {
@@ -2076,7 +2090,7 @@ func TestQueryExecSchemaReloadCount(t *testing.T) {
 				db.AddQueryPattern(dbr.query, dbr.result)
 			}
 
-			qre := newTestQueryExecutor(context.Background(), tsv, tcase.input, 0)
+			qre := newTestQueryExecutor(t.Context(), tsv, tcase.input, 0)
 			_, err := qre.Execute()
 			require.NoError(t, err)
 			assert.EqualValues(t, tcase.schemaReloadCount, qre.tsv.se.SchemaReloadTimings.Counts()["TabletServerTest.SchemaReload"], "got: %v", qre.tsv.se.SchemaReloadTimings.Counts())

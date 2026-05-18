@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -252,7 +251,7 @@ func TestFanoutVindex(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(context.Background(), &vtParams)
+	newConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 
@@ -307,7 +306,7 @@ func TestSubShardVindex(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(context.Background(), &vtParams)
+	newConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 
@@ -357,7 +356,7 @@ func TestSubShardVindexDML(t *testing.T) {
 		}
 	}
 
-	newConn, err := mysql.Connect(context.Background(), &vtParams)
+	newConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer newConn.Close()
 

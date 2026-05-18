@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,7 +41,7 @@ func TestVttabletProcess(t *testing.T) {
 	err = json.Unmarshal(respByte, &resultMap)
 	require.NoError(t, err)
 	if got, want := resultMap["TabletKeyspace"], "commerce"; got != want {
-		t.Errorf("select:\n%v want\n%v for %s", got, want, "Keyspace of tablet should match")
+		assert.Equalf(t, want, got, "select:\n%v want\n%v for %s", got, want, "Keyspace of tablet should match")
 	}
 }
 

@@ -17,7 +17,6 @@ limitations under the License.
 package transactiontimeout
 
 import (
-	"context"
 	_ "embed"
 	"testing"
 	"time"
@@ -73,7 +72,7 @@ func TestTransactionTimeout(t *testing.T) {
 	teardown := createCluster(t)
 	defer teardown()
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -99,7 +98,7 @@ func TestTransactionTimeout(t *testing.T) {
 	require.ErrorContains(t, err, "Query execution was interrupted")
 
 	// Get new connection
-	conn, err = mysql.Connect(context.Background(), &vtParams)
+	conn, err = mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	// Set session transaction timeout to 0
@@ -117,7 +116,7 @@ func TestSmallerTimeout(t *testing.T) {
 	teardown := createCluster(t, "--queryserver-config-transaction-timeout", "1s")
 	defer teardown()
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	// Set session transaction timeout larger than tablet transaction timeout

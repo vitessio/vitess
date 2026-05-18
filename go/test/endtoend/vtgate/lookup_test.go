@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -47,7 +46,7 @@ func TestLookupUniqueWithAutocommit(t *testing.T) {
 	defer closer()
 
 	// conn2 is to check entries in the lookup table
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.Nil(t, err)
 	defer conn2.Close()
 
@@ -107,7 +106,7 @@ func TestConsistentLookup(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.Nil(t, err)
 	defer conn2.Close()
 
@@ -120,7 +119,7 @@ func TestConsistentLookup(t *testing.T) {
 	utils.AssertMatches(t, conn, "select * from t1", "[[INT64(1) INT64(4)]]")
 	qr := utils.Exec(t, conn, "select * from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	// Inserting again should fail.
@@ -140,22 +139,22 @@ func TestConsistentLookup(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr = utils.Exec(t, conn, "select * from t1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	qr = utils.Exec(t, conn, "select * from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	// Autocommit insert.
 	utils.Exec(t, conn, "insert into t1(id1, id2) values(1, 4)")
 	qr = utils.Exec(t, conn, "select * from t1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	qr = utils.Exec(t, conn, "select id2 from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	// Autocommit delete.
 	utils.Exec(t, conn, "delete from t1 where id1=1")
@@ -168,7 +167,7 @@ func TestConsistentLookup(t *testing.T) {
 	// Verify the lookup row is still there.
 	qr = utils.Exec(t, conn, "select id2 from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	// Insert should still succeed.
 	utils.Exec(t, conn, "begin")
@@ -176,12 +175,12 @@ func TestConsistentLookup(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr = utils.Exec(t, conn, "select * from t1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	// Lookup row should be unchanged.
 	qr = utils.Exec(t, conn, "select * from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	// Dangling row not pointing to existing keyspace id.
@@ -191,7 +190,7 @@ func TestConsistentLookup(t *testing.T) {
 	utils.Exec(t, conn, "update t1_id2_idx set keyspace_id='aaa' where id2=4")
 	qr = utils.Exec(t, conn, "select * from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"aaa\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	// Insert should still succeed.
 	utils.Exec(t, conn, "begin")
@@ -199,12 +198,12 @@ func TestConsistentLookup(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr = utils.Exec(t, conn, "select * from t1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	// lookup row must be updated.
 	qr = utils.Exec(t, conn, "select * from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	// Update, but don't change anything. This should not deadlock.
@@ -213,11 +212,11 @@ func TestConsistentLookup(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr = utils.Exec(t, conn, "select * from t1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	qr = utils.Exec(t, conn, "select * from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(4) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	// Update, and change the lookup value. This should change main and lookup rows.
@@ -226,11 +225,11 @@ func TestConsistentLookup(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr = utils.Exec(t, conn, "select * from t1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(5)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	qr = utils.Exec(t, conn, "select * from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(5) VARBINARY(\"\\x16k@\\xb4J\\xbaK\\xd6\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 }
 
@@ -256,7 +255,7 @@ func TestDMLScatter(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr := utils.Exec(t, conn, "select id5, id6, id7 from t3 order by id5")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(2) INT64(3)] [INT64(2) INT64(2) INT64(3)] [INT64(3) INT64(4) INT64(3)] [INT64(4) INT64(5) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	/* Updating a non lookup column. after this dml, the tables will contain the following:
@@ -275,7 +274,7 @@ func TestDMLScatter(t *testing.T) {
 	utils.Exec(t, conn, "update `ks[-]`.t3 set id5 = 42 where id5 = 1")
 	qr = utils.Exec(t, conn, "select id5, id6, id7 from t3 order by id5")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) INT64(2) INT64(3)] [INT64(3) INT64(4) INT64(3)] [INT64(4) INT64(5) INT64(4)] [INT64(42) INT64(2) INT64(3)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	/* Updating a lookup column. after this dml, the tables will contain the following:
@@ -296,7 +295,7 @@ func TestDMLScatter(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr = utils.Exec(t, conn, "select id5, id6, id7 from t3 order by id5")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) INT64(2) INT64(42)] [INT64(3) INT64(4) INT64(3)] [INT64(4) INT64(5) INT64(4)] [INT64(42) INT64(2) INT64(42)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	/* delete one specific keyspace id. after this dml, the tables will contain the following:
@@ -344,7 +343,7 @@ func TestDMLIn(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr := utils.Exec(t, conn, "select id5, id6, id7 from t3 order by id5, id6")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(2) INT64(3)] [INT64(2) INT64(2) INT64(3)] [INT64(3) INT64(4) INT64(3)] [INT64(4) INT64(5) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	/* Updating a non lookup column. after this dml, the tables will contain the following:
@@ -363,7 +362,7 @@ func TestDMLIn(t *testing.T) {
 	utils.Exec(t, conn, "update t3 set id5 = 42 where id6 in (4, 5)")
 	qr = utils.Exec(t, conn, "select id5, id6, id7 from t3 order by id5, id6")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(2) INT64(3)] [INT64(2) INT64(2) INT64(3)] [INT64(42) INT64(4) INT64(3)] [INT64(42) INT64(5) INT64(4)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	/* Updating a non lookup column. after this dml, the tables will contain the following:
@@ -384,7 +383,7 @@ func TestDMLIn(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr = utils.Exec(t, conn, "select id5, id6, id7 from t3 order by id5, id6")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(2) INT64(42)] [INT64(2) INT64(2) INT64(42)] [INT64(42) INT64(4) INT64(3)] [INT64(42) INT64(5) INT64(42)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	/* Updating a non lookup column. after this dml, the tables will contain the following:
@@ -414,7 +413,7 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.Nil(t, err)
 	defer conn2.Close()
 
@@ -423,11 +422,11 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr := utils.Exec(t, conn, "select * from t1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(4)] [INT64(2) INT64(5)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	qr = utils.Exec(t, conn, "select count(*) from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	// Delete one row but leave its lookup dangling.
@@ -444,15 +443,15 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	qr = utils.Exec(t, conn, "select id1, id2 from t1 order by id1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(2)] [INT64(2) INT64(5)] [INT64(3) INT64(6)] [INT64(4) INT64(7)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	qr = utils.Exec(t, conn, "select * from t1_id2_idx where id2=6")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(6) VARBINARY(\"N\\xb1\\x90ɢ\\xfa\\x16\\x9c\")]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 	qr = utils.Exec(t, conn, "select count(*) from t1_id2_idx")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(5)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 }
 
@@ -460,7 +459,7 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 	// conn2 is for queries that target shards.
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.Nil(t, err)
 	defer conn2.Close()
 
@@ -505,7 +504,7 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	utils.Exec(t, conn, "insert into t4(id1, id2) values(1, '2'), (2, '2'), (3, '3'), (4, '3')")
 	qr := utils.Exec(t, conn, "select id1, id2 from t4 order by id1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("2")] [INT64(2) VARCHAR("2")] [INT64(3) VARCHAR("3")] [INT64(4) VARCHAR("3")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	/* Updating a lookup column. after this dml, the tables will contain the following:
@@ -524,7 +523,7 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	utils.Exec(t, conn, "update t4 a set a.id2 = '42' where a.id1 = 1")
 	qr = utils.Exec(t, conn, "select id1, id2 from t4 order by id1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("42")] [INT64(2) VARCHAR("2")] [INT64(3) VARCHAR("3")] [INT64(4) VARCHAR("3")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+		assert.Failf(t, "select mismatch", "select:\n%v want\n%v", got, want)
 	}
 
 	/* delete one specific keyspace id. after this dml, the tables will contain the following:

@@ -50,13 +50,11 @@ func TestNumberedGeneral(t *testing.T) {
 	p.Unregister(0, "test")
 	// p is now empty
 
-	if _, err = p.Get(0, "test3"); !strings.HasPrefix(err.Error(), "ended at") || !strings.HasSuffix(err.Error(), "(test)") {
-		t.Errorf("want prefix 'ended at' and suffix '(test)', got '%v'", err)
-	}
+	_, err = p.Get(0, "test3")
+	require.Error(t, err)
+	assert.Truef(t, strings.HasPrefix(err.Error(), "ended at") && strings.HasSuffix(err.Error(), "(test)"), "want prefix 'ended at' and suffix '(test)', got %q", err.Error())
 
-	if p.Size() != 0 {
-		t.Errorf("want 0, got %v", p.Size())
-	}
+	assert.Equalf(t, int64(0), p.Size(), "want 0, got %v", p.Size())
 	p.WaitForEmpty()
 }
 
