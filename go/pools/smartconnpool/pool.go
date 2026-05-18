@@ -464,62 +464,42 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.borrowed.Add(-1)
 
 	if conn == nil {
-		// Taint, or Recycle on a closed conn: open the replacement off the
-		// caller's goroutine so we don't block on the backend's connect
-		// timeout. The background goroutine still hands the fresh conn to
-		// any queued waiter via tryReturnConn, so waiters aren't stranded.
-		go pool.openReplacement()
-		return
-	}
-
-	conn.timeUsed.update()
-
-	lifetime := pool.extendedMaxLifetime()
-	if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
-		// Close the maxLifetime-exceeded conn and reopen asynchronously so
-		// the Recycle caller doesn't pay the backend's connect timeout.
-		// Capture the Setting before closing so the reopened conn returns
-		// to the same settings stack.
-		pool.Metrics.maxLifetimeClosed.Add(1)
-		setting := conn.Conn.Setting()
-		conn.Close()
-		go pool.reopenExpired(conn, setting)
-		return
-	}
-
-	pool.tryReturnConn(conn)
-}
-
-// openReplacement opens a brand-new connection on behalf of put(nil) and
-// either hands it to a queued waiter or pushes it onto the clean stack.
-// On connect failure it decrements active so the slot can be lazily
-// reopened by the next Get.
-func (pool *ConnPool[C]) openReplacement() {
-	conn, err := pool.connNew(pool.connectCtx())
-	if err != nil {
-		pool.closedConn()
-		return
-	}
-	pool.tryReturnConn(conn)
-}
-
-// reopenExpired re-opens a maxLifetime-exceeded connection and re-applies
-// the Setting that was captured before the conn was closed, so the
-// replacement returns to the same settings stack. Runs off the put()
-// caller's goroutine.
-func (pool *ConnPool[C]) reopenExpired(conn *Pooled[C], setting *Setting) {
-	ctx := pool.connectCtx()
-	if err := pool.connReopen(ctx, conn, monotonicNow()); err != nil {
-		pool.closedConn()
-		return
-	}
-	if setting != nil {
-		if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
-			conn.Close()
+		// Taint, or Recycle on a closed conn: open a replacement so a
+		// queued waiter can be served. We use the pool's lifetime context
+		// so a Close in flight unblocks this connect, instead of waiting
+		// for the backend's connect timeout.
+		var err error
+		conn, err = pool.connNew(pool.connectCtx())
+		if err != nil {
 			pool.closedConn()
 			return
 		}
+	} else {
+		conn.timeUsed.update()
+
+		lifetime := pool.extendedMaxLifetime()
+		if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
+			// Reopen the maxLifetime-exceeded conn. Capture Setting before
+			// close so the reopened conn lands back in the same settings
+			// stack rather than silently migrating to clean.
+			pool.Metrics.maxLifetimeClosed.Add(1)
+			setting := conn.Conn.Setting()
+			conn.Close()
+			ctx := pool.connectCtx()
+			if err := pool.connReopen(ctx, conn, conn.timeUsed.get()); err != nil {
+				pool.closedConn()
+				return
+			}
+			if setting != nil {
+				if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
+					conn.Close()
+					pool.closedConn()
+					return
+				}
+			}
+		}
 	}
+
 	pool.tryReturnConn(conn)
 }
 

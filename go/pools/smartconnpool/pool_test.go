@@ -191,14 +191,11 @@ func TestOpen(t *testing.T) {
 	r, err = p.Get(ctx, nil)
 	require.NoError(t, err)
 	r.Close()
-	// A nil Put opens the replacement asynchronously so the caller doesn't
-	// block on connect; the new conn ends up on a stack once the
-	// background goroutine completes.
+	// A nil Put causes the resource to be reopened so any queued waiter
+	// can be served.
 	p.put(nil)
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 5, state.open.Load())
-		assert.EqualValues(c, 6, state.lastID.Load())
-	}, time.Second, 10*time.Millisecond)
+	assert.EqualValues(t, 5, state.open.Load())
+	assert.EqualValues(t, 6, state.lastID.Load())
 
 	for i := range 5 {
 		if i%2 == 0 {
@@ -622,13 +619,8 @@ func TestConnReopen(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	p.put(conn)
-	// put closes the maxLifetime-exceeded conn and opens the replacement
-	// asynchronously; the new conn lands on a stack once the background
-	// goroutine completes.
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 2, state.lastID.Load())
-		assert.EqualValues(c, 1, p.Active())
-	}, time.Second, 10*time.Millisecond)
+	assert.EqualValues(t, 2, state.lastID.Load())
+	assert.EqualValues(t, 1, p.Active())
 
 	// wait enough to reach idle timeout.
 	time.Sleep(300 * time.Millisecond)
@@ -791,13 +783,9 @@ func TestMaxLifetime(t *testing.T) {
 	time.Sleep(10 * time.Millisecond * 2)
 
 	p.put(r)
-	// put closes the maxLifetime-exceeded conn and opens the replacement
-	// asynchronously off the Recycle caller's goroutine.
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 2, state.lastID.Load())
-		assert.EqualValues(c, 1, state.open.Load())
-		assert.EqualValues(c, 1, p.Metrics.MaxLifetimeClosed())
-	}, time.Second, 10*time.Millisecond)
+	assert.EqualValues(t, 2, state.lastID.Load())
+	assert.EqualValues(t, 1, state.open.Load())
+	assert.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
 }
 
 func TestExtendedLifetimeTimeout(t *testing.T) {
@@ -920,11 +908,7 @@ func TestCreateFailOnPut(t *testing.T) {
 		// change factory to fail the put.
 		state.chaos.failConnect.Store(true)
 		p.put(nil)
-		// put(nil) opens the replacement asynchronously; the failed connect
-		// drops active to 0.
-		require.EventuallyWithT(t, func(c *assert.CollectT) {
-			assert.Zero(c, p.Active())
-		}, time.Second, 10*time.Millisecond)
+		assert.Zero(t, p.Active())
 
 		// change back for next iteration.
 		state.chaos.failConnect.Store(false)
@@ -1613,13 +1597,12 @@ func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
 	}
 }
 
-// TestTaintDoesNotBlockOnConnect verifies that Pooled.Taint (and Recycle on
-// a closed conn, which goes through the same put(nil) path) does not block
-// the caller on opening a replacement connection. Without this guarantee, a
-// caller poisoning a wedged conn against a dead backend stalls for the full
-// MySQL connect timeout — turning what should be a non-blocking cleanup
-// into a multi-second round-trip.
-func TestTaintDoesNotBlockOnConnect(t *testing.T) {
+// TestTaintConnectCancelsOnClose verifies that Pooled.Taint's synchronous
+// reopen (via put(nil)) unblocks when the pool is closed. Without using
+// the pool's lifetime context for the reopen, Taint against an unreachable
+// backend would block for the full MySQL connect timeout — even when the
+// pool is already shutting down.
+func TestTaintConnectCancelsOnClose(t *testing.T) {
 	var state TestState
 	ctx := t.Context()
 
@@ -1627,8 +1610,6 @@ func TestTaintDoesNotBlockOnConnect(t *testing.T) {
 	customConnector := func(connectCtx context.Context) (*TestConn, error) {
 		call := connectCalls.Add(1)
 		if call > 1 {
-			// Simulate an unreachable backend: park until ctx cancellation
-			// or test exit.
 			select {
 			case <-connectCtx.Done():
 				return nil, connectCtx.Err()
@@ -1647,26 +1628,39 @@ func TestTaintDoesNotBlockOnConnect(t *testing.T) {
 	p := NewPool(&Config[*TestConn]{
 		Capacity: 1,
 	}).Open(customConnector, nil)
-	t.Cleanup(p.Close)
 
 	c, err := p.Get(ctx, nil)
 	require.NoError(t, err)
 
-	done := make(chan struct{})
-	start := time.Now()
+	taintDone := make(chan struct{})
 	go func() {
-		defer close(done)
+		defer close(taintDone)
 		c.Taint()
 	}()
 
+	// Wait until Taint's reopen is parked inside the connector.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, connectCalls.Load(), int64(2))
+	}, 500*time.Millisecond, 5*time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
 	select {
-	case <-done:
-		elapsed := time.Since(start)
-		require.Less(t, elapsed, 2*time.Second,
-			"Taint must not block on connect; took %v", elapsed)
+	case err := <-closeDone:
+		require.NoError(t, err)
+		require.Less(t, time.Since(start), 2*time.Second,
+			"Close should cancel the in-flight Taint reopen")
 	case <-time.After(5 * time.Second):
-		require.Fail(t, "Taint blocked indefinitely on a slow connect")
+		require.Fail(t, "Close did not complete; Taint's reopen connect was not cancelled")
 	}
+
+	<-taintDone
 }
 
 // TestTaintWakesWaiter verifies that Taint, which frees a pool slot,
@@ -1805,12 +1799,10 @@ func TestIdleWorkerReopenPreservesSetting(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
-// TestRecycleDoesNotBlockOnMaxLifetimeReopen verifies that Recycle on a
-// conn whose max-lifetime has elapsed does not block the caller on opening
-// a replacement. The maxLifetime branch in put used to synchronously call
-// connReopen with context.Background(), turning every Recycle of an aged
-// conn into a connect round-trip — bad shape for a hot path.
-func TestRecycleDoesNotBlockOnMaxLifetimeReopen(t *testing.T) {
+// TestRecycleMaxLifetimeReopenCancelsOnClose verifies that the maxLifetime
+// reopen inside put (synchronous, on the Recycle caller's goroutine)
+// unblocks when the pool is closed.
+func TestRecycleMaxLifetimeReopenCancelsOnClose(t *testing.T) {
 	var state TestState
 	ctx := t.Context()
 
@@ -1837,7 +1829,6 @@ func TestRecycleDoesNotBlockOnMaxLifetimeReopen(t *testing.T) {
 		Capacity:    1,
 		MaxLifetime: time.Millisecond,
 	}).Open(customConnector, nil)
-	t.Cleanup(p.Close)
 
 	c, err := p.Get(ctx, nil)
 	require.NoError(t, err)
@@ -1845,23 +1836,35 @@ func TestRecycleDoesNotBlockOnMaxLifetimeReopen(t *testing.T) {
 	// Let the conn cross its max lifetime so the put-time reopen branch fires.
 	time.Sleep(10 * time.Millisecond)
 
-	done := make(chan struct{})
-	start := time.Now()
+	recycleDone := make(chan struct{})
 	go func() {
-		defer close(done)
+		defer close(recycleDone)
 		c.Recycle()
 	}()
 
+	// Wait until Recycle's reopen is parked inside the connector.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, connectCalls.Load(), int64(2))
+	}, 500*time.Millisecond, 5*time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
 	select {
-	case <-done:
-		elapsed := time.Since(start)
-		require.Less(t, elapsed, 2*time.Second,
-			"Recycle must not block on maxLifetime reopen; took %v", elapsed)
+	case err := <-closeDone:
+		require.NoError(t, err)
+		require.Less(t, time.Since(start), 2*time.Second,
+			"Close should cancel the in-flight maxLifetime reopen")
 	case <-time.After(5 * time.Second):
-		require.Fail(t, "Recycle blocked indefinitely on maxLifetime reopen")
+		require.Fail(t, "Close did not complete; maxLifetime reopen connect was not cancelled")
 	}
 
-	require.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
+	<-recycleDone
 }
 
 func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {
