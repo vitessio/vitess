@@ -26,6 +26,7 @@ import (
 
 // waiter represents a client waiting for a connection in the waitlist
 type waiter[C Connection] struct {
+	ctx context.Context
 	// setting is the connection Setting that we'd like, or nil if we'd like a
 	// a connection with no Setting applied
 	setting *Setting
@@ -54,7 +55,7 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	defer wl.nodes.Put(elem)
 
-	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting}
+	elem.Value = waiter[C]{conn: elem.Value.conn, ctx: ctx, setting: setting}
 
 	if wl.aboveWaiterCap(maxWaiters) {
 		if wl.onWaiterCapReached != nil {
@@ -100,7 +101,7 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 
 		// if we weren't able to remove ourselves from the waitlist, it means
 		// another goroutine is trying to hand us a connection
-		return <-elem.Value.conn, nil
+		return waitResult(ctx, <-elem.Value.conn)
 
 	case <-ctx.Done():
 		// Context expired. We need to try to remove ourselves from the waitlist to
@@ -124,11 +125,21 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 
 		// if we weren't able to remove ourselves from the waitlist, it means
 		// another goroutine is trying to hand us a connection
-		return <-elem.Value.conn, nil
+		return waitResult(ctx, <-elem.Value.conn)
 
 	case conn := <-elem.Value.conn:
+		return waitResult(ctx, conn)
+	}
+}
+
+func waitResult[C Connection](ctx context.Context, conn *Pooled[C]) (*Pooled[C], error) {
+	if conn != nil {
 		return conn, nil
 	}
+	if err := context.Cause(ctx); err != nil {
+		return nil, err
+	}
+	return nil, ErrTimeout
 }
 
 func (wl *waitlist[C]) aboveWaiterCap(maxWaiters uint) bool {
@@ -167,16 +178,23 @@ func (wl *waitlist[D]) tryReturnConn(conn *Pooled[D]) bool {
 func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	const maxAge = 8
 	var (
-		target      *list.Element[waiter[D]]
-		connSetting = conn.Conn.Setting()
+		target          *list.Element[waiter[D]]
+		canceledWaiters []*list.Element[waiter[D]]
+		connSetting     = conn.Conn.Setting()
 	)
 
 	wl.mu.Lock()
-	target = wl.list.Front()
-	// iterate through the waitlist looking for either waiters that have been
-	// here too long, or a waiter that is looking exactly for the same Setting
-	// as the one we have in our connection.
-	for e := target; e != nil; e = e.Next() {
+	for e := wl.list.Front(); e != nil; {
+		next := e.Next()
+		if e.Value.ctx.Err() != nil {
+			wl.list.Remove(e)
+			canceledWaiters = append(canceledWaiters, e)
+			e = next
+			continue
+		}
+		if target == nil {
+			target = e
+		}
 		if e.Value.age > maxAge || e.Value.setting == connSetting {
 			target = e
 			break
@@ -187,11 +205,16 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 		// with a specific setting to slightly starve, and aging all the clients
 		// in the list every time leads to unfairness when the system is at capacity
 		e.Value.age++
+		e = next
 	}
 	if target != nil {
 		wl.list.Remove(target)
 	}
 	wl.mu.Unlock()
+
+	for _, e := range canceledWaiters {
+		e.Value.conn <- nil
+	}
 
 	// maybe there isn't anybody to hand over the connection to, because we've
 	// raced with another client returning another connection
@@ -211,7 +234,7 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 func (wl *waitlist[C]) init() {
 	wl.nodes.New = func() any {
 		return &list.Element[waiter[C]]{
-			Value: waiter[C]{conn: make(chan *Pooled[C])},
+			Value: waiter[C]{conn: make(chan *Pooled[C], 1)},
 		}
 	}
 	wl.list.Init()
