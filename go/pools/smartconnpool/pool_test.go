@@ -504,6 +504,7 @@ func TestReopen(t *testing.T) {
 		refreshed.Store(true)
 		return true, nil
 	})
+	t.Cleanup(p.Close)
 
 	var resources [10]*Pooled[*TestConn]
 	for i := range 5 {
@@ -555,6 +556,65 @@ func TestReopen(t *testing.T) {
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, state.lastID.Load())
 	assert.EqualValues(t, 0, state.open.Load())
+}
+
+func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
+	var state TestState
+	var refreshCount atomic.Int32
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        2,
+		RefreshInterval: 50 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		count := refreshCount.Add(1)
+		return count == 1, nil
+	})
+	t.Cleanup(p.Close)
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 3
+	}, 30*time.Second, 50*time.Millisecond)
+}
+
+func TestRefreshWorkerDoesNotQueueReopens(t *testing.T) {
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	var refreshCount atomic.Int32
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        1,
+		RefreshInterval: 20 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		refreshCount.Add(1)
+		return true, nil
+	})
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if held != nil {
+			held.Recycle()
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() == 1
+	}, 5*time.Second, time.Millisecond)
+
+	require.Never(t, func() bool {
+		return refreshCount.Load() > 1
+	}, 100*time.Millisecond, 5*time.Millisecond)
+
+	held.Recycle()
+	held = nil
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 2
+	}, 5*time.Second, 5*time.Millisecond)
 }
 
 func TestUserClosing(t *testing.T) {
@@ -810,6 +870,46 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 		assert.Greater(t, 2*config.MaxLifetime, p.extendedMaxLifetime())
 		p.Close()
 	}
+}
+
+func TestExtendedMaxLifetimeJitter(t *testing.T) {
+	var state TestState
+	config := &Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: 30 * time.Minute,
+		LogWait:     state.LogWait,
+	}
+
+	p := NewPool(config).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	threshold := config.MaxLifetime + config.MaxLifetime/2
+	const maxAttempts = 64
+
+	for range maxAttempts {
+		extended := p.extendedMaxLifetime()
+		require.LessOrEqual(t, config.MaxLifetime, extended)
+		require.Greater(t, 2*config.MaxLifetime, extended)
+
+		if extended > threshold {
+			return
+		}
+	}
+
+	require.Failf(t, "jitter never reached upper half of range",
+		"no sample in %d tries exceeded %s", maxAttempts, threshold)
+}
+
+func TestExtendedMaxLifetimeNegativeDisables(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: -1 * time.Second,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 0, p.extendedMaxLifetime())
 }
 
 // TestMaxIdleCount tests the MaxIdleCount setting, to check if the pool closes
