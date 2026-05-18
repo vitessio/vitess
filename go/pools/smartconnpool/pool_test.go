@@ -1457,7 +1457,7 @@ func TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity(t *testing.T)
 		}, nil
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity: 4,
 		LogWait:  state.LogWait,
