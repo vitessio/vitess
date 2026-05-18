@@ -1477,6 +1477,7 @@ func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
 	p := NewPool(&Config[*TestConn]{
 		Capacity: 1,
 	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
 
 	ctx := t.Context()
 
@@ -1537,21 +1538,24 @@ func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
 func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
 	var state TestState
 
+	// Safety net: unblock any connect that's still parked after the test
+	// exits (e.g. if the assertion below fires before Close cancels the
+	// worker context).
 	released := make(chan struct{})
-	defer func() {
+	t.Cleanup(func() {
 		select {
 		case <-released:
 		default:
 			close(released)
 		}
-	}()
+	})
 
 	var connectCalls atomic.Int64
 	customConnector := func(ctx context.Context) (*TestConn, error) {
 		call := connectCalls.Add(1)
 		if call > 1 {
-			// Block until either ctx is cancelled (the behavior we want) or
-			// the test releases us as a safety net.
+			// Block until ctx is cancelled (the behavior under test) or the
+			// test's cleanup releases us.
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -1571,6 +1575,7 @@ func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
 		Capacity:    1,
 		IdleTimeout: 20 * time.Millisecond,
 	}).Open(customConnector, nil)
+	t.Cleanup(p.Close)
 
 	ctx := t.Context()
 	c, err := p.Get(ctx, nil)
