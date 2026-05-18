@@ -812,6 +812,46 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 	}
 }
 
+func TestExtendedMaxLifetimeJitter(t *testing.T) {
+	var state TestState
+	config := &Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: 30 * time.Minute,
+		LogWait:     state.LogWait,
+	}
+
+	p := NewPool(config).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	threshold := config.MaxLifetime + config.MaxLifetime/2
+	const maxAttempts = 64
+
+	for range maxAttempts {
+		extended := p.extendedMaxLifetime()
+		require.LessOrEqual(t, config.MaxLifetime, extended)
+		require.Greater(t, 2*config.MaxLifetime, extended)
+
+		if extended > threshold {
+			return
+		}
+	}
+
+	require.Failf(t, "jitter never reached upper half of range",
+		"no sample in %d tries exceeded %s", maxAttempts, threshold)
+}
+
+func TestExtendedMaxLifetimeNegativeDisables(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: -1 * time.Second,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	require.EqualValues(t, 0, p.extendedMaxLifetime())
+}
+
 // TestMaxIdleCount tests the MaxIdleCount setting, to check if the pool closes
 // the idle connections when the number of idle connections exceeds the limit.
 func TestMaxIdleCount(t *testing.T) {
