@@ -258,8 +258,7 @@ func (pool *ConnPool[C]) open() {
 				log.Error(fmt.Sprint(err))
 			}
 			if refresh {
-				go pool.reopen()
-				return false
+				pool.reopen()
 			}
 			return true
 		})
