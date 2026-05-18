@@ -464,13 +464,11 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.borrowed.Add(-1)
 
 	if conn == nil {
-		// Taint, or Recycle on a closed conn: the slot is gone. Free the
-		// active count and let the next Get reopen lazily via getNew. We
-		// must not open a replacement here because the caller (a client
-		// goroutine) would otherwise block on the backend's connect
-		// timeout, turning a non-blocking cleanup into a multi-second
-		// round-trip when the backend is unreachable.
-		pool.closedConn()
+		// Taint, or Recycle on a closed conn: open the replacement off the
+		// caller's goroutine so we don't block on the backend's connect
+		// timeout. The background goroutine still hands the fresh conn to
+		// any queued waiter via tryReturnConn, so waiters aren't stranded.
+		go pool.openReplacement()
 		return
 	}
 
@@ -479,15 +477,27 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	lifetime := pool.extendedMaxLifetime()
 	if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
 		// Same rationale as the put(nil) case: close the maxLifetime-exceeded
-		// conn and free the slot. The replacement is opened lazily on the
-		// next Get via getNew so the Recycle caller doesn't pay a connect
-		// round-trip on a hot path.
+		// conn and open the replacement asynchronously to keep the Recycle
+		// caller off the connect-timeout path.
 		pool.Metrics.maxLifetimeClosed.Add(1)
 		conn.Close()
-		pool.closedConn()
+		go pool.openReplacement()
 		return
 	}
 
+	pool.tryReturnConn(conn)
+}
+
+// openReplacement opens a fresh connection on behalf of put() and either
+// hands it to a queued waiter or pushes it onto a stack. On connect
+// failure it decrements active so the slot can be lazily reopened by the
+// next Get.
+func (pool *ConnPool[C]) openReplacement() {
+	conn, err := pool.connNew(pool.connectCtx())
+	if err != nil {
+		pool.closedConn()
+		return
+	}
 	pool.tryReturnConn(conn)
 }
 

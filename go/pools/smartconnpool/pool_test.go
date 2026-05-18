@@ -191,11 +191,14 @@ func TestOpen(t *testing.T) {
 	r, err = p.Get(ctx, nil)
 	require.NoError(t, err)
 	r.Close()
-	// A nil Put frees the slot; the pool reopens lazily on demand instead
-	// of synchronously blocking the caller on connect.
+	// A nil Put opens the replacement asynchronously so the caller doesn't
+	// block on connect; the new conn ends up on a stack once the
+	// background goroutine completes.
 	p.put(nil)
-	assert.EqualValues(t, 4, state.open.Load())
-	assert.EqualValues(t, 5, state.lastID.Load())
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 5, state.open.Load())
+		assert.EqualValues(c, 6, state.lastID.Load())
+	}, time.Second, 10*time.Millisecond)
 
 	for i := range 5 {
 		if i%2 == 0 {
@@ -610,8 +613,7 @@ func TestConnReopen(t *testing.T) {
 
 	defer p.Close()
 
-	ctx := t.Context()
-	conn, err := p.Get(ctx, nil)
+	conn, err := p.Get(t.Context(), nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, state.lastID.Load())
 	assert.EqualValues(t, 1, p.Active())
@@ -620,33 +622,26 @@ func TestConnReopen(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	p.put(conn)
-	// put closes the maxLifetime-exceeded conn and frees the slot; the
-	// replacement is opened lazily on the next Get instead of synchronously
-	// inside put.
-	assert.EqualValues(t, 1, state.lastID.Load())
-	assert.EqualValues(t, 0, p.Active())
-	assert.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
-
-	// A subsequent Get lazily opens a fresh conn via getNew.
-	conn, err = p.Get(ctx, nil)
-	require.NoError(t, err)
-	assert.EqualValues(t, 2, state.lastID.Load())
-	assert.EqualValues(t, 1, p.Active())
-	p.put(conn)
-
-	// The idle worker still eagerly reopens conns that exceed the idle
-	// timeout (unchanged behavior).
+	// put closes the maxLifetime-exceeded conn and opens the replacement
+	// asynchronously; the new conn lands on a stack once the background
+	// goroutine completes.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.GreaterOrEqual(c, state.lastID.Load(), int64(3))
-		assert.GreaterOrEqual(c, p.Metrics.IdleClosed(), int64(1))
+		assert.EqualValues(c, 2, state.lastID.Load())
+		assert.EqualValues(c, 1, p.Active())
 	}, time.Second, 10*time.Millisecond)
-	assert.EqualValues(t, 1, p.Active())
 
-	// If the idle worker's reopen fails, the slot is freed.
+	// wait enough to reach idle timeout.
+	time.Sleep(300 * time.Millisecond)
+	assert.GreaterOrEqual(t, state.lastID.Load(), int64(3))
+	assert.EqualValues(t, 1, p.Active())
+	assert.GreaterOrEqual(t, p.Metrics.IdleClosed(), int64(1))
+
+	// mark connect to fail
 	state.chaos.failConnect.Store(true)
-	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 0, p.Active())
-	}, time.Second, 10*time.Millisecond)
+	// wait enough to reach idle timeout and connect to fail.
+	time.Sleep(300 * time.Millisecond)
+	// no active connection should be left.
+	assert.Zero(t, p.Active())
 }
 
 func TestIdleTimeout(t *testing.T) {
@@ -796,11 +791,13 @@ func TestMaxLifetime(t *testing.T) {
 	time.Sleep(10 * time.Millisecond * 2)
 
 	p.put(r)
-	// put closes the maxLifetime-exceeded conn and frees the slot; the
-	// replacement is opened lazily on the next Get.
-	assert.EqualValues(t, 1, state.lastID.Load())
-	assert.EqualValues(t, 0, state.open.Load())
-	assert.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
+	// put closes the maxLifetime-exceeded conn and opens the replacement
+	// asynchronously off the Recycle caller's goroutine.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 2, state.lastID.Load())
+		assert.EqualValues(c, 1, state.open.Load())
+		assert.EqualValues(c, 1, p.Metrics.MaxLifetimeClosed())
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestExtendedLifetimeTimeout(t *testing.T) {
@@ -923,7 +920,11 @@ func TestCreateFailOnPut(t *testing.T) {
 		// change factory to fail the put.
 		state.chaos.failConnect.Store(true)
 		p.put(nil)
-		assert.Zero(t, p.Active())
+		// put(nil) opens the replacement asynchronously; the failed connect
+		// drops active to 0.
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Zero(c, p.Active())
+		}, time.Second, 10*time.Millisecond)
 
 		// change back for next iteration.
 		state.chaos.failConnect.Store(false)
@@ -1666,11 +1667,85 @@ func TestTaintDoesNotBlockOnConnect(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.Fail(t, "Taint blocked indefinitely on a slow connect")
 	}
+}
 
-	require.EqualValues(t, 1, connectCalls.Load(),
-		"Taint must not synchronously trigger a connect")
-	require.EqualValues(t, 0, p.Active(),
-		"Taint freed the slot; pool should be below capacity")
+// TestTaintWakesWaiter verifies that Taint, which frees a pool slot,
+// still results in a queued waiter being served. The replacement conn
+// is opened off the caller's goroutine but must hand itself to the
+// waiter rather than letting the waiter wait for its own ctx to expire.
+func TestTaintWakesWaiter(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	waiterGot := make(chan *Pooled[*TestConn], 1)
+	go func() {
+		conn, err := p.Get(ctx, nil)
+		if err == nil {
+			waiterGot <- conn
+		}
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	c.Taint()
+
+	select {
+	case conn := <-waiterGot:
+		conn.Recycle()
+	case <-time.After(2 * time.Second):
+		require.Fail(t, "waiter was not served after Taint freed the slot")
+	}
+}
+
+// TestRecycleMaxLifetimeWakesWaiter mirrors TestTaintWakesWaiter for the
+// other put() branch that frees a slot — a Recycle on a conn whose
+// maxLifetime has elapsed.
+func TestRecycleMaxLifetimeWakesWaiter(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: time.Millisecond,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	// Let the conn's max lifetime expire.
+	time.Sleep(10 * time.Millisecond)
+
+	waiterGot := make(chan *Pooled[*TestConn], 1)
+	go func() {
+		conn, err := p.Get(ctx, nil)
+		if err == nil {
+			waiterGot <- conn
+		}
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	c.Recycle()
+
+	select {
+	case conn := <-waiterGot:
+		conn.Recycle()
+	case <-time.After(2 * time.Second):
+		require.Fail(t, "waiter was not served after maxLifetime put freed the slot")
+	}
 }
 
 // TestRecycleDoesNotBlockOnMaxLifetimeReopen verifies that Recycle on a
@@ -1729,11 +1804,7 @@ func TestRecycleDoesNotBlockOnMaxLifetimeReopen(t *testing.T) {
 		require.Fail(t, "Recycle blocked indefinitely on maxLifetime reopen")
 	}
 
-	require.EqualValues(t, 1, connectCalls.Load(),
-		"Recycle on a maxLifetime-exceeded conn must not synchronously trigger a connect")
 	require.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
-	require.EqualValues(t, 0, p.Active(),
-		"the slot is freed; pool reopens lazily on the next Get")
 }
 
 func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {
