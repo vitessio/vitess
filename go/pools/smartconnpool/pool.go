@@ -476,27 +476,49 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 
 	lifetime := pool.extendedMaxLifetime()
 	if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
-		// Same rationale as the put(nil) case: close the maxLifetime-exceeded
-		// conn and open the replacement asynchronously to keep the Recycle
-		// caller off the connect-timeout path.
+		// Close the maxLifetime-exceeded conn and reopen asynchronously so
+		// the Recycle caller doesn't pay the backend's connect timeout.
+		// Capture the Setting before closing so the reopened conn returns
+		// to the same settings stack.
 		pool.Metrics.maxLifetimeClosed.Add(1)
+		setting := conn.Conn.Setting()
 		conn.Close()
-		go pool.openReplacement()
+		go pool.reopenExpired(conn, setting)
 		return
 	}
 
 	pool.tryReturnConn(conn)
 }
 
-// openReplacement opens a fresh connection on behalf of put() and either
-// hands it to a queued waiter or pushes it onto a stack. On connect
-// failure it decrements active so the slot can be lazily reopened by the
-// next Get.
+// openReplacement opens a brand-new connection on behalf of put(nil) and
+// either hands it to a queued waiter or pushes it onto the clean stack.
+// On connect failure it decrements active so the slot can be lazily
+// reopened by the next Get.
 func (pool *ConnPool[C]) openReplacement() {
 	conn, err := pool.connNew(pool.connectCtx())
 	if err != nil {
 		pool.closedConn()
 		return
+	}
+	pool.tryReturnConn(conn)
+}
+
+// reopenExpired re-opens a maxLifetime-exceeded connection and re-applies
+// the Setting that was captured before the conn was closed, so the
+// replacement returns to the same settings stack. Runs off the put()
+// caller's goroutine.
+func (pool *ConnPool[C]) reopenExpired(conn *Pooled[C], setting *Setting) {
+	ctx := pool.connectCtx()
+	if err := pool.connReopen(ctx, conn, monotonicNow()); err != nil {
+		pool.closedConn()
+		return
+	}
+	if setting != nil {
+		if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
+			conn.Close()
+			pool.closedConn()
+			return
+		}
 	}
 	pool.tryReturnConn(conn)
 }
@@ -590,20 +612,18 @@ func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 	return time.Duration(maxLifetime) + time.Duration(rand.Uint32N(uint32(maxLifetime)))
 }
 
+// connReopen replaces dbconn.Conn with a freshly-connected conn. It is a
+// bare reopen — any Setting that was on the previous conn is dropped, and
+// callers that need to keep the conn associated with its original Setting
+// (idle worker expiry, maxLifetime rotation) must capture Setting() before
+// calling and ApplySetting() after. The get()/getWithSetting error paths
+// rely on this bareness: they call connReopen to get a fresh, settingless
+// conn after a ResetSetting failure.
 func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now time.Duration) (err error) {
 	dbconn.Conn, err = pool.config.connect(ctx)
 	if err != nil {
 		return err
 	}
-
-	if setting := dbconn.Conn.Setting(); setting != nil {
-		err = dbconn.Conn.ApplySetting(ctx, setting)
-		if err != nil {
-			dbconn.Close()
-			return err
-		}
-	}
-
 	dbconn.timeCreated.set(now)
 	dbconn.timeUsed.set(now)
 	return nil
@@ -937,15 +957,26 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		for _, conn := range expiredConnections {
 			pool.Metrics.idleClosed.Add(1)
 
+			// Capture the Setting before close so the reopened conn lands
+			// back in the same settings stack rather than silently
+			// migrating to clean.
+			setting := conn.Conn.Setting()
 			conn.Close()
 
 			// Use the pool's worker context so that a Close interrupts any
 			// in-flight connect rather than waiting on the backend's connect
 			// timeout per expired connection.
-			err := pool.connReopen(pool.connectCtx(), conn, mono)
-			if err != nil {
+			ctx := pool.connectCtx()
+			if err := pool.connReopen(ctx, conn, mono); err != nil {
 				pool.closedConn()
 				continue
+			}
+			if setting != nil {
+				if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
+					conn.Close()
+					pool.closedConn()
+					continue
+				}
 			}
 
 			pool.tryReturnConn(conn)

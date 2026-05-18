@@ -1748,6 +1748,63 @@ func TestRecycleMaxLifetimeWakesWaiter(t *testing.T) {
 	}
 }
 
+// TestRecycleMaxLifetimePreservesSetting verifies that a maxLifetime
+// reopen retains the original conn's Setting so the replacement lands
+// in the same settings stack rather than silently migrating to clean.
+func TestRecycleMaxLifetimePreservesSetting(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: time.Millisecond,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, sFoo)
+	require.NoError(t, err)
+	require.Equal(t, sFoo, c.Conn.Setting())
+
+	// Let the conn's max lifetime expire.
+	time.Sleep(10 * time.Millisecond)
+
+	c.Recycle()
+
+	require.EventuallyWithT(t, func(check *assert.CollectT) {
+		assert.EqualValues(check, 1, p.Metrics.MaxLifetimeClosed())
+		assert.NotNil(check, p.settings[sFoo.bucket&stackMask].Peek(),
+			"reopened conn should live in settings[sFoo.bucket]")
+		assert.Nil(check, p.clean.Peek(),
+			"reopened conn must not migrate to the clean stack")
+	}, time.Second, 10*time.Millisecond)
+}
+
+// TestIdleWorkerReopenPreservesSetting verifies the idle worker's
+// closeIdleResources path keeps the original Setting on reopen.
+func TestIdleWorkerReopenPreservesSetting(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		IdleTimeout: 20 * time.Millisecond,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, sFoo)
+	require.NoError(t, err)
+	require.Equal(t, sFoo, c.Conn.Setting())
+	c.Recycle()
+
+	require.EventuallyWithT(t, func(check *assert.CollectT) {
+		assert.GreaterOrEqual(check, p.Metrics.IdleClosed(), int64(1))
+		assert.NotNil(check, p.settings[sFoo.bucket&stackMask].Peek(),
+			"idle-reopened conn should remain in settings[sFoo.bucket]")
+		assert.Nil(check, p.clean.Peek(),
+			"idle-reopened conn must not migrate to the clean stack")
+	}, time.Second, 10*time.Millisecond)
+}
+
 // TestRecycleDoesNotBlockOnMaxLifetimeReopen verifies that Recycle on a
 // conn whose max-lifetime has elapsed does not block the caller on opening
 // a replacement. The maxLifetime branch in put used to synchronously call
