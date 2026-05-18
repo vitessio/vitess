@@ -8244,7 +8244,7 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:  "tablet alias filtering does not stale primaries across shards",
+			name:  "tablet alias filtering current primaries across shards stay primary",
 			cells: []string{"zone1"},
 			tablets: []*topodatapb.Tablet{
 				{
