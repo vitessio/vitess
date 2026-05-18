@@ -48,7 +48,7 @@ type VtctldProcess struct {
 	exit chan error
 }
 
-// Setup starts vtctld process with required arguements
+// Setup starts vtctld process with required arguments
 func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
 	_ = createDirectory(vtctld.LogDir, 0o700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)

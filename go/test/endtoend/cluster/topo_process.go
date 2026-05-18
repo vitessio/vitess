@@ -429,7 +429,7 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 	}
 }
 
-// TopoProcessInstance returns a TopoProcess handle for a etcd sevice,
+// TopoProcessInstance returns a TopoProcess handle for an etcd service,
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func TopoProcessInstance(port int, peerPort int, hostname string, flavor string, name string) *TopoProcess {

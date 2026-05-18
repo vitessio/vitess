@@ -147,7 +147,7 @@ func (vtgate *VtgateProcess) MakeAPICallRetry(t *testing.T, url string) {
 
 const defaultVtGatePlannerVersion = planbuilder.Gen4
 
-// Setup starts Vtgate process with required arguements
+// Setup starts Vtgate process with required arguments
 func (vtgate *VtgateProcess) Setup() (err error) {
 	args := []string{
 		"--topo-implementation", vtgate.TopoImplementation,

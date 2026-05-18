@@ -52,7 +52,7 @@ type VtAdminProcess struct {
 	exit           chan error
 }
 
-// Setup starts orc process with required arguements
+// Setup starts orc process with required arguments
 func (vp *VtAdminProcess) Setup() (err error) {
 	// create the configuration file
 	timeNow := time.Now().UnixNano()

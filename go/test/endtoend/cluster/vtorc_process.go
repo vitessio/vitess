@@ -84,7 +84,7 @@ func (orc *VTOrcProcess) RewriteConfiguration() error {
 	return os.WriteFile(orc.ConfigPath, []byte(orc.Config.ToJSONString()), 0o644)
 }
 
-// Setup starts orc process with required arguements
+// Setup starts orc process with required arguments
 func (orc *VTOrcProcess) Setup() (err error) {
 	// validate cell
 	if orc.Cell == "" {
@@ -142,7 +142,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 
 	if !orc.NoOverride {
 		orc.proc.Args = append(orc.proc.Args,
-			// This parameter is overriden from the config file. This verifies that we indeed use the flag value over the config file.
+			// This parameter is overridden from the config file. This verifies that we indeed use the flag value over the config file.
 			"--instance-poll-time", "1s",
 			// Faster topo information refresh speeds up the tests. This doesn't add any significant load either.
 			"--topo-information-refresh-duration", "3s",
