@@ -7618,9 +7618,11 @@ func TestGetTablets(t *testing.T) {
 		unreachableCells []string // Cells that will return a ctx timeout error when trying to get tablets
 		tablets          []*topodatapb.Tablet
 		addTabletOptions *testutil.AddTabletOptions
+		factorySetup     func(f *memorytopo.Factory) // Optional hook for injecting topo errors after tablets are added.
 		req              *vtctldatapb.GetTabletsRequest
 		expected         []*topodatapb.Tablet
 		shouldErr        bool
+		errorAssertion   func(t *testing.T, err error) // Optional extra check when shouldErr is true.
 	}{
 		{
 			name:      "no tablets",
@@ -8303,6 +8305,163 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name:  "tablet alias filter with shard primary lookup failure under non-strict mode",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname:             "stale.primary.a",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Hostname:             "true.primary.a",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Hostname:             "stale.primary.b",
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  201,
+					},
+					Hostname:             "true.primary.b",
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			factorySetup: func(f *memorytopo.Factory) {
+				f.AddOperationError(memorytopo.Get, path.Join(topo.KeyspacesPath, "testkeyspace", topo.ShardsPath, "-80", topo.ShardFile), topo.NewError(topo.Timeout, "simulated GetShard failure for -80"))
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 100},
+					{Cell: "zone1", Uid: 200},
+				},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname:             "stale.primary.a",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Hostname:             "stale.primary.b",
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "tablet alias filter with shard primary lookup failure under strict mode",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname:             "stale.primary.a",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Hostname:             "true.primary.a",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Hostname:             "stale.primary.b",
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  201,
+					},
+					Hostname:             "true.primary.b",
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			factorySetup: func(f *memorytopo.Factory) {
+				f.AddOperationError(memorytopo.Get, path.Join(topo.KeyspacesPath, "testkeyspace", topo.ShardsPath, "-80", topo.ShardFile), topo.NewError(topo.Timeout, "simulated GetShard failure for -80"))
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 100},
+					{Cell: "zone1", Uid: 200},
+				},
+				Strict: true,
+			},
+			shouldErr: true,
+			errorAssertion: func(t *testing.T, err error) {
+				assert.ErrorContains(t, err, "GetShard")
+				assert.True(t, topo.IsErrType(err, topo.Timeout), "expected underlying topo.Timeout to be preserved via errors.Join chain")
+			},
+		},
+		{
 			name:    "tablet alias filter with none found",
 			tablets: []*topodatapb.Tablet{},
 			req: &vtctldatapb.GetTabletsRequest{
@@ -8466,7 +8625,7 @@ func TestGetTablets(t *testing.T) {
 			t.Parallel()
 
 			ctx := t.Context()
-			ts := memorytopo.NewServer(ctx, tt.cells...)
+			ts, factory := memorytopo.NewServerAndFactory(ctx, tt.cells...)
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
@@ -8483,6 +8642,10 @@ func TestGetTablets(t *testing.T) {
 				}
 			}
 
+			if tt.factorySetup != nil {
+				tt.factorySetup(factory)
+			}
+
 			var (
 				resp *vtctldatapb.GetTabletsResponse
 				err  error
@@ -8496,6 +8659,9 @@ func TestGetTablets(t *testing.T) {
 			}
 			if tt.shouldErr {
 				assert.Error(t, err)
+				if tt.errorAssertion != nil {
+					tt.errorAssertion(t, err)
+				}
 				return
 			}
 
