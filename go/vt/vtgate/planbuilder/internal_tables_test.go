@@ -56,3 +56,84 @@ func TestRejectInternalTableDDLAllowsInternalShapedProcedureNames(t *testing.T) 
 		})
 	}
 }
+
+// TestRejectInternalTableDDLRejectsUnsafeProcedurePrepare verifies that prepared
+// statements cannot hide internal-table modifications inside a procedure body.
+func TestRejectInternalTableDDLRejectsUnsafeProcedurePrepare(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+
+	tests := []struct {
+		name string
+
+		query string
+
+		wantErr string
+	}{
+		{
+			name: "literal delete",
+			query: `
+create procedure p()
+begin
+	prepare stmt from 'delete from _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_';
+	execute stmt;
+end`,
+			wantErr: "VT09033: modification of internal table",
+		},
+		{
+			name: "literal drop",
+			query: `
+create procedure p()
+begin
+	prepare stmt from 'drop table _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_';
+	execute stmt;
+end`,
+			wantErr: "VT09033: modification of internal table",
+		},
+		{
+			name: "dynamic variable",
+			query: `
+create procedure p()
+begin
+	set @sql = 'delete from _vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_';
+	prepare stmt from @sql;
+	execute stmt;
+end`,
+			wantErr: "VT12001: unsupported: dynamic PREPARE in stored procedure",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := rejectInternalTableProcedureQuery(t, tt.query, parser)
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+// TestRejectInternalTableDDLAllowsSafeProcedurePrepare verifies that literal
+// prepared statements remain available when their SQL is inspectable and safe.
+func TestRejectInternalTableDDLAllowsSafeProcedurePrepare(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	query := `
+create procedure p()
+begin
+	prepare stmt from 'select 1';
+	execute stmt;
+end`
+
+	require.NoError(t, rejectInternalTableProcedureQuery(t, query, parser))
+}
+
+// rejectInternalTableProcedureQuery parses query as a DDL statement and runs it
+// through the internal-table guard.
+func rejectInternalTableProcedureQuery(t *testing.T, query string, parser *sqlparser.Parser) error {
+	t.Helper()
+
+	stmt, err := parser.Parse(query)
+	require.NoError(t, err)
+
+	ddl, ok := stmt.(sqlparser.DDLStatement)
+	require.True(t, ok)
+
+	return rejectInternalTableDDL(ddl, query, parser)
+}

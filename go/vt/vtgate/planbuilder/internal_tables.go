@@ -267,10 +267,60 @@ func rejectInternalTableCreateProcedure(
 			loadChecked = true
 
 			return false, rejectInternalTableLoadStatements(query, parser, false)
+		case *sqlparser.PrepareStmt:
+			return false, rejectInternalTablePrepare(node, parser)
 		default:
 			return true, nil
 		}
 	}, stmt.Body)
+}
+
+// rejectInternalTablePrepare returns an error when a prepared statement inside a
+// stored procedure could modify a Vitess internal operation table.
+func rejectInternalTablePrepare(stmt *sqlparser.PrepareStmt, parser *sqlparser.Parser) error {
+	preparedQuery, ok := prepareStatementLiteral(stmt)
+	if !ok {
+		return vterrors.VT12001("dynamic PREPARE in stored procedure")
+	}
+
+	preparedStmt, err := parser.Parse(preparedQuery)
+	if err != nil {
+		return err
+	}
+
+	return rejectInternalTablePreparedStatement(preparedStmt, preparedQuery, parser)
+}
+
+// prepareStatementLiteral returns the static SQL text for an inspectable
+// prepared statement.
+func prepareStatementLiteral(stmt *sqlparser.PrepareStmt) (string, bool) {
+	literal, ok := stmt.Statement.(*sqlparser.Literal)
+	if !ok {
+		return "", false
+	}
+
+	return literal.Val, true
+}
+
+// rejectInternalTablePreparedStatement applies the internal-table guard to SQL
+// embedded in a stored procedure PREPARE statement.
+func rejectInternalTablePreparedStatement(
+	stmt sqlparser.Statement,
+	query string,
+	parser *sqlparser.Parser,
+) error {
+	if err := rejectInternalTableDML(stmt); err != nil {
+		return err
+	}
+
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		return rejectInternalTableDDL(stmt, query, parser)
+	case *sqlparser.Load:
+		return rejectInternalTableLoad(query, parser)
+	default:
+		return nil
+	}
 }
 
 // rejectInternalTableName returns an error for a Vitess internal operation
