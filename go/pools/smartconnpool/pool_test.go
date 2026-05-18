@@ -610,7 +610,8 @@ func TestConnReopen(t *testing.T) {
 
 	defer p.Close()
 
-	conn, err := p.Get(t.Context(), nil)
+	ctx := t.Context()
+	conn, err := p.Get(ctx, nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, state.lastID.Load())
 	assert.EqualValues(t, 1, p.Active())
@@ -619,21 +620,33 @@ func TestConnReopen(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	p.put(conn)
+	// put closes the maxLifetime-exceeded conn and frees the slot; the
+	// replacement is opened lazily on the next Get instead of synchronously
+	// inside put.
+	assert.EqualValues(t, 1, state.lastID.Load())
+	assert.EqualValues(t, 0, p.Active())
+	assert.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
+
+	// A subsequent Get lazily opens a fresh conn via getNew.
+	conn, err = p.Get(ctx, nil)
+	require.NoError(t, err)
 	assert.EqualValues(t, 2, state.lastID.Load())
 	assert.EqualValues(t, 1, p.Active())
+	p.put(conn)
 
-	// wait enough to reach idle timeout.
-	time.Sleep(300 * time.Millisecond)
-	assert.GreaterOrEqual(t, state.lastID.Load(), int64(3))
+	// The idle worker still eagerly reopens conns that exceed the idle
+	// timeout (unchanged behavior).
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, state.lastID.Load(), int64(3))
+		assert.GreaterOrEqual(c, p.Metrics.IdleClosed(), int64(1))
+	}, time.Second, 10*time.Millisecond)
 	assert.EqualValues(t, 1, p.Active())
-	assert.GreaterOrEqual(t, p.Metrics.IdleClosed(), int64(1))
 
-	// mark connect to fail
+	// If the idle worker's reopen fails, the slot is freed.
 	state.chaos.failConnect.Store(true)
-	// wait enough to reach idle timeout and connect to fail.
-	time.Sleep(300 * time.Millisecond)
-	// no active connection should be left.
-	assert.Zero(t, p.Active())
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 0, p.Active())
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestIdleTimeout(t *testing.T) {
@@ -783,8 +796,10 @@ func TestMaxLifetime(t *testing.T) {
 	time.Sleep(10 * time.Millisecond * 2)
 
 	p.put(r)
-	assert.EqualValues(t, 2, state.lastID.Load())
-	assert.EqualValues(t, 1, state.open.Load())
+	// put closes the maxLifetime-exceeded conn and frees the slot; the
+	// replacement is opened lazily on the next Get.
+	assert.EqualValues(t, 1, state.lastID.Load())
+	assert.EqualValues(t, 0, state.open.Load())
 	assert.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
 }
 
@@ -1656,6 +1671,69 @@ func TestTaintDoesNotBlockOnConnect(t *testing.T) {
 		"Taint must not synchronously trigger a connect")
 	require.EqualValues(t, 0, p.Active(),
 		"Taint freed the slot; pool should be below capacity")
+}
+
+// TestRecycleDoesNotBlockOnMaxLifetimeReopen verifies that Recycle on a
+// conn whose max-lifetime has elapsed does not block the caller on opening
+// a replacement. The maxLifetime branch in put used to synchronously call
+// connReopen with context.Background(), turning every Recycle of an aged
+// conn into a connect round-trip — bad shape for a hot path.
+func TestRecycleDoesNotBlockOnMaxLifetimeReopen(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	var connectCalls atomic.Int64
+	customConnector := func(connectCtx context.Context) (*TestConn, error) {
+		call := connectCalls.Add(1)
+		if call > 1 {
+			select {
+			case <-connectCtx.Done():
+				return nil, connectCtx.Err()
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:         state.lastID.Add(1),
+			timeCreated: time.Now(),
+			counts:      &state,
+		}, nil
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: time.Millisecond,
+	}).Open(customConnector, nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	// Let the conn cross its max lifetime so the put-time reopen branch fires.
+	time.Sleep(10 * time.Millisecond)
+
+	done := make(chan struct{})
+	start := time.Now()
+	go func() {
+		defer close(done)
+		c.Recycle()
+	}()
+
+	select {
+	case <-done:
+		elapsed := time.Since(start)
+		require.Less(t, elapsed, 2*time.Second,
+			"Recycle must not block on maxLifetime reopen; took %v", elapsed)
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "Recycle blocked indefinitely on maxLifetime reopen")
+	}
+
+	require.EqualValues(t, 1, connectCalls.Load(),
+		"Recycle on a maxLifetime-exceeded conn must not synchronously trigger a connect")
+	require.EqualValues(t, 1, p.Metrics.MaxLifetimeClosed())
+	require.EqualValues(t, 0, p.Active(),
+		"the slot is freed; pool reopens lazily on the next Get")
 }
 
 func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {

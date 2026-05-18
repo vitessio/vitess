@@ -478,14 +478,14 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 
 	lifetime := pool.extendedMaxLifetime()
 	if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
+		// Same rationale as the put(nil) case: close the maxLifetime-exceeded
+		// conn and free the slot. The replacement is opened lazily on the
+		// next Get via getNew so the Recycle caller doesn't pay a connect
+		// round-trip on a hot path.
 		pool.Metrics.maxLifetimeClosed.Add(1)
 		conn.Close()
-		// Using context.Background() is fine since MySQL connection already enforces
-		// a connect timeout via the `db-connect-timeout-ms` config param.
-		if err := pool.connReopen(context.Background(), conn, conn.timeUsed.get()); err != nil {
-			pool.closedConn()
-			return
-		}
+		pool.closedConn()
+		return
 	}
 
 	pool.tryReturnConn(conn)
