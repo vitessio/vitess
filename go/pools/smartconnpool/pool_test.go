@@ -504,6 +504,7 @@ func TestReopen(t *testing.T) {
 		refreshed.Store(true)
 		return true, nil
 	})
+	t.Cleanup(p.Close)
 
 	var resources [10]*Pooled[*TestConn]
 	for i := range 5 {
@@ -555,6 +556,65 @@ func TestReopen(t *testing.T) {
 	assert.Equal(t, expected, stats)
 	assert.EqualValues(t, 5, state.lastID.Load())
 	assert.EqualValues(t, 0, state.open.Load())
+}
+
+func TestRefreshWorkerContinuesAfterTriggeredReopen(t *testing.T) {
+	var state TestState
+	var refreshCount atomic.Int32
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        2,
+		RefreshInterval: 50 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		count := refreshCount.Add(1)
+		return count == 1, nil
+	})
+	t.Cleanup(p.Close)
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 3
+	}, 30*time.Second, 50*time.Millisecond)
+}
+
+func TestRefreshWorkerDoesNotQueueReopens(t *testing.T) {
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	var refreshCount atomic.Int32
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        1,
+		RefreshInterval: 20 * time.Millisecond,
+	}).Open(newConnector(&state), func() (bool, error) {
+		refreshCount.Add(1)
+		return true, nil
+	})
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if held != nil {
+			held.Recycle()
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() == 1
+	}, 5*time.Second, time.Millisecond)
+
+	require.Never(t, func() bool {
+		return refreshCount.Load() > 1
+	}, 100*time.Millisecond, 5*time.Millisecond)
+
+	held.Recycle()
+	held = nil
+
+	require.Eventually(t, func() bool {
+		return refreshCount.Load() >= 2
+	}, 5*time.Second, 5*time.Millisecond)
 }
 
 func TestUserClosing(t *testing.T) {
