@@ -479,23 +479,15 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 
 		lifetime := pool.extendedMaxLifetime()
 		if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
-			// Reopen the maxLifetime-exceeded conn. Capture Setting before
-			// close so the reopened conn lands back in the same settings
+			// Reopen the maxLifetime-exceeded conn. Pass the original
+			// Setting so the reopened conn lands back in the same settings
 			// stack rather than silently migrating to clean.
 			pool.Metrics.maxLifetimeClosed.Add(1)
 			setting := conn.Conn.Setting()
 			conn.Close()
-			ctx := pool.connectCtx()
-			if err := pool.connReopen(ctx, conn, conn.timeUsed.get()); err != nil {
+			if err := pool.connReopen(pool.connectCtx(), conn, setting, conn.timeUsed.get()); err != nil {
 				pool.closedConn()
 				return
-			}
-			if setting != nil {
-				if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
-					conn.Close()
-					pool.closedConn()
-					return
-				}
 			}
 		}
 	}
@@ -592,17 +584,23 @@ func (pool *ConnPool[D]) extendedMaxLifetime() time.Duration {
 	return time.Duration(maxLifetime) + time.Duration(rand.Uint32N(uint32(maxLifetime)))
 }
 
-// connReopen replaces dbconn.Conn with a freshly-connected conn. It is a
-// bare reopen — any Setting that was on the previous conn is dropped, and
-// callers that need to keep the conn associated with its original Setting
-// (idle worker expiry, maxLifetime rotation) must capture Setting() before
-// calling and ApplySetting() after. The get()/getWithSetting error paths
-// rely on this bareness: they call connReopen to get a fresh, settingless
-// conn after a ResetSetting failure.
-func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], now time.Duration) (err error) {
+// connReopen replaces dbconn.Conn with a freshly-connected conn and
+// applies the given Setting on it (or leaves it settingless when setting
+// is nil). Callers refreshing a conn in place (idle worker expiry,
+// maxLifetime rotation) pass the conn's previous Setting so the
+// replacement lands back in the same settings stack; callers recovering
+// from a ResetSetting failure (the get()/getWithSetting error paths)
+// pass nil so the caller can re-apply or omit a setting as needed.
+func (pool *ConnPool[C]) connReopen(ctx context.Context, dbconn *Pooled[C], setting *Setting, now time.Duration) (err error) {
 	dbconn.Conn, err = pool.config.connect(ctx)
 	if err != nil {
 		return err
+	}
+	if setting != nil {
+		if err = dbconn.Conn.ApplySetting(ctx, setting); err != nil {
+			dbconn.Close()
+			return err
+		}
 	}
 	dbconn.timeCreated.set(now)
 	dbconn.timeUsed.set(now)
@@ -724,7 +722,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 		err = conn.Conn.ResetSetting(ctx)
 		if err != nil {
 			conn.Close()
-			err = pool.connReopen(ctx, conn, monotonicNow())
+			err = pool.connReopen(ctx, conn, nil, monotonicNow())
 			if err != nil {
 				pool.closedConn()
 				return nil, err
@@ -793,7 +791,7 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 			err = conn.Conn.ResetSetting(ctx)
 			if err != nil {
 				conn.Close()
-				err = pool.connReopen(ctx, conn, monotonicNow())
+				err = pool.connReopen(ctx, conn, nil, monotonicNow())
 				if err != nil {
 					pool.closedConn()
 					return nil, err
@@ -937,26 +935,15 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		for _, conn := range expiredConnections {
 			pool.Metrics.idleClosed.Add(1)
 
-			// Capture the Setting before close so the reopened conn lands
+			// Pass the previous Setting through so the reopened conn lands
 			// back in the same settings stack rather than silently
-			// migrating to clean.
+			// migrating to clean. The worker context ensures a Close
+			// interrupts any in-flight connect.
 			setting := conn.Conn.Setting()
 			conn.Close()
-
-			// Use the pool's worker context so that a Close interrupts any
-			// in-flight connect rather than waiting on the backend's connect
-			// timeout per expired connection.
-			ctx := pool.connectCtx()
-			if err := pool.connReopen(ctx, conn, mono); err != nil {
+			if err := pool.connReopen(pool.connectCtx(), conn, setting, mono); err != nil {
 				pool.closedConn()
 				continue
-			}
-			if setting != nil {
-				if err := conn.Conn.ApplySetting(ctx, setting); err != nil {
-					conn.Close()
-					pool.closedConn()
-					continue
-				}
 			}
 
 			pool.tryReturnConn(conn)
