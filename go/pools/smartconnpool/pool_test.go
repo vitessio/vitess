@@ -191,10 +191,11 @@ func TestOpen(t *testing.T) {
 	r, err = p.Get(ctx, nil)
 	require.NoError(t, err)
 	r.Close()
-	// A nil Put should cause the resource to be reopened.
+	// A nil Put frees the slot; the pool reopens lazily on demand instead
+	// of synchronously blocking the caller on connect.
 	p.put(nil)
-	assert.EqualValues(t, 5, state.open.Load())
-	assert.EqualValues(t, 6, state.lastID.Load())
+	assert.EqualValues(t, 4, state.open.Load())
+	assert.EqualValues(t, 5, state.lastID.Load())
 
 	for i := range 5 {
 		if i%2 == 0 {
@@ -1594,6 +1595,67 @@ func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.Fail(t, "Close did not return; idle-worker connect was not cancelled")
 	}
+}
+
+// TestTaintDoesNotBlockOnConnect verifies that Pooled.Taint (and Recycle on
+// a closed conn, which goes through the same put(nil) path) does not block
+// the caller on opening a replacement connection. Without this guarantee, a
+// caller poisoning a wedged conn against a dead backend stalls for the full
+// MySQL connect timeout — turning what should be a non-blocking cleanup
+// into a multi-second round-trip.
+func TestTaintDoesNotBlockOnConnect(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	var connectCalls atomic.Int64
+	customConnector := func(connectCtx context.Context) (*TestConn, error) {
+		call := connectCalls.Add(1)
+		if call > 1 {
+			// Simulate an unreachable backend: park until ctx cancellation
+			// or test exit.
+			select {
+			case <-connectCtx.Done():
+				return nil, connectCtx.Err()
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:         state.lastID.Add(1),
+			timeCreated: time.Now(),
+			counts:      &state,
+		}, nil
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(customConnector, nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	start := time.Now()
+	go func() {
+		defer close(done)
+		c.Taint()
+	}()
+
+	select {
+	case <-done:
+		elapsed := time.Since(start)
+		require.Less(t, elapsed, 2*time.Second,
+			"Taint must not block on connect; took %v", elapsed)
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "Taint blocked indefinitely on a slow connect")
+	}
+
+	require.EqualValues(t, 1, connectCalls.Load(),
+		"Taint must not synchronously trigger a connect")
+	require.EqualValues(t, 0, p.Active(),
+		"Taint freed the slot; pool should be below capacity")
 }
 
 func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {

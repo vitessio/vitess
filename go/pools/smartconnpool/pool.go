@@ -464,27 +464,27 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.borrowed.Add(-1)
 
 	if conn == nil {
-		var err error
+		// Taint, or Recycle on a closed conn: the slot is gone. Free the
+		// active count and let the next Get reopen lazily via getNew. We
+		// must not open a replacement here because the caller (a client
+		// goroutine) would otherwise block on the backend's connect
+		// timeout, turning a non-blocking cleanup into a multi-second
+		// round-trip when the backend is unreachable.
+		pool.closedConn()
+		return
+	}
+
+	conn.timeUsed.update()
+
+	lifetime := pool.extendedMaxLifetime()
+	if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
+		pool.Metrics.maxLifetimeClosed.Add(1)
+		conn.Close()
 		// Using context.Background() is fine since MySQL connection already enforces
 		// a connect timeout via the `db-connect-timeout-ms` config param.
-		conn, err = pool.connNew(context.Background())
-		if err != nil {
+		if err := pool.connReopen(context.Background(), conn, conn.timeUsed.get()); err != nil {
 			pool.closedConn()
 			return
-		}
-	} else {
-		conn.timeUsed.update()
-
-		lifetime := pool.extendedMaxLifetime()
-		if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
-			pool.Metrics.maxLifetimeClosed.Add(1)
-			conn.Close()
-			// Using context.Background() is fine since MySQL connection already enforces
-			// a connect timeout via the `db-connect-timeout-ms` config param.
-			if err := pool.connReopen(context.Background(), conn, conn.timeUsed.get()); err != nil {
-				pool.closedConn()
-				return
-			}
 		}
 	}
 
