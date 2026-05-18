@@ -101,6 +101,24 @@ type (
 	RefreshCheck            func() (bool, error)
 )
 
+// workerLifetime carries the context that bounds the lifetime of the pool's
+// worker goroutines. cancel is invoked at the start of Close so that
+// user-supplied callbacks (e.g. Connector) blocked inside a worker unblock
+// promptly rather than waiting on a backend timeout.
+type workerLifetime struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+// alreadyCancelled is returned for worker connects that race with a pool
+// close — they should fail fast rather than open a connection that has
+// nowhere to go.
+var alreadyCancelled = func() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return ctx
+}()
+
 type Config[C Connection] struct {
 	Capacity        int64
 	MaxIdleCount    int64
@@ -143,6 +161,13 @@ type ConnPool[C Connection] struct {
 	workers    sync.WaitGroup
 	close      atomic.Pointer[chan struct{}]
 	capacityMu sync.Mutex
+
+	// workerLifetime holds a context that is cancelled when the pool starts
+	// closing. Worker goroutines pass it to user-supplied callbacks (e.g. the
+	// connect Connector) so that calls in flight at shutdown unblock instead
+	// of blocking on the backend's connect timeout. Held behind a pointer to
+	// keep ConnPool's heap footprint stable.
+	workerLifetime atomic.Pointer[workerLifetime]
 
 	config struct {
 		// connect is the callback to create a new connection for the pool
@@ -221,6 +246,9 @@ func (pool *ConnPool[C]) open() {
 		// already open
 		return
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	pool.workerLifetime.Store(&workerLifetime{ctx: ctx, cancel: cancel})
 
 	pool.capacity.Store(pool.config.maxCapacity)
 	pool.setIdleCount()
@@ -301,6 +329,15 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	if pool.close.Load() == nil || pool.capacity.Load() == 0 {
 		// already closed
 		return nil
+	}
+
+	// Cancel the workers' context before we start draining: any user
+	// connect callback currently blocked inside a worker (e.g. the idle
+	// worker reopening an expired connection) needs to unblock now so
+	// that setCapacity can observe active dropping to zero and so that
+	// workers.Wait below isn't held up by a hung connect.
+	if wl := pool.workerLifetime.Swap(nil); wl != nil {
+		wl.cancel()
 	}
 
 	// close all the connections in the pool; if we time out while waiting for
@@ -455,6 +492,17 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 }
 
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
+	// If the pool has been drained to zero capacity (Close or an explicit
+	// SetCapacity(0)), close the connection eagerly instead of handing it
+	// off to a waiter or pushing it onto a stack. Otherwise an in-progress
+	// Close keeps cycling connections from Recycle to waiter, and the
+	// setCapacity drain loop never observes a non-empty stack.
+	if pool.capacity.Load() == 0 {
+		conn.Close()
+		pool.closedConn()
+		return false
+	}
+
 	if pool.wait.tryReturnConn(conn) {
 		return true
 	}
@@ -585,6 +633,17 @@ func (pool *ConnPool[C]) getFromSettingsStack(setting *Setting) *Pooled[C] {
 
 func (pool *ConnPool[C]) closedConn() {
 	_ = pool.active.Add(-1)
+}
+
+// connectCtx returns a context that is cancelled when the pool starts
+// closing. If the pool is already closing (or never opened), it returns
+// a pre-cancelled context so callers don't block on user-supplied connect
+// callbacks for a pool that's going away.
+func (pool *ConnPool[C]) connectCtx() context.Context {
+	if wl := pool.workerLifetime.Load(); wl != nil {
+		return wl.ctx
+	}
+	return alreadyCancelled
 }
 
 func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
@@ -870,7 +929,10 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 
 			conn.Close()
 
-			err := pool.connReopen(context.Background(), conn, mono)
+			// Use the pool's worker context so that a Close interrupts any
+			// in-flight connect rather than waiting on the backend's connect
+			// timeout per expired connection.
+			err := pool.connReopen(pool.connectCtx(), conn, mono)
 			if err != nil {
 				pool.closedConn()
 				continue

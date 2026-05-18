@@ -1466,6 +1466,142 @@ func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
 	require.LessOrEqual(t, totalInStack, 10)
 }
 
+// TestCloseDoesNotHandOffToWaiters verifies that once Close has started
+// (capacity has been driven to 0), connections being Recycled by clients
+// are closed immediately rather than handed off to waiters that are still
+// queued in the waitlist. Without this guarantee, Close can be delayed
+// indefinitely as Recycled conns keep getting passed waiter-to-waiter
+// instead of landing on a stack where the close loop can drain them.
+func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+
+	ctx := t.Context()
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+
+	var waiterGotConn atomic.Bool
+	waiterDone := make(chan struct{})
+	go func() {
+		defer close(waiterDone)
+		conn, err := p.Get(ctx, nil)
+		if err == nil {
+			waiterGotConn.Store(true)
+			conn.Recycle()
+		}
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	// Wait until Close has set the capacity to 0 — only then is the
+	// "no more handoffs" guarantee in effect.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 0, p.Capacity())
+	}, time.Second, time.Millisecond)
+
+	c.Recycle()
+
+	select {
+	case err := <-closeDone:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		require.Fail(t, "Close did not complete in time")
+	}
+
+	<-waiterDone
+
+	require.False(t, waiterGotConn.Load(),
+		"waiter must not be handed a connection after Close has set capacity to 0")
+	require.EqualValues(t, 0, state.open.Load(),
+		"recycled conn must be closed when capacity is 0, not pushed back to a stack")
+	require.EqualValues(t, 0, p.Active())
+}
+
+// TestIdleWorkerConnectCancelsOnClose verifies that an idle-worker reopen
+// blocked inside the user-supplied connect callback unblocks when Close is
+// called. Without a cancellable context, the idle worker would extend Close
+// by the full backend connect timeout per expired connection.
+func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
+	var state TestState
+
+	released := make(chan struct{})
+	defer func() {
+		select {
+		case <-released:
+		default:
+			close(released)
+		}
+	}()
+
+	var connectCalls atomic.Int64
+	customConnector := func(ctx context.Context) (*TestConn, error) {
+		call := connectCalls.Add(1)
+		if call > 1 {
+			// Block until either ctx is cancelled (the behavior we want) or
+			// the test releases us as a safety net.
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-released:
+				return nil, errors.New("test cleanup")
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:         state.lastID.Add(1),
+			timeCreated: time.Now(),
+			counts:      &state,
+		}, nil
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		IdleTimeout: 20 * time.Millisecond,
+	}).Open(customConnector, nil)
+
+	ctx := t.Context()
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	c.Recycle()
+
+	// Wait until the idle worker has expired the conn and called into the
+	// connector a second time (which is now blocked).
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, connectCalls.Load(), int64(2))
+	}, 500*time.Millisecond, 5*time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	select {
+	case err := <-closeDone:
+		require.NoError(t, err)
+		elapsed := time.Since(start)
+		require.Less(t, elapsed, 2*time.Second,
+			"Close should unblock idle-worker connect; took %v", elapsed)
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "Close did not return; idle-worker connect was not cancelled")
+	}
+}
+
 func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {
 	var state TestState
 
