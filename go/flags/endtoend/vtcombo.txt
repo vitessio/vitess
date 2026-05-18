@@ -181,7 +181,7 @@ Flags:
       --init_db_name_override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init_keyspace string                                             (init parameter) keyspace to use for this tablet
       --init_shard string                                                (init parameter) shard to use for this tablet
-      --init_tablet_type string                                          (init parameter) the tablet type to use for this tablet. Can be REPLICA, RDONLY, or SPARE. The default is REPLICA.
+      --init_tablet_type string                                          (init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, EXPERIMENTAL and SPARE. The default is REPLICA.
       --init_tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init_timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)
       --jaeger-agent-host string                                         host and port to send spans to. if empty, no tracing will be done

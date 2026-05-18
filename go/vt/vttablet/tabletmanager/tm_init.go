@@ -105,7 +105,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&tabletHostname, "tablet_hostname", tabletHostname, "if not empty, this hostname will be assumed instead of trying to resolve it")
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	fs.StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
-	fs.StringVar(&initTabletType, "init_tablet_type", initTabletType, "(init parameter) the tablet type to use for this tablet. Can be REPLICA, RDONLY, or SPARE. The default is REPLICA.")
+	fs.StringVar(&initTabletType, "init_tablet_type", initTabletType, "(init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, EXPERIMENTAL and SPARE. The default is REPLICA.")
 	fs.BoolVar(&initTabletTypeLookup, "init-tablet-type-lookup", initTabletTypeLookup, "(Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init_tablet_type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init_tablet_type will be used.")
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
@@ -254,9 +254,9 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, err
 	}
 	switch tabletType {
-	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+	case topodatapb.TabletType_SPARE, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_EXPERIMENTAL:
 	default:
-		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY or SPARE", tabletType)
+		return nil, fmt.Errorf("invalid init_tablet_type %v; can only be REPLICA, RDONLY, EXPERIMENTAL or SPARE", tabletType)
 	}
 
 	buildTags, err := getBuildTags(servenv.AppVersion.ToStringMap(), skipBuildInfoTags)
