@@ -712,7 +712,29 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	log.Info("enabling super_read_only")
-	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
+
+	// If the context times out while enabling super_read_only, we want to print a variety of MySQL
+	// diagnostics to help us debug why it may have stalled.
+	stop := context.AfterFunc(ctx, func() {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			log.Error(
+				"timed out enabling super_read_only during DemotePrimary, dumping MySQL diagnostics",
+				slog.Any("error", ctx.Err()),
+			)
+
+			tm.logMySQLDiagnostics(ctx)
+		}
+	})
+
+	_, err = tm.MysqlDaemon.SetSuperReadOnly(ctx, true)
+
+	// If setting super_read_only succeeded, or it errored but it was not due to reaching the context
+	// deadline, prevent the above diagnostics AfterFunc from running.
+	if err == nil || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		stop()
+	}
+
+	if err != nil {
 		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {

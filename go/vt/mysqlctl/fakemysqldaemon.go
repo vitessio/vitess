@@ -138,6 +138,9 @@ type FakeMysqlDaemon struct {
 	// SetSuperReadOnlyError is used by SetSuperReadOnly.
 	SetSuperReadOnlyError error
 
+	// SetSuperReadOnlyFunc overrides SetSuperReadOnly when it is set.
+	SetSuperReadOnlyFunc func(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error)
+
 	// ExecuteSuperQueryListCallback is called at the start of ExecuteSuperQueryList
 	// before any queries are executed, if set.
 	ExecuteSuperQueryListCallback func()
@@ -502,9 +505,14 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(ctx context.Context, on bool) error {
 
 // SetSuperReadOnly is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
+	if fmd.SetSuperReadOnlyFunc != nil {
+		return fmd.SetSuperReadOnlyFunc(ctx, on)
+	}
+
 	if fmd.SetSuperReadOnlyError != nil {
 		return nil, fmd.SetSuperReadOnlyError
 	}
+
 	prev := fmd.SuperReadOnly.Load()
 	prevReadOnly := fmd.ReadOnly
 	fmd.SuperReadOnly.Store(on)
