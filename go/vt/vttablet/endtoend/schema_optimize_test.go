@@ -18,7 +18,6 @@ package endtoend
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -32,7 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -40,12 +38,12 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const (
-	gtidExecutedOptimizeThresholdBytes = 128 * 1024 * 1024
-	gtidExecutedOptimizeSetupTarget    = gtidExecutedOptimizeThresholdBytes + 32*1024*1024
-	gtidExecutedOptimizeBatchRows      = 1000000
-	gtidExecutedOptimizeInsertBatches  = 8
-)
+const gtidExecutedOptimizeDataFreeAtSpawn = 129 * 1024 * 1024
+
+// runOptimizeGtidExecuted exposes the worker without a huge DATA_FREE fixture.
+//
+//go:linkname runOptimizeGtidExecuted vitess.io/vitess/go/vt/vttablet/tabletserver/schema.(*Engine).runOptimizeGtidExecuted
+func runOptimizeGtidExecuted(*schema.Engine, uint64)
 
 func TestSchemaEngineOptimizeGtidExecutedOnReplica(t *testing.T) {
 	ctx := t.Context()
@@ -65,10 +63,6 @@ func TestSchemaEngineOptimizeGtidExecutedOnReplica(t *testing.T) {
 	})
 	stampSchemaEngineTabletTypeLastChangedAt(t, framework.Server.SchemaEngine(), time.Now().Add(-10*time.Minute))
 
-	createGtidExecutedDataFree(t, conn, gtidExecutedOptimizeSetupTarget)
-	dataFreeBefore := waitForGtidExecutedDataFreeAtLeast(t, conn, gtidExecutedOptimizeSetupTarget)
-	require.Greater(t, dataFreeBefore, uint64(gtidExecutedOptimizeThresholdBytes))
-
 	setGlobalBoolVar(t, conn, "read_only", true)
 	setGlobalBoolVar(t, conn, "super_read_only", true)
 
@@ -78,7 +72,7 @@ func TestSchemaEngineOptimizeGtidExecutedOnReplica(t *testing.T) {
 		log.SwapLogger(previousLogger)
 	})
 
-	require.NoError(t, framework.Server.SchemaEngine().ReloadAtEx(ctx, replication.Position{}, true))
+	runOptimizeGtidExecuted(framework.Server.SchemaEngine(), gtidExecutedOptimizeDataFreeAtSpawn)
 
 	assert.Eventually(t, func() bool {
 		return logHandler.Contains("schema engine: OPTIMIZE of mysql.gtid_executed completed")
@@ -118,109 +112,6 @@ func stampSchemaEngineTabletTypeLastChangedAt(t *testing.T, se *schema.Engine, w
 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Set(reflect.ValueOf(when))
 }
 
-func createGtidExecutedDataFree(t *testing.T, conn *mysql.Conn, minDataFree uint64) {
-	t.Helper()
-
-	requiresGtidTag := gtidExecutedHasTagColumn(t, conn)
-	fakeUUIDs := make([]string, 0, gtidExecutedOptimizeInsertBatches)
-	for batch := range gtidExecutedOptimizeInsertBatches {
-		fakeUUID := fmt.Sprintf("aaaaaaaa-aaaa-aaaa-aaaa-%012x", batch+1)
-		fakeUUIDs = append(fakeUUIDs, fakeUUID)
-		insertFakeGTIDBatch(t, conn, fakeUUID, requiresGtidTag, gtidExecutedOptimizeBatchRows)
-	}
-	for _, fakeUUID := range fakeUUIDs {
-		deleteFakeGTIDBatch(t, conn, fakeUUID, requiresGtidTag)
-	}
-	execFetch(t, conn, "ANALYZE TABLE mysql.gtid_executed")
-	dataFree := waitForGtidExecutedDataFreeFloor(t, conn)
-	require.GreaterOrEqual(t, dataFree, minDataFree, "failed to synthesize enough mysql.gtid_executed DATA_FREE for optimize test")
-}
-
-func insertFakeGTIDBatch(t *testing.T, conn *mysql.Conn, fakeUUID string, requiresGtidTag bool, rows int) {
-	t.Helper()
-
-	columns := "source_uuid, interval_start, interval_end"
-	values := fmt.Sprintf("'%s', seq.n + 1, seq.n + 1", fakeUUID)
-	if requiresGtidTag {
-		columns += ", gtid_tag"
-		values += ", ''"
-	}
-
-	query := fmt.Sprintf(`INSERT INTO mysql.gtid_executed (%s)
-SELECT %s
-FROM (
-	SELECT d0.n + 10*d1.n + 100*d2.n + 1000*d3.n + 10000*d4.n + 100000*d5.n AS n
-	FROM %s
-	CROSS JOIN %s
-	CROSS JOIN %s
-	CROSS JOIN %s
-	CROSS JOIN %s
-	CROSS JOIN %s
-) AS seq
-WHERE seq.n < %d`, columns, values, inlineDigitsTable("d0"), inlineDigitsTable("d1"), inlineDigitsTable("d2"), inlineDigitsTable("d3"), inlineDigitsTable("d4"), inlineDigitsTable("d5"), rows)
-
-	execFetch(t, conn, query)
-}
-
-func deleteFakeGTIDBatch(t *testing.T, conn *mysql.Conn, fakeUUID string, requiresGtidTag bool) {
-	t.Helper()
-
-	query := fmt.Sprintf("DELETE FROM mysql.gtid_executed WHERE source_uuid = '%s'", fakeUUID)
-	if requiresGtidTag {
-		query += " AND gtid_tag = ''"
-	}
-	execFetch(t, conn, query)
-}
-
-func waitForGtidExecutedDataFreeAtLeast(t *testing.T, conn *mysql.Conn, minDataFree uint64) uint64 {
-	t.Helper()
-
-	var dataFree uint64
-	assert.Eventually(t, func() bool {
-		var err error
-		dataFree, err = getGtidExecutedDataFree(conn)
-		return err == nil && dataFree >= minDataFree
-	}, 30*time.Second, time.Second, "mysql.gtid_executed DATA_FREE never reached %d bytes", minDataFree)
-	return dataFree
-}
-
-func waitForGtidExecutedDataFreeFloor(t *testing.T, conn *mysql.Conn) uint64 {
-	t.Helper()
-
-	var dataFree uint64
-	assert.Eventually(t, func() bool {
-		var err error
-		dataFree, err = getGtidExecutedDataFree(conn)
-		return err == nil
-	}, 10*time.Second, 500*time.Millisecond)
-	return dataFree
-}
-
-func getGtidExecutedDataFree(conn *mysql.Conn) (uint64, error) {
-	qr, err := conn.ExecuteFetch("SELECT data_free FROM information_schema.TABLES WHERE table_schema = 'mysql' AND table_name = 'gtid_executed'", 1, false)
-	if err != nil {
-		return 0, err
-	}
-	if len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 {
-		return 0, errors.New("mysql.gtid_executed row missing from information_schema.TABLES")
-	}
-	return qr.Rows[0][0].ToCastUint64()
-}
-
-func gtidExecutedHasTagColumn(t *testing.T, conn *mysql.Conn) bool {
-	t.Helper()
-
-	qr, err := conn.ExecuteFetch("SELECT column_name FROM information_schema.COLUMNS WHERE table_schema = 'mysql' AND table_name = 'gtid_executed' ORDER BY ordinal_position", 10, false)
-	require.NoError(t, err)
-
-	for _, row := range qr.Rows {
-		if strings.EqualFold(row[0].ToString(), "gtid_tag") {
-			return true
-		}
-	}
-	return false
-}
-
 func getRequiredGlobalBoolVar(t *testing.T, conn *mysql.Conn, name string) bool {
 	t.Helper()
 
@@ -256,10 +147,6 @@ func execFetch(t *testing.T, conn *mysql.Conn, query string) {
 
 	_, err := conn.ExecuteFetch(query, 1, false)
 	require.NoError(t, err)
-}
-
-func inlineDigitsTable(alias string) string {
-	return "(SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS " + alias
 }
 
 type capturingSlogHandler struct {
