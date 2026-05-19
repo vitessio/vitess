@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1465,9 +1467,9 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	// Wait for idle timeout to kick in and start expiring connections
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		// Check the actual number of currently open connections
-		assert.Equal(c, int64(2), state.open.Load())
+		assert.Equal(c, int64(1), state.open.Load())
 		// Check the total number of closed connections
-		assert.Equal(c, int64(1), state.close.Load())
+		assert.Equal(c, int64(2), state.close.Load())
 	}, 100*time.Millisecond, 10*time.Millisecond)
 
 	// Keep this test focused on the in-flight reopen above. Further idle
@@ -1627,6 +1629,68 @@ func TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity(t *testing.T)
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestIdleTimeoutSweepsWholeStack(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 4,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+	defer p.Close()
+
+	var conns []*Pooled[*TestConn]
+	for range 4 {
+		conn, err := p.Get(ctx, nil)
+		require.NoError(t, err)
+		conns = append(conns, conn)
+	}
+
+	p.SetIdleTimeout(time.Millisecond)
+	for _, conn := range conns {
+		p.put(conn)
+		conn.timeUsed.set(monotonicNow() - 2*time.Millisecond)
+	}
+
+	p.closeIdleResources(time.Now())
+
+	assert.EqualValues(t, 4, p.Metrics.IdleClosed())
+	assert.EqualValues(t, 4, state.close.Load())
+	assert.EqualValues(t, 4, p.Active())
+	assert.EqualValues(t, 4, p.Available())
+}
+
+func TestIdleTimeoutCloseInStackDoesNotAllocate(t *testing.T) {
+	var state TestState
+	const capacity = 1000
+
+	ctx := t.Context()
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    capacity,
+		IdleTimeout: time.Hour,
+		LogWait:     state.LogWait,
+	}).Open(newConnector(&state), nil)
+	defer p.Close()
+
+	conns := make([]*Pooled[*TestConn], 0, capacity)
+	for range capacity {
+		conn, err := p.Get(ctx, nil)
+		require.NoError(t, err)
+		conns = append(conns, conn)
+	}
+
+	for _, conn := range conns {
+		p.put(conn)
+	}
+
+	now := time.Now()
+	allocs := testing.AllocsPerRun(100, func() {
+		p.closeIdleResources(now)
+	})
+
+	assert.Zero(t, allocs)
+}
+
 func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
 	var state TestState
 
@@ -1704,4 +1768,97 @@ func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.
 	for b.Loop() {
 		p.closeIdleResources(time.Now())
 	}
+}
+
+func BenchmarkPoolCleanupIdleConnectionsPerformanceHighConcurrencyNoIdleConnections(b *testing.B) {
+	var state TestState
+
+	const capacity = 1000
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    capacity,
+		IdleTimeout: 30 * time.Second,
+	}).Open(newConnector(&state), nil)
+	defer p.Close()
+
+	connections := make([]*Pooled[*TestConn], 0, capacity)
+	for range capacity {
+		conn, err := p.Get(b.Context(), nil)
+		require.NoError(b, err)
+		connections = append(connections, conn)
+	}
+
+	for _, conn := range connections {
+		conn.Recycle()
+	}
+
+	workerCount := runtime.GOMAXPROCS(0) * 8
+	latencies := make([][]int64, workerCount)
+	var stop atomic.Bool
+	var getErrors atomic.Int64
+	var sampleBudget atomic.Int64
+	var wg sync.WaitGroup
+	sampleBudget.Store(200_000)
+	samplesPerWorker := 200_000/workerCount + 1024
+
+	for i := range workerCount {
+		wg.Go(func() {
+			localLatencies := make([]int64, 0, samplesPerWorker)
+			for !stop.Load() {
+				start := time.Now()
+				conn, err := p.Get(b.Context(), nil)
+				elapsed := time.Since(start)
+				if err != nil {
+					getErrors.Add(1)
+					continue
+				}
+
+				if sampleBudget.Add(-1) >= 0 {
+					localLatencies = append(localLatencies, elapsed.Nanoseconds())
+				}
+				conn.Recycle()
+			}
+			latencies[i] = localLatencies
+		})
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	b.ResetTimer()
+	for b.Loop() {
+		p.closeIdleResources(time.Now())
+	}
+	b.StopTimer()
+
+	stop.Store(true)
+	wg.Wait()
+
+	require.Zero(b, getErrors.Load())
+	reportGetLatencyMetrics(b, latencies)
+}
+
+func reportGetLatencyMetrics(b *testing.B, latencies [][]int64) {
+	total := 0
+	for _, localLatencies := range latencies {
+		total += len(localLatencies)
+	}
+	if total == 0 {
+		return
+	}
+
+	merged := make([]int64, 0, total)
+	for _, localLatencies := range latencies {
+		merged = append(merged, localLatencies...)
+	}
+	slices.Sort(merged)
+
+	b.ReportMetric(float64(total), "get-ops")
+	b.ReportMetric(float64(merged[percentileIndex(total, 50)]), "get-p50-ns")
+	b.ReportMetric(float64(merged[percentileIndex(total, 95)]), "get-p95-ns")
+	b.ReportMetric(float64(merged[percentileIndex(total, 99)]), "get-p99-ns")
+	b.ReportMetric(float64(merged[total-1]), "get-max-ns")
+}
+
+func percentileIndex(total int, percentile int) int {
+	return ((total - 1) * percentile) / 100
 }
