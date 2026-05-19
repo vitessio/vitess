@@ -716,10 +716,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// If setting super_read_only stalls and leads to a context cancellation, log useful MySQL diagnostics
 	// to aid in debugging why it may have taken so long.
 	//
-	// Note that this runs on both context.DeadlineExceeded and context.Canceled. The reason for this is that
-	// a client-side timeout can manifest as a server-side context.Canceled, we need to account for both. This
-	// has the unfortunate consequence that we will dump diagnostics on normal cancelations as well. The window
-	// is small though, as the cancelation would need to occur exactly during this call.
+	// Note that this runs on both context.DeadlineExceeded and context.Canceled. The reason for this is that a
+	// client-side timeout can manifest as a server-side context.Canceled, so we need to account for both. This
+	// has the unfortunate consequence that we will dump diagnostics on normal cancellations as well. The window
+	// is small though, as the cancellation would need to occur exactly during this call.
 	stop := context.AfterFunc(ctx, func() {
 		log.Error(
 			"timed out or canceled while enabling super_read_only during DemotePrimary, dumping MySQL diagnostics",
