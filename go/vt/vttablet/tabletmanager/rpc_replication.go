@@ -713,24 +713,28 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// idempotent.
 	log.Info("enabling super_read_only")
 
-	// If the context times out while enabling super_read_only, we want to print a variety of MySQL
-	// diagnostics to help us debug why it may have stalled.
+	// If setting super_read_only stalls and leads to a context cancellation, log useful MySQL diagnostics
+	// to aid in debugging why it may have taken so long.
+	//
+	// Note that this runs on both context.DeadlineExceeded and context.Canceled. The reason for this is that
+	// a client-side timeout can manifest as a server-side context.Canceled, we need to account for both. This
+	// has the unfortunate consequence that we will dump diagnostics on normal cancelations as well. The window
+	// is small though, as the cancelation would need to occur exactly during this call.
 	stop := context.AfterFunc(ctx, func() {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			log.Error(
-				"timed out enabling super_read_only during DemotePrimary, dumping MySQL diagnostics",
-				slog.Any("error", ctx.Err()),
-			)
+		log.Error(
+			"timed out or canceled while enabling super_read_only during DemotePrimary, dumping MySQL diagnostics",
+			slog.Any("error", ctx.Err()),
+		)
 
-			tm.logMySQLDiagnostics(ctx)
-		}
+		tm.logMySQLDiagnostics(ctx)
 	})
 
 	_, err = tm.MysqlDaemon.SetSuperReadOnly(ctx, true)
 
-	// If setting super_read_only succeeded, or it errored but it was not due to reaching the context
-	// deadline, prevent the above diagnostics AfterFunc from running.
-	if err == nil || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	// If setting super_read_only was successful, or it errored due to an error unrelated to context
+	// cancellation/deadline, prevent the above diagnostics AfterFunc from running due to a future,
+	// unrelated context cancellation/deadline.
+	if err == nil || ctx.Err() == nil {
 		stop()
 	}
 
