@@ -73,14 +73,12 @@ where command != 'Sleep' or info is not null
 order by time desc
 limit 50`,
 	},
-
 	{
 		description: "current MySQL read-only settings",
 		query: `select
 	@@global.read_only as read_only,
 	@@global.super_read_only as super_read_only`,
 	},
-
 	{
 		description: "current MySQL semi-sync counters",
 		query: `select
@@ -91,7 +89,6 @@ where variable_name like 'Rpl_semi_sync_source_%'
 	or variable_name like 'Rpl_semi_sync_master_%'
 order by variable_name`,
 	},
-
 	{
 		description: "active InnoDB transactions",
 		query: `select
@@ -105,7 +102,6 @@ from information_schema.innodb_trx
 order by trx_started
 limit 50`,
 	},
-
 	{
 		description: "current InnoDB row lock waits",
 		query: `select
@@ -122,7 +118,6 @@ join information_schema.innodb_trx blocking_trx
 	on blocking_trx.trx_id = lock_waits.blocking_engine_transaction_id
 limit 50`,
 	},
-
 	{
 		description: "pending MySQL metadata locks",
 		query: `select
