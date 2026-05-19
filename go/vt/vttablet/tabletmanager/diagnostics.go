@@ -37,12 +37,12 @@ const (
 )
 
 // redactableColumns is the set of columns that may contain client SQL and should be redacted.
-var redactableColumns = map[string]struct{}{
-	"blocking_query":   {},
-	"info":             {},
-	"processlist_info": {},
-	"trx_query":        {},
-	"waiting_query":    {},
+var redactableColumns = []string{
+	"blocking_query",
+	"info",
+	"processlist_info",
+	"trx_query",
+	"waiting_query",
 }
 
 // diagnosticQuery describes a query to run that collects useful data about the current state of MySQL,
@@ -231,7 +231,7 @@ func redactIfNecessary(parser *sqlparser.Parser, columnName, value string) strin
 
 // isRedactableColumn returns true if the column may contain client SQL.
 func isRedactableColumn(columnName string) bool {
-	for queryTextColumnName := range redactableColumns {
+	for _, queryTextColumnName := range redactableColumns {
 		if strings.EqualFold(columnName, queryTextColumnName) {
 			return true
 		}
