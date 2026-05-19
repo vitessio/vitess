@@ -41,6 +41,13 @@ const (
 // TestPlannedReparentDumpsDiagnosticsWhenSuperReadOnlyStalls verifies the real PRS path logs
 // diagnostics when MySQL is blocked on the super_read_only change.
 func TestPlannedReparentDumpsDiagnosticsWhenSuperReadOnlyStalls(t *testing.T) {
+	vttabletMajorVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+
+	if vttabletMajorVersion < 25 {
+		t.Skipf("skipping diagnostic log assertion with old vttablet: vttablet major version %d", vttabletMajorVersion)
+	}
+
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 
