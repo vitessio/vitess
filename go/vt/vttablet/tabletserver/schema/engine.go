@@ -78,6 +78,14 @@ const (
 	// 60s means something pathological is happening and we abort so we don't
 	// leave a long-running admin statement in flight indefinitely.
 	gtidExecutedOptimizeTimeout = 60 * time.Second
+	// primaryPromotionRestoreWaitTimeout bounds how long SRO restore waits for
+	// an in-flight promotion to either succeed or abort before giving up.
+	primaryPromotionRestoreWaitTimeout = 5 * time.Minute
+	// primaryPromotionRestorePollInterval controls how often SRO restore checks
+	// whether an in-flight promotion has reached a terminal state.
+	primaryPromotionRestorePollInterval = 100 * time.Millisecond
+	// superReadOnlyRestoreTimeout bounds each DBA operation used to restore SRO.
+	superReadOnlyRestoreTimeout = 10 * time.Second
 	// tabletTypeStabilityCooldown is how long after a transition between
 	// PRIMARY and non-PRIMARY we'll defer OPTIMIZE: a reparent (PRS/ERS)
 	// flips the type, and we don't want to kick off background admin work
@@ -423,12 +431,12 @@ func (se *Engine) MakeNonPrimary() {
 	// This function is tested through endtoend test.
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	se.primaryPromotionInProgress.Store(false)
 	if se.isPrimaryTablet.Load() {
 		se.tabletTypeLastChangedAt = time.Now()
 	}
 	se.isPrimaryTablet.Store(false)
 	se.isServingPrimary = false
+	se.primaryPromotionInProgress.Store(false)
 	for _, t := range se.tables {
 		if t.SequenceInfo != nil {
 			t.SequenceInfo.Reset()
@@ -441,12 +449,12 @@ func (se *Engine) MakeNonPrimary() {
 func (se *Engine) MakePrimary(serving bool) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	se.primaryPromotionInProgress.Store(false)
 	if !se.isPrimaryTablet.Load() {
 		se.tabletTypeLastChangedAt = time.Now()
 	}
 	se.isPrimaryTablet.Store(true)
 	se.isServingPrimary = serving
+	se.primaryPromotionInProgress.Store(false)
 }
 
 // BeginPrimaryPromotion marks that MySQL is becoming writable before the
@@ -693,9 +701,7 @@ func (se *Engine) disableSuperReadOnly(ctx context.Context, conn *dbconnpool.DBC
 	// a non-primary tablet with super_read_only=OFF can let stale or
 	// misrouted writes land on it after shutdown while MySQL is still up.
 	restoreSuperReadOnly := func() {
-		restoreCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		defer cancel()
-		se.restoreSuperReadOnlyWithContext(restoreCtx)
+		se.restoreSuperReadOnlyWithContext(context.WithoutCancel(ctx))
 	}
 	result, err := se.executeFetchCtx(ctx, conn, "SELECT @@global.super_read_only", 1, false)
 	if err != nil {
@@ -739,28 +745,41 @@ func shouldRestoreAfterSuperReadOnlyDisableError(err error) bool {
 // restore closure. Failures are logged loudly but not returned — nothing
 // actionable the caller can do at this point except alert.
 //
-// If the tablet has since been promoted to PRIMARY (e.g. a PRS/ERS landed
-// while OPTIMIZE was running), we skip the restore: the promotion flow
-// itself turns super_read_only OFF and we must not stomp that back ON and
-// leave a freshly-promoted primary read-only.
+// If a primary promotion is in progress, wait for the outcome before deciding:
+// a successful promotion must keep super_read_only OFF, while an aborted
+// promotion leaves this tablet non-primary and still needs the restore.
 func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
-	if se.isPrimaryOrPromoting() {
+	if err := se.waitForPrimaryPromotion(ctx, primaryPromotionRestoreWaitTimeout); err != nil {
+		log.Warn("schema engine: timed out waiting for primary promotion outcome before super_read_only restore",
+			slog.Any("error", err))
+		return
+	}
+	if se.isPrimaryTablet.Load() {
 		log.Warn("schema engine: skipping super_read_only restore; tablet has been promoted to PRIMARY since OPTIMIZE started")
 		return
 	}
 
-	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaWithDB())
+	connCtx, connCancel := context.WithTimeout(ctx, superReadOnlyRestoreTimeout)
+	conn, err := dbconnpool.NewDBConnection(connCtx, se.env.Config().DB.DbaWithDB())
+	connCancel()
 	if err != nil {
 		log.Warn("schema engine: failed to open connection to re-enable super_read_only after OPTIMIZE. Expected during full-stack shutdown; if mysqld is still running the tablet may now accept writes — investigate immediately",
 			slog.Any("error", err))
 		return
 	}
 	defer conn.Close()
-	if se.isPrimaryOrPromoting() {
+	if err := se.waitForPrimaryPromotion(ctx, primaryPromotionRestoreWaitTimeout); err != nil {
+		log.Warn("schema engine: timed out waiting for primary promotion outcome while reopening DBA connection for super_read_only restore",
+			slog.Any("error", err))
+		return
+	}
+	if se.isPrimaryTablet.Load() {
 		log.Warn("schema engine: skipping super_read_only restore; tablet was promoted to PRIMARY while reopening the DBA connection")
 		return
 	}
-	readOnly, err := se.readGlobalBool(ctx, conn, "read_only")
+	readCtx, readCancel := context.WithTimeout(ctx, superReadOnlyRestoreTimeout)
+	readOnly, err := se.readGlobalBool(readCtx, conn, "read_only")
+	readCancel()
 	if err != nil {
 		log.Warn("schema engine: failed to read read_only before super_read_only restore; proceeding with restore based on tablet state",
 			slog.Any("error", err))
@@ -768,14 +787,22 @@ func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
 		log.Warn("schema engine: skipping super_read_only restore; MySQL is already read-write")
 		return
 	}
-	if _, err := se.executeFetchCtx(ctx, conn, "SET GLOBAL super_read_only = 'ON'", 1, false); err != nil {
+	restoreCtx, restoreCancel := context.WithTimeout(ctx, superReadOnlyRestoreTimeout)
+	_, err = se.executeFetchCtx(restoreCtx, conn, "SET GLOBAL super_read_only = 'ON'", 1, false)
+	restoreCancel()
+	if err != nil {
 		log.Warn("schema engine: failed to re-enable super_read_only after OPTIMIZE. Expected during full-stack shutdown; if mysqld is still running the tablet may now accept writes — investigate immediately",
 			slog.Any("error", err))
 		return
 	}
-	if se.isPrimaryOrPromoting() {
+	if err := se.waitForPrimaryPromotion(ctx, primaryPromotionRestoreWaitTimeout); err != nil {
+		log.Warn("schema engine: timed out waiting for primary promotion outcome after super_read_only restore",
+			slog.Any("error", err))
+		return
+	}
+	if se.isPrimaryTablet.Load() {
 		log.Warn("schema engine: tablet was promoted to PRIMARY during super_read_only restore; making it read-write again")
-		undoCtx, undoCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		undoCtx, undoCancel := context.WithTimeout(context.Background(), superReadOnlyRestoreTimeout)
 		defer undoCancel()
 		// We just stomped super_read_only back to ON, which also forces
 		// read_only=ON in MySQL. Both must be cleared to leave the
@@ -793,6 +820,26 @@ func (se *Engine) restoreSuperReadOnlyWithContext(ctx context.Context) {
 				slog.Any("error", err))
 		}
 	}
+}
+
+// waitForPrimaryPromotion waits until an in-flight promotion either completes
+// as PRIMARY or aborts, so restore can choose the safe final SRO state.
+func (se *Engine) waitForPrimaryPromotion(ctx context.Context, timeout time.Duration) error {
+	if !se.primaryPromotionInProgress.Load() {
+		return nil
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	ticker := time.NewTicker(primaryPromotionRestorePollInterval)
+	defer ticker.Stop()
+	for se.primaryPromotionInProgress.Load() {
+		select {
+		case <-waitCtx.Done():
+			return waitCtx.Err()
+		case <-ticker.C:
+		}
+	}
+	return nil
 }
 
 // readGlobalBool reads a MySQL boolean global variable used by restore guards.

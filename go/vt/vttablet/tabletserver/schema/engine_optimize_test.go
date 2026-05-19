@@ -89,6 +89,48 @@ func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 	})
 }
 
+// TestWaitForPrimaryPromotion verifies that restore waits for the promotion
+// outcome separately from the shorter super_read_only statement timeout.
+func TestWaitForPrimaryPromotion(t *testing.T) {
+	t.Run("waits for aborted promotion", func(t *testing.T) {
+		se := &Engine{}
+		se.BeginPrimaryPromotion()
+
+		done := make(chan bool, 1)
+		go func() {
+			done <- se.waitForPrimaryPromotion(t.Context(), 200*time.Millisecond) == nil
+		}()
+
+		require.Never(t, func() bool {
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		}, 50*time.Millisecond, 10*time.Millisecond)
+
+		se.AbortPrimaryPromotion()
+
+		require.Eventually(t, func() bool {
+			select {
+			case ok := <-done:
+				return ok
+			default:
+				return false
+			}
+		}, time.Second, 10*time.Millisecond)
+		assert.False(t, se.isPrimaryTablet.Load())
+	})
+
+	t.Run("bounds unresolved promotion", func(t *testing.T) {
+		se := &Engine{}
+		se.BeginPrimaryPromotion()
+
+		require.ErrorIs(t, se.waitForPrimaryPromotion(t.Context(), 20*time.Millisecond), context.DeadlineExceeded)
+	})
+}
+
 // TestDisableSuperReadOnly covers the SRO toggle helper's branches:
 // already-off, on-and-flipped-with-restore, and unknown-system-variable
 // (MariaDB / older MySQL).
@@ -256,18 +298,86 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			"restore must not issue a compensating SET ... OFF since SET ... ON never ran")
 	})
 
-	t.Run("restore skips while primary promotion is in progress", func(t *testing.T) {
+	t.Run("restore waits for in-progress promotion to abort", func(t *testing.T) {
 		db := fakesqldb.New(t)
 		defer db.Close()
-		db.AddRejectedQuery("SET GLOBAL super_read_only = 'ON'",
-			sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "restore must not re-enable super_read_only while promotion is in progress"))
+		db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("read_only", "int64"),
+			"1",
+		))
+		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
 		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
 
 		se.BeginPrimaryPromotion()
 
-		se.restoreSuperReadOnlyWithContext(t.Context())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			se.restoreSuperReadOnlyWithContext(t.Context())
+		}()
+
+		require.Never(t, func() bool {
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		}, 100*time.Millisecond, 10*time.Millisecond,
+			"restore must wait for the promotion outcome before deciding whether to leave super_read_only off")
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
+
+		se.AbortPrimaryPromotion()
+
+		require.Eventually(t, func() bool {
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		}, time.Second, 10*time.Millisecond)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
+			"aborted promotion leaves the tablet non-primary, so restore must re-enable super_read_only")
+	})
+
+	t.Run("restore waits for in-progress promotion to succeed", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		db.AddRejectedQuery("SET GLOBAL super_read_only = 'ON'",
+			sqlerror.NewSQLError(sqlerror.ERUnknownError, "", "restore must not re-enable super_read_only after promotion succeeds"))
+		se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+
+		se.BeginPrimaryPromotion()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			se.restoreSuperReadOnlyWithContext(t.Context())
+		}()
+
+		require.Never(t, func() bool {
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		}, 100*time.Millisecond, 10*time.Millisecond,
+			"restore must wait for the promotion outcome before deciding whether to restore")
+
+		se.MakePrimary(true)
+
+		require.Eventually(t, func() bool {
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		}, time.Second, 10*time.Millisecond)
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
-			"restore must skip SET ... ON after MySQL has started becoming writable but before schema engine observes PRIMARY")
+			"successful promotion must keep super_read_only off")
 	})
 
 	t.Run("restore skips when MySQL is already read-write", func(t *testing.T) {
