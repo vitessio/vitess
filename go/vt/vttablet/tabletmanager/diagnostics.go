@@ -183,6 +183,7 @@ func (tm *TabletManager) logMySQLDiagnostics(ctx context.Context) {
 			continue
 		}
 
+		// Collect the column names.
 		columnNames := make([]string, 0, len(result.Fields))
 		for fieldIndex, field := range result.Fields {
 			columnName := field.Name
@@ -193,6 +194,7 @@ func (tm *TabletManager) logMySQLDiagnostics(ctx context.Context) {
 			columnNames = append(columnNames, columnName)
 		}
 
+		// Log a line for each row returned by the query.
 		for rowIndex, row := range result.Rows {
 			diagnosticRow := make(map[string]string, len(row))
 			for valueIndex, value := range row {
