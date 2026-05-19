@@ -243,9 +243,16 @@ func GetBackupEngine(backupEngine string) (BackupEngine, error) {
 // GetRestoreEngine returns the RestoreEngine implementation to restore a given backup.
 // It reads the MANIFEST file from the backup to check which engine was used to create it.
 func GetRestoreEngine(ctx context.Context, backup backupstorage.BackupHandle) (RestoreEngine, error) {
+	re, _, err := GetRestoreEngineAndManifest(ctx, backup)
+	return re, err
+}
+
+// GetRestoreEngineAndManifest returns the RestoreEngine and the BackupManifest
+// for a given backup in a single MANIFEST read.
+func GetRestoreEngineAndManifest(ctx context.Context, backup backupstorage.BackupHandle) (RestoreEngine, *BackupManifest, error) {
 	manifest, err := GetBackupManifest(ctx, backup)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "can't get backup MANIFEST")
+		return nil, nil, vterrors.Wrap(err, "can't get backup MANIFEST")
 	}
 	engine := manifest.BackupMethod
 	if engine == "" {
@@ -254,9 +261,9 @@ func GetRestoreEngine(ctx context.Context, backup backupstorage.BackupHandle) (R
 	}
 	re, ok := BackupRestoreEngineMap[engine]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "can't restore backup created with %q engine; no such BackupEngine implementation is registered", manifest.BackupMethod)
+		return nil, nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "can't restore backup created with %q engine; no such BackupEngine implementation is registered", manifest.BackupMethod)
 	}
-	return re, nil
+	return re, manifest, nil
 }
 
 // GetBackupManifest returns the common fields of the MANIFEST file for a given backup.
