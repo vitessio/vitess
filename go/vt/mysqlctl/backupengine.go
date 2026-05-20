@@ -258,6 +258,7 @@ func GetRestoreEngineAndManifest(ctx context.Context, backup backupstorage.Backu
 	if engine == "" {
 		// The builtin engine is the only one that ever left BackupMethod unset.
 		engine = builtinBackupEngineName
+		manifest.BackupMethod = engine
 	}
 	re, ok := BackupRestoreEngineMap[engine]
 	if !ok {
