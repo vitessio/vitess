@@ -166,21 +166,39 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 				case <-shortCtx.Done():
 					return
 				default:
-					update(t, ts, id)
+					update(t, shortCtx, ts, id)
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
+<<<<<<< HEAD
 	log.Infof("All updates completed")
 	rules, err := ts.GetKeyspaceRoutingRules(ctx)
+||||||| parent of fe26c0dc21 (etcd2topo: bound lock-acquisition cleanup RPCs (#20149))
+	log.Info("All updates completed")
+	rules, err := ts.GetKeyspaceRoutingRules(ctx)
+=======
+	log.Info("All updates completed")
+	verifyCtx, verifyCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer verifyCancel()
+	rules, err := ts.GetKeyspaceRoutingRules(verifyCtx)
+>>>>>>> fe26c0dc21 (etcd2topo: bound lock-acquisition cleanup RPCs (#20149))
 	require.NoError(t, err)
 	require.LessOrEqual(t, concurrency, len(rules.Rules))
 }
 
+<<<<<<< HEAD
 func update(t *testing.T, ts *topo.Server, id int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+||||||| parent of fe26c0dc21 (etcd2topo: bound lock-acquisition cleanup RPCs (#20149))
+func update(t *testing.T, ts *topo.Server, id int) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+=======
+func update(t *testing.T, ctx context.Context, ts *topo.Server, id int) {
+>>>>>>> fe26c0dc21 (etcd2topo: bound lock-acquisition cleanup RPCs (#20149))
 	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypeSuffixes {
@@ -188,8 +206,14 @@ func update(t *testing.T, ts *topo.Server, id int) {
 		routes[from] = s + tabletType
 	}
 	err := updateKeyspaceRoutingRules(ctx, ts, "test", routes)
+	if ctx.Err() != nil {
+		return
+	}
 	require.NoError(t, err)
 	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
+	if ctx.Err() != nil {
+		return
+	}
 	require.NoError(t, err)
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)

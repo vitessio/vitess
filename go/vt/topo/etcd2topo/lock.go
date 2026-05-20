@@ -71,8 +71,18 @@ func (s *Server) newUniqueEphemeralKV(ctx context.Context, cli *clientv3.Client,
 			// delete the node, so we don't leave an orphan
 			// node behind for *leaseTTL time.
 
+<<<<<<< HEAD
 			if _, err := cli.Delete(context.Background(), newKey); err != nil {
 				log.Errorf("cli.Delete(context.Background(), newKey) failed :%v", err)
+||||||| parent of fe26c0dc21 (etcd2topo: bound lock-acquisition cleanup RPCs (#20149))
+			if _, err := cli.Delete(context.Background(), newKey); err != nil {
+				log.Error(fmt.Sprintf("cli.Delete(context.Background(), newKey) failed :%v", err))
+=======
+			deleteCtx, deleteCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+			defer deleteCancel()
+			if _, err := cli.Delete(deleteCtx, newKey); err != nil {
+				log.Error(fmt.Sprintf("cli.Delete(%v) failed: %v", newKey, err))
+>>>>>>> fe26c0dc21 (etcd2topo: bound lock-acquisition cleanup RPCs (#20149))
 			}
 		}
 		return "", 0, convertError(err, newKey)
@@ -225,9 +235,19 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 		if err != nil {
 			// We had an error waiting on the last node.
 			// Revoke our lease, this will delete the file.
+<<<<<<< HEAD
 			if _, rerr := s.cli.Revoke(context.Background(), lease.ID); rerr != nil {
 				log.Warningf("Revoke(%d) failed, may have left %v behind: %v", lease.ID, key, rerr)
+||||||| parent of fe26c0dc21 (etcd2topo: bound lock-acquisition cleanup RPCs (#20149))
+			if _, rerr := s.cli.Revoke(context.Background(), lease.ID); rerr != nil {
+				log.Warn(fmt.Sprintf("Revoke(%d) failed, may have left %v behind: %v", lease.ID, key, rerr))
+=======
+			revokeCtx, revokeCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+			if _, rerr := s.cli.Revoke(revokeCtx, lease.ID); rerr != nil {
+				log.Warn(fmt.Sprintf("Revoke(%d) failed, may have left %v behind: %v", lease.ID, key, rerr))
+>>>>>>> fe26c0dc21 (etcd2topo: bound lock-acquisition cleanup RPCs (#20149))
 			}
+			revokeCancel()
 			return nil, err
 		}
 		if done {
