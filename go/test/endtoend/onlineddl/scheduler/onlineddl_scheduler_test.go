@@ -2097,43 +2097,48 @@ func testScheduler(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 	})
 	t.Run("postpone-complete migrations by context", func(t *testing.T) {
-		// Submit two migrations with the same context, then postpone their completion by context.
-		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
-		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		// Use --postpone-launch so migrations stay in queued state. Without it, trivial migrations
+		// on empty tables complete in seconds, racing past the POSTPONE COMPLETE CONTEXT call.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
 
 		// A non-matching context postpones nothing.
 		onlineddl.CheckPostponeCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context-other", 0)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued)
 
 		// Postpone-complete by context: both migrations must be postponed.
 		onlineddl.CheckPostponeCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
 		time.Sleep(ensureStateNotChangedTime)
-		// Migrations are still running because completion is postponed.
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
+		// Migrations are still queued because completion is postponed.
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued)
 
-		// Now complete them.
-		onlineddl.CheckCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
+		// Clean up.
+		onlineddl.CheckCancelContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
 	})
 	t.Run("force-cutover migrations by context", func(t *testing.T) {
-		// Submit two migrations with the same context, both postponed so they stay running.
-		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-force-cutover-by-context", skipWait: true})
-		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-force-cutover-by-context", skipWait: true})
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		// Use --postpone-launch so migrations stay in queued state. Using --postpone-completion
+		// instead risks the migration completing between FORCE_CUTOVER CONTEXT and CANCEL CONTEXT,
+		// causing WaitForMigrationStatus(cancelled) to hang for the full timeout.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-force-cutover-by-context", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-force-cutover-by-context", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
 
 		// A non-matching context force-cuts-over nothing.
 		onlineddl.CheckForceCutOverContextMigrations(t, &vtParams, "ctx-force-cutover-by-context-other", 0)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued)
 
 		// Force-cutover by context: both migrations must be marked.
 		onlineddl.CheckForceCutOverContextMigrations(t, &vtParams, "ctx-force-cutover-by-context", 2)
 
-		// Clean up: cancel the postponed migrations.
+		// Clean up.
 		onlineddl.CheckCancelContextMigrations(t, &vtParams, "ctx-force-cutover-by-context", 2)
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
