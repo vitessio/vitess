@@ -2690,6 +2690,8 @@ var validSQL = []struct {
 	input:  "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' FORCE_CUTOVER",
 	output: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
 }, {
+	input: "alter vitess_migration cancel context 'some-context'",
+}, {
 	input: "alter vitess_migration cancel all",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle",

@@ -362,7 +362,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER CUTOVER_THRESHOLD EXPIRE RATIO POSTPONE
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE FORCE_CUTOVER CUTOVER_THRESHOLD EXPIRE RATIO POSTPONE CONTEXT
 // Throttler tokens
 %token <str> VITESS_THROTTLER
 
@@ -3792,6 +3792,13 @@ alter_statement:
     $$ = &AlterMigration{
       Type: CancelMigrationType,
       UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION CANCEL CONTEXT STRING
+  {
+    $$ = &AlterMigration{
+      Type: CancelAllMigrationType,
+      Context: $6,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION CANCEL ALL
@@ -9075,6 +9082,7 @@ non_reserved_keyword:
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
+| CONTEXT
 | COPY
 | COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV

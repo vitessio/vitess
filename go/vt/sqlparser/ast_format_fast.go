@@ -462,7 +462,11 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
-		alterType = "cancel all"
+		if node.Context != "" {
+			alterType = "cancel"
+		} else {
+			alterType = "cancel all"
+		}
 	case ThrottleMigrationType:
 		alterType = "throttle"
 	case ThrottleAllMigrationType:
@@ -493,6 +497,11 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 	if node.Ratio != nil {
 		buf.WriteString(" ratio ")
 		node.Ratio.FormatFast(buf)
+	}
+	if node.Context != "" {
+		buf.WriteString(" context '")
+		buf.WriteString(node.Context)
+		buf.WriteByte('\'')
 	}
 	if node.Shards != "" {
 		buf.WriteString(" vitess_shards '")
