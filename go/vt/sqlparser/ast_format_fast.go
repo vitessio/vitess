@@ -485,28 +485,24 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)
 	if node.Threshold != "" {
-		buf.WriteString(" '")
-		buf.WriteString(node.Threshold)
-		buf.WriteByte('\'')
+		buf.WriteByte(' ')
+		buf.WriteString(encodeSQLString(node.Threshold))
 	}
 	if node.Expire != "" {
-		buf.WriteString(" expire '")
-		buf.WriteString(node.Expire)
-		buf.WriteByte('\'')
+		buf.WriteString(" expire ")
+		buf.WriteString(encodeSQLString(node.Expire))
 	}
 	if node.Ratio != nil {
 		buf.WriteString(" ratio ")
 		node.Ratio.FormatFast(buf)
 	}
 	if node.Context != "" {
-		buf.WriteString(" context '")
-		buf.WriteString(node.Context)
-		buf.WriteByte('\'')
+		buf.WriteString(" context ")
+		buf.WriteString(encodeSQLString(node.Context))
 	}
 	if node.Shards != "" {
-		buf.WriteString(" vitess_shards '")
-		buf.WriteString(node.Shards)
-		buf.WriteByte('\'')
+		buf.WriteString(" vitess_shards ")
+		buf.WriteString(encodeSQLString(node.Shards))
 	}
 }
 

@@ -359,19 +359,19 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, " %#s", alterType)
 	if node.Threshold != "" {
-		buf.astPrintf(node, " '%#s'", node.Threshold)
+		buf.astPrintf(node, " %s", encodeSQLString(node.Threshold))
 	}
 	if node.Expire != "" {
-		buf.astPrintf(node, " expire '%#s'", node.Expire)
+		buf.astPrintf(node, " expire %s", encodeSQLString(node.Expire))
 	}
 	if node.Ratio != nil {
 		buf.astPrintf(node, " ratio %v", node.Ratio)
 	}
 	if node.Context != "" {
-		buf.astPrintf(node, " context '%#s'", node.Context)
+		buf.astPrintf(node, " context %s", encodeSQLString(node.Context))
 	}
 	if node.Shards != "" {
-		buf.astPrintf(node, " vitess_shards '%#s'", node.Shards)
+		buf.astPrintf(node, " vitess_shards %s", encodeSQLString(node.Shards))
 	}
 }
 
