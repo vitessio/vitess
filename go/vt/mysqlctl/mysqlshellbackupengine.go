@@ -65,6 +65,12 @@ var (
 	// use when checking if we need to create the directory on the local filesystem or not.
 	knownObjectStoreParams = []string{"s3BucketName", "osBucketName", "azureContainerName"}
 
+	// releaseGlobalReadLockTimeout bounds the deferred fallback call to
+	// ReleaseGlobalReadLock so it cannot hang indefinitely on an unresponsive
+	// mysqld and leave the global read lock held — which would block all writes.
+	// Exposed as a package-level variable so tests can shorten it.
+	releaseGlobalReadLockTimeout = 10 * time.Second
+
 	ErrMySQLShellPreCheck = errors.New("ErrMySQLShellPreCheck")
 
 	// internal databases not backed up by MySQL Shell
@@ -171,9 +177,15 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	lockAcquired := time.Now() // we will report how long we hold the lock for
 
 	// we need to release the global read lock in case the backup fails to start and
-	// the lock wasn't released by releaseReadLock() yet. context might be expired,
-	// so we pass a new one.
-	defer func() { _ = params.Mysqld.ReleaseGlobalReadLock(context.Background()) }()
+	// the lock wasn't released by releaseReadLock() yet. the caller's context may
+	// already be cancelled, so we detach from its cancellation (but preserve its
+	// values) and bound the call with a timeout — without one, an unresponsive
+	// mysqld would leave the global read lock held indefinitely.
+	defer func() {
+		releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), releaseGlobalReadLockTimeout)
+		defer releaseCancel()
+		_ = params.Mysqld.ReleaseGlobalReadLock(releaseCtx)
+	}()
 
 	posBeforeBackup, err := params.Mysqld.PrimaryPosition(ctx)
 	if err != nil {

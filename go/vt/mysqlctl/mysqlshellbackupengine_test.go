@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -456,5 +457,55 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		_, err = be.ExecuteBackup(t.Context(), params, bh)
 		require.ErrorContains(t, err, "mysqlshell failed")
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
+	})
+
+	t.Run("deferred lock release is bounded when mysqld hangs", func(t *testing.T) {
+		// Without a timeout on the deferred ReleaseGlobalReadLock call, an
+		// unresponsive mysqld would leave the global read lock held forever
+		// (blocking every write on the server). Simulate that hang and verify
+		// ExecuteBackup still returns, bounded by releaseGlobalReadLockTimeout.
+		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
+		mysql.GlobalReadLock = false // clear lock status.
+		logger.Clear()
+		manifestBuffer := ioutil.NewBytesBufferWriter()
+		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
+			Dir:           t.TempDir(),
+			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: manifestBuffer},
+		}
+
+		// Simulate mysqld hanging on UNLOCK TABLES for far longer than the test
+		// or the timeout. The deferred release must give up via its own timeout
+		// rather than blocking for the full delay.
+		mysql.ReleaseGlobalReadLockDelay = time.Minute
+		t.Cleanup(func() { mysql.ReleaseGlobalReadLockDelay = 0 })
+
+		originalTimeout := releaseGlobalReadLockTimeout
+		releaseGlobalReadLockTimeout = 100 * time.Millisecond
+		t.Cleanup(func() { releaseGlobalReadLockTimeout = originalTimeout })
+
+		// Backup fails so we exercise the deferred fallback release.
+		generateTestFile(t, be.binaryName, "#!/bin/bash\nexit 1")
+
+		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
+		require.NoError(t, err)
+
+		done := make(chan struct{})
+		var execErr error
+		go func() {
+			defer close(done)
+			_, execErr = be.ExecuteBackup(t.Context(), params, bh)
+		}()
+
+		require.Eventually(t, func() bool {
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		}, 10*time.Second, 20*time.Millisecond,
+			"ExecuteBackup did not return — deferred ReleaseGlobalReadLock is not bounded by a timeout")
+
+		require.ErrorContains(t, execErr, "mysqlshell failed")
 	})
 }

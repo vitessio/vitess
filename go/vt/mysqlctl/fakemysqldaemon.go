@@ -68,6 +68,11 @@ type FakeMysqlDaemon struct {
 	// disappear after shutting themselves down before restarting.
 	StartAfterExitTime time.Duration
 
+	// ReleaseGlobalReadLockDelay is used to simulate an unresponsive mysqld
+	// that blocks on UNLOCK TABLES. ReleaseGlobalReadLock will wait up to this
+	// delay, or until the supplied context is cancelled, whichever comes first.
+	ReleaseGlobalReadLockDelay time.Duration
+
 	// StartAfterExitError is used by StartAfterExit.
 	StartAfterExitError error
 
@@ -902,6 +907,14 @@ func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
 
 // ReleaseGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
+	if fmd.ReleaseGlobalReadLockDelay > 0 {
+		select {
+		case <-time.After(fmd.ReleaseGlobalReadLockDelay):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	if fmd.GlobalReadLock {
 		fmd.GlobalReadLock = false
 		return nil
