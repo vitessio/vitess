@@ -40,17 +40,13 @@ import (
 )
 
 // startEtcd starts an etcd subprocess, and waits for it to be ready.
-func startEtcd(t *testing.T, port int) (string, *exec.Cmd) {
+func startEtcd(t *testing.T, clientPort, peerPort int) (string, *exec.Cmd) {
 	// Create a temporary directory.
 	dataDir := t.TempDir()
 
-	// Get our two ports to listen to.
-	if port == 0 {
-		port = testfiles.GoVtTopoEtcd2topoPort
-	}
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("http://localhost:%v", port)
-	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)
+	clientAddr := fmt.Sprintf("http://localhost:%v", clientPort)
+	peerAddr := fmt.Sprintf("http://localhost:%v", peerPort)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 
 	cmd := exec.Command("etcd",
@@ -104,11 +100,9 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 	// Create a temporary directory.
 	dataDir := t.TempDir()
 
-	// Get our two ports to listen to.
-	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("https://localhost:%v", port+2)
-	peerAddr := fmt.Sprintf("https://localhost:%v", port+3)
+	clientAddr := fmt.Sprintf("https://localhost:%v", testfiles.GoVtTopoEtcd2topoTLSPort)
+	peerAddr := fmt.Sprintf("https://localhost:%v", testfiles.GoVtTopoEtcd2topoTLSPeerPort)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 
 	certs := tlstest.CreateClientServerCertPairs(dataDir)
@@ -209,7 +203,7 @@ func TestEtcd2TLS(t *testing.T) {
 
 func TestEtcd2Topo(t *testing.T) {
 	// Start a single etcd in the background.
-	clientAddr, _ := startEtcd(t, 0)
+	clientAddr, _ := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort, testfiles.GoVtTopoEtcd2topoPeerPort)
 
 	testIndex := 0
 	newServer := func() *topo.Server {
@@ -253,16 +247,22 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	root := "/vitess"
 	// Start three etcd instances in the background. One will serve the global topo data
 	// while the other two will serve the cell topo data.
-	globalClientAddr, _ := startEtcd(t, 0)
+	globalClientAddr, _ := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort, testfiles.GoVtTopoEtcd2topoPeerPort)
+	cellPorts := [...]struct {
+		client, peer int
+	}{
+		{testfiles.GoVtTopoEtcd2topoCell1Port, testfiles.GoVtTopoEtcd2topoCell1PeerPort},
+		{testfiles.GoVtTopoEtcd2topoCell2Port, testfiles.GoVtTopoEtcd2topoCell2PeerPort},
+	}
+	require.Equal(t, len(cells), len(cellPorts))
 	cellClientAddrs := make([]string, len(cells))
 	cellClientCmds := make([]*exec.Cmd, len(cells))
 	cellTSs := make([]*topo.Server, len(cells))
 	for i := range cells {
-		addr, cmd := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort+(i+100*i))
+		addr, cmd := startEtcd(t, cellPorts[i].client, cellPorts[i].peer)
 		cellClientAddrs[i] = addr
 		cellClientCmds[i] = cmd
 	}
-	require.Equal(t, len(cells), len(cellTSs))
 
 	// Setup the global topo server.
 	globalTS, err := topo.OpenServer("etcd2", globalClientAddr, path.Join(root, topo.GlobalCell))
@@ -353,7 +353,7 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 // appropriate errors instead of panicking due to nil pointer dereference.
 func TestEtcd2TopoServerClosed(t *testing.T) {
 	// Start a single etcd in the background.
-	clientAddr, _ := startEtcd(t, 0)
+	clientAddr, _ := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort, testfiles.GoVtTopoEtcd2topoPeerPort)
 
 	testRoot := "/test-closed"
 
