@@ -813,8 +813,8 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			return
 		}
 
-		// First, we reverse the popped off connections, so when we push connections back to the stack,
-		// we can go from oldest to newest.
+		// The stack is LIFO. Reverse the detached list so we inspect and return
+		// connections from oldest to newest.
 		var stackConnections int64
 		var oldestFirst *Pooled[C]
 		for conn != nil {
@@ -825,6 +825,10 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			conn = next
 		}
 
+		// Bound closes to the detached stack, not to the whole pool or just the
+		// expired cohort. This lets ordinary cleanup drain a small expired cohort
+		// while preventing the worker from closing and reopening an entire stack at
+		// once when all idle connections aged out together.
 		maxExpiredConnections := max(stackConnections/2, 1)
 		var expiredCount int64
 		var expiredConnections *Pooled[C]
