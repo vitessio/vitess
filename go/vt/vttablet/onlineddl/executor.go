@@ -1712,7 +1712,10 @@ func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancella
 }
 
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
-// for this keyspace
+// for this keyspace. When migrationContext is non-empty only migrations whose migration_context
+// matches are cancelled (CANCEL CONTEXT 'ctx'). When migrationContext is empty all pending
+// migrations are cancelled (CANCEL ALL). Note: CANCEL CONTEXT ” is therefore equivalent to
+// CANCEL ALL — empty context is not a supported filter value.
 func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
