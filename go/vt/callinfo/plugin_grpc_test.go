@@ -17,20 +17,41 @@ limitations under the License.
 package callinfo
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestGRPCCallInfo(t *testing.T) {
-	grpcCi := gRPCCallInfoImpl{
+	grpcCi := callInfoContext{
+		Context:    t.Context(),
 		method:     "tcp",
-		remoteAddr: "localhost",
+		remoteAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080},
 	}
 
 	require.Equal(t, t.Context(), GRPCCallInfo(t.Context()))
-	require.Equal(t, grpcCi.remoteAddr, grpcCi.RemoteAddr())
+	require.Equal(t, "127.0.0.1:8080", grpcCi.RemoteAddr())
 	require.Equal(t, "gRPC", grpcCi.Username())
-	require.Equal(t, "localhost:tcp(gRPC)", grpcCi.Text())
-	require.Equal(t, "<b>Method:</b> tcp <b>Remote Addr:</b> localhost", grpcCi.HTML().String())
+	require.Equal(t, "127.0.0.1:8080:tcp(gRPC)", grpcCi.Text())
+	require.Equal(t, "<b>Method:</b> tcp <b>Remote Addr:</b> 127.0.0.1:8080", grpcCi.HTML().String())
+}
+
+func TestGRPCCallInfoNilAddr(t *testing.T) {
+	grpcCi := callInfoContext{
+		Context: t.Context(),
+		method:  "test",
+	}
+	require.Equal(t, "", grpcCi.RemoteAddr())
+}
+
+func TestGRPCCallInfoFromContext(t *testing.T) {
+	ctx := &callInfoContext{
+		Context:    t.Context(),
+		method:     "/queryservice.Query/Execute",
+		remoteAddr: &net.TCPAddr{IP: net.ParseIP("10.0.0.1"), Port: 1234},
+	}
+	ci, ok := FromContext(ctx)
+	require.True(t, ok)
+	require.Equal(t, "10.0.0.1:1234", ci.RemoteAddr())
 }
