@@ -1693,6 +1693,103 @@ func channelClosed(ch <-chan struct{}) bool {
 	}
 }
 
+func TestIdleTimeoutStopsReopeningWhenPoolCloses(t *testing.T) {
+	var state TestState
+	var reconnectAttempts atomic.Int64
+	reconnectStarted := make(chan struct{})
+	releaseReconnect := make(chan struct{})
+	releaseReconnectOnce := sync.Once{}
+	release := func() {
+		releaseReconnectOnce.Do(func() {
+			close(releaseReconnect)
+		})
+	}
+	t.Cleanup(release)
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    4,
+		IdleTimeout: time.Millisecond,
+		LogWait:     state.LogWait,
+	})
+	p.config.connect = func(ctx context.Context) (*TestConn, error) {
+		if reconnectAttempts.Add(1) == 1 {
+			close(reconnectStarted)
+			select {
+			case <-releaseReconnect:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+
+		state.open.Add(1)
+		return &TestConn{
+			num:    state.lastID.Add(1),
+			counts: &state,
+		}, nil
+	}
+
+	closeChan := make(chan struct{})
+	p.close.Store(&closeChan)
+	p.capacity.Store(4)
+	p.idleCount.Store(4)
+	p.active.Store(4)
+
+	now := monotonicNow()
+	for range 4 {
+		conn := &Pooled[*TestConn]{
+			pool: p,
+			Conn: &TestConn{
+				num:    state.lastID.Add(1),
+				counts: &state,
+			},
+		}
+		state.open.Add(1)
+		conn.timeCreated.set(now)
+		conn.timeUsed.set(now - 2*time.Millisecond)
+		p.clean.Push(conn)
+	}
+
+	cleanupDone := make(chan struct{})
+	go func() {
+		defer close(cleanupDone)
+		p.closeIdleResources(time.Now())
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-reconnectStarted:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+
+	closePtr := p.close.Swap(nil)
+	require.NotNil(t, closePtr)
+	close(*closePtr)
+	release()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-cleanupDone:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+
+	assert.EqualValues(t, 1, reconnectAttempts.Load())
+	assert.EqualValues(t, 3, state.close.Load())
+
+	if conn, ok := p.clean.PopAll(); ok {
+		for conn != nil {
+			next := conn.next.Load()
+			conn.Close()
+			conn = next
+		}
+	}
+}
+
 func TestIdleTimeoutCloseInStackDoesNotAllocate(t *testing.T) {
 	var state TestState
 	const capacity = 1000
