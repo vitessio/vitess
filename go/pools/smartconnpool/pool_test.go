@@ -1467,9 +1467,9 @@ func TestIdleTimeoutConnectionLeak(t *testing.T) {
 	// Wait for idle timeout to kick in and start expiring connections
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		// Check the actual number of currently open connections
-		assert.Equal(c, int64(1), state.open.Load())
+		assert.Equal(c, int64(2), state.open.Load())
 		// Check the total number of closed connections
-		assert.Equal(c, int64(2), state.close.Load())
+		assert.Equal(c, int64(1), state.close.Load())
 	}, 100*time.Millisecond, 10*time.Millisecond)
 
 	// Keep this test focused on the in-flight reopen above. Further idle
@@ -1629,35 +1629,54 @@ func TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity(t *testing.T)
 	}, time.Second, 10*time.Millisecond)
 }
 
-func TestIdleTimeoutSweepsWholeStack(t *testing.T) {
+func TestIdleTimeoutBoundsExpiredSweep(t *testing.T) {
 	var state TestState
 
 	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
-		Capacity: 4,
+		Capacity: 6,
 		LogWait:  state.LogWait,
 	}).Open(newConnector(&state), nil)
-	defer p.Close()
+	var borrowedConns []*Pooled[*TestConn]
+	defer func() {
+		for _, conn := range borrowedConns {
+			p.put(conn)
+		}
+		p.Close()
+	}()
 
-	var conns []*Pooled[*TestConn]
+	var idleConns []*Pooled[*TestConn]
+	for range 2 {
+		conn, err := p.Get(ctx, nil)
+		require.NoError(t, err)
+		idleConns = append(idleConns, conn)
+	}
+
 	for range 4 {
 		conn, err := p.Get(ctx, nil)
 		require.NoError(t, err)
-		conns = append(conns, conn)
+		borrowedConns = append(borrowedConns, conn)
 	}
 
 	p.SetIdleTimeout(time.Millisecond)
-	for _, conn := range conns {
+	for _, conn := range idleConns {
 		p.put(conn)
 		conn.timeUsed.set(monotonicNow() - 2*time.Millisecond)
 	}
 
 	p.closeIdleResources(time.Now())
 
-	assert.EqualValues(t, 4, p.Metrics.IdleClosed())
-	assert.EqualValues(t, 4, state.close.Load())
-	assert.EqualValues(t, 4, p.Active())
-	assert.EqualValues(t, 4, p.Available())
+	assert.EqualValues(t, 1, p.Metrics.IdleClosed())
+	assert.EqualValues(t, 1, state.close.Load())
+	assert.EqualValues(t, 6, p.Active())
+	assert.EqualValues(t, 2, p.Available())
+
+	p.closeIdleResources(time.Now())
+
+	assert.EqualValues(t, 2, p.Metrics.IdleClosed())
+	assert.EqualValues(t, 2, state.close.Load())
+	assert.EqualValues(t, 6, p.Active())
+	assert.EqualValues(t, 2, p.Available())
 }
 
 func TestIdleTimeoutCloseInStackDoesNotAllocate(t *testing.T) {

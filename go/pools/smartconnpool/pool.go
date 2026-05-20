@@ -813,12 +813,20 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			return
 		}
 
+		var stackConnections int64
+		for stackConn := conn; stackConn != nil; stackConn = stackConn.next.Load() {
+			stackConnections++
+		}
+
+		maxExpiredConnections := max(stackConnections/2, 1)
+		var expiredCount int64
 		var expiredConnections *Pooled[C]
 		for conn != nil {
 			next := conn.next.Load()
 			conn.next.Store(nil)
 
-			if conn.timeUsed.expired(mono, timeout) {
+			if expiredCount < maxExpiredConnections && conn.timeUsed.expired(mono, timeout) {
+				expiredCount++
 				conn.next.Store(expiredConnections)
 				expiredConnections = conn
 				conn = next
