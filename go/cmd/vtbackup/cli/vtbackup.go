@@ -586,6 +586,8 @@ func takeBackup(ctx, backgroundCtx context.Context, topoServer *topo.Server, bac
 				log.Warningf("Failed to restart replication: %v", err)
 			}
 		} else {
+			// Clear last error as MySQL's replication is healthy
+			lastErr.Record(nil)
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 		}
 	}
