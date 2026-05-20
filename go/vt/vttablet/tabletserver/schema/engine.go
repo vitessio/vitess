@@ -73,11 +73,6 @@ const (
 	gtidExecutedOptimizeDataFreeThresholdBytes = 128 * 1024 * 1024 // 128 MiB
 	// gtidExecutedOptimizeInterval caps how often we'll run OPTIMIZE per tablet.
 	gtidExecutedOptimizeInterval = 24 * time.Hour
-	// gtidExecutedOptimizeTimeout bounds a single OPTIMIZE invocation. In
-	// normal operation it completes in well under a second; 20s is an outlier;
-	// 60s means something pathological is happening and we abort so we don't
-	// leave a long-running admin statement in flight indefinitely.
-	gtidExecutedOptimizeTimeout = 60 * time.Second
 	// primaryPromotionRestoreWaitTimeout bounds how long SRO restore waits for
 	// an in-flight promotion to either succeed or abort before giving up.
 	primaryPromotionRestoreWaitTimeout = 5 * time.Minute
@@ -96,6 +91,15 @@ const (
 	// schema reload context before the required table metadata queries run.
 	schemaMaintenanceProbeTimeout = 5 * time.Second
 )
+
+// gtidExecutedOptimizeTimeout bounds a single OPTIMIZE invocation. In
+// normal operation it completes in well under a second; 20s is an outlier;
+// 60s means something pathological is happening and we abort so we don't
+// leave a long-running admin statement in flight indefinitely. Declared as
+// var (not const) so tests can shrink it to drive the deadline path
+// without waiting 60s of wall-clock time; tests must restore the original
+// value via t.Cleanup.
+var gtidExecutedOptimizeTimeout = 60 * time.Second
 
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
 
@@ -869,6 +873,14 @@ func (se *Engine) readGlobalBool(ctx context.Context, conn *dbconnpool.DBConnect
 // (and keep super_read_only OFF longer than intended). Pattern modelled on
 // (*Mysqld).executeFetchContext in go/vt/mysqlctl/query.go, hardened to
 // not hang if KILL itself cannot be issued.
+//
+// IMPORTANT: conn MUST be a standalone connection (opened directly via
+// dbconnpool.NewDBConnection), not one borrowed from a pool. On ctx
+// expiry we call conn.Close() which closes the underlying *mysql.Conn
+// directly; if that conn were Recycled back into a pool the pool would
+// hand out a broken handle. All current callers (disableSuperReadOnly,
+// restoreSuperReadOnlyWithContext, runOptimizeGtidExecuted, killMySQLConn)
+// honour this — open new callers must too.
 func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnection, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -922,7 +934,15 @@ func (se *Engine) executeFetchCtx(ctx context.Context, conn *dbconnpool.DBConnec
 				// prefer it over the ctx error.
 				return result, nil
 			}
-			return nil, ctx.Err()
+			// Preserve the underlying execErr (typically a "connection
+			// closed" or server-side reason that arrived during the close)
+			// in the error chain so operators can correlate the timeout
+			// with what MySQL actually reported. Wrap ctx.Err() with %w
+			// (stdlib, not vterrors.Wrapf — vterrors.wrapping does not
+			// implement stdlib Unwrap so errors.Is would not traverse the
+			// chain) so callers that switch on context.DeadlineExceeded /
+			// context.Canceled still match.
+			return nil, fmt.Errorf("execErr: %v: %w", execErr, ctx.Err())
 		case <-timer.C:
 			log.Warn("schema engine: timed out waiting for interrupted query to unwind; returning ctx error",
 				slog.Int64("connID", connID), slog.String("query", query),

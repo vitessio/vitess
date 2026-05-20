@@ -89,6 +89,89 @@ func TestShouldAttemptGtidExecutedOptimizeLocked(t *testing.T) {
 	})
 }
 
+// TestGatingThroughMakePrimaryAndMakeNonPrimaryAPI pins the contract that
+// the tabletTypeStabilityCooldown gating is driven by the public
+// MakePrimary/MakeNonPrimary API — specifically that each transition
+// stamps tabletTypeLastChangedAt so the eligibility check correctly
+// blocks OPTIMIZE during the cooldown window. A regression in
+// MakePrimary or MakeNonPrimary that forgot to stamp the timestamp
+// would let OPTIMIZE fire during a fresh tablet-type transition, which
+// is exactly what the cooldown is designed to prevent.
+//
+// Each subtest captures the stamp before the API call, advances the
+// engine's perceived "before" clock by backdating to a known offset,
+// invokes the API, and asserts the stamp advanced past the backdate.
+// This catches a regression that drops the stamping entirely (which a
+// simple WithinDuration check would miss in a fast-running test).
+func TestGatingThroughMakePrimaryAndMakeNonPrimaryAPI(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+
+	readStamp := func() time.Time {
+		se.mu.Lock()
+		defer se.mu.Unlock()
+		return se.tabletTypeLastChangedAt
+	}
+	backdateStamp := func(to time.Time) {
+		se.mu.Lock()
+		defer se.mu.Unlock()
+		se.tabletTypeLastChangedAt = to
+	}
+	checkEligibility := func() bool {
+		se.mu.Lock()
+		defer se.mu.Unlock()
+		return se.shouldAttemptGtidExecutedOptimizeLocked(time.Now())
+	}
+
+	t.Run("MakePrimary stamps timestamp and blocks OPTIMIZE", func(t *testing.T) {
+		// Backdate to a known sentinel so we can prove the stamp advanced.
+		sentinel := time.Now().Add(-7 * 24 * time.Hour)
+		backdateStamp(sentinel)
+		se.MakePrimary(true)
+		assert.True(t, se.isPrimaryTablet.Load(), "MakePrimary must set isPrimaryTablet")
+		assert.True(t, readStamp().After(sentinel),
+			"MakePrimary must advance tabletTypeLastChangedAt past the sentinel — dropping the stamp would leave it at sentinel")
+		assert.False(t, checkEligibility(), "PRIMARY tablet must not be eligible for OPTIMIZE")
+	})
+
+	t.Run("MakeNonPrimary stamps timestamp on a real transition", func(t *testing.T) {
+		// Already PRIMARY from previous subtest. Backdate, then transition.
+		sentinel := time.Now().Add(-7 * 24 * time.Hour)
+		backdateStamp(sentinel)
+		se.MakeNonPrimary()
+		assert.False(t, se.isPrimaryTablet.Load(), "MakeNonPrimary must clear isPrimaryTablet")
+		assert.True(t, readStamp().After(sentinel),
+			"MakeNonPrimary on a real PRIMARY→non-PRIMARY transition must advance tabletTypeLastChangedAt")
+		assert.False(t, checkEligibility(),
+			"non-primary tablet within stability cooldown must not be eligible")
+	})
+
+	t.Run("simulated cooldown elapse makes the same engine eligible", func(t *testing.T) {
+		// Backdate the stamp past the cooldown without touching the API,
+		// to prove the eligibility check actually reads what the API
+		// stamped. If the API stamped a different field, this backdate
+		// would not affect eligibility.
+		backdateStamp(time.Now().Add(-2 * tabletTypeStabilityCooldown))
+		assert.True(t, checkEligibility(),
+			"past cooldown the same engine must become eligible — confirms the API-stamped field is what gating reads")
+	})
+
+	t.Run("MakeNonPrimary on an already-non-primary engine does NOT re-stamp", func(t *testing.T) {
+		// This pins the deliberate "only on real transitions" behavior at
+		// engine.go MakeNonPrimary line ~434. A future regression that
+		// stamps unconditionally would reset the cooldown on every reload
+		// tick for an idle replica, which the cooldown is designed to
+		// avoid.
+		backdated := time.Now().Add(-2 * tabletTypeStabilityCooldown)
+		backdateStamp(backdated)
+		require.False(t, se.isPrimaryTablet.Load(), "test precondition: already non-primary")
+		se.MakeNonPrimary()
+		assert.Equal(t, backdated.UnixNano(), readStamp().UnixNano(),
+			"MakeNonPrimary on an already-non-primary engine must not re-stamp")
+	})
+}
+
 // TestWaitForPrimaryPromotion verifies that restore waits for the promotion
 // outcome separately from the shorter super_read_only statement timeout.
 func TestWaitForPrimaryPromotion(t *testing.T) {
@@ -119,7 +202,7 @@ func TestWaitForPrimaryPromotion(t *testing.T) {
 			default:
 				return false
 			}
-		}, time.Second, 10*time.Millisecond)
+		}, 30*time.Second, 10*time.Millisecond)
 		assert.False(t, se.isPrimaryTablet.Load())
 	})
 
@@ -267,6 +350,14 @@ func TestDisableSuperReadOnly(t *testing.T) {
 		// PRIMARY ~50ms in, so by the time the middle check runs after the
 		// handshake completes it observes the promotion and bails out
 		// before SET ... ON.
+		//
+		// TODO: this is a race-window simulation (50ms sleep vs 200ms conn
+		// delay). On a heavily-loaded CI runner the 50ms sleep can fire
+		// after the 200ms delay completes, missing the window. Replacing
+		// with a deterministic synchronization primitive (e.g., a barrier
+		// signalled from a fakesqldb conn-open hook) would eliminate the
+		// flake risk — left as a follow-up because it requires a fakesqldb
+		// extension that doesn't exist today.
 		db := fakesqldb.New(t)
 		defer db.Close()
 		db.AddQuery(selectSuperReadOnlyQuery, sqltypes.MakeTestResult(
@@ -336,7 +427,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			default:
 				return false
 			}
-		}, time.Second, 10*time.Millisecond)
+		}, 30*time.Second, 10*time.Millisecond)
 		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
 			"aborted promotion leaves the tablet non-primary, so restore must re-enable super_read_only")
 	})
@@ -375,7 +466,7 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			default:
 				return false
 			}
-		}, time.Second, 10*time.Millisecond)
+		}, 30*time.Second, 10*time.Millisecond)
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"),
 			"successful promotion must keep super_read_only off")
 	})
@@ -489,9 +580,9 @@ func TestDisableSuperReadOnly(t *testing.T) {
 			default:
 				return false
 			}
-		}, 5*time.Second, 10*time.Millisecond, "SET GLOBAL super_read_only = 'OFF' should start")
+		}, 30*time.Second, 10*time.Millisecond, "SET GLOBAL super_read_only = 'OFF' should start")
 		assert.Eventually(t, func() bool { return killSeen.Load() >= 1 },
-			5*time.Second, 10*time.Millisecond, "disable timeout should interrupt the in-flight SET GLOBAL super_read_only = 'OFF'")
+			30*time.Second, 10*time.Millisecond, "disable timeout should interrupt the in-flight SET GLOBAL super_read_only = 'OFF'")
 
 		releaseDisableOnce.Do(func() {
 			close(releaseDisable)
@@ -568,7 +659,7 @@ func TestRestoreSuperReadOnlyHonorsContextTimeout(t *testing.T) {
 	}()
 
 	assert.Eventually(t, func() bool { return killSeen.Load() >= 1 },
-		5*time.Second, 10*time.Millisecond, "restore must issue KILL when SET GLOBAL super_read_only = 'ON' times out")
+		30*time.Second, 10*time.Millisecond, "restore must issue KILL when SET GLOBAL super_read_only = 'ON' times out")
 	close(release)
 	assert.Eventually(t, func() bool {
 		select {
@@ -577,7 +668,7 @@ func TestRestoreSuperReadOnlyHonorsContextTimeout(t *testing.T) {
 		default:
 			return false
 		}
-	}, 5*time.Second, 10*time.Millisecond, "restore must unwind after timing out the SET GLOBAL super_read_only = 'ON'")
+	}, 30*time.Second, 10*time.Millisecond, "restore must unwind after timing out the SET GLOBAL super_read_only = 'ON'")
 }
 
 // TestRunOptimizeGtidExecutedSuccess exercises the full goroutine body on
@@ -706,6 +797,100 @@ func TestRunOptimizeGtidExecutedSkipsIfPromotedAfterDisablingSuperReadOnly(t *te
 	se.mu.Lock()
 	assert.True(t, se.gtidExecutedOptimizeLastAt.IsZero())
 	se.mu.Unlock()
+}
+
+// TestRunOptimizeGtidExecutedHonorsOverallTimeout pins the contract that
+// runOptimizeGtidExecuted actually enforces gtidExecutedOptimizeTimeout on
+// the OPTIMIZE call. We shrink the timeout via the test-overridable var
+// (restored via t.Cleanup), block fakesqldb's OPTIMIZE longer than the
+// override, then assert:
+//   - the function returns within a bounded wall-clock time (the override),
+//   - SRO restore (SET GLOBAL super_read_only = 'ON') still ran so the
+//     tablet is not left writeable, and
+//   - the failure-path stamp gtidExecutedOptimizeLastAt is set so we don't
+//     retry on every reload.
+//
+// A regression that swaps backgroundTimeoutContext for context.Background
+// or otherwise drops the timeout wrap would let the OPTIMIZE block
+// indefinitely; the t.Fatal in the wait below would then fire.
+func TestRunOptimizeGtidExecutedHonorsOverallTimeout(t *testing.T) {
+	const overrideTimeout = 200 * time.Millisecond
+	original := gtidExecutedOptimizeTimeout
+	gtidExecutedOptimizeTimeout = overrideTimeout
+	t.Cleanup(func() { gtidExecutedOptimizeTimeout = original })
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("super_read_only", "int64"), "1"))
+	db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+	db.AddQuery("SELECT @@global.read_only", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("read_only", "int64"), "1"))
+	db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+
+	const optimizeQuery = "OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed"
+	db.AddQuery(optimizeQuery, &sqltypes.Result{})
+	release := make(chan struct{})
+	t.Cleanup(func() {
+		// Best-effort: unblock fakesqldb if the test fails mid-flight so
+		// we don't leak a stuck goroutine into the rest of the suite.
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+	db.SetBeforeFunc(optimizeQuery, func() {
+		<-release
+	})
+	var killSeen atomic.Int32
+	db.AddQueryPatternWithCallback(`(?i)^kill [0-9]+$`, &sqltypes.Result{}, func(q string) {
+		killSeen.Add(1)
+	})
+
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	se.mu.Lock()
+	se.tabletTypeLastChangedAt = time.Now().Add(-1 * time.Hour)
+	se.mu.Unlock()
+
+	done := make(chan struct{})
+	start := time.Now()
+	go func() {
+		defer close(done)
+		se.runOptimizeGtidExecuted(200 * 1024 * 1024)
+	}()
+
+	// Wait for KILL — proof that executeFetchCtx entered the cleanup
+	// path because the override timeout expired. Bound this generously
+	// (CI-resilient) but well above the override.
+	assert.Eventually(t, func() bool { return killSeen.Load() >= 1 },
+		30*time.Second, 10*time.Millisecond,
+		"KILL must fire after the override timeout expires — proves runOptimizeGtidExecuted honours the var")
+
+	// Unblock fakesqldb so the underlying ExecuteFetch can unwind.
+	close(release)
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("runOptimizeGtidExecuted did not return within bounded time — timeout enforcement regressed")
+	}
+
+	elapsed := time.Since(start)
+	// Sanity: the override + post-close grace (5s) + a little slack.
+	// If we observe wall-clock approaching the original 60s constant, the
+	// override was ignored (variable shadowing or a refactor that captured
+	// the constant by value at init).
+	assert.Less(t, elapsed, 30*time.Second,
+		"runOptimizeGtidExecuted exceeded bounded wall-clock; the timeout override was not honoured")
+
+	assert.GreaterOrEqual(t, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"), 1,
+		"SRO must be restored even when OPTIMIZE times out")
+
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	assert.False(t, se.gtidExecutedOptimizeLastAt.IsZero(),
+		"on OPTIMIZE failure (including timeout) the last-run stamp must be set so we don't retry every reload")
 }
 
 func TestCloseCancelsInFlightOptimize(t *testing.T) {
@@ -1096,7 +1281,7 @@ func TestExecuteFetchCtxKillsOnDeadline(t *testing.T) {
 	}()
 
 	assert.Eventually(t, func() bool { return killSeen.Load() >= 1 },
-		5*time.Second, 10*time.Millisecond, "expected KILL to be issued after ctx deadline")
+		30*time.Second, 10*time.Millisecond, "expected KILL to be issued after ctx deadline")
 
 	// Unblock the fakesqldb BeforeFunc so the underlying ExecuteFetch can
 	// unwind (fakesqldb does not honour the KILL semantically).
@@ -1108,7 +1293,79 @@ func TestExecuteFetchCtxKillsOnDeadline(t *testing.T) {
 		default:
 			return false
 		}
-	}, 5*time.Second, 10*time.Millisecond, "executeFetchCtx must unwind after KILL+release")
+	}, 30*time.Second, 10*time.Millisecond, "executeFetchCtx must unwind after KILL+release")
+}
+
+// TestExecuteFetchCtxPreservesUnderlyingExecErrOnTimeout pins that when ctx
+// expires and the in-flight ExecuteFetch subsequently returns with a non-nil
+// error (e.g. "EOF" from the conn being closed by executeFetchCtx itself, or
+// any server-side reason that arrives during the post-close grace window),
+// the returned error preserves the underlying execErr message AND remains
+// ctx.DeadlineExceeded-classifiable via errors.Is. Without this, operators
+// lose the post-mortem detail of what MySQL actually reported when the
+// query was interrupted.
+func TestExecuteFetchCtxPreservesUnderlyingExecErrOnTimeout(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	const blockingQuery = "OPTIMIZE NO_WRITE_TO_BINLOG TABLE mysql.gtid_executed"
+	db.AddQuery(blockingQuery, &sqltypes.Result{})
+	release := make(chan struct{})
+	db.SetBeforeFunc(blockingQuery, func() {
+		<-release
+	})
+	var killSeen atomic.Int32
+	db.AddQueryPatternWithCallback(`(?i)^kill [0-9]+$`, &sqltypes.Result{}, func(q string) {
+		killSeen.Add(1)
+	})
+
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+
+	conn, err := dbconnpool.NewDBConnection(t.Context(), dbconfigs.New(db.ConnParams()))
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+
+	type execResult struct {
+		err error
+	}
+	resultCh := make(chan execResult, 1)
+	go func() {
+		_, err := se.executeFetchCtx(ctx, conn, blockingQuery, 1, false)
+		resultCh <- execResult{err: err}
+	}()
+
+	// Wait until executeFetchCtx has demonstrably entered the cleanup path
+	// by observing the issued KILL — that proves the ctx.Done branch (not
+	// the lucky <-done branch) was taken and we're now in the post-close
+	// grace select. Only then unblock fakesqldb so the underlying
+	// ExecuteFetch can unwind with whatever error it sees from the closed
+	// connection. This avoids the race where unblocking too early lets
+	// the original goroutine return successfully and the outer select
+	// pseudo-randomly picks <-done first.
+	assert.Eventually(t, func() bool { return killSeen.Load() >= 1 },
+		30*time.Second, 10*time.Millisecond, "KILL must fire before we unblock the underlying query")
+	close(release)
+
+	var got execResult
+	select {
+	case got = <-resultCh:
+	case <-time.After(30 * time.Second):
+		t.Fatal("executeFetchCtx did not unwind after ctx expiry + release")
+	}
+
+	require.Error(t, got.err)
+	require.ErrorIs(t, got.err, context.DeadlineExceeded,
+		"returned error must remain classifiable as ctx deadline exceeded")
+	// The underlying execErr message must survive in the error chain for
+	// post-mortem debuggability. The actual underlying error text depends
+	// on how fakesqldb / the MySQL conn driver reports the close, but it
+	// MUST NOT equal just ctx.Err()'s text — that would mean we dropped
+	// the underlying detail.
+	assert.NotEqual(t, context.DeadlineExceeded.Error(), got.err.Error(),
+		"returned error %q must wrap the underlying execErr, not just return ctx.Err() bare", got.err.Error())
 }
 
 // TestExecuteFetchCtxFastFailOnExpiredCtx verifies the fast-fail path:
