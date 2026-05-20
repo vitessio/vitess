@@ -3734,6 +3734,10 @@ alter_statement:
   }
 | ALTER comment_opt VITESS_MIGRATION CLEANUP CONTEXT STRING
   {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
     $$ = &AlterMigration{
       Type: CleanupAllMigrationType,
       Context: $6,
@@ -3762,6 +3766,10 @@ alter_statement:
   }
 | ALTER comment_opt VITESS_MIGRATION LAUNCH CONTEXT STRING
   {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
     $$ = &AlterMigration{
       Type: LaunchAllMigrationType,
       Context: $6,
@@ -3790,6 +3798,10 @@ alter_statement:
   }
 | ALTER comment_opt VITESS_MIGRATION COMPLETE CONTEXT STRING
   {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
     $$ = &AlterMigration{
       Type: CompleteAllMigrationType,
       Context: $6,
@@ -3810,6 +3822,10 @@ alter_statement:
   }
 | ALTER comment_opt VITESS_MIGRATION POSTPONE COMPLETE CONTEXT STRING
   {
+    if $7 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
     $$ = &AlterMigration{
       Type: PostponeCompleteAllMigrationType,
       Context: $7,
@@ -3858,6 +3874,10 @@ alter_statement:
   }
 | ALTER comment_opt VITESS_MIGRATION THROTTLE CONTEXT STRING expire_opt ratio_opt
   {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
     $$ = &AlterMigration{
       Type: ThrottleAllMigrationType,
       Context: $6,
@@ -3880,6 +3900,10 @@ alter_statement:
   }
 | ALTER comment_opt VITESS_MIGRATION UNTHROTTLE CONTEXT STRING
   {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
     $$ = &AlterMigration{
       Type: UnthrottleAllMigrationType,
       Context: $6,
@@ -3900,6 +3924,10 @@ alter_statement:
   }
 | ALTER comment_opt VITESS_MIGRATION FORCE_CUTOVER CONTEXT STRING
   {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+      return 1
+    }
     $$ = &AlterMigration{
       Type: ForceCutOverAllMigrationType,
       Context: $6,
