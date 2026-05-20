@@ -88,14 +88,14 @@ func TestQueryThrottler_StrategyLifecycleManagement(t *testing.T) {
 	iqt := NewQueryThrottler(ctx, throttler, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: uint32(123)}, srvTopoServer)
 
 	// Verify initial strategy was started (NoOpStrategy in this case)
-	require.NotNil(t, iqt.strategyHandlerInstance)
+	require.NotNil(t, iqt.snapshot.Load().strategy)
 
 	// Test Shutdown properly stops the strategy
 	iqt.Shutdown()
 
 	// After shutdown, the strategy should have been stopped
 	// In a real test, we would verify the strategy's Stop method was called
-	require.NotNil(t, iqt.strategyHandlerInstance) // Strategy reference should still exist but be stopped
+	require.NotNil(t, iqt.snapshot.Load().strategy) // Strategy reference should still exist but be stopped
 }
 
 // TestQueryThrottler_Shutdown tests the Shutdown method.
@@ -117,9 +117,7 @@ func TestQueryThrottler_Shutdown(t *testing.T) {
 	iqt.Shutdown()
 
 	// Should still be able to check the strategy reference
-	iqt.mu.RLock()
-	strategy := iqt.strategyHandlerInstance
-	iqt.mu.RUnlock()
+	strategy := iqt.snapshot.Load().strategy
 	require.NotNil(t, strategy)
 }
 
@@ -231,13 +229,15 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			// Create throttler with controlled config
 			iqt := &QueryThrottler{
 				ctx: t.Context(),
+				env: env,
+			}
+			iqt.snapshot.Store(&stateSnapshot{
 				cfg: &querythrottlerpb.Config{
 					Enabled: tt.enabled,
 					DryRun:  tt.dryRun,
 				},
-				env:                     env,
-				strategyHandlerInstance: mockStrategy,
-			}
+				strategy: mockStrategy,
+			})
 
 			requestsTotal.ResetAll()
 			requestsThrottled.ResetAll()
@@ -445,12 +445,14 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 			ctx := t.Context()
 
 			qt := &QueryThrottler{
-				ctx:                     ctx,
-				keyspace:                "test-keyspace",
-				cfg:                     &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
-				strategyHandlerInstance: &registry.NoOpStrategy{},
-				tabletConfig:            &tabletenv.TabletConfig{},
+				ctx:          ctx,
+				keyspace:     "test-keyspace",
+				tabletConfig: &tabletenv.TabletConfig{},
 			}
+			qt.snapshot.Store(&stateSnapshot{
+				cfg:      &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
+				strategy: &registry.NoOpStrategy{},
+			})
 
 			// Create a valid SrvKeyspace matching the test setup (errors are checked before srvks is used)
 			srvks := createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false)
@@ -470,12 +472,14 @@ func TestQueryThrottler_HandleConfigUpdate__ConfigExtraction(t *testing.T) {
 	oldStrategy := &registry.NoOpStrategy{}
 
 	qt := &QueryThrottler{
-		ctx:                     ctx,
-		cfg:                     oldCfg,
-		strategyHandlerInstance: oldStrategy,
-		tabletConfig:            &tabletenv.TabletConfig{},
-		throttlerClient:         &throttle.Client{},
+		ctx:             ctx,
+		tabletConfig:    &tabletenv.TabletConfig{},
+		throttlerClient: &throttle.Client{},
 	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      oldCfg,
+		strategy: oldStrategy,
+	})
 
 	// Create SrvKeyspace with different config values
 	srvks := createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, true)
@@ -485,11 +489,10 @@ func TestQueryThrottler_HandleConfigUpdate__ConfigExtraction(t *testing.T) {
 	// Should return true to continue watching, config should be extracted from SrvKeyspace
 	require.True(t, result, "callback should return true and continue watching")
 
-	qt.mu.RLock()
-	require.True(t, qt.cfg.GetEnabled(), "Enabled should be updated from SrvKeyspace")
-	require.True(t, qt.cfg.GetDryRun(), "DryRun should be updated from SrvKeyspace")
-	require.Equal(t, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, qt.cfg.GetStrategy(), "strategy should remain TabletThrottler")
-	qt.mu.RUnlock()
+	snap := qt.snapshot.Load()
+	require.True(t, snap.cfg.GetEnabled(), "Enabled should be updated from SrvKeyspace")
+	require.True(t, snap.cfg.GetDryRun(), "DryRun should be updated from SrvKeyspace")
+	require.Equal(t, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, snap.cfg.GetStrategy(), "strategy should remain TabletThrottler")
 }
 
 // TestQueryThrottler_HandleConfigUpdate__SuccessfulConfigUpdate tests successful config update when strategy doesn't change.
@@ -503,11 +506,13 @@ func TestQueryThrottler_HandleConfigUpdate__SuccessfulConfigUpdate(t *testing.T)
 	unchangedStrategyType := querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER
 
 	qt := &QueryThrottler{
-		ctx:                     ctx,
-		cfg:                     &querythrottlerpb.Config{Enabled: true, Strategy: unchangedStrategyType, DryRun: false},
-		strategyHandlerInstance: oldStrategy,
-		tabletConfig:            &tabletenv.TabletConfig{},
+		ctx:          ctx,
+		tabletConfig: &tabletenv.TabletConfig{},
 	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{Enabled: true, Strategy: unchangedStrategyType, DryRun: false},
+		strategy: oldStrategy,
+	})
 
 	// Create SrvKeyspace with same strategy but DryRun changed
 	srvks := createTestSrvKeyspace(true, unchangedStrategyType, true)
@@ -516,13 +521,12 @@ func TestQueryThrottler_HandleConfigUpdate__SuccessfulConfigUpdate(t *testing.T)
 
 	require.True(t, result, "callback should return true")
 
-	qt.mu.RLock()
-	require.True(t, qt.cfg.GetDryRun(), "DryRun config should be updated")
-	require.Equal(t, unchangedStrategyType, qt.cfg.GetStrategy(), "strategy type should remain the same")
-	require.Equal(t, oldStrategy, qt.strategyHandlerInstance, "strategy instance should not change when type is same")
+	snap := qt.snapshot.Load()
+	require.True(t, snap.cfg.GetDryRun(), "DryRun config should be updated")
+	require.Equal(t, unchangedStrategyType, snap.cfg.GetStrategy(), "strategy type should remain the same")
+	require.Equal(t, oldStrategy, snap.strategy, "strategy instance should not change when type is same")
 	// Verify the old strategy was NOT stopped (no swap occurred)
 	require.False(t, oldStrategy.stopped, "old strategy should NOT be stopped when type doesn't change")
-	qt.mu.RUnlock()
 }
 
 // TestQueryThrottler_HandleConfigUpdate__StrategySwitch tests that strategy is properly switched when strategy type changes.
@@ -532,12 +536,14 @@ func TestQueryThrottler_HandleConfigUpdate__StrategySwitch(t *testing.T) {
 	oldStrategy := &mockThrottlingStrategy{}
 
 	qt := &QueryThrottler{
-		ctx:                     ctx,
-		cfg:                     &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
-		strategyHandlerInstance: oldStrategy,
-		tabletConfig:            &tabletenv.TabletConfig{},
-		throttlerClient:         &throttle.Client{},
+		ctx:             ctx,
+		tabletConfig:    &tabletenv.TabletConfig{},
+		throttlerClient: &throttle.Client{},
 	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
+		strategy: oldStrategy,
+	})
 
 	srvks := createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_UNKNOWN, false)
 
@@ -546,13 +552,12 @@ func TestQueryThrottler_HandleConfigUpdate__StrategySwitch(t *testing.T) {
 	// Strategy should be switched
 	require.True(t, result, "callback should return true")
 
-	qt.mu.RLock()
-	require.Equal(t, querythrottlerpb.ThrottlingStrategy_UNKNOWN, qt.cfg.GetStrategy(), "config strategy should be updated")
+	snap := qt.snapshot.Load()
+	require.Equal(t, querythrottlerpb.ThrottlingStrategy_UNKNOWN, snap.cfg.GetStrategy(), "config strategy should be updated")
 	// Old strategy should have been stopped (mocked strategy tracks this)
 	require.True(t, oldStrategy.stopped, "old strategy should be stopped")
 	// New strategy should be different instance
-	newStrategyInstance := qt.strategyHandlerInstance
-	qt.mu.RUnlock()
+	newStrategyInstance := snap.strategy
 
 	require.NotEqual(t, fmt.Sprintf("%p", oldStrategy), fmt.Sprintf("%p", newStrategyInstance),
 		"strategy instance should be different after type change")
@@ -566,11 +571,13 @@ func TestQueryThrottler_HandleConfigUpdate__NoChange(t *testing.T) {
 	oldStrategy := &registry.NoOpStrategy{}
 
 	qt := &QueryThrottler{
-		ctx:                     ctx,
-		cfg:                     unchangedCfg,
-		strategyHandlerInstance: oldStrategy,
-		tabletConfig:            &tabletenv.TabletConfig{},
+		ctx:          ctx,
+		tabletConfig: &tabletenv.TabletConfig{},
 	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      unchangedCfg,
+		strategy: oldStrategy,
+	})
 
 	// Create SrvKeyspace with identical config
 	srvks := createTestSrvKeyspace(true, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, false)
@@ -580,10 +587,9 @@ func TestQueryThrottler_HandleConfigUpdate__NoChange(t *testing.T) {
 	// Config and strategy should remain same
 	require.True(t, result, "callback should return true")
 
-	qt.mu.RLock()
-	require.Equal(t, unchangedCfg, qt.cfg, "config should remain unchanged")
-	require.Equal(t, oldStrategy, qt.strategyHandlerInstance, "strategy should remain unchanged")
-	qt.mu.RUnlock()
+	snap := qt.snapshot.Load()
+	require.Equal(t, unchangedCfg, snap.cfg, "config should remain unchanged")
+	require.Equal(t, oldStrategy, snap.strategy, "strategy should remain unchanged")
 }
 
 // TestIsConfigUpdateRequired tests the isConfigUpdateRequired function.
@@ -766,11 +772,10 @@ func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad(t *testing.T) {
 
 	// Verify that the configuration was loaded correctly
 	require.Eventually(t, func() bool {
-		qt.mu.RLock()
-		defer qt.mu.RUnlock()
-		return qt.cfg.GetEnabled() &&
-			qt.cfg.GetStrategy() == querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER &&
-			!qt.cfg.GetDryRun()
+		snap := qt.snapshot.Load()
+		return snap.cfg.GetEnabled() &&
+			snap.cfg.GetStrategy() == querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER &&
+			!snap.cfg.GetDryRun()
 	}, 2*time.Second, 10*time.Millisecond, "Config should be loaded correctly: enabled=true, strategy=TabletThrottler, dryRun=false")
 
 	require.Equal(t, "test_keyspace", qt.keyspace, "Keyspace should be set correctly")
@@ -802,9 +807,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoadFailure(t *testing.T) {
 
 	// Configuration should remain at default (NoOpStrategy) due to failure
 	require.Eventually(t, func() bool {
-		qt.mu.RLock()
-		defer qt.mu.RUnlock()
-		return !qt.cfg.GetEnabled()
+		return !qt.snapshot.Load().cfg.GetEnabled()
 	}, 2*time.Second, 10*time.Millisecond, "Config should remain disabled after initial load failure")
 }
 
@@ -962,11 +965,10 @@ func TestQueryThrottler_startSrvKeyspaceWatch_WatchCallback(t *testing.T) {
 
 			// Verify that HandleConfigUpdate was called by checking if the config was updated
 			require.Eventually(t, func() bool {
-				qt.mu.RLock()
-				defer qt.mu.RUnlock()
-				return qt.cfg.GetEnabled() == tt.expectedEnabled &&
-					qt.cfg.GetStrategy() == tt.expectedStrategy &&
-					qt.cfg.GetDryRun() == tt.expectedDryRun
+				snap := qt.snapshot.Load()
+				return snap.cfg.GetEnabled() == tt.expectedEnabled &&
+					snap.cfg.GetStrategy() == tt.expectedStrategy &&
+					snap.cfg.GetDryRun() == tt.expectedDryRun
 			}, 2*time.Second, 10*time.Millisecond, "Config should be updated correctly after callback is invoked")
 		},
 		)
@@ -1004,9 +1006,7 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 	}, 2*time.Second, 10*time.Millisecond, "Watch should be marked as not started after shutdown")
 
 	// Verify that the strategy was stopped
-	qt.mu.RLock()
-	strategyInstance := qt.strategyHandlerInstance
-	qt.mu.RUnlock()
+	strategyInstance := qt.snapshot.Load().strategy
 	require.NotNil(t, strategyInstance, "Strategy instance should still exist after shutdown")
 
 	// Call Shutdown again to ensure it doesn't panic
@@ -1014,4 +1014,55 @@ func TestQueryThrottler_startSrvKeyspaceWatch_ShutdownStopsWatch(t *testing.T) {
 
 	// Verify the watch flag remains false
 	require.False(t, qt.watchStarted.Load(), "Watch should remain not started after multiple shutdowns")
+}
+
+// TestQueryThrottler_ConcurrentThrottleAndConfigUpdate exercises concurrent
+// Throttle() reads against HandleConfigUpdate() swaps to guard against the
+// data race that previously existed when cfg/strategy were read without
+// synchronization. Must be run with `go test -race` to be meaningful.
+func TestQueryThrottler_ConcurrentThrottleAndConfigUpdate(t *testing.T) {
+	ctx := t.Context()
+
+	qt := &QueryThrottler{
+		ctx:             ctx,
+		tabletConfig:    &tabletenv.TabletConfig{},
+		throttlerClient: &throttle.Client{},
+		env:             tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler"),
+	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{Enabled: true, Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER},
+		strategy: &mockThrottlingStrategy{decision: registry.ThrottleDecision{Throttle: false}},
+	})
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	const readers = 8
+	for range readers {
+		wg.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					_ = qt.Throttle(ctx, topodatapb.TabletType_REPLICA,
+						&sqlparser.ParsedQuery{Query: "SELECT 1"}, 0,
+						&querypb.ExecuteOptions{WorkloadName: "w", Priority: "50"})
+				}
+			}
+		})
+	}
+
+	// Alternate the strategy type to force snapshot swaps that exercise both
+	// the cfg pointer and the strategy interface value.
+	strategies := []querythrottlerpb.ThrottlingStrategy{
+		querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		querythrottlerpb.ThrottlingStrategy_UNKNOWN,
+	}
+	for i := range 200 {
+		qt.HandleConfigUpdate(createTestSrvKeyspace(true, strategies[i%2], i%2 == 0), nil)
+	}
+
+	close(stop)
+	wg.Wait()
 }

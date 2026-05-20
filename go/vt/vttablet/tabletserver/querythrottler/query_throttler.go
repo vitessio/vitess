@@ -59,6 +59,15 @@ var (
 	evaluateLatency   = stats.NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", []string{"Strategy", "Workload", "Priority"})
 )
 
+// stateSnapshot is the immutable {cfg, strategy} pair that Throttle() reads
+// from atomically on the hot path. HandleConfigUpdate replaces the whole snapshot
+// rather than mutating individual fields, so Throttle() always observes a
+// consistent (cfg, strategy) pair without locking.
+type stateSnapshot struct {
+	cfg      *querythrottlerpb.Config
+	strategy registry.ThrottlingStrategyHandler
+}
+
 type QueryThrottler struct {
 	ctx                context.Context
 	cancelWatchContext context.CancelFunc
@@ -70,14 +79,16 @@ type QueryThrottler struct {
 	cell          string
 	srvTopoServer srvtopo.Server
 
-	mu           sync.RWMutex
+	// mu serializes config updates (HandleConfigUpdate) against Shutdown and against
+	// each other. The hot-path Throttle() reads do not take this lock; they load
+	// the snapshot atomically instead.
+	mu           sync.Mutex
 	watchStarted atomic.Bool
 
-	// cfg holds the current configuration for the throttler (proto type used directly).
-	cfg *querythrottlerpb.Config
-	// strategyHandlerInstance is the current throttling strategy handler instance
-	strategyHandlerInstance registry.ThrottlingStrategyHandler
-	env                     tabletenv.Env
+	// snapshot holds the current immutable {cfg, strategy} pair. Always non-nil after NewQueryThrottler. Updated via atomic Store in HandleConfigUpdate.
+	snapshot atomic.Pointer[stateSnapshot]
+
+	env tabletenv.Env
 }
 
 // NewQueryThrottler creates a new  query throttler.
@@ -85,18 +96,24 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.QueryThrottlerName, base.UndefinedScope)
 
 	qt := &QueryThrottler{
-		ctx:                     ctx,
-		throttlerClient:         client,
-		tabletConfig:            env.Config(),
-		cell:                    alias.GetCell(),
-		srvTopoServer:           srvTopoServer,
-		cfg:                     &querythrottlerpb.Config{},
-		strategyHandlerInstance: &registry.NoOpStrategy{}, // default strategy until config is loaded
-		env:                     env,
+		ctx:             ctx,
+		throttlerClient: client,
+		tabletConfig:    env.Config(),
+		cell:            alias.GetCell(),
+		srvTopoServer:   srvTopoServer,
+		env:             env,
 	}
 
+	// Initialize snapshot with empty config and default NoOp strategy so Throttle()
+	// always sees a non-nil snapshot until the first config update lands.
+	initial := &stateSnapshot{
+		cfg:      &querythrottlerpb.Config{},
+		strategy: &registry.NoOpStrategy{},
+	}
+	qt.snapshot.Store(initial)
+
 	// Start the initial strategy
-	qt.strategyHandlerInstance.Start()
+	initial.strategy.Start()
 
 	return qt
 }
@@ -116,8 +133,8 @@ func (qt *QueryThrottler) Shutdown() {
 	qt.watchStarted.Store(false)
 
 	// Stop the current strategy to clean up any background processes
-	if qt.strategyHandlerInstance != nil {
-		qt.strategyHandlerInstance.Stop()
+	if snap := qt.snapshot.Load(); snap != nil && snap.strategy != nil {
+		snap.strategy.Stop()
 	}
 }
 
@@ -144,17 +161,14 @@ func (qt *QueryThrottler) InitDBConfig(keyspace string) {
 	qt.startSrvKeyspaceWatch()
 }
 
-// Throttle checks if the tablet is under heavy load
-// and enforces throttling by rejecting the incoming request if necessary.
-// Note: This method performs lock-free reads of config and strategy for optimal performance.
-// Config updates are rare (default: every 1 minute) compared to query frequency,
-// so the tiny risk of reading slightly stale data during config updates is acceptable
-// for the significant performance improvement of avoiding mutex contention.
+// Throttle checks if the tablet is under heavy load and enforces throttling by rejecting the incoming request if necessary.
+// Note: The hot path uses a single atomic load of the snapshot — no lock is taken — so concurrent config updates never tear the (cfg, strategy) pair.
+// Config updates are rare  compared to query frequency, and the snapshot pointer is swapped atomically by HandleConfigUpdate.
 func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, transactionID int64, options *querypb.ExecuteOptions) error {
-	// Lock-free read: for maximum performance in the hot path as cfg and strategy are updated rarely (default once per minute).
-	// They are word-sized and safe for atomic reads; stale data for one query is acceptable and avoids mutex contention in the hot path.
-	tCfg := qt.cfg
-	tStrategy := qt.strategyHandlerInstance
+	// Single atomic load gives a consistent (cfg, strategy) pair for this call.
+	snap := qt.snapshot.Load()
+	tCfg := snap.cfg
+	tStrategy := snap.strategy
 
 	if !tCfg.GetEnabled() {
 		return nil
@@ -329,41 +343,41 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	// Get the query throttler configuration from the SrvKeyspace that the QueryThrottler uses to manage its throttling behavior.
 	newCfg := srvks.GetQueryThrottlerConfig()
 
+	// Atomic load: safe without the lock. Per the function contract, only this
+	// callback writes to qt.snapshot, so the read here is also single-writer.
+	currentSnap := qt.snapshot.Load()
+
 	// If the config is not changed, return early.
-	if !isConfigUpdateRequired(qt.cfg, newCfg) {
+	if !isConfigUpdateRequired(currentSnap.cfg, newCfg) {
 		return true
 	}
 
-	// No Locking is required because only this function updates the configs of Query Throttler.
-	needsStrategyChange := qt.cfg.GetStrategy() != newCfg.GetStrategy()
-	oldStrategyInstance := qt.strategyHandlerInstance
-
-	var newStrategy registry.ThrottlingStrategyHandler
+	needsStrategyChange := currentSnap.cfg.GetStrategy() != newCfg.GetStrategy()
+	newStrategy := currentSnap.strategy
 	if needsStrategyChange {
-		// Create the new strategy (doesn't need lock)
+		// Build the new strategy outside the lock; this can be slow (opens a topo watch).
 		newStrategy = selectThrottlingStrategy(newCfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
 	}
 
-	// Acquire write lock only for the actual swap operation.
-	// Using closure + defer ensures unlock happens even on panic.
+	// Take the lock only for the swap to serialize with Shutdown. Start() runs
+	// under the lock to match the original behavior (consistent with strategy
+	// installation). Throttle() never contends on this lock.
 	func() {
 		qt.mu.Lock()
 		defer qt.mu.Unlock()
 
-		if needsStrategyChange {
-			qt.strategyHandlerInstance = newStrategy
-			// Start a new strategy after assignment, still under lock for consistency.
-			if newStrategy != nil {
-				newStrategy.Start()
-			}
+		if needsStrategyChange && newStrategy != nil {
+			newStrategy.Start()
 		}
-		// Always update the configuration
-		qt.cfg = newCfg
+		qt.snapshot.Store(&stateSnapshot{
+			cfg:      newCfg,
+			strategy: newStrategy,
+		})
 	}()
 
-	// Stop the old strategy (if needed) outside the lock to avoid blocking.
-	if needsStrategyChange && oldStrategyInstance != nil {
-		oldStrategyInstance.Stop()
+	// Stop the old strategy outside the lock; this can be slow.
+	if needsStrategyChange && currentSnap.strategy != nil {
+		currentSnap.strategy.Stop()
 	}
 
 	log.Info(fmt.Sprintf("HandleConfigUpdate: config updated, strategy=%s, enabled=%v", newCfg.GetStrategy(), newCfg.GetEnabled()))
