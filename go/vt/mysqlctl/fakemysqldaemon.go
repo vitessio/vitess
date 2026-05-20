@@ -225,6 +225,16 @@ type FakeMysqlDaemon struct {
 	// GlobalReadLock is used to test if a lock has been acquired already or not
 	GlobalReadLock bool
 
+	// ReleaseGlobalReadLockLastCtx records the context passed to the most
+	// recent call to ReleaseGlobalReadLock, so tests can assert on its
+	// deadline and inherited values.
+	ReleaseGlobalReadLockLastCtx context.Context
+
+	// ReleaseGlobalReadLockLastCtxErr records the value of ctx.Err() at the
+	// time the most recent ReleaseGlobalReadLock call was invoked, so tests
+	// can assert the context wasn't already cancelled when the call ran.
+	ReleaseGlobalReadLockLastCtxErr error
+
 	// TimeoutHook is a func that can be called at the beginning of
 	// any method to fake a timeout.
 	// All a test needs to do is make it { return context.DeadlineExceeded }.
@@ -902,6 +912,9 @@ func (fmd *FakeMysqlDaemon) AcquireGlobalReadLock(ctx context.Context) error {
 
 // ReleaseGlobalReadLock is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) ReleaseGlobalReadLock(ctx context.Context) error {
+	fmd.ReleaseGlobalReadLockLastCtx = ctx
+	fmd.ReleaseGlobalReadLockLastCtxErr = ctx.Err()
+
 	if fmd.GlobalReadLock {
 		fmd.GlobalReadLock = false
 		return nil

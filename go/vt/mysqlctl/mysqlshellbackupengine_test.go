@@ -17,11 +17,13 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -456,5 +458,58 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		_, err = be.ExecuteBackup(t.Context(), params, bh)
 		require.ErrorContains(t, err, "mysqlshell failed")
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
+	})
+
+	t.Run("deferred lock release uses a bounded context detached from parent", func(t *testing.T) {
+		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
+		mysql.GlobalReadLock = false                // clear lock status.
+		mysql.ReleaseGlobalReadLockLastCtx = nil    // clear recorded context.
+		mysql.ReleaseGlobalReadLockLastCtxErr = nil // clear recorded ctx.Err().
+		logger.Clear()
+		manifestBuffer := ioutil.NewBytesBufferWriter()
+		bs.StartBackupReturn.BackupHandle = &FakeBackupHandle{
+			Dir:           t.TempDir(),
+			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: manifestBuffer},
+		}
+
+		// mysqlsh exits without emitting the lock-release message so the
+		// releaseReadLock goroutine never runs and the deferred cleanup
+		// is the only path that calls ReleaseGlobalReadLock.
+		generateTestFile(t, be.binaryName, "#!/bin/bash\nexit 0")
+
+		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
+		require.NoError(t, err)
+
+		// Build a parent context with a sentinel value, then cancel it
+		// before ExecuteBackup runs. The deferred cleanup must still
+		// happen with a fresh deadline, while preserving parent values.
+		type ctxKey struct{}
+		parentCtx, parentCancel := context.WithCancel(context.WithValue(t.Context(), ctxKey{}, "parent-value"))
+		parentCancel()
+
+		_, err = be.ExecuteBackup(parentCtx, params, bh)
+		require.Error(t, err) // parent ctx was cancelled before we started.
+		require.False(t, mysql.GlobalReadLock, "lock must be released by deferred cleanup")
+
+		require.NotNil(t, mysql.ReleaseGlobalReadLockLastCtx, "deferred ReleaseGlobalReadLock must run")
+
+		// The deferred release must bound the operation with a deadline so
+		// an unresponsive MySQL cannot hang the goroutine forever.
+		deadline, hasDeadline := mysql.ReleaseGlobalReadLockLastCtx.Deadline()
+		require.True(t, hasDeadline, "deferred release context must have a deadline")
+		require.Greater(t, time.Until(deadline), time.Duration(0), "deferred release context deadline must be in the future")
+
+		// The deferred release must inherit values from the parent (i.e.
+		// use WithoutCancel rather than a brand new context.Background),
+		// otherwise tracing / caller-ID context plumbing is lost.
+		require.Equal(t, "parent-value", mysql.ReleaseGlobalReadLockLastCtx.Value(ctxKey{}),
+			"deferred release context must inherit values from parent ctx")
+
+		// At the moment the deferred release was invoked, the context must
+		// not have been cancelled — even though the parent was cancelled
+		// before ExecuteBackup ran. This is what proves the cleanup ctx is
+		// detached from the parent's cancellation.
+		require.NoError(t, mysql.ReleaseGlobalReadLockLastCtxErr,
+			"deferred release context must not be cancelled when parent is cancelled")
 	})
 }

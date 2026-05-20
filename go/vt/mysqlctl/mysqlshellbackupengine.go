@@ -118,6 +118,12 @@ type MySQLShellBackupEngine struct {
 const (
 	mysqlShellBackupEngineName = "mysqlshell"
 	mysqlShellLockMessage      = "Global read lock has been released"
+
+	// mysqlShellBackupReleaseLockTimeout bounds the deferred best-effort
+	// ReleaseGlobalReadLock cleanup so that an unresponsive MySQL cannot
+	// cause the backup goroutine to hang indefinitely while still leaving
+	// enough time for UNLOCK TABLES to complete under load.
+	mysqlShellBackupReleaseLockTimeout = 1 * time.Minute
 )
 
 func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (result BackupResult, finalErr error) {
@@ -172,8 +178,13 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 	// we need to release the global read lock in case the backup fails to start and
 	// the lock wasn't released by releaseReadLock() yet. context might be expired,
-	// so we pass a new one.
-	defer func() { _ = params.Mysqld.ReleaseGlobalReadLock(context.Background()) }()
+	// so we detach from its cancellation but still bound the cleanup with a timeout
+	// to avoid hanging indefinitely if MySQL is unresponsive.
+	defer func() {
+		releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), mysqlShellBackupReleaseLockTimeout)
+		defer releaseCancel()
+		_ = params.Mysqld.ReleaseGlobalReadLock(releaseCtx)
+	}()
 
 	posBeforeBackup, err := params.Mysqld.PrimaryPosition(ctx)
 	if err != nil {
