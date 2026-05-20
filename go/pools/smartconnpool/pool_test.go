@@ -1663,6 +1663,8 @@ func TestIdleTimeoutBoundsExpiredSweep(t *testing.T) {
 		p.put(conn)
 		conn.timeUsed.set(monotonicNow() - 2*time.Millisecond)
 	}
+	oldestClosed := idleConns[0].Conn.waitForClose()
+	newestClosed := idleConns[1].Conn.waitForClose()
 
 	p.closeIdleResources(time.Now())
 
@@ -1670,6 +1672,8 @@ func TestIdleTimeoutBoundsExpiredSweep(t *testing.T) {
 	assert.EqualValues(t, 1, state.close.Load())
 	assert.EqualValues(t, 6, p.Active())
 	assert.EqualValues(t, 2, p.Available())
+	assert.True(t, channelClosed(oldestClosed))
+	assert.False(t, channelClosed(newestClosed))
 
 	p.closeIdleResources(time.Now())
 
@@ -1677,6 +1681,16 @@ func TestIdleTimeoutBoundsExpiredSweep(t *testing.T) {
 	assert.EqualValues(t, 2, state.close.Load())
 	assert.EqualValues(t, 6, p.Active())
 	assert.EqualValues(t, 2, p.Available())
+	assert.True(t, channelClosed(newestClosed))
+}
+
+func channelClosed(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
 }
 
 func TestIdleTimeoutCloseInStackDoesNotAllocate(t *testing.T) {
