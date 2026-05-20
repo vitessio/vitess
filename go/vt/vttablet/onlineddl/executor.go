@@ -1779,7 +1779,11 @@ func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireStr
 	return emptyResult, nil
 }
 
-// ThrottleAllMigrations
+// ThrottleAllMigrations throttles all pending migrations. When migrationContext is non-empty only
+// migrations whose migration_context matches are throttled (THROTTLE CONTEXT 'ctx'). When
+// migrationContext is empty all pending migrations are throttled (THROTTLE ALL). Note:
+// THROTTLE CONTEXT ” is therefore equivalent to THROTTLE ALL — empty context is not a supported
+// filter value.
 func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal, migrationContext string) (result *sqltypes.Result, err error) {
 	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
 	if err != nil {
@@ -1820,7 +1824,11 @@ func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result
 	return emptyResult, nil
 }
 
-// UnthrottleAllMigrations
+// UnthrottleAllMigrations unthrottles all pending migrations. When migrationContext is non-empty
+// only migrations whose migration_context matches are unthrottled (UNTHROTTLE CONTEXT 'ctx'). When
+// migrationContext is empty all pending migrations are unthrottled (UNTHROTTLE ALL). Note:
+// UNTHROTTLE CONTEXT ” is therefore equivalent to UNTHROTTLE ALL — empty context is not a
+// supported filter value.
 func (e *Executor) UnthrottleAllMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
@@ -4333,9 +4341,12 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	return rs, nil
 }
 
-// CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
-// all we do is set retain_artifacts_seconds to a very small number (it's actually a negative) so that the
-// next iteration of gcArtifacts() picks up the migration's artifacts and schedules them for deletion
+// CleanupAllMigrations marks terminal migrations (complete/cancelled/failed) as ready for artifact
+// cleanup by setting retain_artifacts_seconds to a negative value; the next gcArtifacts() run then
+// schedules their artifacts for deletion. When migrationContext is non-empty only migrations whose
+// migration_context matches are affected (CLEANUP CONTEXT 'ctx'). When migrationContext is empty
+// all eligible migrations are affected (CLEANUP ALL). Note: CLEANUP CONTEXT ” is therefore
+// equivalent to CLEANUP ALL — empty context is not a supported filter value.
 func (e *Executor) CleanupAllMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
@@ -4398,7 +4409,11 @@ func (e *Executor) ForceCutOverMigration(ctx context.Context, uuid string) (resu
 	return rs, nil
 }
 
-// ForceCutOverPendingMigrations sets force_cutover flag for all pending migrations
+// ForceCutOverPendingMigrations sets the force_cutover flag for pending migrations. When
+// migrationContext is non-empty only migrations whose migration_context matches are affected
+// (FORCE_CUTOVER CONTEXT 'ctx'). When migrationContext is empty all pending migrations are
+// affected (FORCE_CUTOVER ALL). Note: FORCE_CUTOVER CONTEXT ” is therefore equivalent to
+// FORCE_CUTOVER ALL — empty context is not a supported filter value.
 func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
@@ -4494,8 +4509,11 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string, shardsArg
 	return rs, nil
 }
 
-// CompletePendingMigrations completes all pending migrations (that are expected to run or are running)
-// for this keyspace
+// CompletePendingMigrations completes all pending migrations for this keyspace. When
+// migrationContext is non-empty only migrations whose migration_context matches are completed
+// (COMPLETE CONTEXT 'ctx'). When migrationContext is empty all pending migrations are completed
+// (COMPLETE ALL). Note: COMPLETE CONTEXT ” is therefore equivalent to COMPLETE ALL — empty
+// context is not a supported filter value.
 func (e *Executor) CompletePendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
@@ -4551,8 +4569,11 @@ func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (
 	return rs, nil
 }
 
-// PostponeCompletePendingMigrations sets postpone_completion for all pending migrations (that are expected to run or are running)
-// for this keyspace
+// PostponeCompletePendingMigrations sets postpone_completion for all pending migrations for this
+// keyspace. When migrationContext is non-empty only migrations whose migration_context matches are
+// affected (POSTPONE COMPLETE CONTEXT 'ctx'). When migrationContext is empty all pending
+// migrations are affected (POSTPONE COMPLETE ALL). Note: POSTPONE COMPLETE CONTEXT ” is therefore
+// equivalent to POSTPONE COMPLETE ALL — empty context is not a supported filter value.
 func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
@@ -4612,7 +4633,11 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 	return rs, nil
 }
 
-// LaunchMigrations launches all launch-postponed queued migrations for this keyspace
+// LaunchMigrations launches all launch-postponed queued migrations for this keyspace. When
+// migrationContext is non-empty only migrations whose migration_context matches are launched
+// (LAUNCH CONTEXT 'ctx'). When migrationContext is empty all postponed migrations are launched
+// (LAUNCH ALL). Note: LAUNCH CONTEXT ” is therefore equivalent to LAUNCH ALL — empty context is
+// not a supported filter value.
 func (e *Executor) LaunchMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
