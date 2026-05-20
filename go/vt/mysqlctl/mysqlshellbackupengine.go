@@ -184,7 +184,14 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	defer func() {
 		releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), releaseGlobalReadLockTimeout)
 		defer releaseCancel()
-		_ = params.Mysqld.ReleaseGlobalReadLock(releaseCtx)
+		if err := params.Mysqld.ReleaseGlobalReadLock(releaseCtx); err != nil &&
+			!strings.Contains(err.Error(), "no read locks acquired yet") {
+			// "no read locks acquired yet" is the expected/normal path:
+			// releaseReadLock() already released the lock during mysqlsh's run.
+			// Any other error (most importantly a context deadline) means the
+			// global read lock may still be held, so surface it to operators.
+			params.Logger.Errorf("deferred ReleaseGlobalReadLock failed; the global read lock may still be held: %v", err)
+		}
 	}()
 
 	posBeforeBackup, err := params.Mysqld.PrimaryPosition(ctx)
