@@ -29,25 +29,35 @@ import (
 
 // Port definitions. Unit tests may run at the same time,
 // so they should not use the same ports.
+//
+// Each port has its own constant; do not introduce ad-hoc `port + N`
+// arithmetic at call sites or in this file. New entries must extend
+// the range without overlapping any existing constant.
 var (
 	// vtPortStart is the starting port for all tests.
 	vtPortStart = getPortStart()
 
-	// GoVtTopoEtcd2topoPort is used by the go/vt/topo/etcd2topo package.
-	// Takes two ports.
-	GoVtTopoEtcd2topoPort = vtPortStart
+	// Ports used by the go/vt/topo/etcd2topo package tests.
+	GoVtTopoEtcd2topoPort        = vtPortStart     // etcd client URL (plaintext)
+	GoVtTopoEtcd2topoPeerPort    = vtPortStart + 1 // etcd peer URL (plaintext)
+	GoVtTopoEtcd2topoTLSPort     = vtPortStart + 2 // etcd client URL (TLS)
+	GoVtTopoEtcd2topoTLSPeerPort = vtPortStart + 3 // etcd peer URL (TLS)
 
-	// GoVtTopoZk2topoPort is used by the go/vt/topo/zk2topo package.
-	// Takes three ports.
-	GoVtTopoZk2topoPort = GoVtTopoEtcd2topoPort + 2
+	// Base port used by the go/vt/topo/zk2topo package tests.
+	// zkctl.StartLocalZk consumes three consecutive ports (leader, election,
+	// client) starting at this base, so vtPortStart+4..6 are reserved.
+	GoVtTopoZk2topoPort = vtPortStart + 4
 
-	// GoVtTopoConsultopoPort is used by the go/vt/topo/consultopo package.
-	// Takes four ports.
-	GoVtTopoConsultopoPort = GoVtTopoZk2topoPort + 3
+	// Ports used by the go/vt/topo/consultopo package tests.
+	GoVtTopoConsultopoDNSPort     = vtPortStart + 7
+	GoVtTopoConsultopoHTTPPort    = vtPortStart + 8
+	GoVtTopoConsultopoSerfLANPort = vtPortStart + 9
+	GoVtTopoConsultopoSerfWANPort = vtPortStart + 10
 
-	// GoVtVtctlWorkflowPort is used by the go/vt/vtctl/workflow package for
-	// etcd-backed keyspace routing rules tests. Takes two ports.
-	GoVtVtctlWorkflowPort = GoVtTopoConsultopoPort + 4
+	// Ports used by the go/vt/vtctl/workflow package tests for the
+	// etcd-backed keyspace routing rules tests.
+	GoVtVtctlWorkflowPort     = vtPortStart + 11 // etcd client URL
+	GoVtVtctlWorkflowPeerPort = vtPortStart + 12 // etcd peer URL
 )
 
 // Zookeeper server ID definitions. Unit tests may run at the

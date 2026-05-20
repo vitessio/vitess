@@ -104,11 +104,9 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
 	// Create a temporary directory.
 	dataDir := t.TempDir()
 
-	// Get our two ports to listen to.
-	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("https://localhost:%v", port+2)
-	peerAddr := fmt.Sprintf("https://localhost:%v", port+3)
+	clientAddr := fmt.Sprintf("https://localhost:%v", testfiles.GoVtTopoEtcd2topoTLSPort)
+	peerAddr := fmt.Sprintf("https://localhost:%v", testfiles.GoVtTopoEtcd2topoTLSPeerPort)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 
 	certs := tlstest.CreateClientServerCertPairs(dataDir)

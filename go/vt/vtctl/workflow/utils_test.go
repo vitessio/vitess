@@ -231,11 +231,9 @@ func startEtcd(t *testing.T) string {
 	// Create a temporary directory.
 	dataDir := t.TempDir()
 
-	// Get our two ports to listen to.
-	port := testfiles.GoVtVtctlWorkflowPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("http://localhost:%v", port)
-	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)
+	clientAddr := fmt.Sprintf("http://localhost:%v", testfiles.GoVtVtctlWorkflowPort)
+	peerAddr := fmt.Sprintf("http://localhost:%v", testfiles.GoVtVtctlWorkflowPeerPort)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 	cmd := exec.Command("etcd",
 		"-name", name,
