@@ -232,7 +232,7 @@ func startEtcd(t *testing.T) string {
 	dataDir := t.TempDir()
 
 	// Get our two ports to listen to.
-	port := testfiles.GoVtTopoEtcd2topoPort
+	port := testfiles.GoVtVtctlWorkflowPort
 	name := "vitess_unit_test"
 	clientAddr := fmt.Sprintf("http://localhost:%v", port)
 	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)

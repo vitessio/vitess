@@ -44,6 +44,10 @@ var (
 	// GoVtTopoConsultopoPort is used by the go/vt/topo/consultopo package.
 	// Takes four ports.
 	GoVtTopoConsultopoPort = GoVtTopoZk2topoPort + 3
+
+	// GoVtVtctlWorkflowPort is used by the go/vt/vtctl/workflow package for
+	// etcd-backed keyspace routing rules tests. Takes two ports.
+	GoVtVtctlWorkflowPort = GoVtTopoConsultopoPort + 4
 )
 
 // Zookeeper server ID definitions. Unit tests may run at the
