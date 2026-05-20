@@ -6491,7 +6491,7 @@ var invalidSQL = []struct {
 	output string
 }{{
 	input:  "alter vitess_migration cancel context ''",
-	output: "migration context cannot be empty",
+	output: "migration context cannot be empty at position 41",
 }, {
 	input:  "select : from t",
 	output: "syntax error at position 9 near ':'",

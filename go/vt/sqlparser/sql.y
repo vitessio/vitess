@@ -3798,6 +3798,7 @@ alter_statement:
   {
     if $6 == "" {
       yylex.Error("migration context cannot be empty")
+      return 1
     }
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
