@@ -42,22 +42,28 @@ var (
 	GoVtTopoEtcd2topoPeerPort    = vtPortStart + 1 // etcd peer URL (plaintext)
 	GoVtTopoEtcd2topoTLSPort     = vtPortStart + 2 // etcd client URL (TLS)
 	GoVtTopoEtcd2topoTLSPeerPort = vtPortStart + 3 // etcd peer URL (TLS)
+	// Per-cell etcd pairs for TestEtcd2TopoGetTabletsPartialResults, which
+	// starts a global etcd plus one etcd per cell.
+	GoVtTopoEtcd2topoCell1Port     = vtPortStart + 4 // cell1 etcd client URL
+	GoVtTopoEtcd2topoCell1PeerPort = vtPortStart + 5 // cell1 etcd peer URL
+	GoVtTopoEtcd2topoCell2Port     = vtPortStart + 6 // cell2 etcd client URL
+	GoVtTopoEtcd2topoCell2PeerPort = vtPortStart + 7 // cell2 etcd peer URL
 
 	// Base port used by the go/vt/topo/zk2topo package tests.
 	// zkctl.StartLocalZk consumes three consecutive ports (leader, election,
-	// client) starting at this base, so vtPortStart+4..6 are reserved.
-	GoVtTopoZk2topoPort = vtPortStart + 4
+	// client) starting at this base, so vtPortStart+8..10 are reserved.
+	GoVtTopoZk2topoPort = vtPortStart + 8
 
 	// Ports used by the go/vt/topo/consultopo package tests.
-	GoVtTopoConsultopoDNSPort     = vtPortStart + 7
-	GoVtTopoConsultopoHTTPPort    = vtPortStart + 8
-	GoVtTopoConsultopoSerfLANPort = vtPortStart + 9
-	GoVtTopoConsultopoSerfWANPort = vtPortStart + 10
+	GoVtTopoConsultopoDNSPort     = vtPortStart + 11
+	GoVtTopoConsultopoHTTPPort    = vtPortStart + 12
+	GoVtTopoConsultopoSerfLANPort = vtPortStart + 13
+	GoVtTopoConsultopoSerfWANPort = vtPortStart + 14
 
 	// Ports used by the go/vt/vtctl/workflow package tests for the
 	// etcd-backed keyspace routing rules tests.
-	GoVtVtctlWorkflowPort     = vtPortStart + 11 // etcd client URL
-	GoVtVtctlWorkflowPeerPort = vtPortStart + 12 // etcd peer URL
+	GoVtVtctlWorkflowPort     = vtPortStart + 15 // etcd client URL
+	GoVtVtctlWorkflowPeerPort = vtPortStart + 16 // etcd peer URL
 )
 
 // Zookeeper server ID definitions. Unit tests may run at the
