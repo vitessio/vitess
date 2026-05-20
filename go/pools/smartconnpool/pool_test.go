@@ -1507,6 +1507,54 @@ func TestSetCapacityZeroClosesBorrowedConnsOnReturn(t *testing.T) {
 	require.EqualValues(t, 0, state.open.Load())
 }
 
+func TestRefreshWorkerReopenIsSynchronous(t *testing.T) {
+	// The refresh worker invokes reopen() synchronously, so by the time the
+	// next callback fires the previous trigger's reopen has already bumped
+	// the generation. Capture the pool's generation at each callback entry —
+	// observation N must equal N. If reopens were spawned in their own
+	// goroutine (the old behavior), the next callback could fire before the
+	// previous reopen finished and observe a stale generation.
+	var state TestState
+	var (
+		mu       sync.Mutex
+		observed []int64
+	)
+
+	const samples = 100
+	p := NewPool(&Config[*TestConn]{
+		Capacity:        1,
+		RefreshInterval: 100 * time.Microsecond,
+	})
+	p.Open(newConnector(&state), func() (bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(observed) >= samples {
+			// Stop triggering reopens so Close can drain the worker cleanly
+			// without racing the worker for capacityMu.
+			return false, nil
+		}
+		observed = append(observed, p.generation.Load())
+		return true, nil
+	})
+	t.Cleanup(p.Close)
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(observed) >= samples
+	}, 5*time.Second, time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	// Open() bumps the generation to 1 before the worker starts, so the first
+	// callback observes generation 1, the second observes 2, and so on.
+	for i, gen := range observed[:samples] {
+		require.EqualValues(t, i+1, gen,
+			"callback %d observed generation %d; expected %d (reopens must complete before next tick)",
+			i, gen, i+1)
+	}
+}
+
 func TestUserClosing(t *testing.T) {
 	var state TestState
 
@@ -3361,7 +3409,7 @@ func TestIdleTimeoutReopenDoesNotBlockGetsDespiteAvailableCapacity(t *testing.T)
 		}, nil
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	p := NewPool(&Config[*TestConn]{
 		Capacity: 4,
 		LogWait:  state.LogWait,

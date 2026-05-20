@@ -303,7 +303,7 @@ func (pool *ConnPool[C]) open() {
 				log.Error(fmt.Sprint(err))
 			}
 			if refresh {
-				go pool.reopen(state)
+				pool.reopen(state)
 			}
 			return true
 		})
