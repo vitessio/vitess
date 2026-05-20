@@ -79,8 +79,10 @@ func TestStackRace(t *testing.T) {
 	var stack connStack[*StressConn]
 	var done atomic.Bool
 
+	elim := newElimArray[*StressConn]()
+
 	for range Count {
-		stack.Push(&Pooled[*StressConn]{Conn: &StressConn{}})
+		stack.Push(&Pooled[*StressConn]{Conn: &StressConn{}}, elim)
 	}
 
 	for i := range Procs {
@@ -88,7 +90,7 @@ func TestStackRace(t *testing.T) {
 		go func(tid int32) {
 			defer wg.Done()
 			for !done.Load() {
-				if conn, ok := stack.Pop(); ok {
+				if conn, ok := stack.Pop(elim); ok {
 					previousOwner := conn.Conn.owner.Swap(tid)
 					if previousOwner != 0 {
 						panic(fmt.Errorf("owner race: %d with %d", tid, previousOwner))
@@ -98,7 +100,7 @@ func TestStackRace(t *testing.T) {
 					if previousOwner != tid {
 						panic(fmt.Errorf("owner race: %d with %d", previousOwner, tid))
 					}
-					stack.Push(conn)
+					stack.Push(conn, elim)
 				}
 			}
 		}(int32(i + 1))
@@ -109,7 +111,7 @@ func TestStackRace(t *testing.T) {
 	wg.Wait()
 
 	for range Count {
-		conn, ok := stack.Pop()
+		conn, ok := stack.Pop(elim)
 		require.NotNil(t, conn)
 		require.True(t, ok)
 	}

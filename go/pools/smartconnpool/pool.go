@@ -169,6 +169,49 @@ type ConnPool[C Connection] struct {
 
 	Metrics Metrics
 	Name    string
+
+	// elim holds the elimination arrays for the connStack fields above.
+	// Allocated lazily on first contention, accessed via elimFor*. Stored
+	// behind a pointer so ConnPool stays under the 512-byte threshold —
+	// any larger and the Go runtime prepends an 8-byte GC type header to
+	// each allocation, which would break 16-byte alignment of top fields.
+	elim atomic.Pointer[stackElim[C]]
+}
+
+// stackElim bundles the elimination arrays for all of a ConnPool's stacks
+// into a single heap allocation referenced by ConnPool.elim.
+type stackElim[C Connection] struct {
+	clean    elimArray[C]
+	settings [stackMask + 1]elimArray[C]
+}
+
+func (s *stackElim[C]) init() {
+	s.clean.init()
+	for i := range s.settings {
+		s.settings[i].init()
+	}
+}
+
+// elimFor returns the elimination array paired with the given stack,
+// allocating the side struct on first use.
+func (pool *ConnPool[C]) elimForClean() *elimArray[C] {
+	return &pool.lazyElim().clean
+}
+
+func (pool *ConnPool[C]) elimForSettings(idx uint32) *elimArray[C] {
+	return &pool.lazyElim().settings[idx]
+}
+
+func (pool *ConnPool[C]) lazyElim() *stackElim[C] {
+	if e := pool.elim.Load(); e != nil {
+		return e
+	}
+	fresh := &stackElim[C]{}
+	fresh.init()
+	if pool.elim.CompareAndSwap(nil, fresh) {
+		return fresh
+	}
+	return pool.elim.Load()
 }
 
 // NewPool creates a new connection pool with the given Config.
@@ -463,16 +506,16 @@ func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
 	}
 	connSetting := conn.Conn.Setting()
 	if connSetting == nil {
-		pool.clean.Push(conn)
+		pool.clean.Push(conn, pool.elimForClean())
 	} else {
 		stack := connSetting.bucket & stackMask
-		pool.settings[stack].Push(conn)
+		pool.settings[stack].Push(conn, pool.elimForSettings(stack))
 		pool.freshSettingsStack.Store(int64(stack))
 	}
 	return false
 }
 
-func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
+func (pool *ConnPool[C]) pop(stack *connStack[C], elim *elimArray[C]) *Pooled[C] {
 	// retry-loop: pop a connection from the stack and atomically check whether
 	// its timeout has elapsed. If the timeout has elapsed, the borrow will fail,
 	// which means that a background worker has already marked this connection
@@ -480,7 +523,7 @@ func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
 	// the timeout as borrowed, we know that background workers will not be able
 	// to expire this connection (even if it's still visible to them), so it's
 	// safe to return it
-	for conn, ok := stack.Pop(); ok; conn, ok = stack.Pop() {
+	for conn, ok := stack.Pop(elim); ok; conn, ok = stack.Pop(elim) {
 		if !conn.timeUsed.borrow() {
 			// Ignore the connection that couldn't be borrowed;
 			// it's being closed by the idle worker and replaced by a new connection.
@@ -493,12 +536,12 @@ func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
 }
 
 func (pool *ConnPool[C]) tryReturnAnyConn() bool {
-	if conn := pool.pop(&pool.clean); conn != nil {
+	if conn := pool.pop(&pool.clean, pool.elimForClean()); conn != nil {
 		conn.timeUsed.update()
 		return pool.tryReturnConn(conn)
 	}
-	for u := 0; u <= stackMask; u++ {
-		if conn := pool.pop(&pool.settings[u]); conn != nil {
+	for u := uint32(0); u <= stackMask; u++ {
+		if conn := pool.pop(&pool.settings[u], pool.elimForSettings(u)); conn != nil {
 			conn.timeUsed.update()
 			return pool.tryReturnConn(conn)
 		}
@@ -575,7 +618,7 @@ func (pool *ConnPool[C]) getFromSettingsStack(setting *Setting) *Pooled[C] {
 
 	for i := uint32(0); i <= stackMask; i++ {
 		pos := (i + start) & stackMask
-		if conn := pool.pop(&pool.settings[pos]); conn != nil {
+		if conn := pool.pop(&pool.settings[pos], pool.elimForSettings(pos)); conn != nil {
 			return conn
 		}
 	}
@@ -609,7 +652,7 @@ func (pool *ConnPool[C]) get(ctx context.Context) (*Pooled[C], error) {
 	pool.Metrics.getCount.Add(1)
 
 	// best case: if there's a connection in the clean stack, return it right away
-	if conn := pool.pop(&pool.clean); conn != nil {
+	if conn := pool.pop(&pool.clean, pool.elimForClean()); conn != nil {
 		pool.borrowed.Add(1)
 		return conn, nil
 	}
@@ -672,10 +715,11 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 
 	var err error
 	// best case: check if there's a connection in the setting stack where our Setting belongs
-	conn := pool.pop(&pool.settings[setting.bucket&stackMask])
+	bucket := setting.bucket & stackMask
+	conn := pool.pop(&pool.settings[bucket], pool.elimForSettings(bucket))
 	// if there's connection with our setting, try popping a clean connection
 	if conn == nil {
-		conn = pool.pop(&pool.clean)
+		conn = pool.pop(&pool.clean, pool.elimForClean())
 	}
 	// otherwise try opening a brand new connection and we'll apply the setting to it
 	if conn == nil {
@@ -783,7 +827,7 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 		// try closing from connections which are currently idle in the stacks
 		conn := pool.getFromSettingsStack(nil)
 		if conn == nil {
-			conn = pool.pop(&pool.clean)
+			conn = pool.pop(&pool.clean, pool.elimForClean())
 		}
 		if conn == nil {
 			time.Sleep(delay)
@@ -807,8 +851,8 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 
 	mono := monotonicFromTime(now)
 
-	closeInStack := func(s *connStack[C]) {
-		conn, ok := s.Pop()
+	closeInStack := func(s *connStack[C], elim *elimArray[C]) {
+		conn, ok := s.Pop(elim)
 		if !ok {
 			// Early return to skip allocating slices when the stack is empty
 			return
@@ -842,7 +886,7 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 				validConnections = append(validConnections, conn)
 			}
 
-			conn, ok = s.Pop()
+			conn, ok = s.Pop(elim)
 		}
 
 		// Return all the valid connections back to waiters or the stack
@@ -894,10 +938,10 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		}
 	}
 
-	for i := 0; i <= stackMask; i++ {
-		closeInStack(&pool.settings[i])
+	for i := uint32(0); i <= stackMask; i++ {
+		closeInStack(&pool.settings[i], pool.elimForSettings(i))
 	}
-	closeInStack(&pool.clean)
+	closeInStack(&pool.clean, pool.elimForClean())
 }
 
 func (pool *ConnPool[C]) StatsJSON() map[string]any {

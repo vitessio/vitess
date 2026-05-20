@@ -14,12 +14,12 @@ func TestStackPop(t *testing.T) {
 	s := &connStack[testPooled]{}
 
 	first := &Pooled[testPooled]{}
-	s.Push(first)
+	s.Push(first, nil)
 
 	second := &Pooled[testPooled]{}
-	s.Push(second)
+	s.Push(second, nil)
 
-	c, ok := s.Pop()
+	c, ok := s.Pop(nil)
 	assert.True(t, ok)
 
 	assert.Nil(t, c.next.Load())
