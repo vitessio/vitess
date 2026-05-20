@@ -20,6 +20,7 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/google/safehtml"
@@ -30,6 +31,12 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+var logStatsPool = sync.Pool{
+	New: func() any {
+		return &LogStats{}
+	},
+}
 
 // LogStats records the stats for a single vtgate query
 type LogStats struct {
@@ -63,15 +70,44 @@ type LogStats struct {
 // NewLogStats constructs a new LogStats with supplied Method and ctx
 // field values, and the StartTime field set to the present time.
 func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindVars map[string]*querypb.BindVariable, config streamlog.QueryLogConfig) *LogStats {
-	return &LogStats{
-		Ctx:           ctx,
-		Method:        methodName,
-		SQL:           sql,
-		SessionUUID:   sessionUUID,
-		BindVariables: bindVars,
-		StartTime:     time.Now(),
-		Config:        config,
-	}
+	ls := logStatsPool.Get().(*LogStats)
+	ls.Config = config
+	ls.Ctx = ctx
+	ls.Method = methodName
+	ls.TabletType = ""
+	ls.StmtType = ""
+	ls.SQL = sql
+	ls.BindVariables = bindVars
+	ls.StartTime = time.Now()
+	ls.EndTime = time.Time{}
+	ls.ShardQueries = 0
+	ls.RowsAffected = 0
+	ls.RowsReturned = 0
+	ls.PlanTime = 0
+	ls.ExecuteTime = 0
+	ls.CommitTime = 0
+	ls.Error = nil
+	ls.TablesUsed = nil
+	ls.RoutingIndexesUsed = nil
+	ls.SessionUUID = sessionUUID
+	ls.CachedPlan = false
+	ls.ActiveKeyspace = ""
+	ls.MirrorSourceExecuteTime = 0
+	ls.MirrorTargetExecuteTime = 0
+	ls.MirrorTargetError = nil
+	return ls
+}
+
+// Release returns the LogStats to the pool for reuse.
+// After calling Release, the LogStats must not be accessed.
+func (stats *LogStats) Release() {
+	stats.Ctx = nil
+	stats.BindVariables = nil
+	stats.Error = nil
+	stats.TablesUsed = nil
+	stats.RoutingIndexesUsed = nil
+	stats.MirrorTargetError = nil
+	logStatsPool.Put(stats)
 }
 
 // SaveEndTime sets the end time of this request to now

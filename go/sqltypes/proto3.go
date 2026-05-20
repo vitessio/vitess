@@ -71,9 +71,42 @@ func RowsToProto3(rows [][]Value) []*querypb.Row {
 		return nil
 	}
 
+	// Batch-allocate all Row structs in a single backing array to reduce
+	// per-row heap allocations from N to 1.
+	backing := make([]querypb.Row, len(rows))
 	result := make([]*querypb.Row, len(rows))
+
+	// Pre-allocate a single Lengths backing array for all rows.
+	nCols := len(rows[0])
+	allLengths := make([]int64, 0, nCols*len(rows))
+
+	// First pass: compute lengths and accumulate total value size.
+	totalValueBytes := 0
 	for i, r := range rows {
-		result[i] = RowToProto3(r)
+		result[i] = &backing[i]
+		start := len(allLengths)
+		for _, c := range r {
+			if c.IsNull() {
+				allLengths = append(allLengths, -1)
+			} else {
+				l := c.Len()
+				allLengths = append(allLengths, int64(l))
+				totalValueBytes += l
+			}
+		}
+		backing[i].Lengths = allLengths[start:]
+	}
+
+	// Second pass: batch-allocate all Values into a single buffer.
+	allValues := make([]byte, 0, totalValueBytes)
+	for i, r := range rows {
+		start := len(allValues)
+		for _, c := range r {
+			if !c.IsNull() {
+				allValues = append(allValues, c.Raw()...)
+			}
+		}
+		backing[i].Values = allValues[start:]
 	}
 	return result
 }
@@ -87,9 +120,26 @@ func proto3ToRows(fields []*querypb.Field, rows []*querypb.Row) [][]Value {
 		return [][]Value{}
 	}
 
-	result := make([][]Value, len(rows))
+	nCols := len(fields)
+	nRows := len(rows)
+
+	// Combined allocation: result slice headers + backing Values in one block.
+	// Layout: [nRows []Value headers] allocated as make([][]Value, nRows)
+	// then [nRows*nCols Value] backing allocated separately.
+	// For single row, the make calls may be optimized by the compiler.
+	backing := make([]Value, nRows*nCols)
+	result := make([][]Value, nRows)
 	for i, r := range rows {
-		result[i] = MakeRowTrusted(fields, r)
+		sqlRow := backing[i*nCols : (i+1)*nCols]
+		var offset int64
+		for j, length := range r.Lengths {
+			if length < 0 {
+				continue
+			}
+			sqlRow[j] = MakeTrusted(fields[j].Type, r.Values[offset:offset+length])
+			offset += length
+		}
+		result[i] = sqlRow
 	}
 	return result
 }

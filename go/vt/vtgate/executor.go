@@ -260,8 +260,10 @@ func (e *Executor) Execute(
 	prepared bool,
 ) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "executor.Execute")
-	span.Annotate("method", method)
-	trace.AnnotateSQL(span, sqlparser.Preview(sql))
+	if !trace.IsNoop() {
+		span.Annotate("method", method)
+		trace.AnnotateSQL(span, sqlparser.Preview(sql))
+	}
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
@@ -287,7 +289,9 @@ func (e *Executor) Execute(
 	}
 
 	logStats.SaveEndTime()
-	e.queryLogger.Send(logStats)
+	if e.queryLogger.Send(logStats) == 0 {
+		logStats.Release()
+	}
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
@@ -323,8 +327,10 @@ func (e *Executor) StreamExecute(
 	callback func(*sqltypes.Result) error,
 ) error {
 	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
-	span.Annotate("method", method)
-	trace.AnnotateSQL(span, sqlparser.Preview(sql))
+	if !trace.IsNoop() {
+		span.Annotate("method", method)
+		trace.AnnotateSQL(span, sqlparser.Preview(sql))
+	}
 	defer span.Finish()
 
 	logStats := logstats.NewLogStats(ctx, method, sql, safeSession.GetSessionUUID(), bindVars, streamlog.GetQueryLogConfig())
@@ -400,11 +406,7 @@ func (e *Executor) StreamExecute(
 
 		// 5: Log and add statistics
 		logStats.TablesUsed = plan.TablesUsed
-		executedRoot := vc.ExecutedPrimitive()
-		if executedRoot == nil {
-			executedRoot = plan.Instructions
-		}
-		logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+		logStats.RoutingIndexesUsed = plan.RoutingIndexes
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
 		logStats.ActiveKeyspace = vc.GetKeyspace()
@@ -433,7 +435,9 @@ func (e *Executor) StreamExecute(
 	}
 
 	logStats.SaveEndTime()
-	e.queryLogger.Send(logStats)
+	if e.queryLogger.Send(logStats) == 0 {
+		logStats.Release()
+	}
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
@@ -1189,7 +1193,9 @@ func (e *Executor) fetchOrCreatePlan(
 	e.applyQueryHints(vcursor, plan)
 
 	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
-	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+	if e.queryLogger.HasSubscribers() {
+		logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
+	}
 
 	return plan, vcursor, stmt, nil
 }
@@ -1508,7 +1514,11 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 	// it was a no-op record (i.e. didn't issue any queries)
 	if logStats.StmtType != "ROLLBACK" || logStats.ShardQueries != 0 {
 		logStats.SaveEndTime()
-		e.queryLogger.Send(logStats)
+		if e.queryLogger.Send(logStats) == 0 {
+			logStats.Release()
+		}
+	} else {
+		logStats.Release()
 	}
 
 	err = errorTransform.TransformError(err)

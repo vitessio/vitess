@@ -88,13 +88,14 @@ func GetSubcomponent(ef *vtrpcpb.CallerID) string {
 }
 
 // NewContext adds the provided EffectiveCallerID(vtrpcpb.CallerID) and ImmediateCallerID(querypb.VTGateCallerID)
-// into the Context
+// into the Context. Skips context wrapping for nil values to avoid unnecessary allocations.
 func NewContext(ctx context.Context, ef *vtrpcpb.CallerID, im *querypb.VTGateCallerID) context.Context {
-	ctx = context.WithValue(
-		context.WithValue(ctx, effectiveCallerIDKey, ef),
-		immediateCallerIDKey,
-		im,
-	)
+	if ef != nil {
+		ctx = context.WithValue(ctx, effectiveCallerIDKey, ef)
+	}
+	if im != nil {
+		ctx = context.WithValue(ctx, immediateCallerIDKey, im)
+	}
 	return ctx
 }
 

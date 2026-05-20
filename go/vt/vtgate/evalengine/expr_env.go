@@ -51,13 +51,18 @@ type (
 		// internal state
 		now          time.Time
 		vc           VCursor
+		ctx          context.Context
 		user         *querypb.VTGateCallerID
+		userResolved bool
 		sqlmode      SQLMode
 		collationEnv *collations.Environment
 	}
 )
 
 func (env *ExpressionEnv) time(utc bool) datetime.DateTime {
+	if env.now.IsZero() {
+		env.SetTime(time.Now())
+	}
 	if utc {
 		return datetime.NewDateTimeFromStd(env.now.UTC())
 	}
@@ -65,6 +70,10 @@ func (env *ExpressionEnv) time(utc bool) datetime.DateTime {
 }
 
 func (env *ExpressionEnv) currentUser() string {
+	if !env.userResolved {
+		env.user = callerid.ImmediateCallerIDFromContext(env.ctx)
+		env.userResolved = true
+	}
 	if env.user == nil {
 		return "vt_app@localhost"
 	}
@@ -154,9 +163,7 @@ func EmptyExpressionEnv(env *vtenv.Environment) *ExpressionEnv {
 
 // NewExpressionEnv returns an expression environment with no current row, but with bindvars
 func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVariable, vc VCursor) *ExpressionEnv {
-	env := &ExpressionEnv{BindVars: bindVars, vc: vc}
-	env.user = callerid.ImmediateCallerIDFromContext(ctx)
-	env.SetTime(time.Now())
+	env := &ExpressionEnv{BindVars: bindVars, vc: vc, ctx: ctx}
 	env.sqlmode = ParseSQLMode(vc.SQLMode())
 	env.collationEnv = vc.Environment().CollationEnv()
 	return env

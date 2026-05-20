@@ -155,21 +155,35 @@ func shouldEmitLogOnCondition(aCond bool, aReason string, allMatches bool, reaso
 	}
 }
 
+// HasSubscribers returns true if there are any active subscribers.
+// This can be used to skip expensive work (e.g., copying bind variables)
+// when no one is listening.
+func (logger *StreamLogger[T]) HasSubscribers() bool {
+	logger.mu.Lock()
+	has := len(logger.subscribed) > 0
+	logger.mu.Unlock()
+	return has
+}
+
 // Send sends message to all the writers subscribed to logger. Calling
-// Send does not block.
-func (logger *StreamLogger[T]) Send(message T) {
+// Send does not block. It returns the number of subscribers the message
+// was delivered to.
+func (logger *StreamLogger[T]) Send(message T) int {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
+	delivered := 0
 	for ch, name := range logger.subscribed {
 		select {
 		case ch <- message:
 			deliveredCount.Add([]string{logger.name, name}, 1)
+			delivered++
 		default:
 			deliveryDropCount.Add([]string{logger.name, name}, 1)
 		}
 	}
 	sendCount.Add(logger.name, 1)
+	return delivered
 }
 
 // Subscribe returns a channel which can be used to listen

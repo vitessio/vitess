@@ -50,7 +50,7 @@ type (
 		inDerived int
 		inSelect  int
 
-		bindVarNeeds              *BindVarNeeds
+		bindVarNeeds              BindVarNeeds
 		shouldRewriteDatabaseFunc bool
 		hasStarInSelect           bool
 
@@ -126,7 +126,7 @@ func Normalize(
 
 	return &RewriteASTResult{
 		AST:                out.(Statement),
-		BindVarNeeds:       nz.bindVarNeeds,
+		BindVarNeeds:       &nz.bindVarNeeds,
 		UpdateQueryFromAST: nz.useASTQuery,
 	}, nil
 }
@@ -146,15 +146,12 @@ func newNormalizer(
 		bindVars:      bindVars,
 		reserved:      reserved,
 		vals:          make(map[Literal]string),
-		tupleVals:     make(map[string]string),
-		bindVarNeeds:  &BindVarNeeds{},
 		keyspace:      keyspace,
 		selectLimit:   selectLimit,
 		setVarComment: setVarComment,
 		fkChecksState: fkChecksState,
 		sysVars:       sysVars,
 		views:         views,
-		onLeave:       make(map[*AliasedExpr]func(*AliasedExpr)),
 		parameterize:  parameterize,
 	}
 }
@@ -220,9 +217,17 @@ func (nz *normalizer) noteAliasedExprName(node *AliasedExpr) {
 	if node.As.NotEmpty() {
 		return
 	}
+	// Column references are never rewritten by normalization (only literals are),
+	// so there's no need to track them for alias preservation.
+	if _, ok := node.Expr.(*ColName); ok {
+		return
+	}
 	buf := NewTrackedBuffer(nil)
 	node.Expr.Format(buf)
 	rewrites := nz.bindVarNeeds.NumberOfRewrites()
+	if nz.onLeave == nil {
+		nz.onLeave = make(map[*AliasedExpr]func(*AliasedExpr))
+	}
 	nz.onLeave[node] = func(newAliasedExpr *AliasedExpr) {
 		if nz.bindVarNeeds.NumberOfRewrites() > rewrites {
 			newAliasedExpr.As = NewIdentifierCI(buf.String())
@@ -485,6 +490,9 @@ func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
 		}
 
 		nz.bindVars[bvname] = bvals
+		if nz.tupleVals == nil {
+			nz.tupleVals = make(map[string]string)
+		}
 		nz.tupleVals[string(key)] = bvname
 	}
 

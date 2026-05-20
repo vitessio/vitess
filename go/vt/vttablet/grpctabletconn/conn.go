@@ -83,6 +83,14 @@ type gRPCQueryClient struct {
 
 var _ queryservice.QueryService = (*gRPCQueryClient)(nil)
 
+var executeRequestPool = sync.Pool{
+	New: func() any {
+		return &querypb.ExecuteRequest{
+			Query: &querypb.BoundQuery{},
+		}
+	},
+}
+
 // DialTablet creates and initializes gRPCQueryClient.
 func DialTablet(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	// create the RPC client
@@ -119,19 +127,27 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, _ queryservice.Session
 		return nil, tabletconn.ConnClosed
 	}
 
-	req := &querypb.ExecuteRequest{
-		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-		Target:            target,
-		Query: &querypb.BoundQuery{
-			Sql:           query,
-			BindVariables: bindVars,
-		},
-		TransactionId: transactionID,
-		Options:       options,
-		ReservedId:    reservedID,
-	}
+	req := executeRequestPool.Get().(*querypb.ExecuteRequest)
+	req.EffectiveCallerId = callerid.EffectiveCallerIDFromContext(ctx)
+	req.ImmediateCallerId = callerid.ImmediateCallerIDFromContext(ctx)
+	req.Target = target
+	req.Query.Sql = query
+	req.Query.BindVariables = bindVars
+	req.TransactionId = transactionID
+	req.Options = options
+	req.ReservedId = reservedID
+
 	er, err := conn.c.Execute(ctx, req)
+
+	// Return request to pool. Clear references to avoid retaining caller memory.
+	req.EffectiveCallerId = nil
+	req.ImmediateCallerId = nil
+	req.Target = nil
+	req.Query.Sql = ""
+	req.Query.BindVariables = nil
+	req.Options = nil
+	executeRequestPool.Put(req)
+
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)
 	}

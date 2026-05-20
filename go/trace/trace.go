@@ -62,6 +62,13 @@ func AnnotateSQL(span Span, strippedSQL fmt.Stringer) {
 	span.Annotate("sql-statement-type", strippedSQL.String())
 }
 
+// IsNoop returns true when the current tracer is the noop tracer.
+// Callers can use this to avoid computing trace annotations that would be discarded.
+func IsNoop() bool {
+	_, ok := currentTracer.(noopTracingServer)
+	return ok
+}
+
 // FromContext returns the Span from a Context if present. The bool return
 // value indicates whether a Span was present in the Context.
 func FromContext(ctx context.Context) (Span, bool) {
