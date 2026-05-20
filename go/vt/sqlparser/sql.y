@@ -3796,6 +3796,9 @@ alter_statement:
   }
 | ALTER comment_opt VITESS_MIGRATION CANCEL CONTEXT STRING
   {
+    if $6 == "" {
+      yylex.Error("migration context cannot be empty")
+    }
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
       Context: $6,
