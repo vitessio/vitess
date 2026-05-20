@@ -2061,6 +2061,144 @@ func testScheduler(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusCancelled)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusCancelled)
 	})
+	t.Run("cleanup migrations by context", func(t *testing.T) {
+		// Submit two migrations with the same context and a non-zero retain-artifacts window so
+		// they remain eligible for the CLEANUP query after completion.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --retain-artifacts=1h", executeStrategy: "vtctl", migrationContext: "ctx-cleanup-by-context", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --retain-artifacts=1h", executeStrategy: "vtctl", migrationContext: "ctx-cleanup-by-context", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
+
+		// A non-matching context cleans up nothing.
+		onlineddl.CheckCleanupContextMigrations(t, &vtParams, "ctx-cleanup-by-context-other", 0)
+
+		// Cleanup by context: both migrations must be marked for cleanup.
+		onlineddl.CheckCleanupContextMigrations(t, &vtParams, "ctx-cleanup-by-context", 2)
+	})
+	t.Run("complete migrations by context", func(t *testing.T) {
+		// Submit two migrations with the same context, both postponed so they stay running.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-complete-by-context", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-complete-by-context", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// A non-matching context completes nothing.
+		onlineddl.CheckCompleteContextMigrations(t, &vtParams, "ctx-complete-by-context-other", 0)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
+
+		// Complete by context: both migrations must be completed.
+		onlineddl.CheckCompleteContextMigrations(t, &vtParams, "ctx-complete-by-context", 2)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
+	})
+	t.Run("postpone-complete migrations by context", func(t *testing.T) {
+		// Submit two migrations with the same context, then postpone their completion by context.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// A non-matching context postpones nothing.
+		onlineddl.CheckPostponeCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context-other", 0)
+
+		// Postpone-complete by context: both migrations must be postponed.
+		onlineddl.CheckPostponeCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
+		time.Sleep(ensureStateNotChangedTime)
+		// Migrations are still running because completion is postponed.
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
+
+		// Now complete them.
+		onlineddl.CheckCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
+	})
+	t.Run("force-cutover migrations by context", func(t *testing.T) {
+		// Submit two migrations with the same context, both postponed so they stay running.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-force-cutover-by-context", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-force-cutover-by-context", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// A non-matching context force-cuts-over nothing.
+		onlineddl.CheckForceCutOverContextMigrations(t, &vtParams, "ctx-force-cutover-by-context-other", 0)
+
+		// Force-cutover by context: both migrations must be marked.
+		onlineddl.CheckForceCutOverContextMigrations(t, &vtParams, "ctx-force-cutover-by-context", 2)
+
+		// Clean up: cancel the postponed migrations.
+		onlineddl.CheckCancelContextMigrations(t, &vtParams, "ctx-force-cutover-by-context", 2)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+	})
+	t.Run("launch migrations by context", func(t *testing.T) {
+		// Submit two migrations with the same context, launch-postponed so they sit in queued state.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-launch-by-context", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-launch-by-context", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
+
+		// A non-matching context launches nothing.
+		onlineddl.CheckLaunchContextMigrations(t, &vtParams, "ctx-launch-by-context-other", 0)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued)
+
+		// Launch by context: both migrations must be launched.
+		onlineddl.CheckLaunchContextMigrations(t, &vtParams, "ctx-launch-by-context", 2)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
+	})
+	t.Run("throttle/unthrottle migrations by context", func(t *testing.T) {
+		// Submit two migrations with the same context, both postponed so they stay running.
+		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-throttle-by-context", skipWait: true})
+		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-completion", executeStrategy: "vtctl", migrationContext: "ctx-throttle-by-context", skipWait: true})
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// Throttle by context.
+		onlineddl.ThrottleContextMigrations(t, &vtParams, "ctx-throttle-by-context")
+		time.Sleep(ensureStateNotChangedTime)
+		// Verify both migrations are throttled.
+		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			assert.EqualValues(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
+		}
+		rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			assert.EqualValues(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
+		}
+
+		// Unthrottle by context.
+		onlineddl.UnthrottleContextMigrations(t, &vtParams, "ctx-throttle-by-context")
+		time.Sleep(ensureStateNotChangedTime)
+		// Verify both migrations are unthrottled.
+		rs = onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			assert.EqualValues(t, 0, row.AsFloat64("user_throttle_ratio", 0))
+		}
+		rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			assert.EqualValues(t, 0, row.AsFloat64("user_throttle_ratio", 0))
+		}
+
+		// Clean up: cancel the postponed migrations.
+		onlineddl.CheckCancelContextMigrations(t, &vtParams, "ctx-throttle-by-context", 2)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+	})
 }
 
 func testSingleton(t *testing.T) {

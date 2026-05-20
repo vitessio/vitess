@@ -2659,6 +2659,8 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration cleanup all",
 }, {
+	input: "alter vitess_migration cleanup context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40'",
@@ -2666,6 +2668,8 @@ var validSQL = []struct {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40,40-80'",
 }, {
 	input: "alter vitess_migration launch all",
+}, {
+	input: "alter vitess_migration launch context 'some-context'",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
 }, {
@@ -2675,13 +2679,19 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration complete all",
 }, {
+	input: "alter vitess_migration complete context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' postpone complete",
 }, {
 	input: "alter vitess_migration postpone complete all",
 }, {
+	input: "alter vitess_migration postpone complete context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 }, {
 	input: "alter vitess_migration force_cutover all",
+}, {
+	input: "alter vitess_migration force_cutover context 'some-context'",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
 }, {
@@ -2691,9 +2701,6 @@ var validSQL = []struct {
 	output: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
 }, {
 	input: "alter vitess_migration cancel context 'some-context'",
-}, {
-	input:  "alter vitess_migration cancel context ''",
-	output: "alter vitess_migration cancel all",
 }, {
 	input: "alter vitess_migration cancel all",
 }, {
@@ -2709,7 +2716,17 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration throttle all",
 }, {
+	input: "alter vitess_migration throttle context 'some-context'",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' expire '1h'",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' ratio 0.7",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' expire '1h' ratio 0.7",
+}, {
 	input: "alter vitess_migration unthrottle all",
+}, {
+	input: "alter vitess_migration unthrottle context 'some-context'",
 }, {
 	input: "alter vitess_migration throttle all expire '1h'",
 }, {

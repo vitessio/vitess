@@ -187,6 +187,14 @@ const (
 			AND cleanup_timestamp IS NULL
 			AND retain_artifacts_seconds > 0
 	`
+	sqlUpdateReadyForCleanupAllByContext = `UPDATE _vt.schema_migrations
+			SET retain_artifacts_seconds=-1
+		WHERE
+			migration_status IN ('complete', 'cancelled', 'failed')
+			AND cleanup_timestamp IS NULL
+			AND retain_artifacts_seconds > 0
+			AND migration_context=%a
+	`
 	sqlUpdateForceCutOver = `UPDATE _vt.schema_migrations
 			SET force_cutover=1
 		WHERE

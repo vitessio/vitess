@@ -3732,6 +3732,13 @@ alter_statement:
       Type: CleanupAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION CLEANUP CONTEXT STRING
+  {
+    $$ = &AlterMigration{
+      Type: CleanupAllMigrationType,
+      Context: $6,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING LAUNCH
   {
     $$ = &AlterMigration{
@@ -3751,6 +3758,13 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: LaunchAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION LAUNCH CONTEXT STRING
+  {
+    $$ = &AlterMigration{
+      Type: LaunchAllMigrationType,
+      Context: $6,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING COMPLETE
@@ -3774,6 +3788,13 @@ alter_statement:
       Type: CompleteAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION COMPLETE CONTEXT STRING
+  {
+    $$ = &AlterMigration{
+      Type: CompleteAllMigrationType,
+      Context: $6,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING POSTPONE COMPLETE
   {
     $$ = &AlterMigration{
@@ -3785,6 +3806,13 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: PostponeCompleteAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION POSTPONE COMPLETE CONTEXT STRING
+  {
+    $$ = &AlterMigration{
+      Type: PostponeCompleteAllMigrationType,
+      Context: $7,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING CANCEL
@@ -3828,6 +3856,15 @@ alter_statement:
       Ratio: $7,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION THROTTLE CONTEXT STRING expire_opt ratio_opt
+  {
+    $$ = &AlterMigration{
+      Type: ThrottleAllMigrationType,
+      Context: $6,
+      Expire: $7,
+      Ratio: $8,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING UNTHROTTLE
   {
     $$ = &AlterMigration{
@@ -3841,6 +3878,13 @@ alter_statement:
       Type: UnthrottleAllMigrationType,
     }
   }
+| ALTER comment_opt VITESS_MIGRATION UNTHROTTLE CONTEXT STRING
+  {
+    $$ = &AlterMigration{
+      Type: UnthrottleAllMigrationType,
+      Context: $6,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING FORCE_CUTOVER
   {
     $$ = &AlterMigration{
@@ -3852,6 +3896,13 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: ForceCutOverAllMigrationType,
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION FORCE_CUTOVER CONTEXT STRING
+  {
+    $$ = &AlterMigration{
+      Type: ForceCutOverAllMigrationType,
+      Context: $6,
     }
   }
 | ALTER comment_opt VITESS_MIGRATION STRING CUTOVER_THRESHOLD STRING

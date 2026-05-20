@@ -1780,7 +1780,7 @@ func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireStr
 }
 
 // ThrottleAllMigrations
-func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal, migrationContext string) (result *sqltypes.Result, err error) {
 	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
 	if err != nil {
 		return nil, err
@@ -1788,8 +1788,26 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
-	_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio, false)
-	return emptyResult, nil
+	if migrationContext == "" {
+		_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio, false)
+		return emptyResult, nil
+	}
+	pendingMigrations, err := e.readPendingMigrations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result = &sqltypes.Result{}
+	for _, pm := range pendingMigrations {
+		if pm.migrationContext != migrationContext {
+			continue
+		}
+		res, err := e.ThrottleMigration(ctx, pm.uuid, expireString, ratioLiteral)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	return result, nil
 }
 
 // UnthrottleMigration
@@ -1803,13 +1821,31 @@ func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result
 }
 
 // UnthrottleAllMigrations
-func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+func (e *Executor) UnthrottleAllMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
-	defer e.triggerNextCheckInterval()
-	_ = e.lagThrottler.UnthrottleApp(throttlerapp.OnlineDDLName.String())
-	return emptyResult, nil
+	if migrationContext == "" {
+		defer e.triggerNextCheckInterval()
+		_ = e.lagThrottler.UnthrottleApp(throttlerapp.OnlineDDLName.String())
+		return emptyResult, nil
+	}
+	pendingMigrations, err := e.readPendingMigrations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result = &sqltypes.Result{}
+	for _, pm := range pendingMigrations {
+		if pm.migrationContext != migrationContext {
+			continue
+		}
+		res, err := e.UnthrottleMigration(ctx, pm.uuid)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	return result, nil
 }
 
 // scheduleNextMigration attempts to schedule a single migration to run next.
@@ -4300,7 +4336,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 // CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
 // all we do is set retain_artifacts_seconds to a very small number (it's actually a negative) so that the
 // next iteration of gcArtifacts() picks up the migration's artifacts and schedules them for deletion
-func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+func (e *Executor) CleanupAllMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
@@ -4308,7 +4344,18 @@ func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.R
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	rs, err := e.execQuery(ctx, sqlUpdateReadyForCleanupAll)
+	var rs *sqltypes.Result
+	if migrationContext == "" {
+		rs, err = e.execQuery(ctx, sqlUpdateReadyForCleanupAll)
+	} else {
+		query, bindErr := sqlparser.ParseAndBind(sqlUpdateReadyForCleanupAllByContext,
+			sqltypes.StringBindVariable(migrationContext),
+		)
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		rs, err = e.execQuery(ctx, query)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -4352,27 +4399,30 @@ func (e *Executor) ForceCutOverMigration(ctx context.Context, uuid string) (resu
 }
 
 // ForceCutOverPendingMigrations sets force_cutover flag for all pending migrations
-func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return result, err
 	}
-	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
-	for _, uuid := range uuids {
-		log.Info("ForceCutOverPendingMigrations: applying to " + uuid)
-		res, err := e.ForceCutOverMigration(ctx, uuid)
+	for _, pm := range pendingMigrations {
+		if migrationContext != "" && migrationContext != pm.migrationContext {
+			continue
+		}
+		log.Info("ForceCutOverPendingMigrations: applying to " + pm.uuid)
+		res, err := e.ForceCutOverMigration(ctx, pm.uuid)
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: done iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: done iterating %v migrations", len(pendingMigrations)))
 	return result, nil
 }
 
@@ -4446,27 +4496,30 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string, shardsArg
 
 // CompletePendingMigrations completes all pending migrations (that are expected to run or are running)
 // for this keyspace
-func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+func (e *Executor) CompletePendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return result, err
 	}
-	log.Info(fmt.Sprintf("CompletePendingMigrations: iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("CompletePendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
-	for _, uuid := range uuids {
-		log.Info("CompletePendingMigrations: completing " + uuid)
-		res, err := e.CompleteMigration(ctx, uuid, "")
+	for _, pm := range pendingMigrations {
+		if migrationContext != "" && migrationContext != pm.migrationContext {
+			continue
+		}
+		log.Info("CompletePendingMigrations: completing " + pm.uuid)
+		res, err := e.CompleteMigration(ctx, pm.uuid, "")
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("CompletePendingMigrations: done iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("CompletePendingMigrations: done iterating %v migrations", len(pendingMigrations)))
 	return result, nil
 }
 
@@ -4500,27 +4553,30 @@ func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (
 
 // PostponeCompletePendingMigrations sets postpone_completion for all pending migrations (that are expected to run or are running)
 // for this keyspace
-func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return result, err
 	}
-	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
-	for _, uuid := range uuids {
-		log.Info("PostponeCompletePendingMigrations: postpone completion of " + uuid)
-		res, err := e.PostponeCompleteMigration(ctx, uuid)
+	for _, pm := range pendingMigrations {
+		if migrationContext != "" && migrationContext != pm.migrationContext {
+			continue
+		}
+		log.Info("PostponeCompletePendingMigrations: postpone completion of " + pm.uuid)
+		res, err := e.PostponeCompleteMigration(ctx, pm.uuid)
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: done iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: done iterating %v migrations", len(pendingMigrations)))
 	return result, nil
 }
 
@@ -4557,28 +4613,29 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 }
 
 // LaunchMigrations launches all launch-postponed queued migrations for this keyspace
-func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+func (e *Executor) LaunchMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return result, err
 	}
-	rows := r.Named().Rows
-	log.Info(fmt.Sprintf("LaunchMigrations: iterating %v migrations", len(rows)))
+	log.Info(fmt.Sprintf("LaunchMigrations: iterating %v migrations", len(pendingMigrations)))
 	result = &sqltypes.Result{}
-	for _, row := range rows {
-		uuid := row["migration_uuid"].ToString()
-		log.Info("LaunchMigrations: unpostponing " + uuid)
-		res, err := e.LaunchMigration(ctx, uuid, "")
+	for _, pm := range pendingMigrations {
+		if migrationContext != "" && migrationContext != pm.migrationContext {
+			continue
+		}
+		log.Info("LaunchMigrations: unpostponing " + pm.uuid)
+		res, err := e.LaunchMigration(ctx, pm.uuid, "")
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(rows)))
+	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(pendingMigrations)))
 	return result, nil
 }
 
