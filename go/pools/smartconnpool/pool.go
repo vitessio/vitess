@@ -813,6 +813,8 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			return
 		}
 
+		// First, we reverse the popped off connections, so when we push connections back to the stack,
+		// we can go from oldest to newest.
 		var stackConnections int64
 		var oldestFirst *Pooled[C]
 		for conn != nil {
@@ -849,12 +851,9 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			pool.closedConn()
 		}
 
-		poolClosed := func() bool {
-			return pool.close.Load() == nil || pool.capacity.Load() == 0
-		}
 		for conn := expiredConnections; conn != nil; {
 			next := conn.next.Load()
-			if poolClosed() || pool.active.Load() >= pool.capacity.Load() {
+			if pool.close.Load() == nil || pool.active.Load() >= pool.capacity.Load() {
 				break
 			}
 
@@ -863,14 +862,10 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 				conn = next
 				continue
 			}
-			if poolClosed() {
-				conn.Close()
-				break
-			}
 
 			for {
 				open := pool.active.Load()
-				if open >= pool.capacity.Load() {
+				if pool.close.Load() == nil || open >= pool.capacity.Load() {
 					conn.Close()
 					break
 				}
