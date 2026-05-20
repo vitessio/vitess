@@ -42,3 +42,8 @@ var defaultHash256Key = [32]byte{}
 func New256() *Hasher256 {
 	return highway.New(defaultHash256Key)
 }
+
+// Init256 initializes a Hasher256 in-place using the default key, avoiding heap allocation.
+func Init256(h *Hasher256) {
+	highway.Init(h, defaultHash256Key)
+}
