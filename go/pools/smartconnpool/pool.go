@@ -295,10 +295,10 @@ func (pool *ConnPool[C]) Close() {
 // pool closing operation
 func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	pool.capacityMu.Lock()
-	defer pool.capacityMu.Unlock()
 
-	if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+	if pool.close.Load() == nil {
 		// already closed
+		pool.capacityMu.Unlock()
 		return nil
 	}
 
@@ -310,6 +310,7 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	closeChan := *pool.close.Swap(nil)
 	close(closeChan)
 
+	pool.capacityMu.Unlock()
 	pool.workers.Wait()
 	return err
 }
@@ -317,6 +318,10 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 func (pool *ConnPool[C]) reopen() {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
+
+	if pool.close.Load() == nil {
+		return
+	}
 
 	capacity := pool.capacity.Load()
 	if capacity == 0 {
@@ -752,6 +757,9 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 func (pool *ConnPool[C]) SetCapacity(ctx context.Context, newcap int64) error {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
+	if pool.close.Load() == nil {
+		return ErrConnPoolClosed
+	}
 	return pool.setCapacity(ctx, newcap)
 }
 

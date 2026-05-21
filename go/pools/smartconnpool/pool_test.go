@@ -657,6 +657,49 @@ func TestUserClosing(t *testing.T) {
 	}
 }
 
+func TestCloseWithContextAfterSetCapacityZeroClosesPool(t *testing.T) {
+	var state TestState
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	t.Cleanup(func() {
+		if closeChan := p.close.Swap(nil); closeChan != nil {
+			close(*closeChan)
+			p.workers.Wait()
+		}
+	})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	require.NoError(t, p.SetCapacity(ctx, 0))
+	require.True(t, p.IsOpen())
+
+	require.NoError(t, p.CloseWithContext(ctx))
+	require.False(t, p.IsOpen())
+}
+
+func TestSetCapacityAfterCloseDoesNotReopenPool(t *testing.T) {
+	var state TestState
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	ctx := t.Context()
+	require.NoError(t, p.CloseWithContext(ctx))
+
+	err := p.SetCapacity(ctx, 1)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+	require.False(t, p.IsOpen())
+	require.EqualValues(t, 0, p.Capacity())
+	require.EqualValues(t, 0, p.Active())
+}
+
 func TestConnReopen(t *testing.T) {
 	var state TestState
 
