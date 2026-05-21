@@ -416,6 +416,9 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
 	}
+	if pool.close.Load() == nil {
+		return nil, ErrConnPoolClosed
+	}
 	if pool.capacity.Load() == 0 {
 		return nil, ErrConnPoolClosed
 	}
@@ -432,6 +435,10 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 
 	if conn == nil {
 		var err error
+		if pool.close.Load() == nil {
+			pool.closedConn()
+			return
+		}
 		// Using context.Background() is fine since MySQL connection already enforces
 		// a connect timeout via the `db-connect-timeout-ms` config param.
 		conn, err = pool.connNew(context.Background())
@@ -459,6 +466,12 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 }
 
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
+	if pool.close.Load() == nil {
+		conn.Close()
+		pool.closedConn()
+		return false
+	}
+
 	if pool.wait.tryReturnConn(conn) {
 		return true
 	}
@@ -593,6 +606,10 @@ func (pool *ConnPool[C]) closedConn() {
 
 func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 	for {
+		if pool.close.Load() == nil {
+			return nil, ErrConnPoolClosed
+		}
+
 		open := pool.active.Load()
 		if open >= pool.capacity.Load() {
 			return nil, nil
@@ -603,6 +620,11 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 			if err != nil {
 				pool.closedConn()
 				return nil, err
+			}
+			if pool.close.Load() == nil {
+				conn.Close()
+				pool.closedConn()
+				return nil, ErrConnPoolClosed
 			}
 			return conn, nil
 		}
@@ -757,9 +779,6 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 func (pool *ConnPool[C]) SetCapacity(ctx context.Context, newcap int64) error {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
-	if pool.close.Load() == nil {
-		return ErrConnPoolClosed
-	}
 	return pool.setCapacity(ctx, newcap)
 }
 

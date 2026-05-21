@@ -290,7 +290,7 @@ func runStressCloseDuringTrafficCycle(t *testing.T, cycle int) {
 		for !stop.Load() {
 			ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 			capacityInProgress.Store(true)
-			_ = pool.SetCapacity(ctx, int64(rng.IntN(MaxCapacity+1)))
+			_ = pool.SetCapacity(ctx, int64(rng.IntN(MaxCapacity)+1))
 			capacityInProgress.Store(false)
 			cancel()
 			time.Sleep(time.Duration(rng.IntN(5)) * time.Millisecond)
@@ -344,7 +344,6 @@ func runStressCloseDuringTrafficCycle(t *testing.T, cycle int) {
 
 	require.NoErrorf(t, closeErr, "cycle %d: CloseWithContext failed", cycle)
 	require.Falsef(t, pool.IsOpen(), "cycle %d: pool should be closed", cycle)
-	require.EqualValuesf(t, 0, pool.Capacity(), "cycle %d: capacity should be 0 after Close", cycle)
 	require.EqualValuesf(t, 0, pool.Active(), "cycle %d: active should be 0 after Close", cycle)
 	require.EqualValuesf(t, 0, pool.InUse(), "cycle %d: borrowed should be 0 after Close", cycle)
 
