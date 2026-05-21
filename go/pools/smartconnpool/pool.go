@@ -790,7 +790,12 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	}
 
 	oldcap := pool.capacity.Swap(newcap)
-	if oldcap == newcap {
+	// Skip the drain only when capacity is unchanged AND we're already at or
+	// below the target. Otherwise we may have been left with active > newcap
+	// by a prior call that timed out (e.g. SetCapacity(0) racing with held
+	// conns), and CloseWithContext relies on a follow-up call here to finish
+	// draining.
+	if oldcap == newcap && pool.active.Load() <= newcap {
 		return nil
 	}
 	// update the idle count to match the new capacity if necessary

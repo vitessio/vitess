@@ -682,6 +682,53 @@ func TestCloseWithContextAfterSetCapacityZeroClosesPool(t *testing.T) {
 	require.False(t, p.IsOpen())
 }
 
+// TestCloseWithContextDrainsAfterTimedOutSetCapacityZero guards against an
+// early return in setCapacity that previously caused CloseWithContext to
+// return nil despite active conns being out, when a prior SetCapacity(0)
+// had timed out with conns still borrowed. The path is:
+//
+//   - SetCapacity(0) times out: capacity is swapped to 0 first, then the
+//     drain loop hits the deadline and returns an error.
+//   - The next CloseWithContext calls setCapacity(0) again. With the bug,
+//     oldcap == newcap == 0 short-circuited the drain loop and Close
+//     returned nil even though pool.active was still > 0.
+//
+// CloseWithContext must instead attempt to drain and surface a timeout
+// when borrowed conns aren't returned.
+func TestCloseWithContextDrainsAfterTimedOutSetCapacityZero(t *testing.T) {
+	var state TestState
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 2,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+
+	t.Cleanup(func() {
+		if closeChan := p.close.Swap(nil); closeChan != nil {
+			close(*closeChan)
+			p.workers.Wait()
+		}
+	})
+
+	conn, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	// SetCapacity(0) must time out: a conn is still borrowed.
+	cancelledCtx, cancel := context.WithCancel(t.Context())
+	cancel()
+	require.Error(t, p.SetCapacity(cancelledCtx, 0))
+	require.EqualValues(t, 0, p.Capacity())
+	require.GreaterOrEqual(t, p.Active(), int64(1))
+
+	// CloseWithContext must still attempt to drain — without the fix it
+	// returns nil immediately because setCapacity short-circuits on
+	// oldcap == newcap.
+	require.Error(t, p.CloseWithContext(cancelledCtx))
+
+	// Release the held conn so it is properly closed during teardown.
+	conn.Recycle()
+}
+
 func TestConnReopen(t *testing.T) {
 	var state TestState
 
