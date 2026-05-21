@@ -162,6 +162,20 @@ func TestStress(t *testing.T) {
 	require.NoError(t, wg.Wait())
 }
 
+// TestStressCloseDuringReconnectStorm exercises CloseWithContext racing
+// against in-flight reconnects. Workers churn conns (Get / Recycle, plus
+// occasional Taint), and a storm of Taints is launched with the test's
+// connect() blocked, so several background reconnects are parked inside
+// connNew when Close is called. The test verifies that:
+//
+//   - Close returns (does not deadlock waiting on parked reconnects),
+//   - no closed conn is handed to a worker,
+//   - no conn opened by the pool is leaked (every StressConn the connect
+//     callback ever produced ends up Closed),
+//   - capacity / active / inUse all settle to zero.
+//
+// Each cycle is a fresh pool; the loop runs many cycles to surface
+// scheduling-dependent races.
 func TestStressCloseDuringReconnectStorm(t *testing.T) {
 	const Cycles = 25
 
@@ -174,6 +188,20 @@ func TestStressCloseDuringReconnectStorm(t *testing.T) {
 	}
 }
 
+// TestStressWaiterStormDuringDrain exercises CloseWithContext while a crowd
+// of goroutines are queued on the waitlist. The pool is filled to capacity
+// by the test (held conns), NumWaiters callers pile up on pool.Get, and
+// then Close is invoked. The held conns are Recycled mid-drain. The test
+// verifies that:
+//
+//   - Close completes during the drain,
+//   - the drain does not hand any returned conn to a queued waiter
+//     (waiterHandoffs stays 0 — waiters must error out instead),
+//   - no conn opened by the pool is leaked,
+//   - capacity / active / inUse all settle to zero.
+//
+// Each cycle is a fresh pool; the loop runs many cycles to surface
+// scheduling-dependent races.
 func TestStressWaiterStormDuringDrain(t *testing.T) {
 	const Cycles = 25
 
@@ -274,18 +302,30 @@ func runStressWaiterStormDuringDrainCycle(t *testing.T, cycle int) {
 			pool.Capacity(), pool.Active(), pool.InUse(), connCount(), pool.IsOpen(), pool.wait.waiting(), liveWaiters.Load(), waiterErrors.Load(), waiterHandoffs.Load())
 	}
 
-	waitersQueued := assert.Eventuallyf(t, func() bool {
-		return pool.wait.waiting() == NumWaiters
-	}, Watchdog, time.Millisecond, "cycle %d: waiters did not queue before drain: %s", cycle, status())
-	if !waitersQueued {
+	// abort tears down on a watchdog trip. If closeCancel is non-nil a close
+	// goroutine is already running and we unblock it via cancellation;
+	// otherwise we drive a fresh CloseWithContext.
+	abort := func(closeCancel context.CancelFunc) {
+		if closeCancel != nil {
+			closeCancel()
+		}
 		release()
 		for _, conn := range held {
 			conn.Recycle()
 		}
-		closeCtx, cancel := context.WithTimeout(t.Context(), Watchdog)
-		_ = pool.CloseWithContext(closeCtx)
-		cancel()
+		if closeCancel == nil {
+			closeCtx, cancel := context.WithTimeout(t.Context(), Watchdog)
+			_ = pool.CloseWithContext(closeCtx)
+			cancel()
+		}
 		waitForStressTraffic(t, cycle, &wg, Watchdog, status)
+	}
+
+	waitersQueued := assert.Eventuallyf(t, func() bool {
+		return pool.wait.waiting() == NumWaiters
+	}, Watchdog, time.Millisecond, "cycle %d: waiters did not queue before drain: %s", cycle, status())
+	if !waitersQueued {
+		abort(nil)
 		require.FailNowf(t, "waiters did not queue before drain", "cycle %d: %s", cycle, status())
 	}
 
@@ -299,12 +339,7 @@ func runStressWaiterStormDuringDrainCycle(t *testing.T, cycle int) {
 		return pool.Capacity() == 0
 	}, Watchdog, time.Millisecond, "cycle %d: close did not start draining: %s", cycle, status())
 	if !closeStarted {
-		cancelClose()
-		release()
-		for _, conn := range held {
-			conn.Recycle()
-		}
-		waitForStressTraffic(t, cycle, &wg, Watchdog, status)
+		abort(cancelClose)
 		require.FailNowf(t, "close did not start draining", "cycle %d: %s", cycle, status())
 	}
 
@@ -313,25 +348,22 @@ func runStressWaiterStormDuringDrainCycle(t *testing.T, cycle int) {
 	}
 
 	var closeErr error
-	closeReturned := assert.Eventuallyf(t, func() bool {
+	tryReceiveClose := func() bool {
 		select {
 		case closeErr = <-closeDone:
 			return true
 		default:
 			return false
 		}
-	}, Watchdog, time.Millisecond, "cycle %d: CloseWithContext stalled during waiter drain: %s", cycle, status())
+	}
+
+	closeReturned := assert.Eventuallyf(t, tryReceiveClose,
+		Watchdog, time.Millisecond, "cycle %d: CloseWithContext stalled during waiter drain: %s", cycle, status())
 	if !closeReturned {
 		cancelClose()
 		release()
-		closeReturnedAfterRelease := assert.Eventuallyf(t, func() bool {
-			select {
-			case closeErr = <-closeDone:
-				return true
-			default:
-				return false
-			}
-		}, Watchdog, time.Millisecond, "cycle %d: CloseWithContext did not unblock after releasing waiter handoffs: %s", cycle, status())
+		closeReturnedAfterRelease := assert.Eventuallyf(t, tryReceiveClose,
+			Watchdog, time.Millisecond, "cycle %d: CloseWithContext did not unblock after releasing waiter handoffs: %s", cycle, status())
 		waitForStressTraffic(t, cycle, &wg, Watchdog, status)
 		if !closeReturnedAfterRelease {
 			require.FailNowf(t, "CloseWithContext did not unblock after releasing waiter handoffs", "cycle %d: %s", cycle, status())
@@ -368,10 +400,10 @@ func runStressCloseDuringReconnectStormCycle(t *testing.T, cycle int) {
 	t.Helper()
 
 	const (
-		MaxCapacity   = 8
-		NumWorkers    = 8
-		CloseTimeout  = 30 * time.Second
-		WatchdogDelay = 30 * time.Second
+		MaxCapacity  = 8
+		NumWorkers   = 8
+		CloseTimeout = 30 * time.Second
+		Watchdog     = 30 * time.Second
 	)
 
 	var (
@@ -456,13 +488,12 @@ func runStressCloseDuringReconnectStormCycle(t *testing.T, cycle int) {
 	}
 
 	for i := range NumWorkers {
-		worker := i
-		tid := int32(worker + 1)
+		tid := int32(i + 1)
 		wg.Go(func() error {
 			liveGetWorkers.Add(1)
 			defer liveGetWorkers.Add(-1)
 
-			rng := rand.New(rand.NewPCG(uint64(cycle+1), uint64(worker+101)))
+			rng := rand.New(rand.NewPCG(uint64(cycle+1), uint64(i+101)))
 
 			for !stop.Load() {
 				ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
@@ -509,21 +540,30 @@ func runStressCloseDuringReconnectStormCycle(t *testing.T, cycle int) {
 			pool.Capacity(), pool.Active(), pool.InUse(), connCount(), pool.IsOpen(), liveGetWorkers.Load(), liveReconnectWorkers.Load(), blockedConnects.Load(), blockedBackgroundConnects.Load(), canceledConnects.Load(), completedBlockedConnects.Load(), connectsAfterClose.Load())
 	}
 
-	trafficStarted := assert.Eventuallyf(t, func() bool {
-		return liveGetWorkers.Load() == NumWorkers && successfulGets.Load() >= NumWorkers
-	}, WatchdogDelay, time.Millisecond, "cycle %d: traffic did not start before reconnect storm: %s", cycle, status())
-	if !trafficStarted {
+	abort := func() {
 		stop.Store(true)
 		release()
-		closeCtx, cancel := context.WithTimeout(t.Context(), WatchdogDelay)
+		closeCtx, cancel := context.WithTimeout(t.Context(), Watchdog)
 		_ = pool.CloseWithContext(closeCtx)
 		cancel()
-		waitForStressTraffic(t, cycle, &wg, WatchdogDelay, status)
+		waitForStressTraffic(t, cycle, &wg, Watchdog, status)
+	}
+
+	trafficStarted := assert.Eventuallyf(t, func() bool {
+		return liveGetWorkers.Load() == NumWorkers && successfulGets.Load() >= NumWorkers
+	}, Watchdog, time.Millisecond, "cycle %d: traffic did not start before reconnect storm: %s", cycle, status())
+	if !trafficStarted {
+		abort()
 		require.FailNowf(t, "traffic did not start before reconnect storm", "cycle %d: %s", cycle, status())
 	}
 
 	blockReconnect.Store(true)
 
+	// Taint() synchronously calls pool.put(nil) → connNew → connect, which
+	// blocks on releaseReconnect once blockReconnect is set. Fan the storm
+	// out into goroutines so the main goroutine isn't pinned in the first
+	// Taint() and can proceed to start the close. release() (deferred via
+	// t.Cleanup, also called on the success path) unblocks them.
 	for _, conn := range stormConns {
 		wg.Go(func() error {
 			liveReconnectWorkers.Add(1)
@@ -537,14 +577,9 @@ func runStressCloseDuringReconnectStormCycle(t *testing.T, cycle int) {
 
 	reconnectBlocked := assert.Eventuallyf(t, func() bool {
 		return blockedBackgroundConnects.Load() > 0
-	}, WatchdogDelay, time.Millisecond, "cycle %d: reconnect storm did not block any no-deadline reconnect: %s", cycle, status())
+	}, Watchdog, time.Millisecond, "cycle %d: reconnect storm did not block any no-deadline reconnect: %s", cycle, status())
 	if !reconnectBlocked {
-		stop.Store(true)
-		release()
-		closeCtx, cancel := context.WithTimeout(t.Context(), WatchdogDelay)
-		_ = pool.CloseWithContext(closeCtx)
-		cancel()
-		waitForStressTraffic(t, cycle, &wg, WatchdogDelay, status)
+		abort()
 		require.FailNowf(t, "reconnect storm did not block any no-deadline reconnect", "cycle %d: %s", cycle, status())
 	}
 
@@ -556,27 +591,24 @@ func runStressCloseDuringReconnectStormCycle(t *testing.T, cycle int) {
 	}()
 
 	var closeErr error
-	closeReturned := assert.Eventuallyf(t, func() bool {
+	tryReceiveClose := func() bool {
 		select {
 		case closeErr = <-closeDone:
 			return true
 		default:
 			return false
 		}
-	}, WatchdogDelay, time.Millisecond, "cycle %d: CloseWithContext stalled during reconnect storm: %s", cycle, status())
+	}
+
+	closeReturned := assert.Eventuallyf(t, tryReceiveClose,
+		Watchdog, time.Millisecond, "cycle %d: CloseWithContext stalled during reconnect storm: %s", cycle, status())
 	if !closeReturned {
 		cancelClose()
 		stop.Store(true)
 		release()
-		closeReturnedAfterRelease := assert.Eventuallyf(t, func() bool {
-			select {
-			case closeErr = <-closeDone:
-				return true
-			default:
-				return false
-			}
-		}, WatchdogDelay, time.Millisecond, "cycle %d: CloseWithContext did not unblock after releasing reconnects: %s", cycle, status())
-		waitForStressTraffic(t, cycle, &wg, WatchdogDelay, status)
+		closeReturnedAfterRelease := assert.Eventuallyf(t, tryReceiveClose,
+			Watchdog, time.Millisecond, "cycle %d: CloseWithContext did not unblock after releasing reconnects: %s", cycle, status())
+		waitForStressTraffic(t, cycle, &wg, Watchdog, status)
 		if !closeReturnedAfterRelease {
 			require.FailNowf(t, "CloseWithContext did not unblock after releasing reconnects", "cycle %d: %s", cycle, status())
 		}
@@ -586,7 +618,7 @@ func runStressCloseDuringReconnectStormCycle(t *testing.T, cycle int) {
 
 	stop.Store(true)
 	release()
-	waitForStressTraffic(t, cycle, &wg, WatchdogDelay, status)
+	waitForStressTraffic(t, cycle, &wg, Watchdog, status)
 
 	require.NoErrorf(t, closeErr, "cycle %d: CloseWithContext failed during reconnect storm: %s", cycle, status())
 	require.Falsef(t, pool.IsOpen(), "cycle %d: pool should be closed", cycle)
