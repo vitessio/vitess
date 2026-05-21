@@ -1751,6 +1751,78 @@ func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
 	require.EqualValues(t, 0, p.Active())
 }
 
+// TestSetCapacityReductionDrainsWithWaiters verifies that SetCapacity reducing
+// capacity from N to M (0 < M < N) completes promptly while waiters are
+// queued for conns. tryReturnConn must eagerly close conns whenever
+// active > capacity; otherwise Recycles are handed off to waiters who hold
+// the conn, the wait list drains without conns ever hitting a stack, and
+// setCapacity's drain loop spins until ctx expires.
+func TestSetCapacityReductionDrainsWithWaiters(t *testing.T) {
+	var state TestState
+	pool := NewPool(&Config[*TestConn]{
+		Capacity: 4,
+	}).Open(newConnector(&state), nil)
+
+	ctx := t.Context()
+
+	// Hold all conns directly.
+	conns := make([]*Pooled[*TestConn], 4)
+	for i := range conns {
+		c, err := pool.Get(ctx, nil)
+		require.NoError(t, err)
+		conns[i] = c
+	}
+
+	// Queue NumWaiters callers that Get a conn and then hold it until release.
+	// Holding (instead of immediately recycling) keeps every handed-off conn
+	// out of the clean stack — the exact scenario where setCapacity's drain
+	// loop has nothing to pop and spins.
+	const NumWaiters = 4
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	for range NumWaiters {
+		wg.Go(func() {
+			c, err := pool.Get(ctx, nil)
+			if err != nil {
+				return
+			}
+			<-release
+			c.Recycle()
+		})
+	}
+	t.Cleanup(func() {
+		close(release)
+		pool.Close()
+		wg.Wait()
+	})
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, pool.wait.waiting(), NumWaiters)
+	}, time.Second, time.Millisecond)
+
+	setDone := make(chan error, 1)
+	go func() {
+		setCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		setDone <- pool.SetCapacity(setCtx, 1)
+	}()
+
+	// Wait for capacity to actually drop before recycling, so every
+	// Recycle observes active > capacity.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, pool.Capacity())
+	}, time.Second, time.Millisecond)
+
+	for _, c := range conns {
+		c.Recycle()
+	}
+
+	err := requireReceive(t, setDone, 5*time.Second, "SetCapacity did not return")
+	require.NoError(t, err, "SetCapacity reduction must not stall while waiters are queued")
+	require.EqualValues(t, 1, pool.Capacity())
+	require.LessOrEqual(t, pool.Active(), int64(1))
+}
+
 // TestIdleWorkerConnectCancelsOnClose verifies that an idle-worker reopen
 // blocked inside the user-supplied connect callback unblocks when Close is
 // called. Without a cancellable context, the idle worker would extend Close

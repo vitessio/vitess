@@ -495,12 +495,12 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 }
 
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
-	// If the pool has been drained to zero capacity (Close or an explicit
-	// SetCapacity(0)), close the connection eagerly instead of handing it
-	// off to a waiter or pushing it onto a stack. Otherwise an in-progress
-	// Close keeps cycling connections from Recycle to waiter, and the
-	// setCapacity drain loop never observes a non-empty stack.
-	if pool.capacity.Load() == 0 {
+	// If the pool has more conns out than its configured capacity, close
+	// this one eagerly instead of handing it off to a waiter or pushing it
+	// onto a stack. Otherwise a setCapacity reducing capacity keeps cycling
+	// connections from Recycle to waiter and the drain loop never observes
+	// a non-empty stack — including the capacity=0 case during Close.
+	if pool.active.Load() > pool.capacity.Load() {
 		conn.Close()
 		pool.closedConn()
 		return false
