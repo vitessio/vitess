@@ -149,7 +149,7 @@ func (dte *DTExecutor) Prepare(transactionID int64, dtid string) error {
 		return wrapPrepareError(err, "failed to save redo for prepare %s", dtid)
 	}
 
-	remove, err := addActiveCommit(dte.ctx, localConn, dte.te)
+	remove, err := dte.te.addActiveCommit(dte.ctx, localConn)
 	if err != nil {
 		return wrapPrepareError(err, "failed to track redo commit for prepare %s", dtid)
 	}

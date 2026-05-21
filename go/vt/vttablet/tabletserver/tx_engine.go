@@ -326,7 +326,7 @@ func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (int64, str
 
 // commit commits the transaction.
 func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (string, error) {
-	remove, err := addActiveCommit(ctx, conn, te)
+	remove, err := te.addActiveCommit(ctx, conn)
 	if err != nil {
 		return "", err
 	}
@@ -337,7 +337,7 @@ func (te *TxEngine) commit(ctx context.Context, conn *StatefulConnection) (strin
 
 // addActiveCommit adds a commit to the active commit list. Returns a function that should be deferred
 // by the caller to remove the query from the active commit list on completion.
-func addActiveCommit(ctx context.Context, conn *StatefulConnection, te *TxEngine) (func(), error) {
+func (te *TxEngine) addActiveCommit(ctx context.Context, conn *StatefulConnection) (func(), error) {
 	qd := NewQueryDetail(ctx, conn)
 	if err := te.activeCommits.Add(qd); err != nil {
 		// If we've received an error here, it means a shutdown is in progress, and
