@@ -657,6 +657,82 @@ func TestUserClosing(t *testing.T) {
 	}
 }
 
+func TestCloseWithContextAfterIdleCleanupPopDoesNotLeak(t *testing.T) {
+	var state TestState
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 2,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	idle, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	idle.Recycle()
+
+	cleanupConn, ok := p.clean.Pop()
+	require.True(t, ok)
+	require.NotNil(t, cleanupConn)
+
+	var waiterGotConn atomic.Bool
+	waiterDone := make(chan struct{})
+	go func() {
+		defer close(waiterDone)
+
+		conn, err := p.Get(t.Context(), nil)
+		if err == nil {
+			waiterGotConn.Store(true)
+			conn.Recycle()
+		}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 30*time.Second, time.Millisecond)
+
+	closeCtx, cancelClose := context.WithTimeout(t.Context(), 30*time.Second)
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.Capacity() == 0
+	}, 30*time.Second, time.Millisecond)
+
+	p.tryReturnConn(cleanupConn)
+	held.Recycle()
+
+	var closeErr error
+	require.Eventually(t, func() bool {
+		select {
+		case closeErr = <-closeDone:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond)
+	cancelClose()
+	require.NoError(t, closeErr)
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-waiterDone:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond)
+
+	require.False(t, waiterGotConn.Load(), "close must not hand an idle-cleanup conn to a waiter after capacity reaches 0")
+	require.EqualValues(t, 0, p.Active())
+	require.EqualValues(t, 0, p.InUse())
+	require.EqualValues(t, 0, state.open.Load())
+}
+
 func TestConnReopen(t *testing.T) {
 	var state TestState
 
