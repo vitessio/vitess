@@ -257,6 +257,17 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	}
 }
 
+// CheckCancelContextMigrations cancels all pending migrations with a given context and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCancelContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
+	cancelQuery := fmt.Sprintf("alter vitess_migration cancel context '%s'", migrationContext)
+	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
 // CheckCleanupAllMigrations cleans up all applicable migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCleanupAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) uint64 {
