@@ -207,6 +207,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.Int64Var(&currentConfig.ConsolidatorQueryWaiterCap, "consolidator-query-waiter-cap", 0, "Configure the maximum number of clients allowed to wait on the consolidator.")
 	fs.BoolVar(&currentConfig.ConsolidatorCacheProto3Rows, "consolidator-cache-proto3-rows", defaultConfig.ConsolidatorCacheProto3Rows, "If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.")
+	fs.BoolVar(&currentConfig.ConsolidatorRejectOnCap, "consolidator-reject-on-cap", defaultConfig.ConsolidatorRejectOnCap, "If true, reject queries with a RESOURCE_EXHAUSTED error when the global consolidator waiter cap is exceeded, instead of falling back to independent execution. The cap is enforced globally across all consolidated queries, not per-query.")
 	utils.SetFlagDurationVar(fs, &healthCheckInterval, "health-check-interval", defaultConfig.Healthcheck.Interval, "Interval between health checks")
 	utils.SetFlagDurationVar(fs, &degradedThreshold, "degraded-threshold", defaultConfig.Healthcheck.DegradedThreshold, "replication lag after which a replica is considered degraded")
 	utils.SetFlagDurationVar(fs, &unhealthyThreshold, "unhealthy-threshold", defaultConfig.Healthcheck.UnhealthyThreshold, "replication lag after which a replica is considered unhealthy")
@@ -342,6 +343,7 @@ type TabletConfig struct {
 	ConsolidatorStreamTotalSize int64         `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize int64         `json:"consolidatorStreamQuerySize,omitempty"`
 	ConsolidatorQueryWaiterCap  int64         `json:"consolidatorMaxQueryWait,omitempty"`
+	ConsolidatorRejectOnCap     bool          `json:"consolidatorRejectOnCap,omitempty"`
 	ConsolidatorCacheProto3Rows bool          `json:"consolidatorCacheProto3Rows,omitempty"`
 	QueryCacheMemory            int64         `json:"queryCacheMemory,omitempty"`
 	QueryCacheDoorkeeper        bool          `json:"queryCacheDoorkeeper,omitempty"`
