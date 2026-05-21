@@ -1958,6 +1958,7 @@ func (cmp *Comparator) RefOfAlterMigration(a, b *AlterMigration) bool {
 	}
 	return a.Type == b.Type &&
 		a.UUID == b.UUID &&
+		a.Context == b.Context &&
 		a.Expire == b.Expire &&
 		a.Threshold == b.Threshold &&
 		a.Shards == b.Shards &&
