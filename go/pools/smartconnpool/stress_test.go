@@ -162,6 +162,18 @@ func TestStress(t *testing.T) {
 	require.NoError(t, wg.Wait())
 }
 
+// TestStressCloseDuringTraffic exercises CloseWithContext racing against
+// active workload: NumWorkers goroutines churn conns (Get / Recycle, plus
+// occasional Taint), a separate goroutine repeatedly resizes the pool via
+// SetCapacity, and then Close is invoked. The test verifies that:
+//
+//   - Close returns (does not deadlock),
+//   - no closed conn is handed to a worker,
+//   - no conn opened by the pool is leaked,
+//   - active / inUse settle to zero.
+//
+// Each cycle is a fresh pool; the loop runs many cycles to surface
+// scheduling-dependent races.
 func TestStressCloseDuringTraffic(t *testing.T) {
 	const Cycles = 100
 
@@ -182,7 +194,7 @@ func runStressCloseDuringTrafficCycle(t *testing.T, cycle int) {
 		NumWorkers    = 24
 		WarmupTimeout = 30 * time.Second
 		CloseTimeout  = 30 * time.Second
-		WatchdogDelay = 30 * time.Second
+		Watchdog      = 30 * time.Second
 	)
 
 	var (
@@ -236,13 +248,12 @@ func runStressCloseDuringTrafficCycle(t *testing.T, cycle int) {
 	)
 
 	for i := range NumWorkers {
-		worker := i
-		tid := int32(worker + 1)
+		tid := int32(i + 1)
 		wg.Go(func() error {
 			liveGetWorkers.Add(1)
 			defer liveGetWorkers.Add(-1)
 
-			rng := rand.New(rand.NewPCG(uint64(cycle+1), uint64(worker+1)))
+			rng := rand.New(rand.NewPCG(uint64(cycle+1), uint64(i+1)))
 
 			for !stop.Load() {
 				ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
@@ -303,15 +314,27 @@ func runStressCloseDuringTrafficCycle(t *testing.T, cycle int) {
 			pool.Capacity(), pool.Active(), pool.InUse(), connCount(), pool.IsOpen(), liveGetWorkers.Load(), capacityInProgress.Load(), connectsAfterClose.Load())
 	}
 
+	// abort tears down on a watchdog trip. If closeCancel is non-nil a close
+	// goroutine is already running and we unblock it via cancellation;
+	// otherwise we drive a fresh CloseWithContext.
+	abort := func(closeCancel context.CancelFunc) {
+		if closeCancel != nil {
+			closeCancel()
+		}
+		stop.Store(true)
+		if closeCancel == nil {
+			ctx, cancel := context.WithTimeout(t.Context(), Watchdog)
+			_ = pool.CloseWithContext(ctx)
+			cancel()
+		}
+		waitForStressTraffic(t, cycle, &wg, Watchdog, status)
+	}
+
 	trafficStarted := assert.Eventuallyf(t, func() bool {
 		return liveGetWorkers.Load() == NumWorkers && successfulGets.Load() >= NumWorkers
 	}, WarmupTimeout, time.Millisecond, "cycle %d: traffic did not start: %s", cycle, status())
 	if !trafficStarted {
-		stop.Store(true)
-		ctx, cancel := context.WithTimeout(t.Context(), CloseTimeout)
-		_ = pool.CloseWithContext(ctx)
-		cancel()
-		waitForStressTraffic(t, cycle, &wg, WatchdogDelay, status)
+		abort(nil)
 		require.FailNowf(t, "traffic did not start", "cycle %d: %s", cycle, status())
 	}
 
@@ -330,17 +353,15 @@ func runStressCloseDuringTrafficCycle(t *testing.T, cycle int) {
 		default:
 			return false
 		}
-	}, WatchdogDelay, time.Millisecond, "cycle %d: CloseWithContext stalled: %s", cycle, status())
+	}, Watchdog, time.Millisecond, "cycle %d: CloseWithContext stalled: %s", cycle, status())
 	if !closeReturned {
-		cancelClose()
-		stop.Store(true)
-		waitForStressTraffic(t, cycle, &wg, WatchdogDelay, status)
+		abort(cancelClose)
 		require.FailNowf(t, "CloseWithContext stalled", "cycle %d: %s", cycle, status())
 	}
 	cancelClose()
 
 	stop.Store(true)
-	waitForStressTraffic(t, cycle, &wg, WatchdogDelay, status)
+	waitForStressTraffic(t, cycle, &wg, Watchdog, status)
 
 	require.NoErrorf(t, closeErr, "cycle %d: CloseWithContext failed", cycle)
 	require.Falsef(t, pool.IsOpen(), "cycle %d: pool should be closed", cycle)
