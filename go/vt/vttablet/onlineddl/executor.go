@@ -1712,28 +1712,39 @@ func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancella
 }
 
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
-// for this keyspace
-func (e *Executor) CancelPendingMigrations(ctx context.Context, message string, issuedByUser bool) (result *sqltypes.Result, err error) {
+// for this keyspace. When migrationContext is non-empty only migrations whose migration_context
+// matches are cancelled (CANCEL CONTEXT 'ctx'). When migrationContext is empty all pending
+// migrations are cancelled (CANCEL ALL).
+func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext string, issuedByUser bool) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return result, err
 	}
-	log.Info(fmt.Sprintf("CancelPendingMigrations: iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("CancelPendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
-	result = &sqltypes.Result{}
-	for _, uuid := range uuids {
-		log.Info("CancelPendingMigrations: cancelling " + uuid)
-		res, err := e.CancelMigration(ctx, uuid, message, issuedByUser)
-		if err != nil {
-			return result, err
-		}
-		result.AppendResult(res)
+	message := "CANCEL ALL issued by user"
+	if migrationContext != "" {
+		message = fmt.Sprintf("CANCEL CONTEXT '%s' issued by user", migrationContext)
 	}
-	log.Info(fmt.Sprintf("CancelPendingMigrations: done iterating %v migrations", len(uuids)))
+
+	matched := 0
+	result = &sqltypes.Result{}
+	for _, pending := range pendingMigrations {
+		if migrationContext == "" || migrationContext == pending.migrationContext {
+			matched++
+			log.Info("CancelPendingMigrations: cancelling " + pending.uuid)
+			res, err := e.CancelMigration(ctx, pending.uuid, message, issuedByUser)
+			if err != nil {
+				return result, err
+			}
+			result.AppendResult(res)
+		}
+	}
+	log.Info(fmt.Sprintf("CancelPendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
 	return result, nil
 }
 
