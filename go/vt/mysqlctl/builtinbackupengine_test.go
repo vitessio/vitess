@@ -159,6 +159,36 @@ func TestFileEntryFullPath(t *testing.T) {
 	}
 }
 
+func TestParseBackupStorageName(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantFeIdx  int
+		wantChkIdx int
+		wantErr    bool
+	}{
+		{name: "whole file", input: "5", wantFeIdx: 5, wantChkIdx: -1},
+		{name: "chunk", input: "5-2", wantFeIdx: 5, wantChkIdx: 2},
+		{name: "zero index", input: "0-0", wantFeIdx: 0, wantChkIdx: 0},
+		{name: "large indices", input: "123-456", wantFeIdx: 123, wantChkIdx: 456},
+		{name: "invalid file index", input: "abc", wantErr: true},
+		{name: "invalid chunk index", input: "5-abc", wantErr: true},
+		{name: "invalid file index with chunk", input: "abc-2", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			feIdx, chkIdx, err := parseBackupName(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFeIdx, feIdx)
+			assert.Equal(t, tt.wantChkIdx, chkIdx)
+		})
+	}
+}
+
 func TestShouldDrainForBackupBuiltIn(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 
