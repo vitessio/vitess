@@ -276,16 +276,8 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	cellClientAddrs := make([]string, len(cells))
 	cellClientCmds := make([]*exec.Cmd, len(cells))
 	cellTSs := make([]*topo.Server, len(cells))
-<<<<<<< HEAD
 	for i := 0; i < len(cells); i++ {
-		addr, cmd := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort+(i+100*i))
-||||||| parent of 50e632b1fc (tests: give vtctl/workflow tests their own port range (#20150))
-	for i := range cells {
-		addr, cmd := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort+(i+100*i))
-=======
-	for i := range cells {
 		addr, cmd := startEtcd(t, cellPorts[i].client, cellPorts[i].peer)
->>>>>>> 50e632b1fc (tests: give vtctl/workflow tests their own port range (#20150))
 		cellClientAddrs[i] = addr
 		cellClientCmds[i] = cmd
 	}
