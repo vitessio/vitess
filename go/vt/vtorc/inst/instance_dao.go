@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -54,7 +53,10 @@ var (
 	instanceWriteSem = semaphore.NewWeighted(config.GetBackendWriteConcurrency())
 )
 
-var forgetAliases *cache.Cache
+var (
+	forgetAliases     *cache.Cache
+	forgetAliasesOnce sync.Once
+)
 
 var (
 	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
@@ -62,10 +64,7 @@ var (
 	currentErrantGTIDCount      = stats.NewGaugesWithSingleLabel("CurrentErrantGTIDCount", "Number of errant GTIDs a vttablet currently has", "TabletAlias")
 )
 
-var (
-	emptyQuotesRegexp            = regexp.MustCompile(`^""$`)
-	cacheInitializationCompleted atomic.Bool
-)
+var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
 
 func init() {
 	go initializeInstanceDao()
@@ -73,8 +72,18 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
-	cacheInitializationCompleted.Store(true)
+	initForgetAliasesCache()
+}
+
+func initForgetAliasesCache() {
+	forgetAliasesOnce.Do(func() {
+		forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
+	})
+}
+
+// InitializeForgetAliasesCache ensures the forgetAliases cache is initialized.
+func InitializeForgetAliasesCache() {
+	initForgetAliasesCache()
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronously or not
@@ -1073,6 +1082,7 @@ func UpdateInstanceLastAttemptedCheck(tabletAlias string) error {
 }
 
 func InstanceIsForgotten(tabletAlias string) bool {
+	initForgetAliasesCache()
 	_, found := forgetAliases.Get(tabletAlias)
 	return found
 }
@@ -1085,6 +1095,7 @@ func ForgetInstance(tabletAlias string) error {
 		log.Errorf(errMsg)
 		return errors.New(errMsg)
 	}
+	initForgetAliasesCache()
 	forgetAliases.Set(tabletAlias, true, cache.DefaultExpiration)
 	log.Infof("Forgetting: %v", tabletAlias)
 
