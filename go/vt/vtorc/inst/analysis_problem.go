@@ -146,6 +146,21 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 	},
 
+	// InnoDBStalledPrimary — mysqld is reachable but logged MY-012985, so
+	// LastCheckValid is true (unlike PrimaryDiskStalled). Reparent before
+	// mysqld self-kills at innodb_fatal_semaphore_wait_threshold.
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    InnoDBStalledPrimary,
+			Description: "Primary has a stalled InnoDB latch (MY-012985 long semaphore wait)",
+			Priority:    detectionAnalysisPriorityShardWideAction,
+		},
+		BeforeAnalyses: []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return a.IsClusterPrimary && a.LastCheckValid && a.InnoDBLongSemaphoreWaitSeen && a.CountValidReplicas > 0
+		},
+	},
+
 	// DeadPrimary*
 	{
 		Meta: &DetectionAnalysisProblemMeta{

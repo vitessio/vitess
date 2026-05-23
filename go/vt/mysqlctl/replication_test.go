@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 )
@@ -742,6 +743,74 @@ func TestSemiSyncReplicationStatus(t *testing.T) {
 	res, err = testMysqld.SemiSyncReplicationStatus(t.Context())
 	assert.NoError(t, err)
 	assert.False(t, res)
+}
+
+func TestHasRecentInnoDBLongSemaphoreWait(t *testing.T) {
+	const expectedQuery = "SELECT 1 FROM performance_schema.error_log WHERE logged >= NOW(6) - INTERVAL 60 SECOND AND prio = 'Warning' AND subsystem = 'InnoDB' AND error_code = 'MY-012985' LIMIT 1"
+
+	t.Run("returns true when a recent warning row exists", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		params := db.ConnParams()
+		cp := *params
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		db.AddQuery(expectedQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"))
+		testMysqld := NewMysqld(dbc)
+		defer testMysqld.Close()
+
+		seen, err := testMysqld.HasRecentInnoDBLongSemaphoreWait(t.Context(), 60*time.Second)
+		require.NoError(t, err)
+		assert.True(t, seen)
+	})
+
+	t.Run("returns false when no rows match", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		params := db.ConnParams()
+		cp := *params
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		db.AddQuery(expectedQuery, &sqltypes.Result{})
+		testMysqld := NewMysqld(dbc)
+		defer testMysqld.Close()
+
+		seen, err := testMysqld.HasRecentInnoDBLongSemaphoreWait(t.Context(), 60*time.Second)
+		require.NoError(t, err)
+		assert.False(t, seen)
+	})
+
+	t.Run("returns (false, nil) when performance_schema.error_log is missing", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		params := db.ConnParams()
+		cp := *params
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		db.AddRejectedQuery(expectedQuery, sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownTable, "Table 'performance_schema.error_log' doesn't exist"))
+		testMysqld := NewMysqld(dbc)
+		defer testMysqld.Close()
+
+		seen, err := testMysqld.HasRecentInnoDBLongSemaphoreWait(t.Context(), 60*time.Second)
+		require.NoError(t, err)
+		assert.False(t, seen)
+	})
+
+	t.Run("propagates non-table errors", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		params := db.ConnParams()
+		cp := *params
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		db.AddRejectedQuery(expectedQuery, sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "lost connection"))
+		testMysqld := NewMysqld(dbc)
+		defer testMysqld.Close()
+
+		_, err := testMysqld.HasRecentInnoDBLongSemaphoreWait(t.Context(), 60*time.Second)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "lost connection")
+	})
 }
 
 func TestSemiSyncExtensionLoaded(t *testing.T) {

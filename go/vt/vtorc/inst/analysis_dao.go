@@ -274,7 +274,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
 		) AS count_distinct_logging_major_versions,
-		primary_instance.is_disk_stalled != 0 AS is_disk_stalled
+		primary_instance.is_disk_stalled != 0 AS is_disk_stalled,
+		primary_instance.innodb_long_semaphore_wait_seen != 0 AS innodb_long_semaphore_wait_seen
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -400,6 +401,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
 		a.IsDiskStalled = m.GetBool("is_disk_stalled")
+		a.InnoDBLongSemaphoreWaitSeen = m.GetBool("innodb_long_semaphore_wait_seen")
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf(

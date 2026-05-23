@@ -110,7 +110,8 @@ func ExecDBWriteFunc(f func() error) error {
 
 func ExpireTableData(tableName string, timestampColumn string) error {
 	writeFunc := func() error {
-		query := fmt.Sprintf(`DELETE
+		query := fmt.Sprintf(
+			`DELETE
 			FROM %s
 			WHERE
 				%s < DATETIME('now', PRINTF('-%%d DAY', ?))
@@ -250,6 +251,7 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		instance.SemiSyncPrimaryStatus = fs.SemiSyncPrimaryStatus
 		instance.SemiSyncReplicaStatus = fs.SemiSyncReplicaStatus
 		instance.SemiSyncBlocked = fs.SemiSyncBlocked
+		instance.InnoDBLongSemaphoreWaitSeen = fs.InnodbLongSemaphoreWaitSeen
 
 		if instance.IsOracleMySQL() || instance.IsPercona() {
 			// Stuff only supported on Oracle / Percona MySQL
@@ -658,7 +660,8 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 		if sort == "" {
 			sort = `alias`
 		}
-		query := fmt.Sprintf(`SELECT
+		query := fmt.Sprintf(
+			`SELECT
 				*,
 				STRFTIME('%%s', 'now') - STRFTIME('%%s', last_checked) AS seconds_since_last_checked,
 				IFNULL(last_checked <= last_seen, 0) AS is_last_check_valid,
@@ -733,7 +736,8 @@ func ReadProblemInstances(keyspace, shard string) ([]*Instance, error) {
 			OR (gtid_errant != '')
 		)`
 
-	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5,
+	args := sqlutils.Args(
+		keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5,
 		config.GetReasonableReplicationLagSeconds(),
 		config.GetReasonableReplicationLagSeconds(),
 	)
@@ -848,7 +852,8 @@ func mkInsert(table string, columns []string, values []string, nrRows int, inser
 	}
 
 	col := strings.Join(columns, ", ")
-	query := fmt.Sprintf(`%s %s
+	query := fmt.Sprintf(
+		`%s %s
 			(%s)
 		VALUES
 			%s
@@ -935,6 +940,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"semi_sync_blocked",
 		"last_discovery_latency",
 		"is_disk_stalled",
+		"innodb_long_semaphore_wait_seen",
 	}
 
 	values := make([]string, len(columns))
@@ -1015,6 +1021,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.SemiSyncBlocked)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 		args = append(args, instance.StalledDisk)
+		args = append(args, instance.InnoDBLongSemaphoreWaitSeen)
 	}
 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
@@ -1062,7 +1069,8 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 // for a given instance
 func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSuccess bool, stalledDisk bool) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`UPDATE database_instance
+		_, err := db.ExecVTOrc(
+			`UPDATE database_instance
 			SET
 				last_checked = DATETIME('now'),
 				last_check_partial_success = ?,
@@ -1092,7 +1100,8 @@ func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSucce
 // we have a "hanging" issue.
 func UpdateInstanceLastAttemptedCheck(tabletAlias *topodatapb.TabletAlias) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`UPDATE database_instance
+		_, err := db.ExecVTOrc(
+			`UPDATE database_instance
 			SET
 				last_attempted_check = DATETIME('now')
 			WHERE
@@ -1133,7 +1142,8 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	currentErrantGTIDCount.Reset(tabletAliasString)
 
 	// Delete from the 'vitess_tablet' table.
-	_, err := db.ExecVTOrc(`DELETE FROM
+	_, err := db.ExecVTOrc(
+		`DELETE FROM
 			vitess_tablet
 		WHERE
 			alias = ?`,
@@ -1145,7 +1155,8 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	}
 
 	// Also delete from the 'database_instance' table.
-	sqlResult, err := db.ExecVTOrc(`DELETE FROM
+	sqlResult, err := db.ExecVTOrc(
+		`DELETE FROM
 			database_instance
 		WHERE
 			alias = ?`,
@@ -1172,7 +1183,8 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 
 // ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
 func ForgetLongUnseenInstances() error {
-	sqlResult, err := db.ExecVTOrc(`DELETE
+	sqlResult, err := db.ExecVTOrc(
+		`DELETE
 		FROM database_instance
 		WHERE
 			last_seen < DATETIME('now', PRINTF('-%d HOUR', ?))
@@ -1197,7 +1209,8 @@ func ForgetLongUnseenInstances() error {
 // SnapshotTopologies records topology graph for all existing topologies
 func SnapshotTopologies() error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`INSERT OR IGNORE
+		_, err := db.ExecVTOrc(
+			`INSERT OR IGNORE
 			INTO database_instance_topology_history (
 				snapshot_unix_timestamp,
 				alias,
@@ -1231,7 +1244,8 @@ func SnapshotTopologies() error {
 func ExpireStaleInstanceBinlogCoordinates() error {
 	expireSeconds := max(config.GetReasonableReplicationLagSeconds()*2, config.StaleInstanceCoordinatesExpireSeconds)
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`DELETE FROM
+		_, err := db.ExecVTOrc(
+			`DELETE FROM
 				database_instance_stale_binlog_coordinates
 			WHERE
 				first_seen < DATETIME('now', PRINTF('-%d SECOND', ?))

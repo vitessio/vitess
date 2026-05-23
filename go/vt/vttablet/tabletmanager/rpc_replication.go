@@ -167,6 +167,11 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
+	innodbLongSemaphoreWaitSeen, err := tm.MysqlDaemon.HasRecentInnoDBLongSemaphoreWait(ctx, 60*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
 	return &replicationdatapb.FullStatus{
 		ServerId:                    serverID,
 		ServerUuid:                  serverUUID,
@@ -192,6 +197,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		SuperReadOnly:               superReadOnly,
 		ReplicationConfiguration:    replConfiguration,
 		TabletType:                  tm.Tablet().Type,
+		InnodbLongSemaphoreWaitSeen: innodbLongSemaphoreWaitSeen,
 	}, nil
 }
 

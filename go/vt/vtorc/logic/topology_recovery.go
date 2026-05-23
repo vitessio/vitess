@@ -360,7 +360,8 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 			logger.Info("ERS - " + value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	})).ReparentShard(
+		ctx,
 		tablet.Keyspace,
 		tablet.Shard,
 		reparentutil.EmergencyReparentOptions{
@@ -662,7 +663,7 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	analysisCode := analysisEntry.Analysis
 	switch analysisCode {
 	// primary
-	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked:
+	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimarySemiSyncBlocked, inst.InnoDBStalledPrimary:
 		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
 		if !isERSEnabled(analysisEntry) {
 			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
@@ -942,7 +943,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 	}
 
 	// We lock the shard here and then refresh the tablets information
-	ctx, unlock, err := LockShard(context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
+	ctx, unlock, err := LockShard(
+		context.Background(), analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard,
 		getLockAction(analysisEntry.AnalyzedInstanceAlias, analysisEntry.Analysis),
 	)
 	if err != nil {
@@ -1249,7 +1251,8 @@ func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnal
 			logger.Error("PRS - " + value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	})).ReparentShard(
+		ctx,
 		analyzedTablet.Keyspace,
 		analyzedTablet.Shard,
 		reparentutil.PlannedReparentOptions{
@@ -1381,7 +1384,8 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	// Register the recovery before touching topology so multiple VTOrc instances do not race the demotion.
 	topologyRecovery, err = AttemptRecoveryRegistration(analysisEntry)
 	if topologyRecovery == nil {
-		logger.Warn("skipping recovery, active or recent recovery exists",
+		logger.Warn(
+			"skipping recovery, active or recent recovery exists",
 			slog.String("tablet", aliasString),
 			slog.String("recovery", ReconcileStaleTopoPrimaryRecoveryName),
 		)
@@ -1391,7 +1395,8 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 		return false, nil, err
 	}
 
-	logger.Info("demoting stale topo primary",
+	logger.Info(
+		"demoting stale topo primary",
 		slog.String("analysis", string(analysisEntry.Analysis)),
 		slog.String("tablet", aliasString),
 	)

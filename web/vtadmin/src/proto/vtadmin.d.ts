@@ -51127,6 +51127,9 @@ export namespace replicationdata {
 
         /** FullStatus tablet_type */
         tablet_type?: (topodata.TabletType|null);
+
+        /** FullStatus innodb_long_semaphore_wait_seen */
+        innodb_long_semaphore_wait_seen?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -51212,6 +51215,9 @@ export namespace replicationdata {
 
         /** FullStatus tablet_type. */
         public tablet_type: topodata.TabletType;
+
+        /** FullStatus innodb_long_semaphore_wait_seen. */
+        public innodb_long_semaphore_wait_seen: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.

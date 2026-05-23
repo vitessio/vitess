@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/hook"
@@ -246,7 +247,8 @@ func (mysqld *Mysqld) GetGlobalStatusVars(ctx context.Context, variables []strin
 		if err != nil {
 			return nil, err
 		}
-		query, err = sqlparser.ParseAndBind(getGlobalStatusQuery+" WHERE variable_name IN %a",
+		query, err = sqlparser.ParseAndBind(
+			getGlobalStatusQuery+" WHERE variable_name IN %a",
 			statusBv,
 		)
 		if err != nil {
@@ -818,6 +820,33 @@ func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSy
 	defer conn.Recycle()
 
 	return conn.Conn.SemiSyncExtensionLoaded()
+}
+
+// HasRecentInnoDBLongSemaphoreWait reports whether MY-012985 was logged to
+// performance_schema.error_log in the lookback window. Returns (false, nil)
+// on MariaDB / pre-8.0 MySQL where the table does not exist.
+func (mysqld *Mysqld) HasRecentInnoDBLongSemaphoreWait(ctx context.Context, lookback time.Duration) (bool, error) {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Recycle()
+
+	query := fmt.Sprintf(
+		"SELECT 1 FROM performance_schema.error_log "+
+			"WHERE logged >= NOW(6) - INTERVAL %d SECOND "+
+			"AND prio = 'Warning' AND subsystem = 'InnoDB' "+
+			"AND error_code = 'MY-012985' LIMIT 1",
+		int64(lookback.Seconds()),
+	)
+	res, err := conn.Conn.ExecuteFetch(query, 1, false)
+	if err != nil {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERNoSuchTable {
+			return false, nil
+		}
+		return false, err
+	}
+	return len(res.Rows) > 0, nil
 }
 
 func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {

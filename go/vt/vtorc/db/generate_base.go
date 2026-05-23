@@ -107,6 +107,7 @@ CREATE TABLE database_instance (
 	semi_sync_primary_clients int NOT NULL DEFAULT 0,
 	semi_sync_blocked tinyint NOT NULL DEFAULT 0,
 	is_disk_stalled TINYint NOT NULL DEFAULT 0,
+	innodb_long_semaphore_wait_seen TINYint NOT NULL DEFAULT 0,
 	PRIMARY KEY (alias)
 )`,
 	`
