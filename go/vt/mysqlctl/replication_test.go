@@ -780,23 +780,37 @@ func TestHasRecentInnoDBLongSemaphoreWait(t *testing.T) {
 		assert.False(t, seen)
 	})
 
-	t.Run("returns (false, nil) when performance_schema.error_log is missing", func(t *testing.T) {
-		db := fakesqldb.New(t)
-		defer db.Close()
-		params := db.ConnParams()
-		cp := *params
-		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
-		db.AddQuery("SELECT 1", &sqltypes.Result{})
-		db.AddRejectedQuery(expectedQuery, sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownTable, "Table 'performance_schema.error_log' doesn't exist"))
-		testMysqld := NewMysqld(dbc)
-		defer testMysqld.Close()
+	softFailCases := []struct {
+		name   string
+		number sqlerror.ErrorCode
+		state  string
+		msg    string
+	}{
+		{"performance_schema.error_log missing", sqlerror.ERNoSuchTable, sqlerror.SSUnknownTable, "Table 'performance_schema.error_log' doesn't exist"},
+		{"performance_schema database missing", sqlerror.ERBadDb, sqlerror.SSUnknownSQLState, "Unknown database 'performance_schema'"},
+		{"dba lacks SELECT on the table", sqlerror.ERTableAccessDenied, sqlerror.SSUnknownSQLState, "SELECT command denied"},
+		{"dba lacks access on the server", sqlerror.ERAccessDeniedError, sqlerror.SSUnknownSQLState, "Access denied"},
+		{"dba lacks access on the database", sqlerror.ERDBAccessDenied, sqlerror.SSUnknownSQLState, "Access denied for database"},
+	}
+	for _, tc := range softFailCases {
+		t.Run("returns (false, nil) when "+tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			defer db.Close()
+			params := db.ConnParams()
+			cp := *params
+			dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+			db.AddQuery("SELECT 1", &sqltypes.Result{})
+			db.AddRejectedQuery(expectedQuery, sqlerror.NewSQLError(tc.number, tc.state, tc.msg))
+			testMysqld := NewMysqld(dbc)
+			defer testMysqld.Close()
 
-		seen, err := testMysqld.HasRecentInnoDBLongSemaphoreWait(t.Context(), 60*time.Second)
-		require.NoError(t, err)
-		assert.False(t, seen)
-	})
+			seen, err := testMysqld.HasRecentInnoDBLongSemaphoreWait(t.Context(), 60*time.Second)
+			require.NoError(t, err)
+			assert.False(t, seen)
+		})
+	}
 
-	t.Run("propagates non-table errors", func(t *testing.T) {
+	t.Run("propagates unexpected errors", func(t *testing.T) {
 		db := fakesqldb.New(t)
 		defer db.Close()
 		params := db.ConnParams()

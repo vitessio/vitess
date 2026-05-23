@@ -167,9 +167,14 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
+	// Best-effort: an auxiliary detection signal failing here must not break
+	// the rest of FullStatus. Configuration-state errors (missing table,
+	// missing grants, disabled performance_schema) are already soft-failed in
+	// HasRecentInnoDBLongSemaphoreWait; anything else surfaces as a warning.
 	innodbLongSemaphoreWaitSeen, err := tm.MysqlDaemon.HasRecentInnoDBLongSemaphoreWait(ctx, 60*time.Second)
 	if err != nil {
-		return nil, err
+		log.Warn("FullStatus: HasRecentInnoDBLongSemaphoreWait failed; treating as not seen", slog.Any("error", err))
+		innodbLongSemaphoreWaitSeen = false
 	}
 
 	return &replicationdatapb.FullStatus{

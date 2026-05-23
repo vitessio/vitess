@@ -823,8 +823,10 @@ func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSy
 }
 
 // HasRecentInnoDBLongSemaphoreWait reports whether MY-012985 was logged to
-// performance_schema.error_log in the lookback window. Returns (false, nil)
-// on MariaDB / pre-8.0 MySQL where the table does not exist.
+// performance_schema.error_log in the lookback window. Best-effort: if the
+// table is unavailable (missing on MariaDB / pre-8.0, dba lacks SELECT,
+// performance_schema disabled), returns (false, nil). Only unexpected errors
+// propagate.
 func (mysqld *Mysqld) HasRecentInnoDBLongSemaphoreWait(ctx context.Context, lookback time.Duration) (bool, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
@@ -841,8 +843,12 @@ func (mysqld *Mysqld) HasRecentInnoDBLongSemaphoreWait(ctx context.Context, look
 	)
 	res, err := conn.Conn.ExecuteFetch(query, 1, false)
 	if err != nil {
-		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERNoSuchTable {
-			return false, nil
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok {
+			switch sqlErr.Number() {
+			case sqlerror.ERNoSuchTable, sqlerror.ERBadDb,
+				sqlerror.ERTableAccessDenied, sqlerror.ERAccessDeniedError, sqlerror.ERDBAccessDenied:
+				return false, nil
+			}
 		}
 		return false, err
 	}
