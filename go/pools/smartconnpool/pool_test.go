@@ -2139,8 +2139,9 @@ func TestTaintConnectCancelsOnClose(t *testing.T) {
 
 // TestTaintWakesWaiter verifies that Taint, which frees a pool slot,
 // still results in a queued waiter being served. The replacement conn
-// is opened off the caller's goroutine but must hand itself to the
-// waiter rather than letting the waiter wait for its own ctx to expire.
+// is opened synchronously on Taint's goroutine and must hand itself to
+// the waiter rather than letting the waiter wait for its own ctx to
+// expire.
 func TestTaintWakesWaiter(t *testing.T) {
 	var state TestState
 	ctx := t.Context()
