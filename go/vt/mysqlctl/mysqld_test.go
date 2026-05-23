@@ -178,7 +178,12 @@ func TestMysqldShutdownForwardsTimeoutToRemoteMysqlctld(t *testing.T) {
 	err = mysqld.Shutdown(ctx, &Mycnf{}, true, shutdownTimeout)
 	require.NoError(t, err)
 
-	request := <-recordingServer.shutdownRequests
+	var request *mysqlctlpb.ShutdownRequest
+	select {
+	case request = <-recordingServer.shutdownRequests:
+	case <-ctx.Done():
+		require.Failf(t, "timed out waiting for remote shutdown request", "context error: %v", ctx.Err())
+	}
 	assert.True(t, request.WaitForMysqld)
 
 	gotTimeout, ok, err := protoutil.DurationFromProto(request.MysqlShutdownTimeout)
