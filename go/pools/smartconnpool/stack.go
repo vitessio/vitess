@@ -58,6 +58,20 @@ func (s *connStack[C]) Pop() (*Pooled[C], bool) {
 	}
 }
 
+func (s *connStack[C]) PopAll() (*Pooled[C], bool) {
+	for {
+		oldHead, popCount := s.top.Load()
+		if oldHead == nil {
+			return nil, false
+		}
+
+		if s.top.CompareAndSwap(oldHead, popCount, nil, popCount+1) {
+			return oldHead, true
+		}
+		runtime.Gosched()
+	}
+}
+
 func (s *connStack[C]) Peek() *Pooled[C] {
 	top, _ := s.top.Load()
 	return top
