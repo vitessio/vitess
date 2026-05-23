@@ -22,6 +22,8 @@ import (
 )
 
 type Connection interface {
+	// Implementations must not panic from these methods. Close must be safe
+	// to call more than once.
 	ApplySetting(ctx context.Context, setting *Setting) error
 	ResetSetting(ctx context.Context) error
 	Setting() *Setting
@@ -35,6 +37,10 @@ type Pooled[C Connection] struct {
 	timeCreated timestamp
 	timeUsed    timestamp
 	pool        *ConnPool[C]
+	// generation is the pool's generation counter at the time this conn was
+	// established. A reopen bumps the pool's generation; any conn whose
+	// generation predates the pool's is stale and must be retired on return.
+	generation int64
 
 	Conn C
 }
