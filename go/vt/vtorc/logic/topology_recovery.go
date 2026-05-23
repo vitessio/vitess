@@ -837,13 +837,13 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 // shardWideRecoveryIgnoredTablets returns the list of tablet aliases to skip
 // during the pre-recovery refresh for shard-wide recoveries. Dead primaries
 // are skipped because they are unreachable; reachable-but-unhealthy primaries
-// (PrimarySemiSyncBlocked, PrimaryDiskStalled) are NOT skipped so that
-// checkIfAlreadyFixed evaluates fresh state.
+// (PrimarySemiSyncBlocked, PrimaryDiskStalled, InnoDBStalledPrimary) are NOT
+// skipped so that checkIfAlreadyFixed evaluates fresh state.
 func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, analysisEntry *inst.DetectionAnalysis) []*topodatapb.TabletAlias {
 	var tabletsToIgnore []*topodatapb.TabletAlias
 	if recoveryFunctionCode == recoverDeadPrimaryFunc {
 		switch analysisEntry.Analysis {
-		case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled:
+		case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled, inst.InnoDBStalledPrimary:
 			// Reachable primary — refresh it so checkIfAlreadyFixed
 			// evaluates current state. The problem may have been
 			// resolved by a prior dependency recovery.
