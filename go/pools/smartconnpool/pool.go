@@ -435,31 +435,33 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 			return
 		}
 	} else {
-		conn.timeUsed.update()
-
+		now := monotonicNow()
 		lifetime := pool.extendedMaxLifetime()
-		if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
+		if lifetime > 0 && now-conn.timeCreated.get() > lifetime {
 			pool.Metrics.maxLifetimeClosed.Add(1)
 			conn.Close()
 			// Using context.Background() is fine since MySQL connection already enforces
 			// a connect timeout via the `db-connect-timeout-ms` config param.
-			if err := pool.connReopen(context.Background(), conn, conn.timeUsed.get()); err != nil {
+			if err := pool.connReopen(context.Background(), conn, now); err != nil {
 				pool.closedConn()
 				return
 			}
 		}
 	}
 
-	pool.tryReturnConn(conn)
+	pool.tryReturnConn(conn, true)
 }
 
-func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
+func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C], updateIdleTime bool) bool {
 	if pool.wait.tryReturnConn(conn) {
 		return true
 	}
 
 	if pool.closeOnIdleLimitReached(conn) {
 		return false
+	}
+	if updateIdleTime {
+		conn.timeUsed.update()
 	}
 	connSetting := conn.Conn.Setting()
 	if connSetting == nil {
@@ -494,13 +496,11 @@ func (pool *ConnPool[C]) pop(stack *connStack[C]) *Pooled[C] {
 
 func (pool *ConnPool[C]) tryReturnAnyConn() bool {
 	if conn := pool.pop(&pool.clean); conn != nil {
-		conn.timeUsed.update()
-		return pool.tryReturnConn(conn)
+		return pool.tryReturnConn(conn, true)
 	}
 	for u := 0; u <= stackMask; u++ {
 		if conn := pool.pop(&pool.settings[u]); conn != nil {
-			conn.timeUsed.update()
-			return pool.tryReturnConn(conn)
+			return pool.tryReturnConn(conn, true)
 		}
 	}
 	return false
@@ -808,89 +808,77 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 	mono := monotonicFromTime(now)
 
 	closeInStack := func(s *connStack[C]) {
-		conn, ok := s.Pop()
+		conn, ok := s.PopAll()
 		if !ok {
-			// Early return to skip allocating slices when the stack is empty
 			return
 		}
 
-		activeConnections := pool.Active()
+		// The stack is LIFO. Reverse the detached list so we inspect and return
+		// connections from oldest to newest.
+		var stackConnections int64
+		var oldestFirst *Pooled[C]
+		for conn != nil {
+			next := conn.next.Load()
+			conn.next.Store(oldestFirst)
+			oldestFirst = conn
+			stackConnections++
+			conn = next
+		}
 
-		// Only expire up to ~half of the active connections at a time. This should
-		// prevent us from closing too many connections in one go which could lead to
-		// a lot of `.Get` calls being added to the waitlist if there's a sudden spike
-		// coming in _after_ connections were popped off the stack but _before_ being
-		// returned back to the pool. This is unlikely to happen, but better safe than sorry.
-		//
-		// We always expire at least one connection per stack per iteration to ensure
-		// that idle connections are eventually closed even in small pools.
-		//
-		// We will expire any additional connections in the next iteration of the idle closer.
-		expiredConnections := make([]*Pooled[C], 0, max(activeConnections/2, 1))
-		validConnections := make([]*Pooled[C], 0, activeConnections)
+		// Bound closes to the detached stack, not to the whole pool or just the
+		// expired cohort. This lets ordinary cleanup drain a small expired cohort
+		// while preventing the worker from closing and reopening an entire stack at
+		// once when all idle connections aged out together.
+		maxExpiredConnections := max(stackConnections/2, 1)
+		var expiredCount int64
+		var expiredConnections *Pooled[C]
+		for conn := oldestFirst; conn != nil; {
+			next := conn.next.Load()
+			conn.next.Store(nil)
 
-		// Pop out connections from the stack until we get a `nil` connection
-		for ok {
-			if conn.timeUsed.expired(mono, timeout) {
-				expiredConnections = append(expiredConnections, conn)
-
-				if len(expiredConnections) == cap(expiredConnections) {
-					// We have collected enough connections for this iteration to expire
-					break
-				}
-			} else {
-				validConnections = append(validConnections, conn)
+			if expiredCount < maxExpiredConnections && conn.timeUsed.expired(mono, timeout) {
+				expiredCount++
+				conn.next.Store(expiredConnections)
+				expiredConnections = conn
+				conn = next
+				continue
 			}
 
-			conn, ok = s.Pop()
+			pool.tryReturnConn(conn, false)
+			conn = next
 		}
 
-		// Return all the valid connections back to waiters or the stack
-		//
-		// The order here is not important - because we can't guarantee to
-		// restore the order we got the connections out of the stack anyway.
-		//
-		// If we return the connections in the order popped off the stack:
-		//   * waiters will get the newest connection first
-		//   * stack will have the oldest connections at the top of the stack.
-		//
-		// If we return the connections in reverse order:
-		//  * waiters will get the oldest connection first
-		//  * stack will have the newest connections at the top of the stack.
-		//
-		// Neither of these is better or worse than the other.
-		for _, conn := range validConnections {
-			pool.tryReturnConn(conn)
-		}
-
-		// Close all the expired connections and open new ones to replace them
-		for _, conn := range expiredConnections {
+		for conn := expiredConnections; conn != nil; conn = conn.next.Load() {
 			pool.Metrics.idleClosed.Add(1)
 
 			conn.Close()
 			pool.closedConn()
 		}
 
-		for _, conn := range expiredConnections {
-			if pool.active.Load() >= pool.capacity.Load() {
+		for conn := expiredConnections; conn != nil; {
+			next := conn.next.Load()
+			if pool.close.Load() == nil || pool.active.Load() >= pool.capacity.Load() {
 				break
 			}
 
+			conn.next.Store(nil)
 			if err := pool.connReopen(context.Background(), conn, mono); err != nil {
+				conn = next
 				continue
 			}
 
 			for {
 				open := pool.active.Load()
-				if open >= pool.capacity.Load() {
+				if pool.close.Load() == nil || open >= pool.capacity.Load() {
 					conn.Close()
 					break
 				}
 				if pool.active.CompareAndSwap(open, open+1) {
-					pool.tryReturnConn(conn)
+					pool.tryReturnConn(conn, false)
 					break
 				}
 			}
+			conn = next
 		}
 	}
 
