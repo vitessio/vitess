@@ -29,8 +29,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-const canceledCallTimeout = 3 * time.Second
-const canceledCallExecDelay = canceledCallTimeout * 2
+const (
+	canceledCallTimeout   = 3 * time.Second
+	canceledCallExecDelay = canceledCallTimeout * 2
+)
 
 func waitForCanceledCall(t *testing.T, name string, errCh <-chan error) error {
 	t.Helper()
