@@ -6,6 +6,8 @@
 
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
+    - **[VTOrc](#vtorc)**
+        - [InnoDB Stalled Primary Recovery](#innodb-stalled-primary-recovery)
     - **[Breaking Changes](#breaking-changes)**
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
@@ -20,6 +22,30 @@
 ## <a id="major-changes"/>Major Changes</a>
 
 ### <a id="new-support"/>New Support</a>
+
+### <a id="vtorc"/>VTOrc</a>
+
+#### <a id="innodb-stalled-primary-recovery"/>InnoDB Stalled Primary Recovery</a>
+
+VTOrc can now detect and recover from MySQL primaries that are wedged on an InnoDB latch. When InnoDB has a thread stalled waiting on a semaphore, `mysqld` logs warning `MY-012985` to `performance_schema.error_log`. VTOrc monitors this signal and triggers Emergency Reparent Shard (ERS) to promote a replica before `mysqld` self-kills at `innodb_fatal_semaphore_wait_threshold`.
+
+This addresses a scenario where `mysqld` is alive and accepting connections (replicas still report `Slave_IO_Running: Yes` / `Slave_SQL_Running: Yes`), but writes cannot commit due to the stalled latch. Without this analyzer, the shard remains in a zero-write outage for the full kill threshold plus restart time — potentially 10+ minutes with MySQL's default settings.
+
+**Requirements:**
+
+- MySQL 8.0+ (the `MY-012985` error code and `performance_schema.error_log` table do not exist on MariaDB or MySQL < 8.0)
+- At least one valid replica available for promotion
+
+**Configuration:**
+
+Vitess's bundled MySQL 8.0+ configuration files (`mysql80.cnf`, `mysql8026.cnf`, `mysql84.cnf`, `mysql90.cnf`) now set `innodb_fatal_semaphore_wait_threshold = 240` (down from MySQL's default of 600). This means:
+
+- `MY-012985` warning fires at T=120s (half the threshold)
+- `mysqld` self-kills at T=240s
+
+The analyzer detects the stall around T=120s, giving ERS time to complete before `mysqld` would self-kill. Operators can override this setting via `EXTRA_MY_CNF`.
+
+See [#20169](https://github.com/vitessio/vitess/pull/20169) for details.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
