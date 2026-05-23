@@ -12,6 +12,7 @@
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+        - [Query log ignore patterns](#vtgate-query-log-ignore-patterns)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -66,6 +67,35 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+#### <a id="vtgate-query-log-ignore-patterns"/>Query log ignore patterns</a>
+
+The new `--query-log-ignore-patterns` flag lets you suppress specific SQL query shapes from the vtgate query log. This is useful for filtering out high-frequency health check or monitoring queries that would otherwise dominate log output.
+
+**How it works:**
+
+Patterns are matched against the normalized query shape, where literals are replaced with bind placeholders. For example, the pattern `select 1 from dual` suppresses all queries of that shape regardless of actual literal values (`select 9999 from dual`, `select 42 from dual`, etc.). Patterns that fail to parse fall back to a case-insensitive trimmed raw-string match, allowing non-SQL commands like `PING` to be filtered.
+
+**Configuration options:**
+
+1. **Inline list:**
+   ```
+   --query-log-ignore-patterns='select 1 from dual,select $$,PING'
+   ```
+
+2. **File reference** (one pattern per line, `#` comments supported):
+   ```
+   --query-log-ignore-patterns='@/etc/vt/ignored-queries.txt'
+   ```
+
+3. **Viper config file** (supports dynamic reload without restart):
+   ```yaml
+   query_log_ignore_patterns: "select 1 from dual,select $$"
+   ```
+
+The flag is empty by default, meaning no queries are filtered. It is registered for both `vtgate` and `vtcombo`.
+
+See [#20174](https://github.com/vitessio/vitess/pull/20174) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
