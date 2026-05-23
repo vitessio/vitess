@@ -481,9 +481,8 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 			// Setting so the reopened conn lands back in the same settings
 			// stack rather than silently migrating to clean.
 			pool.Metrics.maxLifetimeClosed.Add(1)
-			setting := conn.Conn.Setting()
 			conn.Close()
-			if err := pool.connReopen(pool.connectCtx(), conn, setting, now); err != nil {
+			if err := pool.connReopen(pool.connectCtx(), conn, conn.Conn.Setting(), now); err != nil {
 				pool.closedConn()
 				return
 			}
