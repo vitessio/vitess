@@ -69,6 +69,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/querylogignore"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -287,7 +288,7 @@ func (e *Executor) Execute(
 	}
 
 	logStats.SaveEndTime()
-	e.queryLogger.Send(logStats)
+	e.sendQueryLog(logStats)
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
@@ -433,12 +434,19 @@ func (e *Executor) StreamExecute(
 	}
 
 	logStats.SaveEndTime()
-	e.queryLogger.Send(logStats)
+	e.sendQueryLog(logStats)
 
 	err = errorTransform.TransformError(err)
 	err = vterrors.TruncateError(err, truncateErrorLen)
 
 	return err
+}
+
+func (e *Executor) sendQueryLog(logStats *logstats.LogStats) {
+	if querylogignore.IgnorePatterns.Get().ShouldIgnore(logStats.SQL, e.env.Parser()) {
+		return
+	}
+	e.queryLogger.Send(logStats)
 }
 
 func canReturnRows(stmtType sqlparser.StatementType) bool {
@@ -1508,7 +1516,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *econ
 	// it was a no-op record (i.e. didn't issue any queries)
 	if logStats.StmtType != "ROLLBACK" || logStats.ShardQueries != 0 {
 		logStats.SaveEndTime()
-		e.queryLogger.Send(logStats)
+		e.sendQueryLog(logStats)
 	}
 
 	err = errorTransform.TransformError(err)
