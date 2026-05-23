@@ -775,6 +775,9 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				startTime := time.Now()
 				q.Wait()
 				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			} else if qre.tsv.config.ConsolidatorRejectOnCap {
+				q.AddWaiterCounter(-1)
+				return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "consolidator waiter cap exceeded")
 			} else {
 				// Waiter cap exceeded, fall back to independent query execution
 				waiterCapExceeded = true
@@ -1047,7 +1050,7 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.CancelMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user", true)
 	case sqlparser.CancelAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user", true)
+		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, alterMigration.Context, true)
 	case sqlparser.ThrottleMigrationType:
 		return qre.tsv.onlineDDLExecutor.ThrottleMigration(qre.ctx, alterMigration.UUID, alterMigration.Expire, alterMigration.Ratio)
 	case sqlparser.ThrottleAllMigrationType:
