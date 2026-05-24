@@ -2103,6 +2103,9 @@ func testScheduler(t *testing.T) {
 		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
+		// LaunchMigrations uses a query that requires reviewed_timestamp IS NOT NULL.
+		onlineddl.WaitForMigrationReviewedTimestamp(t, &vtParams, shards, t1uuid, normalWaitTime)
+		onlineddl.WaitForMigrationReviewedTimestamp(t, &vtParams, shards, t2uuid, normalWaitTime)
 
 		// A non-matching context postpones nothing.
 		onlineddl.CheckPostponeCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context-other", 0)
@@ -2155,6 +2158,9 @@ func testScheduler(t *testing.T) {
 		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-launch-by-context", skipWait: true})
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
+		// LaunchMigrations uses a query that requires reviewed_timestamp IS NOT NULL.
+		onlineddl.WaitForMigrationReviewedTimestamp(t, &vtParams, shards, t1uuid, normalWaitTime)
+		onlineddl.WaitForMigrationReviewedTimestamp(t, &vtParams, shards, t2uuid, normalWaitTime)
 
 		// A non-matching context launches nothing.
 		onlineddl.CheckLaunchContextMigrations(t, &vtParams, "ctx-launch-by-context-other", 0)

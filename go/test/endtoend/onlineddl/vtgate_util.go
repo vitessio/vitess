@@ -445,6 +445,49 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	}
 }
 
+// WaitForMigrationReviewedTimestamp waits until reviewed_timestamp is set for the given
+// migration on all shards. This is needed before LaunchMigrations, which uses a query
+// that requires reviewed_timestamp IS NOT NULL.
+func WaitForMigrationReviewedTimestamp(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration) {
+	t.Helper()
+	shardNames := map[string]bool{}
+	for _, shard := range shards {
+		shardNames[shard.Name] = true
+	}
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		countReviewed := 0
+		r := VtgateExecQuery(t, vtParams, query, "")
+		for _, row := range r.Named().Rows {
+			shardName := row["shard"].ToString()
+			if !shardNames[shardName] {
+				continue
+			}
+			if row["migration_uuid"].ToString() == uuid && row["reviewed_timestamp"].ToString() != "" {
+				countReviewed++
+			}
+		}
+		if countReviewed == len(shards) {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			require.Failf(t, "timed out", "waiting for reviewed_timestamp on migration %s", uuid)
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts
 func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectArtifacts bool) {
 	r := ReadMigrations(t, vtParams, uuid)
