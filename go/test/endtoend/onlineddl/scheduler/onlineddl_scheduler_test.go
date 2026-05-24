@@ -2097,8 +2097,8 @@ func testScheduler(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 	})
 	t.Run("postpone-complete migrations by context", func(t *testing.T) {
-		// Use --postpone-launch so migrations stay in queued state. Without it, trivial migrations
-		// on empty tables complete in seconds, racing past the POSTPONE COMPLETE CONTEXT call.
+		// Use --postpone-launch so migrations stay in queued state until we explicitly launch them,
+		// giving us time to set postpone_completion first.
 		t1uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT1Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
 		t2uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: trivialAlterT2Statement, ddlStrategy: ddlStrategy + " --allow-concurrent --postpone-launch", executeStrategy: "vtctl", migrationContext: "ctx-postpone-complete-by-context", skipWait: true})
 		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusQueued)
@@ -2111,15 +2111,21 @@ func testScheduler(t *testing.T) {
 
 		// Postpone-complete by context: both migrations must be postponed.
 		onlineddl.CheckPostponeCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
-		time.Sleep(ensureStateNotChangedTime)
-		// Migrations are still queued because completion is postponed.
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued)
 
-		// Clean up.
-		onlineddl.CheckCancelContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
-		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusCancelled, schema.OnlineDDLStatusFailed)
+		// Now launch the migrations. They will run but not complete because postpone_completion is set.
+		onlineddl.CheckLaunchContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+
+		// Migrations must stay running: postpone_completion prevents them from completing.
+		time.Sleep(ensureStateNotChangedTime)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
+
+		// Complete by context: both migrations must now complete.
+		onlineddl.CheckCompleteContextMigrations(t, &vtParams, "ctx-postpone-complete-by-context", 2)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete)
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusComplete)
 	})
 	t.Run("force-cutover migrations by context", func(t *testing.T) {
 		// Use --postpone-launch so migrations stay in queued state. Using --postpone-completion
