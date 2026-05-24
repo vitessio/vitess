@@ -4420,10 +4420,12 @@ func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context, migrationC
 	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
+	matched := 0
 	for _, pm := range pendingMigrations {
 		if migrationContext != "" && migrationContext != pm.migrationContext {
 			continue
 		}
+		matched++
 		log.Info("ForceCutOverPendingMigrations: applying to " + pm.uuid)
 		res, err := e.ForceCutOverMigration(ctx, pm.uuid)
 		if err != nil {
@@ -4431,7 +4433,7 @@ func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context, migrationC
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: done iterating %v migrations", len(pendingMigrations)))
+	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
 	return result, nil
 }
 
@@ -4519,10 +4521,12 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context, migrationConte
 	log.Info(fmt.Sprintf("CompletePendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
+	matched := 0
 	for _, pm := range pendingMigrations {
 		if migrationContext != "" && migrationContext != pm.migrationContext {
 			continue
 		}
+		matched++
 		log.Info("CompletePendingMigrations: completing " + pm.uuid)
 		res, err := e.CompleteMigration(ctx, pm.uuid, "")
 		if err != nil {
@@ -4530,7 +4534,7 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context, migrationConte
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("CompletePendingMigrations: done iterating %v migrations", len(pendingMigrations)))
+	log.Info(fmt.Sprintf("CompletePendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
 	return result, nil
 }
 
@@ -4578,10 +4582,12 @@ func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context, migrat
 	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
+	matched := 0
 	for _, pm := range pendingMigrations {
 		if migrationContext != "" && migrationContext != pm.migrationContext {
 			continue
 		}
+		matched++
 		log.Info("PostponeCompletePendingMigrations: postpone completion of " + pm.uuid)
 		res, err := e.PostponeCompleteMigration(ctx, pm.uuid)
 		if err != nil {
@@ -4589,7 +4595,7 @@ func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context, migrat
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: done iterating %v migrations", len(pendingMigrations)))
+	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
 	return result, nil
 }
 
