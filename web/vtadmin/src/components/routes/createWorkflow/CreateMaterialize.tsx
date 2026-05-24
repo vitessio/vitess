@@ -116,17 +116,17 @@ export const CreateMaterialize = () => {
     );
 
     let selectedCluster = null;
-    if (!!formData.clusterID) {
+    if (formData.clusterID) {
         selectedCluster = clusters.find((c) => c.id === formData.clusterID);
     }
 
     let selectedSourceKeyspace = null;
-    if (!!formData.sourceKeyspace) {
+    if (formData.sourceKeyspace) {
         selectedSourceKeyspace = keyspaces.find((ks) => ks.keyspace?.name === formData.sourceKeyspace);
     }
 
     let selectedTargetKeyspace = null;
-    if (!!formData.targetKeyspace) {
+    if (formData.targetKeyspace) {
         selectedTargetKeyspace = keyspaces.find((ks) => ks.keyspace?.name === formData.targetKeyspace);
     }
 
