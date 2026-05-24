@@ -44,6 +44,7 @@ const (
 
 	sqlSelectQueuedMigrations = `SELECT
 			migration_uuid,
+			migration_context,
 			ddl_action,
 			is_view,
 			is_immediate_operation,

@@ -4634,24 +4634,27 @@ func (e *Executor) LaunchMigrations(ctx context.Context, migrationContext string
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	pendingMigrations, err := e.readPendingMigrations(ctx)
+	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
 		return result, err
 	}
-	log.Info(fmt.Sprintf("LaunchMigrations: iterating %v migrations", len(pendingMigrations)))
+	rows := r.Named().Rows
+	log.Info(fmt.Sprintf("LaunchMigrations: iterating %v migrations", len(rows)))
 	result = &sqltypes.Result{}
-	for _, pm := range pendingMigrations {
-		if migrationContext != "" && migrationContext != pm.migrationContext {
+	for _, row := range rows {
+		uuid := row["migration_uuid"].ToString()
+		mc := row["migration_context"].ToString()
+		if migrationContext != "" && migrationContext != mc {
 			continue
 		}
-		log.Info("LaunchMigrations: unpostponing " + pm.uuid)
-		res, err := e.LaunchMigration(ctx, pm.uuid, "")
+		log.Info("LaunchMigrations: unpostponing " + uuid)
+		res, err := e.LaunchMigration(ctx, uuid, "")
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(pendingMigrations)))
+	log.Info(fmt.Sprintf("LaunchMigrations: done iterating %v migrations", len(rows)))
 	return result, nil
 }
 
