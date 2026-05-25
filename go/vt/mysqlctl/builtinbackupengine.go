@@ -1287,6 +1287,13 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	fes := bm.FileEntries
+
+	// For chunked files, we pre-create the files at the right size, each chunk then only writes to the right offset.
+	// This is done to prevent them from being truncated when retries happen.
+	if err := createChunkedDestinations(fes, params.Cnf, createdDir); err != nil {
+		return "", err
+	}
+
 	_ = be.restoreFileEntries(ctx, fes, bh, bm, params, createdDir)
 	if files := bh.GetFailedFiles(); len(files) > 0 {
 		newFEs := make([]FileEntry, len(fes))
@@ -1316,6 +1323,36 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	return createdDir, nil
+}
+
+// createChunkedDestinations pre-creates and pre-sizes destination files for chunked
+// entries. This is called once before any restore pass so that restoreFileEntries can
+// always open them with O_WRONLY (no truncation), making retries safe.
+func createChunkedDestinations(fes []FileEntry, cnf *Mycnf, createdDir string) error {
+	for i := range fes {
+		fe := &fes[i]
+		if len(fe.Chunks) == 0 {
+			// Non-chunked files are not pre-created. this is handled by the restoreFileEntries function.
+			continue
+		}
+		fe.ParentPath = createdDir
+		dest, err := fe.open(cnf, false)
+		if err != nil {
+			return vterrors.Wrapf(err, "can't create destination for chunked file %v", fe.Name)
+		}
+		var totalSize int64
+		for _, c := range fe.Chunks {
+			if c.Offset+c.Size > totalSize {
+				totalSize = c.Offset + c.Size
+			}
+		}
+		if err := dest.Truncate(totalSize); err != nil {
+			dest.Close()
+			return vterrors.Wrapf(err, "can't pre-size chunked file %v", fe.Name)
+		}
+		dest.Close()
+	}
+	return nil
 }
 
 func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) error {
@@ -1348,20 +1385,15 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		fe.ParentPath = createdDir
 
 		if len(fe.Chunks) > 0 {
-			// Chunked file: open destination once, pre-size, then submit each chunk.
-			dest, openErr := fe.open(params.Cnf, false)
+			// Chunked file: open destination for writing and submit each chunk.
+			// The file was already created and pre-sized by createChunkedDestinations.
+			fullPath, pathErr := fe.fullPath(params.Cnf)
+			if pathErr != nil {
+				return vterrors.Wrapf(pathErr, "can't get path for chunked file %v", fe.Name)
+			}
+			dest, openErr := os.OpenFile(fullPath, os.O_WRONLY, 0o644)
 			if openErr != nil {
 				return vterrors.Wrapf(openErr, "can't open destination for chunked file %v", fe.Name)
-			}
-			var totalSize int64
-			for _, c := range fe.Chunks {
-				if c.Offset+c.Size > totalSize {
-					totalSize = c.Offset + c.Size
-				}
-			}
-			if err := dest.Truncate(totalSize); err != nil {
-				dest.Close()
-				return vterrors.Wrapf(err, "can't pre-size chunked file %v", fe.Name)
 			}
 			chunkedDests = append(chunkedDests, chunkedDest{dest: dest, fe: fe})
 
@@ -1381,7 +1413,9 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 					params.Logger.Infof("Restoring chunk %d of file %v (offset=%d, size=%d)", j, fe.Name, chunk.Offset, chunk.Size)
 					if err := be.restoreFileChunk(ctx, params, bh, chunk, bm, dest); err != nil {
 						bh.RecordError(chunk.StorageName, vterrors.Wrapf(err, "failed to restore chunk %d of %v", j, fe.Name))
-						return err
+						if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+							return err
+						}
 					}
 					return nil
 				})

@@ -18,12 +18,23 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bytes"
+	"context"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"hash/crc32"
+	"io"
+	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/fileutil"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -187,6 +198,154 @@ func TestParseBackupStorageName(t *testing.T) {
 			assert.Equal(t, tt.wantChkIdx, chkIdx)
 		})
 	}
+}
+
+func TestOffsetWriter(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "offsetwriter")
+	require.NoError(t, err)
+	t.Cleanup(func() { f.Close() })
+
+	// Pre-size the file.
+	require.NoError(t, f.Truncate(100))
+
+	// Write "hello" at offset 10.
+	ow := &offsetWriter{f: f, offset: 10}
+	n, err := ow.Write([]byte("hello"))
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+	assert.Equal(t, int64(15), ow.offset)
+
+	// Write "world" at offset 50.
+	ow2 := &offsetWriter{f: f, offset: 50}
+	n, err = ow2.Write([]byte("world"))
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+	assert.Equal(t, int64(55), ow2.offset)
+
+	// Verify contents.
+	buf := make([]byte, 100)
+	_, err = f.ReadAt(buf, 0)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("hello"), buf[10:15])
+	assert.Equal(t, []byte("world"), buf[50:55])
+	// Gaps should be zero-filled.
+	assert.Equal(t, make([]byte, 10), buf[0:10])
+	assert.Equal(t, make([]byte, 35), buf[15:50])
+}
+
+// crc32Hash computes the CRC32 IEEE hash of data, matching what backupPipe.HashString() produces.
+func crc32Hash(data []byte) string {
+	h := crc32.NewIEEE()
+	h.Write(data)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// TestRestoreChunkedRetryPreservesData verifies that when a chunk fails during
+// restore and is retried, the previously-restored chunks are not destroyed.
+// This guards against the bug where os2.Create (which truncates) is used on retry,
+// wiping the already-restored data.
+func TestRestoreChunkedRetryPreservesData(t *testing.T) {
+	tmpDir := t.TempDir()
+	cnf := &Mycnf{DataDir: tmpDir}
+
+	// Simulate a file split into 3 chunks of 10 bytes each.
+	chunk0Data := []byte("AAAAAAAAAA")
+	chunk1Data := []byte("BBBBBBBBBB")
+	chunk2Data := []byte("CCCCCCCCCC")
+
+	fes := []FileEntry{
+		{
+			Base: backupData,
+			Name: "testfile.ibd",
+			Chunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 10, Hash: crc32Hash(chunk0Data)},
+				{StorageName: "0-1", Offset: 10, Size: 10, Hash: crc32Hash(chunk1Data)},
+				{StorageName: "0-2", Offset: 20, Size: 10, Hash: crc32Hash(chunk2Data)},
+			},
+		},
+	}
+
+	// Chunk "0-1" fails on first attempt.
+	var attempted sync.Map
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(_ context.Context, filename string) (io.ReadCloser, error) {
+			count := 0
+			if v, ok := attempted.Load(filename); ok {
+				count = v.(int)
+			}
+			count++
+			attempted.Store(filename, count)
+
+			if filename == "0-1" && count == 1 {
+				return nil, errors.New("simulated read failure")
+			}
+			files := map[string][]byte{
+				"0-0": chunk0Data,
+				"0-1": chunk1Data,
+				"0-2": chunk2Data,
+			}
+			data, ok := files[filename]
+			if !ok {
+				return nil, fmt.Errorf("file %s not found", filename)
+			}
+			return io.NopCloser(bytes.NewReader(data)), nil
+		},
+	}
+
+	bm := builtinBackupManifest{SkipCompress: true}
+	params := RestoreParams{
+		Cnf:         cnf,
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+
+	be := &BuiltinBackupEngine{}
+
+	// Pre-create and pre-size destination files, as restoreFiles() would.
+	require.NoError(t, createChunkedDestinations(fes, cnf, ""))
+
+	// First pass: chunk 0-1 will fail.
+	_ = be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
+
+	// Verify chunks 0 and 2 were written correctly.
+	filePath := fmt.Sprintf("%s/testfile.ibd", tmpDir)
+	content, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	assert.Equal(t, chunk0Data, content[0:10], "chunk 0 should be intact after first pass")
+	assert.Equal(t, chunk2Data, content[20:30], "chunk 2 should be intact after first pass")
+
+	// Retry: build newFEs with only the failed chunk, as restoreFiles would.
+	failedFiles := bh.GetFailedFiles()
+	require.Len(t, failedFiles, 1)
+
+	newFEs := make([]FileEntry, len(fes))
+	for _, file := range failedFiles {
+		feIdx, chunkIdx, parseErr := parseBackupName(file)
+		require.NoError(t, parseErr)
+		oldFe := fes[feIdx]
+		if newFEs[feIdx].Name == "" {
+			newFEs[feIdx] = FileEntry{
+				Base:       oldFe.Base,
+				Name:       oldFe.Name,
+				ParentPath: oldFe.ParentPath,
+				RetryCount: 1,
+			}
+		}
+		newFEs[feIdx].Chunks = append(newFEs[feIdx].Chunks, oldFe.Chunks[chunkIdx])
+		bh.ResetErrorForFile(file)
+	}
+
+	// Second pass: retry the failed chunk.
+	err = be.restoreFileEntries(t.Context(), newFEs, bh, bm, params, "")
+	require.NoError(t, err)
+
+	// Verify ALL chunks are correct after retry.
+	content, err = os.ReadFile(filePath)
+	require.NoError(t, err)
+	assert.Equal(t, chunk0Data, content[0:10], "chunk 0 should still be intact after retry")
+	assert.Equal(t, chunk1Data, content[10:20], "chunk 1 should be restored after retry")
+	assert.Equal(t, chunk2Data, content[20:30], "chunk 2 should still be intact after retry")
 }
 
 func TestShouldDrainForBackupBuiltIn(t *testing.T) {
