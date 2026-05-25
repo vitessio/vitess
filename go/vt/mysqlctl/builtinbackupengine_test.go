@@ -200,6 +200,67 @@ func TestParseBackupStorageName(t *testing.T) {
 	}
 }
 
+func TestComputeFileChunks(t *testing.T) {
+	tests := []struct {
+		name       string
+		fileIndex  int
+		fileSize   int64
+		chunkSize  int64
+		wantChunks []FileChunk
+	}{
+		{
+			name:      "exact multiple",
+			fileIndex: 3,
+			fileSize:  100,
+			chunkSize: 50,
+			wantChunks: []FileChunk{
+				{StorageName: "3-0", Offset: 0, Size: 50},
+				{StorageName: "3-1", Offset: 50, Size: 50},
+			},
+		},
+		{
+			name:      "last chunk is smaller",
+			fileIndex: 0,
+			fileSize:  70,
+			chunkSize: 30,
+			wantChunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 30},
+				{StorageName: "0-1", Offset: 30, Size: 30},
+				{StorageName: "0-2", Offset: 60, Size: 10},
+			},
+		},
+		{
+			name:      "file smaller than chunk size",
+			fileIndex: 5,
+			fileSize:  10,
+			chunkSize: 100,
+			wantChunks: []FileChunk{
+				{StorageName: "5-0", Offset: 0, Size: 10},
+			},
+		},
+		{
+			name:      "single byte file",
+			fileIndex: 0,
+			fileSize:  1,
+			chunkSize: 1024,
+			wantChunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 1},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeFileChunks(tt.fileIndex, tt.fileSize, tt.chunkSize)
+			require.Len(t, got, len(tt.wantChunks))
+			for i, want := range tt.wantChunks {
+				assert.Equal(t, want.StorageName, got[i].StorageName)
+				assert.Equal(t, want.Offset, got[i].Offset)
+				assert.Equal(t, want.Size, got[i].Size)
+			}
+		})
+	}
+}
+
 func TestOffsetWriter(t *testing.T) {
 	f, err := os.CreateTemp(t.TempDir(), "offsetwriter")
 	require.NoError(t, err)
@@ -309,7 +370,7 @@ func TestRestoreChunkedRetryPreservesData(t *testing.T) {
 	_ = be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
 
 	// Verify chunks 0 and 2 were written correctly.
-	filePath := fmt.Sprintf("%s/testfile.ibd", tmpDir)
+	filePath := tmpDir + "/testfile.ibd"
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, chunk0Data, content[0:10], "chunk 0 should be intact after first pass")

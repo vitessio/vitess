@@ -183,6 +183,26 @@ type FileChunk struct {
 	Hash        string
 }
 
+// computeFileChunks splits a file of the given size into chunks of chunkSize bytes.
+// The fileIndex is used to generate storage names in "fileIndex-chunkIndex" format.
+func computeFileChunks(fileIndex int, fileSize, chunkSize int64) []FileChunk {
+	numChunks := (fileSize + chunkSize - 1) / chunkSize
+	chunks := make([]FileChunk, numChunks)
+	for j := range numChunks {
+		offset := j * chunkSize
+		size := chunkSize
+		if offset+size > fileSize {
+			size = fileSize - offset
+		}
+		chunks[j] = FileChunk{
+			StorageName: fmt.Sprintf("%d-%d", fileIndex, j),
+			Offset:      offset,
+			Size:        size,
+		}
+	}
+	return chunks
+}
+
 func init() {
 	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerBuiltinBackupEngineFlags)
@@ -661,23 +681,9 @@ func (be *BuiltinBackupEngine) backupFiles(
 		// Files larger than the threshold are split into chunks for parallel backup/restore.
 		// A threshold of 0 disables chunking entirely.
 		if backupFileChunkThreshold > 0 && fileSize > backupFileChunkThreshold {
-			numChunks := (fileSize + backupFileChunkSize - 1) / backupFileChunkSize
-			fe.Chunks = make([]FileChunk, numChunks)
-			for j := range numChunks {
-				offset := j * backupFileChunkSize
-				size := backupFileChunkSize
-				if offset+size > fileSize {
-					size = fileSize - offset
-				}
-				// Storage name uses "fileIndex-chunkIndex" format (e.g. "5-0", "5-1").
-				// The retry logic uses the presence of "-" to distinguish chunks from whole files.
-				storageName := fmt.Sprintf("%d-%d", i, j)
-				fe.Chunks[j] = FileChunk{
-					StorageName: storageName,
-					Offset:      offset,
-					Size:        size,
-				}
-				workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: int(j), name: storageName})
+			fe.Chunks = computeFileChunks(i, fileSize, backupFileChunkSize)
+			for j, chunk := range fe.Chunks {
+				workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: j, name: chunk.StorageName})
 			}
 		} else {
 			workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: -1, name: strconv.Itoa(i)})
