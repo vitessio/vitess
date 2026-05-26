@@ -1,7 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
 name: Cluster (mysql_server_vault)
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (mysql_server_vault)')
   cancel-in-progress: true

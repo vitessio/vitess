@@ -1,7 +1,12 @@
 name: Query Serving (Schema) Next Release - Upgrade Downgrade Testing
 on:
   push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
   pull_request:
+    branches: '**'
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Schema) Next Release')

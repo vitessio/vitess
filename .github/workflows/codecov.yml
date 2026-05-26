@@ -1,5 +1,12 @@
 name: Code Coverage
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Code Coverage')
   cancel-in-progress: true

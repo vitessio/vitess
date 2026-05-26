@@ -1,5 +1,12 @@
 name: {{.Name}}
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 
 permissions: read-all
 
