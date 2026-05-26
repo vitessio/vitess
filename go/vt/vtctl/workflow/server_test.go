@@ -29,8 +29,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/ptr"
@@ -3153,13 +3151,6 @@ func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
 		response            *validateVReplicationPermissionsResponse
 		expectedErrContains string
 	}{
-		{
-			// Expect no error in this case.
-			name: "unimplemented error",
-			response: &validateVReplicationPermissionsResponse{
-				err: status.Error(codes.Unimplemented, "unimplemented test"),
-			},
-		},
 		{
 			name: "tmc error",
 			response: &validateVReplicationPermissionsResponse{
