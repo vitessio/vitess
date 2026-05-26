@@ -63,7 +63,7 @@ func (d *DMLWithInput) ShortDescription() string {
 		if len(d.Offsets) > idx {
 			offsets = d.Offsets[idx]
 		}
-		colStringsSb59.WriteString(fmt.Sprintf("[%s]", getShortDesc(columns, offsets)))
+		fmt.Fprintf(&colStringsSb59, "[%s]", getShortDesc(columns, offsets))
 	}
 	colStrings += colStringsSb59.String()
 	return colStrings
@@ -78,7 +78,7 @@ func getShortDesc(cols []*sqlparser.ColName, offsets []int) string {
 	for idx, colString := range colStrings {
 		outSb74.WriteString(colString)
 		if len(offsets) > idx {
-			outSb74.WriteString(fmt.Sprintf(":%d", offsets[idx]))
+			fmt.Fprintf(&outSb74, ":%d", offsets[idx])
 		}
 		outSb74.WriteString(" ")
 	}

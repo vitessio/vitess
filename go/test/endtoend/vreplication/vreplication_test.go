@@ -2020,9 +2020,9 @@ func generateInnoDBRowHistory(t *testing.T, defaultSourceKs string, neededTrxHis
 	insertStmt := strings.Builder{}
 	for i := offset; i <= offset+limit; i++ {
 		if i == offset {
-			insertStmt.WriteString(fmt.Sprintf("insert into product (pid, description) values (%d, 'test')", i))
+			fmt.Fprintf(&insertStmt, "insert into product (pid, description) values (%d, 'test')", i)
 		} else {
-			insertStmt.WriteString(fmt.Sprintf(", (%d, 'test')", i))
+			fmt.Fprintf(&insertStmt, ", (%d, 'test')", i)
 		}
 	}
 	execQuery(t, dbConn2, "start transaction")
