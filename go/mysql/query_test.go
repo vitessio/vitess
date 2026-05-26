@@ -762,7 +762,7 @@ func RowString(row []sqltypes.Value) string {
 	result := fmt.Sprintf("%v values:", l)
 	var resultSb767 strings.Builder
 	for _, val := range row {
-		resultSb767.WriteString(fmt.Sprintf(" %v", val))
+		fmt.Fprintf(&resultSb767, " %v", val)
 	}
 	result += resultSb767.String()
 	return result
