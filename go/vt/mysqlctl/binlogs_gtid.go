@@ -42,7 +42,7 @@ func (p *BackupManifestPath) String() string {
 		} else {
 			sb.WriteString("full:")
 		}
-		sb.WriteString(fmt.Sprintf("%v...%v", m.FromPosition, m.Position))
+		fmt.Fprintf(&sb, "%v...%v", m.FromPosition, m.Position)
 	}
 	sb.WriteString("]")
 	return sb.String()

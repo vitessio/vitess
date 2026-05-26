@@ -13,8 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Required version of golangci-lint
-REQUIRED_VERSION="v2.9.0" # https://github.com/golangci/golangci-lint/releases/tag/v2.9.0
+# Required version of golangci-lint, sourced from build.env (single source of truth)
+REQUIRED_VERSION=$(grep "^export GOLANGCI_LINT_VER=" "$(git rev-parse --show-toplevel)/build.env" | cut -d= -f2)
+if [ -z "$REQUIRED_VERSION" ]; then
+  echo "Could not determine required golangci-lint version from build.env"
+  exit 1
+fi
 
 # Function to compare versions in pure Bash
 version_greater_or_equal() {

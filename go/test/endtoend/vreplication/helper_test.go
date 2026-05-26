@@ -839,7 +839,7 @@ func (lg *loadGenerator) start() {
 	lg.ctx, lg.cancel = context.WithCancel(context.Background())
 	var connectionCount atomic.Int64
 
-	var id int64
+	var id atomic.Int64
 	log.Info("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
 	var totalQueries, successfulQueries int64
@@ -872,7 +872,7 @@ func (lg *loadGenerator) start() {
 							return
 						default:
 						}
-						newID := atomic.AddInt64(&id, 1)
+						newID := id.Add(1)
 						query := fmt.Sprintf(queryTemplate, newID, newID)
 						_, err := conn.ExecuteFetch(query, 1, false)
 						atomic.AddInt64(&totalQueries, 1)
@@ -1057,7 +1057,7 @@ func mapToCSV(m map[string]string) string {
 	}
 	var csvSb1062 strings.Builder
 	for k, v := range m {
-		csvSb1062.WriteString(fmt.Sprintf("%s=%s,", k, v))
+		fmt.Fprintf(&csvSb1062, "%s=%s,", k, v)
 	}
 	csv += csvSb1062.String()
 	if len(csv) == 0 {
