@@ -358,7 +358,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
 			"--migration-check-interval", "3s",
-			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
