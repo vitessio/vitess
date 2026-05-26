@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -2072,7 +2073,8 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnStopReplicationFailure(t *
 		},
 	})
 
-	testutil.AddTablets(ctx, t, ts, nil,
+	testutil.AddTablets(
+		ctx, t, ts, nil,
 		&topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "zone1",
@@ -2214,7 +2216,8 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			},
 		})
 
-		testutil.AddTablets(ctx, t, ts, nil,
+		testutil.AddTablets(
+			ctx, t, ts, nil,
 			&topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -3022,13 +3025,23 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			t.Parallel()
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout)
+			candidatesBefore := maps.Clone(tt.candidates)
+			applied, err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
-
 			assert.NoError(t, err)
+
+			// Failed/cancelled tablets must remain in validCandidates so downstream
+			// split-brain and errant-GTID checks can see their unique GTIDs. We assert
+			// that the candidates map is unchanged after the call regardless of which
+			// goroutines failed: only the applied set is returned for downstream use.
+			assert.Equal(t, candidatesBefore, tt.candidates, "waitForAllRelayLogsToApply must not mutate validCandidates")
+			for alias := range applied {
+				_, ok := tt.candidates[alias]
+				assert.True(t, ok, "applied alias %s should still be in candidates", alias)
+			}
 		})
 	}
 }

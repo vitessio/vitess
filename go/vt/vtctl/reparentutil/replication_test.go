@@ -1856,6 +1856,15 @@ func TestFilterToMostAdvancedCombined(t *testing.T) {
 	gtidSetIncomparableB, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-5")
 	require.NoError(t, err)
 
+	// Partial-order scenario: A and B share a common UUID but diverge on disjoint UUIDs
+	// alpha and beta. C is strictly behind B (beta:1-3 ⊂ beta:1-10) but incomparable with A.
+	gtidSetPartialA, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5")
+	require.NoError(t, err)
+	gtidSetPartialB, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-10")
+	require.NoError(t, err)
+	gtidSetPartialCBehindB, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-3")
+	require.NoError(t, err)
+
 	tests := []struct {
 		name        string
 		candidates  map[string]*RelayLogPositions
@@ -1900,6 +1909,21 @@ func TestFilterToMostAdvancedCombined(t *testing.T) {
 				"zone1-102": {Combined: replication.Position{GTIDSet: gtidSetLow}, Executed: replication.Position{GTIDSet: gtidSetExecLow}},
 			},
 			wantAliases: []string{"zone1-100", "zone1-101"}, // zone1-102 is strictly behind, incomparable A/B are both kept
+		},
+		{
+			// Regression: with partially-ordered GTID sets, a candidate strictly behind one
+			// incomparable maximum must be dropped even though it isn't behind the other.
+			// Tablets A and B are incomparable (disjoint UUIDs alpha vs beta). C is strictly
+			// behind B (beta:1-3 ⊂ beta:1-10) but incomparable with A (lacks alpha). The
+			// previous single-max filter could pick A as the max and keep C; the pairwise
+			// filter correctly drops C because B dominates it.
+			name: "dominated by an incomparable peer",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetPartialA}, Executed: replication.Position{GTIDSet: gtidSetExecHigh}},
+				"zone1-101": {Combined: replication.Position{GTIDSet: gtidSetPartialB}, Executed: replication.Position{GTIDSet: gtidSetExecMid}},
+				"zone1-102": {Combined: replication.Position{GTIDSet: gtidSetPartialCBehindB}, Executed: replication.Position{GTIDSet: gtidSetExecLow}},
+			},
+			wantAliases: []string{"zone1-100", "zone1-101"},
 		},
 	}
 
