@@ -105,12 +105,22 @@ jobs:
       if: steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
+        export DEBIAN_FRONTEND="noninteractive"
+        sudo apt-get -qq update
+
+        # Uninstall any previously installed MySQL first; the ubuntu-24.04 runner
+        # image ships with MySQL pre-installed, which conflicts with our install.
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
         {{if .InstallXtraBackup}}
 
         # Setup Percona Server for MySQL 8.0. We need pdps8.0 + pxb-80 enabled
         # (and ps-80 release) to get both percona-server-* and percona-xtrabackup-80;
         # the older `setup ps80` shortcut no longer ships percona-xtrabackup-80.
-        sudo apt-get -qq update
         sudo apt-get -qq install -y lsb-release gnupg2 curl
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
@@ -124,21 +134,21 @@ jobs:
 
         {{else}}
 
+        # We have to install this old version of libaio1 in case we end up testing with MySQL 5.7. See also:
+        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
+        wget http://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
+        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
+        # libtinfo5 is also needed for older MySQL 5.7 builds.
+        wget http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+        sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        # Setup MySQL 8.0
+        # Setup MySQL 8.0. 0.8.35-1 ships the current (non-expired) MySQL repo key.
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get -qq update
-
-        # We have to install this old version of libaio1 in case we end up testing with MySQL 5.7. See also:
-        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
-        curl -L -O http://mirrors.kernel.org/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
-        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb
-        # libtinfo5 is also needed for older MySQL 5.7 builds.
-        curl -L -O http://mirrors.kernel.org/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-        sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
 
         # Install everything else we need, and configure
         sudo apt-get -qq install -y mysql-server mysql-shell mysql-client make unzip g++ etcd-client etcd-server curl git wget eatmydata xz-utils libncurses6
@@ -147,8 +157,11 @@ jobs:
 
         sudo service mysql stop
         sudo service etcd stop
+        # The apparmor profile is removed when we uninstall the pre-installed MySQL,
+        # so we recreate an empty one before disabling it.
+        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld"
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
         go mod download
 
         # install JUnit report formatter

@@ -86,9 +86,20 @@ jobs:
     - name: Get dependencies
       if: steps.changes.outputs.end_to_end == 'true'
       run: |
+        export DEBIAN_FRONTEND="noninteractive"
+        sudo apt-get -qq update
+
+        # Uninstall any previously installed MySQL first; the ubuntu-24.04 runner
+        # image ships with MySQL pre-installed, which conflicts with our install.
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        # Setup MySQL 8.0
+        # Setup MySQL 8.0. 0.8.35-1 ships the current (non-expired) MySQL repo key.
         wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
@@ -98,8 +109,11 @@ jobs:
 
         sudo service mysql stop
         sudo service etcd stop
+        # The apparmor profile is removed when we uninstall the pre-installed MySQL,
+        # so we recreate an empty one before disabling it.
+        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld"
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
         go mod download
 
         # install JUnit report formatter
