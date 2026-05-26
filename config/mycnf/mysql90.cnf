@@ -37,10 +37,3 @@ super-read-only
 # Replication parameters to ensure reparents are fast.
 replica_net_timeout = 8
 
-# Lowered from the default of 600 so MY-012985 fires at T=120s, letting
-# VTOrc's InnoDBStalledPrimary analyser ERS sooner. mysqld self-kills at the
-# full threshold (T=240s) — half the stock buffer. Override via EXTRA_MY_CNF.
-# loose_ prefix: this variable is Percona Server only; stock MySQL 9.x
-# ignores it (the analyser still works, just at the stock detection floor).
-loose_innodb_fatal_semaphore_wait_threshold = 240
-

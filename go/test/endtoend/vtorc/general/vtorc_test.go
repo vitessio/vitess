@@ -1103,6 +1103,48 @@ func disableSemiSyncOnAllTablets(t *testing.T) {
 	}
 }
 
+// TestInnoDBStalledPrimary verifies the InnoDBStalledPrimary detection +
+// recovery path end-to-end using the VTTABLET_E2E_INNODB_LOG_TABLE override
+// (see HasRecentInnoDBLongSemaphoreWait in go/vt/mysqlctl/replication.go).
+// performance_schema.error_log is backed by mysqld's in-process log buffer
+// and is not writable, so the hook lets the analyser read from a regular
+// table that the test can populate.
+//
+// Does NOT cover: mysqld's own MY-012985 emission path on a real InnoDB
+// latch stall — that's unfalsifiable in CI.
+func TestInnoDBStalledPrimary(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+
+	const fakeLogTable = "_vt.fake_innodb_error_log"
+	t.Setenv("VTTABLET_E2E_INNODB_LOG_TABLE", fakeLogTable)
+
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
+		PreventCrossCellFailover: true,
+	}, cluster.DefaultVtorcsByCell, "")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+	primary, _, _ := waitForPrimaryAndPick(t, keyspace, shard0)
+	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.ElectNewPrimaryRecoveryName, keyspace.Name, shard0.Name, 1)
+
+	ersBefore := utils.GetSuccessfulRecoveryCount(t, vtorc, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name)
+
+	// Create the override table and inject a MY-012985 warning row on the
+	// primary only. SET sql_log_bin = 0 keeps both statements off the
+	// binlog so the table and row don't replicate — once ERS reparents,
+	// the new primary's analyser query hits ER_NO_SUCH_TABLE (soft-fail
+	// to false), which prevents a second ERS firing on the same row.
+	err := utils.RunSQLs(t, []string{
+		"SET sql_log_bin = 0",
+		fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (logged DATETIME(6), prio VARCHAR(16), subsystem VARCHAR(16), error_code VARCHAR(16))", fakeLogTable),
+		fmt.Sprintf("INSERT INTO %s (logged, prio, subsystem, error_code) VALUES (NOW(6), 'Warning', 'InnoDB', 'MY-012985')", fakeLogTable),
+	}, primary, "")
+	require.NoError(t, err)
+
+	utils.WaitForDetectedProblems(t, vtorc, string(inst.InnoDBStalledPrimary), primary.Alias, keyspace.Name, shard0.Name, 1)
+	utils.WaitForSuccessfulRecoveryCount(t, vtorc, logic.RecoverDeadPrimaryRecoveryName, keyspace.Name, shard0.Name, ersBefore+1)
+}
+
 // waitForPrimaryAndPick blocks until VTOrc has elected a primary and returns
 // it along with the surviving REPLICA (semi-sync acker) and RDONLY tablets.
 func waitForPrimaryAndPick(t *testing.T, keyspace *cluster.Keyspace, shard *cluster.Shard) (primary, replica, rdonly *cluster.Vttablet) {

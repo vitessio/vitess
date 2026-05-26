@@ -825,6 +825,31 @@ func TestHasRecentInnoDBLongSemaphoreWait(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "lost connection")
 	})
+
+	t.Run("VTTABLET_E2E_INNODB_LOG_TABLE override redirects the query", func(t *testing.T) {
+		const overrideTable = "_vt.fake_error_log"
+		const overrideQuery = "SELECT 1 FROM " + overrideTable + " WHERE logged >= NOW(6) - INTERVAL 60 SECOND AND prio = 'Warning' AND subsystem = 'InnoDB' AND error_code = 'MY-012985' LIMIT 1"
+
+		prev := innodbLogTableOverride
+		innodbLogTableOverride = overrideTable
+		t.Cleanup(func() { innodbLogTableOverride = prev })
+
+		db := fakesqldb.New(t)
+		defer db.Close()
+		params := db.ConnParams()
+		cp := *params
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		db.AddQuery(overrideQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"))
+		// The default table must NOT be queried when the override is set.
+		db.AddRejectedQuery(expectedQuery, sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownTable, "default table should not be queried"))
+		testMysqld := NewMysqld(dbc)
+		defer testMysqld.Close()
+
+		seen, err := testMysqld.HasRecentInnoDBLongSemaphoreWait(t.Context(), 60*time.Second)
+		require.NoError(t, err)
+		assert.True(t, seen)
+	})
 }
 
 func TestSemiSyncExtensionLoaded(t *testing.T) {

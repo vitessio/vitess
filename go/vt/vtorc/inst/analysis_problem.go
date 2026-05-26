@@ -148,7 +148,11 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 
 	// InnoDBStalledPrimary — mysqld is reachable but logged MY-012985, so
 	// LastCheckValid is true (unlike PrimaryDiskStalled). Reparent before
-	// mysqld self-kills at innodb_fatal_semaphore_wait_threshold.
+	// mysqld self-kills at the 600s threshold hardcoded in Oracle/Percona
+	// MySQL [1]. MariaDB exposes innodb_fatal_semaphore_wait_threshold to
+	// lower it without recompiling, but MariaDB is not supported by Vitess.
+	//
+	// [1] https://github.com/planetscale/mysql-server-private/blob/8.0/storage/innobase/srv/srv0srv.cc#L120
 	{
 		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    InnoDBStalledPrimary,
