@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -297,16 +298,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	requireAll := true
 	if isGTIDBased {
 		relayLogWaitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
-		if filtered := int64(len(validCandidates) - len(relayLogWaitCandidates)); filtered > 0 {
-			ersFilteredCandidates.Add([]string{keyspace, shard}, filtered)
-		}
 		if !uniformCombined(relayLogWaitCandidates) {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "emergency reparent aborted: multiple candidates have incomparable Combined GTID positions (suspected split-brain)")
+		}
+		if filtered := int64(len(validCandidates) - len(relayLogWaitCandidates)); filtered > 0 {
+			ersFilteredCandidates.Add([]string{keyspace, shard}, filtered)
 		}
 		requireAll = false
 	}
 
-	applied, err := erp.waitForAllRelayLogsToApply(ctx, relayLogWaitCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
+	applied, realFailures, err := erp.waitForAllRelayLogsToApply(ctx, relayLogWaitCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
 	if err != nil {
 		return err
 	}
@@ -319,8 +320,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			pos.Executed = pos.Combined
 		}
 	}
-	if failed := int64(len(relayLogWaitCandidates) - len(applied)); failed > 0 {
-		ersRelayLogApplyFailedCandidates.Add([]string{keyspace, shard}, failed)
+	if realFailures > 0 {
+		ersRelayLogApplyFailedCandidates.Add([]string{keyspace, shard}, int64(realFailures))
 	}
 
 	// For GTID based replication, we will run errant GTID detection.
@@ -471,7 +472,9 @@ type relayLogResult struct {
 }
 
 // waitForAllRelayLogsToApply waits for the given candidates to apply their relay logs
-// and returns the set of aliases that fully applied. Behavior depends on requireAll:
+// and returns the set of aliases that fully applied along with the count of candidates
+// that genuinely failed (excluding context cancellations triggered by our own short-
+// circuit after a peer succeeded). Behavior depends on requireAll:
 //
 //   - requireAll=true (pre-PR semantics): wait for every candidate's result and return
 //     an error on the first failure. Used for non-GTID flavors where Combined does not
@@ -480,6 +483,8 @@ type relayLogResult struct {
 //   - requireAll=false (optimization): cancel the remaining goroutines as soon as one
 //     candidate succeeds. Used only when the caller has proven a single success is
 //     sufficient (GTID-based + filtered candidates share the same Combined position).
+//     Subsequent context.Canceled errors are treated as expected cancellations, not
+//     failures — they are not logged and do not contribute to the returned failure count.
 //
 // Failed candidates are NOT removed from validCandidates, so downstream errant-GTID and
 // split-brain detection can still see them.
@@ -490,7 +495,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
 	requireAll bool,
-) (map[string]bool, error) {
+) (map[string]bool, int, error) {
 	resultCh := make(chan relayLogResult, len(validCandidates))
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
@@ -535,7 +540,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	// If no candidates needed to apply relay logs (e.g., initialization with no replication),
 	// there's nothing to wait for.
 	if waiterCount == 0 {
-		return map[string]bool{}, nil
+		return map[string]bool{}, 0, nil
 	}
 
 	// Collect results. In optimization mode (!requireAll), cancel remaining goroutines
@@ -543,10 +548,18 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	// after ERS completes. In requireAll mode, wait for every result and surface the
 	// first failure so the caller can abort ERS.
 	applied := make(map[string]bool, waiterCount)
+	realFailures := 0
 	var firstFailure error
 	for range waiterCount {
 		result := <-resultCh
 		if result.err != nil {
+			// In optimization mode, once we have a winner the remaining goroutines are
+			// cancelled via groupCancel(). Their resulting context.Canceled errors are
+			// expected, not real failures — exclude them from logging and counting.
+			if !requireAll && len(applied) > 0 && errors.Is(result.err, context.Canceled) {
+				continue
+			}
+			realFailures++
 			if firstFailure == nil {
 				firstFailure = result.err
 				erp.logger.Warningf("EmergencyReparent candidate %s failed to apply relay logs: %v", result.alias, result.err)
@@ -561,13 +574,13 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	}
 
 	if requireAll && firstFailure != nil {
-		return nil, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+		return nil, realFailures, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 	if len(applied) == 0 {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+		return nil, realFailures, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
-	return applied, nil
+	return applied, realFailures, nil
 }
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.

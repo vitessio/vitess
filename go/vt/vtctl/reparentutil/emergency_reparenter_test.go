@@ -130,8 +130,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		shards     []*vtctldatapb.Shard
 		tablets    []*topodatapb.Tablet
 		// results
-		shouldErr        bool
-		errShouldContain string
+		shouldErr           bool
+		errShouldContain    string
+		errShouldNotContain string
 	}{
 		{
 			name:                 "success",
@@ -909,11 +910,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Hostname: "fails to apply relay logs",
 				},
 			},
-			shouldErr:        true,
-			keyspace:         "testkeyspace",
-			shard:            "-",
-			cells:            []string{"zone1"},
-			errShouldContain: "failed to promote", // ERS now tolerates partial relay log failures and continues to promotion (which isn't fully mocked)
+			shouldErr:           true,
+			keyspace:            "testkeyspace",
+			shard:               "-",
+			cells:               []string{"zone1"},
+			errShouldContain:    "failed to promote", // ERS reaches promotion (not fully mocked) because zone1-0000000100 succeeded the relay-log wait.
+			errShouldNotContain: "could not apply all relay logs",
 		},
 		{
 			name:       "requested primary-elect is not in tablet map",
@@ -1986,6 +1988,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tt.errShouldContain)
+				if tt.errShouldNotContain != "" {
+					assert.NotContains(t, err.Error(), tt.errShouldNotContain)
+				}
 				return
 			}
 
@@ -3028,7 +3033,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
 			candidatesBefore := maps.Clone(tt.candidates)
-			applied, err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout, false /* requireAll */)
+			applied, _, err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout, false /* requireAll */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

@@ -90,13 +90,15 @@ func (rlp *RelayLogPositions) IsZero() bool {
 // neither dominates), the cluster is in a suspected-split-brain state and ERS must not
 // short-circuit the wait.
 func uniformCombined(candidates map[string]*RelayLogPositions) bool {
-	var ref *replication.Position
+	var ref replication.Position
+	set := false
 	for _, pos := range candidates {
-		if ref == nil {
-			ref = &pos.Combined
+		if !set {
+			ref = pos.Combined
+			set = true
 			continue
 		}
-		if !pos.Combined.Equal(*ref) {
+		if !pos.Combined.Equal(ref) {
 			return false
 		}
 	}
