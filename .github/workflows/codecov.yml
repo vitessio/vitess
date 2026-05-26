@@ -16,6 +16,11 @@ permissions: read-all
 jobs:
   test:
     name: Code Coverage
+    # Skip the whole job when no CODECOV_TOKEN is available — without one the
+    # final upload step fails ("Token required - not valid tokenless upload"),
+    # so running the test suite just to throw the report away is wasted work.
+    # Forks that want coverage can opt in by configuring CODECOV_TOKEN.
+    if: ${{ secrets.CODECOV_TOKEN != '' }}
     runs-on: ${{ github.repository == 'vitessio/vitess' && 'gh-hosted-runners-16cores-1-24.04' || 'ubuntu-24.04' }}
 
     steps:
