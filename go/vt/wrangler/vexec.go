@@ -442,15 +442,15 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			// a default empty string value and a user provided empty value.
 			if !textutil.ValueIsSimulatedNull(rpcReq.Cells) {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  cells=%q\n", strings.Join(rpcReq.Cells, ",")))
+				fmt.Fprintf(&dryRunChanges, "  cells=%q\n", strings.Join(rpcReq.Cells, ","))
 			}
 			if !textutil.ValueIsSimulatedNull(rpcReq.TabletTypes) {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", topoproto.MakeStringTypeCSV(rpcReq.TabletTypes)))
+				fmt.Fprintf(&dryRunChanges, "  tablet_types=%q\n", topoproto.MakeStringTypeCSV(rpcReq.TabletTypes))
 			}
 			if rpcReq.OnDdl != nil {
 				changes = true
-				dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(*rpcReq.OnDdl)]))
+				fmt.Fprintf(&dryRunChanges, "  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(*rpcReq.OnDdl)])
 			}
 			if !changes {
 				return nil, errors.New("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
