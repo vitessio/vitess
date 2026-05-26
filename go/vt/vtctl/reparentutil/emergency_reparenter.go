@@ -692,6 +692,9 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		return successMap, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 	if successes == 0 {
+		if firstFailure != nil {
+			return successMap, vterrors.Wrapf(firstFailure, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+		}
 		return successMap, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
