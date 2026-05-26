@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +84,28 @@ func (rlp *RelayLogPositions) Equal(pos *RelayLogPositions) bool {
 // IsZero returns true if the RelayLogPositions is zero.
 func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
+}
+
+// describeCombinedPositions returns a deterministic, human-readable listing of each
+// candidate's Combined GTID position, sorted by alias. Used to make split-brain abort
+// errors actionable by naming exactly which tablets diverged.
+func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+	aliases := make([]string, 0, len(candidates))
+	for alias := range candidates {
+		aliases = append(aliases, alias)
+	}
+	sort.Strings(aliases)
+
+	var b strings.Builder
+	for i, alias := range aliases {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(alias)
+		b.WriteString("=")
+		b.WriteString(candidates[alias].Combined.String())
+	}
+	return b.String()
 }
 
 // uniformCombined returns true when every candidate in the map shares the same Combined

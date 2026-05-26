@@ -77,7 +77,7 @@ var (
 		[]string{"Keyspace", "Shard", "Result"},
 	)
 	ersFilteredCandidates = stats.NewCountersWithMultiLabels(
-		"EmergencyReparentFilteredCandidates", "Number of candidates filtered out during EmergencyReparentShard because their Combined position was not the most advanced",
+		"EmergencyReparentFilteredCandidates", "Number of candidates filtered out during EmergencyReparentShard because their Combined position was not the most advanced. A single ERS run may increment this twice if errant-GTID detection forces a second wait pass over the surviving candidates.",
 		[]string{"Keyspace", "Shard"},
 	)
 	ersRelayLogApplyFailedCandidates = stats.NewCountersWithMultiLabels(
@@ -299,7 +299,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if isGTIDBased {
 		relayLogWaitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
 		if !uniformCombined(relayLogWaitCandidates) {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "emergency reparent aborted: multiple candidates have incomparable Combined GTID positions (suspected split-brain)")
+			return vterrors.Errorf(
+				vtrpc.Code_FAILED_PRECONDITION,
+				"emergency reparent aborted: candidates have incomparable Combined GTID positions (suspected split-brain): %s",
+				describeCombinedPositions(relayLogWaitCandidates),
+			)
 		}
 		if filtered := int64(len(validCandidates) - len(relayLogWaitCandidates)); filtered > 0 {
 			ersFilteredCandidates.Add([]string{keyspace, shard}, filtered)
@@ -307,24 +311,9 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		requireAll = false
 	}
 
-	applied, realFailures, err := erp.waitForAllRelayLogsToApply(ctx, relayLogWaitCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
-	// Update the failure metric before any error-path return so that aborts caused by
-	// relay-log-apply failures are visible to operators (otherwise the metric would
-	// undercount in exactly the worst case).
-	if realFailures > 0 {
-		ersRelayLogApplyFailedCandidates.Add([]string{keyspace, shard}, int64(realFailures))
-	}
+	relayLogSuccessMap, err := erp.applyRelayLogsAndReconcile(ctx, relayLogWaitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll, keyspace, shard)
 	if err != nil {
 		return err
-	}
-	// Reflect post-wait reality in validCandidates: tablets that fully applied now have
-	// Executed == Combined. This preserves the existing intermediate-selection promise —
-	// the sorter's Combined→Executed→promotion-rule tie-break naturally prefers fully-applied
-	// tablets over cancelled-mid-apply peers when their Combined positions are tied.
-	for alias := range applied {
-		if pos, ok := validCandidates[alias]; ok {
-			pos.Executed = pos.Combined
-		}
 	}
 
 	// For GTID based replication, we will run errant GTID detection.
@@ -335,6 +324,49 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 		if len(validCandidates) == 0 {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
+		}
+
+		// Errant filtering can leave promotion candidates that were never waited on:
+		// tablets strictly behind the original leading group (excluded by the filter) and
+		// tablets cancelled mid-apply (excluded from successMap by the optimization). If
+		// every originally-applied tablet is removed by errant detection, one of these
+		// unwaited survivors could be promoted with received-but-unapplied transactions.
+		// Detect this case (no applied tablet survives) and run a second wait pass on the
+		// survivors to bring them to post-apply state before promotion. Applies the same
+		// filter/uniform/wait pipeline as the first pass — uniformity is re-checked
+		// because the survivor set is a different shape than the original leading group.
+		//
+		// If at least one applied tablet survived, no re-wait is needed: findMostAdvanced
+		// will pick the applied tablet over any unwaited peer (Executed tie-break), and
+		// pos.AtLeast() also gates NewPrimaryAlias to candidates that are at least as
+		// advanced as the winner, so an unwaited peer with lower Executed cannot be
+		// promoted out from under the applied winner.
+		appliedSurvived := false
+		for alias := range validCandidates {
+			if applied, ok := relayLogSuccessMap[alias]; ok && applied {
+				appliedSurvived = true
+				break
+			}
+		}
+		if !appliedSurvived {
+			erp.logger.Warningf("all originally-applied candidates were removed by errant-GTID detection; running second relay-log-apply wait on surviving candidates before promotion")
+			rewaitCandidates := filterToMostAdvancedCombined(validCandidates, erp.logger)
+			if !uniformCombined(rewaitCandidates) {
+				return vterrors.Errorf(
+					vtrpc.Code_FAILED_PRECONDITION,
+					"emergency reparent aborted: surviving unwaited candidates have incomparable Combined GTID positions (suspected split-brain): %s",
+					describeCombinedPositions(rewaitCandidates),
+				)
+			}
+			if filtered := int64(len(validCandidates) - len(rewaitCandidates)); filtered > 0 {
+				ersFilteredCandidates.Add([]string{keyspace, shard}, filtered)
+			}
+			if _, err := erp.applyRelayLogsAndReconcile(ctx, rewaitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, false /* requireAll */, keyspace, shard); err != nil {
+				return err
+			}
+			if len(validCandidates) == 0 {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all surviving candidates failed the second relay-log-apply wait")
+			}
 		}
 	}
 
@@ -474,10 +506,71 @@ type relayLogResult struct {
 	err   error
 }
 
+// applyRelayLogsAndReconcile runs waitForAllRelayLogsToApply on waitCandidates and
+// reconciles validCandidates with the outcome: applied tablets get Executed bumped to
+// Combined (so the intermediate-selection sorter prefers them), failed tablets are
+// removed (so they cannot be picked for promotion or catch-up). Updates the failure
+// metric. The wait function's successMap is returned for callers that need to track
+// which aliases were waited on across multiple passes.
+func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
+	ctx context.Context,
+	waitCandidates map[string]*RelayLogPositions,
+	validCandidates map[string]*RelayLogPositions,
+	tabletMap map[string]*topo.TabletInfo,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	waitReplicasTimeout time.Duration,
+	requireAll bool,
+	keyspace, shard string,
+) (successMap map[string]bool, err error) {
+	successMap, waitErr := erp.waitForAllRelayLogsToApply(ctx, waitCandidates, tabletMap, statusMap, waitReplicasTimeout, requireAll)
+	// Update the failure metric before any error-path return so that aborts caused by
+	// relay-log-apply failures are visible to operators (otherwise the metric would
+	// undercount in exactly the worst case).
+	failedCount := 0
+	for _, applied := range successMap {
+		if !applied {
+			failedCount++
+		}
+	}
+	if failedCount > 0 {
+		ersRelayLogApplyFailedCandidates.Add([]string{keyspace, shard}, int64(failedCount))
+	}
+	if waitErr != nil {
+		return successMap, waitErr
+	}
+	// Reconcile validCandidates with the wait results:
+	//   - Applied tablets get Executed bumped to Combined so the intermediate-selection
+	//     sorter naturally prefers them via the existing Combined→Executed→promotion-rule
+	//     tie-break.
+	//   - Failed tablets are removed entirely so they cannot be picked as intermediate
+	//     source, primary candidate, or catch-up target. Safe to remove because the
+	//     upfront uniformCombined check guarantees every wait candidate shares the same
+	//     Combined position — failed tablets carry no unique GTIDs vs the applied tablet,
+	//     so no split-brain signal is lost.
+	//   - Cancelled tablets (not in successMap) are left untouched; the sort ranks them
+	//     below applied peers at the same Combined.
+	for alias, applied := range successMap {
+		if applied {
+			if pos, ok := validCandidates[alias]; ok {
+				pos.Executed = pos.Combined
+			}
+		} else {
+			delete(validCandidates, alias)
+		}
+	}
+	return successMap, nil
+}
+
 // waitForAllRelayLogsToApply waits for the given candidates to apply their relay logs
-// and returns the set of aliases that fully applied along with the count of candidates
-// that genuinely failed (excluding context cancellations triggered by our own short-
-// circuit after a peer succeeded). Behavior depends on requireAll:
+// and returns a map of alias to outcome:
+//
+//   - successMap[alias] == true:  the tablet fully applied its relay logs.
+//   - successMap[alias] == false: the tablet genuinely failed (RPC error, MySQL error,
+//     or timeout).
+//   - alias absent:               the tablet was not attempted (no statusMap entry) or
+//     was cancelled by our own short-circuit after a peer succeeded.
+//
+// Behavior depends on requireAll:
 //
 //   - requireAll=true (pre-PR semantics): wait for every candidate's result and return
 //     an error on the first failure. Used for non-GTID flavors where Combined does not
@@ -487,10 +580,10 @@ type relayLogResult struct {
 //     candidate succeeds. Used only when the caller has proven a single success is
 //     sufficient (GTID-based + filtered candidates share the same Combined position).
 //     Subsequent context.Canceled errors are treated as expected cancellations, not
-//     failures — they are not logged and do not contribute to the returned failure count.
+//     failures — they are not logged and are excluded from successMap entirely.
 //
-// Failed candidates are NOT removed from validCandidates, so downstream errant-GTID and
-// split-brain detection can still see them.
+// The function does not mutate validCandidates; the caller decides how to handle the
+// failed aliases (e.g., remove them from promotion consideration).
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
@@ -498,7 +591,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
 	requireAll bool,
-) (map[string]bool, int, error) {
+) (successMap map[string]bool, err error) {
 	resultCh := make(chan relayLogResult, len(validCandidates))
 
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
@@ -543,52 +636,66 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	// If no candidates needed to apply relay logs (e.g., initialization with no replication),
 	// there's nothing to wait for.
 	if waiterCount == 0 {
-		return map[string]bool{}, 0, nil
+		return map[string]bool{}, nil
 	}
 
 	// Collect results. In optimization mode (!requireAll), cancel remaining goroutines
 	// as soon as one tablet succeeds — the others will continue applying on their own
 	// after ERS completes. In requireAll mode, wait for every result and surface the
 	// first failure so the caller can abort ERS.
-	applied := make(map[string]bool, waiterCount)
-	realFailures := 0
+	successMap = make(map[string]bool, waiterCount)
+	successes := 0
 	var firstFailure error
 	for range waiterCount {
 		result := <-resultCh
 		if result.err != nil {
-			// In optimization mode, once we have a winner the remaining goroutines are
-			// cancelled via groupCancel(). Their resulting context.Canceled errors are
-			// expected, not real failures — exclude them from logging and counting.
-			// Non-context.Canceled errors that arrive after success are conservatively
-			// treated as real failures even though they may have been caused indirectly
+			// We call groupCancel() at two points: in optimization mode once a peer
+			// succeeds, and in requireAll mode once any peer fails (since we will abort
+			// anyway). Cancellation errors that arrive after either trigger are expected
+			// noise — omit them from successMap entirely. We must check both
+			// context.Canceled (in-process) and the gRPC-wrapped equivalent
+			// (vterrors.Code(err) == vtrpcpb.Code_CANCELED), which is what real tmclient
+			// RPCs return after vterrors.FromGRPC has converted the gRPC status — that
+			// one does NOT satisfy errors.Is(err, context.Canceled).
+			//
+			// Non-cancellation errors that arrive after a trigger are conservatively
+			// recorded as real failures even though they may have been caused indirectly
 			// by our own cancellation (e.g., torn-down RPC connections, MySQL session
 			// closure). Over-reporting is preferable to silently dropping a genuine
 			// failure signal.
-			if !requireAll && len(applied) > 0 && errors.Is(result.err, context.Canceled) {
+			isCancellation := errors.Is(result.err, context.Canceled) || vterrors.Code(result.err) == vtrpc.Code_CANCELED
+			weTriggeredCancellation := (!requireAll && successes > 0) || (requireAll && firstFailure != nil)
+			if isCancellation && weTriggeredCancellation {
 				continue
 			}
-			realFailures++
+			successMap[result.alias] = false
 			if firstFailure == nil {
 				firstFailure = result.err
 				erp.logger.Warningf("EmergencyReparent candidate %s failed to apply relay logs: %v", result.alias, result.err)
+				if requireAll {
+					// requireAll means any failure must abort ERS — short-circuit the
+					// remaining waiters so we don't block until waitReplicasTimeout.
+					groupCancel()
+				}
 			}
 			continue
 		}
-		if !requireAll && len(applied) == 0 {
+		if !requireAll && successes == 0 {
 			// Optimization: cancel remaining goroutines — we have a winner.
 			groupCancel()
 		}
-		applied[result.alias] = true
+		successMap[result.alias] = true
+		successes++
 	}
 
 	if requireAll && firstFailure != nil {
-		return nil, realFailures, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+		return successMap, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
-	if len(applied) == 0 {
-		return nil, realFailures, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+	if successes == 0 {
+		return successMap, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
-	return applied, realFailures, nil
+	return successMap, nil
 }
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.

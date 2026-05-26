@@ -3033,19 +3033,21 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
 			candidatesBefore := maps.Clone(tt.candidates)
-			applied, _, err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout, false /* requireAll */)
+			successMap, err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout, false /* requireAll */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
 			assert.NoError(t, err)
 
-			// Failed/cancelled tablets must remain in validCandidates so downstream
-			// split-brain and errant-GTID checks can see their unique GTIDs. We assert
-			// that the candidates map is unchanged after the call regardless of which
-			// goroutines failed: only the applied set is returned for downstream use.
+			// The wait function must not mutate validCandidates — it only inspects the
+			// map and returns a success map for the caller to act on. This keeps the
+			// function's contract narrow and the caller's intent explicit.
 			assert.Equal(t, candidatesBefore, tt.candidates, "waitForAllRelayLogsToApply must not mutate validCandidates")
-			for alias := range applied {
+			for alias, applied := range successMap {
+				if !applied {
+					continue
+				}
 				_, ok := tt.candidates[alias]
 				assert.True(t, ok, "applied alias %s should still be in candidates", alias)
 			}

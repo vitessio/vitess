@@ -106,3 +106,5 @@ Two new stats are exported for observability:
 
 - `EmergencyReparentFilteredCandidates` — counts replicas excluded from the relay-log wait because their `Combined` position is strictly behind the leading group.
 - `EmergencyReparentRelayLogFailedCandidates` — counts replicas that genuinely failed to apply relay logs (cancellations after a peer succeeded are not counted).
+
+See [#18707](https://github.com/vitessio/vitess/pull/18707) for details.
