@@ -177,10 +177,18 @@ type FileEntry struct {
 
 // FileChunk describes one chunk of a large file that has been split for parallel backup/restore.
 type FileChunk struct {
+	// StorageName is the name used to store this chunk in the backup storage.
+	// Format is "fileIndex-chunkIndex" (e.g. "5-0", "5-1").
 	StorageName string
-	Offset      int64
-	Size        int64
-	Hash        string
+
+	// Offset is the byte offset within the original file where this chunk starts.
+	Offset int64
+
+	// Size is the number of bytes in this chunk.
+	Size int64
+
+	// Hash is the CRC32 hash of the stored data (after compression, if any).
+	Hash string
 }
 
 // computeFileChunks splits a file of the given size into chunks of chunkSize bytes.
