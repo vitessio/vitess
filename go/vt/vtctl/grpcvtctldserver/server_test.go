@@ -4868,6 +4868,57 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}
 }
 
+// TestEmergencyReparentShardResponsePreservesReqOnEarlyFailure is a regression
+// test for the case where reparentShardLocked returns an error before populating
+// ev.ShardInfo. In that situation the response must still carry the keyspace/shard
+// from the request rather than empty strings.
+//
+// The test injects a topo Get error on the shard data path (after the shard lock
+// is acquired) so that GetShard fails before ev.ShardInfo is assigned. With the
+// unfixed code this produces resp.Keyspace == "" and resp.Shard == "".
+func TestEmergencyReparentShardResponsePreservesReqOnEarlyFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
+
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+	}, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Type: topodatapb.TabletType_PRIMARY,
+		PrimaryTermStartTime: &vttime.Time{
+			Seconds: 100,
+		},
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	})
+
+	// Inject a failure on shard data reads after the shard is created. This causes
+	// reparentShardLocked to fail at GetShard before ev.ShardInfo = *shardInfo is
+	// reached, leaving ev.ShardInfo zero-valued while ev itself is non-nil.
+	factory.AddOperationError(memorytopo.Get, `.*shards/-/Shard$`, topo.NewError(topo.NoNode, "injected"))
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	resp, err := vtctld.EmergencyReparentShard(ctx, &vtctldatapb.EmergencyReparentShardRequest{
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	})
+	require.Error(t, err)
+	require.NotNil(t, resp)
+	testutil.AssertEmergencyReparentShardResponsesEqual(t, &vtctldatapb.EmergencyReparentShardResponse{
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	}, resp)
+}
+
 func TestExecuteFetchAsApp(t *testing.T) {
 	t.Parallel()
 
@@ -9011,6 +9062,46 @@ func TestPlannedReparentShard(t *testing.T) {
 			expectEventsToOccur: true,
 			expectedErr:         "global status vars failed",
 		},
+		{
+			// Regression test: when reparentShardLocked returns an error before populating
+			// ev.ShardInfo (e.g. the ExpectedPrimary check fires before ev.ShardInfo is
+			// assigned), the response must still carry the keyspace/shard from the request
+			// rather than empty strings.
+			name: "response preserves keyspace/shard when reparent fails before ShardInfo is populated",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				// ExpectedPrimary deliberately points to a non-existent tablet so that
+				// reparentShardLocked fails the expected-primary check before assigning
+				// ev.ShardInfo, leaving ev.ShardInfo zero-valued.
+				ExpectedPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  999,
+				},
+			},
+			expected: &vtctldatapb.PlannedReparentShardResponse{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+			},
+			expectEventsToOccur: false,
+			expectedErr:         "primary zone1-0000000100 is not equal to expected alias zone1-0000000999",
+		},
 	}
 
 	for _, tt := range tests {
@@ -9041,6 +9132,10 @@ func TestPlannedReparentShard(t *testing.T) {
 
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
+				if tt.expected != nil {
+					require.NotNil(t, resp)
+					testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+				}
 
 				return
 			}
