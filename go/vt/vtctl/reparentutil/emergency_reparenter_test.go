@@ -19,7 +19,6 @@ package reparentutil
 import (
 	"context"
 	"errors"
-	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -3032,7 +3031,13 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			t.Parallel()
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			candidatesBefore := maps.Clone(tt.candidates)
+			// Deep-clone so the post-call equality check actually catches mutations
+			// to the underlying RelayLogPositions structs, not just key/pointer changes.
+			candidatesBefore := make(map[string]*RelayLogPositions, len(tt.candidates))
+			for alias, pos := range tt.candidates {
+				clone := *pos
+				candidatesBefore[alias] = &clone
+			}
 			successMap, err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout, false /* requireAll */)
 			if tt.shouldErr {
 				assert.Error(t, err)
