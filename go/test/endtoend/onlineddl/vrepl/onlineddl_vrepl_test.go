@@ -181,7 +181,6 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat-interval", "250ms",
 			"--migration-check-interval", "5s",
-			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl-strategy", "online",
