@@ -882,7 +882,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	createTable := "create table replicationtypes(id int"
 	var createTableSb912 strings.Builder
 	for _, tcase := range testcases {
-		createTableSb912.WriteString(fmt.Sprintf(", %v %v", tcase.name, tcase.createType))
+		fmt.Fprintf(&createTableSb912, ", %v %v", tcase.name, tcase.createType)
 	}
 	createTable += createTableSb912.String()
 	createTable += ", primary key(id))"
@@ -893,7 +893,7 @@ func TestRowReplicationTypes(t *testing.T) {
 	insert := "insert into replicationtypes set id=1"
 	var insertSb922 strings.Builder
 	for _, tcase := range testcases {
-		insertSb922.WriteString(fmt.Sprintf(", %v=%v", tcase.name, tcase.createValue))
+		fmt.Fprintf(&insertSb922, ", %v=%v", tcase.name, tcase.createValue)
 	}
 	insert += insertSb922.String()
 

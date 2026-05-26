@@ -679,7 +679,7 @@ func getOptionSetString(config map[string]string) string {
 		clause = fmt.Sprintf("json_remove(options, '$.config.\"%s\"'", deletedKeys[0])
 		var clauseSb681 strings.Builder
 		for _, k := range deletedKeys[1:] {
-			clauseSb681.WriteString(fmt.Sprintf(", '$.config.\"%s\"'", k))
+			fmt.Fprintf(&clauseSb681, ", '$.config.\"%s\"'", k)
 		}
 		clause += clauseSb681.String()
 		clause += ")"
@@ -691,7 +691,7 @@ func getOptionSetString(config map[string]string) string {
 			if i > 0 {
 				clauseSb688.WriteString(", ")
 			}
-			clauseSb688.WriteString(fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k])))
+			fmt.Fprintf(&clauseSb688, "'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
 		}
 		clause += clauseSb688.String()
 		clause += ")"
@@ -1030,7 +1030,7 @@ func (tm *TabletManager) buildReadVReplicationWorkflowsQuery(req *tabletmanagerd
 
 	additionalPredicates := strings.Builder{}
 	if req.GetExcludeFrozen() {
-		additionalPredicates.WriteString(fmt.Sprintf(" and message != '%s'", workflow.Frozen))
+		fmt.Fprintf(&additionalPredicates, " and message != '%s'", workflow.Frozen)
 	}
 	if len(req.GetIncludeIds()) > 0 {
 		additionalPredicates.WriteString(" and id in (")
