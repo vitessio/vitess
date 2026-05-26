@@ -272,10 +272,10 @@ func (pool *ConnPool[C]) Close() {
 // pool closing operation
 func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	pool.capacityMu.Lock()
-	defer pool.capacityMu.Unlock()
 
-	if pool.close.Load() == nil || pool.capacity.Load() == 0 {
+	if pool.close.Load() == nil {
 		// already closed
+		pool.capacityMu.Unlock()
 		return nil
 	}
 
@@ -287,6 +287,7 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 	closeChan := *pool.close.Swap(nil)
 	close(closeChan)
 
+	pool.capacityMu.Unlock()
 	pool.workers.Wait()
 	return err
 }
@@ -294,6 +295,10 @@ func (pool *ConnPool[C]) CloseWithContext(ctx context.Context) error {
 func (pool *ConnPool[C]) reopen() {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
+
+	if pool.close.Load() == nil {
+		return
+	}
 
 	capacity := pool.capacity.Load()
 	if capacity == 0 {
@@ -389,6 +394,9 @@ func (pool *ConnPool[C]) Get(ctx context.Context, setting *Setting) (*Pooled[C],
 	if ctx.Err() != nil {
 		return nil, ErrCtxTimeout
 	}
+	if pool.close.Load() == nil {
+		return nil, ErrConnPoolClosed
+	}
 	if pool.capacity.Load() == 0 {
 		return nil, ErrConnPoolClosed
 	}
@@ -405,6 +413,10 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 
 	if conn == nil {
 		var err error
+		if pool.close.Load() == nil {
+			pool.closedConn()
+			return
+		}
 		// Using context.Background() is fine since MySQL connection already enforces
 		// a connect timeout via the `db-connect-timeout-ms` config param.
 		conn, err = pool.connNew(context.Background())
@@ -431,7 +443,19 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.tryReturnConn(conn)
 }
 
+<<<<<<< HEAD
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
+||||||| parent of 4061458538 (smartconnpool: avoid close deadlock with refresh reopen (#20157))
+func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C], updateIdleTime bool) bool {
+=======
+func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C], updateIdleTime bool) bool {
+	if pool.close.Load() == nil {
+		conn.Close()
+		pool.closedConn()
+		return false
+	}
+
+>>>>>>> 4061458538 (smartconnpool: avoid close deadlock with refresh reopen (#20157))
 	if pool.wait.tryReturnConn(conn) {
 		return true
 	}
@@ -566,6 +590,10 @@ func (pool *ConnPool[C]) closedConn() {
 
 func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 	for {
+		if pool.close.Load() == nil {
+			return nil, ErrConnPoolClosed
+		}
+
 		open := pool.active.Load()
 		if open >= pool.capacity.Load() {
 			return nil, nil
@@ -576,6 +604,11 @@ func (pool *ConnPool[C]) getNew(ctx context.Context) (*Pooled[C], error) {
 			if err != nil {
 				pool.closedConn()
 				return nil, err
+			}
+			if pool.close.Load() == nil {
+				conn.Close()
+				pool.closedConn()
+				return nil, ErrConnPoolClosed
 			}
 			return conn, nil
 		}
@@ -735,7 +768,12 @@ func (pool *ConnPool[C]) setCapacity(ctx context.Context, newcap int64) error {
 	}
 
 	oldcap := pool.capacity.Swap(newcap)
-	if oldcap == newcap {
+	// Skip the drain only when capacity is unchanged AND we're already at or
+	// below the target. Otherwise we may have been left with active > newcap
+	// by a prior call that timed out (e.g. SetCapacity(0) racing with held
+	// conns), and CloseWithContext relies on a follow-up call here to finish
+	// draining.
+	if oldcap == newcap && pool.active.Load() <= newcap {
 		return nil
 	}
 	// update the idle count to match the new capacity if necessary
