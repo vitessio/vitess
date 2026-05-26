@@ -308,6 +308,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	applied, realFailures, err := erp.waitForAllRelayLogsToApply(ctx, relayLogWaitCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
+	// Update the failure metric before any error-path return so that aborts caused by
+	// relay-log-apply failures are visible to operators (otherwise the metric would
+	// undercount in exactly the worst case).
+	if realFailures > 0 {
+		ersRelayLogApplyFailedCandidates.Add([]string{keyspace, shard}, int64(realFailures))
+	}
 	if err != nil {
 		return err
 	}
@@ -319,9 +325,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		if pos, ok := validCandidates[alias]; ok {
 			pos.Executed = pos.Combined
 		}
-	}
-	if realFailures > 0 {
-		ersRelayLogApplyFailedCandidates.Add([]string{keyspace, shard}, int64(realFailures))
 	}
 
 	// For GTID based replication, we will run errant GTID detection.
@@ -556,6 +559,11 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 			// In optimization mode, once we have a winner the remaining goroutines are
 			// cancelled via groupCancel(). Their resulting context.Canceled errors are
 			// expected, not real failures — exclude them from logging and counting.
+			// Non-context.Canceled errors that arrive after success are conservatively
+			// treated as real failures even though they may have been caused indirectly
+			// by our own cancellation (e.g., torn-down RPC connections, MySQL session
+			// closure). Over-reporting is preferable to silently dropping a genuine
+			// failure signal.
 			if !requireAll && len(applied) > 0 && errors.Is(result.err, context.Canceled) {
 				continue
 			}
