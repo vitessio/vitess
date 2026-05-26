@@ -880,7 +880,7 @@ func printEvents(evs []*binlogdatapb.VEvent) {
 	s := "\n===START===" + "\n"
 	var sSb911 strings.Builder
 	for i, ev := range evs {
-		sSb911.WriteString(fmt.Sprintf("Event %d; %v\n", i, ev))
+		fmt.Fprintf(&sSb911, "Event %d; %v\n", i, ev)
 	}
 	s += sSb911.String()
 	s += "===END===" + "\n"
