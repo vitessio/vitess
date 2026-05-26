@@ -79,8 +79,8 @@ func commandMirrorTraffic(cmd *cobra.Command, args []string) error {
 	} else {
 		tout := bytes.Buffer{}
 		tout.WriteString(resp.Summary + "\n\n")
-		tout.WriteString(fmt.Sprintf("Start State: %s\n", resp.StartState))
-		tout.WriteString(fmt.Sprintf("Current State: %s\n", resp.CurrentState))
+		fmt.Fprintf(&tout, "Start State: %s\n", resp.StartState)
+		fmt.Fprintf(&tout, "Current State: %s\n", resp.CurrentState)
 		output = tout.Bytes()
 	}
 	fmt.Printf("%s\n", output)
