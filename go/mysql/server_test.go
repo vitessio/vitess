@@ -1012,7 +1012,17 @@ func TestTLSRequired(t *testing.T) {
 	params.SslKey = path.Join(root, "revoked-client-key.pem")
 	conn, err = Connect(context.Background(), params)
 	require.NotNil(t, err)
-	require.Contains(t, err.Error(), "remote error: tls: bad certificate")
+	// On a happy day the client reads the server's TLS `bad_certificate`
+	// alert; on a less happy day the server's TCP close races ahead of the
+	// alert and the client sees `connection reset by peer` / `broken pipe`.
+	// Either outcome means the revoked cert was rejected, which is what the
+	// test cares about — so accept both.
+	errStr := err.Error()
+	require.True(t,
+		strings.Contains(errStr, "remote error: tls: bad certificate") ||
+			strings.Contains(errStr, "connection reset by peer") ||
+			strings.Contains(errStr, "broken pipe"),
+		"expected revoked-cert connection to be rejected, got: %v", err)
 	if conn != nil {
 		conn.Close()
 	}
