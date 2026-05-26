@@ -282,20 +282,31 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	// Filter to the most-advanced candidates by Combined (relay log) position for the relay log wait.
-	// Since replication is stopped, Combined positions are frozen — tablets behind the max can never
-	// catch up during relay log application. We only wait for the most-advanced group, but keep all
-	// valid candidates for later promotion steps (behind tablets can catch up via the intermediate source).
-	relayLogWaitCandidates := filterToMostAdvancedCombined(validCandidates, erp.logger)
-	if filtered := int64(len(validCandidates) - len(relayLogWaitCandidates)); filtered > 0 {
-		ersFilteredCandidates.Add([]string{keyspace, shard}, filtered)
+	// Pick the relay-log-apply wait set and mode based on the replication flavor.
+	//
+	// For GTID-based replication, Combined includes the received relay-log position, so we
+	// can filter out tablets strictly behind the leading group and wait only for that group.
+	// When the filtered set is uniform (single Combined value) one success is sufficient.
+	// When it is non-uniform we have incomparable maxima — a suspected split-brain — and ERS
+	// must error rather than silently pick one side (see AGENTS.md / CLAUDE.md ERS section).
+	//
+	// For non-GTID flavors (FilePos, MariaDB), Combined is the executed position and does not
+	// reflect received-but-not-applied relay logs. The filter is unsafe, so we wait for every
+	// candidate (pre-PR behavior) and fail on any error.
+	relayLogWaitCandidates := validCandidates
+	requireAll := true
+	if isGTIDBased {
+		relayLogWaitCandidates = filterToMostAdvancedCombined(validCandidates, erp.logger)
+		if filtered := int64(len(validCandidates) - len(relayLogWaitCandidates)); filtered > 0 {
+			ersFilteredCandidates.Add([]string{keyspace, shard}, filtered)
+		}
+		if !uniformCombined(relayLogWaitCandidates) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "emergency reparent aborted: multiple candidates have incomparable Combined GTID positions (suspected split-brain)")
+		}
+		requireAll = false
 	}
 
-	// Wait for relay logs to apply on the most-advanced candidates. Proceeds as soon as one
-	// tablet succeeds. Failed tablets are kept in validCandidates so that downstream split-brain
-	// and errant-GTID checks can see them — when filterToMostAdvancedCombined keeps multiple
-	// incomparable maxima, each carries unique GTIDs the safety checks need.
-	applied, err := erp.waitForAllRelayLogsToApply(ctx, relayLogWaitCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout)
+	applied, err := erp.waitForAllRelayLogsToApply(ctx, relayLogWaitCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll)
 	if err != nil {
 		return err
 	}
@@ -459,18 +470,26 @@ type relayLogResult struct {
 	err   error
 }
 
-// waitForAllRelayLogsToApply waits for the given candidates to apply their relay logs and
-// returns the set of aliases that fully applied. As soon as one candidate succeeds, the
-// remaining goroutines are cancelled. Failed candidates are NOT removed from validCandidates:
-// when filterToMostAdvancedCombined keeps multiple incomparable maxima (e.g., split-brain or
-// errant-GTID divergence), each maximum carries unique GTIDs that downstream split-brain and
-// errant-GTID checks must still see in order to abort ERS safely.
+// waitForAllRelayLogsToApply waits for the given candidates to apply their relay logs
+// and returns the set of aliases that fully applied. Behavior depends on requireAll:
+//
+//   - requireAll=true (pre-PR semantics): wait for every candidate's result and return
+//     an error on the first failure. Used for non-GTID flavors where Combined does not
+//     reflect received-but-not-applied relay logs, so we cannot safely short-circuit
+//     and must reach post-apply state before any candidate is selected.
+//   - requireAll=false (optimization): cancel the remaining goroutines as soon as one
+//     candidate succeeds. Used only when the caller has proven a single success is
+//     sufficient (GTID-based + filtered candidates share the same Combined position).
+//
+// Failed candidates are NOT removed from validCandidates, so downstream errant-GTID and
+// split-brain detection can still see them.
 func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus,
 	waitReplicasTimeout time.Duration,
+	requireAll bool,
 ) (map[string]bool, error) {
 	resultCh := make(chan relayLogResult, len(validCandidates))
 
@@ -519,28 +538,31 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		return map[string]bool{}, nil
 	}
 
-	// Collect results. As soon as one tablet succeeds, cancel the remaining
-	// goroutines — all tablets in this group have the same Combined position so
-	// any single success gives us a valid relay-log-applied candidate. The others
-	// will continue applying relay logs on their own after ERS completes.
+	// Collect results. In optimization mode (!requireAll), cancel remaining goroutines
+	// as soon as one tablet succeeds — the others will continue applying on their own
+	// after ERS completes. In requireAll mode, wait for every result and surface the
+	// first failure so the caller can abort ERS.
 	applied := make(map[string]bool, waiterCount)
+	var firstFailure error
 	for range waiterCount {
 		result := <-resultCh
 		if result.err != nil {
-			if len(applied) == 0 {
-				// Pre-success failure: log it so operators can see it. After success,
-				// remaining goroutines are cancelled and their errors are expected.
+			if firstFailure == nil {
+				firstFailure = result.err
 				erp.logger.Warningf("EmergencyReparent candidate %s failed to apply relay logs: %v", result.alias, result.err)
 			}
 			continue
 		}
-		if len(applied) == 0 {
-			// Cancel remaining goroutines — we have a winner.
+		if !requireAll && len(applied) == 0 {
+			// Optimization: cancel remaining goroutines — we have a winner.
 			groupCancel()
 		}
 		applied[result.alias] = true
 	}
 
+	if requireAll && firstFailure != nil {
+		return nil, vterrors.Wrapf(firstFailure, "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
+	}
 	if len(applied) == 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "all candidates failed to apply relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}

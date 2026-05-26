@@ -1939,3 +1939,54 @@ func TestFilterToMostAdvancedCombined(t *testing.T) {
 		})
 	}
 }
+
+func TestUniformCombined(t *testing.T) {
+	gtidSetA, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10")
+	require.NoError(t, err)
+	gtidSetB, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5")
+	require.NoError(t, err)
+	gtidSetC, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-5")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		candidates map[string]*RelayLogPositions
+		want       bool
+	}{
+		{
+			name:       "empty",
+			candidates: map[string]*RelayLogPositions{},
+			want:       true,
+		},
+		{
+			name: "single",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetA}},
+			},
+			want: true,
+		},
+		{
+			name: "all equal",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetA}},
+				"zone1-101": {Combined: replication.Position{GTIDSet: gtidSetA}},
+				"zone1-102": {Combined: replication.Position{GTIDSet: gtidSetA}},
+			},
+			want: true,
+		},
+		{
+			name: "incomparable",
+			candidates: map[string]*RelayLogPositions{
+				"zone1-100": {Combined: replication.Position{GTIDSet: gtidSetB}},
+				"zone1-101": {Combined: replication.Position{GTIDSet: gtidSetC}},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, uniformCombined(tt.candidates))
+		})
+	}
+}

@@ -84,6 +84,25 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
+// uniformCombined returns true when every candidate in the map shares the same Combined
+// position. Used to detect whether the relay-log-apply optimization is safe: when the
+// filtered candidate set has incomparable maxima (different Combined positions that
+// neither dominates), the cluster is in a suspected-split-brain state and ERS must not
+// short-circuit the wait.
+func uniformCombined(candidates map[string]*RelayLogPositions) bool {
+	var ref *replication.Position
+	for _, pos := range candidates {
+		if ref == nil {
+			ref = &pos.Combined
+			continue
+		}
+		if !pos.Combined.Equal(*ref) {
+			return false
+		}
+	}
+	return true
+}
+
 // filterToMostAdvancedCombined filters the given candidates to only those whose Combined
 // position is not strictly dominated by any other candidate. Since replication is stopped
 // at this point, Combined positions are frozen — a candidate strictly behind another can

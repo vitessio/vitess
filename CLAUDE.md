@@ -237,6 +237,7 @@ return user.NeedsMigration() && migrate(user) || user
 
 ### EmergencyReparentShard (ERS)
 - ERS must prioritize **certainty** that we picked the most-advanced candidate
+- ERS must error when the most-advanced candidate is not clear, and/or a split-brain is suspected
 - Changes should prioritize reducing points of failure - avoid new RPCs or work that may delay or make ERS more brittle
 
 ## :mag: Debugging & Troubleshooting
