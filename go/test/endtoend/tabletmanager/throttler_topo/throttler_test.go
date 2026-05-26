@@ -105,7 +105,6 @@ func TestMain(m *testing.M) {
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--lock-tables-timeout", "5s",
-			"--watch-replication-stream",
 			"--enable-replication-reporter",
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", onDemandHeartbeatDuration.String(),
