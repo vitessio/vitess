@@ -579,6 +579,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 			return nil
 		})
 	}
+	validateReverseWorkflowForComplete(ctx, ts, &wg, &rec)
 	wg.Wait()
 
 	if !ts.keepRoutingRules {
@@ -603,6 +604,39 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
 	}
 	return nil
+}
+
+func validateReverseWorkflowForComplete(ctx context.Context, ts *trafficSwitcher, wg *sync.WaitGroup, rec *concurrency.AllErrorRecorder) {
+	_ = ts.ForAllSources(func(source *MigrationSource) error {
+		wg.Add(1)
+		defer wg.Done()
+		res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, source.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: ts.ReverseWorkflowName(),
+		})
+		if err != nil {
+			rec.RecordError(err)
+			return nil
+		}
+		if res == nil || len(res.Streams) == 0 {
+			return nil
+		}
+		for _, stream := range res.Streams {
+			switch stream.State {
+			case binlogdatapb.VReplicationWorkflowState_Running,
+				binlogdatapb.VReplicationWorkflowState_Stopped:
+			case binlogdatapb.VReplicationWorkflowState_Error:
+				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is in error state on tablet %d",
+					stream.Id, source.GetPrimary().Alias.Uid))
+			case binlogdatapb.VReplicationWorkflowState_Copying:
+				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is still copying on tablet %d",
+					stream.Id, source.GetPrimary().Alias.Uid))
+			default:
+				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is in state %s on tablet %d",
+					stream.Id, stream.State, source.GetPrimary().Alias.Uid))
+			}
+		}
+		return nil
+	})
 }
 
 // ReverseWorkflowName returns the "reversed" name of a workflow. For a

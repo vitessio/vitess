@@ -261,6 +261,12 @@ func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicatio
 	return nil
 }
 
+func (dr *switcherDryRun) stopAndDrainReverseVReplication(ctx context.Context, waitTime time.Duration) error {
+	dr.drLog.Logf("Stop and drain reverse vreplication workflow %s for up to %v before removing source data",
+		dr.ts.ReverseWorkflowName(), waitTime)
+	return nil
+}
+
 func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
 	sources := maps.Values(dr.ts.Sources())
 	// Sort the slice for deterministic output.

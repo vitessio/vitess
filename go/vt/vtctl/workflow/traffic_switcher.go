@@ -75,6 +75,12 @@ const (
 	// operation too.
 	shardTabletRefreshTimeout = time.Duration(30 * time.Second)
 
+	// reverseReplicationDrainTimeout bounds how long Complete waits for reverse
+	// streams to catch up to the target primary position before stopping them.
+	reverseReplicationDrainTimeout = 30 * time.Second
+
+	stoppedForComplete = "stopped for complete"
+
 	// Use pt-osc's naming convention, this format also ensures vstreamer ignores such tables.
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
@@ -1027,6 +1033,64 @@ func (ts *trafficSwitcher) buildTenantPredicate(ctx context.Context) (*sqlparser
 		return nil, err
 	}
 	return tenantPredicate, nil
+}
+
+func (ts *trafficSwitcher) stopAndDrainReverseVReplication(ctx context.Context, waitTime time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, waitTime)
+	defer cancel()
+
+	targetPositions := make(map[string]string)
+	if err := ts.ForAllTargets(func(target *MigrationTarget) error {
+		pos, err := ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
+		if err != nil {
+			return err
+		}
+		targetPositions[target.GetShard().ShardName()] = pos
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return ts.ForAllSources(func(source *MigrationSource) error {
+		res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, source.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: ts.ReverseWorkflowName(),
+		})
+		if err != nil {
+			return err
+		}
+		if res == nil || len(res.Streams) == 0 {
+			return nil
+		}
+		for _, stream := range res.Streams {
+			if stream.Bls == nil {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "reverse vreplication stream %d on %s has no binlog source",
+					stream.Id, topoproto.TabletAliasString(source.GetPrimary().GetAlias()))
+			}
+			targetShard := stream.Bls.Shard
+			pos, ok := targetPositions[targetShard]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"reverse vreplication stream %d on %s reads from unknown target shard %s",
+					stream.Id, topoproto.TabletAliasString(source.GetPrimary().GetAlias()), targetShard)
+			}
+			if stream.State == binlogdatapb.VReplicationWorkflowState_Running {
+				ts.Logger().Infof("Waiting for reverse stream %d on %s to catch up to target shard %s position %s",
+					stream.Id, topoproto.TabletAliasString(source.GetPrimary().GetAlias()), targetShard, pos)
+				if err := ts.TabletManagerClient().VReplicationWaitForPos(ctx, source.GetPrimary().Tablet, stream.Id, pos); err != nil {
+					return err
+				}
+			}
+			if stream.State != binlogdatapb.VReplicationWorkflowState_Stopped {
+				ts.Logger().Infof("Stopping reverse stream %d on %s for complete",
+					stream.Id, topoproto.TabletAliasString(source.GetPrimary().GetAlias()))
+				if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet,
+					binlogplayer.StopVReplication(stream.Id, stoppedForComplete)); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {

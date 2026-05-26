@@ -199,6 +199,16 @@ func TestMoveTablesComplete(t *testing.T) {
 	defer cancel()
 
 	workflowName := "wf1"
+	stopReverseStreamQueries := []*queryResult{
+		{
+			query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=1",
+			result: &querypb.QueryResult{},
+		},
+		{
+			query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
+			result: &querypb.QueryResult{},
+		},
+	}
 	table1Name := "t1"
 	table2Name := "t1_2"
 	table3Name := "t1_3"
@@ -259,25 +269,25 @@ func TestMoveTablesComplete(t *testing.T) {
 				TargetKeyspace: targetKeyspaceName,
 				Workflow:       workflowName,
 			},
-			expectedSourceQueries: []*queryResult{
-				{
+			expectedSourceQueries: append(slices.Clone(stopReverseStreamQueries),
+				&queryResult{
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
 				},
-				{
+				&queryResult{
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table2Name),
 					result: &querypb.QueryResult{},
 				},
-				{
+				&queryResult{
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
-				{
+				&queryResult{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
 				},
-			},
+			),
 			expectedTargetQueries: []*queryResult{
 				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
@@ -306,13 +316,13 @@ func TestMoveTablesComplete(t *testing.T) {
 				KeepRoutingRules: true,
 				KeepData:         new(true),
 			},
-			expectedSourceQueries: []*queryResult{
-				{
+			expectedSourceQueries: append(slices.Clone(stopReverseStreamQueries),
+				&queryResult{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
 				},
-			},
+			),
 			expectedTargetQueries: []*queryResult{
 				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
@@ -343,25 +353,25 @@ func TestMoveTablesComplete(t *testing.T) {
 				Workflow:       workflowName,
 				RenameTables:   true,
 			},
-			expectedSourceQueries: []*queryResult{
-				{
+			expectedSourceQueries: append(slices.Clone(stopReverseStreamQueries),
+				&queryResult{
 					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table1Name, sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
 				},
-				{
+				&queryResult{
 					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table2Name, sourceKeyspaceName, table2Name),
 					result: &querypb.QueryResult{},
 				},
-				{
+				&queryResult{
 					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table3Name, sourceKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
-				{
+				&queryResult{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
 				},
-			},
+			),
 			expectedTargetQueries: []*queryResult{
 				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
@@ -372,6 +382,46 @@ func TestMoveTablesComplete(t *testing.T) {
 			want: &vtctldatapb.MoveTablesCompleteResponse{
 				Summary: fmt.Sprintf("Successfully completed the %s workflow in the %s keyspace",
 					workflowName, targetKeyspaceName),
+			},
+		},
+		{
+			name: "reverse workflow in error state",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.MoveTablesCompleteRequest{
+				TargetKeyspace: targetKeyspaceName,
+				Workflow:       workflowName,
+			},
+			preFunc: func(t *testing.T, env *testEnv) {
+				for _, tablet := range env.tablets[sourceKeyspaceName] {
+					env.tmc.expectReadVReplicationWorkflowRequest(tablet.Alias.Uid, &readVReplicationWorkflowRequestResponse{
+						req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+							Workflow: ReverseWorkflowName(workflowName),
+						},
+						res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+							Workflow: ReverseWorkflowName(workflowName),
+							Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+								{
+									Id:    1,
+									State: binlogdatapb.VReplicationWorkflowState_Error,
+									Bls: &binlogdatapb.BinlogSource{
+										Keyspace: targetKeyspaceName,
+										Shard:    "-80",
+									},
+								},
+							},
+						},
+					})
+				}
+			},
+			wantErr: "reverse vreplication stream 1 is in error state on tablet 100",
+			postFunc: func(t *testing.T, env *testEnv) {
 			},
 		},
 		{
