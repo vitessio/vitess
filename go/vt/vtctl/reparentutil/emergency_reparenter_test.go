@@ -3663,6 +3663,16 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 	}
 
+	// positionIncompUnfinished simulates a cancelled-mid-apply candidate: its Combined
+	// (received) is GTID2, but Executed (applied) is still empty — the relay-log apply
+	// wait never finished. Pairs with positionIntermediate1 (Combined={GTID1}) for an
+	// incomparable-Combined scenario where the requested primary did NOT apply.
+	positionIncompUnfinished := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionIncompUnfinished.Combined.GTIDSet = positionIncompUnfinished.Combined.GTIDSet.AddGTID(mysqlGTID2)
+
 	tests := []struct {
 		name                 string
 		validCandidates      map[string]*RelayLogPositions
@@ -3992,6 +4002,87 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 					Uid:  100,
 				},
 			},
+		}, {
+			// Codex P1 regression: under AllowSplitBrainPromotion=true the sort comparator
+			// is not a total order (incomparable positions make Less return false both ways).
+			// The sort may put a cancelled-mid-apply tablet at index 0 even though an
+			// applied alternative exists in the leading group. Without --new-primary, the
+			// post-sort applied-preference must steer ERS to the applied tablet so we don't
+			// promote one with received-but-unapplied transactions.
+			//
+			// The test is deterministic regardless of sort order — either sort puts the
+			// applied tablet first (no fix needed) or it puts the cancelled one first (fix
+			// kicks in and picks the applied one). Both branches yield the same winner.
+			name: "AllowSplitBrainPromotion=true prefers applied candidate over cancelled-mid-apply at sort 0",
+			emergencyReparentOps: EmergencyReparentOptions{
+				AllowSplitBrainPromotion: true,
+			},
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionIncompUnfinished, // Combined={GTID2}, Executed={} — cancelled
+				"zone1-0000000101": positionIntermediate1,    // Combined={GTID1}, Executed={GTID1} — applied, incomparable with 100
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			// Codex P1 regression: AllowSplitBrainPromotion=true + --new-primary on a
+			// cancelled-mid-apply tablet must NOT promote silently. The override forces
+			// past the AtLeast sort check, but applyRelayLogsAndReconcile leaves
+			// cancelled tablets with Executed != Combined. Promoting one would lose its
+			// received-but-unapplied transactions. ERS must error and ask the operator
+			// to pick a different tablet (or drop --new-primary).
+			name: "AllowSplitBrainPromotion=true rejects --new-primary on a cancelled-mid-apply tablet (Executed != Combined)",
+			emergencyReparentOps: EmergencyReparentOptions{
+				AllowSplitBrainPromotion: true,
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionIntermediate1,    // Combined={GTID1}, Executed={GTID1} — applied
+				"zone1-0000000101": positionIncompUnfinished, // Combined={GTID2}, Executed={} — cancelled mid-apply
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			err: "did not complete the relay-log apply wait",
 		},
 	}
 
@@ -4011,6 +4102,96 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				assert.True(t, topoproto.TabletAliasEqual(test.result.Alias, winningTablet.Alias))
 			}
 		})
+	}
+}
+
+// TestEmergencyReparenter_findMostAdvanced_RejectsDominatedNewPrimary is the Codex P1
+// regression for the partial-order split-brain shape:
+//
+//	A has {uuidA}, B has {uuidB:1-10}, requested C has {uuidB:1-3}.
+//	- A vs B: incomparable.
+//	- A vs C: incomparable.
+//	- B vs C: B strictly dominates C.
+//
+// With AllowSplitBrainPromotion=true the sort is non-deterministic between A and B
+// (incomparable Combineds). Whichever ends up at index 0 determines whether the
+// `--new-primary=C` override path fires at all — but in EITHER branch the dominated
+// tablet C must not be promoted:
+//   - If A is sort winner: A is incomparable with C, override fires; the new dominator
+//     check sees B AtLeast C and rejects with "strictly dominated by candidate".
+//   - If B is sort winner: B strictly dominates C, override does NOT fire; the existing
+//     AtLeast check keeps B as winner.
+//
+// We loop to exercise both branches and assert the invariant: C is never the winner.
+func TestEmergencyReparenter_findMostAdvanced_RejectsDominatedNewPrimary(t *testing.T) {
+	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	uuidA := replication.SID{0xaa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+	uuidB := replication.SID{0xbb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+	_ = sid1
+
+	// positionA: {uuidA:1-5} — incomparable with positionB and positionC.
+	positionA := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	for seq := int64(1); seq <= 5; seq++ {
+		g := replication.Mysql56GTID{Server: uuidA, Sequence: seq}
+		positionA.Combined.GTIDSet = positionA.Combined.GTIDSet.AddGTID(g)
+		positionA.Executed.GTIDSet = positionA.Executed.GTIDSet.AddGTID(g)
+	}
+
+	// positionB: {uuidB:1-10} — dominates positionC, incomparable with positionA.
+	positionB := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	for seq := int64(1); seq <= 10; seq++ {
+		g := replication.Mysql56GTID{Server: uuidB, Sequence: seq}
+		positionB.Combined.GTIDSet = positionB.Combined.GTIDSet.AddGTID(g)
+		positionB.Executed.GTIDSet = positionB.Executed.GTIDSet.AddGTID(g)
+	}
+
+	// positionC: {uuidB:1-3} — strictly dominated by positionB.
+	positionC := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	for seq := int64(1); seq <= 3; seq++ {
+		g := replication.Mysql56GTID{Server: uuidB, Sequence: seq}
+		positionC.Combined.GTIDSet = positionC.Combined.GTIDSet.AddGTID(g)
+		positionC.Executed.GTIDSet = positionC.Executed.GTIDSet.AddGTID(g)
+	}
+
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": positionA, // sort-winner candidate (incomparable with B)
+		"zone1-0000000101": positionB, // dominator
+		"zone1-0000000102": positionC, // requested, dominated by B
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+		"zone1-0000000102": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}}},
+	}
+	opts := EmergencyReparentOptions{
+		AllowSplitBrainPromotion: true,
+		NewPrimaryAlias:          &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+	}
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+	opts.durability = durability
+
+	erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+
+	// Loop to exercise both possible sort orderings between A and B.
+	for i := range 30 {
+		winner, _, err := erp.findMostAdvanced(validCandidates, tabletMap, opts, "ks", "0")
+		if err != nil {
+			// Branch 1: override fired, dominator check rejected.
+			require.ErrorContains(t, err, "strictly dominated by candidate")
+			continue
+		}
+		// Branch 2: override did not fire (sort winner dominates C); winner must be B.
+		require.NotEqual(t, uint32(102), winner.Alias.Uid, "dominated tablet 102 (positionC) must never be promoted under AllowSplitBrainPromotion when a dominator exists in validCandidates (iteration %d)", i)
 	}
 }
 

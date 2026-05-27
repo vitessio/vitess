@@ -758,6 +758,36 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	winningPrimaryTablet := validTablets[0]
 	winningPosition := tabletPositions[0]
 
+	// Under AllowSplitBrainPromotion, the sort runs over incomparable positions and the
+	// comparator is not a total order — the sort can put a cancelled-mid-apply tablet
+	// (Executed != Combined) at index 0. Prefer an applied candidate that is NOT strictly
+	// behind the sort winner so we never promote a tablet with received-but-unapplied
+	// transactions when a safe alternative exists. Gated on the flag because without it
+	// the sort is a total order and the winner is canonical; without the strictly-behind
+	// skip we could prefer a lagger and lose data the winner had.
+	//
+	// applyRelayLogsAndReconcile bumps Executed=Combined exactly for applied + pre-satisfied
+	// PRIMARY-likes, leaving cancelled and lagging tablets with their pre-wait Executed —
+	// Executed.Equal(Combined) is the proxy for "safe to promote without losing data".
+	if opts.AllowSplitBrainPromotion && !winningPosition.Executed.Equal(winningPosition.Combined) {
+		for i := 1; i < len(validTablets); i++ {
+			otherPos := tabletPositions[i]
+			if !otherPos.Executed.Equal(otherPos.Combined) {
+				continue
+			}
+			// Skip strictly-behind candidates: winner.Combined dominates other.Combined.
+			if winningPosition.Combined.AtLeast(otherPos.Combined) && !otherPos.Combined.AtLeast(winningPosition.Combined) {
+				continue
+			}
+			erp.logger.Warningf("findMostAdvanced: sort winner %v is unapplied (Executed != Combined) under split-brain non-total ordering — preferring applied candidate %v",
+				topoproto.TabletAliasString(winningPrimaryTablet.Alias),
+				topoproto.TabletAliasString(validTablets[i].Alias))
+			winningPrimaryTablet = validTablets[i]
+			winningPosition = otherPos
+			break
+		}
+	}
+
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
 	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should cancel the ERS —
 	// unless AllowSplitBrainPromotion is set, in which case the operator has accepted that the losing side's unique GTIDs will become errant.
@@ -800,6 +830,35 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 				return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
 			}
 			if incomparable {
+				// The override forces past the AtLeast sort check, not past the relay-log-apply
+				// requirement. applyRelayLogsAndReconcile bumps Executed=Combined for applied
+				// tablets and pre-satisfied PRIMARY-likes, but leaves cancelled-mid-apply peers
+				// with their pre-wait Executed. Refusing the requested tablet here when those are
+				// not equal prevents promoting a tablet with received-but-unapplied transactions.
+				if !pos.Executed.Equal(pos.Combined) {
+					return nil, nil, vterrors.Errorf(
+						vtrpc.Code_FAILED_PRECONDITION,
+						"AllowSplitBrainPromotion=true: requested primary %v did not complete the relay-log apply wait (Executed=%v != Combined=%v) — re-run without --new-primary to let ERS pick an applied candidate, or specify one that finished applying",
+						requestedPrimaryAlias, pos.Executed, pos.Combined,
+					)
+				}
+				// "Incomparable with the sort winner" is not sufficient under partial-order
+				// GTID sets — the requested tablet can be strictly dominated by another valid
+				// candidate that happens to be incomparable with the (non-deterministic) sort
+				// winner. Reject if any other validCandidate strictly dominates the requested
+				// tablet, so we don't lose transactions present on that dominator.
+				for otherAlias, otherPos := range validCandidates {
+					if otherAlias == requestedPrimaryAlias {
+						continue
+					}
+					if otherPos.AtLeast(pos) && !pos.AtLeast(otherPos) {
+						return nil, nil, vterrors.Errorf(
+							vtrpc.Code_FAILED_PRECONDITION,
+							"AllowSplitBrainPromotion=true: requested primary %v is strictly dominated by candidate %v — re-run without --new-primary to let ERS pick the dominant candidate, or specify a non-dominated one",
+							requestedPrimaryAlias, otherAlias,
+						)
+					}
+				}
 				erp.logger.Warningf("AllowSplitBrainPromotion=true: requested primary %v has a position incomparable with the sort winner %v — honouring operator's explicit choice; non-promoted side's unique GTIDs will become errant", requestedPrimaryAlias, topoproto.TabletAliasString(winningPrimaryTablet.Alias))
 			}
 			winningPrimaryTablet = requestedPrimaryInfo.Tablet
