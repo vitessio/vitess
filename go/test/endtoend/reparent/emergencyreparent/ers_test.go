@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
+	e2eutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
@@ -638,6 +639,10 @@ func TestERSFailFast(t *testing.T) {
 // The replica with the stopped IO thread will have a lower Combined position and should be
 // filtered out. We verify this by checking the EmergencyReparentFilteredCandidates stat.
 func TestERSFiltersNonMostAdvancedCandidates(t *testing.T) {
+	// The EmergencyReparentFilteredCandidates stat was added in v25 along with the
+	// partial relay-log-apply filter. Skip on older vtctld where neither exists.
+	e2eutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -690,6 +695,11 @@ func TestERSFiltersNonMostAdvancedCandidates(t *testing.T) {
 // keeps both tablets, the uniformCombined check fires, and ERS aborts before
 // risking promotion of either diverged side.
 func TestERSSplitBrainDetection(t *testing.T) {
+	// The upfront "suspected split-brain" abort was added in v25. Older vtctld either
+	// promotes one side silently or surfaces a different error message, so this test
+	// is only meaningful against v25+.
+	e2eutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
@@ -735,6 +745,11 @@ func TestERSSplitBrainDetection(t *testing.T) {
 // TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
 // If there are more than 1, we also fail.
 func TestReplicationStopped(t *testing.T) {
+	// In v25 ERS tolerates partial relay-log-apply failures and succeeds as long as
+	// one leading candidate applies; this test asserts that new behavior. Older vtctld
+	// still fails on any single replica error.
+	e2eutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
+
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
