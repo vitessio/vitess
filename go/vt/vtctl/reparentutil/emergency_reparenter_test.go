@@ -3272,9 +3272,13 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile_PreSatisfiedBeatsCancell
 // the upfront uniformity check aborts with FAILED_PRECONDITION on incomparable Combined
 // positions. With the flag set, the same input logs a warning, increments the override
 // counter, and returns the filtered set so ERS can proceed.
+//
+// The test is NOT parallel and asserts on a per-label delta of the global counter rather
+// than the absolute value — `ersSplitBrainOverrides` is a package-level counter shared
+// across the whole package's tests, so absolute assertions or `ResetAll()` would race
+// with other parallel tests that also exercise the override path (e.g. the
+// TestEmergencyReparenter_reparentShardLocked case that sets AllowSplitBrainPromotion=true).
 func TestEmergencyReparenter_filterAndCheckUniform_AllowSplitBrainPromotion(t *testing.T) {
-	t.Parallel()
-
 	gtidA, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5")
 	require.NoError(t, err)
 	gtidB, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-5")
@@ -3286,10 +3290,15 @@ func TestEmergencyReparenter_filterAndCheckUniform_AllowSplitBrainPromotion(t *t
 		"zone1-0000000101": {Combined: replication.Position{GTIDSet: gtidB}},
 	}
 
+	// Use a unique keyspace label so we read a delta on a dedicated counter slot rather
+	// than a shared label other tests may also touch.
+	keyspace, shard := "ks-filterAndCheckUniform-AllowSplitBrainPromotion", "0"
+	label := keyspace + "." + shard
+
 	erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
 	t.Run("default: abort with split-brain error", func(t *testing.T) {
-		_, err := erp.filterAndCheckUniform(candidates, "ks", "0", "candidates", false /* allowSplitBrain */)
+		_, err := erp.filterAndCheckUniform(candidates, keyspace, shard, "candidates", false /* allowSplitBrain */)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "suspected split-brain")
 		require.ErrorContains(t, err, "zone1-0000000100")
@@ -3297,12 +3306,12 @@ func TestEmergencyReparenter_filterAndCheckUniform_AllowSplitBrainPromotion(t *t
 	})
 
 	t.Run("AllowSplitBrainPromotion=true: warn and continue", func(t *testing.T) {
-		ersSplitBrainOverrides.ResetAll()
-		filtered, err := erp.filterAndCheckUniform(candidates, "ks", "0", "candidates", true /* allowSplitBrain */)
+		before := ersSplitBrainOverrides.Counts()[label]
+		filtered, err := erp.filterAndCheckUniform(candidates, keyspace, shard, "candidates", true /* allowSplitBrain */)
 		require.NoError(t, err, "AllowSplitBrainPromotion must let ERS proceed past the uniformity check")
 		require.Len(t, filtered, 2, "both incomparable candidates must remain in the filtered set so the sort can pick a side")
-		count := ersSplitBrainOverrides.Counts()["ks.0"]
-		assert.Equal(t, int64(1), count, "EmergencyReparentSplitBrainOverrides metric must increment when the override fires")
+		after := ersSplitBrainOverrides.Counts()[label]
+		assert.Equal(t, int64(1), after-before, "EmergencyReparentSplitBrainOverrides must increment exactly once for this label")
 	})
 }
 
