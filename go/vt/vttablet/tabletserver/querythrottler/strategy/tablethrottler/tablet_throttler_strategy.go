@@ -145,7 +145,12 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 		randFloat64:               rand.Float64,
 		randIntN:                  rand.IntN,
 	}
-	// Store the default config.
+	// Normalize nil to an empty config so Evaluate() can safely read cfg.TabletRules
+	// (direct field access on a nil proto would panic). An empty TabletRules map means
+	// no rules match for any tablet type, so Evaluate falls through to "allow".
+	if cfg == nil {
+		cfg = &querythrottlerpb.TabletStrategyConfig{}
+	}
 	strategy.config.Store(cfg)
 
 	// Start the topo server watch post the keyspace is set.
