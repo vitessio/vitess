@@ -1947,6 +1947,88 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr:        true,
 			errShouldContain: "suspected split-brain",
 		},
+		{
+			// Regression test for the Codex P2 finding: with AllowSplitBrainPromotion=true,
+			// errant-GTID detection still removes BOTH mutually-errant sides of a two-tablet
+			// split-brain (each side's unique writes are errant relative to the other). Without
+			// the restoration logic in reparentShardLocked, ERS would still abort with "all
+			// candidates have errant GTIDs" — defeating the operator override. The fix
+			// snapshots validCandidates pre-detection and restores it when detection wipes
+			// every candidate, so findMostAdvanced (whose secondary AtLeast check is also
+			// flag-gated) can sort the diverged sides and pick one.
+			name:       "AllowSplitBrainPromotion=true rescues ERS past errant-GTID pruning of all mutually-errant candidates",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				AllowSplitBrainPromotion: true,
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 3,
+					"zone1-0000000101": 3,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-100", "1-31", "1-50"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-100", "1-30", "1-51"): nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:            "testkeyspace",
+			shard:               "-",
+			cells:               []string{"zone1"},
+			shouldErr:           true,
+			errShouldContain:    "failed to promote", // promotion path isn't mocked; the point is ERS reached this stage
+			errShouldNotContain: "no valid candidates for emergency reparent: all candidates have errant GTIDs",
+		},
 	}
 
 	for _, tt := range tests {
@@ -3813,6 +3895,94 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				},
 			},
 			err: "split brain detected between servers",
+		}, {
+			// With AllowSplitBrainPromotion=true the operator's --new-primary takes precedence
+			// over the AtLeast guard when the requested tablet's position is INCOMPARABLE with
+			// the sort winner (true split-brain). The secondary AtLeast check inside
+			// findMostAdvanced logs a WARN and continues. The override deliberately does NOT
+			// fire for strictly-lagging requested primaries — that case still falls through to
+			// the existing catch-up path to avoid losing transactions the winner has.
+			name: "AllowSplitBrainPromotion=true honours --new-primary on incomparable candidates",
+			emergencyReparentOps: EmergencyReparentOptions{
+				AllowSplitBrainPromotion: true,
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+			validCandidates: map[string]*RelayLogPositions{
+				// positionIntermediate1 (Combined={GTID1}) and positionOnly2 (Combined={GTID2})
+				// are mutually incomparable — neither's GTID set is a superset of the other's.
+				"zone1-0000000100": positionIntermediate1,
+				"zone1-0000000101": positionOnly2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			// Codex P1 regression: even with AllowSplitBrainPromotion=true, a strictly-LAGGING
+			// requested primary must NOT bypass the AtLeast check — that would skip the
+			// existing intermediate-source + waitForCatchUp path and lose transactions the
+			// winner has. The override is gated on "incomparable", not just "AtLeast failed".
+			// Here positionEmpty is strictly behind positionMostAdvanced, so the requested
+			// tablet 102 should NOT win; the sort winner stays.
+			name: "AllowSplitBrainPromotion=true does NOT override --new-primary on a strictly-lagging requested tablet",
+			emergencyReparentOps: EmergencyReparentOptions{
+				AllowSplitBrainPromotion: true,
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+			},
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000102": positionEmpty,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
 		},
 	}
 

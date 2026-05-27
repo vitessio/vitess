@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -92,7 +93,7 @@ var (
 		[]string{"Keyspace", "Shard"},
 	)
 	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
-		"EmergencyReparentSplitBrainOverrides", "Number of times EmergencyReparentShard proceeded despite detecting incomparable Combined GTID positions, because the operator set AllowSplitBrainPromotion=true. The losing side's unique GTIDs will become errant on those tablets after promotion.",
+		"EmergencyReparentSplitBrainOverrides", "Number of split-brain detections bypassed by AllowSplitBrainPromotion=true during EmergencyReparentShard. Counted per detection, not per ERS run — a single run may increment this twice if the errant-GTID re-wait pass also encounters incomparable Combined positions in the survivor set. The non-promoted side's unique GTIDs will become errant on those tablets after promotion.",
 		[]string{"Keyspace", "Shard"},
 	)
 )
@@ -316,12 +317,28 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// For GTID based replication, we will run errant GTID detection.
 	if isGTIDBased {
+		// Snapshot validCandidates before errant-GTID detection so we can restore the set
+		// if AllowSplitBrainPromotion is set and detection wipes every candidate. The
+		// canonical case is a mutually-errant two-tablet split-brain where each side has
+		// unique writes under its own server UUID — findErrantGTIDs flags both sides as
+		// errant relative to each other and removes both. maps.Clone defends against a
+		// future refactor that mutates the input map.
+		preErrantCandidates := maps.Clone(validCandidates)
 		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
 		if err != nil {
 			return err
 		}
 		if len(validCandidates) == 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
+			if !opts.AllowSplitBrainPromotion {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
+			}
+			// AllowSplitBrainPromotion already incremented the override metric upfront in
+			// filterAndCheckUniform — don't double-count here. Restore the pre-detection
+			// set so findMostAdvanced (whose secondary AtLeast check is also flag-gated)
+			// can sort the candidates and pick one. The non-promoted side's unique GTIDs
+			// will become errant after promotion.
+			erp.logger.Warningf("AllowSplitBrainPromotion=true: errant-GTID detection removed every candidate — restoring the pre-detection set so findMostAdvanced can pick a side")
+			validCandidates = preErrantCandidates
 		}
 
 		// If errant detection removed every originally-applied tablet, promotion candidates
@@ -754,12 +771,21 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		if !ok {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
 		}
-		// if the requested tablet is as advanced as the most advanced tablet, then we can just use it for promotion.
-		// otherwise, we should let it catchup to the most advanced tablet and not change the intermediate source
-		if pos.AtLeast(winningPosition) {
+		// If the requested tablet is as advanced as the most advanced tablet, use it for promotion.
+		// Otherwise let it catch up to the most advanced tablet and don't change the intermediate source —
+		// unless the position is INCOMPARABLE with the winner (true split-brain shape, neither side
+		// dominates) AND AllowSplitBrainPromotion is set, in which case the operator's explicit choice
+		// overrides the AtLeast check. We deliberately do not override for strictly-lagging requested
+		// primaries: those still need the existing catch-up path to avoid losing transactions the
+		// winner has.
+		incomparable := !pos.AtLeast(winningPosition) && !winningPosition.AtLeast(pos)
+		if pos.AtLeast(winningPosition) || (opts.AllowSplitBrainPromotion && incomparable) {
 			requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
 			if !isFound {
 				return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
+			}
+			if incomparable {
+				erp.logger.Warningf("AllowSplitBrainPromotion=true: requested primary %v has a position incomparable with the sort winner %v — honouring operator's explicit choice; non-promoted side's unique GTIDs will become errant", requestedPrimaryAlias, winningPrimaryTablet.Alias)
 			}
 			winningPrimaryTablet = requestedPrimaryInfo.Tablet
 		}
