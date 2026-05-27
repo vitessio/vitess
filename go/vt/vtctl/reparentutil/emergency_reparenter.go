@@ -378,7 +378,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -654,9 +654,15 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 		waiterCount++
 	}
 
-	// If no candidates needed to apply relay logs (e.g., initialization with no replication),
-	// there's nothing to wait for.
+	// If no candidates needed to apply relay logs (e.g., initialization with no replication
+	// or every candidate was pre-satisfied), there's nothing to wait for. Still honour an
+	// outer context cancellation — otherwise an operator-aborted ERS could continue into
+	// later steps that intentionally use context.WithoutCancel (e.g., the deferred replica
+	// restart and the final reparentReplicas call).
 	if waiterCount == 0 {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return successMap, vterrors.Wrapf(ctxErr, "emergency reparent aborted while waiting for relay logs to apply")
+		}
 		return successMap, nil
 	}
 
@@ -727,6 +733,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
+	keyspace, shard string,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
 	if len(validCandidates) == 0 {
@@ -754,13 +761,21 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
 	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should cancel the ERS —
 	// unless AllowSplitBrainPromotion is set, in which case the operator has accepted that the losing side's unique GTIDs will become errant.
+	// The override counter is incremented here as well as in filterAndCheckUniform because the upfront check can miss the Combined-equal-but-
+	// Executed-incomparable shape that AtLeast catches here (Combined.Equal → falls through to Executed.AtLeast, which can be false in both
+	// directions if either tablet has executed unique errant GTIDs).
+	splitBrainBypassed := false
 	for i, position := range tabletPositions {
 		if !winningPosition.AtLeast(position) {
 			if !opts.AllowSplitBrainPromotion {
-				return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
+				return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
 			}
-			erp.logger.Warningf("AllowSplitBrainPromotion=true: split brain detected between %v and %v — proceeding under operator override; losing side's unique GTIDs will become errant", winningPrimaryTablet.Alias, validTablets[i].Alias)
+			erp.logger.Warningf("AllowSplitBrainPromotion=true: split brain detected between %v and %v — proceeding under operator override; losing side's unique GTIDs will become errant", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
+			splitBrainBypassed = true
 		}
+	}
+	if splitBrainBypassed {
+		ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
 	}
 
 	// If we were requested to elect a particular primary, verify it's a valid
@@ -785,7 +800,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 				return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
 			}
 			if incomparable {
-				erp.logger.Warningf("AllowSplitBrainPromotion=true: requested primary %v has a position incomparable with the sort winner %v — honouring operator's explicit choice; non-promoted side's unique GTIDs will become errant", requestedPrimaryAlias, winningPrimaryTablet.Alias)
+				erp.logger.Warningf("AllowSplitBrainPromotion=true: requested primary %v has a position incomparable with the sort winner %v — honouring operator's explicit choice; non-promoted side's unique GTIDs will become errant", requestedPrimaryAlias, topoproto.TabletAliasString(winningPrimaryTablet.Alias))
 			}
 			winningPrimaryTablet = requestedPrimaryInfo.Tablet
 		}
