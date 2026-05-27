@@ -37,30 +37,6 @@ var (
 	sBar = &Setting{queryApply: "set bar=1"}
 )
 
-func requireReceive[T any](t *testing.T, ch <-chan T, timeout time.Duration, msg string, args ...any) T {
-	t.Helper()
-
-	var value T
-	require.Eventuallyf(t, func() bool {
-		select {
-		case value = <-ch:
-			return true
-		default:
-			return false
-		}
-	}, timeout, time.Millisecond, msg, args...)
-	return value
-}
-
-func requireMaxLifetimeExpired[C Connection](t *testing.T, pool *ConnPool[C], conn *Pooled[C]) {
-	t.Helper()
-
-	maxLifetime := time.Duration(pool.config.maxLifetime.Load())
-	require.Eventually(t, func() bool {
-		return conn.timeCreated.elapsed() > 2*maxLifetime
-	}, 30*time.Second, time.Millisecond)
-}
-
 type TestState struct {
 	lastID, open, close, reset atomic.Int64
 	mu                         sync.Mutex
@@ -2008,10 +1984,18 @@ func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
 
 	c.Recycle()
 
-	err = requireReceive(t, closeDone, 30*time.Second, "Close did not complete in time")
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not complete in time")
+	}
 	require.NoError(t, err)
 
-	requireReceive(t, waiterDone, 30*time.Second, "waiter did not finish")
+	select {
+	case <-waiterDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "waiter did not finish")
+	}
 
 	require.False(t, waiterGotConn.Load(),
 		"waiter must not be handed a connection after Close has set capacity to 0")
@@ -2086,7 +2070,12 @@ func TestSetCapacityReductionDrainsWithWaiters(t *testing.T) {
 		c.Recycle()
 	}
 
-	err := requireReceive(t, setDone, 5*time.Second, "SetCapacity did not return")
+	var err error
+	select {
+	case err = <-setDone:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "SetCapacity did not return")
+	}
 	require.NoError(t, err, "SetCapacity reduction must not stall while waiters are queued")
 	require.EqualValues(t, 1, pool.Capacity())
 	require.LessOrEqual(t, pool.Active(), int64(1))
@@ -2145,7 +2134,11 @@ func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
 		closeDone <- p.CloseWithContext(closeCtx)
 	}()
 
-	err = requireReceive(t, closeDone, 30*time.Second, "Close did not return; idle-worker connect was not cancelled")
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not return; idle-worker connect was not cancelled")
+	}
 	require.NoError(t, err)
 }
 
@@ -2203,10 +2196,18 @@ func TestTaintConnectCancelsOnClose(t *testing.T) {
 		closeDone <- p.CloseWithContext(closeCtx)
 	}()
 
-	err = requireReceive(t, closeDone, 30*time.Second, "Close did not complete; Taint's reopen connect was not cancelled")
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not complete; Taint's reopen connect was not cancelled")
+	}
 	require.NoError(t, err)
 
-	requireReceive(t, taintDone, 30*time.Second, "Taint did not return")
+	select {
+	case <-taintDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Taint did not return")
+	}
 }
 
 // TestTaintWakesWaiter verifies that Taint, which frees a pool slot,
@@ -2240,7 +2241,12 @@ func TestTaintWakesWaiter(t *testing.T) {
 
 	c.Taint()
 
-	conn := requireReceive(t, waiterGot, 30*time.Second, "waiter was not served after Taint freed the slot")
+	var conn *Pooled[*TestConn]
+	select {
+	case conn = <-waiterGot:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "waiter was not served after Taint freed the slot")
+	}
 	conn.Recycle()
 }
 
@@ -2260,7 +2266,7 @@ func TestRecycleMaxLifetimeWakesWaiter(t *testing.T) {
 	c, err := p.Get(ctx, nil)
 	require.NoError(t, err)
 
-	requireMaxLifetimeExpired(t, p, c)
+	time.Sleep(2 * time.Duration(p.config.maxLifetime.Load()))
 
 	waiterGot := make(chan *Pooled[*TestConn], 1)
 	go func() {
@@ -2276,7 +2282,12 @@ func TestRecycleMaxLifetimeWakesWaiter(t *testing.T) {
 
 	c.Recycle()
 
-	conn := requireReceive(t, waiterGot, 30*time.Second, "waiter was not served after maxLifetime put freed the slot")
+	var conn *Pooled[*TestConn]
+	select {
+	case conn = <-waiterGot:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "waiter was not served after maxLifetime put freed the slot")
+	}
 	conn.Recycle()
 }
 
@@ -2297,7 +2308,7 @@ func TestRecycleMaxLifetimePreservesSetting(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sFoo, c.Conn.Setting())
 
-	requireMaxLifetimeExpired(t, p, c)
+	time.Sleep(2 * time.Duration(p.config.maxLifetime.Load()))
 
 	c.Recycle()
 
@@ -2371,7 +2382,7 @@ func TestRecycleMaxLifetimeReopenCancelsOnClose(t *testing.T) {
 	c, err := p.Get(ctx, nil)
 	require.NoError(t, err)
 
-	requireMaxLifetimeExpired(t, p, c)
+	time.Sleep(2 * time.Duration(p.config.maxLifetime.Load()))
 
 	recycleDone := make(chan struct{})
 	go func() {
@@ -2391,10 +2402,18 @@ func TestRecycleMaxLifetimeReopenCancelsOnClose(t *testing.T) {
 		closeDone <- p.CloseWithContext(closeCtx)
 	}()
 
-	err = requireReceive(t, closeDone, 30*time.Second, "Close did not complete; maxLifetime reopen connect was not cancelled")
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not complete; maxLifetime reopen connect was not cancelled")
+	}
 	require.NoError(t, err)
 
-	requireReceive(t, recycleDone, 30*time.Second, "Recycle did not return")
+	select {
+	case <-recycleDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Recycle did not return")
+	}
 }
 
 func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {
