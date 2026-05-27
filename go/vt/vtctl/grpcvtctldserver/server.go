@@ -1289,10 +1289,14 @@ func fillReparentResponseFromEvent(keyspace, shard *string, promotedPrimary **to
 		return
 	}
 	if k, s := ev.ShardInfo.Keyspace(), ev.ShardInfo.ShardName(); k != "" && s != "" {
-		*keyspace = k
-		*shard = s
+		if keyspace != nil {
+			*keyspace = k
+		}
+		if shard != nil {
+			*shard = s
+		}
 	}
-	if ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
+	if promotedPrimary != nil && ev.NewPrimary != nil && !topoproto.TabletAliasIsZero(ev.NewPrimary.Alias) {
 		*promotedPrimary = ev.NewPrimary.Alias
 	}
 }

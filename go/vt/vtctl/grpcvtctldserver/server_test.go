@@ -51,6 +51,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
@@ -4668,6 +4669,81 @@ func TestDeleteTablets(t *testing.T) {
 			checkRemainingTablets()
 		})
 	}
+}
+
+// TestFillReparentResponseFromEvent exercises fillReparentResponseFromEvent,
+// including the nil-pointer guards on each output parameter.
+func TestFillReparentResponseFromEvent(t *testing.T) {
+	t.Parallel()
+
+	makeEv := func(keyspace, shard string, newPrimary *topodatapb.Tablet) *events.Reparent {
+		ev := &events.Reparent{}
+		ev.ShardInfo = *topo.NewShardInfo(keyspace, shard, &topodatapb.Shard{}, nil)
+		ev.NewPrimary = newPrimary
+		return ev
+	}
+
+	t.Run("nil ev is a no-op", func(t *testing.T) {
+		t.Parallel()
+		k, s := "ks", "-"
+		var pp *topodatapb.TabletAlias
+		fillReparentResponseFromEvent(&k, &s, &pp, nil)
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+		assert.Nil(t, pp)
+	})
+
+	t.Run("nil keyspace pointer does not panic", func(t *testing.T) {
+		t.Parallel()
+		s := "-"
+		var pp *topodatapb.TabletAlias
+		assert.NotPanics(t, func() {
+			fillReparentResponseFromEvent(nil, &s, &pp, makeEv("ks", "-", nil))
+		})
+		assert.Equal(t, "-", s) // shard still written
+	})
+
+	t.Run("nil shard pointer does not panic", func(t *testing.T) {
+		t.Parallel()
+		k := "ks"
+		var pp *topodatapb.TabletAlias
+		assert.NotPanics(t, func() {
+			fillReparentResponseFromEvent(&k, nil, &pp, makeEv("ks", "-", nil))
+		})
+		assert.Equal(t, "ks", k) // keyspace still written
+	})
+
+	t.Run("nil promotedPrimary pointer does not panic", func(t *testing.T) {
+		t.Parallel()
+		k, s := "ks", "-"
+		tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+		assert.NotPanics(t, func() {
+			fillReparentResponseFromEvent(&k, &s, nil, makeEv("ks", "-", tablet))
+		})
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+	})
+
+	t.Run("populates all fields when ev is fully populated", func(t *testing.T) {
+		t.Parallel()
+		k, s := "default", "0"
+		var pp *topodatapb.TabletAlias
+		tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+		fillReparentResponseFromEvent(&k, &s, &pp, makeEv("ks", "-", tablet))
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+		assert.Equal(t, tablet.Alias, pp)
+	})
+
+	t.Run("preserves defaults when ShardInfo is zero-valued", func(t *testing.T) {
+		t.Parallel()
+		k, s := "ks", "-"
+		var pp *topodatapb.TabletAlias
+		fillReparentResponseFromEvent(&k, &s, &pp, &events.Reparent{}) // zero ShardInfo
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+		assert.Nil(t, pp)
+	})
 }
 
 func TestEmergencyReparentShard(t *testing.T) {
