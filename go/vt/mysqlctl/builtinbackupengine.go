@@ -99,6 +99,7 @@ var (
 
 	backupFileChunkThreshold int64                          // 0 means chunking is disabled
 	backupFileChunkSize      int64 = 1 * 1024 * 1024 * 1024 // 1 GiB
+	minBackupFileChunkSize   int64 = 4 * 1024 * 1024        // 4 MiB minimum to prevent the accidental allocation of a huge amount of files
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -278,8 +279,8 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
 		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
 
-	if backupFileChunkSize <= 0 {
-		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size can't be zero")
+	if backupFileChunkThreshold > 0 && backupFileChunkSize < minBackupFileChunkSize {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be >= %d", minBackupFileChunkSize)
 	}
 
 	if isIncrementalBackup(params) {
@@ -1364,12 +1365,14 @@ func createChunkedDestinations(fes []FileEntry, cnf *Mycnf, createdDir string) e
 			dest.Close()
 			return vterrors.Wrapf(err, "can't pre-size chunked file %v", fe.Name)
 		}
-		dest.Close()
+		if err := dest.Close(); err != nil {
+			return vterrors.Wrapf(err, "can't close pre-sized chunked file %v", fe.Name)
+		}
 	}
 	return nil
 }
 
-func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) error {
+func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) (finalErr error) {
 	// Capture the parent context before errgroup.WithContext replaces ctx with a
 	// child that is cancelled after g.Wait(). The deferred close of chunked
 	// destinations needs a live context.
@@ -1387,6 +1390,9 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		for _, cd := range chunkedDests {
 			if err := closeWithRetry(cleanupCtx, params.Logger, cd.dest, cd.fe.Name); err != nil {
 				params.Logger.Errorf("Failed to close chunked destination file %s: %v", cd.fe.Name, err)
+				if finalErr == nil {
+					finalErr = vterrors.Wrapf(err, "failed to close chunked destination file %s", cd.fe.Name)
+				}
 			}
 		}
 	}()
