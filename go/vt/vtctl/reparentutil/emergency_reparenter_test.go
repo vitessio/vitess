@@ -4195,6 +4195,82 @@ func TestEmergencyReparenter_findMostAdvanced_RejectsDominatedNewPrimary(t *test
 	}
 }
 
+// TestEmergencyReparenter_findMostAdvanced_SwapToDominatorOnCycle constructs the
+// pathological alias arrangement that causes the sort comparator to produce a
+// 3-cycle (A < B by alias tiebreaker, B < C by dominance, C < A by alias
+// tiebreaker). Under a non-transitive comparator Go's sort can put any element
+// at index 0 — including the strictly-dominated C — and the result is undefined.
+//
+// The swap-to-dominator loop in findMostAdvanced must correct this regardless of
+// sort output: the winner must never be strictly dominated by another candidate.
+// We loop to flush sort non-determinism and assert the invariant holds in every
+// iteration: the dominated tablet C (alias 100) must never be the winner.
+//
+// Aliases chosen so the tiebreaker and dominance disagree on transitivity:
+//
+//	A = 101 (uuidA only)            — incomparable with B and C
+//	B = 102 (uuidB:1-10)            — dominates C, incomparable with A
+//	C = 100 (uuidB:1-3, dominated)
+func TestEmergencyReparenter_findMostAdvanced_SwapToDominatorOnCycle(t *testing.T) {
+	uuidA := replication.SID{0xaa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+	uuidB := replication.SID{0xbb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+
+	positionA := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	for seq := int64(1); seq <= 5; seq++ {
+		g := replication.Mysql56GTID{Server: uuidA, Sequence: seq}
+		positionA.Combined.GTIDSet = positionA.Combined.GTIDSet.AddGTID(g)
+		positionA.Executed.GTIDSet = positionA.Executed.GTIDSet.AddGTID(g)
+	}
+	positionB := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	for seq := int64(1); seq <= 10; seq++ {
+		g := replication.Mysql56GTID{Server: uuidB, Sequence: seq}
+		positionB.Combined.GTIDSet = positionB.Combined.GTIDSet.AddGTID(g)
+		positionB.Executed.GTIDSet = positionB.Executed.GTIDSet.AddGTID(g)
+	}
+	positionC := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	for seq := int64(1); seq <= 3; seq++ {
+		g := replication.Mysql56GTID{Server: uuidB, Sequence: seq}
+		positionC.Combined.GTIDSet = positionC.Combined.GTIDSet.AddGTID(g)
+		positionC.Executed.GTIDSet = positionC.Executed.GTIDSet.AddGTID(g)
+	}
+
+	// Cycle-inducing alias layout: A=101, B=102, C=100. Tiebreaker says A < B,
+	// dominance says B < C, tiebreaker says C < A — 3-cycle in the comparator.
+	validCandidates := map[string]*RelayLogPositions{
+		"zone1-0000000101": positionA,
+		"zone1-0000000102": positionB,
+		"zone1-0000000100": positionC,
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+		"zone1-0000000102": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}}},
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+	}
+	opts := EmergencyReparentOptions{
+		AllowSplitBrainPromotion: true,
+	}
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+	opts.durability = durability
+
+	erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+
+	for i := range 30 {
+		winner, _, err := erp.findMostAdvanced(validCandidates, tabletMap, opts, "ks", "0")
+		require.NoError(t, err)
+		require.NotEqual(t, uint32(100), winner.Alias.Uid, "dominated tablet C (alias 100) must never be the winner — swap-to-dominator loop should correct any cycle-induced sort output (iteration %d)", i)
+	}
+}
+
 func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 	tests := []struct {
 		name                  string

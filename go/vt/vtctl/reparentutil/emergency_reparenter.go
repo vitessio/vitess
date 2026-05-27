@@ -757,34 +757,68 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// The first tablet in the sorted list will be the most eligible candidate unless explicitly asked for some other tablet
 	winningPrimaryTablet := validTablets[0]
 	winningPosition := tabletPositions[0]
+	winningIdx := 0
 
-	// Under AllowSplitBrainPromotion, the sort runs over incomparable positions and the
-	// comparator is not a total order — the sort can put a cancelled-mid-apply tablet
-	// (Executed != Combined) at index 0. Prefer an applied candidate that is NOT strictly
-	// behind the sort winner so we never promote a tablet with received-but-unapplied
-	// transactions when a safe alternative exists. Gated on the flag because without it
-	// the sort is a total order and the winner is canonical; without the strictly-behind
-	// skip we could prefer a lagger and lose data the winner had.
-	//
-	// applyRelayLogsAndReconcile bumps Executed=Combined exactly for applied + pre-satisfied
-	// PRIMARY-likes, leaving cancelled and lagging tablets with their pre-wait Executed —
-	// Executed.Equal(Combined) is the proxy for "safe to promote without losing data".
-	if opts.AllowSplitBrainPromotion && !winningPosition.Executed.Equal(winningPosition.Combined) {
-		for i := 1; i < len(validTablets); i++ {
-			otherPos := tabletPositions[i]
-			if !otherPos.Executed.Equal(otherPos.Combined) {
-				continue
+	// Safety nets for AllowSplitBrainPromotion. The sort comparator is not guaranteed
+	// to be a strict weak order when dominance and alias tiebreakers disagree (e.g.,
+	// triple {A, B, C} where A and B are incomparable, B strictly dominates C, and
+	// aliases produce A < B < C < A as a cycle). Go's sort can then put a strictly-
+	// dominated tablet at index 0. Both safety nets are gated on the flag because
+	// pre-PR behaviour was to abort the whole ERS via the secondary AtLeast check below
+	// for any non-uniform leading set, and we only want to silently correct under the
+	// explicit operator override.
+	if opts.AllowSplitBrainPromotion {
+		// Safety net #1: swap to a strict dominator if one exists. Dominance is a
+		// partial order so the loop terminates in at most len(validTablets)-1 swaps.
+		for {
+			dominatorIdx := -1
+			for i := range validTablets {
+				if i == winningIdx {
+					continue
+				}
+				if tabletPositions[i].AtLeast(winningPosition) && !winningPosition.AtLeast(tabletPositions[i]) {
+					dominatorIdx = i
+					break
+				}
 			}
-			// Skip strictly-behind candidates: winner.Combined dominates other.Combined.
-			if winningPosition.Combined.AtLeast(otherPos.Combined) && !otherPos.Combined.AtLeast(winningPosition.Combined) {
-				continue
+			if dominatorIdx == -1 {
+				break
 			}
-			erp.logger.Warningf("findMostAdvanced: sort winner %v is unapplied (Executed != Combined) under split-brain non-total ordering — preferring applied candidate %v",
+			erp.logger.Warningf("findMostAdvanced: sort winner %v is strictly dominated by %v — swapping (sort comparator is non-transitive under partial-order positions)",
 				topoproto.TabletAliasString(winningPrimaryTablet.Alias),
-				topoproto.TabletAliasString(validTablets[i].Alias))
-			winningPrimaryTablet = validTablets[i]
-			winningPosition = otherPos
-			break
+				topoproto.TabletAliasString(validTablets[dominatorIdx].Alias))
+			winningIdx = dominatorIdx
+			winningPrimaryTablet = validTablets[dominatorIdx]
+			winningPosition = tabletPositions[dominatorIdx]
+		}
+
+		// Safety net #2: prefer an applied (Executed.Equal(Combined)) candidate over a
+		// cancelled-mid-apply winner when one exists at an incomparable Combined.
+		// applyRelayLogsAndReconcile bumps Executed=Combined exactly for applied +
+		// pre-satisfied PRIMARY-likes, leaving cancelled and lagging tablets with their
+		// pre-wait Executed — Executed.Equal(Combined) is the proxy for "safe to promote
+		// without losing received-but-unapplied transactions". The strictly-behind skip
+		// prevents preferring a lagger that would lose the winner's leading data.
+		if !winningPosition.Executed.Equal(winningPosition.Combined) {
+			for i := range validTablets {
+				if i == winningIdx {
+					continue
+				}
+				otherPos := tabletPositions[i]
+				if !otherPos.Executed.Equal(otherPos.Combined) {
+					continue
+				}
+				// Skip strictly-behind candidates: winner.Combined dominates other.Combined.
+				if winningPosition.Combined.AtLeast(otherPos.Combined) && !otherPos.Combined.AtLeast(winningPosition.Combined) {
+					continue
+				}
+				erp.logger.Warningf("findMostAdvanced: sort winner %v is unapplied (Executed != Combined) under split-brain non-total ordering — preferring applied candidate %v",
+					topoproto.TabletAliasString(winningPrimaryTablet.Alias),
+					topoproto.TabletAliasString(validTablets[i].Alias))
+				winningPrimaryTablet = validTablets[i]
+				winningPosition = otherPos
+				break
+			}
 		}
 	}
 
