@@ -129,7 +129,7 @@ jobs:
 
     - name: Upload coverage reports to codecov.io
       if: steps.changes.outputs.changed_files == 'true'
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
       with:
         fail_ci_if_error: true
         verbose: true
