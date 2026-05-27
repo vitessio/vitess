@@ -86,33 +86,21 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
-// describeCombinedPositions returns a deterministic, human-readable listing of each
-// candidate's Combined GTID position, sorted by alias. Used to make split-brain abort
-// errors actionable by naming exactly which tablets diverged.
+// describeCombinedPositions returns a sorted "alias=position" listing, used to make
+// split-brain abort errors actionable by naming exactly which tablets diverged.
 func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
-	aliases := make([]string, 0, len(candidates))
-	for alias := range candidates {
-		aliases = append(aliases, alias)
+	parts := make([]string, 0, len(candidates))
+	for alias, pos := range candidates {
+		parts = append(parts, alias+"="+pos.Combined.String())
 	}
-	sort.Strings(aliases)
-
-	var b strings.Builder
-	for i, alias := range aliases {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		b.WriteString(alias)
-		b.WriteString("=")
-		b.WriteString(candidates[alias].Combined.String())
-	}
-	return b.String()
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
 }
 
 // uniformCombined returns true when every candidate in the map shares the same Combined
-// position. Used to detect whether the relay-log-apply optimization is safe: when the
-// filtered candidate set has incomparable maxima (different Combined positions that
-// neither dominates), the cluster is in a suspected-split-brain state and ERS must not
-// short-circuit the wait.
+// position. Applied to the output of filterToMostAdvancedCombined, a false result means
+// the filtered set has incomparable maxima — a suspected split-brain that ERS must not
+// silently resolve by short-circuiting on one side.
 func uniformCombined(candidates map[string]*RelayLogPositions) bool {
 	var ref replication.Position
 	set := false
@@ -129,17 +117,11 @@ func uniformCombined(candidates map[string]*RelayLogPositions) bool {
 	return true
 }
 
-// filterToMostAdvancedCombined filters the given candidates to only those whose Combined
-// position is not strictly dominated by any other candidate. Since replication is stopped
-// at this point, Combined positions are frozen — a candidate strictly behind another can
-// never catch up and is safe to exclude from the relay log wait.
-//
-// A candidate X is strictly dominated by Y when Y.Combined is a superset of X.Combined and
-// the two are not equal. Pairwise comparison correctly handles partially-ordered GTID sets:
-// when two candidates have disjoint UUIDs (e.g., from errant GTIDs or a prior split-brain),
-// neither dominates the other, so both are kept — while candidates dominated by either are
-// still dropped. Comparing only against a single chosen max position would let a candidate
-// behind one incomparable maximum survive because it isn't behind the other.
+// filterToMostAdvancedCombined keeps only candidates whose Combined position is not
+// strictly dominated by another (X dominated by Y iff Y.AtLeast(X) and X != Y). Pairwise
+// comparison is required to correctly handle partially-ordered GTID sets: when two
+// candidates have disjoint UUIDs neither dominates the other, so both must be kept;
+// comparing against a single chosen max would silently drop one incomparable maximum.
 func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
 	if len(candidates) == 0 {
 		return candidates

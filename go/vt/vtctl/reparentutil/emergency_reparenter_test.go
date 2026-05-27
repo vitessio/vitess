@@ -2974,6 +2974,50 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			shouldErr: true,
 		},
 		{
+			// A candidate that is absent from statusMap (current/stuck PRIMARY) has no
+			// relay logs to apply and is already at its position. It must satisfy the
+			// partial-wait rule even when every replica waiter fails, so ERS can fall
+			// back to promoting the leading PRIMARY-like candidate.
+			name: "leading PRIMARY-like candidate skipped rescues partial-wait when all waiters fail",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"position2": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {}, // absent from statusMap — treated as pre-satisfied
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1", // TMC only knows "position2", so it fails
+					},
+				},
+			},
+			shouldErr: false, // 100 is pre-satisfied, 101 fails — ERS still proceeds
+		},
+		{
 			name: "one slow tablet times out, other succeeds",
 			tmc: &testutil.TabletManagerClient{
 				WaitForPositionDelays: map[string]time.Duration{
@@ -3058,6 +3102,232 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestEmergencyReparenter_applyRelayLogsAndReconcile_PreSatisfiedBeatsCancelledOnSort
+// is the end-to-end safety regression test for the Codex P1 finding. The pre-satisfied
+// PRIMARY-like candidate (no statusMap entry) must get its Executed bumped to Combined,
+// so a cancelled-mid-apply peer at the same Combined position cannot sort ahead of it
+// via the Combined→Executed tie-break in findMostAdvanced. This test exercises the full
+// applyRelayLogsAndReconcile path (not just waitForAllRelayLogsToApply) to guard against
+// future refactors that decouple "marked applied in successMap" from "Executed bumped
+// in reconcile".
+func TestEmergencyReparenter_applyRelayLogsAndReconcile_PreSatisfiedBeatsCancelledOnSort(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 50 * time.Millisecond
+
+	// Build GTID positions: leading (PRIMARY's executed = replica's received) and
+	// a strictly-behind executed position for the cancelled replica.
+	leadingGTID, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10")
+	require.NoError(t, err)
+	behindGTID, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	leadingPos := replication.Position{GTIDSet: leadingGTID}
+	behindPos := replication.Position{GTIDSet: behindGTID}
+
+	primaryAlias := "zone1-0000000100"
+	replicaAlias := "zone1-0000000101"
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionDelays: map[string]time.Duration{
+			replicaAlias: time.Minute, // ensure cancellation, not application
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			replicaAlias: {"position1": nil},
+		},
+	}
+
+	// PRIMARY: Combined=leading (its executed position from primaryStatusMap),
+	// Executed=zero (set by FindPositionsOfAllCandidates for primaryStatusMap entries).
+	// Replica: Combined=leading (received), Executed=behind (pre-wait applied position).
+	validCandidates := map[string]*RelayLogPositions{
+		primaryAlias: {Combined: leadingPos},
+		replicaAlias: {Combined: leadingPos, Executed: behindPos},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		primaryAlias: {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		replicaAlias: {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		replicaAlias: {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+	}
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	_, err = erp.applyRelayLogsAndReconcile(ctx, validCandidates, validCandidates, tabletMap, statusMap, waitReplicasTimeout, false /* requireAll */, "ks", "0")
+	require.NoError(t, err)
+
+	// Safety property #1: pre-satisfied PRIMARY's Executed was bumped to Combined,
+	// so it sorts ahead of (or tied with) any peer at the same Combined position.
+	primaryPos, ok := validCandidates[primaryAlias]
+	require.True(t, ok, "PRIMARY-like candidate must remain in validCandidates")
+	assert.True(t, primaryPos.Executed.Equal(primaryPos.Combined),
+		"pre-satisfied PRIMARY's Executed must be bumped to Combined to beat cancelled peers in the sort; got Executed=%v Combined=%v",
+		primaryPos.Executed, primaryPos.Combined)
+
+	// Safety property #2: cancelled replica is still in validCandidates (cancellation
+	// is not a failure), and its Executed was NOT bumped — its pre-wait Executed is
+	// preserved, which is strictly behind the PRIMARY.
+	replicaPos, ok := validCandidates[replicaAlias]
+	require.True(t, ok, "cancelled replica must remain in validCandidates (cancellation is not failure)")
+	assert.True(t, replicaPos.Executed.Equal(behindPos),
+		"cancelled replica's Executed must not be bumped (it never finished applying); got %v want %v",
+		replicaPos.Executed, behindPos)
+
+	// Safety property #3: the AtLeast comparison used by reparent_sorter favors PRIMARY.
+	// findMostAdvanced relies on this to pick PRIMARY over a cancelled replica at the
+	// same Combined position. Without the Executed bump, replica.AtLeast(PRIMARY) would
+	// be true (Combined equal, replica.Executed > PRIMARY.Executed=zero), and the
+	// cancelled replica with received-but-unapplied transactions could be promoted.
+	assert.True(t, primaryPos.AtLeast(replicaPos), "PRIMARY must be at least as advanced as cancelled replica")
+	assert.False(t, replicaPos.AtLeast(primaryPos), "cancelled replica must NOT be at least as advanced as pre-satisfied PRIMARY")
+}
+
+// TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationNotRecordedAsFailure
+// verifies that when the parent context is cancelled while waiters are in-flight, the
+// resulting cancellation errors are classified as expected noise and not recorded as
+// per-tablet failures in successMap. Without this, the EmergencyReparentRelayLogFailedCandidates
+// metric would over-report on operator abort, misleading operators who debug ERS failures.
+func TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationNotRecordedAsFailure(t *testing.T) {
+	t.Parallel()
+
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 5 * time.Second // generous — outer-ctx cancel should fire first
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionDelays: map[string]time.Duration{
+			"zone1-0000000100": time.Minute,
+			"zone1-0000000101": time.Minute,
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000100": {"position1": nil},
+			"zone1-0000000101": {"position1": nil},
+		},
+	}
+	candidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {},
+		"zone1-0000000101": {},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // pre-cancel: all waiters will see a cancelled context immediately
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	successMap, err := erp.waitForAllRelayLogsToApply(ctx, candidates, tabletMap, statusMap, waitReplicasTimeout, false /* requireAll */)
+
+	// We expect an error (no successes), but the per-tablet successMap must NOT contain
+	// any alias=false entries — those would inflate the failed-candidates metric in
+	// applyRelayLogsAndReconcile and delete the tablet from validCandidates downstream.
+	require.Error(t, err)
+	// The error must come from the new ctx-error branch, not the misleading
+	// "all candidates failed" path. This verifies operators get a precise abort reason.
+	require.ErrorContains(t, err, "aborted while waiting for relay logs to apply")
+	for alias, applied := range successMap {
+		assert.True(t, applied, "alias %s should not be recorded as a failure when parent context was cancelled (would inflate the relay-log-failed metric)", alias)
+	}
+}
+
+// TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationAbortsEvenWithPreSatisfied
+// closes a behavior asymmetry: when the parent context is cancelled, the wait function
+// must surface the cancellation regardless of how many candidates were pre-satisfied
+// (current/stuck PRIMARY-like). Pre-PR errgroup.Wait surfaced any ctx-cancellation
+// error; the partial-wait optimization with preSatisfied>0 was incorrectly returning
+// nil because the failed-result branches only check successes==0. Downstream code does
+// eventually catch the cancelled ctx, but a faster, accurate abort here keeps behavior
+// symmetric across preSatisfied=0 and preSatisfied>0 paths.
+func TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationAbortsEvenWithPreSatisfied(t *testing.T) {
+	t.Parallel()
+
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 5 * time.Second
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionDelays: map[string]time.Duration{
+			"zone1-0000000101": time.Minute,
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000101": {"position1": nil},
+		},
+	}
+	candidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {}, // PRIMARY-like — preSatisfied
+		"zone1-0000000101": {}, // slow replica — will be cancelled
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	_, err := erp.waitForAllRelayLogsToApply(ctx, candidates, tabletMap, statusMap, waitReplicasTimeout, false /* requireAll */)
+	require.Error(t, err, "outer ctx cancellation must propagate even when preSatisfied>0")
+	require.ErrorContains(t, err, "aborted while waiting for relay logs to apply")
+}
+
+// TestEmergencyReparenter_waitForAllRelayLogsToApply_PreSatisfiedMarkedApplied is a
+// safety regression test for the bug Codex flagged in code review of the partial-wait
+// optimization. When a no-statusMap candidate (current/stuck PRIMARY) causes peer
+// waiters to be cancelled mid-apply, the cancelled peers' Executed positions are still
+// their pre-wait values, which can be HIGHER than the PRIMARY-like candidate's default
+// Executed=zero. If the PRIMARY-like candidate is not recorded as applied in successMap,
+// applyRelayLogsAndReconcile won't bump its Executed=Combined, and findMostAdvanced
+// can sort a cancelled (unwaited) replica ahead of the PRIMARY-like — risking promotion
+// of a tablet with received-but-unapplied transactions. The fix is to record the
+// pre-satisfied alias as true in successMap so the reconcile loop bumps its Executed.
+func TestEmergencyReparenter_waitForAllRelayLogsToApply_PreSatisfiedMarkedApplied(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 50 * time.Millisecond
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionDelays: map[string]time.Duration{
+			"zone1-0000000101": time.Minute, // ensure 101 is cancelled, not applied
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000101": {
+				"position1": nil,
+			},
+		},
+	}
+	candidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {}, // PRIMARY-like — absent from statusMap, must be marked applied
+		"zone1-0000000101": {}, // slow replica — will be cancelled
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			After: &replicationdatapb.Status{RelayLogPosition: "position1"},
+		},
+	}
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	successMap, err := erp.waitForAllRelayLogsToApply(ctx, candidates, tabletMap, statusMap, waitReplicasTimeout, false /* requireAll */)
+	require.NoError(t, err)
+
+	applied, ok := successMap["zone1-0000000100"]
+	require.True(t, ok, "pre-satisfied PRIMARY-like candidate must be present in successMap so applyRelayLogsAndReconcile bumps Executed=Combined")
+	assert.True(t, applied, "pre-satisfied PRIMARY-like candidate must be marked applied so the reconcile loop bumps Executed=Combined")
 }
 
 func TestEmergencyReparenterStats(t *testing.T) {

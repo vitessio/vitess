@@ -721,13 +721,15 @@ func TestERSSplitBrainDetection(t *testing.T) {
 	utils.StopTablet(t, tablets[0], true)
 
 	// ERS must abort with the upfront split-brain error, not silently promote
-	// one of the diverged sides.
+	// one of the diverged sides. The vtctldclient surfaces the RPC error message
+	// in stdout/stderr — assert against `out` rather than err (which is just
+	// "exit status 1" from the command process).
 	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
 	require.Error(t, err, out)
-	require.ErrorContains(t, err, "suspected split-brain")
+	require.Contains(t, out, "suspected split-brain", "ERS output: %s", out)
 	// describeCombinedPositions names the offending tablets in the error.
-	require.ErrorContains(t, err, tablets[2].Alias)
-	require.ErrorContains(t, err, tablets[3].Alias)
+	require.Contains(t, out, tablets[2].Alias)
+	require.Contains(t, out, tablets[3].Alias)
 }
 
 // TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
