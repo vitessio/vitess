@@ -465,19 +465,13 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.tryReturnConn(conn)
 }
 
-<<<<<<< HEAD
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
-||||||| parent of 4061458538 (smartconnpool: avoid close deadlock with refresh reopen (#20157))
-func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C], updateIdleTime bool) bool {
-=======
-func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C], updateIdleTime bool) bool {
 	if pool.close.Load() == nil {
 		conn.Close()
 		pool.closedConn()
 		return false
 	}
 
->>>>>>> 4061458538 (smartconnpool: avoid close deadlock with refresh reopen (#20157))
 	if pool.wait.tryReturnConn(conn) {
 		return true
 	}
