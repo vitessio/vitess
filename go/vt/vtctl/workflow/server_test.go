@@ -420,7 +420,7 @@ func TestMoveTablesComplete(t *testing.T) {
 					})
 				}
 			},
-			wantErr: "reverse vreplication stream 1 is in error state on tablet 100",
+			wantErr: "reverse vreplication stream 1 is in error state on cell-0000000100",
 			postFunc: func(t *testing.T, env *testEnv) {
 			},
 		},

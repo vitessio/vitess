@@ -608,11 +608,12 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 
 func validateReverseWorkflowForComplete(ctx context.Context, ts *trafficSwitcher, rec *concurrency.AllErrorRecorder) error {
 	return ts.ForAllSources(func(source *MigrationSource) error {
+		tabletAlias := topoproto.TabletAliasString(source.GetPrimary().GetAlias())
 		res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, source.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
 			Workflow: ts.ReverseWorkflowName(),
 		})
 		if err != nil {
-			rec.RecordError(err)
+			rec.RecordError(vterrors.Wrapf(err, "reading reverse workflow %s on %s", ts.ReverseWorkflowName(), tabletAlias))
 			return nil
 		}
 		if res == nil || len(res.Streams) == 0 {
@@ -623,14 +624,14 @@ func validateReverseWorkflowForComplete(ctx context.Context, ts *trafficSwitcher
 			case binlogdatapb.VReplicationWorkflowState_Running,
 				binlogdatapb.VReplicationWorkflowState_Stopped:
 			case binlogdatapb.VReplicationWorkflowState_Error:
-				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is in error state on tablet %d",
-					stream.Id, source.GetPrimary().Alias.Uid))
+				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is in error state on %s",
+					stream.Id, tabletAlias))
 			case binlogdatapb.VReplicationWorkflowState_Copying:
-				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is still copying on tablet %d",
-					stream.Id, source.GetPrimary().Alias.Uid))
+				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is still copying on %s",
+					stream.Id, tabletAlias))
 			default:
-				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is in state %s on tablet %d",
-					stream.Id, stream.State, source.GetPrimary().Alias.Uid))
+				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is in state %s on %s",
+					stream.Id, stream.State, tabletAlias))
 			}
 		}
 		return nil
