@@ -156,11 +156,11 @@ type Executor struct {
 	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
 	ownedRunningMigrations        sync.Map
 	vreplicationLastError         map[string]*vterrors.LastError
-	tickReentranceFlag            int64
+	tickReentranceFlag            atomic.Int64
 	reviewedRunningMigrationsFlag bool
 
 	ticks  *timer.Timer
-	isOpen int64
+	isOpen atomic.Int64
 
 	// This will be a pointer to the executeQuery function unless
 	// a custom sidecar database is used, then it will point to
@@ -286,7 +286,7 @@ func (e *Executor) InitDBConfig(keyspace, shard, dbName string) {
 func (e *Executor) Open() error {
 	e.initMutex.Lock()
 	defer e.initMutex.Unlock()
-	if atomic.LoadInt64(&e.isOpen) > 0 || !e.env.Config().EnableOnlineDDL {
+	if e.isOpen.Load() > 0 || !e.env.Config().EnableOnlineDDL {
 		return nil
 	}
 	log.Info("onlineDDL Executor Open()")
@@ -308,7 +308,7 @@ func (e *Executor) Open() error {
 	e.ticks.Start(e.onMigrationCheckTick)
 	e.triggerNextCheckInterval()
 
-	atomic.StoreInt64(&e.isOpen, 1)
+	e.isOpen.Store(1)
 
 	return nil
 }
@@ -317,14 +317,14 @@ func (e *Executor) Open() error {
 func (e *Executor) Close() {
 	e.initMutex.Lock()
 	defer e.initMutex.Unlock()
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return
 	}
 	log.Info("onlineDDL Executor Close()")
 
 	e.ticks.Stop()
 	e.pool.Close()
-	atomic.StoreInt64(&e.isOpen, 0)
+	e.isOpen.Store(0)
 }
 
 // triggerNextCheckInterval the next tick sooner than normal
@@ -1643,7 +1643,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 
 // CancelMigration attempts to abort a scheduled or a running migration
 func (e *Executor) CancelMigration(ctx context.Context, uuid string, message string, issuedByUser bool) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	log.Info(fmt.Sprintf("CancelMigration: request to cancel %s with message: %v", uuid, message))
@@ -1716,7 +1716,7 @@ func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancella
 // matches are cancelled (CANCEL CONTEXT 'ctx'). When migrationContext is empty all pending
 // migrations are cancelled (CANCEL ALL).
 func (e *Executor) CancelPendingMigrations(ctx context.Context, migrationContext string, issuedByUser bool) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
@@ -3291,7 +3291,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return countRunnning, cancellable, nil
 	}
 
@@ -3760,8 +3760,8 @@ func (e *Executor) onMigrationCheckTick() {
 	// - ensure the function is non-reentrant, using tickReentranceFlag
 	// - clean up tickReentranceFlag 1 second after function completes; this throttles calls to
 	//   this function at no more than 1/sec rate.
-	if atomic.CompareAndSwapInt64(&e.tickReentranceFlag, 0, 1) {
-		defer time.AfterFunc(time.Second, func() { atomic.StoreInt64(&e.tickReentranceFlag, 0) })
+	if e.tickReentranceFlag.CompareAndSwap(0, 1) {
+		defer time.AfterFunc(time.Second, func() { e.tickReentranceFlag.Store(0) })
 	} else {
 		// An instance of this function is already running
 		return
@@ -4288,7 +4288,7 @@ func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (r
 
 // RetryMigration marks given migration for retry
 func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
@@ -4312,7 +4312,7 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 // all we do is set retain_artifacts_seconds to a very small number (it's actually a negative) so that the
 // next iteration of gcArtifacts() picks up the migration's artifacts and schedules them for deletion
 func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
@@ -4343,7 +4343,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 // migration_context matches are affected (CLEANUP CONTEXT 'ctx'). When migrationContext is empty
 // all eligible migrations are affected (CLEANUP ALL).
 func (e *Executor) CleanupAllMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	log.Info("CleanupMigration: request to cleanup all terminal migrations")
@@ -4379,7 +4379,7 @@ func (e *Executor) CleanupAllMigrations(ctx context.Context, migrationContext st
 //     The force_cutover flag, once set, remains set, and so all future cut-over attempts will again KILL interfering
 //     queries and connections.
 func (e *Executor) ForceCutOverMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
@@ -4409,7 +4409,7 @@ func (e *Executor) ForceCutOverMigration(ctx context.Context, uuid string) (resu
 // (FORCE_CUTOVER CONTEXT 'ctx'). When migrationContext is empty all pending migrations are
 // affected (FORCE_CUTOVER ALL).
 func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
@@ -4438,7 +4438,7 @@ func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context, migrationC
 }
 
 func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string, thresholdString string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
@@ -4475,7 +4475,7 @@ func (e *Executor) SetMigrationCutOverThreshold(ctx context.Context, uuid string
 
 // CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
 func (e *Executor) CompleteMigration(ctx context.Context, uuid string, shardsArg string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
@@ -4510,7 +4510,7 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string, shardsArg
 // (COMPLETE CONTEXT 'ctx'). When migrationContext is empty all pending migrations are completed
 // (COMPLETE ALL).
 func (e *Executor) CompletePendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
@@ -4540,7 +4540,7 @@ func (e *Executor) CompletePendingMigrations(ctx context.Context, migrationConte
 
 // PostponeCompleteMigration sets the postpone_completion flag for a given migration, assuming it was not set in the first place
 func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
@@ -4571,7 +4571,7 @@ func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (
 // affected (POSTPONE COMPLETE CONTEXT 'ctx'). When migrationContext is empty all pending
 // migrations are affected (POSTPONE COMPLETE ALL).
 func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
@@ -4601,7 +4601,7 @@ func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context, migrat
 
 // LaunchMigration clears the postpone_launch flag for a given migration, assuming it was set in the first place
 func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	if !schema.IsOnlineDDLUUID(uuid) {
@@ -4636,7 +4636,7 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 // (LAUNCH CONTEXT 'ctx'). When migrationContext is empty all postponed migrations are launched
 // (LAUNCH ALL).
 func (e *Executor) LaunchMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
@@ -4767,7 +4767,7 @@ func (e *Executor) SubmitMigration(
 	ctx context.Context,
 	stmt sqlparser.Statement,
 ) (*sqltypes.Result, error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
@@ -4877,7 +4877,7 @@ func (e *Executor) SubmitMigration(
 
 // ShowMigrations shows migrations, optionally filtered by a condition
 func (e *Executor) ShowMigrations(ctx context.Context, show *sqlparser.Show) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	showBasic, ok := show.Internal.(*sqlparser.ShowBasic)
@@ -4902,7 +4902,7 @@ func (e *Executor) ShowMigrations(ctx context.Context, show *sqlparser.Show) (re
 
 // ShowMigrationLogs reads the migration log for a given migration
 func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMigrationLogs) (result *sqltypes.Result, err error) {
-	if atomic.LoadInt64(&e.isOpen) == 0 {
+	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 	_, row, err := e.readMigration(ctx, stmt.UUID)
