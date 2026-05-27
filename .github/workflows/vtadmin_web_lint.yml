@@ -45,7 +45,7 @@ jobs:
         with:
           persist-credentials: 'false'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b # v4.0.3
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
         with:
           # node-version should match package.json
