@@ -7,11 +7,16 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
     - **[Breaking Changes](#breaking-changes)**
+        - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
+        - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
+        - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+    - **[VTTablet](#minor-changes-vttablet)**
+        - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
 
@@ -20,6 +25,36 @@
 ### <a id="new-support"/>New Support</a>
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
+
+#### <a id="vttablet-watch-replication-stream-removed"/>`--watch-replication-stream` flag removed</a>
+
+The deprecated `--watch-replication-stream` VTTablet flag has been removed.
+
+**Migration**: remove `--watch-replication-stream` from VTTablet startup arguments.
+
+**Impact**: VTTablet will fail to start if `--watch-replication-stream` is still passed.
+
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19204](https://github.com/vitessio/vitess/pull/19204) for the original deprecation.
+
+#### <a id="vtorc-snapshot-topology-removed"/>Snapshot Topology feature removed</a>
+
+VTOrc's Snapshot Topology feature, [deprecated in v24](../../24.0/24.0.0/summary.md#vtorc-snapshot-topology-deprecation), has been removed. This includes the `--snapshot-topology-interval` flag and the `database_instance_topology_history` table.
+
+**Migration**: remove `--snapshot-topology-interval` from VTOrc startup arguments.
+
+**Impact**: VTOrc will fail to start if `--snapshot-topology-interval` is still passed.
+
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19070](https://github.com/vitessio/vitess/pull/19070) for the original deprecation.
+
+#### <a id="vtorc-cell-required"/>VTOrc `--cell` flag is now required</a>
+
+The `--cell` VTOrc flag, [introduced in v24](../../24.0/24.0.0/summary.md#vtorc-cell-flag), is now required.
+
+**Migration**: ensure `--cell` is set on every VTOrc deployment.
+
+**Impact**: VTOrc will fail to start with a `FAILED_PRECONDITION` error if `--cell` is empty.
+
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19047](https://github.com/vitessio/vitess/pull/19047) for the original `--cell` flag introduction.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
@@ -64,6 +99,16 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+### <a id="minor-changes-vttablet"/>VTTablet</a>
+
+#### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
+
+A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VTTablet. When enabled alongside a non-zero `--consolidator-query-waiter-cap`, queries that would join a consolidated result but exceed the **global** consolidator waiter cap are rejected with a `RESOURCE_EXHAUSTED` error instead of silently falling back to independent MySQL execution.
+
+**Important:** The cap is enforced against the consolidator's global `totalWaiterCount` across all queries, not a per-query waiter count. This means a duplicate for query B can be rejected because query A has already consumed most of the global waiter budget. This provides backpressure when the consolidator as a whole is saturated, rather than when any single query has too many waiters.
+
+See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
