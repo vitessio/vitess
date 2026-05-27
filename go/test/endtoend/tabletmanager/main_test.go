@@ -104,7 +104,6 @@ func TestMain(m *testing.M) {
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
 			utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
 			utils.GetFlagVariantForTests("--heartbeat-enable"),
 			utils.GetFlagVariantForTests("--health-check-interval"), tabletHealthcheckRefreshInterval.String(),
 			utils.GetFlagVariantForTests("--unhealthy-threshold"), tabletUnhealthyThreshold.String(),

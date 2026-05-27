@@ -90,7 +90,6 @@ func TestMain(m *testing.M) {
 			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
 			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
 			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
