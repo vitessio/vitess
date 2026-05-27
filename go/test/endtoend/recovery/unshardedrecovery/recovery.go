@@ -55,7 +55,6 @@ var (
 		"--vreplication-retry-delay", "1s",
 		vtutils.GetFlagVariantForTests("--degraded-threshold"), "5s",
 		vtutils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
-		vtutils.GetFlagVariantForTests("--watch-replication-stream"),
 		vtutils.GetFlagVariantForTests("--serving-state-grace-period"), "1s",
 	}
 	recoveryKS1  = "recovery_ks1"

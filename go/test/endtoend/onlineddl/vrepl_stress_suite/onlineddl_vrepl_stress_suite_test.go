@@ -434,7 +434,6 @@ func TestMain(m *testing.M) {
 			utils.GetFlagVariantForTests("--heartbeat-on-demand-duration"), "5s",
 			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
