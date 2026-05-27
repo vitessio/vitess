@@ -808,6 +808,33 @@ func TestCloseWithContextDrainsAfterTimedOutSetCapacityZero(t *testing.T) {
 	conn.Recycle()
 }
 
+// TestSetCapacityRejectedOnClosedPool pins the contract that SetCapacity must
+// fail fast (rather than silently writing into pool.capacity) when the pool
+// is not open. This covers both states: never-opened and previously-opened-
+// then-closed. Without this guard, a SetCapacity call queued on capacityMu
+// during CloseWithContext can race through after Close releases the mutex
+// and bump capacity back up — leaving the pool closed with non-zero capacity.
+func TestSetCapacityRejectedOnClosedPool(t *testing.T) {
+	var state TestState
+
+	// Never-opened pool: SetCapacity must reject.
+	p := NewPool(&Config[*TestConn]{Capacity: 4})
+	err := p.SetCapacity(t.Context(), 2)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+
+	// Opened pool: SetCapacity succeeds.
+	p.Open(newConnector(&state), nil)
+	require.NoError(t, p.SetCapacity(t.Context(), 2))
+	require.EqualValues(t, 2, p.Capacity())
+
+	// Closed pool: SetCapacity must reject and must not change capacity.
+	p.Close()
+	require.False(t, p.IsOpen())
+	err = p.SetCapacity(t.Context(), 8)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+	require.EqualValues(t, 0, p.Capacity())
+}
+
 func TestConnReopen(t *testing.T) {
 	var state TestState
 
