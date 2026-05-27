@@ -14,7 +14,7 @@ concurrency:
 jobs:
   build:
     name: VTop Example
-    runs-on: oracle-vm-8cpu-32gb-x86-64
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
       - name: Skip CI

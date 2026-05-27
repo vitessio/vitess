@@ -20,7 +20,7 @@ jobs:
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
     name: Run Upgrade Downgrade Test - Backups - Manual
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
 
     steps:
     - name: Skip CI
