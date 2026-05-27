@@ -3185,6 +3185,45 @@ func TestEmergencyReparenter_applyRelayLogsAndReconcile_PreSatisfiedBeatsCancell
 	assert.False(t, replicaPos.AtLeast(primaryPos), "cancelled replica must NOT be at least as advanced as pre-satisfied PRIMARY")
 }
 
+// TestEmergencyReparenter_filterAndCheckUniform_AllowSplitBrainPromotion verifies the
+// operator-escape-hatch flag. With AllowSplitBrainPromotion=false (the safe default)
+// the upfront uniformity check aborts with FAILED_PRECONDITION on incomparable Combined
+// positions. With the flag set, the same input logs a warning, increments the override
+// counter, and returns the filtered set so ERS can proceed.
+func TestEmergencyReparenter_filterAndCheckUniform_AllowSplitBrainPromotion(t *testing.T) {
+	t.Parallel()
+
+	gtidA, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-5")
+	require.NoError(t, err)
+	gtidB, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10,bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-5")
+	require.NoError(t, err)
+
+	// Two tablets with incomparable Combined positions — neither dominates the other.
+	candidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {Combined: replication.Position{GTIDSet: gtidA}},
+		"zone1-0000000101": {Combined: replication.Position{GTIDSet: gtidB}},
+	}
+
+	erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+
+	t.Run("default: abort with split-brain error", func(t *testing.T) {
+		_, err := erp.filterAndCheckUniform(candidates, "ks", "0", "candidates", false /* allowSplitBrain */)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "suspected split-brain")
+		require.ErrorContains(t, err, "zone1-0000000100")
+		require.ErrorContains(t, err, "zone1-0000000101")
+	})
+
+	t.Run("AllowSplitBrainPromotion=true: warn and continue", func(t *testing.T) {
+		ersSplitBrainOverrides.ResetAll()
+		filtered, err := erp.filterAndCheckUniform(candidates, "ks", "0", "candidates", true /* allowSplitBrain */)
+		require.NoError(t, err, "AllowSplitBrainPromotion must let ERS proceed past the uniformity check")
+		require.Len(t, filtered, 2, "both incomparable candidates must remain in the filtered set so the sort can pick a side")
+		count := ersSplitBrainOverrides.Counts()["ks.0"]
+		assert.Equal(t, int64(1), count, "EmergencyReparentSplitBrainOverrides metric must increment when the override fires")
+	})
+}
+
 // TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationNotRecordedAsFailure
 // verifies that when the parent context is cancelled while waiters are in-flight, the
 // resulting cancellation errors are classified as expected noise and not recorded as

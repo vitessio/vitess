@@ -63,6 +63,13 @@ type EmergencyReparentOptions struct {
 	WaitReplicasTimeout       time.Duration
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
+	// AllowSplitBrainPromotion lets ERS proceed when two leading candidates have
+	// incomparable Combined GTID positions (suspected split-brain). Off by default —
+	// operator escape hatch. When set, the upfront uniformCombined check and the
+	// secondary AtLeast check in findMostAdvanced log a warning and continue instead
+	// of aborting with FAILED_PRECONDITION. The losing side's unique GTIDs will
+	// become errant on those tablets after promotion.
+	AllowSplitBrainPromotion bool
 
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
@@ -82,6 +89,10 @@ var (
 	)
 	ersRelayLogApplyFailedCandidates = stats.NewCountersWithMultiLabels(
 		"EmergencyReparentRelayLogFailedCandidates", "Number of candidates that failed to apply relay logs during EmergencyReparentShard",
+		[]string{"Keyspace", "Shard"},
+	)
+	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentSplitBrainOverrides", "Number of times EmergencyReparentShard proceeded despite detecting incomparable Combined GTID positions, because the operator set AllowSplitBrainPromotion=true. The losing side's unique GTIDs will become errant on those tablets after promotion.",
 		[]string{"Keyspace", "Shard"},
 	)
 )
@@ -291,7 +302,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	relayLogWaitCandidates := validCandidates
 	requireAll := true
 	if isGTIDBased {
-		relayLogWaitCandidates, err = erp.filterAndCheckUniform(validCandidates, keyspace, shard, "candidates")
+		relayLogWaitCandidates, err = erp.filterAndCheckUniform(validCandidates, keyspace, shard, "candidates", opts.AllowSplitBrainPromotion)
 		if err != nil {
 			return err
 		}
@@ -331,7 +342,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 		if !appliedSurvived {
 			erp.logger.Warningf("all originally-applied candidates were removed by errant-GTID detection; running second relay-log-apply wait on surviving candidates before promotion")
-			rewaitCandidates, err := erp.filterAndCheckUniform(validCandidates, keyspace, shard, "surviving unwaited candidates")
+			rewaitCandidates, err := erp.filterAndCheckUniform(validCandidates, keyspace, shard, "surviving unwaited candidates", opts.AllowSplitBrainPromotion)
 			if err != nil {
 				return err
 			}
@@ -485,18 +496,27 @@ type relayLogResult struct {
 // has incomparable Combined positions (suspected split-brain). The descriptor parameter is
 // interpolated into the error message to identify which ERS pipeline stage detected the
 // split-brain (first wait vs. errant-GTID re-wait).
+//
+// If allowSplitBrain is true, an incomparable result logs a warning and returns the filtered
+// set without erroring — the operator-escape-hatch path that accepts errant GTIDs on the
+// losing side in exchange for forcing ERS through.
 func (erp *EmergencyReparenter) filterAndCheckUniform(
 	validCandidates map[string]*RelayLogPositions,
 	keyspace, shard, descriptor string,
+	allowSplitBrain bool,
 ) (map[string]*RelayLogPositions, error) {
 	filtered := filterToMostAdvancedCombined(validCandidates, erp.logger)
 	if !uniformCombined(filtered) {
-		return nil, vterrors.Errorf(
-			vtrpc.Code_FAILED_PRECONDITION,
-			"emergency reparent aborted: %s have incomparable Combined GTID positions (suspected split-brain): %s",
-			descriptor,
-			describeCombinedPositions(filtered),
-		)
+		if !allowSplitBrain {
+			return nil, vterrors.Errorf(
+				vtrpc.Code_FAILED_PRECONDITION,
+				"emergency reparent aborted: %s have incomparable Combined GTID positions (suspected split-brain): %s",
+				descriptor,
+				describeCombinedPositions(filtered),
+			)
+		}
+		erp.logger.Warningf("AllowSplitBrainPromotion=true: %s have incomparable Combined GTID positions (suspected split-brain): %s — proceeding under operator override; losing side's unique GTIDs will become errant", descriptor, describeCombinedPositions(filtered))
+		ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
 	}
 	if excluded := int64(len(validCandidates) - len(filtered)); excluded > 0 {
 		ersFilteredCandidates.Add([]string{keyspace, shard}, excluded)
@@ -715,10 +735,14 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	winningPosition := tabletPositions[0]
 
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
-	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should cancel the ERS
+	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should cancel the ERS —
+	// unless AllowSplitBrainPromotion is set, in which case the operator has accepted that the losing side's unique GTIDs will become errant.
 	for i, position := range tabletPositions {
 		if !winningPosition.AtLeast(position) {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
+			if !opts.AllowSplitBrainPromotion {
+				return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
+			}
+			erp.logger.Warningf("AllowSplitBrainPromotion=true: split brain detected between %v and %v — proceeding under operator override; losing side's unique GTIDs will become errant", winningPrimaryTablet.Alias, validTablets[i].Alias)
 		}
 	}
 

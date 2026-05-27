@@ -100,11 +100,14 @@ See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
 
 `EmergencyReparentShard` (ERS) on GTID-based shards no longer fails when only some replicas can apply their relay logs. As long as at least one tablet at the leading `Combined` GTID position applies successfully, ERS proceeds; lagging or stuck-SQL-thread replicas are no longer blockers. Pre-existing pre-PR behavior is preserved for non-GTID flavors (FilePos, MariaDB), where ERS still requires every candidate to apply.
 
-When the leading GTID-based candidates have incomparable `Combined` positions (suspected split-brain), ERS now aborts upfront with a clear `FAILED_PRECONDITION` error rather than risk silently picking one side.
+When the leading GTID-based candidates have incomparable `Combined` positions (suspected split-brain), ERS now aborts upfront with a clear `FAILED_PRECONDITION` error naming the diverged tablets, rather than silently picking one side. Pre-PR ERS would pick blindly and let the losing side's unique GTIDs become errant on those tablets — a silent data-integrity incident that surfaced later via lag alerts or downstream consistency checks. See [#20199](https://github.com/vitessio/vitess/issues/20199) for the bug this addresses.
 
-Two new stats are exported for observability:
+A new `--allow-split-brain-promotion` flag is added to `vtctldclient EmergencyReparentShard` (and `--allow_split_brain_promotion` on the legacy `vtctl`). It is **off by default**. Operators who deliberately need to force ERS through a detected split-brain — typically because they already know which side to keep and plan to re-clone the losing side — can set it to convert the abort into a `WARN` log and proceed. The losing side's unique GTIDs will become errant after promotion, so this is an explicit operator override, not a default-on safety knob.
+
+Three new stats are exported for observability:
 
 - `EmergencyReparentFilteredCandidates` — counts replicas excluded from the relay-log wait because their `Combined` position is strictly behind the leading group.
 - `EmergencyReparentRelayLogFailedCandidates` — counts replicas that genuinely failed to apply relay logs (cancellations after a peer succeeded are not counted).
+- `EmergencyReparentSplitBrainOverrides` — counts ERS runs that proceeded despite detected split-brain because `--allow-split-brain-promotion` was set. Stays at zero unless an operator has deliberately invoked the escape hatch.
 
 See [#18707](https://github.com/vitessio/vitess/pull/18707) for details.

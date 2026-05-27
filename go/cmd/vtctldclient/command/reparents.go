@@ -96,6 +96,7 @@ var emergencyReparentShardOptions = struct {
 	IgnoreReplicaAliasStrList []string
 	PreventCrossCellPromotion bool
 	WaitForAllTablets         bool
+	AllowSplitBrainPromotion  bool
 }{}
 
 func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
@@ -144,6 +145,7 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 		WaitReplicasTimeout:       protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
 		PreventCrossCellPromotion: emergencyReparentShardOptions.PreventCrossCellPromotion,
 		WaitForAllTablets:         emergencyReparentShardOptions.WaitForAllTablets,
+		AllowSplitBrainPromotion:  emergencyReparentShardOptions.AllowSplitBrainPromotion,
 	})
 	if err != nil {
 		return err
@@ -309,6 +311,7 @@ func init() {
 	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.ExpectedPrimaryAliasStr, "expected-primary", "", "Alias of a tablet that must be the current primary in order for the reparent to be processed.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
+	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.AllowSplitBrainPromotion, "allow-split-brain-promotion", false, "Allow ERS to proceed when two leading candidates have incomparable Combined GTID positions (suspected split-brain). Off by default. Operator escape hatch — accepts that the losing side's unique GTIDs will become errant.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
 	Root.AddCommand(EmergencyReparentShard)
 

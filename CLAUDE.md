@@ -238,7 +238,7 @@ return user.NeedsMigration() && migrate(user) || user
 ### EmergencyReparentShard (ERS)
 - ERS must prioritize **certainty** that we picked the most-advanced candidate
 - ERS must error when the most-advanced candidate is not clear, and/or a split-brain is suspected
-- ERS must avoid introducing errant GTIDs on replicas. This includes writes that are considered unacknowledged to the client — at the errant-GTID level, whether or not the transaction was acknowledged to the client is inconsequential, as MySQL cannot rewind GTIDs of any kind
+- ERS must avoid introducing errant GTIDs on replicas. This includes writes that are considered unacknowledged to the client as MySQL cannot rewind GTIDs of any kind
 - Changes should prioritize reducing points of failure - avoid new RPCs or work that may delay or make ERS more brittle
 - ERS must error if a shard contains a mix of GTID-based and non-GTID-based replication. Their position semantics differ (`Combined` = retrieved+executed for GTID vs. executed-only for non-GTID), so a unified split-brain / most-advanced check across both is unsafe
 - For non-GTID flavors, ERS must wait on every candidate and fail on any error. The "filter to leading group + short-circuit on first success" optimization is only safe for GTID-based flavors, where `Combined` is distinct from the executed position
