@@ -189,7 +189,8 @@ func TestOpen(t *testing.T) {
 	r, err = p.Get(ctx, nil)
 	require.NoError(t, err)
 	r.Close()
-	// A nil Put should cause the resource to be reopened.
+	// A nil Put causes the resource to be reopened so any queued waiter
+	// can be served.
 	p.put(nil)
 	assert.EqualValues(t, 5, state.open.Load())
 	assert.EqualValues(t, 6, state.lastID.Load())
@@ -1711,22 +1712,497 @@ func TestIdleTimeoutDoesntLeaveLingeringConnection(t *testing.T) {
 	require.EqualValues(t, 10, p.Active())
 	require.EqualValues(t, 10, p.Available())
 
-	// Wait a bit for the idle timeout worker to refresh connections
-	assert.Eventually(t, func() bool {
-		return p.Metrics.IdleClosed() > 10
-	}, 500*time.Millisecond, 10*time.Millisecond, "Expected at least 10 connections to be closed by idle timeout")
+	// Wait for the idle worker to refresh more than the initial 10 conns
+	// AND for the reopen loop to bring Active back to capacity. These need
+	// to hold simultaneously, so they go in one EventuallyWithT — the
+	// idle worker briefly drops Active between closing expired conns and
+	// re-acquiring slots for the reopened ones.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Greater(c, p.Metrics.IdleClosed(), int64(10))
+		assert.EqualValues(c, 10, p.Active())
+		assert.EqualValues(c, 10, p.Available())
+	}, time.Second, 10*time.Millisecond)
+}
 
-	// Verify that new connections were created to replace the closed ones
-	require.EqualValues(t, 10, p.Active())
-	require.EqualValues(t, 10, p.Available())
+// TestCloseDoesNotHandOffToWaiters verifies that once Close has started
+// (capacity has been driven to 0), connections being Recycled by clients
+// are closed immediately rather than handed off to waiters that are still
+// queued in the waitlist. Without this guarantee, Close can be delayed
+// indefinitely as Recycled conns keep getting passed waiter-to-waiter
+// instead of landing on a stack where the close loop can drain them.
+func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
 
-	// Count how many connections in the stack are closed
-	totalInStack := 0
-	for conn := p.clean.Peek(); conn != nil; conn = conn.next.Load() {
-		totalInStack++
+	ctx := t.Context()
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+
+	var waiterGotConn atomic.Bool
+	waiterDone := make(chan struct{})
+	go func() {
+		defer close(waiterDone)
+		conn, err := p.Get(ctx, nil)
+		if err == nil {
+			waiterGotConn.Store(true)
+			conn.Recycle()
+		}
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	// Wait until Close has set the capacity to 0 — only then is the
+	// "no more handoffs" guarantee in effect.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 0, p.Capacity())
+	}, time.Second, time.Millisecond)
+
+	c.Recycle()
+
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not complete in time")
+	}
+	require.NoError(t, err)
+
+	select {
+	case <-waiterDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "waiter did not finish")
 	}
 
-	require.LessOrEqual(t, totalInStack, 10)
+	require.False(t, waiterGotConn.Load(),
+		"waiter must not be handed a connection after Close has set capacity to 0")
+	require.EqualValues(t, 0, state.open.Load(),
+		"recycled conn must be closed when capacity is 0, not pushed back to a stack")
+	require.EqualValues(t, 0, p.Active())
+}
+
+// TestSetCapacityReductionDrainsWithWaiters verifies that SetCapacity reducing
+// capacity from N to M (0 < M < N) completes promptly while waiters are
+// queued for conns. tryReturnConn must eagerly close conns whenever
+// active > capacity; otherwise Recycles are handed off to waiters who hold
+// the conn, the wait list drains without conns ever hitting a stack, and
+// setCapacity's drain loop spins until ctx expires.
+func TestSetCapacityReductionDrainsWithWaiters(t *testing.T) {
+	var state TestState
+	pool := NewPool(&Config[*TestConn]{
+		Capacity: 4,
+	}).Open(newConnector(&state), nil)
+
+	ctx := t.Context()
+
+	// Hold all conns directly.
+	conns := make([]*Pooled[*TestConn], 4)
+	for i := range conns {
+		c, err := pool.Get(ctx, nil)
+		require.NoError(t, err)
+		conns[i] = c
+	}
+
+	// Queue NumWaiters callers that Get a conn and then hold it until release.
+	// Holding (instead of immediately recycling) keeps every handed-off conn
+	// out of the clean stack — the exact scenario where setCapacity's drain
+	// loop has nothing to pop and spins.
+	const NumWaiters = 4
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+	for range NumWaiters {
+		wg.Go(func() {
+			c, err := pool.Get(ctx, nil)
+			if err != nil {
+				return
+			}
+			<-release
+			c.Recycle()
+		})
+	}
+	t.Cleanup(func() {
+		close(release)
+		pool.Close()
+		wg.Wait()
+	})
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, pool.wait.waiting(), NumWaiters)
+	}, time.Second, time.Millisecond)
+
+	setDone := make(chan error, 1)
+	go func() {
+		setCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		setDone <- pool.SetCapacity(setCtx, 1)
+	}()
+
+	// Wait for capacity to actually drop before recycling, so every
+	// Recycle observes active > capacity.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, pool.Capacity())
+	}, time.Second, time.Millisecond)
+
+	for _, c := range conns {
+		c.Recycle()
+	}
+
+	var err error
+	select {
+	case err = <-setDone:
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "SetCapacity did not return")
+	}
+	require.NoError(t, err, "SetCapacity reduction must not stall while waiters are queued")
+	require.EqualValues(t, 1, pool.Capacity())
+	require.LessOrEqual(t, pool.Active(), int64(1))
+}
+
+// TestIdleWorkerConnectCancelsOnClose verifies that an idle-worker reopen
+// blocked inside the user-supplied connect callback unblocks when Close is
+// called. Without a cancellable context, the idle worker would extend Close
+// by the full backend connect timeout per expired connection.
+func TestIdleWorkerConnectCancelsOnClose(t *testing.T) {
+	var state TestState
+
+	ctx := t.Context()
+
+	var connectCalls atomic.Int64
+	customConnector := func(connectCtx context.Context) (*TestConn, error) {
+		call := connectCalls.Add(1)
+		if call > 1 {
+			// Block until connectCtx is cancelled (the behavior under test)
+			// or the test exits. t.Context is cancelled just before t.Cleanup
+			// runs, so a failed assertion still unblocks us.
+			select {
+			case <-connectCtx.Done():
+				return nil, connectCtx.Err()
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:         state.lastID.Add(1),
+			timeCreated: time.Now(),
+			counts:      &state,
+		}, nil
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		IdleTimeout: 20 * time.Millisecond,
+	}).Open(customConnector, nil)
+	t.Cleanup(p.Close)
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	c.Recycle()
+
+	// Wait until the idle worker has expired the conn and called into the
+	// connector a second time (which is now blocked).
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, connectCalls.Load(), int64(2))
+	}, 500*time.Millisecond, 5*time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not return; idle-worker connect was not cancelled")
+	}
+	require.NoError(t, err)
+}
+
+// TestTaintConnectCancelsOnClose verifies that Pooled.Taint's synchronous
+// reopen (via put(nil)) unblocks when the pool is closed. Without using
+// the pool's lifetime context for the reopen, Taint against an unreachable
+// backend would block for the full MySQL connect timeout — even when the
+// pool is already shutting down.
+func TestTaintConnectCancelsOnClose(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	var connectCalls atomic.Int64
+	customConnector := func(connectCtx context.Context) (*TestConn, error) {
+		call := connectCalls.Add(1)
+		if call > 1 {
+			select {
+			case <-connectCtx.Done():
+				return nil, connectCtx.Err()
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:         state.lastID.Add(1),
+			timeCreated: time.Now(),
+			counts:      &state,
+		}, nil
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(customConnector, nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	taintDone := make(chan struct{})
+	go func() {
+		defer close(taintDone)
+		c.Taint()
+	}()
+
+	// Wait until Taint's reopen is parked inside the connector.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, connectCalls.Load(), int64(2))
+	}, 500*time.Millisecond, 5*time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not complete; Taint's reopen connect was not cancelled")
+	}
+	require.NoError(t, err)
+
+	select {
+	case <-taintDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Taint did not return")
+	}
+}
+
+// TestTaintWakesWaiter verifies that Taint, which frees a pool slot,
+// still results in a queued waiter being served. The replacement conn
+// is opened synchronously on Taint's goroutine and must hand itself to
+// the waiter rather than letting the waiter wait for its own ctx to
+// expire.
+func TestTaintWakesWaiter(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	waiterGot := make(chan *Pooled[*TestConn], 1)
+	go func() {
+		conn, err := p.Get(ctx, nil)
+		if err == nil {
+			waiterGot <- conn
+		}
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	c.Taint()
+
+	var conn *Pooled[*TestConn]
+	select {
+	case conn = <-waiterGot:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "waiter was not served after Taint freed the slot")
+	}
+	conn.Recycle()
+}
+
+// TestRecycleMaxLifetimeWakesWaiter mirrors TestTaintWakesWaiter for the
+// other put() branch that frees a slot — a Recycle on a conn whose
+// maxLifetime has elapsed.
+func TestRecycleMaxLifetimeWakesWaiter(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: time.Millisecond,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Duration(p.config.maxLifetime.Load()))
+
+	waiterGot := make(chan *Pooled[*TestConn], 1)
+	go func() {
+		conn, err := p.Get(ctx, nil)
+		if err == nil {
+			waiterGot <- conn
+		}
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	c.Recycle()
+
+	var conn *Pooled[*TestConn]
+	select {
+	case conn = <-waiterGot:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "waiter was not served after maxLifetime put freed the slot")
+	}
+	conn.Recycle()
+}
+
+// TestRecycleMaxLifetimePreservesSetting verifies that a maxLifetime
+// reopen retains the original conn's Setting so the replacement lands
+// in the same settings stack rather than silently migrating to clean.
+func TestRecycleMaxLifetimePreservesSetting(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: time.Millisecond,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, sFoo)
+	require.NoError(t, err)
+	require.Equal(t, sFoo, c.Conn.Setting())
+
+	time.Sleep(2 * time.Duration(p.config.maxLifetime.Load()))
+
+	c.Recycle()
+
+	require.EventuallyWithT(t, func(check *assert.CollectT) {
+		assert.EqualValues(check, 1, p.Metrics.MaxLifetimeClosed())
+		assert.NotNil(check, p.settings[sFoo.bucket&stackMask].Peek(),
+			"reopened conn should live in settings[sFoo.bucket]")
+		assert.Nil(check, p.clean.Peek(),
+			"reopened conn must not migrate to the clean stack")
+	}, time.Second, 10*time.Millisecond)
+}
+
+// TestIdleWorkerReopenPreservesSetting verifies the idle worker's
+// closeIdleResources path keeps the original Setting on reopen.
+func TestIdleWorkerReopenPreservesSetting(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		IdleTimeout: 20 * time.Millisecond,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, sFoo)
+	require.NoError(t, err)
+	require.Equal(t, sFoo, c.Conn.Setting())
+	c.Recycle()
+
+	require.EventuallyWithT(t, func(check *assert.CollectT) {
+		assert.GreaterOrEqual(check, p.Metrics.IdleClosed(), int64(1))
+		assert.NotNil(check, p.settings[sFoo.bucket&stackMask].Peek(),
+			"idle-reopened conn should remain in settings[sFoo.bucket]")
+		assert.Nil(check, p.clean.Peek(),
+			"idle-reopened conn must not migrate to the clean stack")
+	}, time.Second, 10*time.Millisecond)
+}
+
+// TestRecycleMaxLifetimeReopenCancelsOnClose verifies that the maxLifetime
+// reopen inside put (synchronous, on the Recycle caller's goroutine)
+// unblocks when the pool is closed.
+func TestRecycleMaxLifetimeReopenCancelsOnClose(t *testing.T) {
+	var state TestState
+	ctx := t.Context()
+
+	var connectCalls atomic.Int64
+	customConnector := func(connectCtx context.Context) (*TestConn, error) {
+		call := connectCalls.Add(1)
+		if call > 1 {
+			select {
+			case <-connectCtx.Done():
+				return nil, connectCtx.Err()
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		state.open.Add(1)
+		return &TestConn{
+			num:         state.lastID.Add(1),
+			timeCreated: time.Now(),
+			counts:      &state,
+		}, nil
+	}
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity:    1,
+		MaxLifetime: time.Millisecond,
+	}).Open(customConnector, nil)
+	t.Cleanup(p.Close)
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	time.Sleep(2 * time.Duration(p.config.maxLifetime.Load()))
+
+	recycleDone := make(chan struct{})
+	go func() {
+		defer close(recycleDone)
+		c.Recycle()
+	}()
+
+	// Wait until Recycle's reopen is parked inside the connector.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.GreaterOrEqual(c, connectCalls.Load(), int64(2))
+	}, 500*time.Millisecond, 5*time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not complete; maxLifetime reopen connect was not cancelled")
+	}
+	require.NoError(t, err)
+
+	select {
+	case <-recycleDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Recycle did not return")
+	}
 }
 
 func BenchmarkPoolCleanupIdleConnectionsPerformanceNoIdleConnections(b *testing.B) {
