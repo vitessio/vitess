@@ -433,7 +433,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat-on-demand-duration", "5s",
 			"--migration-check-interval", "5s",
 			"--vstream-packet-size", "4096", // Keep this value small and below 10k to ensure multilple vstream iterations
-			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl-strategy", "online",
