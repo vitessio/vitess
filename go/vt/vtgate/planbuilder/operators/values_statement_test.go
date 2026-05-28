@@ -73,6 +73,23 @@ func TestValuesStatementOperatorPlanningHelpers(t *testing.T) {
 	assert.True(t, isMergeable(ctx, values, horizon))
 }
 
+func TestValuesStatementListArgPlanningHelpers(t *testing.T) {
+	values := mustParseValuesStatement(t, "values ::vals")
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+
+	op := translateQueryToOp(ctx, values)
+	horizon, ok := op.(*Horizon)
+	require.True(t, ok)
+	assert.Equal(t, values, horizon.Query)
+
+	qp := CreateQPFromSelectStatement(ctx, values)
+	assert.Empty(t, qp.SelectExprs)
+
+	assert.Empty(t, horizon.GetSelectExprs(ctx))
+	assert.Equal(t, -1, horizon.FindCol(ctx, sqlparser.NewColName("column_0"), false))
+	assert.True(t, isMergeable(ctx, values, horizon))
+}
+
 func TestToSQLValuesStatementHorizon(t *testing.T) {
 	values := mustParseValuesStatement(t, "values row(1, 2)")
 	horizon := newHorizon(&Table{}, values)
@@ -81,6 +98,16 @@ func TestToSQLValuesStatementHorizon(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, dmlOp)
 	assert.Equal(t, "values row(1, 2)", sqlparser.String(stmt))
+}
+
+func TestToSQLValuesStatementListArgHorizon(t *testing.T) {
+	values := mustParseValuesStatement(t, "values ::vals")
+	horizon := newHorizon(&Table{}, values)
+
+	stmt, dmlOp, err := ToSQL(&plancontext.PlanningContext{}, horizon)
+	require.NoError(t, err)
+	require.Nil(t, dmlOp)
+	assert.Equal(t, "values ::vals", sqlparser.String(stmt))
 }
 
 func TestToSQLDerivedValuesStatementProjectsColumns(t *testing.T) {

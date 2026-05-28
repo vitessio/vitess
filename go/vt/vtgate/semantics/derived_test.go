@@ -121,6 +121,17 @@ func TestScopingWDerivedTables(t *testing.T) {
 		}, {
 			query:        "select * from (values row(1, 1), row(2)) as sub",
 			errorMessage: "The used SELECT statements have a different number of columns: 2, 1",
+		}, {
+			query:         "select 1 from (values ::vals) as sub",
+			directDeps:    NoTables,
+			recursiveDeps: NoTables,
+		}, {
+			query:         "select sub.c1 from (values ::vals) as sub(c1, c2)",
+			directDeps:    TS0,
+			recursiveDeps: NoTables,
+		}, {
+			query:        "select sub.c1 from (values ::vals) as sub(c1, c1)",
+			errorMessage: "Duplicate column name 'c1'",
 		},
 	}
 	for _, query := range queries {
@@ -149,15 +160,33 @@ func TestScopingWDerivedTables(t *testing.T) {
 }
 
 func TestSemTableSelectExprsValuesStatement(t *testing.T) {
-	stmt, err := sqlparser.NewTestParser().Parse("values row(1, 2)")
-	require.NoError(t, err)
-	values, ok := stmt.(*sqlparser.ValuesStatement)
-	require.True(t, ok)
+	tests := []struct {
+		query   string
+		columns []string
+	}{
+		{
+			query:   "values row(1, 2)",
+			columns: []string{"column_0", "column_1"},
+		},
+		{
+			query: "values ::vals",
+		},
+	}
 
-	selectExprs := EmptySemTable().SelectExprs(values)
-	require.Len(t, selectExprs, 2)
-	assert.Equal(t, "column_0", sqlparser.String(selectExprs[0]))
-	assert.Equal(t, "column_1", sqlparser.String(selectExprs[1]))
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			stmt, err := sqlparser.NewTestParser().Parse(tt.query)
+			require.NoError(t, err)
+			values, ok := stmt.(*sqlparser.ValuesStatement)
+			require.True(t, ok)
+
+			selectExprs := EmptySemTable().SelectExprs(values)
+			require.Len(t, selectExprs, len(tt.columns))
+			for i, column := range tt.columns {
+				assert.Equal(t, column, sqlparser.String(selectExprs[i]))
+			}
+		})
+	}
 }
 
 func TestDerivedTablesOrderClause(t *testing.T) {

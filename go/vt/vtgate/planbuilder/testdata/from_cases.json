@@ -1636,6 +1636,44 @@
     }
   },
   {
+    "comment": "values list arg derived table",
+    "query": "select 1 from (values ::vals) as sub",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select 1 from (values ::vals) as sub",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from (values ::vals) as sub where 1 != 1",
+        "Query": "select 1 from (values ::vals) as sub"
+      }
+    }
+  },
+  {
+    "comment": "values list arg derived table with explicit column aliases",
+    "query": "select sub.c1 from (values ::vals) as sub(c1, c2)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select sub.c1 from (values ::vals) as sub(c1, c2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select sub.c1 from (values ::vals) as sub(c1, c2) where 1 != 1",
+        "Query": "select sub.c1 from (values ::vals) as sub(c1, c2)"
+      }
+    }
+  },
+  {
     "comment": "filtered values derived table",
     "query": "select * from (values row(1, 1), row(2, 2)) as sub where sub.column_0 = 1",
     "plan": {

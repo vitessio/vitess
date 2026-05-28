@@ -443,7 +443,7 @@ func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t
 	case *sqlparser.ValuesStatement:
 		return tc.addValuesDerivedTable(sel, node, node.Columns, node.As)
 	default:
-		return vterrors.VT13001(fmt.Sprintf("[BUG] %T in a derived table", sel))
+		return vterrors.VT13001(fmt.Sprintf("%T in a derived table", sel))
 	}
 }
 
@@ -514,34 +514,43 @@ func (tc *tableCollector) addValuesDerivedTable(
 	columns sqlparser.Columns,
 	alias sqlparser.IdentifierCS,
 ) error {
-	if len(values.Rows) == 0 {
+	if len(values.Rows) == 0 && values.ListArg == "" {
 		return vterrors.VT12001("VALUES statement without rows in derived table")
 	}
 
-	size := values.GetColumnCount()
+	size := valuesColumnCount(values, columns)
+	if len(columns) > 0 && len(values.Rows) > 0 && len(columns) != size {
+		return vterrors.VT03033()
+	}
 	deps := make([]TableSet, size)
-	typers := make([]evalengine.TypeAggregator, size)
-	collations := tc.org.collationEnv()
+	types := make([]evalengine.Type, size)
+	for i := range types {
+		types[i] = evalengine.NewUnknownType()
+	}
 
-	for _, row := range values.Rows {
-		if len(row) != size {
-			return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
-		}
-		for i, expr := range row {
-			_, recursiveDeps, qt := tc.org.depsForExpr(expr)
-			deps[i] = deps[i].Merge(recursiveDeps)
-			if err := typers[i].Add(qt, collations); err != nil {
-				return err
+	if len(values.Rows) > 0 {
+		typers := make([]evalengine.TypeAggregator, size)
+		collations := tc.org.collationEnv()
+
+		for _, row := range values.Rows {
+			if len(row) != size {
+				return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
+			}
+			for i, expr := range row {
+				_, recursiveDeps, qt := tc.org.depsForExpr(expr)
+				deps[i] = deps[i].Merge(recursiveDeps)
+				if err := typers[i].Add(qt, collations); err != nil {
+					return err
+				}
 			}
 		}
+
+		for i, typer := range typers {
+			types[i] = typer.Type()
+		}
 	}
 
-	types := make([]evalengine.Type, 0, size)
-	for _, typer := range typers {
-		types = append(types, typer.Type())
-	}
-
-	tableInfo := createDerivedTableForExpressions(values.GetColumns(), columns, nil, tc.org, true, deps, types)
+	tableInfo := createDerivedTableForExpressions(valuesColumns(size), columns, nil, tc.org, true, deps, types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
@@ -551,6 +560,21 @@ func (tc *tableCollector) addValuesDerivedTable(
 	tc.Tables = append(tc.Tables, tableInfo)
 	scope := tc.scoper.currentScope()
 	return scope.addTable(tableInfo)
+}
+
+func valuesColumnCount(values *sqlparser.ValuesStatement, columns sqlparser.Columns) int {
+	if count := values.GetColumnCount(); count > 0 {
+		return count
+	}
+	return len(columns)
+}
+
+func valuesColumns(size int) []sqlparser.SelectExpr {
+	result := make([]sqlparser.SelectExpr, 0, size)
+	for i := range size {
+		result = append(result, &sqlparser.AliasedExpr{Expr: sqlparser.NewColName(fmt.Sprintf("column_%d", i))})
+	}
+	return result
 }
 
 func newVindexTable(t sqlparser.IdentifierCS) *vindexes.BaseTable {
