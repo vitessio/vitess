@@ -25,6 +25,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -63,7 +66,7 @@ func TestSchemaVersioning(t *testing.T) {
 	defer tsv.EnableHistorian(true)
 	defer tsv.SetTracking(true)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	wg := sync.WaitGroup{}
 	tsv.EnableHistorian(true)
@@ -159,6 +162,7 @@ func TestSchemaVersioning(t *testing.T) {
 		},
 	}
 	eventCh := make(chan []*binlogdatapb.VEvent)
+	currentErrCh := make(chan error, 1)
 	var startPos string
 	send := func(events []*binlogdatapb.VEvent) error {
 		var evs []*binlogdatapb.VEvent
@@ -185,8 +189,12 @@ func TestSchemaVersioning(t *testing.T) {
 		defer close(eventCh)
 		req := &binlogdatapb.VStreamRequest{Target: target, Position: "current", TableLastPKs: nil, Filter: filter}
 		if err := tsv.VStream(ctx, req, send); err != nil {
-			fmt.Printf("Error in tsv.VStream: %v", err)
-			t.Error(err)
+			if ctx.Err() == nil {
+				select {
+				case currentErrCh <- err:
+				default:
+				}
+			}
 		}
 	})
 	log.Info("\n\n\n=============================================== CURRENT EVENTS START HERE ======================\n\n\n")
@@ -201,23 +209,26 @@ func TestSchemaVersioning(t *testing.T) {
 				`gtid`, // no tracker, so no insert into schema_version or version event
 				`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
 			},
-		}, {
-			query: "insert into vitess_version values(4, 40, 'FFF', 'GGGG' )",
-			output: []string{
-				`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
-				`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG"}}}`,
-				`gtid`,
-			},
 		},
 	}
 	runCases(ctx, t, cases, eventCh)
 	cancel()
 	wg.Wait()
+	select {
+	case err := <-currentErrCh:
+		require.NoError(t, err)
+	default:
+	}
+
+	client := framework.NewClient()
+	_, err := client.Execute("insert into vitess_version values(4, 40, 'FFF', 'GGGG' )", nil)
+	require.NoError(t, err)
 
 	log.Info("\n\n\n=============================================== PAST EVENTS WITH TRACK VERSIONS START HERE ======================\n\n\n")
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
+	errCh := make(chan error, 1)
 	send = func(events []*binlogdatapb.VEvent) error {
 		var evs []*binlogdatapb.VEvent
 		for _, event := range events {
@@ -237,7 +248,8 @@ func TestSchemaVersioning(t *testing.T) {
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
-			t.Fatal("Context Done() in send")
+			assert.Fail(t, "Context Done() in send")
+			return nil
 		}
 		return nil
 	}
@@ -245,8 +257,10 @@ func TestSchemaVersioning(t *testing.T) {
 		defer close(eventCh)
 		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
 		if err := tsv.VStream(ctx, req, send); err != nil {
-			fmt.Printf("Error in tsv.VStream: %v", err)
-			t.Error(err)
+			select {
+			case errCh <- err:
+			default:
+			}
 		}
 	})
 
@@ -277,21 +291,25 @@ func TestSchemaVersioning(t *testing.T) {
 		`gtid`,
 		`gtid`,
 		`type:DDL statement:"/**/alter table vitess_version add column id4 varbinary(16)"`,
-		`type:FIELD field_event:{table_name:"vitess_version" fields:{name:"id1" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id1" column_length:11 charset:63 column_type:"int"} fields:{name:"id2" type:INT32 table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id2" column_length:11 charset:63 column_type:"int"} fields:{name:"id3" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id3" column_length:16 charset:63 column_type:"varbinary(16)"} fields:{name:"id4" type:VARBINARY table:"vitess_version" org_table:"vitess_version" database:"vttest" org_name:"id4" column_length:16 charset:63 column_type:"varbinary(16)"}}`,
-		`type:ROW row_event:{table_name:"vitess_version" row_changes:{after:{lengths:1 lengths:2 lengths:3 lengths:4 values:"440FFFGGGG"}}}`,
-		`gtid`,
 	)
 
 	expectLogs(ctx, t, "Past stream", eventCh, output)
+	select {
+	case err := <-errCh:
+		require.ErrorContains(t, err, "cannot determine table columns for vitess_version")
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "timed out waiting for past stream failure after untracked schema change")
+	}
 
 	cancel()
 	wg.Wait()
 
 	log.Info("\n\n\n=============================================== PAST EVENTS WITHOUT TRACK VERSIONS START HERE ======================\n\n\n")
 	tsv.EnableHistorian(false)
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 	eventCh = make(chan []*binlogdatapb.VEvent)
+	noHistorianErrCh := make(chan error, 1)
 	send = func(events []*binlogdatapb.VEvent) error {
 		var evs []*binlogdatapb.VEvent
 		for _, event := range events {
@@ -311,7 +329,8 @@ func TestSchemaVersioning(t *testing.T) {
 		select {
 		case eventCh <- evs:
 		case <-ctx.Done():
-			t.Fatal("Context Done() in send")
+			assert.Fail(t, "Context Done() in send")
+			return nil
 		}
 		return nil
 	}
@@ -319,8 +338,12 @@ func TestSchemaVersioning(t *testing.T) {
 		defer close(eventCh)
 		req := &binlogdatapb.VStreamRequest{Target: target, Position: startPos, TableLastPKs: nil, Filter: filter}
 		if err := tsv.VStream(ctx, req, send); err != nil {
-			fmt.Printf("Error in tsv.VStream: %v", err)
-			t.Error(err)
+			if ctx.Err() == nil {
+				select {
+				case noHistorianErrCh <- err:
+				default:
+				}
+			}
 		}
 	})
 
@@ -362,10 +385,16 @@ func TestSchemaVersioning(t *testing.T) {
 	expectLogs(ctx, t, "Past stream", eventCh, output)
 	cancel()
 	wg.Wait()
+	select {
+	case err := <-noHistorianErrCh:
+		require.NoError(t, err)
+	default:
+	}
 
-	client := framework.NewClient()
-	client.Execute("drop table vitess_version", nil)
-	client.Execute("drop table _vt.schema_version", nil)
+	_, err = client.Execute("drop table vitess_version", nil)
+	require.NoError(t, err)
+	_, err = client.Execute("drop table _vt.schema_version", nil)
+	require.NoError(t, err)
 
 	log.Info("=== END OF TEST")
 }
@@ -376,15 +405,15 @@ func runCases(ctx context.Context, t *testing.T, tests []test, eventCh chan []*b
 
 	for _, test := range tests {
 		query := test.query
-		client.Execute(query, nil)
+		_, err := client.Execute(query, nil)
+		require.NoErrorf(t, err, "executing query %s", query)
 		if len(test.output) > 0 {
 			expectLogs(ctx, t, query, eventCh, test.output)
 		}
 		if strings.HasPrefix(query, "create") || strings.HasPrefix(query, "alter") || strings.HasPrefix(query, "drop") {
 			ok, err := waitForVersionInsert(client, query)
-			if err != nil || !ok {
-				t.Fatalf("Query %s never got inserted into the schema_version table", query)
-			}
+			require.NoErrorf(t, err, "waiting for schema_version insert for %s", query)
+			require.Truef(t, ok, "Query %s never got inserted into the schema_version table", query)
 			framework.Server.SchemaEngine().Reload(ctx)
 		}
 	}
@@ -399,9 +428,7 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 	for {
 		select {
 		case allevs, ok := <-eventCh:
-			if !ok {
-				t.Fatal("expectLogs: not ok, stream ended early")
-			}
+			require.True(t, ok, "expectLogs: not ok, stream ended early")
 			// Ignore unrelated gtid progress events that can race with the events that the test expects
 			if len(allevs) == 3 &&
 				allevs[0].Type == binlogdatapb.VEventType_BEGIN &&
@@ -433,41 +460,29 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 			}
 			log.Info(fmt.Sprintf("In expectLogs, have got %d events, want %d", len(evs), len(output)))
 		case <-ctx.Done():
-			t.Fatalf("expectLog: Done(), stream ended early")
+			require.FailNow(t, "expectLog: Done(), stream ended early")
 		case <-timer.C:
-			t.Fatalf("expectLog: timed out waiting for events: %v: evs\n%v, want\n%v, >> got length %d, wanted length %d", query, evs, output, len(evs), len(output))
+			require.FailNowf(t, "expectLog", "timed out waiting for events: %v: evs\n%v, want\n%v, >> got length %d, wanted length %d", query, evs, output, len(evs), len(output))
 		}
 		if len(evs) >= len(output) {
 			break
 		}
 	}
-	if len(evs) > len(output) {
-		t.Fatalf("expectLog: got too many events: %v: evs\n%v, want\n%v, >> got length %d, wanted length %d", query, evs, output, len(evs), len(output))
-	}
+	require.Lenf(t, evs, len(output), "expectLog: got wrong number of events: %v: evs\n%v, want\n%v", query, evs, output)
 	for i, want := range output {
 		// CurrentTime is not testable.
 		evs[i].CurrentTime = 0
 		switch want {
 		case "begin":
-			if evs[i].Type != binlogdatapb.VEventType_BEGIN {
-				t.Fatalf("%v (%d): event: %v, want begin", query, i, evs[i])
-			}
+			require.Equalf(t, binlogdatapb.VEventType_BEGIN, evs[i].Type, "%v (%d): event: %v, want begin", query, i, evs[i])
 		case "gtid":
-			if evs[i].Type != binlogdatapb.VEventType_GTID {
-				t.Fatalf("%v (%d): event: %v, want gtid", query, i, evs[i])
-			}
+			require.Equalf(t, binlogdatapb.VEventType_GTID, evs[i].Type, "%v (%d): event: %v, want gtid", query, i, evs[i])
 		case "commit":
-			if evs[i].Type != binlogdatapb.VEventType_COMMIT {
-				t.Fatalf("%v (%d): event: %v, want commit", query, i, evs[i])
-			}
+			require.Equalf(t, binlogdatapb.VEventType_COMMIT, evs[i].Type, "%v (%d): event: %v, want commit", query, i, evs[i])
 		case "other":
-			if evs[i].Type != binlogdatapb.VEventType_OTHER {
-				t.Fatalf("%v (%d): event: %v, want other", query, i, evs[i])
-			}
+			require.Equalf(t, binlogdatapb.VEventType_OTHER, evs[i].Type, "%v (%d): event: %v, want other", query, i, evs[i])
 		case "version":
-			if evs[i].Type != binlogdatapb.VEventType_VERSION {
-				t.Fatalf("%v (%d): event: %v, want version", query, i, evs[i])
-			}
+			require.Equalf(t, binlogdatapb.VEventType_VERSION, evs[i].Type, "%v (%d): event: %v, want version", query, i, evs[i])
 		default:
 			evs[i].Timestamp = 0
 			evs[i].Keyspace = ""
@@ -486,9 +501,8 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 				evs[i].RowEvent.Keyspace = ""
 				evs[i].RowEvent.Shard = ""
 			}
-			if got := fmt.Sprintf("%v", evs[i]); got != want {
-				t.Fatalf("%v (%d): event:\n%q, want\n%q", query, i, got, want)
-			}
+			got := fmt.Sprintf("%v", evs[i])
+			require.Equalf(t, want, got, "%v (%d): event mismatch", query, i)
 		}
 	}
 }

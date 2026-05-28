@@ -1,0 +1,6 @@
+# Large generated data tables that crash the instrumentor
+go/mysql/collations/vindex/collate/tables.go
+go/mysql/collations/charset/simplifiedchinese/tables.go
+go/mysql/collations/charset/korean/tables.go
+go/mysql/collations/charset/japanese/tables_gen.go
+go/vt/sqlparser/sql.go

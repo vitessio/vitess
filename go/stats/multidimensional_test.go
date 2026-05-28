@@ -17,9 +17,10 @@ limitations under the License.
 package stats
 
 import (
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMultiTimingsCounterFor(t *testing.T) {
@@ -39,8 +40,6 @@ func TestMultiTimingsCounterFor(t *testing.T) {
 	}
 	for _, c := range cases {
 		counts := CounterForDimension(mtm, c.dim).Counts()
-		if !reflect.DeepEqual(c.want, counts) {
-			t.Errorf("mtm.CounterFor(%q).Counts()=%v, want %v", c.dim, counts, c.want)
-		}
+		assert.Equalf(t, c.want, counts, "mtm.CounterFor(%q).Counts()=%v, want %v", c.dim, counts, c.want)
 	}
 }

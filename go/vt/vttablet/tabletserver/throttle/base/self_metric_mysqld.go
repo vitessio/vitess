@@ -91,6 +91,9 @@ func getMysqlHostMetric(ctx context.Context, params *SelfMetricReadParams, mysql
 	if resp == nil {
 		return metric.WithError(ErrNoResultYet)
 	}
+	if resp.HostMetrics == nil || resp.HostMetrics.Metrics == nil {
+		return metric.WithError(ErrNoSuchMetric)
+	}
 	mysqlMetric := resp.HostMetrics.Metrics[mysqlHostMetricName]
 	if mysqlMetric == nil {
 		return metric.WithError(ErrNoSuchMetric)

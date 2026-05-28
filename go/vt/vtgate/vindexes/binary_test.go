@@ -17,11 +17,8 @@ limitations under the License.
 package vindexes
 
 import (
-	"bytes"
-	"context"
 	"encoding/hex"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -103,14 +100,10 @@ func TestBinaryMap(t *testing.T) {
 		out: []byte("test2"),
 	}}
 	for _, tcase := range tcases {
-		got, err := binOnlyVindex.Map(context.Background(), nil, []sqltypes.Value{tcase.in})
-		if err != nil {
-			t.Error(err)
-		}
+		got, err := binOnlyVindex.Map(t.Context(), nil, []sqltypes.Value{tcase.in})
+		assert.NoError(t, err)
 		out := []byte(got[0].(key.DestinationKeyspaceID))
-		if !bytes.Equal(tcase.out, out) {
-			t.Errorf("Map(%#v): %#v, want %#v", tcase.in, out, tcase.out)
-		}
+		assert.Equalf(t, tcase.out, out, "Map(%#v)", tcase.in)
 	}
 }
 
@@ -121,30 +114,19 @@ func TestBinaryVerify(t *testing.T) {
 	hexBytes, _ := hex.DecodeString(hexValStr)
 	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2"), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
 	ksids := [][]byte{[]byte("1"), []byte("1"), hexBytes, hexBytes}
-	got, err := binOnlyVindex.Verify(context.Background(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []bool{true, false, true, true}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binary.Verify: %v, want %v", got, want)
-	}
+	got, err := binOnlyVindex.Verify(t.Context(), nil, ids, ksids)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false, true, true}, got, "binary.Verify")
 }
 
 func TestBinaryReverseMap(t *testing.T) {
 	got, err := binOnlyVindex.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
 	require.NoError(t, err)
-	want := []sqltypes.Value{sqltypes.NewVarBinary("\x00\x00\x00\x00\x00\x00\x00\x01")}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReverseMap(): %+v, want %+v", got, want)
-	}
+	assert.Equal(t, []sqltypes.Value{sqltypes.NewVarBinary("\x00\x00\x00\x00\x00\x00\x00\x01")}, got, "ReverseMap()")
 
 	// Negative Test
 	_, err = binOnlyVindex.(Reversible).ReverseMap(nil, [][]byte{[]byte(nil)})
-	wantErr := "Binary.ReverseMap: keyspaceId is nil"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("ReverseMap(): %v, want %s", err, wantErr)
-	}
+	assert.EqualError(t, err, "Binary.ReverseMap: keyspaceId is nil", "ReverseMap()")
 }
 
 // TestBinaryRangeMap takes start and env values,
@@ -153,7 +135,7 @@ func TestBinaryRangeMap(t *testing.T) {
 	startInterval := "0x01"
 	endInterval := "0x10"
 
-	got, err := binOnlyVindex.(Sequential).RangeMap(context.Background(), nil, sqltypes.NewHexNum([]byte(startInterval)),
+	got, err := binOnlyVindex.(Sequential).RangeMap(t.Context(), nil, sqltypes.NewHexNum([]byte(startInterval)),
 		sqltypes.NewHexNum([]byte(endInterval)))
 	require.NoError(t, err)
 	want := "DestinationKeyRange(01-10)"

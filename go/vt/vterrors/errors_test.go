@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -33,9 +32,7 @@ import (
 
 func TestWrapNil(t *testing.T) {
 	got := Wrap(nil, "no error")
-	if got != nil {
-		t.Errorf("Wrap(nil, \"no error\"): got %#v, expected nil", got)
-	}
+	assert.Nilf(t, got, "Wrap(nil, \"no error\"): got %#v, expected nil", got)
 }
 
 func TestWrap(t *testing.T) {
@@ -51,12 +48,8 @@ func TestWrap(t *testing.T) {
 
 	for _, tt := range tests {
 		got := Wrap(tt.err, tt.message)
-		if got.Error() != tt.wantMessage {
-			t.Errorf("Wrap(%v, %q): got: [%v], want [%v]", tt.err, tt.message, got, tt.wantMessage)
-		}
-		if Code(got) != tt.wantCode {
-			t.Errorf("Wrap(%v, %v): got: [%v], want [%v]", tt.err, tt, Code(got), tt.wantCode)
-		}
+		assert.Equalf(t, tt.wantMessage, got.Error(), "Wrap(%v, %q)", tt.err, tt.message)
+		assert.Equalf(t, tt.wantCode, Code(got), "Wrap(%v, %v)", tt.err, tt)
 	}
 }
 
@@ -157,9 +150,7 @@ func TestRootCause(t *testing.T) {
 
 	for i, tt := range tests {
 		got := RootCause(tt.err)
-		if !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("test %d: got %#v, want %#v", i+1, got, tt.want)
-		}
+		assert.Equalf(t, tt.want, got, "test %d", i+1)
 	}
 }
 
@@ -187,17 +178,13 @@ func TestCause(t *testing.T) {
 
 	for i, tt := range tests {
 		got := Cause(tt.err)
-		if !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("test %d: got %#v, want %#v", i+1, got, tt.want)
-		}
+		assert.Equalf(t, tt.want, got, "test %d", i+1)
 	}
 }
 
 func TestWrapfNil(t *testing.T) {
 	got := Wrapf(nil, "no error")
-	if got != nil {
-		t.Errorf("Wrapf(nil, \"no error\"): got %#v, expected nil", got)
-	}
+	assert.Nilf(t, got, "Wrapf(nil, \"no error\"): got %#v, expected nil", got)
 }
 
 func TestWrapf(t *testing.T) {
@@ -213,9 +200,7 @@ func TestWrapf(t *testing.T) {
 
 	for _, tt := range tests {
 		got := Wrap(tt.err, tt.message).Error()
-		if got != tt.want {
-			t.Errorf("Wrapf(%v, %q): got: %v, want %v", tt.err, tt.message, got, tt.want)
-		}
+		assert.Equalf(t, tt.want, got, "Wrapf(%v, %q)", tt.err, tt.message)
 	}
 }
 
@@ -230,9 +215,7 @@ func TestErrorf(t *testing.T) {
 
 	for _, tt := range tests {
 		got := tt.err.Error()
-		if got != tt.want {
-			t.Errorf("Errorf(%v): got: %q, want %q", tt.err, got, tt.want)
-		}
+		assert.Equalf(t, tt.want, got, "Errorf(%v)", tt.err)
 	}
 }
 
@@ -297,12 +280,10 @@ func TestCreation(t *testing.T) {
 		want: vtrpcpb.Code_UNKNOWN,
 	}}
 	for _, tcase := range testcases {
-		if got := Code(New(tcase.in, "")); got != tcase.want {
-			t.Errorf("Code(New(%v)): %v, want %v", tcase.in, got, tcase.want)
-		}
-		if got := Code(Errorf(tcase.in, "")); got != tcase.want {
-			t.Errorf("Code(Errorf(%v)): %v, want %v", tcase.in, got, tcase.want)
-		}
+		got := Code(New(tcase.in, ""))
+		assert.Equalf(t, tcase.want, got, "Code(New(%v))", tcase.in)
+		got = Code(Errorf(tcase.in, ""))
+		assert.Equalf(t, tcase.want, got, "Code(Errorf(%v))", tcase.in)
 	}
 }
 
@@ -327,9 +308,8 @@ func TestCode(t *testing.T) {
 		want: vtrpcpb.Code_DEADLINE_EXCEEDED,
 	}}
 	for _, tcase := range testcases {
-		if got := Code(tcase.in); got != tcase.want {
-			t.Errorf("Code(%v): %v, want %v", tcase.in, got, tcase.want)
-		}
+		got := Code(tcase.in)
+		assert.Equalf(t, tcase.want, got, "Code(%v)", tcase.in)
 	}
 }
 
@@ -357,13 +337,11 @@ func TestWrapping(t *testing.T) {
 
 func assertContains(t *testing.T, s, substring string, contains bool) {
 	t.Helper()
-	if doesContain := strings.Contains(s, substring); doesContain != contains {
-		t.Errorf("string `%v` contains `%v`: %v, want %v", s, substring, doesContain, contains)
-	}
+	doesContain := strings.Contains(s, substring)
+	assert.Equalf(t, contains, doesContain, "string `%v` contains `%v`", s, substring)
 }
 
 func assertEquals(t *testing.T, a, b any) {
-	if a != b {
-		t.Fatalf("expected [%s] to be equal to [%s]", a, b)
-	}
+	t.Helper()
+	assert.Equalf(t, b, a, "expected [%s] to be equal to [%s]", a, b)
 }

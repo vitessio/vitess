@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/icrowley/fake"
+	"github.com/brianvoe/gofakeit/v7"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -74,7 +74,7 @@ func TestLargeComment(t *testing.T) {
 	defer conn.Close()
 
 	// insert data with large comment
-	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(1, 'large blob', 123, 'LLL') /* "+fake.CharactersN(4*1024*1024)+" */", 1, false)
+	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(1, 'large blob', 123, 'LLL') /* "+gofakeit.LetterN(4*1024*1024)+" */", 1, false)
 	require.Nilf(t, err, "insertion error: %v", err)
 
 	qr, err := conn.ExecuteFetch("select * from vt_insert_test where id = 1", 1, false)
@@ -96,7 +96,7 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 	require.Nilf(t, err, "int parsing error: %v", err)
 
 	// insert data with large blob
-	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(2, 'huge blob', 123, '"+fake.CharactersN(limit+1)+"')", 1, false)
+	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(2, 'huge blob', 123, '"+gofakeit.LetterN(uint(limit+1))+"')", 1, false)
 	require.NotNil(t, err, "error expected on insert")
 	assert.Contains(t, err.Error(), "trying to send message larger than max")
 }

@@ -56,12 +56,17 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		buf.literal(SQLCalcFoundRowsStr)
 	}
 
-	buf.astPrintf(node, "%v from ", node.SelectExprs)
+	buf.astPrintf(node, "%v", node.SelectExprs)
 
-	prefix := ""
-	for _, expr := range node.From {
-		buf.astPrintf(node, "%s%v", prefix, expr)
-		prefix = ", "
+	if len(node.From) == 0 {
+		buf.literal(" from dual")
+	} else {
+		buf.literal(" from ")
+		prefix := ""
+		for _, expr := range node.From {
+			buf.astPrintf(node, "%s%v", prefix, expr)
+			prefix = ", "
+		}
 	}
 
 	buf.astPrintf(node, "%v%v%v",
@@ -332,7 +337,11 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
-		alterType = "cancel all"
+		if node.Context != "" {
+			alterType = "cancel"
+		} else {
+			alterType = "cancel all"
+		}
 	case ThrottleMigrationType:
 		alterType = "throttle"
 	case ThrottleAllMigrationType:
@@ -350,16 +359,19 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, " %#s", alterType)
 	if node.Threshold != "" {
-		buf.astPrintf(node, " '%#s'", node.Threshold)
+		buf.astPrintf(node, " %#s", encodeSQLString(node.Threshold))
 	}
 	if node.Expire != "" {
-		buf.astPrintf(node, " expire '%#s'", node.Expire)
+		buf.astPrintf(node, " expire %#s", encodeSQLString(node.Expire))
 	}
 	if node.Ratio != nil {
 		buf.astPrintf(node, " ratio %v", node.Ratio)
 	}
+	if node.Context != "" {
+		buf.astPrintf(node, " context %#s", encodeSQLString(node.Context))
+	}
 	if node.Shards != "" {
-		buf.astPrintf(node, " vitess_shards '%#s'", node.Shards)
+		buf.astPrintf(node, " vitess_shards %#s", encodeSQLString(node.Shards))
 	}
 }
 
@@ -1399,11 +1411,7 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
-	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
-		buf.WriteString("dual")
-	} else {
-		buf.astPrintf(node, "%v", node.Name)
-	}
+	buf.astPrintf(node, "%v", node.Name)
 }
 
 // Format formats the node.
@@ -2384,8 +2392,10 @@ func (node *ShowEngine) Format(buf *TrackedBuffer) {
 func (node *ShowGrants) Format(buf *TrackedBuffer) {
 	buf.literal("show grants")
 	if node.User != nil {
-		buf.literal(" for ")
-		node.User.formatTo(buf)
+		if node.User.Name != nil || len(node.UsingRole) > 0 {
+			buf.literal(" for ")
+			node.User.formatTo(buf)
+		}
 		if len(node.UsingRole) > 0 {
 			buf.literal(" using ")
 			for i, role := range node.UsingRole {

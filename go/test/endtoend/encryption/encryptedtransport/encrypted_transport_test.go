@@ -67,7 +67,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/encryption"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
@@ -202,7 +201,7 @@ func useEffectiveCallerID(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{utils.GetFlagVariantForTests("--grpc-use-effective-callerid")}
+	clusterInstance.VtGateExtraArgs = []string{"--grpc-use-effective-callerid"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	err := clusterInstance.RestartVtgate()
 	require.NoError(t, err)
@@ -251,7 +250,7 @@ func useEffectiveGroups(ctx context.Context, t *testing.T) {
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller's groups
 	// into immediate caller id.
-	clusterInstance.VtGateExtraArgs = []string{utils.GetFlagVariantForTests("--grpc-use-effective-callerid"), utils.GetFlagVariantForTests("--grpc-use-effective-groups")}
+	clusterInstance.VtGateExtraArgs = []string{"--grpc-use-effective-callerid", "--grpc-use-effective-groups"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
 	err := clusterInstance.RestartVtgate()
 	require.NoError(t, err)
@@ -304,7 +303,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {
-		return 1, fmt.Errorf("unable to start topo %w", err)
+		return 1, err
 	}
 
 	// create all certs
@@ -388,9 +387,8 @@ func clusterSetUp(t *testing.T) (int, error) {
 		clusterInstance.Keyspaces = append(clusterInstance.Keyspaces, keyspace)
 	}
 	for _, proc := range mysqlProcesses {
-		err := proc.Wait()
-		if err != nil {
-			return 1, fmt.Errorf("unable to wait on mysql process %w", err)
+		if err := proc.Wait(); err != nil {
+			return 1, fmt.Errorf("mysql process Wait failed: %w", err)
 		}
 	}
 	return 0, nil
@@ -424,9 +422,9 @@ func createSignedCert(ca string, serial string, name string, commonName string) 
 
 func serverExtraArguments(name string, ca string) []string {
 	args := []string{
-		utils.GetFlagVariantForTests("--grpc-cert"), certDirectory + "/" + name + "-cert.pem",
-		utils.GetFlagVariantForTests("--grpc-key"), certDirectory + "/" + name + "-key.pem",
-		utils.GetFlagVariantForTests("--grpc-ca"), certDirectory + "/" + ca + "-cert.pem",
+		"--grpc-cert", certDirectory + "/" + name + "-cert.pem",
+		"--grpc-key", certDirectory + "/" + name + "-key.pem",
+		"--grpc-ca", certDirectory + "/" + ca + "-cert.pem",
 	}
 	return args
 }
@@ -445,10 +443,10 @@ func tmclientExtraArgs(name string) []string {
 func tabletConnExtraArgs(name string) []string {
 	ca := "vttablet-server"
 	args := []string{
-		utils.GetFlagVariantForTests("--tablet-grpc-cert"), certDirectory + "/" + name + "-cert.pem",
-		utils.GetFlagVariantForTests("--tablet-grpc-key"), certDirectory + "/" + name + "-key.pem",
-		utils.GetFlagVariantForTests("--tablet-grpc-ca"), certDirectory + "/" + ca + "-cert.pem",
-		utils.GetFlagVariantForTests("--tablet-grpc-server-name"), "vttablet server instance",
+		"--tablet-grpc-cert", certDirectory + "/" + name + "-cert.pem",
+		"--tablet-grpc-key", certDirectory + "/" + name + "-key.pem",
+		"--tablet-grpc-ca", certDirectory + "/" + ca + "-cert.pem",
+		"--tablet-grpc-server-name", "vttablet server instance",
 	}
 	return args
 }

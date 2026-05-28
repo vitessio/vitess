@@ -108,9 +108,7 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 	return func(tablet *topodatapb.Tablet) {
 		tablet.Keyspace = keyspace
 		shard, kr, err := topo.ValidateShardName(shard)
-		if err != nil {
-			t.Fatalf("cannot ValidateShardName value %v", shard)
-		}
+		require.NoErrorf(t, err, "cannot ValidateShardName value %v", shard)
 		tablet.Shard = shard
 		tablet.KeyRange = kr
 	}
@@ -122,9 +120,7 @@ func TabletKeyspaceShard(t *testing.T, keyspace, shard string) TabletOption {
 // Use TabletOption implementations if you need to change values at creation.
 // 'db' can be nil if the test doesn't use a database at all.
 func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletType topodatapb.TabletType, db *fakesqldb.DB, options ...TabletOption) *fakeTablet {
-	if uid > 99 {
-		t.Fatalf("uid has to be between 0 and 99: %v", uid)
-	}
+	require.LessOrEqualf(t, uid, uint32(99), "uid has to be between 0 and 99: %v", uid)
 	mysqlPort := int32(3300 + uid)
 	hostname, err := netutil.FullyQualifiedHostname()
 	require.NoError(t, err)
@@ -144,9 +140,8 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 	for _, option := range options {
 		option(tablet)
 	}
-	if err := wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
-		t.Fatalf("cannot create tablet %v: %v", uid, err)
-	}
+	err = wr.TopoServer().InitTablet(t.Context(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */)
+	require.NoErrorf(t, err, "cannot create tablet %v: %v", uid, err)
 
 	// create a FakeMysqlDaemon with the right information by default
 	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
@@ -165,25 +160,19 @@ var exporter = servenv.NewExporter("TestWrangler", "")
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
-	if ft.TM != nil {
-		t.Fatalf("TM for %v is already running", ft.Tablet.Alias)
-	}
+	require.Nilf(t, ft.TM, "TM for %v is already running", ft.Tablet.Alias)
 
 	// Listen on a random port for gRPC.
 	var err error
 	ft.Listener, err = net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Cannot listen: %v", err)
-	}
+	require.NoError(t, err)
 	gRPCPort := int32(ft.Listener.Addr().(*net.TCPAddr).Port)
 
 	// If needed, listen on a random port for HTTP.
 	vtPort := ft.Tablet.PortMap["vt"]
 	if ft.StartHTTPServer {
 		ft.HTTPListener, err = net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("Cannot listen on http port: %v", err)
-		}
+		require.NoError(t, err)
 		handler := http.NewServeMux()
 		ft.HTTPServer = &http.Server{
 			Handler: handler,
@@ -197,7 +186,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
 	ft.TM = &tabletmanager.TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            t.Context(),
 		TopoServer:          wr.TopoServer(),
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
@@ -206,9 +195,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(ft.FakeMysqlDaemon.DB(), exporter),
 		Env:                 vtenv.NewTestEnv(),
 	}
-	if err := ft.TM.Start(ft.Tablet, nil); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, ft.TM.Start(ft.Tablet, nil))
 	ft.Tablet = ft.TM.Tablet()
 
 	// Register the gRPC server, and starts listening.
@@ -221,7 +208,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 	step := 10 * time.Millisecond
 	c := tmclient.NewTabletManagerClient()
 	for timeout >= 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 		err := c.Ping(ctx, ft.TM.Tablet())
 		cancel()
 		if err == nil {
@@ -237,9 +224,7 @@ func (ft *fakeTablet) StartActionLoop(t *testing.T, wr *Wrangler) {
 
 // StopActionLoop will stop the Action Loop for the given FakeTablet
 func (ft *fakeTablet) StopActionLoop(t *testing.T) {
-	if ft.TM == nil {
-		t.Fatalf("TM for %v is not running", ft.Tablet.Alias)
-	}
+	require.NotNilf(t, ft.TM, "TM for %v is not running", ft.Tablet.Alias)
 	if ft.StartHTTPServer {
 		ft.HTTPListener.Close()
 	}

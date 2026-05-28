@@ -73,6 +73,12 @@ func TestTypeSizes(t *testing.T) {
 
 		{&String1{}, hack.RuntimeAllocSize(PtrSize*2 + 8)},
 		{&String1{field1: "1234"}, hack.RuntimeAllocSize(PtrSize*2+8) + hack.RuntimeAllocSize(4)},
+
+		{&PtrToBasic{}, PtrSize * 3},
+		{&PtrToBasic{field1: new(bool)}, PtrSize*3 + hack.RuntimeAllocSize(1)},
+		{&PtrToBasic{field2: new(int)}, PtrSize*3 + hack.RuntimeAllocSize(8)},
+		{&PtrToBasic{field3: new(string)}, PtrSize*3 + hack.RuntimeAllocSize(16) + hack.RuntimeAllocSize(0)},
+		{&PtrToBasic{field3: new(string("1234"))}, PtrSize*3 + hack.RuntimeAllocSize(16) + hack.RuntimeAllocSize(4)},
 	}
 
 	for _, tt := range cases {

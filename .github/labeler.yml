@@ -129,11 +129,6 @@
     - go/cmd/vtexplain/**
     - go/vt/vtexplain/**
 
-'Component: vtexplain':
-- changed-files:
-  - any-glob-to-any-file:
-    - go/cmd/vttestserver/**
-
 'Type: Dependencies':
 - changed-files:
   - any-glob-to-any-file:

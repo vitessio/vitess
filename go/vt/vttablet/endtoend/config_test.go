@@ -348,9 +348,7 @@ func changeVar(t *testing.T, name, value string) (revert func()) {
 
 	vals := framework.FetchJSON("/debug/env?format=json")
 	initial, ok := vals[name]
-	if !ok {
-		t.Fatalf("%s not found in: %v", name, vals)
-	}
+	require.Truef(t, ok, "%s not found in: %v", name, vals)
 	vals = framework.PostJSON("/debug/env?format=json", map[string]string{
 		"varname": name,
 		"value":   value,
@@ -368,9 +366,7 @@ func changeVar(t *testing.T, name, value string) (revert func()) {
 func verifyMapValue(t *testing.T, values map[string]any, tag string, want any) {
 	t.Helper()
 	val, ok := values[tag]
-	if !ok {
-		t.Fatalf("%s not found in: %v", tag, values)
-	}
+	require.Truef(t, ok, "%s not found in: %v", tag, values)
 	assert.Equal(t, want, val)
 }
 

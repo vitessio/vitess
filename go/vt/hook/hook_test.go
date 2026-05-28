@@ -52,7 +52,7 @@ func TestExecuteContext(t *testing.T) {
 	}()
 
 	h := NewHook("sleep", []string{"5"})
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*10)
 	defer cancel()
 
 	hr := h.ExecuteContext(ctx)

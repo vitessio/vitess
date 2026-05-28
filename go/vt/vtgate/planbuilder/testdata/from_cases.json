@@ -1114,7 +1114,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -2743,10 +2742,7 @@
             "OperatorType": "SingleRow"
           }
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {

@@ -181,7 +181,6 @@ describe('useWorkflow', () => {
         );
 
         // Execute a useWorkflowsResponse query to populate the query cache with the raw response.
-        // eslint-disable-next-line testing-library/render-result-naming-convention
         const useWorkflowsCall = renderHook(() => api.useWorkflowsResponse(), { wrapper });
         await waitFor(() => expect(useWorkflowsCall.result.current.isSuccess).toBe(true));
 

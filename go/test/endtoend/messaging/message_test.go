@@ -140,15 +140,13 @@ func TestMessage(t *testing.T) {
 	// epoch could be 0 or 1, depending on how fast the row is updated
 	switch epoch {
 	case 0:
-		if !(start-1e9 < next && next < (start+jitter)) {
-			t.Errorf("next: %d. must be within 1s of start: %d", next/1e9, (start+jitter)/1e9)
-		}
+		assert.True(t, start-1e9 < next && next < (start+jitter),
+			"next: %d. must be within 1s of start: %d", next/1e9, (start+jitter)/1e9)
 	case 1:
-		if !(start < next && next < (start+jitter)+3e9) {
-			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
-		}
+		assert.True(t, start < next && next < (start+jitter)+3e9,
+			"next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
 	default:
-		t.Errorf("epoch: %d, must be 0 or 1", epoch)
+		assert.Failf(t, "unexpected epoch", "epoch: %d, must be 0 or 1", epoch)
 	}
 
 	// Consume the resend.
@@ -160,15 +158,13 @@ func TestMessage(t *testing.T) {
 	// epoch could be 1 or 2, depending on how fast the row is updated
 	switch epoch {
 	case 1:
-		if !(start < next && next < (start+jitter)+3e9) {
-			t.Errorf("next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
-		}
+		assert.True(t, start < next && next < (start+jitter)+3e9,
+			"next: %d. must be about 1s after start: %d", next/1e9, (start+jitter)/1e9)
 	case 2:
-		if !(start+2e9 < next && next < (start+jitter)+6e9) {
-			t.Errorf("next: %d. must be about 3s after start: %d", next/1e9, (start+jitter)/1e9)
-		}
+		assert.True(t, start+2e9 < next && next < (start+jitter)+6e9,
+			"next: %d. must be about 3s after start: %d", next/1e9, (start+jitter)/1e9)
 	default:
-		t.Errorf("epoch: %d, must be 1 or 2", epoch)
+		assert.Failf(t, "unexpected epoch", "epoch: %d, must be 1 or 2", epoch)
 	}
 
 	// Ack the message.
@@ -431,7 +427,7 @@ func TestReparenting(t *testing.T) {
 	assertClientCount(t, 0, shard0Replica)
 	assertClientCount(t, 1, shard1Primary)
 
-	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil, false)
+	_, err = session.Execute(t.Context(), "update "+name+" set time_acked = 1, time_next = null where id in (3) and time_acked is null", nil, false)
 	require.Nil(t, err)
 }
 
@@ -482,7 +478,7 @@ func TestConnection(t *testing.T) {
 	_, err = stream.Next()
 	require.Nil(t, err)
 
-	_, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (2, 5) and time_acked is null", nil, false)
+	_, err = session.Execute(t.Context(), "update "+name+" set time_acked = 1, time_next = null where id in (2, 5) and time_acked is null", nil, false)
 	require.Nil(t, err)
 	// After closing one stream, ensure vttablets have dropped it.
 	stream.Close()
@@ -535,7 +531,7 @@ func testMessaging(t *testing.T, name, ks string) {
 	resMap = make(map[string]string)
 	stream.ClearMem()
 	// validate message ack with id 4
-	qr, err := session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (4) and time_acked is null", nil, false)
+	qr, err := session.Execute(t.Context(), "update "+name+" set time_acked = 1, time_next = null where id in (4) and time_acked is null", nil, false)
 	require.Nil(t, err)
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 
@@ -548,7 +544,7 @@ func testMessaging(t *testing.T, name, ks string) {
 	assert.Equal(t, "1", resMap["1"])
 
 	// validate message ack with 1 and 4, only 1 should be ack
-	qr, err = session.Execute(context.Background(), "update "+name+" set time_acked = 1, time_next = null where id in (1, 4) and time_acked is null", nil, false)
+	qr, err = session.Execute(t.Context(), "update "+name+" set time_acked = 1, time_next = null where id in (1, 4) and time_acked is null", nil, false)
 	require.Nil(t, err)
 	assert.Equal(t, uint64(1), qr.RowsAffected)
 }
@@ -636,29 +632,22 @@ func assertClientCount(t *testing.T, expected int, vttablet *cluster.Vttablet) {
 	parseDebugVars(t, &vars, vttablet)
 
 	got := vars.Messages["sharded_message.ClientCount"]
-	if got != expected {
-		t.Fatalf("wrong number of clients: got %d, expected %d. messages:\n%#v", got, expected, vars.Messages)
-	}
+	require.Equalf(t, expected, got, "wrong number of clients: got %d, expected %d. messages:\n%#v", got, expected, vars.Messages)
 }
 
 func parseDebugVars(t *testing.T, output any, vttablet *cluster.Vttablet) {
 	debugVarURL := fmt.Sprintf("http://%s:%d/debug/vars", vttablet.VttabletProcess.TabletHostname, vttablet.HTTPPort)
 	resp, err := http.Get(debugVarURL)
-	if err != nil {
-		t.Fatalf("failed to fetch %q: %v", debugVarURL, err)
-	}
+	require.NoErrorf(t, err, "failed to fetch %q: %v", debugVarURL, err)
 	defer resp.Body.Close()
 
 	respByte, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("failed to read body %q: %v", debugVarURL, err)
-	}
+	require.NoErrorf(t, err, "failed to read body %q: %v", debugVarURL, err)
 
 	if resp.StatusCode != 200 {
-		t.Fatalf("status code %d while fetching %q:\n%s", resp.StatusCode, debugVarURL, respByte)
+		require.Failf(t, "unexpected status code", "status code %d while fetching %q:\n%s", resp.StatusCode, debugVarURL, respByte)
 	}
 
-	if err := json.Unmarshal(respByte, output); err != nil {
-		t.Fatalf("failed to unmarshal JSON from %q: %v", debugVarURL, err)
-	}
+	err = json.Unmarshal(respByte, output)
+	require.NoErrorf(t, err, "failed to unmarshal JSON from %q: %v", debugVarURL, err)
 }

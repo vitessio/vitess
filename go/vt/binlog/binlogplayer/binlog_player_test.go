@@ -20,10 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -97,9 +99,7 @@ func TestNewBinlogPlayerKeyRange(t *testing.T) {
 	dbClient.Wait()
 	expectFBCRequest(t, fbc, wantTablet, testPos, nil, &topodatapb.KeyRange{End: []byte{0x80}})
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 func TestNewBinlogPlayerTables(t *testing.T) {
@@ -130,9 +130,7 @@ func TestNewBinlogPlayerTables(t *testing.T) {
 	dbClient.Wait()
 	expectFBCRequest(t, fbc, wantTablet, testPos, wantTables, nil)
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestApplyEventsFail ensures the error is recorded in the vreplication table if there's a failure.
@@ -153,9 +151,8 @@ func TestApplyEventsFail(t *testing.T) {
 	dbClient.Wait()
 
 	want := "error in processing binlog event failed query BEGIN, err: err"
-	if err := errfunc(); err == nil || err.Error() != want {
-		t.Errorf("ApplyBinlogEvents err: %v, want %v", err, want)
-	}
+	err := errfunc()
+	require.EqualErrorf(t, err, want, "ApplyBinlogEvents err: %v, want %v", err, want)
 }
 
 var settingsFields []*querypb.Field = []*querypb.Field{
@@ -204,9 +201,7 @@ func TestStopPosEqual(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestStopPosLess ensures player stops if stopPos<pos.
@@ -243,9 +238,7 @@ func TestStopPosLess(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestStopPosGreater ensures player stops if stopPos>pos.
@@ -286,9 +279,7 @@ func TestStopPosGreater(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestContextCancel ensures player does not record error or stop if context is canceled.
@@ -332,9 +323,7 @@ func TestContextCancel(t *testing.T) {
 	// Wait for Apply to return,
 	// and call dbClient.Wait to ensure
 	// no new statements were issued.
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 
 	dbClient.Wait()
 }
@@ -360,9 +349,7 @@ func TestRetryOnDeadlock(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // applyEvents starts a goroutine to apply events, and returns an error function.
@@ -403,9 +390,7 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if got != want {
-		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
-	}
+	assert.Equalf(t, want, got, "CreateVReplication() =\n%v, want\n%v", got, want)
 }
 
 func TestCreateVReplicationTables(t *testing.T) {
@@ -425,9 +410,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if got != want {
-		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
-	}
+	assert.Equalf(t, want, got, "CreateVReplication() =\n%v, want\n%v", got, want)
 }
 
 func TestUpdateVReplicationPos(t *testing.T) {
@@ -437,9 +420,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0, 0, false)
-	if got != want {
-		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "updateVReplicationPos() = %#v, want %#v", got, want)
 }
 
 func TestUpdateVReplicationTimestamp(t *testing.T) {
@@ -449,25 +430,19 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828, 0, false)
-	if got != want {
-		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "updateVReplicationPos() = %#v, want %#v", got, want)
 }
 
 func TestReadVReplicationPos(t *testing.T) {
 	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)
-	if got != want {
-		t.Errorf("ReadVReplicationPos(482821) = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "ReadVReplicationPos(482821) = %#v, want %#v", got, want)
 }
 
 func TestReadVReplicationStatus(t *testing.T) {
 	want := "select pos, state, message from _vt.vreplication where id=482821"
 	got := ReadVReplicationStatus(482821)
-	if got != want {
-		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
 }
 
 func TestEncodeString(t *testing.T) {
@@ -499,6 +474,46 @@ func TestEncodeString(t *testing.T) {
 		t.Run(tcase.in, func(t *testing.T) {
 			out := encodeString(tcase.in)
 			assert.Equal(t, tcase.out, out)
+		})
+	}
+}
+
+func TestMessageTruncate(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectTruncate bool
+	}{
+		{
+			name:           "short message unchanged",
+			input:          "short message",
+			expectTruncate: false,
+		},
+		{
+			name:           "exactly 950 bytes unchanged",
+			input:          strings.Repeat("a", 950),
+			expectTruncate: false,
+		},
+		{
+			name:           "951 bytes truncated",
+			input:          strings.Repeat("b", 951),
+			expectTruncate: true,
+		},
+		{
+			name:           "very long message truncated",
+			input:          strings.Repeat("c", 2000),
+			expectTruncate: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MessageTruncate(tc.input)
+			if tc.expectTruncate {
+				assert.LessOrEqual(t, len(result), 950, "truncated message should be at most 950 bytes")
+				assert.Contains(t, result, TruncationIndicator, "truncated message should contain truncation indicator")
+			} else {
+				assert.Equal(t, tc.input, result, "message should be unchanged")
+			}
 		})
 	}
 }

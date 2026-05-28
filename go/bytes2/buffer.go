@@ -72,3 +72,10 @@ func (buf *Buffer) Reset() {
 func (buf *Buffer) Len() int {
 	return len(buf.bytes)
 }
+
+// Truncate discards all but the first n bytes from the buffer but
+// continues to use the same allocated storage.
+// It panics if n is negative or greater than the length of the buffer.
+func (buf *Buffer) Truncate(n int) {
+	buf.bytes = buf.bytes[:n]
+}

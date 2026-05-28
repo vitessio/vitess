@@ -17,10 +17,10 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -48,39 +48,39 @@ func (tc *testConn) IsKilled() bool {
 func TestQueryList(t *testing.T) {
 	ql := NewQueryList("test", sqlparser.NewTestParser())
 	connID := int64(1)
-	qd := NewQueryDetail(context.Background(), &testConn{id: connID})
+	qd := NewQueryDetail(t.Context(), &testConn{id: connID})
 	err := ql.Add(qd)
 	require.NoError(t, err)
 
 	if qd1, ok := ql.queryDetails[connID]; !ok || qd1[0].connID != connID {
-		t.Errorf("failed to add to QueryList")
+		assert.Fail(t, "failed to add to QueryList")
 	}
 
 	conn2ID := int64(2)
-	qd2 := NewQueryDetail(context.Background(), &testConn{id: conn2ID})
+	qd2 := NewQueryDetail(t.Context(), &testConn{id: conn2ID})
 	err = ql.Add(qd2)
 	require.NoError(t, err)
 
 	rows := ql.AppendQueryzRows(nil)
 	if len(rows) != 2 || rows[0].ConnID != 1 || rows[1].ConnID != 2 {
-		t.Errorf("wrong rows returned %v", rows)
+		assert.Failf(t, "wrong rows returned", "wrong rows returned %v", rows)
 	}
 
 	ql.Remove(qd)
 	if _, ok := ql.queryDetails[connID]; ok {
-		t.Errorf("failed to remove from QueryList")
+		assert.Fail(t, "failed to remove from QueryList")
 	}
 }
 
 func TestQueryListChangeConnIDInMiddle(t *testing.T) {
 	ql := NewQueryList("test", sqlparser.NewTestParser())
 	connID := int64(1)
-	qd1 := NewQueryDetail(context.Background(), &testConn{id: connID})
+	qd1 := NewQueryDetail(t.Context(), &testConn{id: connID})
 	err := ql.Add(qd1)
 	require.NoError(t, err)
 
 	conn := &testConn{id: connID}
-	qd2 := NewQueryDetail(context.Background(), conn)
+	qd2 := NewQueryDetail(t.Context(), conn)
 	err = ql.Add(qd2)
 	require.NoError(t, err)
 
@@ -100,7 +100,7 @@ func TestQueryListChangeConnIDInMiddle(t *testing.T) {
 func TestClusterAction(t *testing.T) {
 	ql := NewQueryList("test", sqlparser.NewTestParser())
 	connID := int64(1)
-	qd1 := NewQueryDetail(context.Background(), &testConn{id: connID})
+	qd1 := NewQueryDetail(t.Context(), &testConn{id: connID})
 
 	ql.SetClusterAction(ClusterActionInProgress)
 	ql.SetClusterAction(ClusterActionNoQueries)

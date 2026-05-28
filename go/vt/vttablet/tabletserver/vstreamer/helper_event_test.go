@@ -439,9 +439,7 @@ func (ts *TestSpec) Run() {
 				case *sqlparser.Set:
 				default:
 					_, ok := stmt.(sqlparser.DDLStatement)
-					if !ok {
-						require.FailNowf(ts.t, "unsupported statement type", "stmt: %s", stmt)
-					}
+					require.True(ts.t, ok, "stmt: %s", stmt)
 					output = append(output, "gtid")
 					output = append(output, ts.getDDLEvent(tq.query))
 				}

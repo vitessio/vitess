@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,7 +59,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"))
 		vc := newTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
-		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 		require.NoError(t, err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -70,7 +69,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		})
 
 		vc.Rewind()
-		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+		err = fkc.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
 		require.NoError(t, err)
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -85,7 +84,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1", "1")
 		vc := newTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
-		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -93,7 +92,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		})
 
 		vc.Rewind()
-		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+		err = fkc.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
 		require.ErrorContains(t, err, "Cannot add or update a child row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -107,7 +106,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		fakeRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1", "1", "1")
 		vc := newTestVCursor("0")
 		vc.results = []*sqltypes.Result{fakeRes}
-		_, err := fkc.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true)
+		_, err := fkc.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
 		require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -115,7 +114,7 @@ func TestFKVerifyUpdate(t *testing.T) {
 		})
 
 		vc.Rewind()
-		err = fkc.TryStreamExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
+		err = fkc.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true, func(result *sqltypes.Result) error { return nil })
 		require.ErrorContains(t, err, "Cannot delete or update a parent row: a foreign key constraint fails")
 		vc.ExpectLog(t, []string{
 			`ResolveDestinations ks [] Destinations:DestinationAllShards()`,

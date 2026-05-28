@@ -53,5 +53,5 @@ vtctldclient Reshard --workflow cust2cust --target-keyspace customer complete
 vtctldclient DeleteShards --force --recursive customer/0
 
 # Down cluster
-./401_teardown.sh
+./501_teardown.sh
 ```

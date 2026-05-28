@@ -58,7 +58,7 @@ func init() {
 func TestSchemaManagerControllerOpenFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"select * from test_db"}, true, false, false)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err := Run(ctx, controller, newFakeExecutor(t))
 	require.ErrorIs(t, err, errControllerOpen)
@@ -67,7 +67,7 @@ func TestSchemaManagerControllerOpenFail(t *testing.T) {
 func TestSchemaManagerControllerReadFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"select * from test_db"}, false, true, false)
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := Run(ctx, controller, newFakeExecutor(t))
 	require.ErrorIs(t, err, errControllerRead)
 	require.True(t, controller.onReadFailTriggered, "OnReadFail should be called")
@@ -76,7 +76,7 @@ func TestSchemaManagerControllerReadFail(t *testing.T) {
 func TestSchemaManagerValidationFail(t *testing.T) {
 	controller := newFakeController(
 		[]string{"invalid sql"}, false, false, false)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err := Run(ctx, controller, newFakeExecutor(t))
 	require.ErrorContains(t, err, "failed to parse sql", "run schema change should fail due to executor.Validate fail")
@@ -87,7 +87,7 @@ func TestSchemaManagerExecutorOpenFail(t *testing.T) {
 		[]string{"create table test_table (pk int);"}, false, false, false)
 	controller.SetKeyspace("unknown_keyspace")
 	executor := NewTabletExecutor("TestSchemaManagerExecutorOpenFail", newFakeTopo(t), newFakeTabletManagerClient(), logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err := Run(ctx, controller, executor)
 	require.ErrorContains(t, err, "unknown_keyspace", "run schema change should fail due to executor.Open fail")
@@ -117,7 +117,7 @@ func TestSchemaManagerRun(t *testing.T) {
 			fakeTmc.AddSchemaDefinition("vt_test_keyspace", &tabletmanagerdatapb.SchemaDefinition{})
 			executor := NewTabletExecutor("TestSchemaManagerRun", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 
-			ctx := context.Background()
+			ctx := t.Context()
 			resp, err := Run(ctx, controller, executor)
 
 			require.Lenf(t, resp.UUIDs, 0, "response should contain an empty list of UUIDs")
@@ -154,7 +154,7 @@ func TestSchemaManagerExecutorFail(t *testing.T) {
 	fakeTmc.EnableExecuteFetchAsDbaError = true
 	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 0, sqlparser.NewTestParser())
 
-	ctx := context.Background()
+	ctx := t.Context()
 	resp, err := Run(ctx, controller, executor)
 	require.Lenf(t, resp.UUIDs, 0, "response should contain an empty list of UUIDs")
 	require.ErrorContains(t, err, "schema change failed", "schema change should fail")
@@ -170,7 +170,7 @@ func TestSchemaManagerExecutorBatchVsStrategyFail(t *testing.T) {
 	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10, sqlparser.NewTestParser())
 	executor.SetDDLStrategy("online")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := Run(ctx, controller, executor)
 
 	assert.ErrorContains(t, err, "--batch-size requires 'direct'")
@@ -186,7 +186,7 @@ func TestSchemaManagerExecutorBatchVsQueriesFail(t *testing.T) {
 	executor := NewTabletExecutor("TestSchemaManagerExecutorFail", newFakeTopo(t), fakeTmc, logutil.NewConsoleLogger(), testWaitReplicasTimeout, 10, sqlparser.NewTestParser())
 	executor.SetDDLStrategy("direct")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := Run(ctx, controller, executor)
 
 	assert.ErrorContains(t, err, "--batch-size only allowed when all queries are CREATE")
@@ -203,7 +203,7 @@ func TestSchemaManagerExecutorBatchVsUUIDsFail(t *testing.T) {
 	executor.SetDDLStrategy("direct")
 	executor.SetUUIDList([]string{"4e5dcf80_354b_11eb_82cd_f875a4d24e90"})
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := Run(ctx, controller, executor)
 
 	assert.ErrorContains(t, err, "--batch-size conflicts with --uuid-list")
@@ -305,7 +305,7 @@ func (client *fakeTabletManagerClient) ExecuteMultiFetchAsDba(ctx context.Contex
 // - 3 shards named '1', '2', '3'.
 // - A primary tablet for each shard.
 func newFakeTopo(t *testing.T) *topo.Server {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "test_cell")
 	err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{})

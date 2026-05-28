@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 // VTOrcProcess is a test struct for running
@@ -54,7 +53,6 @@ type VTOrcProcess struct {
 
 type VTOrcConfiguration struct {
 	InstancePollTime                     string `json:"instance-poll-time,omitempty"`
-	SnapshotTopologyInterval             string `json:"snapshot-topology-interval,omitempty"`
 	PreventCrossCellFailover             bool   `json:"prevent-cross-cell-failover,omitempty"`
 	ReasonableReplicationLag             string `json:"reasonable-replication-lag,omitempty"`
 	AuditToBackend                       bool   `json:"audit-to-backend,omitempty"`
@@ -134,15 +132,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--bind-address":               "127.0.0.1",
 	}
 
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", orc.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", orc.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", orc.TopoGlobalRoot)
-	orcVer, versionErr := GetMajorVersion(orc.Binary)
-	if versionErr != nil {
-		log.Warn(fmt.Sprintf("failed to get major %s version; skipping --log-format flag: %s", orc.Binary, versionErr))
-	} else if orcVer >= 24 {
-		flags["--log-format"] = "text"
-	}
+	flags["--log-format"] = "text"
 
 	orc.proc = exec.Command(orc.Binary)
 	for flag, value := range flags {

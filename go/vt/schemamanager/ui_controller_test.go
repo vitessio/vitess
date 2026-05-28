@@ -17,7 +17,6 @@ limitations under the License.
 package schemamanager
 
 import (
-	"context"
 	"errors"
 	"net/http/httptest"
 	"testing"
@@ -29,7 +28,7 @@ func TestUIController(t *testing.T) {
 	sql := "CREATE TABLE test_table (pk int)"
 	response := httptest.NewRecorder()
 	controller := NewUIController(sql, "test_keyspace", response)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := controller.Open(ctx)
 	require.NoError(t, err)

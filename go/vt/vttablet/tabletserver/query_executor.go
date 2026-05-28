@@ -504,10 +504,6 @@ func (qre *QueryExecutor) checkPermissions() error {
 	default:
 		// no rules against this query. Good to proceed
 	}
-	// Skip ACL check for queries against the dummy dual table
-	if qre.plan.TableName().String() == "dual" {
-		return nil
-	}
 
 	// Skip the ACL check if the connecting user is an exempted superuser.
 	if qre.tsv.qe.exemptACL != nil && qre.tsv.qe.exemptACL.IsMember(&querypb.VTGateCallerID{Username: username}) {
@@ -550,11 +546,6 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 			return nil
 		}
 
-		// Skip ACL check for queries against the dummy dual table
-		if tableName == "dual" {
-			return nil
-		}
-
 		if qre.tsv.qe.strictTableACL {
 			groupStr := ""
 			if len(callerID.Groups) > 0 {
@@ -592,6 +583,12 @@ func (qre *QueryExecutor) recordACLStats(key []string, aclState acl.ACLState) {
 }
 
 func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Result, err error) {
+	// Reject CREATE TABLE/VIEW before reaching MySQL if it would push the
+	// schema engine past its configured table-count limit.
+	if err := qre.checkCreateTableLimit(); err != nil {
+		return nil, err
+	}
+
 	// Let's see if this is a normal DDL statement or an Online DDL statement.
 	// An Online DDL statement is identified by /*vt+ .. */ comment with expected directives, like uuid etc.
 	if onlineDDL, err := schema.OnlineDDLFromCommentedStatement(qre.plan.FullStmt); err == nil {
@@ -649,6 +646,18 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 		}
 	}
 	return qre.execStatefulConn(conn, sql, true)
+}
+
+// checkCreateTableLimit rejects a CREATE TABLE/VIEW that would exceed the
+// schema engine's configured table-count limit. Other DDL is a no-op for the
+// count, so short-circuit it before acquiring the schema-engine lock.
+func (qre *QueryExecutor) checkCreateTableLimit() error {
+	switch qre.plan.FullStmt.(type) {
+	case *sqlparser.CreateTable, *sqlparser.CreateView:
+	default:
+		return nil
+	}
+	return eschema.CheckCreateTableLimit(qre.tsv.se, []sqlparser.Statement{qre.plan.FullStmt}, 0)
 }
 
 func (qre *QueryExecutor) execLoad(conn *StatefulConnection) (*sqltypes.Result, error) {
@@ -753,16 +762,22 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 			} else {
 				defer conn.Recycle()
 				res, err := qre.execDBConn(conn.Conn, sql, true)
+				if qre.tsv.config.ConsolidatorCacheProto3Rows && q.HasWaiters() {
+					res.CacheProto3Rows()
+				}
 				q.SetResult(res)
 				q.SetErr(err)
 			}
 		} else {
 			waiterCap := qre.tsv.config.ConsolidatorQueryWaiterCap
-			if waiterCap == 0 || *q.AddWaiterCounter(0) <= waiterCap {
+			if waiterCap == 0 || qre.tsv.qe.consolidator.TotalWaiterCount() <= waiterCap {
 				qre.logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 				startTime := time.Now()
 				q.Wait()
 				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			} else if qre.tsv.config.ConsolidatorRejectOnCap {
+				q.AddWaiterCounter(-1)
+				return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "consolidator waiter cap exceeded")
 			} else {
 				// Waiter cap exceeded, fall back to independent query execution
 				waiterCapExceeded = true
@@ -1035,7 +1050,7 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.CancelMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user", true)
 	case sqlparser.CancelAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user", true)
+		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, alterMigration.Context, true)
 	case sqlparser.ThrottleMigrationType:
 		return qre.tsv.onlineDDLExecutor.ThrottleMigration(qre.ctx, alterMigration.UUID, alterMigration.Expire, alterMigration.Ratio)
 	case sqlparser.ThrottleAllMigrationType:

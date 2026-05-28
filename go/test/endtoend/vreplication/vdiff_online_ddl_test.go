@@ -15,7 +15,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -34,7 +33,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 	keyspace := defaultSourceKs
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	createQuery := "create table temp (id int, name varchar(100), blb blob, primary key (id))"
@@ -89,12 +88,12 @@ func onlineDDLShow(t *testing.T, keyspace, uuid string) *vtctldata.GetSchemaMigr
 }
 
 func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), strategy, "--sql", query, keyspace)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", strategy, "--sql", query, keyspace)
 	require.NoError(t, err, output)
 	output = strings.TrimSpace(output)
 	if strategy != "direct" {
-		// We expect a UUID as the only output, but when using --ddl_strategy we get a warning mixed into the output:
-		//   Flag --ddl_strategy has been deprecated, use --ddl-strategy instead
+		// We expect a UUID as the only output, but when using --ddl-strategy we get a warning mixed into the output:
+		//   Flag --ddl-strategy has been deprecated, use --ddl-strategy instead
 		// In order to prevent this and other similar future issues, lets hunt for the UUID (which should be on its own line)
 		// in the returned output.
 		uuid := ""
@@ -131,7 +130,7 @@ func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
 
 	numRowsStart := getNumRows(t, vtgateConn, keyspace, table)
 	numRows := 0
-	shortCtx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	shortCtx, cancel := context.WithTimeout(t.Context(), defaultTimeout)
 	defer cancel()
 	for {
 		switch {

@@ -20,11 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
-	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -161,28 +162,27 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 	innodbLogFile := "innodb_log_1"
 
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_data_1: %v", err)
+		require.NoError(t, err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file %s: %v", innodbLogFile, err)
-	}
+	err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm)
+	require.NoErrorf(t, err, "failed to write file %s: %v", innodbLogFile, err)
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file db.opt: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(extraDir, "extra.stuff"), []byte("extra file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file extra.stuff: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(outsideDbDir, "table1.frm"), []byte("frm file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file table1.opt: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.Symlink(outsideDbDir, path.Join(dataDir, "vt_symlink")); err != nil {
-		t.Fatalf("failed to symlink vt_symlink: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(rocksdbDir, "000011.sst"), []byte("rocksdb file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file 000011.sst: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(sdiOnlyDir, "table1.sdi"), []byte("sdi file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file table1.sdi: %v", err)
+		require.NoError(t, err)
 	}
 
 	cnf := &Mycnf{
@@ -192,9 +192,7 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 	}
 
 	result, totalSize, err := findFilesToBackup(cnf)
-	if err != nil {
-		t.Fatalf("findFilesToBackup failed: %v", err)
-	}
+	require.NoError(t, err)
 	sort.Sort(forTest(result))
 	t.Logf("findFilesToBackup returned: %v", result)
 	expected := []FileEntry{
@@ -223,12 +221,8 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 			Name: innodbLogFile,
 		},
 	}
-	if !reflect.DeepEqual(result, expected) {
-		t.Fatalf("got wrong list of FileEntry %v, expected %v", result, expected)
-	}
-	if totalSize <= 0 {
-		t.Fatalf("backup size should be > 0, got %v", totalSize)
-	}
+	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
+	require.Greaterf(t, totalSize, int64(0), "backup size should be > 0, got %v", totalSize)
 }
 
 func TestFindFilesToBackupWithRedoLog(t *testing.T) {
@@ -244,9 +238,8 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 	rocksdbDir := path.Join(dataDir, ".rocksdb")
 	sdiOnlyDir := path.Join(dataDir, "sdi_dir")
 	for _, s := range []string{innodbDataDir, innodbLogDir, dataDbDir, extraDir, outsideDbDir, rocksdbDir, sdiOnlyDir} {
-		if err := os.MkdirAll(s, os.ModePerm); err != nil {
-			t.Fatalf("failed to create directory %v: %v", s, err)
-		}
+		err := os.MkdirAll(s, os.ModePerm)
+		require.NoErrorf(t, err, "failed to create directory %v: %v", s, err)
 	}
 
 	cnf := &Mycnf{
@@ -259,34 +252,31 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 	innodbLogFile := path.Join(mysql.DynamicRedoLogSubdir, "#ib_redo1")
 
 	if err := os.WriteFile(path.Join(innodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file innodb_data_1: %v", err)
+		require.NoError(t, err)
 	}
-	if err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file %s: %v", innodbLogFile, err)
-	}
+	err := os.WriteFile(path.Join(innodbLogDir, innodbLogFile), []byte("innodb log 1 contents"), os.ModePerm)
+	require.NoErrorf(t, err, "failed to write file %s: %v", innodbLogFile, err)
 	if err := os.WriteFile(path.Join(dataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file db.opt: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(extraDir, "extra.stuff"), []byte("extra file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file extra.stuff: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(outsideDbDir, "table1.frm"), []byte("frm file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file table1.opt: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.Symlink(outsideDbDir, path.Join(dataDir, "vt_symlink")); err != nil {
-		t.Fatalf("failed to symlink vt_symlink: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(rocksdbDir, "000011.sst"), []byte("rocksdb file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file 000011.sst: %v", err)
+		require.NoError(t, err)
 	}
 	if err := os.WriteFile(path.Join(sdiOnlyDir, "table1.sdi"), []byte("sdi file"), os.ModePerm); err != nil {
-		t.Fatalf("failed to write file table1.sdi: %v", err)
+		require.NoError(t, err)
 	}
 
 	result, totalSize, err := findFilesToBackup(cnf)
-	if err != nil {
-		t.Fatalf("findFilesToBackup failed: %v", err)
-	}
+	require.NoError(t, err)
 	sort.Sort(forTest(result))
 	t.Logf("findFilesToBackup returned: %v", result)
 	expected := []FileEntry{
@@ -315,12 +305,8 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 			Name: innodbLogFile,
 		},
 	}
-	if !reflect.DeepEqual(result, expected) {
-		t.Fatalf("got wrong list of FileEntry %v, expected %v", result, expected)
-	}
-	if totalSize <= 0 {
-		t.Fatalf("backup size should be > 0, got %v", totalSize)
-	}
+	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
+	require.Greaterf(t, totalSize, int64(0), "backup size should be > 0, got %v", totalSize)
 }
 
 // TestRestoreEmitsStats tests that Restore emits stats.
@@ -551,7 +537,7 @@ type fakeBackupRestoreEnv struct {
 }
 
 func createFakeBackupRestoreEnv(t *testing.T) *fakeBackupRestoreEnv {
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 
 	sqldb := fakesqldb.New(t)
@@ -928,7 +914,120 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			wantErrString: "no timeout provided",
 			wantNoLogMsg:  true,
 		},
+		{
+			name: "SetSuperReadOnly failure with FailOnError true",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = errors.New("access denied")
+			},
+			wantErr:       true,
+			wantErrString: "failed to disable super_read_only for init SQL queries",
+		},
+		{
+			name: "SetSuperReadOnly ERUnknownSystemVariable with FailOnError true",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: true,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = sqlerror.NewSQLError(sqlerror.ERUnknownSystemVariable, "", "Unknown system variable 'super_read_only'")
+				fmd.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+			},
+			wantErr:    false,
+			wantLogMsg: "Server does not support super_read_only",
+		},
+		{
+			name: "SetSuperReadOnly failure with FailOnError false",
+			params: &BackupParams{
+				TabletType: topodatapb.TabletType_PRIMARY,
+				InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+					Queries:     []string{"OPTIMIZE TABLE foo"},
+					TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+					Timeout:     protoutil.DurationToProto(30 * time.Second),
+					FailOnError: false,
+				},
+				Logger: logutil.NewMemoryLogger(),
+			},
+			setupMysqld: func(fmd *FakeMysqlDaemon) {
+				fmd.SetSuperReadOnlyError = errors.New("access denied")
+				fmd.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+			},
+			wantErr:    false,
+			wantLogMsg: "Failed to disable super_read_only for init SQL queries",
+		},
 	}
+
+	// Test that super_read_only is disabled before query execution and reset after.
+	t.Run("super_read_only disabled and reset after queries", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		mysqld.SuperReadOnly.Store(true)
+		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+		superReadOnlyDuringQueries := true
+		mysqld.ExecuteSuperQueryListCallback = func() {
+			superReadOnlyDuringQueries = mysqld.SuperReadOnly.Load()
+		}
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"OPTIMIZE TABLE foo"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+			},
+			Mysqld: mysqld,
+			Logger: logutil.NewMemoryLogger(),
+		}
+
+		err := ExecuteBackupInitSQL(t.Context(), params)
+		require.NoError(t, err)
+		assert.False(t, superReadOnlyDuringQueries, "super_read_only should be disabled during query execution")
+		assert.True(t, mysqld.SuperReadOnly.Load(), "super_read_only should be reset to true after queries complete")
+	})
+
+	// Test that super_read_only is not reset when it was already off.
+	t.Run("super_read_only already off no reset needed", func(t *testing.T) {
+		sqldb := fakesqldb.New(t)
+		defer sqldb.Close()
+		mysqld := NewFakeMysqlDaemon(sqldb)
+		defer mysqld.Close()
+
+		mysqld.SuperReadOnly.Store(false)
+		mysqld.ExpectedExecuteSuperQueryList = []string{"OPTIMIZE TABLE foo"}
+
+		params := &BackupParams{
+			TabletType: topodatapb.TabletType_PRIMARY,
+			InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+				Queries:     []string{"OPTIMIZE TABLE foo"},
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				Timeout:     protoutil.DurationToProto(30 * time.Second),
+			},
+			Mysqld: mysqld,
+			Logger: logutil.NewMemoryLogger(),
+		}
+
+		err := ExecuteBackupInitSQL(t.Context(), params)
+		require.NoError(t, err)
+		assert.False(t, mysqld.SuperReadOnly.Load(), "super_read_only should remain false")
+	})
 
 	// Test case for context cancellation during query execution.
 	t.Run("parent context canceled with query failure", func(t *testing.T) {
@@ -953,7 +1052,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			Logger: logger,
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel() // Cancel immediately to simulate parent context cancellation
 
 		err := ExecuteBackupInitSQL(ctx, params)
@@ -982,7 +1081,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				tc.params.Mysqld = mysqld
 			}
 
-			ctx := context.Background()
+			ctx := t.Context()
 			err := ExecuteBackupInitSQL(ctx, tc.params)
 
 			if tc.wantErr {

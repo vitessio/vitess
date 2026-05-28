@@ -30,11 +30,16 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 		if node.With != nil {
 			node.With.Format(buf)
 		}
-		buf.Myprintf("select %v from ", node.SelectExprs)
-		var prefix string
-		for _, n := range node.From {
-			buf.Myprintf("%s%v", prefix, n)
-			prefix = ", "
+		buf.Myprintf("select %v", node.SelectExprs)
+		if len(node.From) == 0 {
+			buf.Myprintf(" from dual")
+		} else {
+			buf.Myprintf(" from ")
+			var prefix string
+			for _, n := range node.From {
+				buf.Myprintf("%s%v", prefix, n)
+				prefix = ", "
+			}
 		}
 		buf.Myprintf(" where 1 != 1")
 		if node.GroupBy != nil {

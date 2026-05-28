@@ -16,7 +16,7 @@
 
 import React from 'react';
 import { UseMutationResult } from '@tanstack/react-query';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { DeleteTabletParams } from '../../../api/http';
 import {
     useDeleteTablet,
@@ -38,7 +38,7 @@ interface AdvancedProps {
 }
 
 const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
-    const history = useHistory();
+    const navigate = useNavigate();
     const primary = isPrimary(tablet);
 
     const deleteParams: DeleteTabletParams = { alias, clusterID };
@@ -51,7 +51,7 @@ const Advanced: React.FC<AdvancedProps> = ({ alias, clusterID, tablet }) => {
             success(
                 `Initiated deletion for tablet ${alias}. It may take some time for the tablet to disappear from the topology.`
             );
-            history.push('/tablets');
+            navigate('/tablets');
         },
         onError: (error) => warn(`There was an error deleting tablet: ${error}`),
     });

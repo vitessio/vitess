@@ -5,3 +5,10 @@
 /vthook/
 /web/vtadmin/node_modules
 /web/vtadmin/build
+/examples/compose
+/examples/local
+/examples/operator
+/examples/backups
+/examples/demo
+/examples/region_sharding
+/examples/vtexplain

@@ -106,6 +106,8 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 	} else {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		if len(message) > maxVReplicationLogMessageLen {
+			log.Warn(fmt.Sprintf("VReplication log message truncated (vrepl_id=%d, type=%s, len=%d). Full message: %s",
+				vreplID, typ, len(message), message))
 			message, err = textutil.TruncateText(message, maxVReplicationLogMessageLen, binlogplayer.TruncationLocation, binlogplayer.TruncationIndicator)
 			if err != nil {
 				log.Error(fmt.Sprintf("Could not insert vreplication_log record because we failed to truncate the message: %v", err))
