@@ -3187,7 +3187,7 @@ func (node *ValuesStatement) GetColumnCount() int {
 	if len(node.Rows) > 0 {
 		return len(node.Rows[0])
 	}
-	panic("no columns available") // TODO: we need a better solution than a panic
+	return 0
 }
 
 func (node *ValuesStatement) GetColumns() []SelectExpr {
