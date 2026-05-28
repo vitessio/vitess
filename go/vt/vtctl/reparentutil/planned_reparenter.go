@@ -773,9 +773,11 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 			}
 			// Some MySQL variants like MariaDB don't expose this status variable. Omit those
 			// tablets from the map so a missing or unparseable value can't be confused with a
-			// legitimate zero when tiebreaking primary election by buffer-pool warmth.
+			// legitimate zero when tiebreaking primary election by buffer-pool warmth. We treat
+			// an empty string the same as a missing key to avoid log spam on variants that
+			// return the row but with no value.
 			rawVal, ok := statusValues[InnodbBufferPoolsDataVar]
-			if !ok {
+			if !ok || rawVal == "" {
 				return nil
 			}
 			val, err := strconv.Atoi(rawVal)
