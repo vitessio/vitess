@@ -199,16 +199,6 @@ func TestMoveTablesComplete(t *testing.T) {
 	defer cancel()
 
 	workflowName := "wf1"
-	stopReverseStreamQueries := []*queryResult{
-		{
-			query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=1",
-			result: &querypb.QueryResult{},
-		},
-		{
-			query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
-			result: &querypb.QueryResult{},
-		},
-	}
 	table1Name := "t1"
 	table2Name := "t1_2"
 	table3Name := "t1_3"
@@ -269,7 +259,15 @@ func TestMoveTablesComplete(t *testing.T) {
 				TargetKeyspace: targetKeyspaceName,
 				Workflow:       workflowName,
 			},
-			expectedSourceQueries: append(slices.Clone(stopReverseStreamQueries),
+			expectedSourceQueries: []*queryResult{
+				{
+					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=1",
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
+					result: &querypb.QueryResult{},
+				},
 				&queryResult{
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
@@ -287,7 +285,7 @@ func TestMoveTablesComplete(t *testing.T) {
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
 				},
-			),
+			},
 			expectedTargetQueries: []*queryResult{
 				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
@@ -316,13 +314,21 @@ func TestMoveTablesComplete(t *testing.T) {
 				KeepRoutingRules: true,
 				KeepData:         new(true),
 			},
-			expectedSourceQueries: append(slices.Clone(stopReverseStreamQueries),
+			expectedSourceQueries: []*queryResult{
+				{
+					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=1",
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
+					result: &querypb.QueryResult{},
+				},
 				&queryResult{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
 				},
-			),
+			},
 			expectedTargetQueries: []*queryResult{
 				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
@@ -353,7 +359,15 @@ func TestMoveTablesComplete(t *testing.T) {
 				Workflow:       workflowName,
 				RenameTables:   true,
 			},
-			expectedSourceQueries: append(slices.Clone(stopReverseStreamQueries),
+			expectedSourceQueries: []*queryResult{
+				{
+					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=1",
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
+					result: &querypb.QueryResult{},
+				},
 				&queryResult{
 					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table1Name, sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
@@ -371,7 +385,7 @@ func TestMoveTablesComplete(t *testing.T) {
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
 				},
-			),
+			},
 			expectedTargetQueries: []*queryResult{
 				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
