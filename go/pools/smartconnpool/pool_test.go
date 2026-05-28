@@ -691,7 +691,7 @@ func TestCloseWithContextAfterIdleCleanupPopDoesNotLeak(t *testing.T) {
 		return p.Capacity() == 0
 	}, 30*time.Second, time.Millisecond)
 
-	p.tryReturnConn(cleanupConn, false)
+	p.tryReturnConn(cleanupConn)
 	held.Recycle()
 
 	var closeErr error
