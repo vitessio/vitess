@@ -276,13 +276,19 @@ type replicationSnapshot struct {
 }
 
 // replicasWithStoppedIO returns the reachable replicas whose IO threads ERS
-// stopped and should restart during cleanup.
-func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.TabletInfo) []*topodatapb.Tablet {
-	replicas := make([]*topodatapb.Tablet, 0, len(rs.statusMap))
+// stopped and should restart during cleanup. Only includes replicas where the
+// SQL thread was also healthy pre-ERS — the cleanup calls StartReplication
+// which starts both threads, so restarting a replica whose SQL_THREAD was
+// deliberately stopped pre-ERS would silently undo the operator's intent
+// (e.g. delayed-replication setups, manual conflict resolution). The
+// returned skippedSQLStopped slice lets the caller log those skipped
+// replicas so the operator can decide whether to restart IO manually.
+func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.TabletInfo) (replicas, skippedSQLStopped []*topodatapb.Tablet) {
+	replicas = make([]*topodatapb.Tablet, 0, len(rs.statusMap))
 
 	for alias, stopStatus := range rs.statusMap {
-		ioThreadWasRunning, err := replicaIOThreadWasRunning(stopStatus)
-		if err != nil || !ioThreadWasRunning {
+		ioHealthy, sqlHealthy, err := replicaThreadStatesWereHealthy(stopStatus)
+		if err != nil || !ioHealthy {
 			continue
 		}
 
@@ -291,22 +297,27 @@ func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.
 			continue
 		}
 
+		if !sqlHealthy {
+			skippedSQLStopped = append(skippedSQLStopped, tabletInfo.Tablet)
+			continue
+		}
+
 		replicas = append(replicas, tabletInfo.Tablet)
 	}
 
-	return replicas
+	return replicas, skippedSQLStopped
 }
 
-// replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
-// that ERS stopped a healthy IO thread that should restart during cleanup.
-func replicaIOThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+// replicaThreadStatesWereHealthy returns whether the IO and SQL threads were
+// healthy in the Before state of a StopReplicationStatus.
+func replicaThreadStatesWereHealthy(stopStatus *replicationdatapb.StopReplicationStatus) (ioHealthy, sqlHealthy bool, err error) {
 	if stopStatus == nil || stopStatus.Before == nil {
-		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+		return false, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
 	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
 
-	return replStatus.IOHealthy(), nil
+	return replStatus.IOHealthy(), replStatus.SQLHealthy(), nil
 }
 
 // tabletAliasError wraps an error with the tablet alias that produced it.

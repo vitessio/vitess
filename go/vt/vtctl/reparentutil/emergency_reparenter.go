@@ -270,7 +270,14 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// leaves replication stopped. We do this before checking the error so that we ensure we
 	// handle partial failures (where we've stopped some replicas but failed on others) correctly.
 	if stoppedReplicationSnapshot != nil {
-		replicasToRestart = stoppedReplicationSnapshot.replicasWithStoppedIO(tabletMap)
+		var skippedSQLStopped []*topodatapb.Tablet
+		replicasToRestart, skippedSQLStopped = stoppedReplicationSnapshot.replicasWithStoppedIO(tabletMap)
+		// Surface replicas we deliberately did not restart so the operator can
+		// decide whether to restart their IO threads manually — StartReplication
+		// would have started SQL_THREAD too, which they had explicitly stopped.
+		for _, replica := range skippedSQLStopped {
+			erp.logger.Warningf("not restarting replication on %s after potential failed ERS: IO_THREAD was running pre-ERS but SQL_THREAD was stopped, and StartReplication would silently start both", topoproto.TabletAliasString(replica.Alias))
+		}
 	}
 
 	if err != nil {
@@ -328,17 +335,38 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		if err != nil {
 			return err
 		}
-		if len(validCandidates) == 0 {
+		// Detect whether any of the candidates we originally waited on (the leading group)
+		// survived errant-GTID detection. The split-brain failure mode we need to guard
+		// against is mutually-errant leaders being pruned while a lagging non-errant
+		// candidate remains — promoting the lagger would lose unique writes from both
+		// split-brain sides, which is strictly worse than the documented "pick one side;
+		// losing side becomes errant" semantics. Treating "no leading survivor" the same
+		// as "no survivor at all" prevents a lagger from being elected on the second-pass
+		// re-wait below.
+		leadingSurvived := false
+		for alias := range validCandidates {
+			if _, isLeading := relayLogWaitCandidates[alias]; isLeading {
+				leadingSurvived = true
+				break
+			}
+		}
+		if !leadingSurvived {
 			if !opts.AllowSplitBrainPromotion {
-				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all leading candidates have errant GTIDs")
 			}
 			// AllowSplitBrainPromotion already incremented the override metric upfront in
 			// filterAndCheckUniform — don't double-count here. Restore the pre-detection
-			// set so findMostAdvanced (whose secondary AtLeast check is also flag-gated)
-			// can sort the candidates and pick one. The non-promoted side's unique GTIDs
-			// will become errant after promotion.
-			erp.logger.Warningf("AllowSplitBrainPromotion=true: errant-GTID detection removed every candidate — restoring the pre-detection set so findMostAdvanced can pick a side")
-			validCandidates = preErrantCandidates
+			// LEADING set (intersected with relayLogWaitCandidates so laggers can't be
+			// elected by findMostAdvanced) and let the sort pick a side. The non-promoted
+			// side's unique GTIDs will become errant after promotion.
+			erp.logger.Warningf("AllowSplitBrainPromotion=true: no leading candidates survived errant-GTID detection — restoring the pre-detection leading set so findMostAdvanced can pick a side without promoting a lagger")
+			restored := make(map[string]*RelayLogPositions, len(relayLogWaitCandidates))
+			for alias := range relayLogWaitCandidates {
+				if pos, ok := preErrantCandidates[alias]; ok {
+					restored[alias] = pos
+				}
+			}
+			validCandidates = restored
 		}
 
 		// If errant detection removed every originally-applied tablet, promotion candidates

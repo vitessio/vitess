@@ -2029,6 +2029,95 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain:    "failed to promote", // promotion path isn't mocked; the point is ERS reached this stage
 			errShouldNotContain: "no valid candidates for emergency reparent: all candidates have errant GTIDs",
 		},
+		{
+			// Regression test for the mattlord review concern on
+			// https://github.com/vitessio/vitess/pull/18707#pullrequestreview-4374787837 —
+			// with AllowSplitBrainPromotion=true and a 3-tablet topology of two mutually
+			// errant leaders (A, B) plus a lagging non-errant survivor (C), the previous
+			// restore branch only fired when EVERY candidate was pruned. A and B would be
+			// removed by errant-GTID detection, C would remain, and the second-pass
+			// re-wait would happily promote the lagger — losing the unique writes from
+			// both split-brain sides, strictly worse than the documented "pick one side;
+			// losing side becomes errant" semantics. The fix gates restore on whether any
+			// LEADING candidate survived (not just any candidate), so the leading set is
+			// restored even when laggers remain.
+			//
+			// Pre-fix ERS would have failed inside the second-pass relay-log-apply wait
+			// for C (its WaitForPosition is not mocked). Post-fix ERS short-circuits past
+			// the re-wait, restores {A, B}, and reaches the (unmocked) promotion stage —
+			// asserting "failed to promote" and "errShouldNotContain" the re-wait failure
+			// proves we took the new path.
+			name:       "AllowSplitBrainPromotion=true restores leading set when laggers are the only errant-GTID survivors",
+			durability: policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{
+				AllowSplitBrainPromotion: true,
+			},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 3,
+					"zone1-0000000101": 3,
+					"zone1-0000000102": 1, // lagger has not seen all reparent journal entries
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+							},
+						},
+					},
+					"zone1-0000000102": {
+						// Lagging non-errant survivor: subset of the leaders' u1 GTIDs,
+						// no u2/u3 GTIDs of its own — findErrantGTIDs leaves it intact.
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-50"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-100", "1-31", "1-50"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-100", "1-30", "1-51"): nil,
+					},
+					// Deliberately no entry for 0000000102 — pre-fix the re-wait on the
+					// lagger would have failed here; post-fix the re-wait is skipped.
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{Keyspace: "testkeyspace", Name: "-"},
+			},
+			tablets: []*topodatapb.Tablet{
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "testkeyspace", Shard: "-"},
+				{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Keyspace: "testkeyspace", Shard: "-"},
+			},
+			keyspace:            "testkeyspace",
+			shard:               "-",
+			cells:               []string{"zone1"},
+			shouldErr:           true,
+			errShouldContain:    "failed to promote", // promotion path isn't mocked; the point is ERS reached this stage with a leader, not the lagger
+			errShouldNotContain: "all candidates failed to apply relay logs within the provided waitReplicasTimeout",
+		},
 	}
 
 	for _, tt := range tests {

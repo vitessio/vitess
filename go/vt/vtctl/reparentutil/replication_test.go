@@ -1579,35 +1579,49 @@ func TestReplicaWasRunning(t *testing.T) {
 	}
 }
 
-func TestReplicaIOThreadWasRunning(t *testing.T) {
+func TestReplicaThreadStatesWereHealthy(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		in        *replicationdatapb.StopReplicationStatus
-		expected  bool
-		shouldErr bool
+		name           string
+		in             *replicationdatapb.StopReplicationStatus
+		wantIOHealthy  bool
+		wantSQLHealthy bool
+		shouldErr      bool
 	}{
 		{
-			name: "io thread running",
+			name: "both threads running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: &replicationdatapb.Status{
+					IoState:  int32(replication.ReplicationStateRunning),
+					SqlState: int32(replication.ReplicationStateRunning),
+				},
+			},
+			wantIOHealthy:  true,
+			wantSQLHealthy: true,
+		},
+		{
+			name: "io running, sql stopped (delayed-replication / manual pause)",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
 					IoState:  int32(replication.ReplicationStateRunning),
 					SqlState: int32(replication.ReplicationStateStopped),
 				},
 			},
-			expected: true,
+			wantIOHealthy:  true,
+			wantSQLHealthy: false,
 		},
 		{
-			name: "io thread connecting without an io error",
+			name: "io thread connecting without an io error, sql running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
 					IoState:     int32(replication.ReplicationStateConnecting),
 					LastIoError: "",
-					SqlState:    int32(replication.ReplicationStateStopped),
+					SqlState:    int32(replication.ReplicationStateRunning),
 				},
 			},
-			expected: true,
+			wantIOHealthy:  true,
+			wantSQLHealthy: true,
 		},
 		{
 			name: "io thread connecting with an io error",
@@ -1618,7 +1632,8 @@ func TestReplicaIOThreadWasRunning(t *testing.T) {
 					SqlState:    int32(replication.ReplicationStateStopped),
 				},
 			},
-			expected: false,
+			wantIOHealthy:  false,
+			wantSQLHealthy: false,
 		},
 		{
 			name: "only sql thread running",
@@ -1628,7 +1643,8 @@ func TestReplicaIOThreadWasRunning(t *testing.T) {
 					SqlState: int32(replication.ReplicationStateRunning),
 				},
 			},
-			expected: false,
+			wantIOHealthy:  false,
+			wantSQLHealthy: true,
 		},
 		{
 			name: "no replication threads running",
@@ -1638,7 +1654,8 @@ func TestReplicaIOThreadWasRunning(t *testing.T) {
 					SqlState: int32(replication.ReplicationStateStopped),
 				},
 			},
-			expected: false,
+			wantIOHealthy:  false,
+			wantSQLHealthy: false,
 		},
 		{
 			name:      "passing nil pointer results in an error",
@@ -1658,16 +1675,71 @@ func TestReplicaIOThreadWasRunning(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual, err := replicaIOThreadWasRunning(tt.in)
+			ioHealthy, sqlHealthy, err := replicaThreadStatesWereHealthy(tt.in)
 			if tt.shouldErr {
 				require.Error(t, err)
 				return
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, tt.expected, actual)
+			require.Equal(t, tt.wantIOHealthy, ioHealthy, "ioHealthy")
+			require.Equal(t, tt.wantSQLHealthy, sqlHealthy, "sqlHealthy")
 		})
 	}
+}
+
+// TestReplicasWithStoppedIO covers the split between replicas that the failed-ERS
+// cleanup should restart and replicas whose SQL_THREAD was deliberately stopped
+// pre-ERS — the latter must not be restarted via StartReplication because that
+// would silently start SQL too, undoing the operator's intent.
+func TestReplicasWithStoppedIO(t *testing.T) {
+	t.Parallel()
+
+	const (
+		bothRunningAlias = "zone1-0000000100"
+		sqlStoppedAlias  = "zone1-0000000101"
+		ioStoppedAlias   = "zone1-0000000102"
+	)
+	bothRunning := &replicationdatapb.StopReplicationStatus{
+		Before: &replicationdatapb.Status{
+			IoState:  int32(replication.ReplicationStateRunning),
+			SqlState: int32(replication.ReplicationStateRunning),
+		},
+	}
+	sqlStopped := &replicationdatapb.StopReplicationStatus{
+		Before: &replicationdatapb.Status{
+			IoState:  int32(replication.ReplicationStateRunning),
+			SqlState: int32(replication.ReplicationStateStopped),
+		},
+	}
+	ioStopped := &replicationdatapb.StopReplicationStatus{
+		Before: &replicationdatapb.Status{
+			IoState:  int32(replication.ReplicationStateStopped),
+			SqlState: int32(replication.ReplicationStateRunning),
+		},
+	}
+
+	tabletMap := map[string]*topo.TabletInfo{
+		bothRunningAlias: {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		sqlStoppedAlias:  {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+		ioStoppedAlias:   {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}}},
+	}
+
+	rs := &replicationSnapshot{
+		statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+			bothRunningAlias: bothRunning,
+			sqlStoppedAlias:  sqlStopped,
+			ioStoppedAlias:   ioStopped,
+		},
+	}
+
+	replicas, skippedSQLStopped := rs.replicasWithStoppedIO(tabletMap)
+
+	require.Len(t, replicas, 1, "only the both-threads-running replica should be restarted")
+	require.Equal(t, bothRunningAlias, topoproto.TabletAliasString(replicas[0].Alias))
+
+	require.Len(t, skippedSQLStopped, 1, "the IO-running/SQL-stopped replica should be reported as skipped, not restarted")
+	require.Equal(t, sqlStoppedAlias, topoproto.TabletAliasString(skippedSQLStopped[0].Alias))
 }
 
 // waitForRelayLogsToApplyTestTMClient implements just the WaitForPosition
