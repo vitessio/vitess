@@ -2435,6 +2435,144 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 	})
 }
 
+// TestEmergencyReparenterRestartsStoppedIOThreadsAfterRelayLogApply verifies
+// that ERS restarts replication on replicas whose IO threads it stopped when
+// promotion fails AFTER relay-log application has already succeeded. Prevents
+// regression of a bug where replicasToRestart was cleared just before the
+// promotion attempt, so a PromoteReplica/SetReplicationSource/waitForCatchUp
+// failure would silently skip the deferred cleanup and leave replicas with
+// IO_THREAD stopped.
+func TestEmergencyReparenterRestartsStoppedIOThreadsAfterRelayLogApply(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			stoppedIOAlias1  = "zone1-0000000101"
+			stoppedIOAlias2  = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+		// Primary is dead, both replicas have their IO threads stopped by ERS.
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		// Both replicas successfully apply their relay logs.
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), relayLogPosition).
+			Return(nil).
+			Times(1)
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), relayLogPosition).
+			Return(nil).
+			Times(1)
+
+		// Errant-GTID detection reads each candidate's reparent journal length.
+		// Same length on both keeps both in the leading set with no lagged
+		// handling.
+		tmc.EXPECT().
+			ReadReparentJournalInfo(gomock.Any(), gomock.Any()).
+			Return(int32(1), nil).
+			AnyTimes()
+
+		// PromoteReplica fails on the new primary, triggering the
+		// post-relay-log-apply abort path.
+		tmc.EXPECT().
+			PromoteReplica(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return("", assert.AnError).
+			Times(1)
+
+		// handleReplica goroutines race in reparentReplicas. Allow any number
+		// of SetReplicationSource calls; the test asserts only on cleanup.
+		tmc.EXPECT().
+			SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		// Both replicas whose IO threads ERS stopped must have replication
+		// restarted by the deferred cleanup.
+		tmc.EXPECT().
+			StartReplication(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), false).
+			Return(nil).
+			Times(1)
+
+		tmc.EXPECT().
+			StartReplication(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), false).
+			Return(nil).
+			Times(1)
+
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+		})
+
+		testutil.AddTablets(
+			ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: time.Second,
+		})
+
+		require.Error(t, err)
+	})
+}
+
 // tabletAliasMatcher matches tablets by alias string for gomock expectations.
 func tabletAliasMatcher(alias string) gomock.Matcher {
 	return gomock.Cond(func(tablet *topodatapb.Tablet) bool {

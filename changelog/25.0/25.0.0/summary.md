@@ -137,11 +137,6 @@ When the leading GTID-based candidates have incomparable `Combined` positions (s
 
 A new `--allow-split-brain-promotion` flag is added to `vtctldclient EmergencyReparentShard` (and `--allow_split_brain_promotion` on the legacy `vtctl`). It is **off by default**. Operators who deliberately need to force ERS through a detected split-brain — typically because they already know which side to keep and plan to re-clone the losing side — can set it to convert the abort into a `WARN` log and proceed. The non-promoted side's unique GTIDs will become errant after promotion, so this is an explicit operator override, not a default-on safety knob.
 
-Two limitations to be aware of when using the override:
-
-1. **Specify `--new-primary` for deterministic side selection.** In a symmetric split-brain (incomparable Combined positions, neither side dominating the other), the sort comparator returns false in both directions and Go's sort cannot establish a total order — the winning side ends up depending on map iteration order. Pair `--allow-split-brain-promotion` with `--new-primary` if you have a preferred side; the flag teaches `findMostAdvanced` to honour `--new-primary` even when `AtLeast` would otherwise reject it.
-2. **A lagging tablet in the candidate pool can still be picked over the diverged leaders.** If the leading group is mutually-errant AND a non-leading (lagged) tablet exists in `validCandidates`, errant-GTID detection removes both leaders, leaves the lagger, and ERS promotes the lagger — losing both sides' unique writes. The flag's restoration logic only fires when *every* candidate is pruned; the mixed-survivor case is unchanged from pre-PR. Ensure the candidate pool is constrained to the diverged sides (via `--ignore-replicas`) when forcing through.
-
 Three new stats are exported for observability:
 
 - `EmergencyReparentFilteredCandidates` — counts replicas excluded from the relay-log wait because their `Combined` position is strictly behind the leading group.
