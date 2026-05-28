@@ -24,7 +24,7 @@ type ServerVersion struct {
 	Major, Minor, Patch int
 }
 
-func (v *ServerVersion) atLeast(compare ServerVersion) bool {
+func (v *ServerVersion) AtLeast(compare ServerVersion) bool {
 	if v.Major > compare.Major {
 		return true
 	}
@@ -37,6 +37,6 @@ func (v *ServerVersion) atLeast(compare ServerVersion) bool {
 	return false
 }
 
-func (v *ServerVersion) isSameRelease(compare ServerVersion) bool {
+func (v *ServerVersion) IsSameRelease(compare ServerVersion) bool {
 	return v.Major == compare.Major && v.Minor == compare.Minor
 }

@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -57,10 +58,11 @@ const (
 // ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
-// tablet with the most advanced replication position is chosen to minimize the
-// amount of time spent catching up with the current primary. Further ties are
-// broken by the durability rules. Tablets taking backups are excluded from
-// consideration.
+// tablet with the most advanced replication position is preferred, then promotion
+// rules (operator intent), then the lowest MySQL version to maintain replication
+// compatibility (replicas must be >= primary version). Further ties are broken by
+// InnoDB buffer pool size and tablet alias. Tablets taking backups are excluded
+// from consideration.
 // Note that the search for the most advanced replication position will race
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
@@ -87,6 +89,7 @@ func ElectNewPrimary(
 		validTablets         []*topodatapb.Tablet
 		tabletPositions      []*RelayLogPositions
 		innodbBufferPool     []int
+		mysqlVersions        []mysqlctl.ServerVersion
 		errorGroup, groupCtx = errgroup.WithContext(ctx)
 	)
 
@@ -127,7 +130,7 @@ func ElectNewPrimary(
 		tb := tablet
 		errorGroup.Go(func() error {
 			// find and store the positions for the tablet
-			pos, replLag, takingBackup, replUnknown, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
+			pos, replLag, takingBackup, replUnknown, serverVersion, err := findTabletPositionLagBackupStatus(groupCtx, tb, logger, tmc, opts.WaitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
@@ -139,6 +142,15 @@ func ElectNewPrimary(
 					validTablets = append(validTablets, tb)
 					tabletPositions = append(tabletPositions, pos)
 					innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
+
+					v := unknownVersion
+					if serverVersion != "" {
+						_, parsed, parseErr := mysqlctl.ParseVersionString(serverVersion)
+						if parseErr == nil {
+							v = parsed
+						}
+					}
+					mysqlVersions = append(mysqlVersions, v)
 				}
 			} else {
 				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
@@ -158,7 +170,7 @@ func ElectNewPrimary(
 	}
 
 	// sort preferred tablets for finding the best primary
-	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, opts.durability)
+	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, mysqlVersions, opts.durability)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +180,7 @@ func ElectNewPrimary(
 
 // findTabletPositionLagBackupStatus processes the replication positions and lag for a single tablet and
 // returns it. It is safe to call from multiple goroutines.
-func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (*RelayLogPositions, time.Duration, bool, bool, error) {
+func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (*RelayLogPositions, time.Duration, bool, bool, string, error) {
 	rlp := &RelayLogPositions{}
 
 	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
@@ -181,25 +193,25 @@ func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.T
 		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
-			return rlp, 0, false, false, nil
+			return rlp, 0, false, false, "", nil
 		}
 		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
-		return rlp, 0, false, false, err
+		return rlp, 0, false, false, "", err
 	}
 
 	rlp.Executed, err = replication.DecodePosition(status.Position)
 	if err != nil {
 		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.Position, topoproto.TabletAliasString(tablet.Alias), err)
-		return rlp, 0, status.BackupRunning, false, err
+		return rlp, 0, status.BackupRunning, false, "", err
 	}
 
 	rlp.Combined, err = replication.DecodePosition(status.RelayLogPosition)
 	if err != nil {
 		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.RelayLogPosition, topoproto.TabletAliasString(tablet.Alias), err)
-		return rlp, 0, status.BackupRunning, false, err
+		return rlp, 0, status.BackupRunning, false, "", err
 	}
 
-	return rlp, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, status.ReplicationLagUnknown, nil
+	return rlp, time.Second * time.Duration(status.ReplicationLagSeconds), status.BackupRunning, status.ReplicationLagUnknown, status.ServerVersion, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
@@ -335,18 +347,63 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 func findCandidate(
 	intermediateSource *topodatapb.Tablet,
 	possibleCandidates []*topodatapb.Tablet,
+	versionMap map[string]mysqlctl.ServerVersion,
 ) *topodatapb.Tablet {
-	// check whether the one we have selected as the source belongs to the candidate list provided
-	for _, candidate := range possibleCandidates {
-		if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
-			return candidate
-		}
+	if len(possibleCandidates) == 0 {
+		return nil
 	}
-	// return the first candidate from this list, if it isn't empty
-	if len(possibleCandidates) > 0 {
+
+	if len(versionMap) == 0 {
+		// No version data — fall back to preferring the intermediate source to avoid catch-up.
+		for _, candidate := range possibleCandidates {
+			if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
+				return candidate
+			}
+		}
 		return possibleCandidates[0]
 	}
-	return nil
+
+	// Find the candidate with the lowest MySQL version in this tier.
+	// Among equal-version candidates, prefer the intermediate source to avoid catch-up.
+	sourceAlias := topoproto.TabletAliasString(intermediateSource.Alias)
+	sourceVersion, ok := versionMap[sourceAlias]
+	if !ok {
+		sourceVersion = unknownVersion
+	}
+
+	var best *topodatapb.Tablet
+	bestVersion := unknownVersion
+	for _, candidate := range possibleCandidates {
+		alias := topoproto.TabletAliasString(candidate.Alias)
+		v, ok := versionMap[alias]
+		if !ok {
+			v = unknownVersion
+		}
+
+		if best == nil {
+			best = candidate
+			bestVersion = v
+			continue
+		}
+
+		if v.AtLeast(bestVersion) {
+			continue
+		}
+		best = candidate
+		bestVersion = v
+	}
+
+	// If best has the same version as the intermediate source, prefer intermediate source to avoid catch-up.
+	if !sourceVersion.AtLeast(bestVersion) || bestVersion.AtLeast(sourceVersion) {
+		// Versions are equal — check if intermediate source is in the list.
+		for _, candidate := range possibleCandidates {
+			if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
+				return candidate
+			}
+		}
+	}
+
+	return best
 }
 
 // getTabletsWithPromotionRules gets the tablets with the given promotion rule from the list of tablets

@@ -53,6 +53,12 @@ func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdat
 	protoStatus := replication.ReplicationStatusToProto(status)
 	protoStatus.BackupRunning = tm.IsBackupRunning()
 
+	if version, vErr := tm.MysqlDaemon.GetVersionString(ctx); vErr == nil {
+		protoStatus.ServerVersion = version
+	} else {
+		log.Warn("failed to get MySQL version string", slog.Any("error", vErr))
+	}
+
 	return protoStatus, nil
 }
 
@@ -1069,6 +1075,12 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	before := replication.ReplicationStatusToProto(rs)
 	before.BackupRunning = tm.IsBackupRunning()
 
+	if version, vErr := tm.MysqlDaemon.GetVersionString(ctx); vErr == nil {
+		before.ServerVersion = version
+	} else {
+		log.Warn("failed to get MySQL version string", slog.Any("error", vErr))
+	}
+
 	// Get semi-sync state before replication is stopped.
 	before.SemiSyncPrimaryEnabled, before.SemiSyncReplicaEnabled = tm.MysqlDaemon.SemiSyncEnabled(ctx)
 	before.SemiSyncPrimaryStatus, before.SemiSyncReplicaStatus = tm.MysqlDaemon.SemiSyncStatus(ctx)
@@ -1119,6 +1131,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	}
 	after := replication.ReplicationStatusToProto(rsAfter)
 	after.BackupRunning = tm.IsBackupRunning()
+	after.ServerVersion = before.ServerVersion
 
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition

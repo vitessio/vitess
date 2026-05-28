@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -3189,6 +3190,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		name                 string
 		validCandidates      map[string]*RelayLogPositions
 		tabletMap            map[string]*topo.TabletInfo
+		versionMap           map[string]mysqlctl.ServerVersion
 		emergencyReparentOps EmergencyReparentOptions
 		result               *topodatapb.Tablet
 		err                  string
@@ -3426,6 +3428,113 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 				},
 			},
 			err: "split brain detected between servers",
+		}, {
+			name: "lower MySQL version preferred when positions are equal",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 4, Patch: 0},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			name: "same MySQL version falls through to position",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionAlmostMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "unknown MySQL version sorts last",
+			validCandidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
 		},
 	}
 
@@ -3436,7 +3545,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
 			test.emergencyReparentOps.durability = durability
-			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.versionMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
@@ -4753,7 +4862,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.validCandidates, test.tabletMap, nil, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 				return
@@ -5942,7 +6051,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			dp, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
 			require.NoError(t, err)
 			ers := EmergencyReparenter{logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {})}
-			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, EmergencyReparentOptions{durability: dp})
+			winningPrimary, _, err := ers.findMostAdvanced(candidates, tt.tabletMap, nil, EmergencyReparentOptions{durability: dp})
 			require.NoError(t, err)
 			require.True(t, slices.Contains(tt.wantMostAdvancedPossible, winningPrimary.Hostname), winningPrimary.Hostname)
 		})
