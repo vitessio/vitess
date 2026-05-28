@@ -440,8 +440,10 @@ func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t
 		return tc.addSelectDerivedTable(sel, node, node.Columns, node.As)
 	case *sqlparser.Union:
 		return tc.addUnionDerivedTable(sel, node, node.Columns, node.As)
+	case *sqlparser.ValuesStatement:
+		return tc.addValuesDerivedTable(sel, node, node.Columns, node.As)
 	default:
-		return vterrors.VT13001("[BUG] %T in a derived table", sel)
+		return vterrors.VT13001(fmt.Sprintf("[BUG] %T in a derived table", sel))
 	}
 }
 
@@ -495,6 +497,51 @@ func (tc *tableCollector) addUnionDerivedTable(
 	}
 
 	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
+	if err := tableInfo.checkForDuplicates(); err != nil {
+		return err
+	}
+	tableInfo.ASTNode = node
+	tableInfo.tableName = alias.String()
+
+	tc.Tables = append(tc.Tables, tableInfo)
+	scope := tc.scoper.currentScope()
+	return scope.addTable(tableInfo)
+}
+
+func (tc *tableCollector) addValuesDerivedTable(
+	values *sqlparser.ValuesStatement,
+	node *sqlparser.AliasedTableExpr,
+	columns sqlparser.Columns,
+	alias sqlparser.IdentifierCS,
+) error {
+	if len(values.Rows) == 0 {
+		return vterrors.VT12001("VALUES statement without rows in derived table")
+	}
+
+	size := values.GetColumnCount()
+	deps := make([]TableSet, size)
+	typers := make([]evalengine.TypeAggregator, size)
+	collations := tc.org.collationEnv()
+
+	for _, row := range values.Rows {
+		if len(row) != size {
+			return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
+		}
+		for i, expr := range row {
+			_, recursiveDeps, qt := tc.org.depsForExpr(expr)
+			deps[i] = deps[i].Merge(recursiveDeps)
+			if err := typers[i].Add(qt, collations); err != nil {
+				return err
+			}
+		}
+	}
+
+	types := make([]evalengine.Type, 0, size)
+	for _, typer := range typers {
+		types = append(types, typer.Type())
+	}
+
+	tableInfo := createDerivedTableForExpressions(values.GetColumns(), columns, nil, tc.org, true, deps, types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}

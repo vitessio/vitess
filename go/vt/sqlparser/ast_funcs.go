@@ -3196,8 +3196,7 @@ func (node *ValuesStatement) GetColumns() []SelectExpr {
 	for i := range columnCount {
 		sel = append(sel, &AliasedExpr{Expr: NewColName(fmt.Sprintf("column_%d", i))})
 	}
-	_ = sel
-	panic("no columns available") // TODO: we need a better solution than a panic
+	return sel
 }
 
 func (node *ValuesStatement) SetComments(comments Comments) {}

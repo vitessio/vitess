@@ -107,6 +107,17 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:         "select uu.count from (select count(*) as `count` from t1) uu",
 			directDeps:    TS1,
 			recursiveDeps: TS0,
+		}, {
+			query:         "select sub.column_0 from (values row(1, 1)) as sub",
+			directDeps:    TS0,
+			recursiveDeps: NoTables,
+		}, {
+			query:         "select sub.c1 from (values row(1, 1)) as sub(c1, c2)",
+			directDeps:    TS0,
+			recursiveDeps: NoTables,
+		}, {
+			query:        "select sub.c1 from (values row(1, 1)) as sub(c1, c1)",
+			errorMessage: "Duplicate column name 'c1'",
 		},
 	}
 	for _, query := range queries {
