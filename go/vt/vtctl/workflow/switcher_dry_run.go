@@ -261,9 +261,8 @@ func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicatio
 	return nil
 }
 
-func (dr *switcherDryRun) stopAndDrainReverseVReplication(ctx context.Context, waitTime time.Duration) error {
-	dr.drLog.Logf("Stop and drain reverse vreplication workflow %s for up to %v before removing source data",
-		dr.ts.ReverseWorkflowName(), waitTime)
+func (dr *switcherDryRun) stopReverseVReplication(ctx context.Context) error {
+	dr.drLog.Logf("Stop reverse vreplication workflow %s before removing source data", dr.ts.ReverseWorkflowName())
 	return nil
 }
 

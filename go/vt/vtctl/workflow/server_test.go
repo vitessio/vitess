@@ -385,46 +385,6 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 		},
 		{
-			name: "reverse workflow in error state",
-			sourceKeyspace: &testKeyspace{
-				KeyspaceName: sourceKeyspaceName,
-				ShardNames:   []string{"0"},
-			},
-			targetKeyspace: &testKeyspace{
-				KeyspaceName: targetKeyspaceName,
-				ShardNames:   []string{"-80", "80-"},
-			},
-			req: &vtctldatapb.MoveTablesCompleteRequest{
-				TargetKeyspace: targetKeyspaceName,
-				Workflow:       workflowName,
-			},
-			preFunc: func(t *testing.T, env *testEnv) {
-				for _, tablet := range env.tablets[sourceKeyspaceName] {
-					env.tmc.expectReadVReplicationWorkflowRequest(tablet.Alias.Uid, &readVReplicationWorkflowRequestResponse{
-						req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-							Workflow: ReverseWorkflowName(workflowName),
-						},
-						res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
-							Workflow: ReverseWorkflowName(workflowName),
-							Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-								{
-									Id:    1,
-									State: binlogdatapb.VReplicationWorkflowState_Error,
-									Bls: &binlogdatapb.BinlogSource{
-										Keyspace: targetKeyspaceName,
-										Shard:    "-80",
-									},
-								},
-							},
-						},
-					})
-				}
-			},
-			wantErr: "reverse vreplication stream 1 is in error state on cell-0000000100",
-			postFunc: func(t *testing.T, env *testEnv) {
-			},
-		},
-		{
 			name: "ignore source keyspace",
 			sourceKeyspace: &testKeyspace{
 				KeyspaceName: sourceKeyspaceName,

@@ -2514,7 +2514,7 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 		}
 	}
 	if !wopts.ignoreSourceKeyspace {
-		if err := sw.stopAndDrainReverseVReplication(ctx, reverseReplicationDrainTimeout); err != nil {
+		if err := sw.stopReverseVReplication(ctx); err != nil {
 			return nil, err
 		}
 	}

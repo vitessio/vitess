@@ -578,10 +578,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 			rec.RecordError(err)
 		}
 	}
-	if err := validateReverseWorkflowForComplete(ctx, ts, &rec); err != nil {
-		rec.RecordError(err)
-	}
-
 	if !ts.keepRoutingRules {
 		// Check if table is routable.
 		if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
@@ -604,38 +600,6 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		return fmt.Errorf("%s", strings.Join(rec.ErrorStrings(), "\n"))
 	}
 	return nil
-}
-
-func validateReverseWorkflowForComplete(ctx context.Context, ts *trafficSwitcher, rec *concurrency.AllErrorRecorder) error {
-	return ts.ForAllSources(func(source *MigrationSource) error {
-		tabletAlias := topoproto.TabletAliasString(source.GetPrimary().GetAlias())
-		res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, source.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
-			Workflow: ts.ReverseWorkflowName(),
-		})
-		if err != nil {
-			rec.RecordError(vterrors.Wrapf(err, "reading reverse workflow %s on %s", ts.ReverseWorkflowName(), tabletAlias))
-			return nil
-		}
-		if res == nil || len(res.Streams) == 0 {
-			return nil
-		}
-		for _, stream := range res.Streams {
-			switch stream.State {
-			case binlogdatapb.VReplicationWorkflowState_Running,
-				binlogdatapb.VReplicationWorkflowState_Stopped:
-			case binlogdatapb.VReplicationWorkflowState_Error:
-				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is in error state on %s",
-					stream.Id, tabletAlias))
-			case binlogdatapb.VReplicationWorkflowState_Copying:
-				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is still copying on %s",
-					stream.Id, tabletAlias))
-			default:
-				rec.RecordError(fmt.Errorf("reverse vreplication stream %d is in state %s on %s",
-					stream.Id, stream.State, tabletAlias))
-			}
-		}
-		return nil
-	})
 }
 
 // ReverseWorkflowName returns the "reversed" name of a workflow. For a
