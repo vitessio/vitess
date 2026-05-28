@@ -1592,19 +1592,6 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 	return onlineDDL, row, nil
 }
 
-// readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
-func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) ([]string, error) {
-	pending, err := e.readPendingMigrations(ctx)
-	if err != nil {
-		return nil, err
-	}
-	uuids := make([]string, len(pending))
-	for i, pm := range pending {
-		uuids[i] = pm.uuid
-	}
-	return uuids, nil
-}
-
 // readPendingMigrations returns pending migrations (queued/ready/running) with their migration contexts.
 func (e *Executor) readPendingMigrations(ctx context.Context) ([]pendingMigration, error) {
 	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
