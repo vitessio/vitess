@@ -145,7 +145,8 @@ func (tm *TabletManager) CreateVReplicationWorkflow(ctx context.Context, req *ta
 			"deferSecondaryKeys": sqltypes.BoolBindVariable(req.DeferSecondaryKeys),
 			"options":            sqltypes.StringBindVariable(req.Options),
 		}
-		parsed := sqlparser.BuildParsedQuery(sqlCreateVReplicationWorkflow, sidecar.GetIdentifier(),
+		parsed := sqlparser.BuildParsedQuery(
+			sqlCreateVReplicationWorkflow, sidecar.GetIdentifier(),
 			":workflow", ":source", ":cells", ":tabletTypes", ":state", ":dbname", ":workflowType", ":workflowSubType",
 			":deferSecondaryKeys", ":options",
 		)
@@ -596,9 +597,10 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if err = prototext.Unmarshal(source, bls); err != nil {
 			return nil, err
 		}
-		// We also need to check for a SimulatedNull here to support older clients and
-		// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
-		if req.OnDdl != nil && *req.OnDdl != binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) {
+		if req.OnDdl != nil {
+			if _, ok := binlogdatapb.OnDDLAction_name[int32(*req.OnDdl)]; !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid OnDdl value: %v", req.GetOnDdl())
+			}
 			bls.OnDdl = *req.OnDdl
 		}
 		bls.Filter.Rules = append(bls.Filter.Rules, req.FilterRules...)
@@ -606,10 +608,12 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 		if err != nil {
 			return nil, err
 		}
-		// We also need to check for a SimulatedNull here to support older clients and
-		// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
-		if req.State != nil && *req.State != binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt) {
-			state = binlogdatapb.VReplicationWorkflowState_name[int32(*req.State)]
+		if req.State != nil {
+			var ok bool
+			state, ok = binlogdatapb.VReplicationWorkflowState_name[int32(*req.State)]
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid state value: %v", req.GetState())
+			}
 		}
 		if state == binlogdatapb.VReplicationWorkflowState_Running.String() {
 			// `Workflow Start` sets the new state to Running. However, if stream is still copying tables, we should set
@@ -679,7 +683,7 @@ func getOptionSetString(config map[string]string) string {
 		clause = fmt.Sprintf("json_remove(options, '$.config.\"%s\"'", deletedKeys[0])
 		var clauseSb681 strings.Builder
 		for _, k := range deletedKeys[1:] {
-			clauseSb681.WriteString(fmt.Sprintf(", '$.config.\"%s\"'", k))
+			fmt.Fprintf(&clauseSb681, ", '$.config.\"%s\"'", k)
 		}
 		clause += clauseSb681.String()
 		clause += ")"
@@ -691,7 +695,7 @@ func getOptionSetString(config map[string]string) string {
 			if i > 0 {
 				clauseSb688.WriteString(", ")
 			}
-			clauseSb688.WriteString(fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k])))
+			fmt.Fprintf(&clauseSb688, "'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
 		}
 		clause += clauseSb688.String()
 		clause += ")"
@@ -756,7 +760,8 @@ func (tm *TabletManager) getMaxSequenceValue(ctx context.Context, sm *tabletmana
 				"the database (%s), table (%s), and column (%s) names must be non-empty escaped values", sm.UsingTableDbNameEscaped, sm.UsingTableNameEscaped, sm.UsingColEscaped)
 		}
 	}
-	query := sqlparser.BuildParsedQuery(sqlGetMaxSequenceVal,
+	query := sqlparser.BuildParsedQuery(
+		sqlGetMaxSequenceVal,
 		sm.UsingColEscaped,
 		sm.UsingTableDbNameEscaped,
 		sm.UsingTableNameEscaped,
@@ -796,7 +801,8 @@ func (tm *TabletManager) UpdateSequenceTables(ctx context.Context, req *tabletma
 	if err != nil {
 		return nil, vterrors.Errorf(
 			vtrpcpb.Code_INTERNAL, "failed to reset sequences on %q: %v",
-			tm.DBConfigs.DBName, err)
+			tm.DBConfigs.DBName, err,
+		)
 	}
 	return &tabletmanagerdatapb.UpdateSequenceTablesResponse{}, nil
 }
@@ -817,7 +823,8 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 			seq.BackingTableName, err)
 	}
 	log.Info(fmt.Sprintf("Updating sequence %s.%s to %d", seq.BackingTableDbName, seq.BackingTableName, nextVal))
-	initQuery := sqlparser.BuildParsedQuery(sqlInitSequenceTable,
+	initQuery := sqlparser.BuildParsedQuery(
+		sqlInitSequenceTable,
 		backingTableDbNameEscaped,
 		backingTableNameEscaped,
 		nextVal,
@@ -856,7 +863,8 @@ func (tm *TabletManager) updateSequenceValue(ctx context.Context, seq *tabletman
 
 	return vterrors.Errorf(
 		vtrpcpb.Code_INTERNAL, "failed to initialize the backing sequence table %s.%s after retries. Last error: %v",
-		backingTableDbNameEscaped, backingTableNameEscaped, err)
+		backingTableDbNameEscaped, backingTableNameEscaped, err,
+	)
 }
 
 func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName string) error {
@@ -882,7 +890,8 @@ func (tm *TabletManager) createSequenceTable(ctx context.Context, tableName stri
 // instead of querying mysql.user table directly as that requires permissions on the mysql.user table.
 // Leaving this here for now in case we want to revert back.
 func (tm *TabletManager) ValidateVReplicationPermissionsOld(ctx context.Context, req *tabletmanagerdatapb.ValidateVReplicationPermissionsRequest) (*tabletmanagerdatapb.ValidateVReplicationPermissionsResponse, error) {
-	query, err := sqlparser.ParseAndBind(sqlValidateVReplicationPermissions,
+	query, err := sqlparser.ParseAndBind(
+		sqlValidateVReplicationPermissions,
 		sqltypes.StringBindVariable(tm.DBConfigs.Filtered.User),
 		sqltypes.StringBindVariable(sidecar.GetName()),
 		sqltypes.StringBindVariable(sidecar.GetName()),
@@ -1030,7 +1039,7 @@ func (tm *TabletManager) buildReadVReplicationWorkflowsQuery(req *tabletmanagerd
 
 	additionalPredicates := strings.Builder{}
 	if req.GetExcludeFrozen() {
-		additionalPredicates.WriteString(fmt.Sprintf(" and message != '%s'", workflow.Frozen))
+		fmt.Fprintf(&additionalPredicates, " and message != '%s'", workflow.Frozen)
 	}
 	if len(req.GetIncludeIds()) > 0 {
 		additionalPredicates.WriteString(" and id in (")
@@ -1101,9 +1110,7 @@ func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanage
 	predicates := strings.Builder{}
 
 	// First add the SET clauses.
-	// We also need to check for a SimulatedNull here to support older clients and
-	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
-	if req.State != nil && *req.State != binlogdatapb.VReplicationWorkflowState(textutil.SimulatedNullInt) {
+	if req.State != nil {
 		state, ok := binlogdatapb.VReplicationWorkflowState_name[int32(req.GetState())]
 		if !ok {
 			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid state value: %v", req.GetState())
@@ -1111,18 +1118,14 @@ func (tm *TabletManager) buildUpdateVReplicationWorkflowsQuery(req *tabletmanage
 		sets.WriteString(" state = ")
 		sets.WriteString(sqltypes.EncodeStringSQL(state))
 	}
-	// We also need to check for a SimulatedNull here to support older clients and
-	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
-	if req.Message != nil && *req.Message != sqltypes.Null.String() {
+	if req.Message != nil {
 		if sets.Len() > 0 {
 			sets.WriteByte(',')
 		}
 		sets.WriteString(" message = ")
 		sets.WriteString(sqltypes.EncodeStringSQL(req.GetMessage()))
 	}
-	// We also need to check for a SimulatedNull here to support older clients and
-	// smooth upgrades. All non-slice simulated NULL checks can be removed in v22+.
-	if req.StopPosition != nil && *req.StopPosition != sqltypes.Null.String() {
+	if req.StopPosition != nil {
 		if sets.Len() > 0 {
 			sets.WriteByte(',')
 		}

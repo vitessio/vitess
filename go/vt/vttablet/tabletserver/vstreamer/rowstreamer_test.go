@@ -616,9 +616,9 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	defer cancel()
 
 	var heartbeatCount int32
-	var streamCanceled int32
-	var rowsAfterCancel int32
-	var heartbeatsAfterCancel int32
+	var streamCanceled atomic.Int32
+	var rowsAfterCancel atomic.Int32
+	var heartbeatsAfterCancel atomic.Int32
 	dataReceived := false
 
 	var options binlogdatapb.VStreamOptions
@@ -628,20 +628,20 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 
 	err := engine.StreamRows(ctx, "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if rows.Heartbeat {
-			if atomic.LoadInt32(&streamCanceled) != 0 {
-				atomic.AddInt32(&heartbeatsAfterCancel, 1)
+			if streamCanceled.Load() != 0 {
+				heartbeatsAfterCancel.Add(1)
 				return nil
 			}
 			atomic.AddInt32(&heartbeatCount, 1)
 			// After receiving at least 3 heartbeats, we can be confident the fix is working
 			if atomic.LoadInt32(&heartbeatCount) >= 3 {
-				atomic.StoreInt32(&streamCanceled, 1)
+				streamCanceled.Store(1)
 				cancel()
 				return nil
 			}
 		} else if len(rows.Rows) > 0 {
-			if atomic.LoadInt32(&streamCanceled) != 0 {
-				atomic.AddInt32(&rowsAfterCancel, 1)
+			if streamCanceled.Load() != 0 {
+				rowsAfterCancel.Add(1)
 				return nil
 			}
 			dataReceived = true
@@ -666,7 +666,7 @@ func TestStreamRowsHeartbeat(t *testing.T) {
 	}
 
 	require.Never(t, func() bool {
-		return atomic.LoadInt32(&rowsAfterCancel) != 0 || atomic.LoadInt32(&heartbeatsAfterCancel) != 0
+		return rowsAfterCancel.Load() != 0 || heartbeatsAfterCancel.Load() != 0
 	}, 50*time.Millisecond, time.Millisecond, "expected context cancellation to stop row and heartbeat callbacks")
 }
 

@@ -70,7 +70,7 @@ func repeatJSON(jsonDoc string, times int, typ largeDocCollectionType) string {
 		var jsonDocsSb67 strings.Builder
 		for times > 0 {
 			times--
-			jsonDocsSb67.WriteString(fmt.Sprintf("\"%d\": %s", times, jsonSingleDoc))
+			fmt.Fprintf(&jsonDocsSb67, "\"%d\": %s", times, jsonSingleDoc)
 			if times != 0 {
 				jsonDocsSb67.WriteString(",")
 			}
