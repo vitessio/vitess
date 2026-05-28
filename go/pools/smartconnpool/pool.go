@@ -809,6 +809,9 @@ func (pool *ConnPool[C]) getWithSetting(ctx context.Context, setting *Setting) (
 func (pool *ConnPool[C]) SetCapacity(ctx context.Context, newcap int64) error {
 	pool.capacityMu.Lock()
 	defer pool.capacityMu.Unlock()
+	if pool.close.Load() == nil {
+		return ErrConnPoolClosed
+	}
 	return pool.setCapacity(ctx, newcap)
 }
 
