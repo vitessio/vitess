@@ -87,6 +87,11 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 		h.Source = h.Source.AddPredicate(ctx, expr)
 		return h
 	}
+	if h.IsDerived() {
+		if _, isValues := h.Query.(*sqlparser.ValuesStatement); isValues {
+			return newFilter(h, expr)
+		}
+	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
 		if errors.Is(err, semantics.ErrNotSingleTable) {
@@ -159,7 +164,7 @@ func (h *Horizon) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr,
 		return -1
 	}
 
-	for idx, se := range getFirstSelect(h.Query).GetColumns() {
+	for idx, se := range ctx.SemTable.SelectExprs(h.Query) {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
 			panic(vterrors.VT09015())
@@ -184,8 +189,8 @@ func (h *Horizon) GetColumns(ctx *plancontext.PlanningContext) (exprs []*sqlpars
 	return exprs
 }
 
-func (h *Horizon) GetSelectExprs(*plancontext.PlanningContext) []sqlparser.SelectExpr {
-	return getFirstSelect(h.Query).GetColumns()
+func (h *Horizon) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
+	return ctx.SemTable.SelectExprs(h.Query)
 }
 
 func (h *Horizon) GetOrdering(ctx *plancontext.PlanningContext) []OrderBy {

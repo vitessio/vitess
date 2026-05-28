@@ -420,6 +420,17 @@ func stripDownQuery(from, to sqlparser.TableStatement) {
 		stripDownQuery(node.Right, toNode.Right)
 		toNode.OrderBy = node.OrderBy
 		toNode.Limit = node.Limit
+	case *sqlparser.ValuesStatement:
+		toNode, ok := to.(*sqlparser.ValuesStatement)
+		if !ok {
+			panic(vterrors.VT13001("AST did not match"))
+		}
+		toNode.With = node.With
+		toNode.Rows = node.Rows
+		toNode.ListArg = node.ListArg
+		toNode.Comments = node.Comments
+		toNode.Order = node.Order
+		toNode.Limit = node.Limit
 	default:
 		panic(vterrors.VT13001(fmt.Sprintf("this should not happen - we have covered all implementations of SelectStatement %T", from)))
 	}
@@ -667,6 +678,10 @@ func buildDerived(op *Horizon, qb *queryBuilder) {
 
 	stmt := qb.stmt
 	qb.stmt = nil
+	if values, ok := op.Query.(*sqlparser.ValuesStatement); ok {
+		buildDerivedValues(op, qb, values)
+		return
+	}
 	switch sel := stmt.(type) {
 	case *sqlparser.Select:
 		buildDerivedSelect(op, qb, sel)
@@ -676,6 +691,15 @@ func buildDerived(op *Horizon, qb *queryBuilder) {
 		return
 	}
 	panic(fmt.Sprintf("unknown select statement type: %T", stmt))
+}
+
+func buildDerivedValues(op *Horizon, qb *queryBuilder, values *sqlparser.ValuesStatement) {
+	qb.addTableExpr(op.Alias, op.Alias, TableID(op), &sqlparser.DerivedTable{
+		Select: values,
+	}, nil, op.ColumnAliases)
+	for _, col := range op.Columns {
+		qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
+	}
 }
 
 func buildDerivedUnion(op *Horizon, qb *queryBuilder, union *sqlparser.Union) {
@@ -714,6 +738,10 @@ func buildDerivedSelect(op *Horizon, qb *queryBuilder, sel *sqlparser.Select) {
 
 func buildHorizon(op *Horizon, qb *queryBuilder) {
 	buildQuery(op.Source, qb)
+	if values, ok := op.Query.(*sqlparser.ValuesStatement); ok {
+		qb.stmt = sqlparser.Clone(values)
+		return
+	}
 	stripDownQuery(op.Query, qb.asSelectStatement())
 }
 
