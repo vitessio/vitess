@@ -644,6 +644,82 @@ func TestUserClosing(t *testing.T) {
 	}
 }
 
+func TestCloseWithContextAfterIdleCleanupPopDoesNotLeak(t *testing.T) {
+	var state TestState
+
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 2,
+		LogWait:  state.LogWait,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	held, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	idle, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+	idle.Recycle()
+
+	cleanupConn, ok := p.clean.Pop()
+	require.True(t, ok)
+	require.NotNil(t, cleanupConn)
+
+	var waiterGotConn atomic.Bool
+	waiterDone := make(chan struct{})
+	go func() {
+		defer close(waiterDone)
+
+		conn, err := p.Get(t.Context(), nil)
+		if err == nil {
+			waiterGotConn.Store(true)
+			conn.Recycle()
+		}
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.wait.waiting() == 1
+	}, 30*time.Second, time.Millisecond)
+
+	closeCtx, cancelClose := context.WithTimeout(t.Context(), 30*time.Second)
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	require.Eventually(t, func() bool {
+		return p.Capacity() == 0
+	}, 30*time.Second, time.Millisecond)
+
+	p.tryReturnConn(cleanupConn)
+	held.Recycle()
+
+	var closeErr error
+	require.Eventually(t, func() bool {
+		select {
+		case closeErr = <-closeDone:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond)
+	cancelClose()
+	require.NoError(t, closeErr)
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-waiterDone:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond)
+
+	require.False(t, waiterGotConn.Load(), "close must not hand an idle-cleanup conn to a waiter after capacity reaches 0")
+	require.EqualValues(t, 0, p.Active())
+	require.EqualValues(t, 0, p.InUse())
+	require.EqualValues(t, 0, state.open.Load())
+}
+
 func TestCloseWithContextAfterSetCapacityZeroClosesPool(t *testing.T) {
 	var state TestState
 
@@ -714,6 +790,33 @@ func TestCloseWithContextDrainsAfterTimedOutSetCapacityZero(t *testing.T) {
 
 	// Release the held conn so it is properly closed during teardown.
 	conn.Recycle()
+}
+
+// TestSetCapacityRejectedOnClosedPool pins the contract that SetCapacity must
+// fail fast (rather than silently writing into pool.capacity) when the pool
+// is not open. This covers both states: never-opened and previously-opened-
+// then-closed. Without this guard, a SetCapacity call queued on capacityMu
+// during CloseWithContext can race through after Close releases the mutex
+// and bump capacity back up — leaving the pool closed with non-zero capacity.
+func TestSetCapacityRejectedOnClosedPool(t *testing.T) {
+	var state TestState
+
+	// Never-opened pool: SetCapacity must reject.
+	p := NewPool(&Config[*TestConn]{Capacity: 4})
+	err := p.SetCapacity(t.Context(), 2)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+
+	// Opened pool: SetCapacity succeeds.
+	p.Open(newConnector(&state), nil)
+	require.NoError(t, p.SetCapacity(t.Context(), 2))
+	require.EqualValues(t, 2, p.Capacity())
+
+	// Closed pool: SetCapacity must reject and must not change capacity.
+	p.Close()
+	require.False(t, p.IsOpen())
+	err = p.SetCapacity(t.Context(), 8)
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+	require.EqualValues(t, 0, p.Capacity())
 }
 
 func TestConnReopen(t *testing.T) {
