@@ -86,8 +86,10 @@ func (m *Metrics) ResetSettingCount() int64 {
 	return m.resetSetting.Load()
 }
 
-type Connector[C Connection] func(ctx context.Context) (C, error)
-type RefreshCheck func() (bool, error)
+type (
+	Connector[C Connection] func(ctx context.Context) (C, error)
+	RefreshCheck            func() (bool, error)
+)
 
 // lifetime carries a context that is alive for as long as the pool is
 // open. cancel is invoked at the start of Close so that user-supplied
@@ -463,29 +465,13 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 		conn.timeUsed.update()
 
 		lifetime := pool.extendedMaxLifetime()
-<<<<<<< HEAD
 		if lifetime > 0 && conn.timeCreated.elapsed() > lifetime {
-||||||| parent of e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
-		if lifetime > 0 && now-conn.timeCreated.get() > lifetime {
-=======
-		if lifetime > 0 && now-conn.timeCreated.get() > lifetime {
 			// Reopen the maxLifetime-exceeded conn. Pass the original
 			// Setting so the reopened conn lands back in the same settings
 			// stack rather than silently migrating to clean.
->>>>>>> e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
 			pool.Metrics.maxLifetimeClosed.Add(1)
 			conn.Close()
-<<<<<<< HEAD
-			// Using context.Background() is fine since MySQL connection already enforces
-			// a connect timeout via the `db-connect-timeout-ms` config param.
-			if err := pool.connReopen(context.Background(), conn, conn.timeUsed.get()); err != nil {
-||||||| parent of e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
-			// Using context.Background() is fine since MySQL connection already enforces
-			// a connect timeout via the `db-connect-timeout-ms` config param.
-			if err := pool.connReopen(context.Background(), conn, now); err != nil {
-=======
-			if err := pool.connReopen(pool.connectCtx(), conn, conn.Conn.Setting(), now); err != nil {
->>>>>>> e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
+			if err := pool.connReopen(pool.connectCtx(), conn, conn.Conn.Setting(), conn.timeUsed.get()); err != nil {
 				pool.closedConn()
 				return
 			}
@@ -495,21 +481,13 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 	pool.tryReturnConn(conn)
 }
 
-<<<<<<< HEAD
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C]) bool {
-	if pool.close.Load() == nil {
-||||||| parent of e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
-func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C], updateIdleTime bool) bool {
-	if pool.close.Load() == nil {
-=======
-func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C], updateIdleTime bool) bool {
 	// If the pool has more conns out than its configured capacity, close
 	// this one eagerly instead of handing it off to a waiter or pushing it
 	// onto a stack. Otherwise a setCapacity reducing capacity keeps cycling
 	// connections from Recycle to waiter and the drain loop never observes
 	// a non-empty stack — including the capacity=0 case during Close.
 	if pool.active.Load() > pool.capacity.Load() {
->>>>>>> e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
 		conn.Close()
 		pool.closedConn()
 		return false
@@ -954,14 +932,6 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 			pool.closedConn()
 		}
 
-<<<<<<< HEAD
-		for _, conn := range expiredConnections {
-			if pool.active.Load() >= pool.capacity.Load() {
-||||||| parent of e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
-		for conn := expiredConnections; conn != nil; {
-			next := conn.next.Load()
-			if pool.close.Load() == nil || pool.active.Load() >= pool.capacity.Load() {
-=======
 		// Reopen up to capacity. Each reopen re-acquires its active slot
 		// via CAS; if capacity has been reduced in the meantime, the
 		// freshly connected conn is closed instead of returned to the
@@ -969,24 +939,12 @@ func (pool *ConnPool[C]) closeIdleResources(now time.Time) {
 		// in-flight connect. We pass each conn's prior Setting so the
 		// reopened conn lands back in the same settings stack instead of
 		// silently migrating to clean.
-		for conn := expiredConnections; conn != nil; {
-			next := conn.next.Load()
-			if pool.close.Load() == nil || pool.active.Load() >= pool.capacity.Load() {
->>>>>>> e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
+		for _, conn := range expiredConnections {
+			if pool.active.Load() >= pool.capacity.Load() {
 				break
 			}
 
-<<<<<<< HEAD
-			if err := pool.connReopen(context.Background(), conn, mono); err != nil {
-||||||| parent of e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
-			conn.next.Store(nil)
-			if err := pool.connReopen(context.Background(), conn, mono); err != nil {
-				conn = next
-=======
-			conn.next.Store(nil)
 			if err := pool.connReopen(pool.connectCtx(), conn, conn.Conn.Setting(), mono); err != nil {
-				conn = next
->>>>>>> e396da45c6 (smartconnpool: unblock Close and preserve Setting on reopen (#20122))
 				continue
 			}
 
