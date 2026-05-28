@@ -118,6 +118,9 @@ func TestScopingWDerivedTables(t *testing.T) {
 		}, {
 			query:        "select sub.c1 from (values row(1, 1)) as sub(c1, c1)",
 			errorMessage: "Duplicate column name 'c1'",
+		}, {
+			query:        "select * from (values row(1, 1), row(2)) as sub",
+			errorMessage: "The used SELECT statements have a different number of columns: 2, 1",
 		},
 	}
 	for _, query := range queries {
@@ -143,6 +146,18 @@ func TestScopingWDerivedTables(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSemTableSelectExprsValuesStatement(t *testing.T) {
+	stmt, err := sqlparser.NewTestParser().Parse("values row(1, 2)")
+	require.NoError(t, err)
+	values, ok := stmt.(*sqlparser.ValuesStatement)
+	require.True(t, ok)
+
+	selectExprs := EmptySemTable().SelectExprs(values)
+	require.Len(t, selectExprs, 2)
+	assert.Equal(t, "column_0", sqlparser.String(selectExprs[0]))
+	assert.Equal(t, "column_1", sqlparser.String(selectExprs[1]))
 }
 
 func TestDerivedTablesOrderClause(t *testing.T) {
