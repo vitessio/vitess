@@ -45,7 +45,7 @@ var (
 	discoveryQueue                *DiscoveryQueue
 	snapshotDiscoveryAliases      chan *topodatapb.TabletAlias
 	snapshotDiscoveryAliasesMutex sync.Mutex
-	hasReceivedSIGTERM            int32
+	hasReceivedSIGTERM            atomic.Int32
 )
 
 var (
@@ -80,7 +80,7 @@ func init() {
 // closeVTOrc runs all the operations required to cleanly shutdown VTOrc
 func closeVTOrc() {
 	log.Info("Starting VTOrc shutdown")
-	atomic.StoreInt32(&hasReceivedSIGTERM, 1)
+	hasReceivedSIGTERM.Store(1)
 	// Poke other go routines to stop cleanly here ...
 	_ = inst.AuditOperation("shutdown", nil, "Triggered via SIGTERM")
 	// wait for the locks to be released
@@ -93,7 +93,7 @@ func closeVTOrc() {
 func waitForLocksRelease() {
 	timeout := time.After(shutdownWaitTime)
 	for {
-		count := atomic.LoadInt64(&shardsLockCounter)
+		count := shardsLockCounter.Load()
 		if count == 0 {
 			break
 		}
@@ -271,7 +271,7 @@ func ContinuousDiscovery() {
 	caretakingTick := time.Tick(time.Minute)
 	recoveryTick := time.Tick(config.GetRecoveryPollDuration())
 	tabletTopoTick := OpenTabletDiscovery()
-	var recoveryEntrance int64
+	var recoveryEntrance atomic.Int64
 	var snapshotTopologiesTick <-chan time.Time
 	if config.GetSnapshotTopologyInterval() > 0 {
 		log.Warn("--snapshot-topology-interval is deprecated and will be removed in v25+")
@@ -308,8 +308,8 @@ func ContinuousDiscovery() {
 
 				go func() {
 					// This function is non re-entrant (it can only be running once at any point in time)
-					if atomic.CompareAndSwapInt64(&recoveryEntrance, 0, 1) {
-						defer atomic.StoreInt64(&recoveryEntrance, 0)
+					if recoveryEntrance.CompareAndSwap(0, 1) {
+						defer recoveryEntrance.Store(0)
 					} else {
 						return
 					}

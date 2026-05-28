@@ -487,7 +487,7 @@ func TestMoveTablesComplete(t *testing.T) {
 			req: &vtctldatapb.MoveTablesCompleteRequest{
 				TargetKeyspace: targetKeyspaceName,
 				Workflow:       workflowName + "_reverse",
-				KeepData:       ptr.Of(false),
+				KeepData:       new(false),
 			},
 			expectedTargetQueries: []*queryResult{
 				{

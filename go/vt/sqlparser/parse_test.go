@@ -2690,6 +2690,8 @@ var validSQL = []struct {
 	input:  "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' FORCE_CUTOVER",
 	output: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
 }, {
+	input: "alter vitess_migration cancel context 'some-context'",
+}, {
 	input: "alter vitess_migration cancel all",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' throttle",
@@ -6488,6 +6490,9 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	input:  "alter vitess_migration cancel context ''",
+	output: "migration context cannot be empty at position 41",
+}, {
 	input:  "select : from t",
 	output: "syntax error at position 9 near ':'",
 }, {
@@ -7010,16 +7015,16 @@ func testFile(t *testing.T, filename, tempDir string) {
 				if tcase.output == "" && tcase.errStr == "" {
 					tcase.output = tcase.input
 				}
-				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
+				fmt.Fprintf(&expected, "%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input))
 				tree, err := parser.Parse(tcase.input)
 				if tcase.errStr != "" {
 					errPresent := ""
 					if err != nil {
 						errPresent = err.Error()
-						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
+						fmt.Fprintf(&expected, "ERROR\n%s\nEND\n", escapeNewLines(errPresent))
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						fmt.Fprintf(&expected, "OUTPUT\n%s\nEND\n", escapeNewLines(out))
 					}
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
@@ -7027,12 +7032,12 @@ func testFile(t *testing.T, filename, tempDir string) {
 					}
 				} else {
 					if err != nil {
-						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
+						fmt.Fprintf(&expected, "ERROR\n%s\nEND\n", escapeNewLines(err.Error()))
 						fail = true
 						assert.Failf(t, "unexpected parse error", "File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						fmt.Fprintf(&expected, "OUTPUT\n%s\nEND\n", escapeNewLines(out))
 						if tcase.output != out {
 							fail = true
 							assert.Failf(t, "parsing failed", "Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
