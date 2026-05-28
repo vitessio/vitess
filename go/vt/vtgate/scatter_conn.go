@@ -98,13 +98,13 @@ func NewScatterConn(statsName string, txConn *TxConn, gw *TabletGateway) *Scatte
 	}
 }
 
-func (stc *ScatterConn) startAction(name string, target *querypb.Target) (time.Time, []string) {
-	statsKey := []string{name, target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}
+func (stc *ScatterConn) startAction(name string, target *querypb.Target) (time.Time, [4]string) {
+	statsKey := [4]string{name, target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}
 	startTime := time.Now()
 	return startTime, statsKey
 }
 
-func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error, session *econtext.SafeSession) {
+func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey [4]string, err *error, session *econtext.SafeSession) {
 	if *err != nil {
 		allErrors.RecordError(*err)
 		// Don't increment the error counter for duplicate
@@ -112,21 +112,21 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 		// client queries and are not VTGate's fault.
 		ec := vterrors.Code(*err)
 		if ec != vtrpcpb.Code_ALREADY_EXISTS && ec != vtrpcpb.Code_INVALID_ARGUMENT {
-			stc.tabletCallErrorCount.Add(statsKey, 1)
+			stc.tabletCallErrorCount.Add(statsKey[:], 1)
 		}
 		if ec == vtrpcpb.Code_RESOURCE_EXHAUSTED || ec == vtrpcpb.Code_ABORTED {
 			session.SetRollback()
 		}
 	}
-	stc.timings.Record(statsKey, startTime)
+	stc.timings.Record(statsKey[:], startTime)
 }
 
-func (stc *ScatterConn) endLockAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey []string, err *error) {
+func (stc *ScatterConn) endLockAction(startTime time.Time, allErrors *concurrency.AllErrorRecorder, statsKey [4]string, err *error) {
 	if *err != nil {
 		allErrors.RecordError(*err)
-		stc.tabletCallErrorCount.Add(statsKey, 1)
+		stc.tabletCallErrorCount.Add(statsKey[:], 1)
 	}
-	stc.timings.Record(statsKey, startTime)
+	stc.timings.Record(statsKey[:], startTime)
 }
 
 type reset int
@@ -160,7 +160,12 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 	// mu protects qr
 	var mu sync.Mutex
-	qr = new(sqltypes.Result)
+	var singleShard bool
+	if len(rss) == 1 {
+		singleShard = true
+	} else {
+		qr = new(sqltypes.Result)
+	}
 
 	if session.InLockSession() && triggerLockHeartBeat(session) {
 		go stc.runLockQuery(ctx, session)
@@ -273,26 +278,46 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			if err != nil {
 				return newInfo, err
 			}
-			mu.Lock()
-			defer mu.Unlock()
 
-			if innerqr != nil {
-				resultsObserver.Observe(innerqr)
-			}
+			if singleShard {
+				// Single-shard fast path: use innerqr directly, no mutex needed.
+				if innerqr != nil {
+					resultsObserver.Observe(innerqr)
+				}
+				qr = innerqr
+			} else {
+				mu.Lock()
+				defer mu.Unlock()
 
-			// Don't append more rows if row count is exceeded.
-			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
-				qr.AppendResult(innerqr)
+				if innerqr != nil {
+					resultsObserver.Observe(innerqr)
+				}
+
+				// Don't append more rows if row count is exceeded.
+				if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
+					qr.AppendResult(innerqr)
+				}
 			}
 			return newInfo, nil
 		},
 	)
 
+	if qr == nil {
+		qr = new(sqltypes.Result)
+	}
+
 	if !ignoreMaxMemoryRows && len(qr.Rows) > maxMemoryRows {
 		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", maxMemoryRows)}
 	}
 
-	return qr, allErrors.GetErrors()
+	errs = allErrors.GetErrors()
+	if errs == nil {
+		// Success path: recycle the recorder. Safe because GetErrors()
+		// returned nil (no error slice to alias).
+		allErrors.Errors = nil
+		allErrorRecorderPool.Put(allErrors)
+	}
+	return qr, errs
 }
 
 func triggerLockHeartBeat(session *econtext.SafeSession) bool {
@@ -677,46 +702,64 @@ func (stc *ScatterConn) multiGoTransaction(
 	action shardActionTransactionFunc,
 ) (allErrors *concurrency.AllErrorRecorder) {
 	numShards := len(rss)
-	allErrors = new(concurrency.AllErrorRecorder)
+	allErrors = allErrorRecorderPool.Get().(*concurrency.AllErrorRecorder)
 
 	if numShards == 0 {
 		return allErrors
 	}
-	oneShard := func(rs *srvtopo.ResolvedShard, i int) {
-		var err error
-		startTime, statsKey := stc.startAction(name, rs.Target)
-		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
-
-		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.txMode.TransactionMode())
-		if err != nil {
-			return
-		}
-		info, err = action(rs, i, info)
-		if info == nil {
-			return
-		}
-		if info.ignoreOldSession {
-			shardSession = nil
-		}
-		if shardSession != nil && info.rowsAffected {
-			// We might not always update or append in the session.
-			// We need to track if rows were affected in the transaction.
-			shardSession.RowsAffected = info.rowsAffected
-		}
-		if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {
-			appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.txMode.TransactionMode())
-			if appendErr != nil {
-				err = appendErr
-			}
-		}
-	}
 
 	if numShards == 1 {
-		// only one shard, do it synchronously.
-		for i, rs := range rss {
-			oneShard(rs, i)
+		// Single-shard fast path: inline the logic to avoid closure allocation.
+		rs := rss[0]
+		var err error
+		startTime, statsKey := stc.startAction(name, rs.Target)
+
+		info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.txMode.TransactionMode())
+		if err == nil {
+			info, err = action(rs, 0, info)
+			if info != nil {
+				if info.ignoreOldSession {
+					shardSession = nil
+				}
+				if shardSession != nil && info.rowsAffected {
+					shardSession.RowsAffected = info.rowsAffected
+				}
+				if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {
+					if appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.txMode.TransactionMode()); appendErr != nil {
+						err = appendErr
+					}
+				}
+			}
 		}
+
+		stc.endAction(startTime, allErrors, statsKey, &err, session)
 	} else {
+		oneShard := func(rs *srvtopo.ResolvedShard, i int) {
+			var err error
+			startTime, statsKey := stc.startAction(name, rs.Target)
+			defer stc.endAction(startTime, allErrors, statsKey, &err, session)
+
+			info, shardSession, err := actionInfo(ctx, rs.Target, session, autocommit, stc.txConn.txMode.TransactionMode())
+			if err != nil {
+				return
+			}
+			info, err = action(rs, i, info)
+			if info == nil {
+				return
+			}
+			if info.ignoreOldSession {
+				shardSession = nil
+			}
+			if shardSession != nil && info.rowsAffected {
+				shardSession.RowsAffected = info.rowsAffected
+			}
+			if info.actionNeeded != nothing && (info.transactionID != 0 || info.reservedID != 0) {
+				appendErr := session.AppendOrUpdate(rs.Target, info, shardSession, stc.txConn.txMode.TransactionMode())
+				if appendErr != nil {
+					err = appendErr
+				}
+			}
+		}
 		var panicRecord atomic.Value
 		var wg sync.WaitGroup
 		for i, rs := range rss {
@@ -866,11 +909,11 @@ func actionInfo(ctx context.Context, target *querypb.Target, session *econtext.S
 				alias:        alias,
 			}, nil, nil
 		}
-		return &shardActionInfo{}, nil, nil
+		return zeroActionInfo, nil, nil
 	}
 	ignoreSession := ctx.Value(engine.IgnoreReserveTxn)
 	if ignoreSession != nil {
-		return &shardActionInfo{}, nil, nil
+		return zeroActionInfo, nil, nil
 	}
 	// No need to protect ourselves from the race condition between
 	// Find and AppendOrUpdate. The higher level functions ensure that no
@@ -983,6 +1026,17 @@ func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64
 }
 
 type actionNeeded int
+
+// zeroActionInfo is a read-only singleton used by actionInfo to avoid heap
+// allocation for the common non-transactional, non-reserved query path.
+// updateTransactionAndReservedID copies before mutating, so this is safe.
+var zeroActionInfo = &shardActionInfo{}
+
+// allErrorRecorderPool reuses AllErrorRecorder objects on the success path
+// (no errors) to avoid per-query allocation.
+var allErrorRecorderPool = sync.Pool{
+	New: func() any { return &concurrency.AllErrorRecorder{} },
+}
 
 const (
 	nothing actionNeeded = iota

@@ -51,6 +51,10 @@ type (
 		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
 		Optimized    atomic.Bool             // Prepared queries need to be optimized before the first execution
 
+		// RoutingIndexes caches the routing vindex information for this plan,
+		// computed once from Instructions to avoid per-query closure allocation.
+		RoutingIndexes [][3]string
+
 		ExecCount    uint64 // ExecCount is how many times this plan has been executed.
 		ExecTime     uint64 // ExecTime is the total accumulated execution time in nanoseconds.
 		ShardQueries uint64 // ShardQueries is the total count of shard-level queries performed.
@@ -259,7 +263,9 @@ func (pk PlanKey) DebugString() string {
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
-	hasher := vthash.New256()
+	// Use a stack-allocated Digest to avoid heap allocation.
+	var hasher vthash.Hasher256
+	vthash.Init256(&hasher)
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
@@ -274,12 +280,13 @@ func (pk PlanKey) Hash() theine.HashKey256 {
 
 func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
 	return &Plan{
-		Type:         getPlanType(primitive),
-		QueryType:    sqlparser.ASTToStatementType(stmt),
-		Original:     query,
-		Instructions: primitive,
-		BindVarNeeds: bindVarNeeds,
-		TablesUsed:   tablesUsed,
+		Type:           getPlanType(primitive),
+		QueryType:      sqlparser.ASTToStatementType(stmt),
+		Original:       query,
+		Instructions:   primitive,
+		BindVarNeeds:   bindVarNeeds,
+		TablesUsed:     tablesUsed,
+		RoutingIndexes: GetRoutingIndexes(primitive),
 	}
 }
 

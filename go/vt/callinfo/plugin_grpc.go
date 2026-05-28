@@ -21,6 +21,7 @@ package callinfo
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"github.com/google/safehtml"
 	"github.com/google/safehtml/template"
@@ -29,50 +30,65 @@ import (
 )
 
 // GRPCCallInfo returns an augmented context with a CallInfo structure,
-// only for gRPC contexts.
+// only for gRPC contexts. Uses a combined callInfoContext to avoid
+// separate allocations for the struct and context.WithValue wrapper.
 func GRPCCallInfo(ctx context.Context) context.Context {
 	method, ok := grpc.Method(ctx)
 	if !ok {
 		return ctx
 	}
 
-	callinfo := &gRPCCallInfoImpl{
-		method: method,
+	c := &callInfoContext{
+		Context: ctx,
+		method:  method,
 	}
-	peer, ok := peer.FromContext(ctx)
-	if ok {
-		callinfo.remoteAddr = peer.Addr.String()
+	if p, ok := peer.FromContext(ctx); ok {
+		c.remoteAddr = p.Addr
 	}
 
-	return NewContext(ctx, callinfo)
+	return c
 }
 
-type gRPCCallInfoImpl struct {
+// callInfoContext is a combined context+callinfo that avoids separate allocations
+// for the gRPCCallInfoImpl struct and the context.WithValue wrapper. It embeds
+// the parent context and implements Value() to return itself for the callInfoKey.
+type callInfoContext struct {
+	context.Context
 	method     string
-	remoteAddr string
+	remoteAddr net.Addr
 }
 
-func (gci *gRPCCallInfoImpl) RemoteAddr() string {
-	return gci.remoteAddr
+func (c *callInfoContext) Value(key any) any {
+	if key == callInfoKey {
+		return CallInfo(c)
+	}
+	return c.Context.Value(key)
 }
 
-func (gci *gRPCCallInfoImpl) Username() string {
+func (c *callInfoContext) RemoteAddr() string {
+	if c.remoteAddr == nil {
+		return ""
+	}
+	return c.remoteAddr.String()
+}
+
+func (c *callInfoContext) Username() string {
 	return "gRPC"
 }
 
-func (gci *gRPCCallInfoImpl) Text() string {
-	return fmt.Sprintf("%s:%s(gRPC)", gci.remoteAddr, gci.method)
+func (c *callInfoContext) Text() string {
+	return fmt.Sprintf("%s:%s(gRPC)", c.RemoteAddr(), c.method)
 }
 
 var grpcTmpl = template.Must(template.New("tcs").Parse("<b>Method:</b> {{.Method}} <b>Remote Addr:</b> {{.RemoteAddr}}"))
 
-func (gci *gRPCCallInfoImpl) HTML() safehtml.HTML {
+func (c *callInfoContext) HTML() safehtml.HTML {
 	html, err := grpcTmpl.ExecuteToHTML(struct {
 		Method     string
 		RemoteAddr string
 	}{
-		Method:     gci.method,
-		RemoteAddr: gci.remoteAddr,
+		Method:     c.method,
+		RemoteAddr: c.RemoteAddr(),
 	})
 	if err != nil {
 		panic(err)

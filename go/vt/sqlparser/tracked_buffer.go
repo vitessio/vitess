@@ -21,9 +21,18 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/slice"
 )
+
+var trackedBufferPool = sync.Pool{
+	New: func() any {
+		return &TrackedBuffer{
+			Builder: new(strings.Builder),
+		}
+	},
+}
 
 // NodeFormatter defines the signature of a custom node formatter
 // function that can be given to TrackedBuffer for code generation.
@@ -398,9 +407,17 @@ func String(node SQLNode) string {
 		return "<nil>"
 	}
 
-	buf := NewTrackedBuffer(nil)
+	buf := trackedBufferPool.Get().(*TrackedBuffer)
+	buf.Builder.Reset()
+	buf.bindLocations = buf.bindLocations[:0]
+	buf.nodeFormatter = nil
+	buf.literal = buf.WriteString
+	buf.fast = true
+	buf.escape = escapeKeywords
 	node.FormatFast(buf)
-	return buf.String()
+	s := buf.String()
+	trackedBufferPool.Put(buf)
+	return s
 }
 
 // UnescapedString will return a string where no identifiers have been escaped.

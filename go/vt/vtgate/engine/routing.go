@@ -346,12 +346,25 @@ func (rp *RoutingParameters) byDestination(ctx context.Context, vcursor VCursor,
 }
 
 func (rp *RoutingParameters) equal(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	value, err := env.Evaluate(rp.Values[0])
-	if err != nil {
-		return nil, nil, err
+	var value sqltypes.Value
+	// Fast path: for simple bind variable references with numeric types, skip the eval machinery
+	// (ExpressionEnv + valueToEval allocations) and use the bind variable value directly.
+	if bvExpr, ok := rp.Values[0].(*evalengine.BindVariable); ok {
+		if bvar, found := bindVars[bvExpr.Key]; found && bvar != nil && sqltypes.IsNumber(bvar.Type) {
+			value = sqltypes.MakeTrusted(bvar.Type, bvar.Value)
+			goto resolved
+		}
 	}
-	rss, _, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, []sqltypes.Value{value.Value(vcursor.ConnCollation())})
+	{
+		env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+		result, err := env.Evaluate(rp.Values[0])
+		if err != nil {
+			return nil, nil, err
+		}
+		value = result.Value(vcursor.ConnCollation())
+	}
+resolved:
+	rss, _, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, []sqltypes.Value{value})
 	if err != nil {
 		return nil, nil, err
 	}

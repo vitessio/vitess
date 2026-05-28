@@ -506,6 +506,12 @@ func execShard(
 }
 
 func getQueries(query string, bvs []map[string]*querypb.BindVariable) []*querypb.BoundQuery {
+	if len(bvs) == 1 {
+		return []*querypb.BoundQuery{{
+			Sql:           query,
+			BindVariables: bvs[0],
+		}}
+	}
 	queries := make([]*querypb.BoundQuery, len(bvs))
 	for i, bv := range bvs {
 		queries[i] = &querypb.BoundQuery{

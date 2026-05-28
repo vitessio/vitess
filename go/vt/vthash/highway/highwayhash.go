@@ -46,6 +46,14 @@ func New(key [Size]byte) *Digest {
 	return h
 }
 
+// Init initializes a Digest in-place with the given key, avoiding heap allocation.
+// This is useful when the caller allocates the Digest on the stack.
+func Init(d *Digest, key [Size]byte) {
+	d.size = Size
+	d.key = key
+	d.Reset()
+}
+
 // New128 returns a hash.Hash computing the HighwayHash-128 checksum.
 // It returns a non-nil error if the key is not 32 bytes long.
 func New128(key [Size]byte) *Digest {
