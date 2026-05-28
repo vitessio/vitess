@@ -76,8 +76,8 @@ func TestBuiltinBackupChunked(t *testing.T) {
 	defer setDefaultCommonArgs()
 	commonTabletArg = append(
 		getDefaultCommonArgs(),
-		"--builtinbackup-file-chunk-threshold", "1048576",
-		"--builtinbackup-file-chunk-size", "524288",
+		"--builtinbackup-file-chunk-threshold", "4194304",
+		"--builtinbackup-file-chunk-size", "4194304",
 	)
 
 	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)

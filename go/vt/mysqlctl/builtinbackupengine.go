@@ -1309,8 +1309,12 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		return "", err
 	}
 
-	_ = be.restoreFileEntries(ctx, fes, bh, bm, params, createdDir)
-	if files := bh.GetFailedFiles(); len(files) > 0 {
+	restoreErr := be.restoreFileEntries(ctx, fes, bh, bm, params, createdDir)
+	files := bh.GetFailedFiles()
+	if restoreErr != nil && len(files) == 0 {
+		return "", restoreErr
+	}
+	if len(files) > 0 {
 		newFEs := make([]FileEntry, len(fes))
 		for _, file := range files {
 			feIdx, chunkIdx, parseErr := parseBackupName(file)
@@ -1336,6 +1340,9 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		if err != nil {
 			return "", err
 		}
+	}
+	if restoreErr != nil {
+		return "", restoreErr
 	}
 	return createdDir, nil
 }
@@ -1397,6 +1404,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		}
 	}()
 
+	var setupErr error
 	for i := range fes {
 		if fes[i].Name == "" {
 			continue
@@ -1409,11 +1417,13 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			// The file was already created and pre-sized by createChunkedDestinations.
 			fullPath, pathErr := fe.fullPath(params.Cnf)
 			if pathErr != nil {
-				return vterrors.Wrapf(pathErr, "can't get path for chunked file %v", fe.Name)
+				setupErr = vterrors.Wrapf(pathErr, "can't get path for chunked file %v", fe.Name)
+				break
 			}
 			dest, openErr := os.OpenFile(fullPath, os.O_WRONLY, 0o644)
 			if openErr != nil {
-				return vterrors.Wrapf(openErr, "can't open destination for chunked file %v", fe.Name)
+				setupErr = vterrors.Wrapf(openErr, "can't open destination for chunked file %v", fe.Name)
+				break
 			}
 			chunkedDests = append(chunkedDests, chunkedDest{dest: dest, fe: fe})
 
@@ -1466,6 +1476,9 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		}
 	}
 	_ = g.Wait()
+	if setupErr != nil {
+		return setupErr
+	}
 	return bh.Error()
 }
 
@@ -1503,7 +1516,7 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 	wrappedReader := ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
 	cleanup := func() error {
-		params.Logger.Infof("closing decompressor")
+		params.Logger.Infof("closing decompressor for %s", name)
 		closeAt := time.Now()
 		cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor")
 		if cerr != nil {
