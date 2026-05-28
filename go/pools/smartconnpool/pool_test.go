@@ -2204,6 +2204,65 @@ func TestWaiterUnblocksAtDrainStart(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestRecycleAfterLifetimeCancelClosesEagerly pins the contract that
+// tryReturnConn closes a Recycled conn instead of handing it off once the
+// pool's lifetime context has been cancelled — even before setCapacity has
+// driven capacity to 0. Without this gate, a Recycle in the brief window
+// between CloseWithContext cancelling lifetime and setCapacity swapping
+// capacity to 0 could be handed to a queued waiter that had not yet woken
+// from lifetimeCtx.Done(), defeating the "waiters unblock at drain start"
+// guarantee.
+func TestRecycleAfterLifetimeCancelClosesEagerly(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+
+	ctx := t.Context()
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+
+	waiterErr := make(chan error, 1)
+	go func() {
+		_, err := p.Get(ctx, nil)
+		waiterErr <- err
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	// Simulate the state CloseWithContext leaves the pool in between
+	// `lt.cancel()` and `setCapacity(ctx, 0)`: lifetime is nil/cancelled,
+	// but capacity has not yet been driven to 0.
+	lt := p.lifetime.Swap(nil)
+	require.NotNil(t, lt)
+	lt.cancel()
+	t.Cleanup(p.workers.Wait)
+
+	// The waiter should unblock with ErrConnPoolClosed because the lifetime
+	// context was cancelled.
+	select {
+	case err = <-waiterErr:
+	case <-time.After(time.Second):
+		require.Fail(t, "waiter did not unblock after lifetime cancel")
+	}
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+
+	// Recycling now must eagerly close the conn rather than push it onto a
+	// stack — capacity is still > 0 and active is not > capacity, so the
+	// active>capacity gate alone would not catch this.
+	require.EqualValues(t, 1, p.Capacity(),
+		"sanity: capacity must still be > 0 to exercise the lifetime gate")
+	c.Recycle()
+
+	require.EqualValues(t, 1, state.close.Load(),
+		"recycled conn must be closed once lifetime is cancelled, not pushed to a stack")
+	require.EqualValues(t, 0, p.Active())
+}
+
 // TestSetCapacityReductionDrainsWithWaiters verifies that SetCapacity reducing
 // capacity from N to M (0 < M < N) completes promptly while waiters are
 // queued for conns. tryReturnConn must eagerly close conns whenever

@@ -495,12 +495,18 @@ func (pool *ConnPool[C]) put(conn *Pooled[C]) {
 }
 
 func (pool *ConnPool[C]) tryReturnConn(conn *Pooled[C], updateIdleTime bool) bool {
-	// If the pool has more conns out than its configured capacity, close
-	// this one eagerly instead of handing it off to a waiter or pushing it
-	// onto a stack. Otherwise a setCapacity reducing capacity keeps cycling
-	// connections from Recycle to waiter and the drain loop never observes
-	// a non-empty stack — including the capacity=0 case during Close.
-	if pool.active.Load() > pool.capacity.Load() {
+	// Close eagerly instead of handing this conn off or pushing it to a
+	// stack when either:
+	//   - the pool is shutting down (lifetime cancelled): otherwise a
+	//     Recycle in the brief window between CloseWithContext cancelling
+	//     lifetime and setCapacity swapping capacity to 0 could be handed
+	//     to a waiter that has not yet woken from lifetimeCtx.Done(),
+	//     defeating the "waiters unblock at drain start" guarantee; or
+	//   - the pool has more conns out than its configured capacity:
+	//     otherwise a setCapacity reducing capacity keeps cycling conns
+	//     from Recycle to waiter and the drain loop never observes a
+	//     non-empty stack — including the capacity=0 case during Close.
+	if pool.lifetime.Load() == nil || pool.active.Load() > pool.capacity.Load() {
 		conn.Close()
 		pool.closedConn()
 		return false
