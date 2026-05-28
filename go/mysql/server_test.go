@@ -654,8 +654,8 @@ func TestServerStats(t *testing.T) {
 	}
 
 	timings.Reset()
-	connAccept.Reset()
 	connCount.Reset()
+	connAccept.Reset()
 	connSlow.Reset()
 	connRefuse.Reset()
 
@@ -667,9 +667,23 @@ func TestServerStats(t *testing.T) {
 	assert.Contains(t, output, "ERROR 1047 (08S01)")
 	assert.Contains(t, output, "forced query error", "Unexpected output for 'error': %v", output)
 
-	assert.EqualValues(t, 0, connCount.Get(), "connCount")
+	// Accept starts a goroutine to handle each incoming connection.
+	// It's in that goroutine where live stats/gauges such as the
+	// current connection counts are updated when the handle function
+	// ends (e.g. connCount.Add(-1)).
+	// So we wait for the expected value to avoid races and flakiness.
+	// 1 second should be enough, but no reason to fail the test or
+	// a CI workflow if the test is CPU starved.
+	conditionWait := 10 * time.Second
+	conditionTick := 10 * time.Millisecond
+	assert.Eventually(t, func() bool {
+		return connCount.Get() == int64(0)
+	}, conditionWait, conditionTick, "connCount")
+	assert.Eventually(t, func() bool {
+		return connSlow.Get() == int64(1)
+	}, conditionWait, conditionTick, "connSlow")
+
 	assert.EqualValues(t, 1, connAccept.Get(), "connAccept")
-	assert.EqualValues(t, 1, connSlow.Get(), "connSlow")
 	assert.EqualValues(t, 0, connRefuse.Get(), "connRefuse")
 
 	expectedTimingDeltas := map[string]int64{
@@ -998,7 +1012,17 @@ func TestTLSRequired(t *testing.T) {
 	params.SslKey = path.Join(root, "revoked-client-key.pem")
 	conn, err = Connect(context.Background(), params)
 	require.NotNil(t, err)
-	require.Contains(t, err.Error(), "remote error: tls: bad certificate")
+	// On a happy day the client reads the server's TLS `bad_certificate`
+	// alert; on a less happy day the server's TCP close races ahead of the
+	// alert and the client sees `connection reset by peer` / `broken pipe`.
+	// Either outcome means the revoked cert was rejected, which is what the
+	// test cares about — so accept both.
+	errStr := err.Error()
+	require.True(t,
+		strings.Contains(errStr, "remote error: tls: bad certificate") ||
+			strings.Contains(errStr, "connection reset by peer") ||
+			strings.Contains(errStr, "broken pipe"),
+		"expected revoked-cert connection to be rejected, got: %v", err)
 	if conn != nil {
 		conn.Close()
 	}

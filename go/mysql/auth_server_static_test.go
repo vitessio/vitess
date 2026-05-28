@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -157,11 +158,9 @@ func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, 
 	require.Equal(t, oldStr, aStatic.getEntries()[oldStr][0].Password, "%s's Password should still be '%s'", oldStr, oldStr)
 
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-	time.Sleep(100 * time.Millisecond)
-	// wait for signal handler
-	require.Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-	require.Equal(t, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
 
+	// wait for signal handler
+	waitForReload(t, aStatic, oldStr, newStr)
 }
 
 func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
@@ -170,11 +169,28 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 
-	time.Sleep(20 * time.Millisecond)
-	// wait for signal handler
-	require.Nil(t, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-	require.Equal(t, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+	waitForReload(t, aStatic, oldStr, newStr)
+}
 
+// waitForReload polls aStatic until the auth file reload has dropped oldStr
+// and installed newStr.
+//
+// We use `assert.X(c, ...)` (not `require.X`) inside the callback because
+// testify v1.9 on this branch implements `CollectT.FailNow` as
+// `panic("Assertion failed")`, and `EventuallyWithT` doesn't recover from
+// that — a failed poll would crash the test instead of being retried. We
+// also gate the `[0]` indexing on `NotEmpty` for the same reason: a panic
+// inside the callback (e.g. `nil[0]`) escapes the goroutine.
+func waitForReload(t *testing.T, aStatic *AuthServerStatic, oldStr, newStr string) {
+	t.Helper()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
+		entries := aStatic.getEntries()[newStr]
+		if !assert.NotEmpty(c, entries, "Should have new %s entries after config reload", newStr) {
+			return
+		}
+		assert.Equal(c, newStr, entries[0].Password, "%s's Password should be '%s'", newStr, newStr)
+	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
 }
 
 func TestStaticPasswords(t *testing.T) {

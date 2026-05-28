@@ -1,7 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
 name: Cluster (xb_recovery)
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (xb_recovery)')
   cancel-in-progress: true
@@ -96,13 +103,26 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
-        
-        # Setup Percona Server for MySQL 8.0
+        export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get -qq update
+
+        # Uninstall any previously installed MySQL first; the ubuntu-24.04 runner
+        # image ships with MySQL pre-installed, which conflicts with our install.
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # Setup Percona Server for MySQL 8.0. We need pdps8.0 + pxb-80 enabled
+        # (and ps-80 release) to get both percona-server-* and percona-xtrabackup-80;
+        # the older `setup ps80` shortcut no longer ships percona-xtrabackup-80.
         sudo apt-get -qq install -y lsb-release gnupg2 curl
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo percona-release setup ps80
+        sudo percona-release setup pdps8.0
+        sudo percona-release setup pxb-80
+        sudo percona-release enable ps-80 release
         sudo apt-get -qq update
 
         # Install everything else we need, and configure
@@ -110,8 +130,11 @@ jobs:
 
         sudo service mysql stop
         sudo service etcd stop
+        # The apparmor profile is removed when we uninstall the pre-installed MySQL,
+        # so we recreate an empty one before disabling it.
+        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld"
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
         go mod download
 
         # install JUnit report formatter

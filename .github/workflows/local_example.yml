@@ -1,11 +1,18 @@
 name: local_example
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
+  pull_request:
+    branches: '**'
 permissions: read-all
 jobs:
 
   build:
     name: Local example using ${{ matrix.topo }} on Ubuntu
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'gh-hosted-runners-16cores-1-24.04' || 'ubuntu-24.04' }}
     strategy:
       matrix:
         topo: [consul,etcd,zk2]

@@ -1,7 +1,12 @@
 name: Query Serving (Queries) Next Release - Upgrade Downgrade Testing
 on:
   push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+    tags: '**'
   pull_request:
+    branches: '**'
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing Query Serving (Queries) Next Release')
@@ -17,7 +22,7 @@ jobs:
   upgrade_downgrade_test:
     timeout-minutes: 60
     name: Run Upgrade Downgrade Test - Query Serving (Queries) Next Release
-    runs-on: gh-hosted-runners-16cores-1-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'gh-hosted-runners-16cores-1-24.04' || 'ubuntu-24.04' }}
 
     steps:
     - name: Skip CI
@@ -104,7 +109,7 @@ jobs:
         sudo rm -rf /etc/mysql
         # Install mysql80
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.33-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update

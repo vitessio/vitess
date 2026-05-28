@@ -36,7 +36,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Run FOSSA scan and upload build data
-        uses: fossa-contrib/fossa-action@v3
+        uses: fossa-contrib/fossa-action@3d2ef181b1820d6dcd1972f86a767d18167fa19b # v3.0.1
         with:
           # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
