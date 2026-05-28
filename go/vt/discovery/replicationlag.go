@@ -17,8 +17,6 @@ limitations under the License.
 package discovery
 
 import (
-	"errors"
-	"slices"
 	"sort"
 	"time"
 
@@ -182,86 +180,6 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	return res
 }
 
-// Deprecated: the legacy algorithm is no longer used by FilterStatsByReplicationLag
-// and will be removed in v26 along with the --legacy-replication-lag-algorithm flag.
-func filterStatsByLagWithLegacyAlgorithm(tabletHealthList []*TabletHealth) []*TabletHealth {
-	list := make([]*TabletHealth, 0, len(tabletHealthList))
-	// Filter out non-serving tablets.
-	for _, ts := range tabletHealthList {
-		if !ts.Serving || ts.LastError != nil || ts.Stats == nil {
-			continue
-		}
-		list = append(list, ts)
-	}
-	if len(list) <= 1 {
-		return list
-	}
-	// If all tablets have low replication lag (<=30s), return all of them.
-	allLowLag := !slices.ContainsFunc(list, IsReplicationLagHigh)
-	if allLowLag {
-		return list
-	}
-	// We want to filter out tablets that are affecting "mean" lag significantly.
-	// We first calculate the mean across all tablets.
-	res := make([]*TabletHealth, 0, len(list))
-	m, _ := mean(list, -1)
-	for i, ts := range list {
-		// Now we calculate the mean by excluding ith tablet
-		mi, _ := mean(list, i)
-		if float64(mi) > float64(m)*0.7 {
-			res = append(res, ts)
-		}
-	}
-	if len(res) >= minNumTablets.Get() {
-		return res
-	}
-
-	// We want to return at least minNumTablets tablets to avoid overloading,
-	// as long as there are enough tablets with replication lag < highReplicationLagMinServing.
-
-	// Save the current replication lag for a stable sort.
-	snapshots := make([]tabletLagSnapshot, 0, len(list))
-	for _, ts := range list {
-		if !IsReplicationLagVeryHigh(ts) {
-			snapshots = append(snapshots, tabletLagSnapshot{
-				ts:     ts,
-				replag: ts.Stats.ReplicationLagSeconds,
-			})
-		}
-	}
-	if len(snapshots) == 0 {
-		// We get here if all tablets are over the high
-		// replication lag threshold, and their lag is
-		// different enough that the 70% mean computation up
-		// there didn't find them all in a group. For
-		// instance, if *minNumTablets = 2, and we have two
-		// tablets with lag of 3h and 30h.  In that case, we
-		// just use them all.
-		for _, ts := range list {
-			snapshots = append(snapshots, tabletLagSnapshot{
-				ts:     ts,
-				replag: ts.Stats.ReplicationLagSeconds,
-			})
-		}
-	}
-
-	// Sort by replication lag.
-	sort.Sort(byReplag(snapshots))
-
-	// Pick the first minNumTablets tablets.
-	res = make([]*TabletHealth, 0, minNumTablets.Get())
-	for i := 0; i < min(minNumTablets.Get(), len(snapshots)); i++ {
-		res = append(res, snapshots[i].ts)
-	}
-	return res
-}
-
-type byReplag []tabletLagSnapshot
-
-func (a byReplag) Len() int           { return len(a) }
-func (a byReplag) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a byReplag) Less(i, j int) bool { return a[i].replag < a[j].replag }
-
 type tabletLagSnapshot struct {
 	ts     *TabletHealth
 	replag uint32
@@ -272,20 +190,3 @@ func (a tabletLagSnapshotList) Len() int           { return len(a) }
 func (a tabletLagSnapshotList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a tabletLagSnapshotList) Less(i, j int) bool { return a[i].replag < a[j].replag }
 
-// mean calculates the mean value over the given list,
-// while excluding the item with the specified index.
-func mean(tabletHealthList []*TabletHealth, idxExclude int) (uint64, error) {
-	var sum uint64
-	var count uint64
-	for i, ts := range tabletHealthList {
-		if i == idxExclude {
-			continue
-		}
-		sum = sum + uint64(ts.Stats.ReplicationLagSeconds)
-		count++
-	}
-	if count == 0 {
-		return 0, errors.New("empty list")
-	}
-	return sum / count, nil
-}
