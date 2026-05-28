@@ -159,38 +159,9 @@ func TestStress(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 	stop.Store(true)
-<<<<<<< HEAD
 	if err := wg.Wait(); err != nil {
 		t.Fatal(err)
-||||||| parent of 6c797e0a61 (smartconnpool: reject SetCapacity on a closed pool + shutdown stress tests (#20158))
-	require.NoError(t, wg.Wait())
-}
-
-// TestStressCloseDuringReconnectStorm exercises CloseWithContext racing
-// against in-flight reconnects. Workers churn conns (Get / Recycle, plus
-// occasional Taint), and a storm of Taints is launched with the test's
-// connect() blocked, so several background reconnects are parked inside
-// connNew when Close is called. The test verifies that:
-//
-//   - Close returns (does not deadlock waiting on parked reconnects),
-//   - no closed conn is handed to a worker,
-//   - no conn opened by the pool is leaked (every StressConn the connect
-//     callback ever produced ends up Closed),
-//   - capacity / active / inUse all settle to zero.
-//
-// Each cycle is a fresh pool; the loop runs many cycles to surface
-// scheduling-dependent races.
-func TestStressCloseDuringReconnectStorm(t *testing.T) {
-	const Cycles = 25
-
-	for cycle := range Cycles {
-		if !t.Run(fmt.Sprintf("cycle-%03d", cycle), func(t *testing.T) {
-			runStressCloseDuringReconnectStormCycle(t, cycle)
-		}) {
-			return
-		}
-=======
-	require.NoError(t, wg.Wait())
+	}
 }
 
 func TestStressFull(t *testing.T) {
@@ -547,33 +518,6 @@ func runStressRefreshReopenSetCapacityCloseCycle(t *testing.T, cycle int) {
 	}
 	require.Equalf(t, 0, leaked, "cycle %d: leaked %d connections out of %d ever opened; %s",
 		cycle, leaked, len(allConns), finalStatus)
-}
-
-// TestStressCloseDuringReconnectStorm exercises CloseWithContext racing
-// against in-flight reconnects. Workers churn conns (Get / Recycle, plus
-// occasional Taint), and a storm of Taints is launched with the test's
-// connect() blocked, so several background reconnects are parked inside
-// connNew when Close is called. The test verifies that:
-//
-//   - Close returns (does not deadlock waiting on parked reconnects),
-//   - no closed conn is handed to a worker,
-//   - no conn opened by the pool is leaked (every StressConn the connect
-//     callback ever produced ends up Closed),
-//   - capacity / active / inUse all settle to zero.
-//
-// Each cycle is a fresh pool; the loop runs many cycles to surface
-// scheduling-dependent races.
-func TestStressCloseDuringReconnectStorm(t *testing.T) {
-	const Cycles = 25
-
-	for cycle := range Cycles {
-		if !t.Run(fmt.Sprintf("cycle-%03d", cycle), func(t *testing.T) {
-			runStressCloseDuringReconnectStormCycle(t, cycle)
-		}) {
-			return
-		}
->>>>>>> 6c797e0a61 (smartconnpool: reject SetCapacity on a closed pool + shutdown stress tests (#20158))
-	}
 }
 
 // TestStressCloseDuringReconnectStorm exercises CloseWithContext racing
