@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -823,17 +822,6 @@ func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSy
 	return conn.Conn.SemiSyncExtensionLoaded()
 }
 
-// innodbLogTableOverride redirects HasRecentInnoDBLongSemaphoreWait's source
-// table to a writable test table. E2E-only — a typo in production silently
-// disables InnoDB-stall detection via the ERNoSuchTable soft-fail below.
-var innodbLogTableOverride = os.Getenv("VTTABLET_E2E_INNODB_LOG_TABLE")
-
-func init() {
-	if innodbLogTableOverride != "" {
-		log.Warn(fmt.Sprintf("VTTABLET_E2E_INNODB_LOG_TABLE=%q is set — HasRecentInnoDBLongSemaphoreWait will read from this table instead of performance_schema.error_log. This is for e2e tests only.", innodbLogTableOverride))
-	}
-}
-
 // HasRecentInnoDBLongSemaphoreWait reports whether MY-012985 was logged to
 // performance_schema.error_log in the lookback window. Best-effort: if the
 // table is unavailable (missing on MariaDB / pre-8.0, dba lacks SELECT,
@@ -846,16 +834,12 @@ func (mysqld *Mysqld) HasRecentInnoDBLongSemaphoreWait(ctx context.Context, look
 	}
 	defer conn.Recycle()
 
-	table := "performance_schema.error_log"
-	if innodbLogTableOverride != "" {
-		table = innodbLogTableOverride
-	}
 	query := fmt.Sprintf(
 		"SELECT 1 FROM %s "+
 			"WHERE logged >= NOW(6) - INTERVAL %d SECOND "+
 			"AND prio = 'Warning' AND subsystem = 'InnoDB' "+
 			"AND error_code = 'MY-012985' LIMIT 1",
-		table, int64(lookback.Seconds()),
+		innoDBLogTable, int64(lookback.Seconds()),
 	)
 	res, err := conn.Conn.ExecuteFetch(query, 1, false)
 	if err != nil {

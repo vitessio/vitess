@@ -40,6 +40,18 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// innoDBLogLookback bounds how recent a MY-012985 row must be for
+// HasRecentInnoDBLongSemaphoreWait to count it as "currently stalled."
+//
+// mysqld's srv_error_monitor_thread re-emits MY-012985 once per second per
+// sync_array cell whose wait crosses the 4-minute constexpr in sync0arr.cc,
+// so any value above ~2s reliably catches an active wedge. The lookback's
+// other job is to bound the post-resolution ghost window — the interval
+// during which a row that mysqld stopped emitting can still satisfy the
+// analyser and trigger ERS against a now-healthy primary. 10s keeps that
+// window short while leaving headroom for srv_error_monitor_thread jitter.
+const innoDBLogLookback = 10 * time.Second
+
 // ReplicationStatus returns the replication status
 func (tm *TabletManager) ReplicationStatus(ctx context.Context) (*replicationdatapb.Status, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
@@ -171,7 +183,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 	// the rest of FullStatus. Configuration-state errors (missing table,
 	// missing grants, disabled performance_schema) are already soft-failed in
 	// HasRecentInnoDBLongSemaphoreWait; anything else surfaces as a warning.
-	innodbLongSemaphoreWaitSeen, err := tm.MysqlDaemon.HasRecentInnoDBLongSemaphoreWait(ctx, 60*time.Second)
+	innodbLongSemaphoreWaitSeen, err := tm.MysqlDaemon.HasRecentInnoDBLongSemaphoreWait(ctx, innoDBLogLookback)
 	if err != nil {
 		log.Warn("FullStatus: HasRecentInnoDBLongSemaphoreWait failed; treating as not seen", slog.Any("error", err))
 		innodbLongSemaphoreWaitSeen = false
