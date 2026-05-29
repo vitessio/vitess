@@ -26,6 +26,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -281,6 +282,9 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 	if backupFileChunkThreshold > 0 && backupFileChunkSize < minBackupFileChunkSize {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be >= %d", minBackupFileChunkSize)
+	}
+	if backupFileChunkThreshold > 0 && backupFileChunkSize > math.MaxInt64 {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size exceeds maximum allowed value of %d", int64(math.MaxInt64))
 	}
 
 	if isIncrementalBackup(params) {
@@ -1341,9 +1345,6 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		if err != nil {
 			return "", err
 		}
-	}
-	if restoreErr != nil {
-		return "", restoreErr
 	}
 	return createdDir, nil
 }

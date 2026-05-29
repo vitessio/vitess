@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math"
 	"os"
 	"sync"
 	"testing"
@@ -407,6 +408,22 @@ func TestRestoreChunkedRetryPreservesData(t *testing.T) {
 	assert.Equal(t, chunk0Data, content[0:10], "chunk 0 should still be intact after retry")
 	assert.Equal(t, chunk1Data, content[10:20], "chunk 1 should be restored after retry")
 	assert.Equal(t, chunk2Data, content[20:30], "chunk 2 should still be intact after retry")
+}
+
+func TestExecuteBackupRejectsOversizedChunkSize(t *testing.T) {
+	oldThreshold := backupFileChunkThreshold
+	oldSize := backupFileChunkSize
+	t.Cleanup(func() {
+		backupFileChunkThreshold = oldThreshold
+		backupFileChunkSize = oldSize
+	})
+
+	backupFileChunkThreshold = 1024
+	backupFileChunkSize = math.MaxInt64 + 1
+
+	be := &BuiltinBackupEngine{}
+	_, err := be.ExecuteBackup(t.Context(), BackupParams{Logger: logutil.NewMemoryLogger()}, nil)
+	require.ErrorContains(t, err, "exceeds maximum allowed value")
 }
 
 func TestShouldDrainForBackupBuiltIn(t *testing.T) {
