@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -1523,11 +1524,11 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 		if firstPacket && needsEndPacket {
 			if flags, ok := c.consumePendingMultiResultStatusFlags(); ok {
 				if err := c.writeEndResultWithFlags(flags, true, 0, 0, handler.WarningCount(c)); err != nil {
-					log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
+					log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
 					return err
 				}
 			} else if err := c.writeEndResultWithFlags(previousStatusFlags, true, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
+				log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
 				return err
 			}
 		}
