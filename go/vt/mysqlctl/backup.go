@@ -485,7 +485,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return backupManifest, err
 	}
 	if err = ensureRestoredGTIDPurgedMatchesManifest(ctx, manifest, &params); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
@@ -496,7 +496,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		for _, bh := range handles {
 			manifest, err := builtInRE.ExecuteRestore(ctx, params, bh)
 			if err != nil {
-				return nil, err
+				return backupManifest, err
 			}
 			params.Logger.Infof("Restore: applied incremental backup: %v", manifest.Position)
 		}
@@ -505,7 +505,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	params.Logger.Infof("Restore: removing state file")
 	if err = removeStateFile(params.Cnf); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	backupstats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
