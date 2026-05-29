@@ -677,13 +677,12 @@ func TestServer(t *testing.T) {
 	th.SetWarnings(0)
 
 	// If there's an error after streaming has started,
-	// we should get a 2013
+	// we should send the real error instead of closing the connection.
 	th.SetErr(sqlerror.NewSQLError(sqlerror.ERUnknownComError, sqlerror.SSNetError, "forced error after send"))
 	output, err = runMysqlWithErr(t, params, "error after send")
 	require.Error(t, err)
-	assert.Contains(t, output, "ERROR 2013 (HY000)", "Unexpected output for 'panic'")
-	// MariaDB might not print the MySQL bit here
-	assert.Regexp(t, `Lost connection to( MySQL)? server during query`, output, "Unexpected output for 'panic': %v", output)
+	assert.Contains(t, output, "forced error after send", "Unexpected output for 'error after send'")
+	assert.NotRegexp(t, `Lost connection to( MySQL)? server during query`, output, "Unexpected output for 'error after send': %v", output)
 
 	// Run an 'insert' command, no rows, but rows affected.
 	output, err = runMysqlWithErr(t, params, "insert")

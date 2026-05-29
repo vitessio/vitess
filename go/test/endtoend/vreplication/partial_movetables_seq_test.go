@@ -327,6 +327,8 @@ func TestSequenceResetOnSwitchTraffic(t *testing.T) {
 		})
 		wf.create()
 
+		currentCustomerCount = getCustomerCount(t, "")
+		lastCustomerId = getLastCustomerId(t)
 		vtgateConn, closeConn := getVTGateConn()
 		defer closeConn()
 
@@ -575,6 +577,8 @@ func TestPartialMoveTablesWithSequences(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch("use `customer`", 0, false) // switch vtgate default db back to customer
 	require.NoError(t, err)
 	currentCustomerCount = getCustomerCount(t, "")
+	lastCustomerId = getLastCustomerId(t)
+	newCustomerCount = int64(201)
 	t.Run("Switch sequence traffic forward and reverse and validate workflows still exist and sequence routing works", func(t *testing.T) {
 		wfSeq.switchTraffic()
 		log.Info("SwitchTraffic was successful for workflow seqTgt.seq, with output " + lastOutput)
@@ -646,6 +650,16 @@ func getCustomerCount(t *testing.T, msg string) int64 {
 	count, err := qr.Rows[0][0].ToInt64()
 	require.NoError(t, err)
 	return count
+}
+
+func getLastCustomerId(t *testing.T) int64 {
+	vtgateConn, closeConn := getVTGateConn()
+	defer closeConn()
+	qr := execVtgateQuery(t, vtgateConn, "", "select coalesce(max(cid), 0) from customer")
+	require.NotNil(t, qr)
+	currentCustomerId, err := qr.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	return currentCustomerId
 }
 
 func confirmLastCustomerIdHasIncreased(t *testing.T) {

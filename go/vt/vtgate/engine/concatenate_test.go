@@ -17,9 +17,11 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
@@ -173,6 +175,127 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	require.EqualError(t, err, strFailed)
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
 	require.EqualError(t, err, strFailed)
+}
+
+func TestConcatenateStreamExecuteCopiesBindVars(t *testing.T) {
+	bindVars := map[string]*querypb.BindVariable{
+		"input": sqltypes.StringBindVariable("value"),
+	}
+	concatenate := NewConcatenate([]Primitive{
+		&bindVarMutatingPrimitive{},
+	}, nil)
+
+	_, err := wrapStreamExecute(concatenate, &noopVCursor{}, bindVars, true)
+
+	require.NoError(t, err)
+	require.NotContains(t, bindVars, "mutated")
+}
+
+func TestConcatenateStreamExecutePreservesSourceOrder(t *testing.T) {
+	leftStarted := make(chan struct{})
+	rightRowsSent := make(chan struct{})
+
+	left := &orderedStreamPrimitive{
+		result:             r("id|name", "int64|varchar", "1|left"),
+		signalBeforeFields: leftStarted,
+		waitBeforeRows:     rightRowsSent,
+	}
+	right := &orderedStreamPrimitive{
+		result:          r("id|name", "int64|varchar", "2|right"),
+		waitBeforeStart: leftStarted,
+		signalAfterRows: rightRowsSent,
+	}
+	concatenate := NewConcatenate([]Primitive{left, right}, nil)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+
+	var result sqltypes.Result
+	err := concatenate.TryStreamExecute(ctx, &noopVCursor{}, nil, true, func(r *sqltypes.Result) error {
+		if result.Fields == nil {
+			result.Fields = r.Fields
+		}
+		result.Rows = append(result.Rows, r.Rows...)
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.NoError(t, sqltypes.RowsEquals(r("id|name", "int64|varchar", "1|left", "2|right").Rows, result.Rows))
+}
+
+func TestConcatenateStreamExecuteErrorsIfSourceFinishesWithoutFields(t *testing.T) {
+	concatenate := NewConcatenate([]Primitive{
+		&streamRowsWithoutFieldsPrimitive{},
+		&fakePrimitive{results: []*sqltypes.Result{r("id", "int64", "2")}},
+	}, nil)
+
+	err := concatenate.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(*sqltypes.Result) error {
+		return nil
+	})
+
+	require.ErrorContains(t, err, "finished without sending fields")
+}
+
+type bindVarMutatingPrimitive struct {
+	fakePrimitive
+}
+
+func (p *bindVarMutatingPrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	bindVars["mutated"] = sqltypes.StringBindVariable("value")
+	return callback(r("id", "int64"))
+}
+
+type orderedStreamPrimitive struct {
+	fakePrimitive
+	result             *sqltypes.Result
+	waitBeforeStart    <-chan struct{}
+	waitBeforeRows     <-chan struct{}
+	signalBeforeFields chan<- struct{}
+	signalAfterRows    chan<- struct{}
+}
+
+func (p *orderedStreamPrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	if p.waitBeforeStart != nil {
+		select {
+		case <-p.waitBeforeStart:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if p.signalBeforeFields != nil {
+		close(p.signalBeforeFields)
+	}
+	if wantfields {
+		if err := callback(&sqltypes.Result{Fields: p.result.Fields}); err != nil {
+			return err
+		}
+	}
+	if p.waitBeforeRows != nil {
+		select {
+		case <-p.waitBeforeRows:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	rows := make([][]sqltypes.Value, 0, len(p.result.Rows))
+	for _, row := range p.result.Rows {
+		rows = append(rows, sqltypes.CopyRow(row))
+	}
+	if err := callback(&sqltypes.Result{Rows: rows}); err != nil {
+		return err
+	}
+	if p.signalAfterRows != nil {
+		close(p.signalAfterRows)
+	}
+	return nil
+}
+
+type streamRowsWithoutFieldsPrimitive struct {
+	fakePrimitive
+}
+
+func (p *streamRowsWithoutFieldsPrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return callback(&sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}})
 }
 
 func TestConcatenateTypes(t *testing.T) {

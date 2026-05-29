@@ -199,6 +199,20 @@ func TestHashJoin(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, `select /*vt+ ALLOW_HASH_JOIN */ t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
 }
 
+func TestWindowFunctionSingleShardStreaming(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, `insert into t1(id, col) values (1, 10), (2, 20)`)
+
+	for _, workload := range []string{"olap", "oltp"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			utils.AssertMatches(t, mcmp.VtConn, `select id, row_number() over (order by col) as rn from t1 where id = 1`, `[[INT64(1) UINT64(1)]]`)
+		})
+	}
+}
+
 func TestMultiColumnVindex(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -495,7 +509,13 @@ func TestDualJoinQueries(t *testing.T) {
 	defer closer()
 
 	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'ABC', 'ABC'),(2, 'DEF', 'DEF')`)
+	runDualJoinQueries(mcmp)
 
+	utils.Exec(t, mcmp.VtConn, `set workload = olap`)
+	runDualJoinQueries(mcmp)
+}
+
+func runDualJoinQueries(mcmp utils.MySQLCompare) {
 	// Left join with a dual table on left - merge-able
 	mcmp.Exec("select t.title, t2.id from (select 'ABC' as title) as t left join t2 on t2.id=1 and t.title = t2.tcol1")
 	mcmp.Exec("select t.title, t2.id from (select 'DEF' as title) as t left join t2 on t2.id=1 and t.title = t2.tcol1")

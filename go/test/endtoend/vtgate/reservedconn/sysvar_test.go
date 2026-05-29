@@ -373,13 +373,14 @@ func TestSysvarSocket(t *testing.T) {
 	assert.Equal(t, "VT03010: variable 'socket' is a read only variable (errno 1238) (sqlstate HY000) during query: set socket = '/any/path'", sqlErr.Error())
 }
 
-func TestReservedConnInStreaming(t *testing.T) {
+func TestReservedConnWithDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, "delete from test")
 
-	utils.Exec(t, conn, "set workload = olap")
 	utils.Exec(t, conn, "set sql_safe_updates = 1")
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into test (id, val1) values (80, null)")
@@ -838,6 +839,28 @@ func TestImplicitTxOnAutocommitOff(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("Default streaming DML starts tx", func(t *testing.T) {
+		for _, query := range []string{
+			"insert into test (id, val1) values (999, null)",
+			"update test set val1 = 'x' where id = 999",
+			"delete from test where id = 999",
+		} {
+			t.Run(query, func(t *testing.T) {
+				conn, err := mysql.Connect(t.Context(), &vtParams)
+				require.NoError(t, err)
+				defer conn.Close()
+
+				utils.Exec(t, conn, "delete from test")
+				utils.Exec(t, conn, "delete from test_vdx")
+				utils.Exec(t, conn, "set autocommit = 0")
+
+				result := utils.Exec(t, conn, query)
+				inTx := result.StatusFlags&mysql.ServerStatusInTrans != 0
+				assert.True(t, inTx, "expected %q to start an implicit transaction", query)
+			})
+		}
+	})
 
 	t.Run("ROLLBACK TO SAVEPOINT returns an error when no transaction has been started", func(t *testing.T) {
 		conn, err := mysql.Connect(t.Context(), &vtParams)

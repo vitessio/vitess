@@ -1339,10 +1339,14 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 		}
 	} else {
 		if err != nil {
-			// We can't send an error in the middle of a stream.
-			// All we can do is abort the send, which will cause a 2013.
-			log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-			return false
+			if sendFinished {
+				log.Error(fmt.Sprintf("Error after result was sent to %s: %v", c, err))
+				return false
+			}
+			if !c.writeErrorPacketFromErrorAndLog(err) {
+				return false
+			}
+			return true
 		}
 
 		// Send the end packet only sendFinished is false (results were streamed).
@@ -1569,10 +1573,14 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	}
 
 	if err != nil {
-		// We can't send an error in the middle of a stream.
-		// All we can do is abort the send, which will cause a 2013.
-		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-		return connErr
+		if !needsEndPacket {
+			log.Error(fmt.Sprintf("Error after result was sent to %s: %v", c, err))
+			return connErr
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
 	}
 
 	// If we haven't sent the final packet for the last query, we should send that too.
@@ -1689,10 +1697,14 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 		return execErr
 	}
 	if err != nil {
-		// We can't send an error in the middle of a stream.
-		// All we can do is abort the send, which will cause a 2013.
-		log.Error(fmt.Sprintf("Error in the middle of a stream to %s: %v", c, err))
-		return connErr
+		if sendFinished {
+			log.Error(fmt.Sprintf("Error after result was sent to %s: %v", c, err))
+			return connErr
+		}
+		if !c.writeErrorPacketFromErrorAndLog(err) {
+			return connErr
+		}
+		return execErr
 	}
 
 	// Send the end packet only sendFinished is false (results were streamed).

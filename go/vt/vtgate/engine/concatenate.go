@@ -18,10 +18,7 @@ package engine
 
 import (
 	"context"
-	"slices"
 	"sync"
-
-	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -209,114 +206,161 @@ func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 }
 
 func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, in func(*sqltypes.Result) error, sqlmode evalengine.SQLMode) error {
-	// Scoped context; any early exit triggers cancel() to clean up ongoing work.
 	ctx, cancel := context.WithCancel(inCtx)
 	defer cancel()
 
-	// Mutexes for dealing with concurrent access to shared state.
-	var (
-		muCallback    sync.Mutex                                 // Protects callback
-		muFields      sync.Mutex                                 // Protects field state
-		condFields    = sync.NewCond(&muFields)                  // Condition var for field arrival
-		wg            errgroup.Group                             // Wait group for all streaming goroutines
-		rest          = make([]*sqltypes.Result, len(c.Sources)) // Collects first result from each source to derive fields
-		fieldTypes    []evalengine.Type                          // Cached final field types
-		resultFields  []*querypb.Field                           // Final fields that need to be set for the first result.
-		needsCoercion = make([]bool, len(c.Sources))             // Tracks if coercion is needed for each individual source
-	)
-
-	// Process each result chunk, considering type coercion.
-	callback := func(res *sqltypes.Result, srcIdx int) error {
-		muCallback.Lock()
-		defer muCallback.Unlock()
-
-		// Apply type coercion if needed.
-		if needsCoercion[srcIdx] {
-			for _, row := range res.Rows {
-				if err := c.coerceValuesTo(row, fieldTypes, sqlmode); err != nil {
-					return err
-				}
-			}
-		}
-		return in(res)
+	type streamEvent struct {
+		result *sqltypes.Result
+		err    error
+		srcIdx int
+		done   bool
 	}
 
-	// Start streaming query execution in parallel for all sources.
+	type sourceState struct {
+		results []*sqltypes.Result
+		done    bool
+	}
+
+	events := make(chan streamEvent)
+	var wg sync.WaitGroup
 	for i, source := range c.Sources {
-		currIndex, currSource := i, source
-		wg.Go(func() error {
-			err := vcursor.StreamExecutePrimitive(ctx, currSource, bindVars, true, func(resultChunk *sqltypes.Result) error {
-				muFields.Lock()
+		currIndex, currSource, currBindVars := i, source, copyBindVars(bindVars)
+		wg.Go(func() {
+			err := vcursor.StreamExecutePrimitive(ctx, currSource, currBindVars, true, func(resultChunk *sqltypes.Result) error {
+				select {
+				case events <- streamEvent{srcIdx: currIndex, result: resultChunk}:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			})
+			select {
+			case events <- streamEvent{srcIdx: currIndex, err: err, done: true}:
+			case <-ctx.Done():
+			}
+		})
+	}
 
-				// Process fields when they arrive; coordinate field agreement across sources.
-				if resultChunk.Fields != nil && rest[currIndex] == nil {
-					// Capture the initial result chunk to determine field types later.
-					rest[currIndex] = resultChunk
+	go func() {
+		wg.Wait()
+		close(events)
+	}()
 
-					// If this was the last source to report its fields, derive the final output fields.
-					if !slices.Contains(rest, nil) {
-						// We have received fields from all sources. We can now calculate the output types
-						var err error
-						resultFields, fieldTypes, err = c.getFieldTypes(vcursor, rest)
-						if err != nil {
-							muFields.Unlock()
+	rest := make([]*sqltypes.Result, len(c.Sources))
+	sources := make([]sourceState, len(c.Sources))
+	needsCoercion := make([]bool, len(c.Sources))
+	var (
+		fieldTypes   []evalengine.Type
+		resultFields []*querypb.Field
+		fieldsReady  bool
+		fieldsSent   bool
+		nextSrc      int
+	)
+
+	allFieldsReady := func() bool {
+		for _, result := range rest {
+			if result == nil {
+				return false
+			}
+		}
+		return true
+	}
+
+	prepareFields := func() error {
+		if fieldsReady || !allFieldsReady() {
+			return nil
+		}
+
+		var err error
+		resultFields, fieldTypes, err = c.getFieldTypes(vcursor, rest)
+		if err != nil {
+			return err
+		}
+
+		for srcIdx, result := range rest {
+			srcNeedsCoercion := false
+			for idx, field := range result.Fields {
+				_, skip := c.NoNeedToTypeCheck[idx]
+				if !skip && fieldTypes[idx].Type() != field.Type {
+					srcNeedsCoercion = true
+					break
+				}
+			}
+			needsCoercion[srcIdx] = srcNeedsCoercion
+		}
+
+		fieldsReady = true
+		return nil
+	}
+
+	flush := func() error {
+		if !fieldsReady {
+			return nil
+		}
+
+		for nextSrc < len(sources) {
+			source := &sources[nextSrc]
+			for len(source.results) > 0 {
+				result := source.results[0]
+				source.results = source.results[1:]
+
+				if !fieldsSent {
+					result.Fields = resultFields
+					fieldsSent = true
+				} else {
+					result.Fields = nil
+				}
+
+				if needsCoercion[nextSrc] {
+					for _, row := range result.Rows {
+						if err := c.coerceValuesTo(row, fieldTypes, sqlmode); err != nil {
 							return err
 						}
-
-						// Check if we need coercion for each source.
-						for srcIdx, result := range rest {
-							srcNeedsCoercion := false
-							for idx, field := range result.Fields {
-								_, skip := c.NoNeedToTypeCheck[idx]
-								// We only need to check if fields are not in NoNeedToTypeCheck set.
-								if !skip && fieldTypes[idx].Type() != field.Type {
-									srcNeedsCoercion = true
-									break
-								}
-							}
-							needsCoercion[srcIdx] = srcNeedsCoercion
-						}
-
-						// We only need to send the fields in the first result.
-						// We set this field after the coercion check to avoid calculating incorrect needs coercion value.
-						resultChunk.Fields = resultFields
-						muFields.Unlock()
-						defer condFields.Broadcast()
-						return callback(resultChunk, currIndex)
 					}
 				}
 
-				// Wait for fields from all sources.
-				for slices.Contains(rest, nil) {
-					// This wait call lets go of the muFields lock and acquires it again later after waiting.
-					condFields.Wait()
+				if err := in(result); err != nil {
+					return err
 				}
-				// We only need to send fields in the first result.
-				resultChunk.Fields = nil
-				muFields.Unlock()
-
-				// Context check to avoid extra work.
-				if ctx.Err() != nil {
-					return nil
-				}
-				return callback(resultChunk, currIndex)
-			})
-			// Error handling and context cleanup for this source.
-			if err != nil {
-				muFields.Lock()
-				if rest[currIndex] == nil {
-					// Signal that this source is done, even if by failure, to unblock field waiting.
-					rest[currIndex] = &sqltypes.Result{}
-				}
-				cancel()
-				condFields.Broadcast()
-				muFields.Unlock()
 			}
-			return err
-		})
+
+			if !source.done {
+				return nil
+			}
+			nextSrc++
+		}
+		return nil
 	}
-	// Wait for all sources to complete.
-	return wg.Wait()
+
+	for event := range events {
+		if event.done {
+			if event.err != nil {
+				cancel()
+				return event.err
+			}
+			if rest[event.srcIdx] == nil {
+				cancel()
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "concatenate source %d finished without sending fields", event.srcIdx)
+			}
+			sources[event.srcIdx].done = true
+		} else {
+			if event.result.Fields != nil && rest[event.srcIdx] == nil {
+				rest[event.srcIdx] = event.result
+			}
+			sources[event.srcIdx].results = append(sources[event.srcIdx].results, event.result)
+		}
+
+		if err := prepareFields(); err != nil {
+			cancel()
+			return err
+		}
+		if err := flush(); err != nil {
+			cancel()
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error, sqlmode evalengine.SQLMode) error {

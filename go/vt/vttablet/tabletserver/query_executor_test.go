@@ -951,6 +951,267 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
+func TestQueryExecutorStreamPlanNextval(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	selQuery := "select next_id, cache from seq where id = 0 for update"
+	db.AddQuery(selQuery, &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.Int64},
+			{Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(3),
+		}},
+	})
+	updateQuery := "update seq set next_id = 4 where id = 0"
+	db.AddQuery(updateQuery, &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, "select next value from seq", 0)
+	assert.Equal(t, planbuilder.PlanNextval, qre.plan.PlanID)
+
+	var got *sqltypes.Result
+	err := qre.Stream(func(qr *sqltypes.Result) error {
+		got = qr
+		return nil
+	})
+	require.NoError(t, err)
+
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+		}},
+	}
+	require.Truef(t, got.Equal(want), "qre.Stream() =\n%#v, want:\n%#v", got, want)
+}
+
+func TestQueryExecutorStreamShowThrottlerStatus(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	query := "show vitess_throttler status"
+	execQre := newTestQueryExecutor(ctx, tsv, query, 0)
+	assert.Equal(t, planbuilder.PlanShowThrottlerStatus, execQre.plan.PlanID)
+	want, err := execQre.Execute()
+	require.NoError(t, err)
+
+	streamQre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	assert.Equal(t, planbuilder.PlanShowThrottlerStatus, streamQre.plan.PlanID)
+	var got *sqltypes.Result
+	err = streamQre.Stream(func(qr *sqltypes.Result) error {
+		got = qr
+		return nil
+	})
+	require.NoError(t, err)
+	require.Truef(t, got.Equal(want), "qre.Stream() =\n%#v, want:\n%#v", got, want)
+}
+
+func TestQueryExecutorStreamShowUsesShowPlan(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "show tables where Tables_in_keyspace='test_table'"
+	want := sqltypes.MakeTestResult(sqltypes.MakeTestFields("Tables_in_ks", "varchar"), "test_table")
+	db.AddQuery("show tables where Tables_in_ks = 'test_table'", want)
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv.config.DB.DBName = "ks"
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	assert.Equal(t, planbuilder.PlanShow, qre.plan.PlanID)
+
+	var got *sqltypes.Result
+	err := qre.Stream(func(qr *sqltypes.Result) error {
+		got = qr
+		return nil
+	})
+	require.NoError(t, err)
+	require.Truef(t, got.Equal(want), "qre.Stream() =\n%#v, want:\n%#v", got, want)
+}
+
+func TestQueryExecutorStreamMaxResultSize(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|name", "int64|varchar"), "1|a", "2|b"))
+
+	ctx := callerid.NewContext(t.Context(), nil, callerid.NewImmediateCallerID("test"))
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv.SetMaxResultSize(1)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	err := qre.Stream(func(*sqltypes.Result) error {
+		return nil
+	})
+	require.ErrorContains(t, err, "row count exceeded 1")
+}
+
+func TestQueryExecutorStreamMaxResultSizeNoCallerID(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|name", "int64|varchar"), "1|a", "2|b"))
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv.SetMaxResultSize(1)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	err := qre.Stream(func(*sqltypes.Result) error {
+		return nil
+	})
+	require.ErrorContains(t, err, "row count exceeded 1")
+}
+
+func TestQueryExecutorStreamWarnResultSizeNoCallerID(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|name", "int64|varchar"), "1|a", "2|b"))
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv.qe.warnResultSize.Store(1)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	err := qre.Stream(func(*sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+func TestQueryExecutorStreamRecordsQueryStats(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|name", "int64|varchar"), "1|a", "2|b"))
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	err := qre.Stream(func(*sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+
+	queryCount, _, _, rowsAffected, rowsReturned, errorCount := qre.plan.Stats()
+	assert.Equal(t, uint64(1), queryCount)
+	assert.Equal(t, uint64(0), rowsAffected)
+	assert.Equal(t, uint64(2), rowsReturned)
+	assert.Equal(t, uint64(0), errorCount)
+	assert.Equal(t, 2, qre.logStats.RowsReturned)
+	assert.Equal(t, int64(1), tsv.Stats().ResultHistogram.Counts()["5"])
+}
+
+func TestQueryExecutorGetSchemaDefinitionsIgnoresMaxResultSize(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select `table_name`, create_statement from _vt.`tables` where table_schema = database()"
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|create_statement", "varchar|varchar"),
+		"t1|create table t1(id bigint)",
+		"t2|create table t2(id bigint)",
+	))
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv.SetMaxResultSize(1)
+	defer tsv.StopService()
+
+	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutorGetSchemaDefinitions", streamlog.NewQueryLogConfigForTest())
+	qre := &QueryExecutor{
+		ctx:      ctx,
+		logStats: logStats,
+		tsv:      tsv,
+	}
+
+	var got *querypb.GetSchemaResponse
+	err := qre.GetSchemaDefinitions(querypb.SchemaTableType_TABLES, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+		got = schemaRes
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, map[string]string{
+		"t1": "create table t1(id bigint)",
+		"t2": "create table t2(id bigint)",
+	}, got.TableDefinition)
+}
+
+func TestQueryExecutorStreamUpdateLimit(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "update test_table set a=1"
+	want := &sqltypes.Result{RowsAffected: 1}
+	db.AddQuery("update test_table set a = 1 limit 10001", want)
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	assert.Equal(t, planbuilder.PlanUpdateLimit, qre.plan.PlanID)
+
+	var got *sqltypes.Result
+	err := qre.Stream(func(qr *sqltypes.Result) error {
+		got = qr
+		return nil
+	})
+	require.NoError(t, err)
+	require.Truef(t, got.Equal(want), "qre.Stream() =\n%#v, want:\n%#v", got, want)
+	assert.Equal(t, 1, qre.logStats.RowsAffected)
+}
+
+func TestQueryExecutorStreamCallProc(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "call getAllTheThings()"
+	want := sqltypes.MakeTestResult(sqltypes.MakeTestFields("a", "int64"), "1")
+	db.AddQuery(query, want)
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	assert.Equal(t, planbuilder.PlanCallProc, qre.plan.PlanID)
+
+	var got *sqltypes.Result
+	err := qre.Stream(func(qr *sqltypes.Result) error {
+		got = qr
+		return nil
+	})
+	require.NoError(t, err)
+	require.Truef(t, got.Equal(want), "qre.Stream() =\n%#v, want:\n%#v", got, want)
+}
+
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	ctx := t.Context()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
@@ -1098,6 +1359,41 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	_, err = qre.Execute()
 	require.Error(t, err, "got: nil, want: error")
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
+}
+
+func TestQueryExecutorStreamTableAclNoPermissionUsesSelectCommand(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table limit 1000"
+	username := "u2"
+	callerID := &querypb.VTGateCallerID{
+		Username: username,
+	}
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group02",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"superuser"},
+		}},
+	}
+
+	require.NoError(t, tableacl.InitFromProto(config))
+
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	defer tsv.StopService()
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	assert.Equal(t, planbuilder.PlanSelectStream, qre.plan.PlanID)
+
+	err := qre.Stream(func(*sqltypes.Result) error {
+		return nil
+	})
+	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Stream: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
+	assert.EqualError(t, err, `Select command denied to user 'u2' for table 'test_table' (ACL check error)`)
 }
 
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {

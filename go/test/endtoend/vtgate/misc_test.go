@@ -18,6 +18,8 @@ package vtgate
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -258,12 +260,21 @@ func TestShowTablesWithWhereClause(t *testing.T) {
 	utils.AssertMatchesAny(t, conn, "show tables from ks where Tables_in_ks='t3'", `[[VARBINARY("t3")]]`, `[[VARCHAR("t3")]]`)
 }
 
-func TestOffsetAndLimitWithOLAP(t *testing.T) {
+func TestOffsetAndLimitWithDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
 	conn, closer := start(t)
 	defer closer()
 
 	utils.Exec(t, conn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)")
 	utils.AssertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
+}
+
+func TestOffsetAndLimitWithOLAP(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)")
 	utils.Exec(t, conn, "set workload='olap'")
 	utils.AssertMatches(t, conn, "select id1 from t1 order by id1 limit 3 offset 2", "[[INT64(3)] [INT64(4)] [INT64(5)]]")
 }
@@ -291,6 +302,20 @@ func TestFoundRowsOnDualQueries(t *testing.T) {
 	utils.AssertMatches(t, conn, "select found_rows()", "[[INT64(1)]]")
 }
 
+func TestUseStmtWithDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
+	conn, closer := start(t)
+	defer closer()
+
+	queries := []string{"use `ks:80-`", "use `ks:-80`"}
+	for i, q := range queries {
+		t.Run(fmt.Sprintf("%d-%s", i, q), func(t *testing.T) {
+			utils.Exec(t, conn, q)
+		})
+	}
+}
+
 func TestUseStmtInOLAP(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
@@ -301,6 +326,16 @@ func TestUseStmtInOLAP(t *testing.T) {
 			utils.Exec(t, conn, q)
 		})
 	}
+}
+
+func TestInsertStmtWithDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]`)
 }
 
 func TestInsertStmtInOLAP(t *testing.T) {
@@ -490,6 +525,20 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 
 	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
 	utils.Exec(t, conn, "drop table function_default")
+}
+
+func TestRenameFieldsWithDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
+	conn, closer := start(t)
+	defer closer()
+
+	qr := utils.Exec(t, conn, "show tables")
+	require.Equal(t, 1, len(qr.Fields))
+	assert.Equal(t, `Tables_in_ks`, qr.Fields[0].Name)
+	_ = utils.Exec(t, conn, "use mysql")
+	qr = utils.Exec(t, conn, "select @@workload")
+	assert.Equal(t, `[[VARCHAR("OLTP")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestRenameFieldsOnOLAP(t *testing.T) {
@@ -711,6 +760,25 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
                     TABLE_NAME = 'user'`)
 }
 
+func TestTransactionsWithDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (1,2)")
+	utils.AssertMatches(t, conn, "select id1, id2 from t1", `[[INT64(1) INT64(2)]]`)
+	utils.Exec(t, conn, "commit")
+	utils.AssertMatches(t, conn, "select id1, id2 from t1", `[[INT64(1) INT64(2)]]`)
+
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (2,3)")
+	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[[INT64(2) INT64(3)]]`)
+	utils.Exec(t, conn, "rollback")
+	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[]`)
+}
+
 func TestTransactionsInStreamingMode(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
@@ -727,6 +795,15 @@ func TestTransactionsInStreamingMode(t *testing.T) {
 	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[[INT64(2) INT64(3)]]`)
 	utils.Exec(t, conn, "rollback")
 	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[]`)
+}
+
+func requireMySQLServerUseStreaming(t *testing.T) {
+	t.Helper()
+
+	args := os.Getenv("VTTEST_VTGATE_EXTRA_ARGS")
+	if !strings.Contains(args, "--mysql-server-use-streaming") || strings.Contains(args, "--mysql-server-use-streaming=false") {
+		t.Skip("requires --mysql-server-use-streaming=true")
+	}
 }
 
 func TestCharsetIntro(t *testing.T) {

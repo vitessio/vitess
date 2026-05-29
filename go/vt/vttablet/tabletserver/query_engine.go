@@ -426,7 +426,7 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 		return nil, err
 	}
 
-	splan, err := planbuilder.BuildStreaming(statement, curSchema.tables)
+	splan, err := planbuilder.BuildStreaming(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName)
 	if err != nil {
 		return nil, err
 	}
@@ -717,6 +717,9 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		return
 	}
 	items := qe.consolidator.Items()
+	if qe.streamConsolidator != nil {
+		items = append(items, qe.streamConsolidator.Items()...)
+	}
 	response.Header().Set("Content-Type", "text/plain")
 	if items == nil {
 		response.Write([]byte("empty\n"))

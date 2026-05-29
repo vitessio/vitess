@@ -102,7 +102,74 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 // TryStreamExecute performs a streaming exec.
 func (jv *ValuesJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	lresult := &sqltypes.Result{}
+	if err := vcursor.StreamExecutePrimitive(ctx, jv.Left, bindVars, wantfields, func(qr *sqltypes.Result) error {
+		if len(qr.Fields) > 0 {
+			lresult.Fields = qr.Fields
+		}
+		lresult.Rows = append(lresult.Rows, qr.Rows...)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	bv := &querypb.BindVariable{
+		Type: querypb.Type_TUPLE,
+	}
+	if len(lresult.Rows) == 0 && wantfields {
+		var vals []sqltypes.Value
+		for _, field := range lresult.Fields {
+			val, _ := sqltypes.NewValue(field.Type, nil)
+			vals = append(vals, val)
+		}
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(vals))
+
+		bindVars[jv.RowConstructorArg] = bv
+		rresult, err := jv.Right.GetFields(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		result := &sqltypes.Result{Fields: valuesJoinFields(lresult.Fields, rresult.Fields, jv.Cols, jv.ColNames)}
+		return callback(result)
+	}
+
+	for i, row := range lresult.Rows {
+		newRow := make(sqltypes.Row, 0, len(jv.Vars)+1)
+		newRow = append(newRow, sqltypes.NewInt64(int64(i)))
+
+		for _, loffset := range jv.Vars {
+			newRow = append(newRow, row[loffset])
+		}
+
+		bv.Values = append(bv.Values, sqltypes.TupleToProto(newRow))
+	}
+
+	bindVars[jv.RowConstructorArg] = bv
+	return vcursor.StreamExecutePrimitive(ctx, jv.Right, bindVars, wantfields, func(qr *sqltypes.Result) error {
+		result := &sqltypes.Result{}
+		if len(qr.Fields) > 0 {
+			result.Fields = valuesJoinFields(lresult.Fields, qr.Fields, jv.Cols, jv.ColNames)
+		}
+
+		for _, rrow := range qr.Rows {
+			lhsRowID, err := rrow[len(rrow)-1].ToCastInt64()
+			if err != nil {
+				return vterrors.VT13001("values joins cannot fetch lhs row ID: " + err.Error())
+			}
+
+			result.Rows = append(result.Rows, joinRows(lresult.Rows[lhsRowID], rrow, jv.Cols))
+		}
+
+		return callback(result)
+	})
+}
+
+func valuesJoinFields(lfields, rfields []*querypb.Field, cols []int, colNames []string) []*querypb.Field {
+	fields := joinFields(lfields, rfields, cols)
+	for i := range fields {
+		fields[i].Name = colNames[i]
+	}
+	return fields
 }
 
 // GetFields fetches the field info.

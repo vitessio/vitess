@@ -177,6 +177,15 @@ func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "set query_timeout=0")
 	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select sleep(5) from dual")
 	assert.Error(t, err)
+
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=1 */ sleep(1) from dual")
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "EOF")
+	assert.True(t,
+		strings.Contains(err.Error(), "DeadlineExceeded") ||
+			strings.Contains(err.Error(), "maximum statement execution time exceeded") ||
+			strings.Contains(err.Error(), "context deadline exceeded"),
+		"unexpected timeout error: %v", err)
 }
 
 // TestOverallQueryTimeout tests that the query timeout is applied to the overall execution of a query

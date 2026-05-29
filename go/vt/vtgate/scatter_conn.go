@@ -770,7 +770,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 		return nil, vterrors.VT13001("session cannot be nil")
 	}
 
-	opts = session.Options
+	opts = lockExecuteOptions(session.Options)
 	info, err := lockInfo(rs.Target, session, lockFuncType)
 	// Lock session is created on alphabetic sorted keyspace.
 	// This error will occur if the existing session target does not match the current target.
@@ -821,6 +821,15 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 		return nil, err
 	}
 	return qr, err
+}
+
+func lockExecuteOptions(options *querypb.ExecuteOptions) *querypb.ExecuteOptions {
+	if options.GetWorkload() != querypb.ExecuteOptions_OLAP {
+		return options
+	}
+	lockOptions := options.CloneVT()
+	lockOptions.Workload = querypb.ExecuteOptions_OLTP
+	return lockOptions
 }
 
 func wasConnectionClosed(err error) bool {

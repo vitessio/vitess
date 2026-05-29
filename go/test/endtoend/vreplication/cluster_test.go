@@ -51,7 +51,8 @@ var (
 	vtdataroot         string
 	// If you query the sidecar database directly against mysqld then you will need to specify the
 	// sidecarDBIdentifier
-	sidecarDBName         = "__vt_e2e-test" // test a non-default sidecar database name that also needs to be escaped
+	defaultSidecarDBName  = "__vt_e2e-test" // test a non-default sidecar database name that also needs to be escaped
+	sidecarDBName         = defaultSidecarDBName
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
@@ -373,6 +374,9 @@ func getClusterOptions(opts *clusterOptions) *clusterOptions {
 
 // NewVitessCluster starts a basic cluster with vtgate, vtctld and the topo
 func NewVitessCluster(t *testing.T, opts *clusterOptions) *VitessCluster {
+	t.Cleanup(func() {
+		setSidecarDBName(defaultSidecarDBName)
+	})
 	opts = getClusterOptions(opts)
 	vc := &VitessCluster{t: t, Name: t.Name(), CellNames: opts.cells, Cells: make(map[string]*Cell), ClusterConfig: opts.clusterConfig}
 	require.NotNil(t, vc)
@@ -858,7 +862,7 @@ func (vc *VitessCluster) TearDown() {
 	select {
 	case <-done:
 		log.Info("TearDown() was successful")
-	case <-time.After(1 * time.Minute):
+	case <-time.After(5 * time.Minute):
 		log.Info("TearDown() timed out")
 	}
 	// some processes seem to hang around for a bit

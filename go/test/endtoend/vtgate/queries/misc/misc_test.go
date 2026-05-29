@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -372,10 +373,19 @@ func TestHighNumberOfParams(t *testing.T) {
 	require.Equal(t, 5, count)
 }
 
-// TestPreparedStatementInOLAP verifies that streaming prepared statements
+// TestPreparedStatementWithDefaultStreaming verifies that streaming prepared statements
 // return correct binary-encoded rows when result fields are only sent in the
 // first chunk.
+func TestPreparedStatementWithDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+	testPreparedStatementStreamingRows(t, false)
+}
+
 func TestPreparedStatementInOLAP(t *testing.T) {
+	testPreparedStatementStreamingRows(t, true)
+}
+
+func testPreparedStatementStreamingRows(t *testing.T, olap bool) {
 	_, closer := start(t)
 	defer closer()
 
@@ -389,13 +399,15 @@ func TestPreparedStatementInOLAP(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// Seed test data and switch to OLAP streaming mode.
+	// Seed test data. The default OLTP workload should still use streaming.
 	_, err = conn.ExecContext(t.Context(), "delete from t1")
 	require.NoError(t, err)
 	_, err = conn.ExecContext(t.Context(), "insert into t1(id1, id2) values (1, 2)")
 	require.NoError(t, err)
-	_, err = conn.ExecContext(t.Context(), "set workload = olap")
-	require.NoError(t, err)
+	if olap {
+		_, err = conn.ExecContext(t.Context(), "set workload = olap")
+		require.NoError(t, err)
+	}
 
 	// Select 7 columns: the null bitmap crosses a byte boundary at this count,
 	// making corruption from missing fields visible.
@@ -721,7 +733,16 @@ func TestStraightJoin(t *testing.T) {
 	require.JSONEq(t, expJoinOutput2, res.Rows[0][0].ToString())
 }
 
+func TestFailingOuterJoinWithDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+	testFailingOuterJoin(t, false)
+}
+
 func TestFailingOuterJoinInOLAP(t *testing.T) {
+	testFailingOuterJoin(t, true)
+}
+
+func testFailingOuterJoin(t *testing.T, olap bool) {
 	// This query was returning different results in MySQL and Vitess
 	mcmp, closer := start(t)
 	defer closer()
@@ -729,8 +750,9 @@ func TestFailingOuterJoinInOLAP(t *testing.T) {
 	// Insert data into the 2 tables
 	mcmp.Exec("insert into t1(id1, id2) values (1,2), (5, 42)")
 	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (1,2,3), (2,5,3)")
-
-	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	if olap {
+		utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	}
 
 	// This query was
 	mcmp.Exec("select t1.id1 from t1 left join tbl on t1.id2 = tbl.nonunq_col")
@@ -754,7 +776,10 @@ func TestHandleNullableColumn(t *testing.T) {
 	mcmp.Exec("insert into tbl(id, unq_col, nonunq_col) values (0,0,0), (1,1,6)")
 	// This query tests that we handle nullable columns correctly
 	// tbl.nonunq_col is not nullable according to the schema, but because of the left join, it can be NULL
-	mcmp.ExecWithColumnCompare(`select * from t1 left join tbl on t1.id2 = tbl.id where t1.id1 = 6 or tbl.nonunq_col = 6`)
+	query := `select * from t1 left join tbl on t1.id2 = tbl.id where t1.id1 = 6 or tbl.nonunq_col = 6`
+	mcmp.ExecWithColumnCompare(query)
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	mcmp.ExecWithColumnCompare(query)
 }
 
 func TestEnumSetVals(t *testing.T) {
@@ -811,6 +836,107 @@ func TestTimeZones(t *testing.T) {
 			require.InDeltaf(t, tc.expectedDiff.Seconds(), actualDiff.Seconds(), allowableDeviation.Seconds(),
 				"time2 should be approximately %v after time1, within 1 second tolerance\n%v vs %v", tc.expectedDiff, time1, time2)
 		})
+	}
+}
+
+func TestMySQLServerUseStreamingWithOLTPWorkload(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	defer func() {
+		_, _ = conn.ExecuteFetch("drop table if exists uks.forced_streaming_ddl", 1, false)
+	}()
+
+	utils.AssertMatches(t, conn, "select @@workload", `[[VARCHAR("OLTP")]]`)
+
+	before := getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	utils.AssertMatches(t, conn, "select 1 from dual", `[[INT64(1)]]`)
+	after := getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	assert.Greater(t, after-before, float64(0))
+
+	utils.Exec(t, conn, "delete from t1")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (42, 1)")
+
+	before = getVtgateMetricSum(t, "VtgateApiRowsAffected", "StreamExecute.")
+	utils.Exec(t, conn, "update t1 set id2 = id2 + 1 where id1 = 42")
+	after = getVtgateMetricSum(t, "VtgateApiRowsAffected", "StreamExecute.")
+	assert.Greater(t, after-before, float64(0))
+
+	multiParams := vtParams
+	multiParams.MultiQuery = true
+	multiConn, err := mysql.Connect(t.Context(), &multiParams)
+	require.NoError(t, err)
+	defer multiConn.Close()
+
+	before = getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	require.NoError(t, multiConn.ExecuteFetchMultiDrain("select 1; select 2"))
+	after = getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	assert.Greater(t, after-before, float64(1))
+
+	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%d)/%s?interpolateParams=false", vtParams.Host, vtParams.Port, vtParams.DbName))
+	require.NoError(t, err)
+	defer db.Close()
+
+	stmt, err := db.Prepare("select id2 from t1 where id1 = ?")
+	require.NoError(t, err)
+	defer stmt.Close()
+
+	before = getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	rows, err := stmt.Query(42)
+	require.NoError(t, err)
+	drainSQLRows(t, rows)
+	after = getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	assert.Greater(t, after-before, float64(0))
+
+	before = getVtgateMetricSum(t, "VtgateQueryTextCharactersProcessed", "StreamExecute.")
+	utils.Exec(t, conn, "drop table if exists uks.forced_streaming_ddl")
+	utils.Exec(t, conn, "create table uks.forced_streaming_ddl(id bigint primary key) Engine=InnoDB")
+	utils.Exec(t, conn, "alter table uks.forced_streaming_ddl add column val bigint")
+	utils.Exec(t, conn, "drop table uks.forced_streaming_ddl")
+	after = getVtgateMetricSum(t, "VtgateQueryTextCharactersProcessed", "StreamExecute.")
+	assert.Greater(t, after-before, float64(0))
+
+	before = getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	tablets := utils.Exec(t, conn, "show vitess_tablets")
+	require.NotEmpty(t, tablets.Rows)
+	after = getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	assert.Greater(t, after-before, float64(0))
+
+	before = getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	utils.Exec(t, conn, "use ks_misc")
+	utils.AssertMatches(t, conn, "show tables where Tables_in_keyspace = 't1'", `[[VARBINARY("t1")]]`)
+	after = getVtgateMetricSum(t, "VtgateApiRowsReturned", "StreamExecute.")
+	assert.Greater(t, after-before, float64(0))
+
+	before = getVtgateMetricSum(t, "VtgateQueryTextCharactersProcessed", "StreamExecute.")
+	utils.Exec(t, conn, "show vitess_migrations from ks_misc")
+	after = getVtgateMetricSum(t, "VtgateQueryTextCharactersProcessed", "StreamExecute.")
+	assert.Greater(t, after-before, float64(0))
+
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (100, 100)")
+	utils.AssertMatches(t, conn, "select id2 from t1 where id1 = 100", `[[INT64(100)]]`)
+	utils.Exec(t, conn, "rollback")
+	utils.AssertMatches(t, conn, "select id2 from t1 where id1 = 100", `[]`)
+
+	utils.Exec(t, conn, "set autocommit = 0")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (101, 101)")
+	utils.Exec(t, conn, "rollback")
+	utils.AssertMatches(t, conn, "select id2 from t1 where id1 = 101", `[]`)
+	utils.Exec(t, conn, "set autocommit = 1")
+
+	utils.Exec(t, conn, "set transaction_mode = single")
+	utils.AssertMatches(t, conn, "select @@transaction_mode", `[[VARCHAR("SINGLE")]]`)
+}
+
+func requireMySQLServerUseStreaming(t *testing.T) {
+	t.Helper()
+
+	args := os.Getenv("VTTEST_VTGATE_EXTRA_ARGS")
+	if !strings.Contains(args, "--mysql-server-use-streaming") || strings.Contains(args, "--mysql-server-use-streaming=false") {
+		t.Skip("requires --mysql-server-use-streaming=true")
 	}
 }
 
@@ -882,4 +1008,37 @@ func TestJoinMixedCaseExpr(t *testing.T) {
 	mcmp.Exec(`insert into all_types(id, int_unsigned) values (1, 1), (2, 2), (3,3), (4,4), (10,5), (20, 6)`)
 	mcmp.Exec(`prepare prep_pk from 'SELECT t1.id from all_types t1 join all_types t2 on t1.int_unsigned = (case when t2.int_unsigned in (1, 2, 3) then 1 when t2.int_unsigned = 4 then 10 else 20 end)'`)
 	mcmp.AssertMatches(`execute prep_pk`, `[[INT64(1)] [INT64(1)] [INT64(1)]]`)
+}
+
+func getVtgateMetricSum(t *testing.T, metric, keyPrefix string) float64 {
+	t.Helper()
+
+	vars := clusterInstance.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
+
+	rawMetric, ok := vars[metric]
+	require.True(t, ok, "missing vtgate metric %s", metric)
+
+	metricMap, ok := rawMetric.(map[string]any)
+	require.True(t, ok, "vtgate metric %s is not a map", metric)
+
+	var sum float64
+	for key, rawValue := range metricMap {
+		if !strings.HasPrefix(key, keyPrefix) {
+			continue
+		}
+		value, ok := rawValue.(float64)
+		require.True(t, ok, "vtgate metric %s[%s] is not a number", metric, key)
+		sum += value
+	}
+	return sum
+}
+
+func drainSQLRows(t *testing.T, rows *sql.Rows) {
+	t.Helper()
+	defer rows.Close()
+
+	for rows.Next() {
+	}
+	require.NoError(t, rows.Err())
 }

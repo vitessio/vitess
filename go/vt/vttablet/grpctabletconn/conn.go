@@ -37,6 +37,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const protocolName = "grpc"
@@ -79,6 +80,32 @@ type gRPCQueryClient struct {
 	mu sync.RWMutex
 	cc *grpc.ClientConn
 	c  queryservicepb.QueryClient
+}
+
+func callerIDsFromContext(ctx context.Context) (*vtrpcpb.CallerID, *querypb.VTGateCallerID) {
+	return cloneEffectiveCallerID(callerid.EffectiveCallerIDFromContext(ctx)), cloneImmediateCallerID(callerid.ImmediateCallerIDFromContext(ctx))
+}
+
+func cloneEffectiveCallerID(callerID *vtrpcpb.CallerID) *vtrpcpb.CallerID {
+	if callerID == nil {
+		return nil
+	}
+	return &vtrpcpb.CallerID{
+		Principal:    callerID.Principal,
+		Component:    callerID.Component,
+		Subcomponent: callerID.Subcomponent,
+		Groups:       append([]string(nil), callerID.Groups...),
+	}
+}
+
+func cloneImmediateCallerID(callerID *querypb.VTGateCallerID) *querypb.VTGateCallerID {
+	if callerID == nil {
+		return nil
+	}
+	return &querypb.VTGateCallerID{
+		Username: callerID.Username,
+		Groups:   append([]string(nil), callerID.Groups...),
+	}
 }
 
 var _ queryservice.QueryService = (*gRPCQueryClient)(nil)
@@ -158,10 +185,11 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, _ queryservice.S
 			return nil, tabletconn.ConnClosed
 		}
 
+		effectiveCallerID, immediateCallerID := callerIDsFromContext(ctx)
 		req := &querypb.StreamExecuteRequest{
 			Target:            target,
-			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			EffectiveCallerId: effectiveCallerID,
+			ImmediateCallerId: immediateCallerID,
 			Query: &querypb.BoundQuery{
 				Sql:           query,
 				BindVariables: bindVars,
@@ -514,10 +542,11 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, _ queryserv
 			return nil, tabletconn.ConnClosed
 		}
 
+		effectiveCallerID, immediateCallerID := callerIDsFromContext(ctx)
 		req := &querypb.BeginStreamExecuteRequest{
 			Target:            target,
-			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			EffectiveCallerId: effectiveCallerID,
+			ImmediateCallerId: immediateCallerID,
 			PreQueries:        preQueries,
 			Query: &querypb.BoundQuery{
 				Sql:           query,
@@ -963,10 +992,11 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, _ qu
 			return nil, tabletconn.ConnClosed
 		}
 
+		effectiveCallerID, immediateCallerID := callerIDsFromContext(ctx)
 		req := &querypb.ReserveBeginStreamExecuteRequest{
 			Target:            target,
-			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			EffectiveCallerId: effectiveCallerID,
+			ImmediateCallerId: immediateCallerID,
 			Options:           options,
 			PreQueries:        preQueries,
 			PostBeginQueries:  postBeginQueries,
@@ -1077,10 +1107,11 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, _ queryse
 			return nil, tabletconn.ConnClosed
 		}
 
+		effectiveCallerID, immediateCallerID := callerIDsFromContext(ctx)
 		req := &querypb.ReserveStreamExecuteRequest{
 			Target:            target,
-			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			EffectiveCallerId: effectiveCallerID,
+			ImmediateCallerId: immediateCallerID,
 			Options:           options,
 			PreQueries:        preQueries,
 			Query: &querypb.BoundQuery{

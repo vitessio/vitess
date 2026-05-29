@@ -85,8 +85,9 @@ var (
 	mysqlDefaultWorkload     int32
 	mysqlDrainOnTerm         bool
 
-	mysqlServerFlushDelay = 100 * time.Millisecond
-	mysqlServerMultiQuery = false
+	mysqlServerFlushDelay   = 100 * time.Millisecond
+	mysqlServerMultiQuery   = false
+	mysqlServerUseStreaming = false
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -114,6 +115,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mysqlDefaultWorkloadName, "mysql-default-workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 	fs.BoolVar(&mysqlDrainOnTerm, "mysql-server-drain-onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work")
 	utils.SetFlagBoolVar(fs, &mysqlServerMultiQuery, "mysql-server-multi-query-protocol", mysqlServerMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
+	utils.SetFlagBoolVar(fs, &mysqlServerUseStreaming, "mysql-server-use-streaming", mysqlServerUseStreaming, "If true, MySQL protocol queries use streaming execution regardless of workload.")
 }
 
 // vtgateHandler implements the Listener interface.
@@ -309,8 +311,11 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		}
 	}()
 
-	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), callback)
+	if mysqlSessionUsesStreaming(session) {
+		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			fillInTxStatusFlagsForStreamingResult(c, session, result)
+			return callback(result)
+		})
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
@@ -366,15 +371,19 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 		}
 	}()
 
-	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+	if mysqlSessionUsesStreaming(session) {
 		if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
-			session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
+			session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+				fillInTxStatusFlags(c, session)
+				return callback(qr, more, firstPacket)
+			})
 		} else {
 			firstPacket := true
 			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()
+				fillInTxStatusFlagsForStreamingResult(c, session, result)
 				return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
 			})
 		}
@@ -504,8 +513,11 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		}
 	}()
 
-	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, callback)
+	if mysqlSessionUsesStreaming(session) {
+		_, err := vh.vtg.StreamExecutePrepared(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, func(result *sqltypes.Result) error {
+			fillInTxStatusFlagsForStreamingResult(c, session, result)
+			return callback(result)
+		})
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
@@ -519,6 +531,16 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	fillInTxStatusFlags(c, session)
 
 	return callback(qr)
+}
+
+func fillInTxStatusFlagsForStreamingResult(c *mysql.Conn, session *vtgatepb.Session, result *sqltypes.Result) {
+	if result != nil && len(result.Fields) == 0 && len(result.Rows) == 0 {
+		fillInTxStatusFlags(c, session)
+	}
+}
+
+func mysqlSessionUsesStreaming(session *vtgatepb.Session) bool {
+	return mysqlServerUseStreaming || session.GetOptions().GetWorkload() == querypb.ExecuteOptions_OLAP
 }
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {

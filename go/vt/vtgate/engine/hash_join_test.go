@@ -160,6 +160,50 @@ func TestHashJoinVariations(t *testing.T) {
 	}
 }
 
+func TestHashJoinStreamLeftJoinAvoidsRightFieldsWhenUnused(t *testing.T) {
+	left := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col1", "int64"),
+				"1",
+			),
+		},
+	}
+	right := &fakePrimitive{
+		results: []*sqltypes.Result{
+			{},
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col2", "int64"),
+			),
+		},
+	}
+
+	typ, err := evalengine.CoerceTypes(typeForOffset(0), typeForOffset(0), collations.MySQL8())
+	require.NoError(t, err)
+
+	join := &HashJoin{
+		Opcode:         LeftJoin,
+		Left:           left,
+		Right:          right,
+		Cols:           []int{-1},
+		LHSKey:         0,
+		RHSKey:         0,
+		Collation:      typ.Collation(),
+		ComparisonType: typ.Type(),
+		CollationEnv:   collations.MySQL8(),
+	}
+
+	result, err := wrapStreamExecute(join, &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	expectResult(t, result, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1", "int64"),
+		"1",
+	))
+	right.ExpectLog(t, []string{
+		"StreamExecute  true",
+	})
+}
+
 func typeForOffset(i int) evalengine.Type {
 	switch i {
 	case 0:

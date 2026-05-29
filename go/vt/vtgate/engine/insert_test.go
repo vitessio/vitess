@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -28,6 +29,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -1726,6 +1728,43 @@ func TestInsertSelectSimple(t *testing.T) {
 	})
 }
 
+func TestStreamingInsertSelectDisablesChunkAutocommit(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"uks": {Tables: map[string]*vschemapb.Table{"tbl": {}}},
+		},
+	}
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
+	ks := vs.Keyspaces["uks"]
+
+	input := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2", "3"),
+		},
+	}
+	ins := newInsertSelect(false, ks.Keyspace, nil, "prefix ", nil, nil, input)
+
+	var canAutocommits []bool
+	vc := &loggingVCursor{
+		resolvedTargetTabletType: topodatapb.TabletType_PRIMARY,
+		ksShardMap:               map[string][]string{"uks": {"0"}},
+		results: []*sqltypes.Result{
+			{RowsAffected: 2},
+			{RowsAffected: 1},
+		},
+		onExecuteMultiShardFn: func(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError bool, canAutocommit bool) {
+			canAutocommits = append(canAutocommits, canAutocommit)
+		},
+	}
+
+	err := ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []bool{false, false}, canAutocommits)
+}
+
 func TestInsertSelectOwned(t *testing.T) {
 	invschema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -2473,7 +2512,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
 	})
 
 	// sks1 and uks2
@@ -2504,7 +2543,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations sks1 [value:"0"] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
-		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`ExecuteMultiShard sks1.-20: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
 	})
 
 	// uks1 and sks2
@@ -2543,7 +2582,7 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
 	})
 
 	// uks1 and uks2
@@ -2574,6 +2613,6 @@ func TestInsertSelectShardingCases(t *testing.T) {
 
 		// the query exec
 		`ResolveDestinations uks1 [] Destinations:DestinationAllShards()`,
-		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true true`, sqltypes.Int64BindVariable(1)),
+		fmt.Sprintf(`ExecuteMultiShard uks1.0: prefix values (:_c0_0) {_c0_0: %v} true false`, sqltypes.Int64BindVariable(1)),
 	})
 }

@@ -119,9 +119,9 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 		var qr *sqltypes.Result
 		var err error
 		if sharded {
-			qr, err = ins.insertIntoShardedTable(ctx, vcursor, bindVars, irr)
+			qr, err = ins.insertIntoShardedTable(ctx, vcursor, bindVars, irr, false)
 		} else {
-			qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr)
+			qr, err = ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr, false)
 		}
 		if err != nil {
 			return err
@@ -148,12 +148,12 @@ func (ins *InsertSelect) execInsertUnsharded(ctx context.Context, vcursor VCurso
 	if len(irr.rows) == 0 {
 		return &sqltypes.Result{}, nil
 	}
-	return ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr)
+	return ins.insertIntoUnshardedTable(ctx, vcursor, bindVars, irr, true)
 }
 
-func (ins *InsertSelect) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, irr insertRowsResult) (*sqltypes.Result, error) {
+func (ins *InsertSelect) insertIntoUnshardedTable(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, irr insertRowsResult, canAutocommit bool) (*sqltypes.Result, error) {
 	query := ins.getInsertUnshardedQuery(irr.rows, bindVars)
-	return ins.executeUnshardedTableQuery(ctx, vcursor, ins, bindVars, query, irr.insertID)
+	return ins.executeUnshardedTableQueryWithAutocommit(ctx, vcursor, ins, bindVars, query, irr.insertID, canAutocommit)
 }
 
 func (ins *InsertSelect) getInsertUnshardedQuery(rows []sqltypes.Row, bindVars map[string]*querypb.BindVariable) string {
@@ -175,13 +175,14 @@ func (ins *InsertSelect) insertIntoShardedTable(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 	irr insertRowsResult,
+	canAutocommit bool,
 ) (*sqltypes.Result, error) {
 	rss, queries, err := ins.getInsertShardedQueries(ctx, vcursor, bindVars, irr.rows)
 	if err != nil {
 		return nil, err
 	}
 
-	qr, err := ins.executeInsertQueries(ctx, vcursor, rss, queries, irr.insertID)
+	qr, err := ins.executeInsertQueries(ctx, vcursor, rss, queries, irr.insertID, canAutocommit)
 	if err != nil {
 		return nil, err
 	}
@@ -195,8 +196,9 @@ func (ins *InsertSelect) executeInsertQueries(
 	rss []*srvtopo.ResolvedShard,
 	queries []*querypb.BoundQuery,
 	insertID uint64,
+	canAutocommit bool,
 ) (*sqltypes.Result, error) {
-	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
+	autocommit := canAutocommit && !ins.PreventAutoCommit && (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	err := allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
@@ -309,7 +311,7 @@ func (ins *InsertSelect) execInsertSharded(ctx context.Context, vcursor VCursor,
 		return &sqltypes.Result{}, nil
 	}
 
-	return ins.insertIntoShardedTable(ctx, vcursor, bindVars, result)
+	return ins.insertIntoShardedTable(ctx, vcursor, bindVars, result, true)
 }
 
 func (ins *InsertSelect) description() PrimitiveDescription {

@@ -777,6 +777,21 @@ func TestLoadQueryTimeout(t *testing.T) {
 	}
 }
 
+func TestLoadStreamQueryTimeout(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	assert.Equal(t, 30*time.Second, tsv.loadStreamQueryTimeoutWithTxAndOptions(0, &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}))
+	assert.Equal(t, time.Duration(0), tsv.loadStreamQueryTimeoutWithTxAndOptions(0, &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}))
+	assert.Equal(t, 3*time.Millisecond, tsv.loadStreamQueryTimeoutWithTxAndOptions(0, &querypb.ExecuteOptions{
+		Workload: querypb.ExecuteOptions_OLAP,
+		Timeout:  &querypb.ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: 3},
+	}))
+	assert.Equal(t, 30*time.Second, tsv.loadStreamQueryTimeoutWithTxAndOptions(1234, &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLAP}))
+}
+
 func TestTabletServerReserveConnection(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -938,6 +953,29 @@ func TestTabletServerStreamExecute(t *testing.T) {
 		executeSQL, err)
 }
 
+func TestTabletServerStreamExecuteHonorsQueryTimeoutOption(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	db.AddQuery(executeSQL, sqltypes.MakeTestResult(sqltypes.MakeTestFields("name", "varchar"), "row01"))
+	db.SetBeforeFunc(executeSQL, func() {
+		time.Sleep(50 * time.Millisecond)
+	})
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	options := &querypb.ExecuteOptions{
+		Timeout: &querypb.ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: 1},
+	}
+	err := tsv.StreamExecute(ctx, nil, &target, executeSQL, nil, 0, 0, options, func(*sqltypes.Result) error {
+		return nil
+	})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "maximum statement execution time exceeded")
+}
+
 func TestTabletServerStreamExecuteComments(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -1055,6 +1093,47 @@ func TestTabletServerBeginStreamExecuteWithError(t *testing.T) {
 	state, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, executeSQL, nil, 0, nil, callback)
 	require.Error(t, err)
 	err = tsv.Release(ctx, &target, state.TransactionID, 0)
+	require.NoError(t, err)
+}
+
+func TestReserveStreamExecute_WithoutTx(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, err := tsv.ReserveStreamExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil, func(*sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.NotEqual(t, int64(0), state.ReservedID, "reservedID should not be zero")
+	assert.Contains(t, strings.Split(db.QueryLog(), ";"), "set sql_mode = ''")
+	err = tsv.Release(ctx, &target, 0, state.ReservedID)
+	require.NoError(t, err)
+}
+
+func TestReserveBeginStreamExecute(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, err := tsv.ReserveBeginStreamExecute(ctx, nil, &target, nil, nil, "set @@sql_mode = ''", nil, nil, func(*sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Greater(t, state.TransactionID, int64(0), "transactionID")
+	assert.Equal(t, state.TransactionID, state.ReservedID, "reservedID should equal transactionID")
+	splitOutput := strings.Split(db.QueryLog(), ";")
+	assert.Contains(t, splitOutput, "begin")
+	assert.Contains(t, splitOutput, "set @@sql_mode = ''")
+	err = tsv.Release(ctx, &target, state.TransactionID, state.ReservedID)
 	require.NoError(t, err)
 }
 

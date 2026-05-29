@@ -123,18 +123,32 @@ func bindvarForType(field *querypb.Field) *querypb.BindVariable {
 // TryStreamExecute performs a streaming exec.
 func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var mu sync.Mutex
+	var rightMu sync.Mutex
 	// We need to use this atomic since we're also reading this
 	// value outside of it being locked with the mu lock.
 	// This is still racy, but worst case it means that we may
 	// retrieve the right hand side fields twice instead of once.
 	var fieldsSent atomic.Bool
 	fieldsSent.Store(!wantfields)
+	var lfields []*querypb.Field
 	err := vcursor.StreamExecutePrimitive(ctx, jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+		if len(lresult.Fields) != 0 {
+			mu.Lock()
+			lfields = lresult.Fields
+			mu.Unlock()
+		}
 		joinVars := make(map[string]*querypb.BindVariable)
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
 			}
+			leftFields := lresult.Fields
+			if len(leftFields) == 0 {
+				mu.Lock()
+				leftFields = lfields
+				mu.Unlock()
+			}
+			rightMu.Lock()
 			var rowSent atomic.Bool
 			err := vcursor.StreamExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), !fieldsSent.Load(), func(rresult *sqltypes.Result) error {
 				// This needs to be locking since it's not safe to just use
@@ -147,7 +161,7 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				defer mu.Unlock()
 				result := &sqltypes.Result{}
 				if fieldsSent.CompareAndSwap(false, true) {
-					result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
+					result.Fields = joinFields(leftFields, rresult.Fields, jn.Cols)
 				}
 				for _, rrow := range rresult.Rows {
 					result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
@@ -158,6 +172,7 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				return callback(result)
 			})
 			if err != nil {
+				rightMu.Unlock()
 				return err
 			}
 			if jn.Opcode == LeftJoin && !rowSent.Load() {
@@ -169,35 +184,53 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				)}
 
 				if err := callback(result); err != nil {
+					rightMu.Unlock()
 					return err
 				}
 			}
-		}
-		// This needs to be locking since it's not safe to just use
-		// fieldsSent. This is because we can't have a race between
-		// checking fieldsSent and then actually calling the callback
-		// and in parallel another goroutine doing the same. That
-		// can lead to out of order execution of the callback. So the callback
-		// itself and the check need to be covered by the same lock.
-		mu.Lock()
-		defer mu.Unlock()
-		if fieldsSent.CompareAndSwap(false, true) {
-			for k, v := range jn.Vars {
-				joinVars[k] = bindvarForType(lresult.Fields[v])
-			}
-			result := &sqltypes.Result{}
-			rresult, err := jn.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))
-			if err != nil {
-				return err
-			}
-			result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
-			if err := callback(result); err != nil {
-				return err
-			}
+			rightMu.Unlock()
 		}
 		return nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	// This needs to be locking since it's not safe to just use
+	// fieldsSent. This is because we can't have a race between
+	// checking fieldsSent and then actually calling the callback
+	// and in parallel another goroutine doing the same. That
+	// can lead to out of order execution of the callback. So the callback
+	// itself and the check need to be covered by the same lock.
+	mu.Lock()
+	if !fieldsSent.CompareAndSwap(false, true) {
+		mu.Unlock()
+		return nil
+	}
+	leftFields := lfields
+	mu.Unlock()
+	if len(leftFields) == 0 {
+		lresult, err := jn.Left.GetFields(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		leftFields = lresult.Fields
+	}
+	{
+		joinVars := make(map[string]*querypb.BindVariable)
+		for k, v := range jn.Vars {
+			joinVars[k] = bindvarForType(leftFields[v])
+		}
+		result := &sqltypes.Result{}
+		rresult, err := jn.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))
+		if err != nil {
+			return err
+		}
+		result.Fields = joinFields(leftFields, rresult.Fields, jn.Cols)
+		if err := callback(result); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetFields fetches the field info.

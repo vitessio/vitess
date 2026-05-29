@@ -172,6 +172,50 @@ func TestConsolidatorSimple(t *testing.T) {
 	}
 }
 
+func TestConsolidatorRecordsFollowers(t *testing.T) {
+	ct := consolidationTest{
+		cc:              NewStreamConsolidator(128*1024, 2*1024, nocleanup),
+		streamItemDelay: 10 * time.Millisecond,
+		streamItemCount: 10,
+	}
+
+	ct.run(3, func(worker int) (string, StreamCallback) {
+		return "select 1", func(result *sqltypes.Result) error {
+			return nil
+		}
+	})
+
+	items := ct.cc.Items()
+	require.Len(t, items, 1)
+	require.Equal(t, "select 1", items[0].Query)
+	require.EqualValues(t, 2, items[0].Count)
+}
+
+func TestConsolidatorStreamsFieldsThenRowsToFollowers(t *testing.T) {
+	ct := consolidationTest{
+		cc:              NewStreamConsolidator(128*1024, 2*1024, nocleanup),
+		streamItemDelay: 10 * time.Millisecond,
+		streamItems: []*sqltypes.Result{
+			{Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Int64}}},
+			{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}},
+		},
+	}
+
+	ct.run(2, func(worker int) (string, StreamCallback) {
+		return "select 1", func(result *sqltypes.Result) error {
+			return nil
+		}
+	})
+
+	require.Equal(t, uint64(1), ct.leaderCalls)
+	for _, results := range ct.results {
+		require.NoError(t, results.err)
+		require.Len(t, results.items, 2)
+		require.Len(t, results.items[0].Fields, 1)
+		require.Len(t, results.items[1].Rows, 1)
+	}
+}
+
 func TestConsolidatorErrorPropagation(t *testing.T) {
 	t.Run("from mysql", func(t *testing.T) {
 		ct := consolidationTest{
@@ -400,6 +444,43 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 		for _, results := range ct.results {
 			require.Len(t, results.items, 10)
 			require.NoError(t, results.err)
+		}
+	})
+}
+
+func BenchmarkStreamConsolidatorLeaderNoFollowers(b *testing.B) {
+	results := []*sqltypes.Result{
+		{Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Int64}}},
+		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}},
+	}
+	leader := func(callback StreamCallback) error {
+		for _, result := range results {
+			if err := callback(result); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	callback := func(*sqltypes.Result) error {
+		return nil
+	}
+
+	b.Run("Direct", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			require.NoError(b, leader(callback))
+		}
+	})
+
+	b.Run("Consolidate", func(b *testing.B) {
+		exporter := servenv.NewExporter("ConsolidatorBenchmark", "")
+		timings := exporter.NewTimings("ConsolidatorWaits", "", "StreamConsolidations")
+		logStats := tabletenv.NewLogStats(b.Context(), "StreamConsolidation", streamlog.NewQueryLogConfigForTest())
+		cc := NewStreamConsolidator(128*1024, 2*1024, nocleanup)
+
+		b.ReportAllocs()
+		for b.Loop() {
+			require.NoError(b, cc.Consolidate(timings, logStats, "select 1", callback, leader))
 		}
 	})
 }

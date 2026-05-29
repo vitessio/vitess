@@ -31,6 +31,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
@@ -48,6 +49,10 @@ func TestStreamSQLUnsharded(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	assert.Truef(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
+}
+
+func TestStreamStatementReturnsRows(t *testing.T) {
+	assert.True(t, canReturnRows(sqlparser.StmtStream))
 }
 
 func TestStreamSQLSharded(t *testing.T) {
@@ -89,6 +94,33 @@ func TestStreamSQLSharded(t *testing.T) {
 		},
 	}
 	assert.Truef(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
+}
+
+func TestStreamExecutePreservesResultMetadataAfterBatchFlush(t *testing.T) {
+	executor, _, _, sbcUnsharded, ctx := createExecutorEnv(t)
+	sbcUnsharded.SetResults([]*sqltypes.Result{
+		{
+			Fields:       sqltypes.MakeTestFields("msg", "varchar"),
+			Rows:         [][]sqltypes.Value{{sqltypes.NewVarBinary("this row is large enough to flush")}},
+			RowsAffected: 3,
+			InsertID:     42,
+		},
+		{
+			Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("tail")}},
+		},
+	})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	var got []*sqltypes.Result
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecutePreservesResultMetadataAfterBatchFlush", session, "call proc()", nil, func(qr *sqltypes.Result) error {
+		got = append(got, qr.Copy())
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, got)
+	assert.Equal(t, uint64(3), got[len(got)-1].RowsAffected)
+	assert.Equal(t, uint64(42), got[len(got)-1].InsertID)
+	assert.True(t, got[len(got)-1].InsertIDUpdated())
 }
 
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {

@@ -245,6 +245,9 @@ func TestVTGateStreamExecute(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
 
 	var qrs []*sqltypes.Result
+	query := "select id from t1"
+	statsKey := "StreamExecute." + KsTestUnsharded + ".primary"
+	initialCharsProcessed := vtg.queryTextCharsProcessed.Counts()[statsKey]
 	_, err := vtg.StreamExecute(
 		ctx,
 		nil,
@@ -252,7 +255,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 			TargetString: KsTestUnsharded + "@primary",
 			Options:      executeOptions,
 		},
-		"select id from t1",
+		query,
 		nil,
 		func(r *sqltypes.Result) error {
 			qrs = append(qrs, r)
@@ -268,6 +271,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	}}
 	utils.MustMatch(t, want, qrs)
 	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	assert.Equal(t, initialCharsProcessed+int64(len(query)), vtg.queryTextCharsProcessed.Counts()[statsKey])
 }
 
 func TestVTGateBindVarError(t *testing.T) {

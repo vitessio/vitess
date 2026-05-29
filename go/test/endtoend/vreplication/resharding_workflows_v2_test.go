@@ -163,6 +163,9 @@ func tstWorkflowExec(t *testing.T, cells, workflow, defaultSourceKs, defaultTarg
 		args = append(args, "--tablet-types", tabletTypes)
 	}
 	args = append(args, "--action-timeout=10m") // At this point something is up so fail the test
+	if action == workflowActionSwitchTraffic {
+		ensureCanSwitch(t, currentWorkflowType.String(), cells, defaultTargetKs+"."+workflow)
+	}
 	t.Logf("Executing workflow command: vtctldclient %s", strings.Join(args, " "))
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(args...)
 	lastOutput = output
@@ -340,19 +343,17 @@ func getCurrentStatus(t *testing.T) string {
 func TestBasicV2Workflows(t *testing.T) {
 	ogReplicas := defaultReplicas
 	ogRdOnly := defaultRdonly
+	origExtraVTTabletArgs := extraVTTabletArgs
 	defer func() {
 		defaultReplicas = ogReplicas
 		defaultRdonly = ogRdOnly
+		extraVTTabletArgs = origExtraVTTabletArgs
 	}()
 	defaultReplicas = 1
 	defaultRdonly = 1
 	extraVTTabletArgs = []string{
 		parallelInsertWorkers,
 	}
-	defer func() {
-		defaultRdonly = 0
-		extraVTTabletArgs = []string{}
-	}()
 
 	vc = setupCluster(t)
 	defer vc.TearDown()
@@ -949,7 +950,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		switchWrites(t, workflowType, ksWorkflow, false)
 		validateWritesRouteToTarget(t)
 
-		switchWrites(t, workflowType, defaultReverseKsWorkflow, true)
+		switchWrites(t, workflowType, ksWorkflow, true)
 		validateWritesRouteToSource(t)
 
 		validateReadsRouteToSource(t, "replica")

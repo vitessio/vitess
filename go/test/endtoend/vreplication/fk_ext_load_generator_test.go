@@ -185,6 +185,7 @@ func isQueryRetryable(err error) bool {
 		"VT13001",
 		"Lock wait timeout exceeded",
 		"errno 2003",
+		"errno 1317",
 	}
 	for _, e := range retryableErrorStrings {
 		if strings.Contains(err.Error(), e) {
