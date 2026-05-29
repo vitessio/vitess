@@ -19,6 +19,8 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[Reparenting](#minor-changes-reparenting)**
+        - [MySQL version-aware primary selection in PRS and ERS](#reparent-mysql-version-aware)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -124,3 +126,25 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-reparenting"/>Reparenting</a>
+
+#### <a id="reparent-mysql-version-aware"/>MySQL version-aware primary selection in PRS and ERS</a>
+
+`PlannedReparentShard` (PRS) and `EmergencyReparentShard` (ERS) now consider MySQL server versions when selecting a new primary. During rolling MySQL upgrades, promoting a newer-version tablet as primary can break replication for replicas still on the older version because MySQL only guarantees forward replication compatibility (old primary to new replica).
+
+When all other factors are equal (GTID position, promotion rules), the reparent candidate sorter now prefers lower MySQL versions. Only major.minor differences matter; patch version differences within the same release are ignored since they don't affect replication compatibility.
+
+**Selection order:**
+1. GTID position (most advanced preferred)
+2. Promotion rules (operator intent)
+3. MySQL release (major.minor — lower preferred)
+4. InnoDB buffer pool size
+5. Tablet alias (tiebreaker)
+
+**Deployment notes:**
+- The version-aware election is automatic once tablets report `server_version` in their replication status.
+- Tablets on older Vitess versions that don't populate the `server_version` field are treated as "unknown version" and sorted last, preserving existing behavior.
+- No migrations or flag changes required.
+
+See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.
