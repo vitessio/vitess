@@ -15,6 +15,7 @@
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+        - [New `--slow-query-threshold` flag for slow query detection](#vtgate-slow-query-threshold)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -99,6 +100,27 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+#### <a id="vtgate-slow-query-threshold"/>New `--slow-query-threshold` flag for slow query detection</a>
+
+VTGate now supports configurable slow query detection with the new `--slow-query-threshold` flag. When set to a non-zero duration, queries whose total execution time meets or exceeds the threshold are marked as slow.
+
+Slow queries are:
+- Logged in vtgate logstats with a `SlowQuery` field set to `true`
+- Visible in `/debug/querylogz` with a `SlowQuery` column
+- Counted in the new `SlowQueries` metric, broken down by query type, plan type, and tablet type (e.g., `UPDATE.Passthrough.PRIMARY`)
+- Exported to Prometheus as `vtgate_slow_queries{query=...,plan=...,tablet=...}`
+- Signaled to MySQL clients via the `SERVER_QUERY_WAS_SLOW` status flag
+
+**Example usage:**
+
+```
+--slow-query-threshold=500ms
+```
+
+The default value is `0`, which disables slow query detection.
+
+See [#19603](https://github.com/vitessio/vitess/pull/19603) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
