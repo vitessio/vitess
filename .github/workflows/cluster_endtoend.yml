@@ -176,7 +176,7 @@ jobs:
             sudo apt-get -qq install -y mysql-shell
           fi
 
-          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6
+          sudo apt-get -qq install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils libncurses6 ${{ contains(matrix.needs, 'fuse') && 'fuse3' || '' }}
           sudo service etcd stop
           go mod download
 
