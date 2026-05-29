@@ -20,10 +20,12 @@ SOURCE_DB=${SOURCE_DB:-0}
 WEB_PORT=${WEB_PORT:-"8080"}
 VTORC_CONFIG=${VTORC_CONFIG:-/vt/vtorc/config.json}
 TOPOLOGY_FLAGS=${TOPOLOGY_FLAGS:-""}
+CELL=${CELL:-"test"}
 
 source_db=$SOURCE_DB
 web_port=$WEB_PORT
 config=$VTORC_CONFIG
+cell=$CELL
 # Copy config directory
 cp -R /script/vtorc /vt
 # Update credentials
@@ -44,5 +46,6 @@ read -r -a topo_args <<< "$TOPOLOGY_FLAGS"
 exec /vt/bin/vtorc \
 "${topo_args[@]}" \
 --logtostderr=true \
+--cell "$cell" \
 --port "$web_port" \
 --config-file "$config"

@@ -54,7 +54,6 @@ var (
 		"--vreplication-retry-delay", "1s",
 		"--degraded-threshold", "5s",
 		"--lock-tables-timeout", "5s",
-		"--watch-replication-stream",
 		"--serving-state-grace-period", "1s",
 	}
 	recoveryKS1  = "recovery_ks1"

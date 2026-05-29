@@ -117,8 +117,8 @@ var (
 		"Shard",
 	})
 
-	// shardsLockCounter is a count of in-flight shard locks. Use atomics to read/update.
-	shardsLockCounter int64
+	// shardsLockCounter is a count of in-flight shard locks.
+	shardsLockCounter atomic.Int64
 
 	// recoveriesCounterLabels are labels for grouping the counter based stats for recoveries.
 	recoveriesCounterLabels = []string{"RecoveryType", "Keyspace", "Shard"}
@@ -214,7 +214,7 @@ func NewTopologyRecoveryStep(id int64, message string) *TopologyRecoveryStep {
 func init() {
 	// ShardLocksActive is a stats representation of shardsLockCounter.
 	stats.NewGaugeFunc("ShardLocksActive", "Number of actively-held shard locks", func() int64 {
-		return atomic.LoadInt64(&shardsLockCounter)
+		return shardsLockCounter.Load()
 	})
 	urgentOperations = cache.New(urgentOperationsInterval, 2*urgentOperationsInterval)
 	go initializeTopologyRecoveryPostConfiguration()
@@ -236,8 +236,7 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 	if shard == "" {
 		return nil, nil, errors.New("can't lock shard: shard name is unspecified")
 	}
-	val := atomic.LoadInt32(&hasReceivedSIGTERM)
-	if val > 0 {
+	if hasReceivedSIGTERM.Load() > 0 {
 		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
@@ -247,16 +246,16 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 		shardLockTimings.Add("Lock", lockTime)
 	}()
 
-	atomic.AddInt64(&shardsLockCounter, 1)
+	shardsLockCounter.Add(1)
 	ctx, unlock, err := ts.TryLockShard(ctx, keyspace, shard, lockAction)
 	if err != nil {
-		atomic.AddInt64(&shardsLockCounter, -1)
+		shardsLockCounter.Add(-1)
 		return nil, nil, err
 	}
 	return ctx, func(e *error) {
 		startTime := time.Now()
 		defer func() {
-			atomic.AddInt64(&shardsLockCounter, -1)
+			shardsLockCounter.Add(-1)
 			shardLockTimings.Add("Unlock", time.Since(startTime))
 		}()
 		unlock(e)

@@ -227,18 +227,6 @@ func TestValidateTablet(t *testing.T) {
 		require.ErrorContains(t, validateTablet(tablet), "tablet is shutdown")
 	})
 
-	// TODO: remove in v25
-	t.Run("is shutdown pre-v24", func(t *testing.T) {
-		tablet := &topodatapb.Tablet{
-			Type:               topodatapb.TabletType_REPLICA,
-			Hostname:           "",
-			MysqlHostname:      "",
-			PortMap:            nil,
-			TabletShutdownTime: nil,
-		}
-		require.ErrorContains(t, validateTablet(tablet), "tablet is shutdown")
-	})
-
 	t.Run("invalid - empty Hostname", func(t *testing.T) {
 		tablet := &topodatapb.Tablet{
 			Hostname: "",
