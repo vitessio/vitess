@@ -40,3 +40,10 @@ func (v *ServerVersion) AtLeast(compare ServerVersion) bool {
 func (v *ServerVersion) IsSameRelease(compare ServerVersion) bool {
 	return v.Major == compare.Major && v.Minor == compare.Minor
 }
+
+func (v *ServerVersion) ReleaseAtLeast(compare ServerVersion) bool {
+	if v.Major > compare.Major {
+		return true
+	}
+	return v.Major == compare.Major && v.Minor >= compare.Minor
+}

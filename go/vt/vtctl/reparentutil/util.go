@@ -363,8 +363,9 @@ func findCandidate(
 		return possibleCandidates[0]
 	}
 
-	// Find the candidate with the lowest MySQL version in this tier.
-	// Among equal-version candidates, prefer the intermediate source to avoid catch-up.
+	// Find the candidate with the lowest MySQL release (major.minor) in this tier.
+	// Patch differences within the same release are ignored.
+	// Among same-release candidates, prefer the intermediate source to avoid catch-up.
 	sourceAlias := topoproto.TabletAliasString(intermediateSource.Alias)
 	sourceVersion, ok := versionMap[sourceAlias]
 	if !ok {
@@ -386,16 +387,15 @@ func findCandidate(
 			continue
 		}
 
-		if v.AtLeast(bestVersion) {
+		if v.IsSameRelease(bestVersion) || v.ReleaseAtLeast(bestVersion) {
 			continue
 		}
 		best = candidate
 		bestVersion = v
 	}
 
-	// If best has the same version as the intermediate source, prefer intermediate source to avoid catch-up.
-	if !sourceVersion.AtLeast(bestVersion) || bestVersion.AtLeast(sourceVersion) {
-		// Versions are equal — check if intermediate source is in the list.
+	// If best is on the same release as the intermediate source, prefer intermediate source to avoid catch-up.
+	if sourceVersion.IsSameRelease(bestVersion) {
 		for _, candidate := range possibleCandidates {
 			if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {
 				return candidate

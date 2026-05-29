@@ -102,18 +102,21 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return !jPromotionRule.BetterThan(iPromotionRule)
 	}
 
-	// Same promotion rule. Prefer lower MySQL version to maintain replication
+	// Same promotion rule. Prefer lower MySQL release (major.minor) to maintain replication
 	// compatibility — replicas must be at the same or higher version than the primary.
+	// Patch differences within the same release are ignored.
 	if len(rs.mysqlVersions) != 0 {
 		iVersion := rs.mysqlVersions[i]
 		jVersion := rs.mysqlVersions[j]
-		iAtLeastJ := iVersion.AtLeast(jVersion)
-		jAtLeastI := jVersion.AtLeast(iVersion)
-		if !iAtLeastJ {
-			return true
-		}
-		if !jAtLeastI {
-			return false
+		if !iVersion.IsSameRelease(jVersion) {
+			iAtLeastJ := iVersion.ReleaseAtLeast(jVersion)
+			jAtLeastI := jVersion.ReleaseAtLeast(iVersion)
+			if !iAtLeastJ {
+				return true
+			}
+			if !jAtLeastI {
+				return false
+			}
 		}
 	}
 
