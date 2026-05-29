@@ -42,7 +42,7 @@ type ImpossibleApplyDiffOrderError struct {
 func (e *ImpossibleApplyDiffOrderError) Error() string {
 	var b strings.Builder
 	conflictingStatements := e.ConflictingStatements()
-	b.WriteString(fmt.Sprintf("no valid applicable order for diffs. %d diffs found conflicting:", len(conflictingStatements)))
+	fmt.Fprintf(&b, "no valid applicable order for diffs. %d diffs found conflicting:", len(conflictingStatements))
 	for _, s := range conflictingStatements {
 		b.WriteString("\n")
 		b.WriteString(s)
@@ -481,7 +481,7 @@ type SubsequentDiffRejectedError struct {
 
 func (e *SubsequentDiffRejectedError) Error() string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("multiple changes not allowed on table %s. Found:", sqlescape.EscapeID(e.Table)))
+	fmt.Fprintf(&b, "multiple changes not allowed on table %s. Found:", sqlescape.EscapeID(e.Table))
 	for _, d := range e.Diffs {
 		b.WriteString("\n")
 		b.WriteString(d.CanonicalStatementString())
