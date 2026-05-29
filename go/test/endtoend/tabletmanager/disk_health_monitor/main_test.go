@@ -108,18 +108,18 @@ func run(m *testing.M) int {
 
 	clusterInstance = cluster.NewCluster(cell, hostname)
 	defer clusterInstance.Teardown()
-	// Safety net for panic-during-stall: SIGCONT the helper before cluster
-	// teardown runs, so mysqld isn't wedged on FUSE I/O while we try to stop
-	// it. Registered after Teardown so it fires first (LIFO).
+	// Safety net for panic-during-stall: send SIGHUP (clear) to the helper
+	// before cluster teardown runs, so mysqld isn't wedged on FUSE I/O while
+	// we try to stop it. Registered after Teardown so it fires first (LIFO).
 	defer func() {
 		if fuseHelperCmd != nil && fuseHelperCmd.Process != nil {
-			_ = fuseHelperCmd.Process.Signal(syscall.SIGCONT)
+			_ = fuseHelperCmd.Process.Signal(syscall.SIGHUP)
 		}
 	}()
 
 	// disk-write-dir points inside the FUSE mount so the monitor's probe
 	// writes are stalled in lockstep with mysqld's I/O when the helper is
-	// SIGSTOPed. Use CurrentVTDATAROOT (created by NewCluster) so the
+	// stalled. Use CurrentVTDATAROOT (created by NewCluster) so the
 	// directory already exists when vttablet starts.
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--disk-write-dir", clusterInstance.CurrentVTDATAROOT,
@@ -207,9 +207,10 @@ func stopFuseHelper() {
 	if fuseHelperCmd == nil || fuseHelperCmd.Process == nil {
 		return
 	}
-	// Defensive: always SIGCONT before SIGTERM so a test that panicked
-	// mid-stall doesn't leave the helper frozen and the mount wedged.
-	_ = fuseHelperCmd.Process.Signal(syscall.SIGCONT)
+	// Defensive: always send SIGHUP (clear) before SIGTERM so a test that
+	// panicked mid-stall doesn't leave the helper gating waiters and any
+	// in-flight ops wedged at unmount time.
+	_ = fuseHelperCmd.Process.Signal(syscall.SIGHUP)
 	_ = fuseHelperCmd.Process.Signal(syscall.SIGTERM)
 	done := make(chan error, 1)
 	go func() { done <- fuseHelperCmd.Wait() }()

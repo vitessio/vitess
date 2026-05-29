@@ -16,24 +16,112 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// fuse_helper is a minimal loopback FUSE filesystem used by the
-// disk_health_monitor end-to-end test. It mirrors -backing onto -mount and,
-// once the mount is live, prints "READY" on a line by itself. The test
-// stalls the filesystem by sending SIGSTOP to this process; SIGCONT
-// resumes it. SIGTERM/SIGINT unmounts cleanly.
+// fuse_helper is a passthrough loopback FUSE filesystem used by the
+// disk_health_monitor end-to-end tests. It mirrors -backing onto -mount
+// and supports a small set of catchable signals that toggle simulated
+// disk-failure modes for VTTablet to react to.
+//
+// Signal protocol (must stay in sync with the test):
+//
+//	SIGUSR1 — enter "stalled" mode. Mutating FUSE ops block until cleared.
+//	SIGUSR2 — RESERVED for "disk full" mode (writes will return ENOSPC).
+//	            Wired in a follow-up PR; SIGUSR2 is intentionally claimed
+//	            now so the protocol is stable.
+//	SIGHUP  — clear any failure mode; resume normal operation.
+//	SIGTERM / SIGINT — unmount cleanly and exit.
+//
+// We deliberately do NOT use SIGSTOP/SIGCONT: while they would stall the
+// kernel-side FUSE daemon, they also freeze this process's Go runtime, so
+// a SIGTERM during a stall cannot be delivered until SIGCONT is sent. A
+// test panic mid-stall would then wedge cluster teardown on a hung FUSE
+// mount. Catchable signals + in-process gating keep the helper responsive
+// to SIGTERM at all times.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
+
+// gate blocks callers of wait() while in stall mode. Mode transitions are
+// driven by signals; see the signal protocol at the top of the file.
+type gate struct {
+	mu      sync.Mutex
+	blockCh chan struct{} // non-nil and open when stalled — receivers block
+}
+
+// wait blocks if the gate is currently in stall mode, returning as soon as
+// resume() closes the block channel. When not stalled it returns immediately.
+func (g *gate) wait() {
+	g.mu.Lock()
+	ch := g.blockCh
+	g.mu.Unlock()
+	if ch != nil {
+		<-ch
+	}
+}
+
+func (g *gate) stall() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.blockCh == nil {
+		g.blockCh = make(chan struct{})
+	}
+}
+
+func (g *gate) resume() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.blockCh != nil {
+		close(g.blockCh) // unblocks every pending waiter
+		g.blockCh = nil
+	}
+}
+
+var ioGate = &gate{}
+
+// gatedNode wraps fs.LoopbackNode and routes the mutating operations
+// exercised by the disk health monitor's probe (os.Create → WriteString →
+// Sync → Close) through ioGate.wait(). Read-only operations remain
+// pass-through.
+//
+// The monitor's probe path goes through one of:
+//
+//	Lookup + Create                  (file doesn't exist yet)
+//	Lookup + Setattr(size=0) + Open  (file exists, O_TRUNC)
+//
+// Gating Create, Open, and Setattr covers both.
+type gatedNode struct {
+	fs.LoopbackNode
+}
+
+func newGatedNode(rootData *fs.LoopbackRoot, _ *fs.Inode, _ string, _ *syscall.Stat_t) fs.InodeEmbedder {
+	return &gatedNode{LoopbackNode: fs.LoopbackNode{RootData: rootData}}
+}
+
+func (n *gatedNode) Create(ctx context.Context, name string, flags, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
+	ioGate.wait()
+	return n.LoopbackNode.Create(ctx, name, flags, mode, out)
+}
+
+func (n *gatedNode) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
+	ioGate.wait()
+	return n.LoopbackNode.Open(ctx, flags)
+}
+
+func (n *gatedNode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
+	ioGate.wait()
+	return n.LoopbackNode.Setattr(ctx, f, in, out)
+}
 
 func main() {
 	mountPoint := flag.String("mount", "", "directory to mount the FUSE filesystem on")
@@ -45,10 +133,18 @@ func main() {
 		os.Exit(2)
 	}
 
-	loopbackRoot, err := fs.NewLoopbackRoot(*backing)
-	if err != nil {
-		log.Fatalf("NewLoopbackRoot(%s): %v", *backing, err)
+	var st syscall.Stat_t
+	if err := syscall.Stat(*backing, &st); err != nil {
+		log.Fatalf("stat(%s): %v", *backing, err)
 	}
+
+	root := &fs.LoopbackRoot{
+		Path:    *backing,
+		Dev:     uint64(st.Dev),
+		NewNode: newGatedNode,
+	}
+	rootNode := newGatedNode(root, nil, "", &st)
+	root.RootNode = rootNode
 
 	opts := &fs.Options{
 		MountOptions: fuse.MountOptions{
@@ -57,15 +153,37 @@ func main() {
 		},
 	}
 
-	server, err := fs.Mount(*mountPoint, loopbackRoot, opts)
+	server, err := fs.Mount(*mountPoint, rootNode, opts)
 	if err != nil {
 		log.Fatalf("fs.Mount(%s): %v", *mountPoint, err)
 	}
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	// Failure-mode signals (USR1/USR2/HUP) — see signal protocol at top of file.
+	modeSig := make(chan os.Signal, 4)
+	signal.Notify(modeSig, syscall.SIGUSR1, syscall.SIGUSR2, syscall.SIGHUP)
 	go func() {
-		<-sig
+		for s := range modeSig {
+			switch s {
+			case syscall.SIGUSR1:
+				ioGate.stall()
+			case syscall.SIGHUP:
+				ioGate.resume()
+			case syscall.SIGUSR2:
+				// Reserved for "disk full" mode; wired in a follow-up PR.
+				// Until then, treat as a no-op so a stray SIGUSR2 doesn't
+				// look like a stall or kill the process.
+			}
+		}
+	}()
+
+	// Teardown signals.
+	termSig := make(chan os.Signal, 1)
+	signal.Notify(termSig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-termSig
+		// Resume first so any waiters drain and in-flight ops can complete
+		// before we tear down the mount — otherwise Unmount can return EBUSY.
+		ioGate.resume()
 		_ = server.Unmount()
 	}()
 

@@ -28,8 +28,8 @@ import (
 // TestDiskHealthMonitor_StallAndRecover exercises the full integration path
 // of the stalled disk monitor: probe write -> timeout -> IsDiskStalled() ->
 // StateManager flips the tablet to NOT_SERVING. We stall the FUSE-backed
-// data directory by sending SIGSTOP to the helper, then SIGCONT to verify
-// the tablet returns to SERVING.
+// data directory by sending SIGUSR1 to the helper (see fuse_helper's signal
+// protocol), then SIGHUP to clear and verify the tablet returns to SERVING.
 func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 	require.NotNil(t, primaryTablet, "primary tablet not initialized in TestMain")
 	require.NotNil(t, fuseHelperCmd, "fuse helper not initialized in TestMain")
@@ -41,8 +41,8 @@ func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 	)
 
 	require.NoError(t,
-		syscall.Kill(fuseHelperCmd.Process.Pid, syscall.SIGSTOP),
-		"failed to SIGSTOP fuse helper",
+		syscall.Kill(fuseHelperCmd.Process.Pid, syscall.SIGUSR1),
+		"failed to send SIGUSR1 (stall) to fuse helper",
 	)
 
 	require.NoError(t,
@@ -52,8 +52,8 @@ func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 	)
 
 	require.NoError(t,
-		syscall.Kill(fuseHelperCmd.Process.Pid, syscall.SIGCONT),
-		"failed to SIGCONT fuse helper",
+		syscall.Kill(fuseHelperCmd.Process.Pid, syscall.SIGHUP),
+		"failed to send SIGHUP (clear) to fuse helper",
 	)
 
 	require.NoError(t,
