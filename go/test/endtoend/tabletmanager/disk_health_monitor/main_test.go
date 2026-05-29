@@ -20,6 +20,7 @@ package diskhealthmonitor
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -182,7 +183,7 @@ func startFuseHelper(bin string) error {
 		if err := scanner.Err(); err != nil {
 			ready <- err
 		} else {
-			ready <- fmt.Errorf("fuse_helper exited before printing READY")
+			ready <- errors.New("fuse_helper exited before printing READY")
 		}
 	}()
 
@@ -194,7 +195,7 @@ func startFuseHelper(bin string) error {
 		}
 	case <-time.After(30 * time.Second):
 		_ = cmd.Process.Kill()
-		return fmt.Errorf("timed out waiting for fuse_helper READY")
+		return errors.New("timed out waiting for fuse_helper READY")
 	}
 
 	fuseHelperCmd = cmd
