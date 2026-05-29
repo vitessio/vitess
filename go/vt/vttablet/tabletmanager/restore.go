@@ -102,20 +102,25 @@ func (tm *TabletManager) RestoreBackup(
 	allowedBackupEngines []string,
 	mysqlShutdownTimeout time.Duration,
 ) error {
-	if err := tm.lock(ctx); err != nil {
-		return err
-	}
-	defer tm.unlock()
-
 	var (
 		err          error
 		startTime    time.Time
 		backupEngine string
 	)
 
+	// Declare the hook defer before the lock so it runs after unlock (LIFO).
+	// The hook can block up to 30s and does not need the action lock.
 	defer func() {
+		if startTime.IsZero() {
+			return
+		}
 		tm.invokeRestoreDoneHook(startTime, err, backupEngine)
 	}()
+
+	if err := tm.lock(ctx); err != nil {
+		return err
+	}
+	defer tm.unlock()
 
 	startTime = time.Now()
 
@@ -207,7 +212,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	var backupManifest *mysqlctl.BackupManifest
 	for {
 		backupManifest, err = mysqlctl.Restore(ctx, params)
-		if backupManifest != nil {
+		if backupManifest != nil && err == nil {
 			statsRestoreBackup.Set(replication.EncodePosition(backupManifest.Position))
 			statsRestoreBackupTime.Set(backupManifest.BackupTime)
 		}
@@ -286,19 +291,23 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 }
 
 func (tm *TabletManager) restoreFromClone(ctx context.Context, logger logutil.Logger, deleteBeforeRestore bool) error {
-	if err := tm.lock(ctx); err != nil {
-		return err
-	}
-	defer tm.unlock()
-
 	var (
 		err       error
 		startTime time.Time
 	)
 
+	// Declare the hook defer before the lock so it runs after unlock (LIFO).
 	defer func() {
+		if startTime.IsZero() {
+			return
+		}
 		tm.invokeRestoreDoneHook(startTime, err, "")
 	}()
+
+	if err := tm.lock(ctx); err != nil {
+		return err
+	}
+	defer tm.unlock()
 
 	startTime = time.Now()
 
