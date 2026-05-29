@@ -53,11 +53,32 @@ const (
 )
 
 var (
-	requestsTotal     = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "query throttler requests", []string{"Strategy", "Workload", "Priority"})
-	requestsThrottled = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "query throttler requests throttled", []string{"Strategy", "Workload", "Priority", "MetricName", "DryRun"})
-	totalLatency      = stats.NewMultiTimings(queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", []string{"Strategy", "Workload", "Priority"})
-	evaluateLatency   = stats.NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", []string{"Strategy", "Workload", "Priority"})
+	metricsInitOnce   sync.Once
+	requestsTotal     *stats.CountersWithMultiLabels
+	requestsThrottled *stats.CountersWithMultiLabels
+	totalLatency      *stats.MultiTimings
+	evaluateLatency   *stats.MultiTimings
 )
+
+// initThrottlerMetrics registers the query throttler stats exactly once per process.
+// The Workload label is included only when includeWorkloadLabel is true: workload names
+// come from the client-supplied WORKLOAD_NAME query directive and are otherwise unbounded,
+// which would cause label-cardinality blowup in the hot path. This mirrors the existing
+// gating used by QueryEngine.queryCounts (see query_engine.go) behind --enable-per-workload-table-metrics.
+func initThrottlerMetrics(includeWorkloadLabel bool) {
+	metricsInitOnce.Do(func() {
+		baseLabels := []string{"Strategy", "Priority"}
+		throttledLabels := []string{"Strategy", "Priority", "MetricName", "DryRun"}
+		if includeWorkloadLabel {
+			baseLabels = []string{"Strategy", "Workload", "Priority"}
+			throttledLabels = []string{"Strategy", "Workload", "Priority", "MetricName", "DryRun"}
+		}
+		requestsTotal = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "query throttler requests", baseLabels)
+		requestsThrottled = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "query throttler requests throttled", throttledLabels)
+		totalLatency = stats.NewMultiTimings(queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", baseLabels)
+		evaluateLatency = stats.NewMultiTimings(queryThrottlerAppName+"EvaluateLatencyNs", "Time each request takes to make the throttling decision (nanoseconds)", baseLabels)
+	})
+}
 
 // stateSnapshot is the immutable {cfg, strategy} pair that Throttle() reads
 // from atomically on the hot path. HandleConfigUpdate replaces the whole snapshot
@@ -88,6 +109,11 @@ type QueryThrottler struct {
 	// snapshot holds the current immutable {cfg, strategy} pair. Always non-nil after NewQueryThrottler. Updated via atomic Store in HandleConfigUpdate.
 	snapshot atomic.Pointer[stateSnapshot]
 
+	// perWorkloadMetrics, when true, includes the Workload label in throttler stats.
+	// Read once at construction from env.Config().EnablePerWorkloadTableMetrics; the
+	// workload value is otherwise unbounded (client-supplied via WORKLOAD_NAME directive).
+	perWorkloadMetrics bool
+
 	env tabletenv.Env
 }
 
@@ -95,13 +121,17 @@ type QueryThrottler struct {
 func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env tabletenv.Env, alias *topodatapb.TabletAlias, srvTopoServer srvtopo.Server) *QueryThrottler {
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.QueryThrottlerName, base.UndefinedScope)
 
+	perWorkloadMetrics := env.Config().EnablePerWorkloadTableMetrics
+	initThrottlerMetrics(perWorkloadMetrics)
+
 	qt := &QueryThrottler{
-		ctx:             ctx,
-		throttlerClient: client,
-		tabletConfig:    env.Config(),
-		cell:            alias.GetCell(),
-		srvTopoServer:   srvTopoServer,
-		env:             env,
+		ctx:                ctx,
+		throttlerClient:    client,
+		tabletConfig:       env.Config(),
+		cell:               alias.GetCell(),
+		srvTopoServer:      srvTopoServer,
+		env:                env,
+		perWorkloadMetrics: perWorkloadMetrics,
 	}
 
 	// Initialize snapshot with empty config and default NoOp strategy so Throttle()
@@ -183,21 +213,21 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 		Priority:     extractPriority(options),
 	}
 	strategyName := tStrategy.GetStrategyName()
-	workload := attrs.WorkloadName
 	priorityStr := strconv.Itoa(attrs.Priority)
+	labels := qt.buildLabels(strategyName, attrs.WorkloadName, priorityStr)
 
 	// Defer total latency recording to ensure it's always emitted regardless of return path.
 	defer func() {
-		totalLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+		totalLatency.Record(labels, startTime)
 	}()
 
 	// Evaluate the throttling decision
 	decision := tStrategy.Evaluate(ctx, tabletType, parsedQuery, transactionID, attrs)
 
 	// Record evaluate-window latency immediately after Evaluate returns
-	evaluateLatency.Record([]string{strategyName, workload, priorityStr}, startTime)
+	evaluateLatency.Record(labels, startTime)
 
-	requestsTotal.Add([]string{strategyName, workload, priorityStr}, 1)
+	requestsTotal.Add(labels, 1)
 
 	// If no throttling is needed, allow the query
 	if !decision.Throttle {
@@ -205,7 +235,7 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	}
 
 	// Emit metric of query being throttled.
-	requestsThrottled.Add([]string{strategyName, workload, priorityStr, decision.MetricName, strconv.FormatBool(tCfg.GetDryRun())}, 1)
+	requestsThrottled.Add(qt.buildLabels(strategyName, attrs.WorkloadName, priorityStr, decision.MetricName, strconv.FormatBool(tCfg.GetDryRun())), 1)
 
 	// If dry-run mode is enabled, log the decision but don't throttle
 	if tCfg.GetDryRun() {
@@ -268,6 +298,18 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 	}()
 
 	log.Info(fmt.Sprintf("QueryThrottler: started event-driven watch for SrvKeyspace keyspace=%s cell=%s", qt.keyspace, qt.cell))
+}
+
+// buildLabels returns the throttler stat label set, optionally appending extras after
+// the base {Strategy, Priority} (or {Strategy, Workload, Priority} when per-workload
+// metrics are enabled). Workload is excluded by default because its value comes from
+// the client-controlled WORKLOAD_NAME query directive and is otherwise unbounded,
+// which would cause label-cardinality blowup in the hot path.
+func (qt *QueryThrottler) buildLabels(strategyName, workload, priorityStr string, extras ...string) []string {
+	if qt.perWorkloadMetrics {
+		return append([]string{strategyName, workload, priorityStr}, extras...)
+	}
+	return append([]string{strategyName, priorityStr}, extras...)
 }
 
 // extractWorkloadName extracts the workload name from ExecuteOptions.

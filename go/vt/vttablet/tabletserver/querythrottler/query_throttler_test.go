@@ -44,6 +44,13 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
 
+// init ensures throttler metrics are registered before any test runs, since some tests
+// construct QueryThrottler directly (bypassing NewQueryThrottler) and reference the
+// package-level metric vars. Schema matches TabletConfig{}.EnablePerWorkloadTableMetrics=false.
+func init() {
+	initThrottlerMetrics(false)
+}
+
 func TestSelectThrottlingStrategy(t *testing.T) {
 	tests := []struct {
 		name                   string
@@ -324,6 +331,46 @@ func TestQueryThrottler_extractWorkloadName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := extractWorkloadName(tt.options)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestQueryThrottler_buildLabels(t *testing.T) {
+	tests := []struct {
+		name               string
+		perWorkloadMetrics bool
+		extras             []string
+		want               []string
+	}{
+		{
+			name:               "workload label disabled, no extras",
+			perWorkloadMetrics: false,
+			want:               []string{"strat", "50"},
+		},
+		{
+			name:               "workload label disabled, with extras",
+			perWorkloadMetrics: false,
+			extras:             []string{"cpu", "false"},
+			want:               []string{"strat", "50", "cpu", "false"},
+		},
+		{
+			name:               "workload label enabled, no extras",
+			perWorkloadMetrics: true,
+			want:               []string{"strat", "client-supplied-wl", "50"},
+		},
+		{
+			name:               "workload label enabled, with extras",
+			perWorkloadMetrics: true,
+			extras:             []string{"cpu", "false"},
+			want:               []string{"strat", "client-supplied-wl", "50", "cpu", "false"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			qt := &QueryThrottler{perWorkloadMetrics: tt.perWorkloadMetrics}
+			got := qt.buildLabels("strat", "client-supplied-wl", "50", tt.extras...)
 			require.Equal(t, tt.want, got)
 		})
 	}
