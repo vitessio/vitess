@@ -125,22 +125,13 @@ func IsReplicationLagVeryHigh(tabletHealth *TabletHealth) bool {
 // FilterStatsByReplicationLag filters the list of TabletHealth by TabletHealth.Stats.ReplicationLagSeconds.
 // Note that TabletHealth that is non-serving or has error is ignored.
 //
-// The simplified logic:
+// Logic:
 // - Return tablets that have lag <= lowReplicationLag.
 // - Make sure we return at least minNumTablets tablets, if there are enough one with lag <= highReplicationLagMinServing.
 // For example, with the default of 30s / 2h / 2, this means:
 // - lags of (5s, 10s, 15s, 120s) return the first three
 // - lags of (30m, 35m, 40m, 45m) return the first two
 // - lags of (2h, 3h, 4h, 5h) return the first one
-//
-// The legacy algorithm (default for now):
-// - Return the list if there is 0 or 1 tablet.
-// - Return the list if all tablets have <=30s lag.
-// - Filter by replication lag: for each tablet, if the mean value without it is more than 0.7 of the mean value across all tablets, it is valid.
-// - Make sure we return at least minNumTablets tablets (if there are enough one with only low replication lag).
-// - If one tablet is removed, run above steps again in case there are two tablets with high replication lag. (It should cover most cases.)
-// For example, lags of (5s, 10s, 15s, 120s) return the first three;
-// lags of (30m, 35m, 40m, 45m) return all.
 //
 // One thing to know about this code: vttablet also has a couple flags that impact the logic here:
 //   - unhealthy-threshold: if replication lag is higher than this, a tablet will be reported as unhealthy.
