@@ -249,6 +249,8 @@ func GetRestoreEngine(ctx context.Context, backup backupstorage.BackupHandle) (R
 
 // GetRestoreEngineAndManifest returns the RestoreEngine and the BackupManifest
 // for a given backup in a single MANIFEST read.
+// Note: if BackupMethod is empty (legacy builtin backups), the returned manifest
+// will have BackupMethod set to "builtin" — this may differ from what is on disk.
 func GetRestoreEngineAndManifest(ctx context.Context, backup backupstorage.BackupHandle) (RestoreEngine, *BackupManifest, error) {
 	manifest, err := GetBackupManifest(ctx, backup)
 	if err != nil {

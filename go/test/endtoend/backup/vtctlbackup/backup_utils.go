@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -1662,11 +1663,11 @@ func testRestoreDoneHookOnFailure(t *testing.T) {
 	vtroot := os.Getenv("VTROOT")
 	require.NotEmpty(t, vtroot, "VTROOT must be set")
 
-	hookDir := path.Join(vtroot, "vthook")
+	hookDir := filepath.Join(vtroot, "vthook")
 	require.NoError(t, os.MkdirAll(hookDir, 0o755))
 
-	hookOutputFile := path.Join(localCluster.CurrentVTDATAROOT, "hook_restore_done_output")
-	hookScript := path.Join(hookDir, "vttablet_restore_done")
+	hookOutputFile := filepath.Join(localCluster.CurrentVTDATAROOT, "hook_restore_done_output")
+	hookScript := filepath.Join(hookDir, "vttablet_restore_done")
 	hookContent := fmt.Sprintf("#!/bin/bash\nenv > %s\n", hookOutputFile)
 	require.NoError(t, os.WriteFile(hookScript, []byte(hookContent), 0o755))
 	t.Cleanup(func() {
@@ -1680,8 +1681,8 @@ func testRestoreDoneHookOnFailure(t *testing.T) {
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 	require.Len(t, backups, 1)
 
-	// 3. Corrupt the backup by truncating one of its data files.
-	backupDir := path.Join(replica1.VttabletProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[0])
+	// 3. Corrupt the backup by overwriting one of its data files with garbage.
+	backupDir := filepath.Join(replica1.VttabletProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[0])
 	entries, err := os.ReadDir(backupDir)
 	require.NoError(t, err)
 
@@ -1690,8 +1691,9 @@ func testRestoreDoneHookOnFailure(t *testing.T) {
 		if entry.IsDir() || entry.Name() == "MANIFEST" {
 			continue
 		}
-		// Truncate a data file to cause a checksum/read error during restore.
-		require.NoError(t, os.Truncate(path.Join(backupDir, entry.Name()), 1))
+		// Overwrite with deterministic garbage to cause a checksum/read error.
+		garbage := []byte("CORRUPTED_FOR_TEST_DO_NOT_USE")
+		require.NoError(t, os.WriteFile(filepath.Join(backupDir, entry.Name()), garbage, 0o644))
 		corrupted = true
 		break
 	}

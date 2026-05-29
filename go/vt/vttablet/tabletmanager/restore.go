@@ -429,10 +429,13 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error, b
 		h.ExtraEnv["TM_RESTORE_DATA_ERROR"] = err.Error()
 	}
 
-	// Run the hook synchronously to ensure it completes before the process
-	// exits. The caller (tm_init.go) calls os.Exit immediately after a failed
-	// restore, which would kill a background goroutine before the hook runs.
-	// Bound with a timeout so a hanging hook cannot wedge tablet startup.
+	// Run the hook synchronously so it completes before either (a) the process
+	// exits on restore failure — tm_init.go calls os.Exit immediately, which
+	// would kill a background goroutine — or (b) the tablet finishes startup on
+	// the success path, where a background goroutine could race with serving.
+	//
+	// 30s is generous for typical hooks (write a file, emit a metric) while
+	// short enough to avoid meaningfully delaying tablet startup.
 	hookCtx, hookCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer hookCancel()
 	hr := h.ExecuteContext(hookCtx)

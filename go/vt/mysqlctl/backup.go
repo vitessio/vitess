@@ -466,23 +466,23 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
 		// Note Start will use dba user for waiting, this is fine, it will be allowed.
 		if err := params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking"); err != nil {
-			return nil, err
+			return backupManifest, err
 		}
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")
 	if err := params.Mysqld.RunMysqlUpgrade(ctx); err != nil {
-		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
+		return backupManifest, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
 	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 	if err = ensureRestoredGTIDPurgedMatchesManifest(ctx, manifest, &params); err != nil {
 		return nil, err
