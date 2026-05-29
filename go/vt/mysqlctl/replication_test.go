@@ -746,7 +746,7 @@ func TestSemiSyncReplicationStatus(t *testing.T) {
 }
 
 func TestHasRecentInnoDBLongSemaphoreWait(t *testing.T) {
-	expectedQuery := "SELECT 1 FROM " + innoDBLogTable + " WHERE logged >= NOW(6) - INTERVAL 60 SECOND AND prio = 'Warning' AND subsystem = 'InnoDB' AND error_code = 'MY-012985' LIMIT 1"
+	expectedQuery := "SELECT 1 FROM " + InnoDBLogTable + " WHERE logged >= NOW(6) - INTERVAL 60 SECOND AND prio = 'Warning' AND subsystem = 'InnoDB' AND error_code = 'MY-012985' LIMIT 1"
 
 	t.Run("returns true when a recent warning row exists", func(t *testing.T) {
 		db := fakesqldb.New(t)

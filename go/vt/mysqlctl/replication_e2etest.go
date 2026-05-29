@@ -18,13 +18,8 @@ limitations under the License.
 
 package mysqlctl
 
-// innoDBLogTable is the table HasRecentInnoDBLongSemaphoreWait queries. Under
+// InnoDBLogTable is the table HasRecentInnoDBLongSemaphoreWait queries. Under
 // the `e2etest` build tag it points at a writable test table so e2e tests can
 // inject synthetic MY-012985 rows. The release variant lives in
 // replication_release.go and points at the real MySQL log view.
-const innoDBLogTable = "_vt.fake_innodb_error_log"
-
-// InnoDBLogTable is the exported alias for e2e tests that need to create and
-// populate the table by name. Only present in `e2etest` builds — release
-// binaries do not expose this symbol.
-const InnoDBLogTable = innoDBLogTable
+const InnoDBLogTable = "_vt.fake_innodb_error_log"

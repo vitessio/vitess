@@ -839,7 +839,7 @@ func (mysqld *Mysqld) HasRecentInnoDBLongSemaphoreWait(ctx context.Context, look
 			"WHERE logged >= NOW(6) - INTERVAL %d SECOND "+
 			"AND prio = 'Warning' AND subsystem = 'InnoDB' "+
 			"AND error_code = 'MY-012985' LIMIT 1",
-		innoDBLogTable, int64(lookback.Seconds()),
+		InnoDBLogTable, int64(lookback.Seconds()),
 	)
 	res, err := conn.Conn.ExecuteFetch(query, 1, false)
 	if err != nil {

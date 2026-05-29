@@ -18,7 +18,7 @@ limitations under the License.
 
 package mysqlctl
 
-// innoDBLogTable is the table HasRecentInnoDBLongSemaphoreWait queries. In
+// InnoDBLogTable is the table HasRecentInnoDBLongSemaphoreWait queries. In
 // release builds it points at the real MySQL log view. The e2etest-build
 // variant lives in replication_e2etest.go and swaps in a writable test table.
-const innoDBLogTable = "performance_schema.error_log"
+const InnoDBLogTable = "performance_schema.error_log"
