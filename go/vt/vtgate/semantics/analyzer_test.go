@@ -904,6 +904,23 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	assert.Equal(t, TS1, d2)
 }
 
+func TestValuesStatementUnion(t *testing.T) {
+	queries := []string{
+		"values row(1)",
+		"select 1 union values row(1)",
+		"select * from (select 1) a union values row(1)",
+		"values row(1) union select 2",
+		"values row(1) union values row(2)",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "")
+			require.Len(t, semTable.SelectExprs(stmt.(sqlparser.TableStatement)), 1)
+		})
+	}
+}
+
 func TestUnionOrderByRewrite(t *testing.T) {
 	query := "select tabl1.id from tabl1 union select 1 order by 1"
 

@@ -74,6 +74,13 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 		} else {
 			FormatImpossibleQuery(buf, node.Right)
 		}
+	case *ValuesStatement:
+		limit := node.Limit
+		node.Limit = &Limit{Rowcount: NewIntLiteral("0")}
+		defer func() {
+			node.Limit = limit
+		}()
+		node.Format(buf)
 	default:
 		node.Format(buf)
 	}

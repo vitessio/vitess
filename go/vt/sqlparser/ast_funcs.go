@@ -2941,6 +2941,8 @@ func (v *visitor) visitAllSelects(in TableStatement, f func(p *Select, idx int) 
 			return err
 		}
 		return v.visitAllSelects(sel.Right, f)
+	case *ValuesStatement:
+		return nil
 	}
 	panic("switch should be exhaustive")
 }

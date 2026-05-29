@@ -35,8 +35,28 @@ func expandHorizon(ctx *plancontext.PlanningContext, horizon *Horizon) (Operator
 		return expandSelectHorizon(ctx, horizon, sel)
 	case *sqlparser.Union:
 		return expandUnionHorizon(ctx, horizon, sel)
+	case *sqlparser.ValuesStatement:
+		return expandValuesHorizon(ctx, horizon, sel)
 	}
 	panic(vterrors.VT13001(fmt.Sprintf("unexpected statement type %T", statement)))
+}
+
+func expandValuesHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, values *sqlparser.ValuesStatement) (Operator, *ApplyResult) {
+	qp := horizon.getQP(ctx)
+	op := createProjectionFromSelect(ctx, horizon)
+	extracted := []string{"Projection"}
+
+	if len(qp.OrderExprs) > 0 {
+		op = expandOrderBy(ctx, op, qp, horizon.Alias)
+		extracted = append(extracted, "Ordering")
+	}
+
+	if values.Limit != nil {
+		op = newLimit(op, values.Limit, true)
+		extracted = append(extracted, "Limit")
+	}
+
+	return op, Rewrote(fmt.Sprintf("expand VALUES horizon into (%s)", strings.Join(extracted, ", ")))
 }
 
 func expandUnionHorizon(ctx *plancontext.PlanningContext, horizon *Horizon, union *sqlparser.Union) (Operator, *ApplyResult) {

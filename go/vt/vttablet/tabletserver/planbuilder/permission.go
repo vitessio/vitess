@@ -44,6 +44,8 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		permissions = buildSubqueryPermissions(node, role, permissions)
 	case *sqlparser.Union:
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
+	case *sqlparser.ValuesStatement:
+		// no op
 	case *sqlparser.Insert:
 		permissions = buildTableExprPermissions(node.Table, tableacl.WRITER, nil, permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)

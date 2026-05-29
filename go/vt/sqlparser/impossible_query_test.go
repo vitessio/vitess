@@ -159,6 +159,44 @@ func TestFormatImpossibleQuery_Union(t *testing.T) {
 			input:    "with cte as (select * from t1 where id > 5) select * from cte union select * from t2 where name = 'test'",
 			expected: "with cte as (select * from t1 where id > 5) select * from cte where 1 != 1 union select * from t2 where 1 != 1",
 		},
+		{
+			name:     "union with values",
+			input:    "select 1 union values row(1)",
+			expected: "select 1 from dual where 1 != 1 union values row(1) limit 0",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := parser.Parse(tc.input)
+			require.NoError(t, err)
+
+			buf := NewTrackedBuffer(nil)
+			FormatImpossibleQuery(buf, stmt)
+
+			assert.Equal(t, tc.expected, buf.String())
+		})
+	}
+}
+
+func TestFormatImpossibleQuery_Values(t *testing.T) {
+	parser := NewTestParser()
+
+	testcases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "values statement",
+			input:    "values row(1)",
+			expected: "values row(1) limit 0",
+		},
+		{
+			name:     "values statement with limit",
+			input:    "values row(1) limit 1",
+			expected: "values row(1) limit 0",
+		},
 	}
 
 	for _, tc := range testcases {

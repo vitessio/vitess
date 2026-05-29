@@ -35,8 +35,7 @@ import (
 func planQuery(ctx *plancontext.PlanningContext, root Operator) Operator {
 	var selExpr []sqlparser.SelectExpr
 	if horizon, isHorizon := root.(*Horizon); isHorizon {
-		sel := getFirstSelect(horizon.Query)
-		selExpr = sqlparser.Clone(sel.SelectExprs).Exprs
+		selExpr = sqlparser.Clone(horizon.Query).GetColumns()
 	}
 
 	output := runPhases(ctx, root)

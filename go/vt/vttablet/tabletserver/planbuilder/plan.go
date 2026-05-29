@@ -206,6 +206,8 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan = analyzeUnion(stmt, noRowsLimit)
+	case *sqlparser.ValuesStatement:
+		plan = &Plan{PlanID: PlanSelect, FullQuery: GenerateFullQuery(stmt)}
 	case *sqlparser.Select:
 		plan, err = analyzeSelect(env, stmt, tables, noRowsLimit)
 	case *sqlparser.Insert:
