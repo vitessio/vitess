@@ -167,14 +167,14 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 	}
 	strategy.config.Store(cfg)
 
-	// Start the topo server watch post the keyspace is set.
-	strategy.startSrvKeyspaceWatch()
-
 	return strategy
 }
 
-// Start begins the background throttle check updater.
-// This should be called after creating the strategy to enable caching.
+// Start begins the background throttle check updater and SrvKeyspace watch.
+// Keeping these spawns out of the constructor makes NewTabletThrottlerStrategy
+// side-effect-free: a strategy that is built but never installed (e.g. because
+// QueryThrottler.HandleConfigUpdate races with Shutdown and the strategy is
+// discarded before the snapshot swap) cannot leak background goroutines.
 func (s *TabletThrottlerStrategy) Start() {
 	if s.running.CompareAndSwap(false, true) {
 		// Prime the cache immediately to eliminate initial cache misses
@@ -183,6 +183,8 @@ func (s *TabletThrottlerStrategy) Start() {
 		updateInterval := resolveCacheUpdateInterval(s.tabletConfig)
 		s.updateTicker = time.NewTicker(updateInterval)
 		go s.runCacheUpdater()
+
+		s.startSrvKeyspaceWatch()
 		log.Info("TabletThrottlerStrategy: started background throttle cache updater")
 	}
 }
@@ -200,20 +202,22 @@ func resolveCacheUpdateInterval(cfg *tabletenv.TabletConfig) time.Duration {
 // Stop is terminal: this instance must not be restarted after Stop returns.
 // The context and done channel are permanently canceled/closed. Strategy switches
 // in QueryThrottler always create a fresh instance via NewTabletThrottlerStrategy.
+//
+// Stop is safe to call when Start was never invoked: s.cancel() runs unconditionally
+// so any goroutine bound to s.ctx (now or added later) exits promptly, while the
+// ticker/done-wait cleanup only runs when the cache updater was actually started.
 func (s *TabletThrottlerStrategy) Stop() {
+	// Cancel the strategy context unconditionally so the SrvKeyspace watch
+	// goroutine (and any future spawn tied to s.ctx) exits even if Start was
+	// never called. cancel() is idempotent, so repeated Stop calls are safe.
+	s.cancel()
+	s.watchStarted.Store(false)
+
 	if s.running.CompareAndSwap(true, false) {
-		// Cancel the main context - this stops both the cache updater goroutine
-		// and the SrvKeyspace watch goroutine (via parent-child context propagation)
-		s.cancel()
-
-		// Reset the watch-started flag to allow restarting the watch if needed
-		s.watchStarted.Store(false)
-
 		if s.updateTicker != nil {
 			s.updateTicker.Stop()
 		}
 		<-s.done // Wait for cache updater to finish
-
 		log.Info("TabletThrottlerStrategy: stopped background throttle cache updater and watch")
 	}
 }

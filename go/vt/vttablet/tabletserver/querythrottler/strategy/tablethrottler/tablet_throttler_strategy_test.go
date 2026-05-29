@@ -477,7 +477,8 @@ func TestTabletThrottlerStrategy_HandleConfigUpdate_SuccessfulUpdate(t *testing.
 	require.NotNil(t, actualCfg.TabletRules["PRIMARY"])
 }
 
-// TestTabletThrottlerStrategy_StartSrvKeyspaceWatch tests the startSrvKeyspaceWatch method
+// TestTabletThrottlerStrategy_StartSrvKeyspaceWatch tests that Start() invokes the
+// SrvKeyspace watch only when the topology server, keyspace, and cell are all set.
 func TestTabletThrottlerStrategy_StartSrvKeyspaceWatch(t *testing.T) {
 	tests := []struct {
 		name               string
@@ -506,6 +507,11 @@ func TestTabletThrottlerStrategy_StartSrvKeyspaceWatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 			strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig(), createTestEnv(), tt.keyspace, tt.cell, tt.srvTopoServer)
+			t.Cleanup(strategy.Stop)
+
+			require.False(t, strategy.watchStarted.Load(), "constructor must not start the SrvKeyspace watch")
+
+			strategy.Start()
 
 			if tt.expectWatchStarted {
 				require.Eventually(t, func() bool {
@@ -632,4 +638,77 @@ func TestFakeThrottleClientWrapper_ThreadSafety(t *testing.T) {
 	checkResult, checkOk := client.ThrottleCheckOK(context.Background(), throttlerapp.QueryThrottlerName)
 	require.NotNil(t, checkResult)
 	require.Equal(t, finalOk, checkOk)
+}
+
+// watchTrackingSrvTopo wraps PassthroughSrvTopoServer to observe SrvKeyspace watch lifecycle.
+// WatchSrvKeyspace records each invocation, blocks until ctx is cancelled, and signals exit.
+type watchTrackingSrvTopo struct {
+	*srvtopotest.PassthroughSrvTopoServer
+	watchInvocations atomic.Int64
+	watchExited      chan struct{}
+	exitOnce         sync.Once
+}
+
+func newWatchTrackingSrvTopo() *watchTrackingSrvTopo {
+	return &watchTrackingSrvTopo{
+		PassthroughSrvTopoServer: srvtopotest.NewPassthroughSrvTopoServer(),
+		watchExited:              make(chan struct{}),
+	}
+}
+
+func (s *watchTrackingSrvTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	s.watchInvocations.Add(1)
+	<-ctx.Done()
+	s.exitOnce.Do(func() { close(s.watchExited) })
+}
+
+// TestTabletThrottlerStrategy_ConstructorIsSideEffectFree verifies that NewTabletThrottlerStrategy
+// does not spawn the SrvKeyspace watch goroutine. The watch must only be started by Start(), so a
+// strategy that is constructed but never installed (e.g. because a concurrent Shutdown raced with
+// QueryThrottler.HandleConfigUpdate) cannot leak its watch goroutine.
+func TestTabletThrottlerStrategy_ConstructorIsSideEffectFree(t *testing.T) {
+	topoSrv := newWatchTrackingSrvTopo()
+	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+
+	strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig(), createTestEnv(), "test-ks", "test-cell", topoSrv)
+	t.Cleanup(strategy.Stop)
+
+	require.Never(t, func() bool {
+		return topoSrv.watchInvocations.Load() > 0
+	}, 100*time.Millisecond, 10*time.Millisecond, "constructor must not spawn the SrvKeyspace watch")
+	require.False(t, strategy.watchStarted.Load(), "watchStarted flag must not be set before Start()")
+}
+
+// TestTabletThrottlerStrategy_StopWithoutStartCancelsContext verifies that Stop() is safe
+// to call on a strategy that was never Started. The strategy context must be cancelled
+// so any background work tied to it would exit immediately, even if Start() is never called.
+func TestTabletThrottlerStrategy_StopWithoutStartCancelsContext(t *testing.T) {
+	topoSrv := newWatchTrackingSrvTopo()
+	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+
+	strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig(), createTestEnv(), "test-ks", "test-cell", topoSrv)
+
+	strategy.Stop()
+	require.Error(t, strategy.ctx.Err(), "Stop() must cancel the strategy context even when Start() was never called")
+}
+
+// TestTabletThrottlerStrategy_WatchLifecycle verifies the full happy-path watch lifecycle:
+// Start() spawns the SrvKeyspace watch and Stop() lets the watch goroutine exit promptly.
+func TestTabletThrottlerStrategy_WatchLifecycle(t *testing.T) {
+	topoSrv := newWatchTrackingSrvTopo()
+	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+
+	strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig(), createTestEnv(), "test-ks", "test-cell", topoSrv)
+
+	strategy.Start()
+	require.Eventually(t, func() bool {
+		return topoSrv.watchInvocations.Load() == 1
+	}, 1*time.Second, 10*time.Millisecond, "Start() must spawn the SrvKeyspace watch exactly once")
+
+	strategy.Stop()
+	select {
+	case <-topoSrv.watchExited:
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "SrvKeyspace watch goroutine did not exit after Stop()")
+	}
 }
