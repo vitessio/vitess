@@ -911,6 +911,8 @@ func TestValuesStatementUnion(t *testing.T) {
 		"select * from (select 1) a union values row(1)",
 		"values row(1) union select 2",
 		"values row(1) union values row(2)",
+		"select * from (values row(1) union select 2) as dt",
+		"select * from (values row(1) union values row(2)) as dt",
 	}
 
 	for _, query := range queries {

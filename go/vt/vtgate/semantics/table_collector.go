@@ -531,17 +531,17 @@ func (tc *tableCollector) addUnionDerivedTable(
 	columns sqlparser.Columns,
 	alias sqlparser.IdentifierCS,
 ) error {
-	firstSelect, err := sqlparser.GetFirstSelect(union)
-	if err != nil {
-		return err
-	}
-	tables := tc.scoper.wScope[firstSelect]
 	info, found := tc.unionInfo[union]
 	if !found {
 		return vterrors.VT13001("information about union is not available")
 	}
 
-	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
+	var tables []TableInfo
+	if firstSelect := firstSelectInTableStatement(union); firstSelect != nil {
+		tables = tc.scoper.wScope[firstSelect].tables
+	}
+
+	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables, tc.org, info.isAuthoritative, info.recursive, info.types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}
@@ -551,6 +551,22 @@ func (tc *tableCollector) addUnionDerivedTable(
 	tc.Tables = append(tc.Tables, tableInfo)
 	scope := tc.scoper.currentScope()
 	return scope.addTable(tableInfo)
+}
+
+func firstSelectInTableStatement(stmt sqlparser.TableStatement) *sqlparser.Select {
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		return stmt
+	case *sqlparser.Union:
+		if sel := firstSelectInTableStatement(stmt.Left); sel != nil {
+			return sel
+		}
+		return firstSelectInTableStatement(stmt.Right)
+	case *sqlparser.ValuesStatement:
+		return nil
+	default:
+		panic(vterrors.VT13001(fmt.Sprintf("unknown type for SelectStatement: %T", stmt)))
+	}
 }
 
 func (tc *tableCollector) addValuesDerivedTable(
