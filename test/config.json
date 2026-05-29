@@ -2297,14 +2297,15 @@
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vtorc/general"
       ],
-      "Args": [],
+      "Args": ["-tags", "e2etest"],
       "Command": [],
       "Manual": false,
       "Shard": "vtorc",
       "Tags": [],
       "Needs": [
         "memory-check"
-      ]
+      ],
+      "BuildTag": "e2etest"
     },
     "vtorc_readtopologyinstance": {
       "File": "unused.go",
