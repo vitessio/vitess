@@ -198,8 +198,7 @@ func (qb *queryBuilder) pushUnionInsideDerived() {
 			As:   sqlparser.NewIdentifierCS("dt"),
 		}},
 	}
-	firstSelect := getFirstSelect(selStmt)
-	sel.SetSelectExprs(unionSelects(firstSelect.GetColumns())...)
+	sel.SetSelectExprs(unionSelects(selStmt.GetColumns())...)
 	qb.stmt = sel
 }
 
@@ -219,8 +218,7 @@ func unionSelects(exprs []sqlparser.SelectExpr) []sqlparser.SelectExpr {
 
 func checkUnionColumnByName(column *sqlparser.ColName, sel sqlparser.TableStatement) {
 	colName := column.Name.String()
-	firstSelect := getFirstSelect(sel)
-	exprs := firstSelect.GetColumns()
+	exprs := sel.GetColumns()
 	offset := slices.IndexFunc(exprs, func(expr sqlparser.SelectExpr) bool {
 		switch ae := expr.(type) {
 		case *sqlparser.StarExpr:

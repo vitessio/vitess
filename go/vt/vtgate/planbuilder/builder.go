@@ -188,6 +188,12 @@ func createInstructionFor(ctx context.Context, query string, stmt sqlparser.Stat
 			return nil, err
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
+	case *sqlparser.ValuesStatement:
+		configuredPlanner, err := getConfiguredPlanner(vschema, stmt, query)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case sqlparser.DDLStatement:
 		return buildGeneralDDLPlan(ctx, query, stmt, reservedVars, vschema, cfg)
 	case *sqlparser.AlterMigration:

@@ -214,8 +214,7 @@ func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext
 func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) *QueryProjection {
 	qp := &QueryProjection{}
 
-	sel := getFirstSelect(union)
-	qp.addSelectExpressions(ctx, sel.GetColumns())
+	qp.addSelectExpressions(ctx, union.GetColumns())
 	qp.addOrderBy(ctx, union.OrderBy)
 
 	return qp
