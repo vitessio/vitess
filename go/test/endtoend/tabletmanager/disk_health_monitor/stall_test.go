@@ -33,6 +33,7 @@ import (
 func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 	require.NotNil(t, primaryTablet, "primary tablet not initialized in TestMain")
 	require.NotNil(t, fuseHelperCmd, "fuse helper not initialized in TestMain")
+	assertHelperAlive(t)
 
 	require.NoError(t,
 		primaryTablet.VttabletProcess.WaitForTabletStatusesForTimeout(
@@ -61,4 +62,22 @@ func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 			[]string{"SERVING"}, tabletStatusTimeout),
 		"primary tablet did not recover to SERVING after disk unstall",
 	)
+
+	// Catch the wrong-reason failure mode: if the helper crashed mid-test,
+	// mysqld I/O would surface EIO and the tablet might flip on its own. Fail
+	// loudly so we don't trust a green test that wasn't actually testing the
+	// monitor.
+	assertHelperAlive(t)
+}
+
+// assertHelperAlive fails the test immediately if the fuse_helper subprocess
+// has exited. helperDied is closed by the watcher in TestMain, so this is a
+// non-blocking, race-free check that any number of callers can perform.
+func assertHelperAlive(t *testing.T) {
+	t.Helper()
+	select {
+	case <-helperDied:
+		t.Fatalf("fuse_helper exited unexpectedly: %v", helperWaitErr)
+	default:
+	}
 }

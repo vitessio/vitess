@@ -89,17 +89,15 @@ func (g *gate) resume() {
 
 var ioGate = &gate{}
 
-// gatedNode wraps fs.LoopbackNode and routes the mutating operations
-// exercised by the disk health monitor's probe (os.Create → WriteString →
-// Sync → Close) through ioGate.wait(). Read-only operations remain
-// pass-through.
+// gatedNode wraps fs.LoopbackNode and routes mutating operations through
+// ioGate.wait(). Together with gatedFile (returned from Create/Open) this
+// covers the full surface vttablet's disk health monitor probe and mysqld
+// exercise during a stall:
 //
-// The monitor's probe path goes through one of:
+//	Node-level (gatedNode):   Create, Open, Setattr
+//	Handle-level (gatedFile): Write, Fsync
 //
-//	Lookup + Create                  (file doesn't exist yet)
-//	Lookup + Setattr(size=0) + Open  (file exists, O_TRUNC)
-//
-// Gating Create, Open, and Setattr covers both.
+// Read-only operations and metadata ops outside this set remain pass-through.
 type gatedNode struct {
 	fs.LoopbackNode
 }
@@ -110,17 +108,56 @@ func newGatedNode(rootData *fs.LoopbackRoot, _ *fs.Inode, _ string, _ *syscall.S
 
 func (n *gatedNode) Create(ctx context.Context, name string, flags, mode uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
 	ioGate.wait()
-	return n.LoopbackNode.Create(ctx, name, flags, mode, out)
+	inode, fh, fuseFlags, errno := n.LoopbackNode.Create(ctx, name, flags, mode, out)
+	return inode, wrapFileHandle(fh), fuseFlags, errno
 }
 
 func (n *gatedNode) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
 	ioGate.wait()
-	return n.LoopbackNode.Open(ctx, flags)
+	fh, fuseFlags, errno := n.LoopbackNode.Open(ctx, flags)
+	return wrapFileHandle(fh), fuseFlags, errno
 }
 
 func (n *gatedNode) Setattr(ctx context.Context, f fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
 	ioGate.wait()
+	// Setattr can be called with one of our wrapped handles; unwrap so
+	// LoopbackNode sees the *LoopbackFile it expects.
+	if gf, ok := f.(*gatedFile); ok {
+		f = gf.LoopbackFile
+	}
 	return n.LoopbackNode.Setattr(ctx, f, in, out)
+}
+
+// gatedFile wraps *fs.LoopbackFile and gates the mutating operations issued
+// against an already-open handle. Read/Lseek/Flush/Release/etc. are promoted
+// via embedding and pass through unchanged, so they remain available for
+// go-fuse's interface type assertions.
+type gatedFile struct {
+	*fs.LoopbackFile
+}
+
+// wrapFileHandle wraps a LoopbackFile in a gatedFile so its mutating
+// operations are gated. Non-LoopbackFile handles pass through unchanged —
+// shouldn't happen with a stock LoopbackRoot, but keeps the helper robust if
+// go-fuse ever returns a different concrete type.
+func wrapFileHandle(fh fs.FileHandle) fs.FileHandle {
+	if fh == nil {
+		return nil
+	}
+	if lf, ok := fh.(*fs.LoopbackFile); ok {
+		return &gatedFile{LoopbackFile: lf}
+	}
+	return fh
+}
+
+func (f *gatedFile) Write(ctx context.Context, data []byte, off int64) (uint32, syscall.Errno) {
+	ioGate.wait()
+	return f.LoopbackFile.Write(ctx, data, off)
+}
+
+func (f *gatedFile) Fsync(ctx context.Context, flags uint32) syscall.Errno {
+	ioGate.wait()
+	return f.LoopbackFile.Fsync(ctx, flags)
 }
 
 func main() {
@@ -165,8 +202,10 @@ func main() {
 		for s := range modeSig {
 			switch s {
 			case syscall.SIGUSR1:
+				// simulate a stalled filesystem/volume
 				ioGate.stall()
 			case syscall.SIGHUP:
+				// un-stall the filesystem/volume
 				ioGate.resume()
 			case syscall.SIGUSR2:
 				// Reserved for "disk full" mode; wired in a follow-up PR.

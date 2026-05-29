@@ -57,6 +57,12 @@ var (
 	fuseHelperCmd     *exec.Cmd
 	fuseHelperBacking string
 	fuseHelperMount   string
+
+	// helperDied is closed by a single watcher goroutine once the fuse_helper
+	// subprocess exits, so any number of readers can check liveness via a
+	// non-blocking select without racing for the Wait() result.
+	helperDied    chan struct{}
+	helperWaitErr error // set by the watcher before closing helperDied
 )
 
 func TestMain(m *testing.M) {
@@ -199,6 +205,11 @@ func startFuseHelper(bin string) error {
 	}
 
 	fuseHelperCmd = cmd
+	helperDied = make(chan struct{})
+	go func() {
+		helperWaitErr = cmd.Wait()
+		close(helperDied)
+	}()
 	log.Info("fuse_helper ready", slog.String("mount", fuseHelperMount), slog.Int("pid", cmd.Process.Pid))
 	return nil
 }
@@ -212,14 +223,12 @@ func stopFuseHelper() {
 	// in-flight ops wedged at unmount time.
 	_ = fuseHelperCmd.Process.Signal(syscall.SIGHUP)
 	_ = fuseHelperCmd.Process.Signal(syscall.SIGTERM)
-	done := make(chan error, 1)
-	go func() { done <- fuseHelperCmd.Wait() }()
 	select {
-	case <-done:
+	case <-helperDied:
 	case <-time.After(30 * time.Second):
 		errf("fuse_helper did not exit on SIGTERM, killing")
 		_ = fuseHelperCmd.Process.Kill()
-		<-done
+		<-helperDied
 	}
 	// Belt-and-suspenders: ensure the mount is gone before the temp dir is removed.
 	if err := exec.Command("fusermount", "-u", fuseHelperMount).Run(); err != nil {
