@@ -107,6 +107,14 @@ func run(m *testing.M) int {
 
 	clusterInstance = cluster.NewCluster(cell, hostname)
 	defer clusterInstance.Teardown()
+	// Safety net for panic-during-stall: SIGCONT the helper before cluster
+	// teardown runs, so mysqld isn't wedged on FUSE I/O while we try to stop
+	// it. Registered after Teardown so it fires first (LIFO).
+	defer func() {
+		if fuseHelperCmd != nil && fuseHelperCmd.Process != nil {
+			_ = fuseHelperCmd.Process.Signal(syscall.SIGCONT)
+		}
+	}()
 
 	// disk-write-dir points inside the FUSE mount so the monitor's probe
 	// writes are stalled in lockstep with mysqld's I/O when the helper is
