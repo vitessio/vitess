@@ -66,4 +66,7 @@ type MySQLConnection interface {
 	KillQuery(uint32) error
 	// KillConnection closes the connection and also stops any executing query on it.
 	KillConnection(context.Context, uint32) error
+	// SetQueryWasSlow stores whether the most recently completed statement
+	// should be marked as slow on the MySQL protocol connection.
+	SetQueryWasSlow(bool)
 }
