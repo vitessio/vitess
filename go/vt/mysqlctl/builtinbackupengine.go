@@ -97,9 +97,9 @@ var (
 	// When empty, the default OS temp dir is assumed.
 	builtinIncrementalRestorePath = ""
 
-	backupFileChunkThreshold int64                          // 0 means chunking is disabled
-	backupFileChunkSize      int64 = 1 * 1024 * 1024 * 1024 // 1 GiB
-	minBackupFileChunkSize   int64 = 4 * 1024 * 1024        // 4 MiB minimum to prevent the accidental allocation of a huge amount of files
+	backupFileChunkThreshold uint64                          // 0 means chunking is disabled
+	backupFileChunkSize      uint64 = 1 * 1024 * 1024 * 1024 // 1 GiB
+	minBackupFileChunkSize   uint64 = 4 * 1024 * 1024        // 4 MiB minimum to prevent the accidental allocation of a huge amount of files
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -224,8 +224,8 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.UintVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
-	fs.Int64Var(&backupFileChunkThreshold, "builtinbackup-file-chunk-threshold", backupFileChunkThreshold, "Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.")
-	fs.Int64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore.")
+	fs.Uint64Var(&backupFileChunkThreshold, "builtinbackup-file-chunk-threshold", backupFileChunkThreshold, "Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.")
+	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore.")
 }
 
 // fullPath returns the full path of the entry, based on its type.
@@ -689,8 +689,8 @@ func (be *BuiltinBackupEngine) backupFiles(
 
 		// Files larger than the threshold are split into chunks for parallel backup/restore.
 		// A threshold of 0 disables chunking entirely.
-		if backupFileChunkThreshold > 0 && fileSize > backupFileChunkThreshold {
-			fe.Chunks = computeFileChunks(i, fileSize, backupFileChunkSize)
+		if backupFileChunkThreshold > 0 && uint64(fileSize) > backupFileChunkThreshold {
+			fe.Chunks = computeFileChunks(i, fileSize, int64(backupFileChunkSize))
 			for j, chunk := range fe.Chunks {
 				workItems = append(workItems, backupWorkItem{feIndex: i, chunkIndex: j, name: chunk.StorageName})
 			}
@@ -804,6 +804,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 			if errBackupFile := be.backupFile(ctxCancel, params, bh, fe, wi.name, wi.chunkIndex); errBackupFile != nil {
 				bh.RecordError(wi.name, vterrors.Wrapf(errBackupFile, "failed to backup '%s'", wi.name))
 				if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errBackupFile) == vtrpcpb.Code_FAILED_PRECONDITION {
+					// This is the last attempt, and we have an error, we can cancel everything and fail fast.
 					cancel()
 				}
 			}
@@ -1379,6 +1380,16 @@ func createChunkedDestinations(fes []FileEntry, cnf *Mycnf, createdDir string) e
 	return nil
 }
 
+// restoreWorkItem represents a single unit of restore work: either a chunk of a
+// chunked file, or a whole non-chunked file.
+type restoreWorkItem struct {
+	fe         *FileEntry
+	chunk      *FileChunk // nil for non-chunked files
+	chunkIndex int        // -1 for non-chunked files
+	dest       *os.File   // shared dest for chunked files, nil for non-chunked
+	name       string     // storage name for error recording
+}
+
 func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) (finalErr error) {
 	// Capture the parent context before errgroup.WithContext replaces ctx with a
 	// child that is cancelled after g.Wait(). The deferred close of chunked
@@ -1397,13 +1408,13 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		for _, cd := range chunkedDests {
 			if err := closeWithRetry(cleanupCtx, params.Logger, cd.dest, cd.fe.Name); err != nil {
 				params.Logger.Errorf("Failed to close chunked destination file %s: %v", cd.fe.Name, err)
-				if finalErr == nil {
-					finalErr = vterrors.Wrapf(err, "failed to close chunked destination file %s", cd.fe.Name)
-				}
+				finalErr = errors.Join(finalErr, vterrors.Wrapf(err, "failed to close chunked destination file %s", cd.fe.Name))
 			}
 		}
 	}()
 
+	// Phase 1: Build work items and open chunked destinations.
+	var workItems []restoreWorkItem
 	var setupErr error
 	for i := range fes {
 		if fes[i].Name == "" {
@@ -1428,53 +1439,55 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 			chunkedDests = append(chunkedDests, chunkedDest{dest: dest, fe: fe})
 
 			for j := range fe.Chunks {
-				g.Go(func() error {
-					chunk := &fe.Chunks[j]
-
-					select {
-					// Skip work if the context has been cancelled (e.g. another goroutine failed).
-					case <-ctx.Done():
-						log.Error(fmt.Sprintf("Context canceled or timed out during %q chunk %d restore", fe.Name, j))
-						bh.RecordError(chunk.StorageName, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
-						return nil
-					default:
-					}
-
-					params.Logger.Infof("Restoring chunk %d of file %v (offset=%d, size=%d)", j, fe.Name, chunk.Offset, chunk.Size)
-					if err := be.restoreFileChunk(ctx, params, bh, chunk, bm, dest); err != nil {
-						bh.RecordError(chunk.StorageName, vterrors.Wrapf(err, "failed to restore chunk %d of %v", j, fe.Name))
-						if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
-							return err
-						}
-					}
-					return nil
+				workItems = append(workItems, restoreWorkItem{
+					fe:         fe,
+					chunk:      &fe.Chunks[j],
+					chunkIndex: j,
+					dest:       dest,
+					name:       fe.Chunks[j].StorageName,
 				})
 			}
 		} else {
-			// Non-chunked file: restore as before.
-			g.Go(func() error {
-				name := strconv.Itoa(i)
-
-				select {
-				// Skip work if the context has been cancelled (e.g. another goroutine failed).
-				case <-ctx.Done():
-					log.Error(fmt.Sprintf("Context canceled or timed out during %q restore", fe.Name))
-					bh.RecordError(name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
-					return nil
-				default:
-				}
-
-				params.Logger.Infof("Copying file %v: %v %s", name, fe.Name, retryToString(fe.RetryCount))
-				if errRestore := be.restoreFile(ctx, params, bh, fe, bm, name); errRestore != nil {
-					bh.RecordError(name, vterrors.Wrapf(errRestore, "failed to restore file %v to %v", name, fe.Name))
-					if fe.RetryCount >= maxRetriesPerFile || vterrors.Code(errRestore) == vtrpcpb.Code_FAILED_PRECONDITION {
-						return errRestore
-					}
-				}
-				return nil
+			workItems = append(workItems, restoreWorkItem{
+				fe:         fe,
+				chunkIndex: -1,
+				name:       strconv.Itoa(i),
 			})
 		}
 	}
+
+	// Phase 2: Dispatch all work items concurrently.
+	for _, wi := range workItems {
+		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				log.Error(fmt.Sprintf("Context canceled or timed out during %q restore", wi.fe.Name))
+				bh.RecordError(wi.name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
+				return nil
+			default:
+			}
+
+			var err error
+			if wi.chunk != nil {
+				params.Logger.Infof("Restoring chunk %d of file %v (offset=%d, size=%d)", wi.chunkIndex, wi.fe.Name, wi.chunk.Offset, wi.chunk.Size)
+				err = be.restoreFileChunk(ctx, params, bh, wi.chunk, bm, wi.dest)
+			} else {
+				params.Logger.Infof("Copying file %v: %v %s", wi.name, wi.fe.Name, retryToString(wi.fe.RetryCount))
+				err = be.restoreFile(ctx, params, bh, wi.fe, bm, wi.name)
+			}
+
+			if err != nil {
+				bh.RecordError(wi.name, vterrors.Wrapf(err, "failed to restore %v", wi.name))
+				if wi.fe.RetryCount >= maxRetriesPerFile || vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION {
+					// This is the last attempt, and we have an error, we can return an error,
+					// which will let errgroup know it can cancel the context.
+					return err
+				}
+			}
+			return nil
+		})
+	}
+
 	_ = g.Wait()
 	if setupErr != nil {
 		return setupErr

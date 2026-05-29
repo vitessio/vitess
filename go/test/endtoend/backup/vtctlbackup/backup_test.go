@@ -69,7 +69,7 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
 }
 
-// TestBuiltinBackupChunked uses a low chunk threshold (1MB) and chunk size (512KB) to force
+// TestBuiltinBackupChunked uses a low chunk threshold and chunk size (4MiB each) to force
 // InnoDB files (ibdata1, undo tablespaces) to be split into multiple chunks during backup.
 // This verifies that MySQL can start successfully and read back rows after a chunked restore.
 func TestBuiltinBackupChunked(t *testing.T) {
