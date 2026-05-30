@@ -133,4 +133,7 @@ service Query {
   // ReserveBeginStreamExecuteRaw starts a transaction and executes a streaming query
   // on a reserved connection, returning raw MySQL wire protocol bytes.
   rpc ReserveBeginStreamExecuteRaw(stream query.ReserveBeginStreamExecuteRawRequest) returns (stream query.ReserveBeginStreamExecuteRawResponse) {};
+
+  // BinlogDumpGTID streams raw binlog events from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
+  rpc BinlogDumpGTID(binlogdata.BinlogDumpGTIDRequest) returns (stream binlogdata.BinlogDumpResponse) {};
 }

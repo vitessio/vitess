@@ -60,11 +60,16 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
-    docker build \
+    args=(
       --platform=linux/amd64
-      -f docker/bootstrap/Dockerfile.$flavor \
-      -t $image \
-      --build-arg bootstrap_version=$version \
-      --build-arg image=$base_image \
-      .
+      -f "docker/bootstrap/Dockerfile.$flavor"
+      -t "$image"
+      --build-arg "bootstrap_version=$version"
+    )
+
+    if [ "$flavor" != "common" ]; then
+      args+=(--build-arg "image=$base_image")
+    fi
+
+    docker build "${args[@]}" .
 fi

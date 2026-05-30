@@ -46,7 +46,7 @@ import (
 func MakeTestFields(names, types string) []*querypb.Field {
 	n := split(names)
 	t := split(types)
-	var fields []*querypb.Field
+	fields := make([]*querypb.Field, 0, len(n))
 	for i := range n {
 		fields = append(fields, &querypb.Field{
 			Name: n[i],

@@ -73,9 +73,11 @@ type testKeyspace struct {
 }
 
 type queryResult struct {
-	query  string
-	result *querypb.QueryResult
-	err    error
+	query            string
+	result           *querypb.QueryResult
+	err              error
+	beforeReturnHook func(context.Context, *topodatapb.Tablet, string)
+	returnContextErr bool
 }
 
 func TestMain(m *testing.M) {
@@ -138,7 +140,7 @@ func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, 
 }
 
 func initSrvKeyspace(t *testing.T, topo *topo.Server, keyspace string, sources, targets, cells []string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{},
 	}
@@ -209,9 +211,9 @@ func (env *testEnv) addTablet(t *testing.T, ctx context.Context, id int, keyspac
 }
 
 func (env *testEnv) saveRoutingRules(t *testing.T, rules map[string][]string) {
-	err := topotools.SaveRoutingRules(context.Background(), env.ts, rules)
+	err := topotools.SaveRoutingRules(t.Context(), env.ts, rules)
 	require.NoError(t, err)
-	err = env.ts.RebuildSrvVSchema(context.Background(), nil)
+	err = env.ts.RebuildSrvVSchema(t.Context(), nil)
 	require.NoError(t, err)
 }
 
@@ -512,7 +514,16 @@ func (tmc *testTMClient) VReplicationExec(ctx context.Context, tablet *topodatap
 	if !matched {
 		return nil, fmt.Errorf("tablet %v:\nunexpected query\n%s\nwant:\n%s", tablet, query, qrs[0].query)
 	}
+	if qrs[0].beforeReturnHook != nil {
+		qrs[0].beforeReturnHook(ctx, tablet, query)
+	}
 	tmc.vrQueries[int(tablet.Alias.Uid)] = qrs[1:]
+	if qrs[0].returnContextErr && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if strings.Contains(query, "set message = 'FROZEN'") {
+		tmc.frozen.Store(true)
+	}
 	return qrs[0].result, qrs[0].err
 }
 
@@ -683,7 +694,7 @@ func (tmc *testTMClient) confirmVDiffRequests(t *testing.T) {
 	reqString := func([]*vdiffRequestResponse) string {
 		str := strings.Builder{}
 		for _, vrr := range tmc.vdiffRequests {
-			str.WriteString(fmt.Sprintf("\n%+v", vrr.req))
+			fmt.Fprintf(&str, "\n%+v", vrr.req)
 		}
 		return str.String()
 	}
@@ -924,7 +935,7 @@ func (tmc *testTMClient) GetMaxValueForSequences(ctx context.Context, tablet *to
 
 func checkRouting(t *testing.T, ws *Server, want map[string][]string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	got, err := topotools.GetRoutingRules(ctx, ws.ts)
 	require.NoError(t, err)
 	require.EqualValues(t, got, want, "routing rules don't match: got: %v, want: %v", got, want)
@@ -937,7 +948,7 @@ func checkRouting(t *testing.T, ws *Server, want map[string][]string) {
 
 func checkCellRouting(t *testing.T, ws *Server, cell string, want map[string][]string) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	svs, err := ws.ts.GetSrvVSchema(ctx, cell)
 	require.NoError(t, err)
 	got := make(map[string][]string, len(svs.RoutingRules.Rules))
@@ -947,9 +958,9 @@ func checkCellRouting(t *testing.T, ws *Server, cell string, want map[string][]s
 	require.EqualValues(t, got, want, "routing rules don't match for cell %s: got: %v, want: %v", cell, got, want)
 }
 
-func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want []string) {
+func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, wantDeniedTables []string, wantAllowReadsFromDeniedTables bool) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	require.NoError(t, err)
 	tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
@@ -957,12 +968,15 @@ func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, want [
 	if tc != nil {
 		got = tc.DeniedTables
 	}
-	require.EqualValues(t, got, want, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, want)
+	require.EqualValues(t, got, wantDeniedTables, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, wantDeniedTables)
+	if tc != nil {
+		require.Equal(t, tc.AllowReads, wantAllowReadsFromDeniedTables, "allow reads for %s/%s: got: %v, want: %v", keyspace, shard, tc.AllowReads, wantAllowReadsFromDeniedTables)
+	}
 }
 
 func checkServedTypes(t *testing.T, ts *topo.Server, keyspace, shard string, want int) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	require.NoError(t, err)
 	servedTypes, err := ts.GetShardServingTypes(ctx, si)
@@ -973,7 +987,7 @@ func checkServedTypes(t *testing.T, ts *topo.Server, keyspace, shard string, wan
 
 func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspace, shard, cell string, want int) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 	require.NoError(t, err)
 	count := 0
@@ -991,7 +1005,7 @@ outer:
 
 func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspace, shard string, want bool) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	require.NoError(t, err)
 	require.Equal(t, want, si.IsPrimaryServing, "primary serving for %s/%s: got: %v, want: %v", keyspace, shard, si.IsPrimaryServing, want)

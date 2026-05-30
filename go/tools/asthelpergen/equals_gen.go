@@ -176,7 +176,7 @@ func compareAllStructFields(strct *types.Struct, spi generatorSPI) jen.Code {
 		fieldA := jen.Id("a").Dot(field.Name())
 		fieldB := jen.Id("b").Dot(field.Name())
 		pred := compareValueType(field.Type(), fieldA, fieldB, true, spi)
-		if _, ok := field.Type().(*types.Basic); ok {
+		if _, ok := field.Type().Underlying().(*types.Basic); ok {
 			basicsPred = append(basicsPred, pred)
 			continue
 		}

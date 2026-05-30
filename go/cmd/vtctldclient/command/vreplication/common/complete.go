@@ -44,7 +44,7 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.MoveTablesCompleteRequest{
 		Workflow:             BaseOptions.Workflow,
 		TargetKeyspace:       BaseOptions.TargetKeyspace,
-		KeepData:             CompleteOptions.KeepData,
+		KeepData:             OptionalBoolFromFlag(cmd, "keep-data", CompleteOptions.KeepData),
 		KeepRoutingRules:     CompleteOptions.KeepRoutingRules,
 		RenameTables:         CompleteOptions.RenameTables,
 		DryRun:               CompleteOptions.DryRun,
@@ -63,16 +63,17 @@ func commandComplete(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		tout := bytes.Buffer{}
-		tout.WriteString(resp.Summary + "\n")
+		AppendWarnings(&tout, resp.Warnings)
+		tout.WriteString(resp.Summary)
 		if len(resp.DryRunResults) > 0 {
-			tout.WriteString("\n")
+			tout.WriteString("\n\n")
 			for _, r := range resp.DryRunResults {
 				tout.WriteString(r + "\n")
 			}
 		}
 		output = tout.Bytes()
 	}
-	fmt.Println(string(output))
+	fmt.Printf("%s\n", output)
 
 	return nil
 }

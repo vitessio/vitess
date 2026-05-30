@@ -292,9 +292,7 @@ func TestConsolidatorDelayedListener(t *testing.T) {
 		if worker == 3 {
 			require.Error(t, results.err)
 		} else {
-			if results.duration > 1*time.Second {
-				t.Fatalf("worker %d took too long (%v)", worker, results.duration)
-			}
+			require.LessOrEqualf(t, results.duration, 1*time.Second, "worker %d took too long (%v)", worker, results.duration)
 			require.Len(t, results.items, ct.streamItemCount)
 			require.NoError(t, results.err)
 		}

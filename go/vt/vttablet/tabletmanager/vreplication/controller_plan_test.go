@@ -17,9 +17,9 @@ limitations under the License.
 package vreplication
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -284,9 +284,7 @@ func TestControllerPlan(t *testing.T) {
 			if pl.delPostCopyAction != nil {
 				gotPlan.delPostCopyAction = pl.delPostCopyAction.Query
 			}
-			if !reflect.DeepEqual(gotPlan, tcase.plan) {
-				t.Errorf("getPlan(%v):\n%+v, want\n%+v", tcase.in, gotPlan, tcase.plan)
-			}
+			assert.Equalf(t, tcase.plan, gotPlan, "getPlan(%v):\n%+v, want\n%+v", tcase.in, gotPlan, tcase.plan)
 		})
 	}
 }

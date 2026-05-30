@@ -104,6 +104,10 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 
 // BuildFromStmt builds a plan based on the AST provided.
 func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, cfg dynamicconfig.DDL) (*engine.Plan, error) {
+	if err := checkDeniedSetVarHints(stmt, vschema); err != nil {
+		return nil, err
+	}
+
 	planResult, err := createInstructionFor(ctx, query, stmt, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
@@ -116,6 +120,22 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 		tablesUsed = planResult.tables
 	}
 	return engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed), nil
+}
+
+func checkDeniedSetVarHints(stmt sqlparser.Statement, vschema plancontext.VSchema) error {
+	if !vschema.HasDeniedSystemVariables() {
+		return nil
+	}
+	commented, ok := stmt.(sqlparser.Commented)
+	if !ok {
+		return nil
+	}
+	for _, name := range commented.GetParsedComments().GetMySQLSetVarNames() {
+		if vschema.IsSystemVariableDenied(name) {
+			return vterrors.VT12001("system setting: " + name)
+		}
+	}
+	return nil
 }
 
 func getConfiguredPlanner(vschema plancontext.VSchema, stmt sqlparser.Statement, query string) (stmtPlanner, error) {

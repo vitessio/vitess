@@ -43,7 +43,7 @@ var File_queryservice_proto protoreflect.FileDescriptor
 
 const file_queryservice_proto_rawDesc = "" +
 	"\n" +
-	"\x12queryservice.proto\x12\fqueryservice\x1a\vquery.proto\x1a\x10binlogdata.proto2\xc9\x15\n" +
+	"\x12queryservice.proto\x12\fqueryservice\x1a\vquery.proto\x1a\x10binlogdata.proto2\xa2\x16\n" +
 	"\x05Query\x12:\n" +
 	"\aExecute\x12\x15.query.ExecuteRequest\x1a\x16.query.ExecuteResponse\"\x00\x12N\n" +
 	"\rStreamExecute\x12\x1b.query.StreamExecuteRequest\x1a\x1c.query.StreamExecuteResponse\"\x000\x01\x124\n" +
@@ -78,7 +78,8 @@ const file_queryservice_proto_rawDesc = "" +
 	"\x10StreamExecuteRaw\x12\x1e.query.StreamExecuteRawRequest\x1a\x1f.query.StreamExecuteRawResponse\"\x00(\x010\x01\x12h\n" +
 	"\x15BeginStreamExecuteRaw\x12#.query.BeginStreamExecuteRawRequest\x1a$.query.BeginStreamExecuteRawResponse\"\x00(\x010\x01\x12n\n" +
 	"\x17ReserveStreamExecuteRaw\x12%.query.ReserveStreamExecuteRawRequest\x1a&.query.ReserveStreamExecuteRawResponse\"\x00(\x010\x01\x12}\n" +
-	"\x1cReserveBeginStreamExecuteRaw\x12*.query.ReserveBeginStreamExecuteRawRequest\x1a+.query.ReserveBeginStreamExecuteRawResponse\"\x00(\x010\x01B+Z)vitess.io/vitess/go/vt/proto/queryserviceb\x06proto3"
+	"\x1cReserveBeginStreamExecuteRaw\x12*.query.ReserveBeginStreamExecuteRawRequest\x1a+.query.ReserveBeginStreamExecuteRawResponse\"\x00(\x010\x01\x12W\n" +
+	"\x0eBinlogDumpGTID\x12!.binlogdata.BinlogDumpGTIDRequest\x1a\x1e.binlogdata.BinlogDumpResponse\"\x000\x01B+Z)vitess.io/vitess/go/vt/proto/queryserviceb\x06proto3"
 
 var file_queryservice_proto_goTypes = []any{
 	(*query.ExecuteRequest)(nil),                       // 0: query.ExecuteRequest
@@ -114,39 +115,41 @@ var file_queryservice_proto_goTypes = []any{
 	(*query.BeginStreamExecuteRawRequest)(nil),         // 30: query.BeginStreamExecuteRawRequest
 	(*query.ReserveStreamExecuteRawRequest)(nil),       // 31: query.ReserveStreamExecuteRawRequest
 	(*query.ReserveBeginStreamExecuteRawRequest)(nil),  // 32: query.ReserveBeginStreamExecuteRawRequest
-	(*query.ExecuteResponse)(nil),                      // 33: query.ExecuteResponse
-	(*query.StreamExecuteResponse)(nil),                // 34: query.StreamExecuteResponse
-	(*query.BeginResponse)(nil),                        // 35: query.BeginResponse
-	(*query.CommitResponse)(nil),                       // 36: query.CommitResponse
-	(*query.RollbackResponse)(nil),                     // 37: query.RollbackResponse
-	(*query.PrepareResponse)(nil),                      // 38: query.PrepareResponse
-	(*query.CommitPreparedResponse)(nil),               // 39: query.CommitPreparedResponse
-	(*query.RollbackPreparedResponse)(nil),             // 40: query.RollbackPreparedResponse
-	(*query.CreateTransactionResponse)(nil),            // 41: query.CreateTransactionResponse
-	(*query.StartCommitResponse)(nil),                  // 42: query.StartCommitResponse
-	(*query.SetRollbackResponse)(nil),                  // 43: query.SetRollbackResponse
-	(*query.ConcludeTransactionResponse)(nil),          // 44: query.ConcludeTransactionResponse
-	(*query.ReadTransactionResponse)(nil),              // 45: query.ReadTransactionResponse
-	(*query.UnresolvedTransactionsResponse)(nil),       // 46: query.UnresolvedTransactionsResponse
-	(*query.BeginExecuteResponse)(nil),                 // 47: query.BeginExecuteResponse
-	(*query.BeginStreamExecuteResponse)(nil),           // 48: query.BeginStreamExecuteResponse
-	(*query.MessageStreamResponse)(nil),                // 49: query.MessageStreamResponse
-	(*query.MessageAckResponse)(nil),                   // 50: query.MessageAckResponse
-	(*query.ReserveExecuteResponse)(nil),               // 51: query.ReserveExecuteResponse
-	(*query.ReserveBeginExecuteResponse)(nil),          // 52: query.ReserveBeginExecuteResponse
-	(*query.ReserveStreamExecuteResponse)(nil),         // 53: query.ReserveStreamExecuteResponse
-	(*query.ReserveBeginStreamExecuteResponse)(nil),    // 54: query.ReserveBeginStreamExecuteResponse
-	(*query.ReleaseResponse)(nil),                      // 55: query.ReleaseResponse
-	(*query.StreamHealthResponse)(nil),                 // 56: query.StreamHealthResponse
-	(*binlogdata.VStreamResponse)(nil),                 // 57: binlogdata.VStreamResponse
-	(*binlogdata.VStreamRowsResponse)(nil),             // 58: binlogdata.VStreamRowsResponse
-	(*binlogdata.VStreamTablesResponse)(nil),           // 59: binlogdata.VStreamTablesResponse
-	(*binlogdata.VStreamResultsResponse)(nil),          // 60: binlogdata.VStreamResultsResponse
-	(*query.GetSchemaResponse)(nil),                    // 61: query.GetSchemaResponse
-	(*query.StreamExecuteRawResponse)(nil),             // 62: query.StreamExecuteRawResponse
-	(*query.BeginStreamExecuteRawResponse)(nil),        // 63: query.BeginStreamExecuteRawResponse
-	(*query.ReserveStreamExecuteRawResponse)(nil),      // 64: query.ReserveStreamExecuteRawResponse
-	(*query.ReserveBeginStreamExecuteRawResponse)(nil), // 65: query.ReserveBeginStreamExecuteRawResponse
+	(*binlogdata.BinlogDumpGTIDRequest)(nil),           // 33: binlogdata.BinlogDumpGTIDRequest
+	(*query.ExecuteResponse)(nil),                      // 34: query.ExecuteResponse
+	(*query.StreamExecuteResponse)(nil),                // 35: query.StreamExecuteResponse
+	(*query.BeginResponse)(nil),                        // 36: query.BeginResponse
+	(*query.CommitResponse)(nil),                       // 37: query.CommitResponse
+	(*query.RollbackResponse)(nil),                     // 38: query.RollbackResponse
+	(*query.PrepareResponse)(nil),                      // 39: query.PrepareResponse
+	(*query.CommitPreparedResponse)(nil),               // 40: query.CommitPreparedResponse
+	(*query.RollbackPreparedResponse)(nil),             // 41: query.RollbackPreparedResponse
+	(*query.CreateTransactionResponse)(nil),            // 42: query.CreateTransactionResponse
+	(*query.StartCommitResponse)(nil),                  // 43: query.StartCommitResponse
+	(*query.SetRollbackResponse)(nil),                  // 44: query.SetRollbackResponse
+	(*query.ConcludeTransactionResponse)(nil),          // 45: query.ConcludeTransactionResponse
+	(*query.ReadTransactionResponse)(nil),              // 46: query.ReadTransactionResponse
+	(*query.UnresolvedTransactionsResponse)(nil),       // 47: query.UnresolvedTransactionsResponse
+	(*query.BeginExecuteResponse)(nil),                 // 48: query.BeginExecuteResponse
+	(*query.BeginStreamExecuteResponse)(nil),           // 49: query.BeginStreamExecuteResponse
+	(*query.MessageStreamResponse)(nil),                // 50: query.MessageStreamResponse
+	(*query.MessageAckResponse)(nil),                   // 51: query.MessageAckResponse
+	(*query.ReserveExecuteResponse)(nil),               // 52: query.ReserveExecuteResponse
+	(*query.ReserveBeginExecuteResponse)(nil),          // 53: query.ReserveBeginExecuteResponse
+	(*query.ReserveStreamExecuteResponse)(nil),         // 54: query.ReserveStreamExecuteResponse
+	(*query.ReserveBeginStreamExecuteResponse)(nil),    // 55: query.ReserveBeginStreamExecuteResponse
+	(*query.ReleaseResponse)(nil),                      // 56: query.ReleaseResponse
+	(*query.StreamHealthResponse)(nil),                 // 57: query.StreamHealthResponse
+	(*binlogdata.VStreamResponse)(nil),                 // 58: binlogdata.VStreamResponse
+	(*binlogdata.VStreamRowsResponse)(nil),             // 59: binlogdata.VStreamRowsResponse
+	(*binlogdata.VStreamTablesResponse)(nil),           // 60: binlogdata.VStreamTablesResponse
+	(*binlogdata.VStreamResultsResponse)(nil),          // 61: binlogdata.VStreamResultsResponse
+	(*query.GetSchemaResponse)(nil),                    // 62: query.GetSchemaResponse
+	(*query.StreamExecuteRawResponse)(nil),             // 63: query.StreamExecuteRawResponse
+	(*query.BeginStreamExecuteRawResponse)(nil),        // 64: query.BeginStreamExecuteRawResponse
+	(*query.ReserveStreamExecuteRawResponse)(nil),      // 65: query.ReserveStreamExecuteRawResponse
+	(*query.ReserveBeginStreamExecuteRawResponse)(nil), // 66: query.ReserveBeginStreamExecuteRawResponse
+	(*binlogdata.BinlogDumpResponse)(nil),              // 67: binlogdata.BinlogDumpResponse
 }
 var file_queryservice_proto_depIdxs = []int32{
 	0,  // 0: queryservice.Query.Execute:input_type -> query.ExecuteRequest
@@ -182,41 +185,43 @@ var file_queryservice_proto_depIdxs = []int32{
 	30, // 30: queryservice.Query.BeginStreamExecuteRaw:input_type -> query.BeginStreamExecuteRawRequest
 	31, // 31: queryservice.Query.ReserveStreamExecuteRaw:input_type -> query.ReserveStreamExecuteRawRequest
 	32, // 32: queryservice.Query.ReserveBeginStreamExecuteRaw:input_type -> query.ReserveBeginStreamExecuteRawRequest
-	33, // 33: queryservice.Query.Execute:output_type -> query.ExecuteResponse
-	34, // 34: queryservice.Query.StreamExecute:output_type -> query.StreamExecuteResponse
-	35, // 35: queryservice.Query.Begin:output_type -> query.BeginResponse
-	36, // 36: queryservice.Query.Commit:output_type -> query.CommitResponse
-	37, // 37: queryservice.Query.Rollback:output_type -> query.RollbackResponse
-	38, // 38: queryservice.Query.Prepare:output_type -> query.PrepareResponse
-	39, // 39: queryservice.Query.CommitPrepared:output_type -> query.CommitPreparedResponse
-	40, // 40: queryservice.Query.RollbackPrepared:output_type -> query.RollbackPreparedResponse
-	41, // 41: queryservice.Query.CreateTransaction:output_type -> query.CreateTransactionResponse
-	42, // 42: queryservice.Query.StartCommit:output_type -> query.StartCommitResponse
-	43, // 43: queryservice.Query.SetRollback:output_type -> query.SetRollbackResponse
-	44, // 44: queryservice.Query.ConcludeTransaction:output_type -> query.ConcludeTransactionResponse
-	45, // 45: queryservice.Query.ReadTransaction:output_type -> query.ReadTransactionResponse
-	46, // 46: queryservice.Query.UnresolvedTransactions:output_type -> query.UnresolvedTransactionsResponse
-	47, // 47: queryservice.Query.BeginExecute:output_type -> query.BeginExecuteResponse
-	48, // 48: queryservice.Query.BeginStreamExecute:output_type -> query.BeginStreamExecuteResponse
-	49, // 49: queryservice.Query.MessageStream:output_type -> query.MessageStreamResponse
-	50, // 50: queryservice.Query.MessageAck:output_type -> query.MessageAckResponse
-	51, // 51: queryservice.Query.ReserveExecute:output_type -> query.ReserveExecuteResponse
-	52, // 52: queryservice.Query.ReserveBeginExecute:output_type -> query.ReserveBeginExecuteResponse
-	53, // 53: queryservice.Query.ReserveStreamExecute:output_type -> query.ReserveStreamExecuteResponse
-	54, // 54: queryservice.Query.ReserveBeginStreamExecute:output_type -> query.ReserveBeginStreamExecuteResponse
-	55, // 55: queryservice.Query.Release:output_type -> query.ReleaseResponse
-	56, // 56: queryservice.Query.StreamHealth:output_type -> query.StreamHealthResponse
-	57, // 57: queryservice.Query.VStream:output_type -> binlogdata.VStreamResponse
-	58, // 58: queryservice.Query.VStreamRows:output_type -> binlogdata.VStreamRowsResponse
-	59, // 59: queryservice.Query.VStreamTables:output_type -> binlogdata.VStreamTablesResponse
-	60, // 60: queryservice.Query.VStreamResults:output_type -> binlogdata.VStreamResultsResponse
-	61, // 61: queryservice.Query.GetSchema:output_type -> query.GetSchemaResponse
-	62, // 62: queryservice.Query.StreamExecuteRaw:output_type -> query.StreamExecuteRawResponse
-	63, // 63: queryservice.Query.BeginStreamExecuteRaw:output_type -> query.BeginStreamExecuteRawResponse
-	64, // 64: queryservice.Query.ReserveStreamExecuteRaw:output_type -> query.ReserveStreamExecuteRawResponse
-	65, // 65: queryservice.Query.ReserveBeginStreamExecuteRaw:output_type -> query.ReserveBeginStreamExecuteRawResponse
-	33, // [33:66] is the sub-list for method output_type
-	0,  // [0:33] is the sub-list for method input_type
+	33, // 33: queryservice.Query.BinlogDumpGTID:input_type -> binlogdata.BinlogDumpGTIDRequest
+	34, // 34: queryservice.Query.Execute:output_type -> query.ExecuteResponse
+	35, // 35: queryservice.Query.StreamExecute:output_type -> query.StreamExecuteResponse
+	36, // 36: queryservice.Query.Begin:output_type -> query.BeginResponse
+	37, // 37: queryservice.Query.Commit:output_type -> query.CommitResponse
+	38, // 38: queryservice.Query.Rollback:output_type -> query.RollbackResponse
+	39, // 39: queryservice.Query.Prepare:output_type -> query.PrepareResponse
+	40, // 40: queryservice.Query.CommitPrepared:output_type -> query.CommitPreparedResponse
+	41, // 41: queryservice.Query.RollbackPrepared:output_type -> query.RollbackPreparedResponse
+	42, // 42: queryservice.Query.CreateTransaction:output_type -> query.CreateTransactionResponse
+	43, // 43: queryservice.Query.StartCommit:output_type -> query.StartCommitResponse
+	44, // 44: queryservice.Query.SetRollback:output_type -> query.SetRollbackResponse
+	45, // 45: queryservice.Query.ConcludeTransaction:output_type -> query.ConcludeTransactionResponse
+	46, // 46: queryservice.Query.ReadTransaction:output_type -> query.ReadTransactionResponse
+	47, // 47: queryservice.Query.UnresolvedTransactions:output_type -> query.UnresolvedTransactionsResponse
+	48, // 48: queryservice.Query.BeginExecute:output_type -> query.BeginExecuteResponse
+	49, // 49: queryservice.Query.BeginStreamExecute:output_type -> query.BeginStreamExecuteResponse
+	50, // 50: queryservice.Query.MessageStream:output_type -> query.MessageStreamResponse
+	51, // 51: queryservice.Query.MessageAck:output_type -> query.MessageAckResponse
+	52, // 52: queryservice.Query.ReserveExecute:output_type -> query.ReserveExecuteResponse
+	53, // 53: queryservice.Query.ReserveBeginExecute:output_type -> query.ReserveBeginExecuteResponse
+	54, // 54: queryservice.Query.ReserveStreamExecute:output_type -> query.ReserveStreamExecuteResponse
+	55, // 55: queryservice.Query.ReserveBeginStreamExecute:output_type -> query.ReserveBeginStreamExecuteResponse
+	56, // 56: queryservice.Query.Release:output_type -> query.ReleaseResponse
+	57, // 57: queryservice.Query.StreamHealth:output_type -> query.StreamHealthResponse
+	58, // 58: queryservice.Query.VStream:output_type -> binlogdata.VStreamResponse
+	59, // 59: queryservice.Query.VStreamRows:output_type -> binlogdata.VStreamRowsResponse
+	60, // 60: queryservice.Query.VStreamTables:output_type -> binlogdata.VStreamTablesResponse
+	61, // 61: queryservice.Query.VStreamResults:output_type -> binlogdata.VStreamResultsResponse
+	62, // 62: queryservice.Query.GetSchema:output_type -> query.GetSchemaResponse
+	63, // 63: queryservice.Query.StreamExecuteRaw:output_type -> query.StreamExecuteRawResponse
+	64, // 64: queryservice.Query.BeginStreamExecuteRaw:output_type -> query.BeginStreamExecuteRawResponse
+	65, // 65: queryservice.Query.ReserveStreamExecuteRaw:output_type -> query.ReserveStreamExecuteRawResponse
+	66, // 66: queryservice.Query.ReserveBeginStreamExecuteRaw:output_type -> query.ReserveBeginStreamExecuteRawResponse
+	67, // 67: queryservice.Query.BinlogDumpGTID:output_type -> binlogdata.BinlogDumpResponse
+	34, // [34:68] is the sub-list for method output_type
+	0,  // [0:34] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

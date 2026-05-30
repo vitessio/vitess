@@ -19,6 +19,8 @@ package vschemaacl
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -27,41 +29,25 @@ func TestVschemaAcl(t *testing.T) {
 	yellowUser := querypb.VTGateCallerID{Username: "yellowUser"}
 
 	// By default no users are allowed in
-	if Authorized(&redUser) {
-		t.Errorf("user should not be authorized")
-	}
-	if Authorized(&yellowUser) {
-		t.Errorf("user should not be authorized")
-	}
+	assert.False(t, Authorized(&redUser), "user should not be authorized")
+	assert.False(t, Authorized(&yellowUser), "user should not be authorized")
 
 	// Test wildcard
 	AuthorizedDDLUsers.Set(NewAuthorizedDDLUsers("%"))
 
-	if !Authorized(&redUser) {
-		t.Errorf("user should be authorized")
-	}
-	if !Authorized(&yellowUser) {
-		t.Errorf("user should be authorized")
-	}
+	assert.True(t, Authorized(&redUser), "user should be authorized")
+	assert.True(t, Authorized(&yellowUser), "user should be authorized")
 
 	// Test user list
 	AuthorizedDDLUsers.Set(NewAuthorizedDDLUsers("oneUser, twoUser, redUser, blueUser"))
 
-	if !Authorized(&redUser) {
-		t.Errorf("user should be authorized")
-	}
-	if Authorized(&yellowUser) {
-		t.Errorf("user should not be authorized")
-	}
+	assert.True(t, Authorized(&redUser), "user should be authorized")
+	assert.False(t, Authorized(&yellowUser), "user should not be authorized")
 
 	// Revert to baseline state for other tests
 	AuthorizedDDLUsers.Set(NewAuthorizedDDLUsers(""))
 
 	// By default no users are allowed in
-	if Authorized(&redUser) {
-		t.Errorf("user should not be authorized")
-	}
-	if Authorized(&yellowUser) {
-		t.Errorf("user should not be authorized")
-	}
+	assert.False(t, Authorized(&redUser), "user should not be authorized")
+	assert.False(t, Authorized(&yellowUser), "user should not be authorized")
 }

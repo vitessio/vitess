@@ -60,7 +60,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
+	reparenttestutil.SetKeyspaceDurability(t.Context(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	oldPrimary.FakeMysqlDaemon.Replicating = false
 	oldPrimary.FakeMysqlDaemon.SetPrimaryPositionLocked(replication.Position{
@@ -198,7 +198,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 // TestEmergencyReparentShardPrimaryElectNotBest tries to emergency reparent
 // to a host that is not the latest in replication position.
 func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 
 	delay := discovery.GetTabletPickerRetryDelay()
@@ -214,7 +214,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	moreAdvancedReplica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
+	reparenttestutil.SetKeyspaceDurability(t.Context(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.Replicating = true

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { useEffect, useState } from 'react';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import style from './CreateSchemaMigration.module.scss';
 import { useApplySchema, useClusters, useKeyspaces } from '../../../hooks/api';
@@ -65,7 +65,7 @@ const CALLER_ID_HELP_TEXT =
 export const CreateSchemaMigration = () => {
     useDocumentTitle('Create Schema Migration Request');
 
-    const history = useHistory();
+    const navigate = useNavigate();
 
     const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
 
@@ -94,7 +94,7 @@ export const CreateSchemaMigration = () => {
             onSuccess: () => {
                 success(`Successfully created schema migration request.`, { autoClose: 1600 });
 
-                history.push({
+                navigate({
                     pathname: `/migrations`,
                     search: `?keyspace=${formData.keyspace}&cluster=${formData.clusterID}`,
                 });
@@ -106,12 +106,12 @@ export const CreateSchemaMigration = () => {
     );
 
     let selectedCluster = null;
-    if (!!formData.clusterID) {
+    if (formData.clusterID) {
         selectedCluster = clusters.find((c) => c.id === formData.clusterID);
     }
 
     let selectedKeyspace = null;
-    if (!!formData.keyspace) {
+    if (formData.keyspace) {
         selectedKeyspace = keyspaces.find((ks) => ks.keyspace?.name === formData.keyspace);
     }
 

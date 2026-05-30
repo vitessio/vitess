@@ -30,22 +30,22 @@ func TestRPCPool(t *testing.T) {
 
 	pool := NewRPCPool(1, time.Millisecond*100, nil)
 
-	err := pool.Acquire(context.Background())
+	err := pool.Acquire(t.Context())
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*5)
 	err = pool.Acquire(ctx)
 	cancel()
 	assert.Error(t, err)
 
 	pool.Release()
-	err = pool.Acquire(context.Background())
+	err = pool.Acquire(t.Context())
 	require.NoError(t, err)
 
 	t.Run("context timeout exceeded", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*50)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*50)
 		defer cancel()
 
 		err := pool.Acquire(ctx)
@@ -61,7 +61,7 @@ func TestRPCPool(t *testing.T) {
 	t.Run("pool timeout exceeded", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*500)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*500)
 		defer cancel()
 
 		err := pool.Acquire(ctx)

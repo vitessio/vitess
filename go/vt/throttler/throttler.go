@@ -174,7 +174,7 @@ func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount
 		return nil, err
 	}
 
-	var modules []Module
+	modules := make([]Module, 0, 2)
 	modules = append(modules, maxRateModule)
 	modules = append(modules, maxReplicationLagModule)
 

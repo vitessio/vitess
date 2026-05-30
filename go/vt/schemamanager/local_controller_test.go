@@ -17,7 +17,6 @@ limitations under the License.
 package schemamanager
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path"
@@ -32,7 +31,7 @@ import (
 func TestLocalControllerNoSchemaChanges(t *testing.T) {
 	schemaChangeDir := t.TempDir()
 	controller := NewLocalController(schemaChangeDir)
-	ctx := context.Background()
+	ctx := t.Context()
 	err := controller.Open(ctx)
 	require.NoError(t, err)
 
@@ -44,7 +43,7 @@ func TestLocalControllerNoSchemaChanges(t *testing.T) {
 
 func TestLocalControllerOpen(t *testing.T) {
 	controller := NewLocalController("")
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := controller.Open(ctx)
 	require.ErrorContains(t, err, "no such file or directory", "Open should fail, no such dir")
@@ -99,7 +98,7 @@ func TestLocalControllerSchemaChange(t *testing.T) {
 	file.Close()
 
 	controller := NewLocalController(schemaChangeDir)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err = controller.Open(ctx)
 	require.NoError(t, err)

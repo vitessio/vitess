@@ -19,7 +19,7 @@ func TestTTest(t *testing.T) {
 			!aeq(want.T, got.T) || !aeq(want.DoF, got.DoF) ||
 			want.AltHypothesis != got.AltHypothesis ||
 			!aeq(want.P, got.P) {
-			t.Errorf("want %+v, got %+v", want, got)
+			assert.Failf(t, "ttest mismatch", "want %+v, got %+v", want, got)
 		}
 	}
 	check3 := func(test func(alt LocationHypothesis) (*TTestResult, error), n1, n2 int, t, dof float64, pless, pdiff, pgreater float64) {

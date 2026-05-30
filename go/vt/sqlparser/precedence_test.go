@@ -57,14 +57,11 @@ func TestAndOrPrecedence(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		tree, err := parser.Parse(tcase.input)
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			continue
 		}
 		expr := readable(tree.(*Select).Where.Expr)
-		if expr != tcase.output {
-			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, expr, "Parse: \n%s, want: \n%s", expr, tcase.output)
 	}
 }
 
@@ -82,14 +79,11 @@ func TestPlusStarPrecedence(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		tree, err := parser.Parse(tcase.input)
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			continue
 		}
 		expr := readable(tree.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr)
-		if expr != tcase.output {
-			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, expr, "Parse: \n%s, want: \n%s", expr, tcase.output)
 	}
 }
 
@@ -110,14 +104,11 @@ func TestIsPrecedence(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		tree, err := parser.Parse(tcase.input)
-		if err != nil {
-			t.Error(err)
+		if !assert.NoError(t, err) {
 			continue
 		}
 		expr := readable(tree.(*Select).Where.Expr)
-		if expr != tcase.output {
-			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, expr, "Parse: \n%s, want: \n%s", expr, tcase.output)
 	}
 }
 

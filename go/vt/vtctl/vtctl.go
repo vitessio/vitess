@@ -2193,7 +2193,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 						msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp, 0).Format(time.ANSIC))
 					}
 				}
-				sSb2177.WriteString(fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg))
+				fmt.Fprintf(&sSb2177, "id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg)
 			}
 			sSb2175.WriteString(sSb2177.String())
 		}
@@ -2369,9 +2369,9 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				if progress.SourceTableSize > 0 {
 					tableSizePct = 100.0 * progress.TargetTableSize / progress.SourceTableSize
 				}
-				sSb2360.WriteString(fmt.Sprintf("%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
+				fmt.Fprintf(&sSb2360, "%s: rows copied %d/%d (%d%%), size copied %d/%d (%d%%)\n",
 					table, progress.TargetRowCount, progress.SourceRowCount, rowCountPct,
-					progress.TargetTableSize, progress.SourceTableSize, tableSizePct))
+					progress.TargetTableSize, progress.SourceTableSize, tableSizePct)
 			}
 			s += sSb2360.String()
 			wr.Logger().Printf("\n%s\n", s)
@@ -4101,14 +4101,13 @@ func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.
 		Charset: collations.CollationBinaryID,
 		Flags:   uint32(querypb.MySqlFlag_BINARY_FLAG),
 	}}
-	var row2 []sqltypes.Value
 	for tabletAlias, result := range results {
 		if qr.Fields == nil {
 			qr.Fields = append(qr.Fields, defaultFields...)
 			qr.Fields = append(qr.Fields, result.Fields...)
 		}
 		for _, row := range result.Rows {
-			row2 = nil
+			row2 := make([]sqltypes.Value, 0, len(row)+1)
 			row2 = append(row2, sqltypes.NewVarBinary(tabletAlias))
 			row2 = append(row2, row...)
 			qr.Rows = append(qr.Rows, row2)

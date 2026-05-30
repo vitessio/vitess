@@ -20,6 +20,8 @@ import (
 	"expvar"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCounterDuration(t *testing.T) {
@@ -31,22 +33,12 @@ func TestCounterDuration(t *testing.T) {
 		gotv = v.(*CounterDuration)
 	})
 	v := NewCounterDuration("CounterDuration", "help")
-	if gotname != "CounterDuration" {
-		t.Errorf("want CounterDuration, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	if v.Get() != 0 {
-		t.Errorf("want 0, got %v", v.Get())
-	}
+	assert.Equal(t, "CounterDuration", gotname)
+	assert.Same(t, v, gotv)
+	assert.EqualValues(t, 0, v.Get())
 	v.Add(time.Duration(1))
-	if v.Get() != 1 {
-		t.Errorf("want 1, got %v", v.Get())
-	}
-	if v.String() != "1" {
-		t.Errorf("want 1, got %v", v.Get())
-	}
+	assert.EqualValues(t, 1, v.Get())
+	assert.Equal(t, "1", v.String())
 }
 
 func TestCounterDurationFunc(t *testing.T) {
@@ -61,15 +53,9 @@ func TestCounterDurationFunc(t *testing.T) {
 	v := NewCounterDurationFunc("CounterDurationFunc", "help", func() time.Duration {
 		return time.Duration(1)
 	})
-	if gotname != "CounterDurationFunc" {
-		t.Errorf("want CounterDurationFunc, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	if v.String() != "1" {
-		t.Errorf("want 1, got %v", v.String())
-	}
+	assert.Equal(t, "CounterDurationFunc", gotname)
+	assert.Same(t, v, gotv)
+	assert.Equal(t, "1", v.String())
 }
 
 func TestGaugeDuration(t *testing.T) {
@@ -81,23 +67,13 @@ func TestGaugeDuration(t *testing.T) {
 		gotv = v.(*GaugeDuration)
 	})
 	v := NewGaugeDuration("GaugeDuration", "help")
-	if gotname != "GaugeDuration" {
-		t.Errorf("want GaugeDuration, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "GaugeDuration", gotname)
+	assert.Same(t, v, gotv)
 	v.Set(time.Duration(5))
-	if v.Get() != 5 {
-		t.Errorf("want 5, got %v", v.Get())
-	}
+	assert.EqualValues(t, 5, v.Get())
 	v.Add(time.Duration(1))
-	if v.Get() != 6 {
-		t.Errorf("want 6, got %v", v.Get())
-	}
-	if v.String() != "6" {
-		t.Errorf("want 6, got %v", v.Get())
-	}
+	assert.EqualValues(t, 6, v.Get())
+	assert.Equal(t, "6", v.String())
 }
 
 func TestGaugeDurationFunc(t *testing.T) {
@@ -113,13 +89,7 @@ func TestGaugeDurationFunc(t *testing.T) {
 		return time.Duration(1)
 	})
 
-	if gotname != "GaugeDurationFunc" {
-		t.Errorf("want GaugeDurationFunc, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
-	if v.String() != "1" {
-		t.Errorf("want 1, got %v", v.String())
-	}
+	assert.Equal(t, "GaugeDurationFunc", gotname)
+	assert.Same(t, v, gotv)
+	assert.Equal(t, "1", v.String())
 }

@@ -20,6 +20,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func sleepBeforeCpuSample() {
@@ -27,21 +29,13 @@ func sleepBeforeCpuSample() {
 }
 
 func validateCpu(t *testing.T, cpu float64, err error) {
-	if err != nil {
-		t.Errorf("Error reading CPU: %v, value %.10f", err, cpu)
-	}
-	if cpu <= 0 || cpu > float64(runtime.NumCPU()) {
-		t.Errorf("CPU value out of range %5.f", cpu)
-	}
+	assert.NoErrorf(t, err, "Error reading CPU: %v, value %.10f", err, cpu)
+	assert.Truef(t, cpu > 0 && cpu <= float64(runtime.NumCPU()), "CPU value out of range %5.f", cpu)
 }
 
 func validateMem(t *testing.T, mem float64, err error) {
-	if err != nil {
-		t.Errorf("Error reading memory: %v, value %.10f", err, mem)
-	}
-	if mem <= 0 || mem > 1 {
-		t.Errorf("Mem value out of range %5.f", mem)
-	}
+	assert.NoErrorf(t, err, "Error reading memory: %v, value %.10f", err, mem)
+	assert.Truef(t, mem > 0 && mem <= 1, "Mem value out of range %5.f", mem)
 }
 
 func TestGetCpuUsageMetrics(t *testing.T) {

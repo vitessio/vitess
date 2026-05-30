@@ -1,6 +1,6 @@
 version: "2"
 run:
-  go: "1.25"
+  go: "1.26"
 linters:
   default: none
   enable:
@@ -14,6 +14,7 @@ linters:
     - modernize
     - nolintlint
     - nosprintfhostport
+    - prealloc
     - perfsprint
     - sqlclosecheck
     - staticcheck
@@ -43,10 +44,9 @@ linters:
           list-mode: lax
           files:
             - "**/go/vt/sqlparser/**"
-            - "!**/go/vt/sqlparser/goyacc/**"
           deny:
             - pkg: github.com/spf13/pflag
-              desc: "sqlparser package should not depend on pflag except in goyacc subpackage - this component should be usable as a library with explicit configuration, not global flags"
+              desc: "sqlparser package should not depend on pflag - this component should be usable as a library with explicit configuration, not global flags"
             - pkg: vitess.io/vitess/go/vt/servenv
               desc: "sqlparser should not depend on servenv - this component should be usable as a library without server infrastructure dependencies"
         schemadiff_package_restrictions:
@@ -124,6 +124,19 @@ linters:
       - legacy
       - std-error-handling
     rules:
+      # prealloc is being enabled incrementally, package-by-package.
+      # These exclusions will be removed as packages are fixed.
+      # Unfortunately golangci-lint's regex is quite limited, so
+      # we must construct this big regex match for now.
+      - linters:
+          - prealloc
+        path: _test\.go$
+      - linters:
+          - prealloc
+        path: ^go/(pools|test|tools)/
+      - linters:
+          - prealloc
+        path: ^go/vt/(sqlparser|vtgate|vttablet|wrangler)/
       - linters:
           - errcheck
         path: ^go/vt/proto/
@@ -163,9 +176,6 @@ linters:
       - linters:
           - errcheck
         path: ^go/vt/sqlparser/(ast_format|ast_format_fast).go
-      - linters:
-          - errcheck
-        path: ^go/vt/sqlparser/goyacc
       - linters:
           - errcheck
         path: ^go/vt/throttler/.*_test.go

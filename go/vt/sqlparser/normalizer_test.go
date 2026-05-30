@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"fmt"
 	"math/rand/v2"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -556,9 +555,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 func TestGetBindVars(t *testing.T) {
 	parser := NewTestParser()
 	stmt, err := parser.Parse("select * from t where :v1 = :v2 and :v2 = :v3 and :v4 in ::v5")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	got := getBindvars(stmt)
 	want := map[string]struct{}{
 		"v1": {},
@@ -567,9 +564,7 @@ func TestGetBindVars(t *testing.T) {
 		"v4": {},
 		"v5": {},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetBindVars: %v, want: %v", got, want)
-	}
+	assert.Equalf(t, want, got, "GetBindVars")
 }
 
 type testCaseSetVar struct {
@@ -769,8 +764,8 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
 		expected: "SELECT * FROM tbl WHERE id IN (SELECT id FROM user GROUP BY id)",
 	}, {
-		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
-		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual, user)",
+		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM `dual`, user)",
+		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM `dual`, `user`)",
 	}, {
 		in:       "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",
 		expected: "SELECT * FROM tbl WHERE id IN (SELECT 1 FROM dual limit 1)",

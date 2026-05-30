@@ -207,6 +207,11 @@ func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.T
 	return nil, errors.New("NYI")
 }
 
+// BinlogDumpGTID streams raw binlog events.
+func (conn *FakeVTGateConn) BinlogDumpGTID(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias, binlogFilename string, binlogPosition uint64, gtidSet string, flags uint32) (vtgateconn.BinlogDumpGTIDReader, error) {
+	return nil, errors.New("NYI")
+}
+
 // Close please see vtgateconn.Impl.Close
 func (conn *FakeVTGateConn) Close() {
 }

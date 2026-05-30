@@ -99,6 +99,8 @@ type QueryClient interface {
 	// ReserveBeginStreamExecuteRaw starts a transaction and executes a streaming query
 	// on a reserved connection, returning raw MySQL wire protocol bytes.
 	ReserveBeginStreamExecuteRaw(ctx context.Context, opts ...grpc.CallOption) (Query_ReserveBeginStreamExecuteRawClient, error)
+	// BinlogDumpGTID streams raw binlog events from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
+	BinlogDumpGTID(ctx context.Context, in *binlogdata.BinlogDumpGTIDRequest, opts ...grpc.CallOption) (Query_BinlogDumpGTIDClient, error)
 }
 
 type queryClient struct {
@@ -747,6 +749,38 @@ func (x *queryReserveBeginStreamExecuteRawClient) Recv() (*query.ReserveBeginStr
 	return m, nil
 }
 
+func (c *queryClient) BinlogDumpGTID(ctx context.Context, in *binlogdata.BinlogDumpGTIDRequest, opts ...grpc.CallOption) (Query_BinlogDumpGTIDClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[15], "/queryservice.Query/BinlogDumpGTID", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &queryBinlogDumpGTIDClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Query_BinlogDumpGTIDClient interface {
+	Recv() (*binlogdata.BinlogDumpResponse, error)
+	grpc.ClientStream
+}
+
+type queryBinlogDumpGTIDClient struct {
+	grpc.ClientStream
+}
+
+func (x *queryBinlogDumpGTIDClient) Recv() (*binlogdata.BinlogDumpResponse, error) {
+	m := new(binlogdata.BinlogDumpResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility
@@ -826,6 +860,8 @@ type QueryServer interface {
 	// ReserveBeginStreamExecuteRaw starts a transaction and executes a streaming query
 	// on a reserved connection, returning raw MySQL wire protocol bytes.
 	ReserveBeginStreamExecuteRaw(Query_ReserveBeginStreamExecuteRawServer) error
+	// BinlogDumpGTID streams raw binlog events from MySQL using COM_BINLOG_DUMP_GTID (GTID-based).
+	BinlogDumpGTID(*binlogdata.BinlogDumpGTIDRequest, Query_BinlogDumpGTIDServer) error
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -931,6 +967,9 @@ func (UnimplementedQueryServer) ReserveStreamExecuteRaw(Query_ReserveStreamExecu
 }
 func (UnimplementedQueryServer) ReserveBeginStreamExecuteRaw(Query_ReserveBeginStreamExecuteRawServer) error {
 	return status.Errorf(codes.Unimplemented, "method ReserveBeginStreamExecuteRaw not implemented")
+}
+func (UnimplementedQueryServer) BinlogDumpGTID(*binlogdata.BinlogDumpGTIDRequest, Query_BinlogDumpGTIDServer) error {
+	return status.Errorf(codes.Unimplemented, "method BinlogDumpGTID not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 
@@ -1604,6 +1643,27 @@ func (x *queryReserveBeginStreamExecuteRawServer) Recv() (*query.ReserveBeginStr
 	return m, nil
 }
 
+func _Query_BinlogDumpGTID_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(binlogdata.BinlogDumpGTIDRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QueryServer).BinlogDumpGTID(m, &queryBinlogDumpGTIDServer{stream})
+}
+
+type Query_BinlogDumpGTIDServer interface {
+	Send(*binlogdata.BinlogDumpResponse) error
+	grpc.ServerStream
+}
+
+type queryBinlogDumpGTIDServer struct {
+	grpc.ServerStream
+}
+
+func (x *queryBinlogDumpGTIDServer) Send(m *binlogdata.BinlogDumpResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1763,6 +1823,11 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _Query_ReserveBeginStreamExecuteRaw_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "BinlogDumpGTID",
+			Handler:       _Query_BinlogDumpGTID_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "queryservice.proto",
