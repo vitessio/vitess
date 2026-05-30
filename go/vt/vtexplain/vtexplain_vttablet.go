@@ -437,7 +437,7 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 		spec := ddl.GetTableSpec()
 		if spec != nil {
 			for _, option := range spec.Options {
-				if option.Name == "comment" && string(option.Value.Val) == "vitess_sequence" {
+				if strings.EqualFold(option.Name, "comment") && string(option.Value.Val) == "vitess_sequence" {
 					options = "vitess_sequence"
 				}
 			}
