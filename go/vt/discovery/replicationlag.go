@@ -72,7 +72,8 @@ func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Bool("legacy-replication-lag-algorithm", legacyReplicationLagAlgorithm.Default(), "(DEPRECATED) Use the legacy algorithm when selecting vttablets for serving.")
 	_ = fs.MarkDeprecated("legacy-replication-lag-algorithm", "this flag is a no-op and will be removed in v26")
 
-	viperutil.BindFlags(fs,
+	viperutil.BindFlags(
+		fs,
 		lowReplicationLag,
 		highReplicationLagMinServing,
 		minNumTablets,
@@ -180,4 +181,3 @@ type tabletLagSnapshotList []tabletLagSnapshot
 func (a tabletLagSnapshotList) Len() int           { return len(a) }
 func (a tabletLagSnapshotList) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a tabletLagSnapshotList) Less(i, j int) bool { return a[i].replag < a[j].replag }
-
