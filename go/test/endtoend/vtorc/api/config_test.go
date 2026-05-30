@@ -71,17 +71,6 @@ func TestDynamicConfigs(t *testing.T) {
 		waitForConfig(t, vtorc, `"prevent-cross-cell-failover": true`)
 	})
 
-	t.Run("SnapshotTopologyInterval", func(t *testing.T) {
-		// Get configuration and verify the output.
-		waitForConfig(t, vtorc, `"snapshot-topology-interval": 0`)
-		// Update configuration and verify the output.
-		vtorc.Config.SnapshotTopologyInterval = "10h"
-		err := vtorc.RewriteConfiguration()
-		assert.NoError(t, err)
-		// Wait until the config has been updated and seen.
-		waitForConfig(t, vtorc, `"snapshot-topology-interval": "10h"`)
-	})
-
 	t.Run("ReasonableReplicationLag", func(t *testing.T) {
 		// Get configuration and verify the output.
 		waitForConfig(t, vtorc, `"reasonable-replication-lag": 10000000000`)

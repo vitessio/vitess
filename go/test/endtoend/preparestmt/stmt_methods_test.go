@@ -307,7 +307,7 @@ type columns struct {
 
 func (c *columns) ToString() string {
 	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("|%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s|",
+	fmt.Fprintf(&buf, "|%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s|",
 		c.columnName,
 		c.dataType,
 		c.fullDataType,
@@ -318,7 +318,7 @@ func (c *columns) ToString() string {
 		getStringToString(c.columnDefault),
 		c.isNullable,
 		c.extra,
-		c.tableName))
+		c.tableName)
 	return buf.String()
 }
 
