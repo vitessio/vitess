@@ -140,14 +140,6 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, _ queryservice.Session
 
 // StreamExecute executes the query and streams results back through callback.
 func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	// All streaming clients should follow the code pattern below.
-	// The first part of the function starts the stream while holding
-	// a lock on conn.mu. The second part receives the data and calls
-	// callback.
-	// A new cancelable context is needed because there's currently
-	// no direct API to end a stream from the client side. If callback
-	// returns an error, we return from the function. The deferred
-	// cancel will then cause the stream to be terminated.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -194,6 +186,260 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, _ queryservice.S
 			}
 			return err
 		}
+	}
+}
+
+// StreamExecuteRaw executes a streaming query and returns raw MySQL wire protocol bytes.
+func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stream, err := func() (queryservicepb.Query_StreamExecuteRawClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+		stream, err := conn.c.StreamExecuteRaw(ctx)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	req := &querypb.StreamExecuteRawRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Query: &querypb.BoundQuery{
+			Sql:           query,
+			BindVariables: bindVars,
+		},
+		Options:       options,
+		TransactionId: transactionID,
+		ReservedId:    reservedID,
+	}
+	if err := stream.Send(req); err != nil {
+		return tabletconn.ErrorFromGRPC(err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		return tabletconn.ErrorFromGRPC(err)
+	}
+
+	resp := querypb.StreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
+	for {
+		if err := stream.RecvMsg(resp); err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		if resp.Done {
+			if resp.Error != nil {
+				return tabletconn.ErrorFromVTRPC(resp.Error)
+			}
+			return nil
+		}
+		if err := callback(resp.Raw); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		resp.ResetVT()
+	}
+}
+
+func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.TransactionState, err error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stream, err := func() (queryservicepb.Query_BeginStreamExecuteRawClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+		stream, err := conn.c.BeginStreamExecuteRaw(ctx)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return state, err
+	}
+
+	req := &querypb.BeginStreamExecuteRawRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		PreQueries:        preQueries,
+		Query: &querypb.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVars,
+		},
+		ReservedId: reservedID,
+		Options:    options,
+	}
+	if err := stream.Send(req); err != nil {
+		return state, tabletconn.ErrorFromGRPC(err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		return state, tabletconn.ErrorFromGRPC(err)
+	}
+
+	resp := querypb.BeginStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
+	for {
+		if err := stream.RecvMsg(resp); err != nil {
+			return state, tabletconn.ErrorFromGRPC(err)
+		}
+		if resp.Done {
+			state.TransactionID = resp.GetTransactionId()
+			state.TabletAlias = resp.GetTabletAlias()
+			state.SessionStateChanges = resp.GetSessionStateChanges()
+			if resp.Error != nil {
+				return state, tabletconn.ErrorFromVTRPC(resp.Error)
+			}
+			return state, nil
+		}
+		if err := callback(resp.Raw); err != nil {
+			if err == io.EOF {
+				return state, nil
+			}
+			return state, err
+		}
+		resp.ResetVT()
+	}
+}
+
+func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.ReservedState, err error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stream, err := func() (queryservicepb.Query_ReserveStreamExecuteRawClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+		stream, err := conn.c.ReserveStreamExecuteRaw(ctx)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return state, err
+	}
+
+	req := &querypb.ReserveStreamExecuteRawRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Options:           options,
+		PreQueries:        preQueries,
+		Query: &querypb.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVars,
+		},
+		TransactionId: transactionID,
+	}
+	if err := stream.Send(req); err != nil {
+		return state, tabletconn.ErrorFromGRPC(err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		return state, tabletconn.ErrorFromGRPC(err)
+	}
+
+	resp := querypb.ReserveStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
+	for {
+		if err := stream.RecvMsg(resp); err != nil {
+			return state, tabletconn.ErrorFromGRPC(err)
+		}
+		if resp.Done {
+			state.ReservedID = resp.GetReservedId()
+			state.TabletAlias = resp.GetTabletAlias()
+			if resp.Error != nil {
+				return state, tabletconn.ErrorFromVTRPC(resp.Error)
+			}
+			return state, nil
+		}
+		if err := callback(resp.Raw); err != nil {
+			if err == io.EOF {
+				return state, nil
+			}
+			return state, err
+		}
+		resp.ResetVT()
+	}
+}
+
+func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.ReservedTransactionState, err error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stream, err := func() (queryservicepb.Query_ReserveBeginStreamExecuteRawClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+		stream, err := conn.c.ReserveBeginStreamExecuteRaw(ctx)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return state, err
+	}
+
+	req := &querypb.ReserveBeginStreamExecuteRawRequest{
+		Target:            target,
+		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+		Options:           options,
+		PreQueries:        preQueries,
+		PostBeginQueries:  postBeginQueries,
+		Query: &querypb.BoundQuery{
+			Sql:           sql,
+			BindVariables: bindVars,
+		},
+	}
+	if err := stream.Send(req); err != nil {
+		return state, tabletconn.ErrorFromGRPC(err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		return state, tabletconn.ErrorFromGRPC(err)
+	}
+
+	resp := querypb.ReserveBeginStreamExecuteRawResponseFromVTPool()
+	defer resp.ReturnToVTPool()
+	for {
+		if err := stream.RecvMsg(resp); err != nil {
+			return state, tabletconn.ErrorFromGRPC(err)
+		}
+		if resp.Done {
+			state.TransactionID = resp.GetTransactionId()
+			state.ReservedID = resp.GetReservedId()
+			state.TabletAlias = resp.GetTabletAlias()
+			state.SessionStateChanges = resp.GetSessionStateChanges()
+			if resp.Error != nil {
+				return state, tabletconn.ErrorFromVTRPC(resp.Error)
+			}
+			return state, nil
+		}
+		if err := callback(resp.Raw); err != nil {
+			if err == io.EOF {
+				return state, nil
+			}
+			return state, err
+		}
+		resp.ResetVT()
 	}
 }
 
@@ -497,7 +743,6 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, _ queryservice.Se
 
 // BeginStreamExecute starts a transaction and runs an Execute.
 func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.TransactionState, err error) {
-	// Please see comments in StreamExecute to see how this works.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -556,7 +801,6 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, _ queryserv
 			return state, tabletconn.ErrorFromVTRPC(ser.Error)
 		}
 
-		// The last stream receive will not have a result, so callback will not be called for it.
 		if ser.Result == nil {
 			return state, nil
 		}
@@ -947,7 +1191,6 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, _ queryser
 
 // ReserveBeginStreamExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedTransactionState, err error) {
-	// Please see comments in StreamExecute to see how this works.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	conn.mu.RLock()
@@ -1009,7 +1252,6 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, _ qu
 			return state, tabletconn.ErrorFromVTRPC(ser.Error)
 		}
 
-		// The last stream receive will not have a result, so callback will not be called for it.
 		if ser.Result == nil {
 			return state, nil
 		}
@@ -1061,7 +1303,6 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, _ queryservice.
 
 // ReserveStreamExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, _ queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (state queryservice.ReservedState, err error) {
-	// Please see comments in StreamExecute to see how this works.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	conn.mu.RLock()
@@ -1117,7 +1358,6 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, _ queryse
 			return state, tabletconn.ErrorFromVTRPC(ser.Error)
 		}
 
-		// The last stream receive will not have a result, so callback will not be called for it.
 		if ser.Result == nil {
 			return state, nil
 		}
@@ -1207,7 +1447,6 @@ func (conn *gRPCQueryClient) Close(ctx context.Context) error {
 	if conn.cc == nil {
 		return nil
 	}
-
 	cc := conn.cc
 	conn.cc = nil
 	return cc.Close()

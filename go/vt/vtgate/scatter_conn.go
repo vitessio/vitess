@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -452,48 +453,99 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				}
 			}
 
-			switch info.actionNeeded {
-			case nothing:
-				err = qs.StreamExecute(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, observedCallback)
-				if err != nil {
-					retryRequest(func() {
-						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
-						info.actionNeeded = reserve
-						var state queryservice.ReservedState
-						state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, observedCallback)
-						reservedID = state.ReservedID
-						alias = state.TabletAlias
-					})
+			if experimentalRawStreaming {
+				// Route streaming queries through the *Raw RPCs, which forward raw
+				// MySQL wire-protocol bytes that rawStreamCallback decodes back into
+				// sqltypes.Result via a RawResultParser.
+				rawCb := rawStreamCallback(observedCallback)
+
+				switch info.actionNeeded {
+				case nothing:
+					err = qs.StreamExecuteRaw(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, nil, rawCb)
+					if err != nil {
+						retryRequest(func() {
+							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+							info.actionNeeded = reserve
+							var state queryservice.ReservedState
+							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStreamCallback(observedCallback))
+							reservedID = state.ReservedID
+							alias = state.TabletAlias
+						})
+					}
+				case begin:
+					var state queryservice.TransactionState
+					state, err = qs.BeginStreamExecuteRaw(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, nil, rawCb)
+					transactionID = state.TransactionID
+					alias = state.TabletAlias
+					if err != nil {
+						retryRequest(func() {
+							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+							info.actionNeeded = reserveBegin
+							var state queryservice.ReservedTransactionState
+							state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(observedCallback))
+							transactionID = state.TransactionID
+							reservedID = state.ReservedID
+							alias = state.TabletAlias
+						})
+					}
+				case reserve:
+					var state queryservice.ReservedState
+					state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, nil, rawCb)
+					reservedID = state.ReservedID
+					alias = state.TabletAlias
+				case reserveBegin:
+					var state queryservice.ReservedTransactionState
+					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(observedCallback))
+					transactionID = state.TransactionID
+					reservedID = state.ReservedID
+					alias = state.TabletAlias
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 				}
-			case begin:
-				var state queryservice.TransactionState
-				state, err = qs.BeginStreamExecute(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, observedCallback)
-				transactionID = state.TransactionID
-				alias = state.TabletAlias
-				if err != nil {
-					retryRequest(func() {
-						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
-						info.actionNeeded = reserveBegin
-						var state queryservice.ReservedTransactionState
-						state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
-						transactionID = state.TransactionID
-						reservedID = state.ReservedID
-						alias = state.TabletAlias
-					})
+			} else {
+				switch info.actionNeeded {
+				case nothing:
+					err = qs.StreamExecute(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, observedCallback)
+					if err != nil {
+						retryRequest(func() {
+							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+							info.actionNeeded = reserve
+							var state queryservice.ReservedState
+							state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, observedCallback)
+							reservedID = state.ReservedID
+							alias = state.TabletAlias
+						})
+					}
+				case begin:
+					var state queryservice.TransactionState
+					state, err = qs.BeginStreamExecute(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, observedCallback)
+					transactionID = state.TransactionID
+					alias = state.TabletAlias
+					if err != nil {
+						retryRequest(func() {
+							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+							info.actionNeeded = reserveBegin
+							var state queryservice.ReservedTransactionState
+							state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
+							transactionID = state.TransactionID
+							reservedID = state.ReservedID
+							alias = state.TabletAlias
+						})
+					}
+				case reserve:
+					var state queryservice.ReservedState
+					state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, observedCallback)
+					reservedID = state.ReservedID
+					alias = state.TabletAlias
+				case reserveBegin:
+					var state queryservice.ReservedTransactionState
+					state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
+					transactionID = state.TransactionID
+					reservedID = state.ReservedID
+					alias = state.TabletAlias
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 				}
-			case reserve:
-				var state queryservice.ReservedState
-				state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, observedCallback)
-				reservedID = state.ReservedID
-				alias = state.TabletAlias
-			case reserveBegin:
-				var state queryservice.ReservedTransactionState
-				state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
-				transactionID = state.TransactionID
-				reservedID = state.ReservedID
-				alias = state.TabletAlias
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
 			session.Log(primitive, rs.Target, rs.Gateway, query, info.actionNeeded == begin || info.actionNeeded == reserveBegin, bindVars[i])
 
@@ -507,6 +559,19 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		},
 	)
 	return allErrors.GetErrors()
+}
+
+// rawStreamCallback wraps a Result callback with a RawResultParser that
+// converts raw MySQL wire protocol bytes into sqltypes.Result objects.
+// Each invocation returns a new callback with its own parser instance.
+func rawStreamCallback(callback func(*sqltypes.Result) error) func(raw []byte) error {
+	var parser *mysql.RawResultParser
+	return func(raw []byte) error {
+		if parser == nil {
+			parser = mysql.NewRawResultParser()
+		}
+		return parser.Feed(raw, callback)
+	}
 }
 
 // timeTracker is a convenience wrapper used by MessageStream
