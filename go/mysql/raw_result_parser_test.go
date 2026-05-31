@@ -453,3 +453,82 @@ func TestEncodeResultToMySQLPackets_TerminalOK(t *testing.T) {
 	}
 	assert.True(t, found, "should find a result with InsertIDChanged=true")
 }
+
+// TestRawResultParser_RetainedRowsSurviveBufferReuse feeds two chunks through a
+// single reused backing array — exactly what the gRPC client (pooled resp.Raw)
+// and the in-process vtcombo path (reused tablet send buffer) do — while
+// retaining the parsed rows past each callback. If the parser returned
+// Values aliasing the caller's buffer, the first row would read the bytes the
+// second Feed overwrote.
+func TestRawResultParser_RetainedRowsSurviveBufferReuse(t *testing.T) {
+	parser := NewRawResultParser()
+
+	var retained [][]sqltypes.Value
+	cb := func(r *sqltypes.Result) error {
+		retained = append(retained, r.Rows...) // retain rows past the callback
+		return nil
+	}
+
+	// Chunk 1: column count + column def + first row (no terminal yet).
+	var c1 []byte
+	c1 = append(c1, makePacket(1, []byte{1})...)
+	c1 = append(c1, makeColumnDefPacket(2, "name", 0x0f, 0)...)
+	c1 = append(c1, makeRowPacket(3, "alice")...)
+
+	// Chunk 2: a longer second row + terminal EOF.
+	var c2 []byte
+	c2 = append(c2, makeRowPacket(4, "bob-is-a-deliberately-longer-value")...)
+	c2 = append(c2, makeEOFPacket(5)...)
+
+	shared := make([]byte, max(len(c1), len(c2)))
+
+	copy(shared, c1)
+	require.NoError(t, parser.Feed(shared[:len(c1)], cb))
+
+	// Reuse the backing array for chunk 2 (overwrite chunk 1's bytes), then
+	// scribble any tail so stale aliases cannot accidentally read valid data.
+	for i := range shared {
+		shared[i] = 0xff
+	}
+	copy(shared, c2)
+	require.NoError(t, parser.Feed(shared[:len(c2)], cb))
+
+	require.Len(t, retained, 2)
+	require.Equal(t, "alice", retained[0][0].ToString())
+	require.Equal(t, "bob-is-a-deliberately-longer-value", retained[1][0].ToString())
+	require.Equal(t, "name", parser.fields[0].Name)
+}
+
+// TestRawResultParser_LeftoverSurvivesBufferReuse exercises the cross-chunk
+// leftover path: a packet is split across two Feed calls that reuse the same
+// backing array. The retained row that spans the split must remain intact.
+func TestRawResultParser_LeftoverSurvivesBufferReuse(t *testing.T) {
+	parser := NewRawResultParser()
+
+	var retained [][]sqltypes.Value
+	cb := func(r *sqltypes.Result) error {
+		retained = append(retained, r.Rows...)
+		return nil
+	}
+
+	var full []byte
+	full = append(full, makePacket(1, []byte{1})...)
+	full = append(full, makeColumnDefPacket(2, "val", 0x0f, 0)...)
+	full = append(full, makeRowPacket(3, "spanning-row-value")...)
+	full = append(full, makeEOFPacket(4)...)
+
+	split := len(full) - 6 // cut inside the row/terminal region
+
+	shared := make([]byte, len(full))
+	copy(shared, full[:split])
+	require.NoError(t, parser.Feed(shared[:split], cb)) // leaves leftover in p.buf
+
+	for i := range split {
+		shared[i] = 0xff // reuse/overwrite the chunk-1 region
+	}
+	copy(shared, full[split:])
+	require.NoError(t, parser.Feed(shared[:len(full)-split], cb))
+
+	require.Len(t, retained, 1)
+	require.Equal(t, "spanning-row-value", retained[0][0].ToString())
+}
