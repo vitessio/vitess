@@ -339,6 +339,10 @@ func (q *query) StreamExecuteRaw(stream queryservicepb.Query_StreamExecuteRawSer
 			resp.Raw = raw
 			return stream.Send(resp)
 		})
+		// Drop the reference to the pooled streaming buffer before returning the
+		// message to the vtproto pool; otherwise the pooled response would pin a
+		// 256KB buffer (which also lives in rawStreamBufPool).
+		resp.Raw = nil
 		resp.ReturnToVTPool()
 
 		// Always send terminal message with done=true (errors are in-band)
@@ -585,6 +589,10 @@ func (q *query) BeginStreamExecuteRaw(stream queryservicepb.Query_BeginStreamExe
 			resp.Raw = raw
 			return stream.Send(resp)
 		})
+		// Drop the reference to the pooled streaming buffer before returning the
+		// message to the vtproto pool; otherwise the pooled response would pin a
+		// 256KB buffer (which also lives in rawStreamBufPool).
+		resp.Raw = nil
 		resp.ReturnToVTPool()
 
 		if err := stream.Send(&querypb.BeginStreamExecuteRawResponse{
@@ -626,6 +634,10 @@ func (q *query) ReserveStreamExecuteRaw(stream queryservicepb.Query_ReserveStrea
 			resp.Raw = raw
 			return stream.Send(resp)
 		})
+		// Drop the reference to the pooled streaming buffer before returning the
+		// message to the vtproto pool; otherwise the pooled response would pin a
+		// 256KB buffer (which also lives in rawStreamBufPool).
+		resp.Raw = nil
 		resp.ReturnToVTPool()
 
 		if err := stream.Send(&querypb.ReserveStreamExecuteRawResponse{
@@ -666,6 +678,10 @@ func (q *query) ReserveBeginStreamExecuteRaw(stream queryservicepb.Query_Reserve
 			resp.Raw = raw
 			return stream.Send(resp)
 		})
+		// Drop the reference to the pooled streaming buffer before returning the
+		// message to the vtproto pool; otherwise the pooled response would pin a
+		// 256KB buffer (which also lives in rawStreamBufPool).
+		resp.Raw = nil
 		resp.ReturnToVTPool()
 
 		if err := stream.Send(&querypb.ReserveBeginStreamExecuteRawResponse{
