@@ -432,6 +432,68 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	})
 }
 
+// StreamRaw mirrors Stream but forwards raw MySQL wire-protocol bytes through
+// callback instead of parsed Results. It performs the same table-ACL checks,
+// query throttling, connection acquisition (including system settings) and
+// QueryList registration as Stream. buf is the reusable read buffer.
+//
+// Unlike Stream it does not use the stream consolidator (which shares parsed
+// *sqltypes.Result across clients), does not fetch last_insert_id on the tablet
+// (the terminal OK packet is forwarded and decoded by the client-side parser),
+// and does not rewrite the keyspace in field metadata (there is no parsed
+// result to rewrite on the tablet).
+func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error) error {
+	qre.logStats.PlanType = qre.plan.PlanID.String()
+
+	defer func(start time.Time) {
+		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
+		qre.tsv.stats.QueryTimingsByTabletType.Record(qre.targetTabletType.String(), start)
+		qre.recordUserQuery("StreamRaw", int64(time.Since(start)))
+	}(time.Now())
+
+	if err := qre.checkPermissions(); err != nil {
+		return err
+	}
+
+	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
+		return reqThrottledErr
+	}
+
+	if qre.plan.PlanID == p.PlanSelectStream && qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
+		qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
+	}
+
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return err
+	}
+
+	// if we have a transaction id, let's use the txPool for this query
+	var conn *connpool.PooledConn
+	if qre.connID != 0 {
+		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for raw streaming query")
+		if err != nil {
+			return err
+		}
+		defer txConn.Unlock()
+		if qre.setting != nil {
+			if _, err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+		}
+		conn = txConn.UnderlyingDBConn()
+	} else {
+		dbConn, err := qre.getStreamConn()
+		if err != nil {
+			return err
+		}
+		defer dbConn.Recycle()
+		conn = dbConn
+	}
+
+	return qre.execStreamRawSQL(conn, qre.connID != 0, sql, buf, callback)
+}
+
 // MessageStream streams messages from a message table.
 func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	qre.logStats.OriginalSQL = qre.query
@@ -1277,6 +1339,47 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 	return nil
 }
 
+// registerQueryDetail registers a QueryDetail for conn in the appropriate
+// QueryList so long-running stream queries are force-terminated during a
+// serving-type change (unserveCommon>terminateAllQueries in state_manager.go).
+// Transactional/reserved connections go to statefulql, OLAP connections to
+// olapql; registering everything in olapql previously left stateful streams
+// uncleaned. It returns a function that removes the registration.
+func (qre *QueryExecutor) registerQueryDetail(conn *connpool.Conn, isTransaction bool) (func(), error) {
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	ql := qre.tsv.olapql
+	if isTransaction {
+		ql = qre.tsv.statefulql
+	}
+	if err := ql.Add(qd); err != nil {
+		return nil, err
+	}
+	return func() { ql.Remove(qd) }, nil
+}
+
+// execStreamRawSQL is the raw-bytes sibling of execStreamSQL. It registers the
+// query in the QueryList (for terminability) and forwards raw MySQL wire
+// protocol packets through streamQueryResultPackets instead of parsing them
+// into sqltypes.Result.
+func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransaction bool, sql string, buf []byte, callback func(raw []byte) error) error {
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamRawSQL")
+	defer span.Finish()
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
+
+	start := time.Now()
+	defer qre.logStats.AddRewrittenSQL(sql, start)
+
+	remove, err := qre.registerQueryDetail(conn.Conn, isTransaction)
+	if err != nil {
+		return err
+	}
+	defer remove()
+
+	return conn.Conn.StreamRaw(ctx, sql, func(mysqlConn *mysql.Conn) error {
+		return qre.tsv.streamQueryResultPackets(ctx, mysqlConn, buf, callback)
+	})
+}
+
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	defer span.Finish()
@@ -1285,16 +1388,15 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	start := time.Now()
 	defer qre.logStats.AddRewrittenSQL(sql, start)
 
-	// Add query detail object into QueryExecutor TableServer list w.r.t if it is a transactional or not. Previously we were adding it
-	// to olapql list regardless but that resulted in problems, where long-running stream queries which can be stateful (or transactional)
-	// weren't getting cleaned up during unserveCommon>terminateAllQueries in state_manager.go.
-	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
-	// once their grace period is over.
-	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)
-
 	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
 		return err
 	}
+
+	remove, err := qre.registerQueryDetail(conn.Conn, isTransaction)
+	if err != nil {
+		return err
+	}
+	defer remove()
 
 	lastInsertIDSet := false
 	cb := func(result *sqltypes.Result) error {
@@ -1304,20 +1406,9 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 		return callback(result)
 	}
 
-	var err error
 	if isTransaction {
-		err = qre.tsv.statefulql.Add(qd)
-		if err != nil {
-			return err
-		}
-		defer qre.tsv.statefulql.Remove(qd)
 		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	} else {
-		err = qre.tsv.olapql.Add(qd)
-		if err != nil {
-			return err
-		}
-		defer qre.tsv.olapql.Remove(qd)
 		err = conn.Conn.Stream(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
 

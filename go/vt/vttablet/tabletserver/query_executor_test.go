@@ -1100,6 +1100,47 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 }
 
+// TestQueryExecutorStreamRawTableAclNoPermission verifies the raw streaming
+// path enforces table ACLs (checkPermissions) like the parsed path: a user
+// without read permission is denied before any connection is acquired.
+func TestQueryExecutorStreamRawTableAclNoPermission(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "select * from test_table limit 1000"
+	db.AddQuery(query, &sqltypes.Result{Fields: getTestTableFields()})
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	callerID := &querypb.VTGateCallerID{Username: "u2"}
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group02",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"superuser"},
+		}},
+	}
+	require.NoError(t, tableacl.InitFromProto(config))
+
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	defer tsv.StopService()
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	// StreamRaw should fail because the current user has no read permission,
+	// and it must fail before streaming any bytes.
+	called := false
+	err := qre.StreamRaw(nil, func(raw []byte) error {
+		called = true
+		return nil
+	})
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err))
+	require.False(t, called, "callback must not run when permission is denied")
+}
+
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})

@@ -64,7 +64,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -1122,19 +1121,7 @@ func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.T
 			if err = plan.IsValid(reservedID != 0, len(settings) > 0); err != nil {
 				return err
 			}
-
-			// Handle special bind variables, same as QueryExecutor.Stream.
-			if bindVariables[sqltypes.BvReplaceSchemaName] != nil {
-				bindVariables[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(tsv.config.DB.DBName)
-			}
-
-			// Substitute bind variables into the SQL template, same as QueryExecutor.Stream.
-			finalSQL, err := plan.FullQuery.GenerateQuery(bindVariables, nil)
-			if err != nil {
-				return err
-			}
-			finalSQL = comments.Leading + finalSQL + comments.Trailing
-
+			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
 			connID := reservedID
 			if transactionID != 0 {
 				connID = transactionID
@@ -1149,27 +1136,20 @@ func (tsv *TabletServer) streamExecuteRaw(ctx context.Context, target *querypb.T
 					return err
 				}
 			}
-
-			var conn *connpool.PooledConn
-			if connID != 0 {
-				txConn, err := tsv.te.txPool.GetAndLock(connID, "for raw streaming query")
-				if err != nil {
-					return err
-				}
-				defer txConn.Unlock()
-				conn = txConn.UnderlyingDBConn()
-			} else {
-				dbConn, err := tsv.qe.streamConns.Get(ctx, connSetting)
-				if err != nil {
-					return err
-				}
-				defer dbConn.Recycle()
-				conn = dbConn
+			qre := &QueryExecutor{
+				query:            query,
+				marginComments:   comments,
+				bindVars:         bindVariables,
+				connID:           connID,
+				options:          options,
+				plan:             plan,
+				ctx:              ctx,
+				logStats:         logStats,
+				tsv:              tsv,
+				targetTabletType: target.GetTabletType(),
+				setting:          connSetting,
 			}
-
-			return conn.Conn.StreamRaw(ctx, finalSQL, func(mysqlConn *mysql.Conn) error {
-				return tsv.streamQueryResultPackets(ctx, mysqlConn, buf, callback)
-			})
+			return qre.StreamRaw(buf, callback)
 		},
 	)
 }
