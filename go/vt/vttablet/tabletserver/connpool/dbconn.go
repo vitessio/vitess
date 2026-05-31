@@ -357,7 +357,7 @@ func (dbc *Conn) StreamOnce(
 
 // StreamRaw sends a COM_QUERY and calls fn with the underlying mysql.Conn
 // for raw packet reading. Context cancellation terminates the connection.
-func (dbc *Conn) StreamRaw(ctx context.Context, query string, fn func(conn *mysql.Conn) error) error {
+func (dbc *Conn) StreamRaw(ctx context.Context, query string, insideTxn bool, fn func(conn *mysql.Conn) error) error {
 	dbc.current.Store(&query)
 	defer dbc.current.Store(nil)
 
@@ -376,7 +376,10 @@ func (dbc *Conn) StreamRaw(ctx context.Context, query string, fn func(conn *mysq
 
 	select {
 	case <-ctx.Done():
-		dbc.terminate(ctx, false, now)
+		// A query inside a transaction cannot be safely killed on its own, so
+		// kill the whole connection; otherwise kill just the query. Mirrors
+		// streamOnce's insideTxn handling.
+		dbc.terminate(ctx, insideTxn, now)
 		<-ch
 		return dbc.Err()
 	case err := <-ch:

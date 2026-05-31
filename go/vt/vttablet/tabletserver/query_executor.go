@@ -1375,7 +1375,7 @@ func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransact
 	}
 	defer remove()
 
-	return conn.Conn.StreamRaw(ctx, sql, func(mysqlConn *mysql.Conn) error {
+	return conn.Conn.StreamRaw(ctx, sql, isTransaction, func(mysqlConn *mysql.Conn) error {
 		return qre.tsv.streamQueryResultPackets(ctx, mysqlConn, buf, callback)
 	})
 }
