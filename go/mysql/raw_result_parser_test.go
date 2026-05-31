@@ -532,3 +532,87 @@ func TestRawResultParser_LeftoverSurvivesBufferReuse(t *testing.T) {
 	require.Len(t, retained, 1)
 	require.Equal(t, "spanning-row-value", retained[0][0].ToString())
 }
+
+// lenEncStringBytes encodes a length-encoded string (MySQL text-protocol
+// column value): a length-encoded integer prefix followed by the bytes.
+func lenEncStringBytes(val []byte) []byte {
+	n := uint64(len(val))
+	var prefix []byte
+	switch {
+	case n < 251:
+		prefix = []byte{byte(n)}
+	case n < 1<<16:
+		prefix = []byte{0xfc, byte(n), byte(n >> 8)}
+	case n < 1<<24:
+		prefix = []byte{0xfd, byte(n), byte(n >> 8), byte(n >> 16)}
+	default:
+		prefix = make([]byte, 9)
+		prefix[0] = 0xfe
+		binary.LittleEndian.PutUint64(prefix[1:], n)
+	}
+	return append(prefix, val...)
+}
+
+// frameLogical splits a logical payload into physical packets per the MySQL
+// MaxPacketSize rule (a run of exactly-MaxPacketSize fragments terminated by
+// one < MaxPacketSize, which is a 0-length packet when the length is an exact
+// multiple). It returns the concatenated wire bytes and the next sequence id.
+func frameLogical(seq byte, logical []byte) ([]byte, byte) {
+	var out []byte
+	for {
+		n := len(logical)
+		if n > MaxPacketSize {
+			n = MaxPacketSize
+		}
+		out = append(out, makePacket(seq, logical[:n])...)
+		seq++
+		if n < MaxPacketSize {
+			return out, seq
+		}
+		logical = logical[n:]
+		if len(logical) == 0 {
+			out = append(out, makePacket(seq, nil)...) // 0-length terminator
+			return out, seq + 1
+		}
+	}
+}
+
+// TestRawResultParser_LargeRowMultiFragment verifies a result row whose payload
+// exceeds MaxPacketSize (split by MySQL into multiple physical packets) is
+// reassembled and parsed correctly. The value is filled with 0xff so the
+// continuation fragment begins with 0xff (ErrPacket) and the row's lenenc
+// prefix is 0xfe (EOFPacket) — neither may be mistaken for a terminal packet.
+func TestRawResultParser_LargeRowMultiFragment(t *testing.T) {
+	parser := NewRawResultParser()
+	var results []*sqltypes.Result
+	cb := func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	}
+
+	value := make([]byte, 1<<24) // 16MiB; lenenc prefix is 0xfe (8-byte length)
+	for i := range value {
+		value[i] = 0xff
+	}
+
+	var raw []byte
+	raw = append(raw, makePacket(1, []byte{1})...)               // column count = 1
+	raw = append(raw, makeColumnDefPacket(2, "val", 0x0f, 0)...) // VARCHAR
+	rowBytes, nextSeq := frameLogical(3, lenEncStringBytes(value))
+	raw = append(raw, rowBytes...)
+	raw = append(raw, makeEOFPacket(nextSeq)...) // terminal
+
+	require.NoError(t, parser.Feed(raw, cb))
+
+	var fields []*querypb.Field
+	var rows [][]sqltypes.Value
+	for _, r := range results {
+		if r.Fields != nil {
+			fields = r.Fields
+		}
+		rows = append(rows, r.Rows...)
+	}
+	require.Len(t, fields, 1)
+	require.Len(t, rows, 1)
+	require.Equal(t, value, rows[0][0].Raw())
+}

@@ -43,6 +43,14 @@ type RawResultParser struct {
 	fieldsSent  bool
 	pendingRows [][]sqltypes.Value
 
+	// reasmBuf reassembles a logical packet that MySQL split into physical
+	// fragments of exactly MaxPacketSize (terminated by one < MaxPacketSize).
+	// It is parser-owned and is never reused across logical packets, so the
+	// Values that ParseTextRow aliases into it stay valid after emission.
+	// reasmActive is true while continuation fragments are still being collected.
+	reasmActive bool
+	reasmBuf    []byte
+
 	// Terminal packet metadata extracted from the final EOF/OK packet.
 	terminalInsertID    uint64
 	terminalInsertIDSet bool
@@ -100,7 +108,37 @@ func (p *RawResultParser) Feed(chunk []byte, callback func(*sqltypes.Result) err
 		payload := data[consumed+PacketHeaderSize : consumed+totalLength]
 		consumed += totalLength
 
-		if err := p.processPacket(payload, callback); err != nil {
+		// Reassemble logical packets that MySQL split into physical fragments of
+		// exactly MaxPacketSize (mirrors (*Conn).readPacket). Only the first
+		// fragment carries the logical type byte; continuation fragments are raw
+		// payload and must be concatenated before terminal detection / parsing.
+		if !p.reasmActive && packetLength < MaxPacketSize {
+			// Fast path: complete single-fragment logical packet. payload is a
+			// sub-slice of parser-owned p.buf; dispatch it directly (no copy).
+			if err := p.processPacket(payload, callback); err != nil {
+				p.buf = nil
+				return err
+			}
+			continue
+		}
+
+		// Multi-fragment logical packet: append into a dedicated parser-owned
+		// buffer. The first append allocates a fresh array which is never reused
+		// for a later packet, so Values aliasing it stay valid after emission.
+		p.reasmActive = true
+		p.reasmBuf = append(p.reasmBuf, payload...)
+		if packetLength == MaxPacketSize {
+			// More fragments follow (possibly in a later Feed call).
+			continue
+		}
+
+		// Terminating fragment (< MaxPacketSize, possibly 0): the logical packet
+		// is complete. Hand off reasmBuf and reset so the next large packet gets
+		// its own backing array.
+		logical := p.reasmBuf
+		p.reasmBuf = nil
+		p.reasmActive = false
+		if err := p.processPacket(logical, callback); err != nil {
 			p.buf = nil
 			return err
 		}
@@ -214,8 +252,10 @@ func (p *RawResultParser) handleRow(payload []byte, callback func(*sqltypes.Resu
 		return nil
 	}
 
-	// Check for terminal packets
-	if payload[0] == ErrPacket {
+	// Check for terminal packets. A real ERR packet is always small; a
+	// reassembled row whose first byte happens to be 0xff is >= MaxPacketSize
+	// and must be treated as row data, not an error.
+	if payload[0] == ErrPacket && len(payload) < MaxPacketSize {
 		p.state = rawParserStateDone
 		// Flush accumulated rows before returning the error.
 		if err := p.flushPendingRows(callback); err != nil {

@@ -1410,7 +1410,28 @@ func (tsv *TabletServer) streamQueryResultPackets(
 			return err
 		}
 
-		if packetLength == 0 {
+		// A logical packet whose payload is >= MaxPacketSize is split across
+		// multiple physical packets: a run of exactly-MaxPacketSize fragments
+		// terminated by one < MaxPacketSize (possibly 0). Only the first
+		// fragment carries the logical type byte; continuation fragments are
+		// raw payload and must not be inspected for terminal detection. Their
+		// bytes are already forwarded by readPayload; drain the remaining
+		// fragments here. Mirrors (*Conn).readPacket and streamBinlogPackets.
+		fragmented := packetLength == mysql.MaxPacketSize
+		for packetLength == mysql.MaxPacketSize {
+			packetLength, err = readHeader()
+			if err != nil {
+				return err
+			}
+			bufOffset += mysql.PacketHeaderSize
+			if _, err := readPayload(packetLength); err != nil {
+				return err
+			}
+		}
+
+		// A fragmented logical packet is a data row: a terminal EOF/ERR/OK
+		// packet is always small and never fragmented, so it is never terminal.
+		if fragmented || packetLength == 0 {
 			continue
 		}
 

@@ -393,3 +393,70 @@ func TestStreamQueryResultPackets_LocalInfile(t *testing.T) {
 	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
 	require.ErrorContains(t, err, "LOCAL INFILE")
 }
+
+// lenEncStringBytes encodes a length-encoded string (lenenc prefix + bytes).
+func lenEncStringBytes(val []byte) []byte {
+	n := uint64(len(val))
+	var prefix []byte
+	switch {
+	case n < 251:
+		prefix = []byte{byte(n)}
+	case n < 1<<16:
+		prefix = []byte{0xfc, byte(n), byte(n >> 8)}
+	case n < 1<<24:
+		prefix = []byte{0xfd, byte(n), byte(n >> 8), byte(n >> 16)}
+	default:
+		prefix = make([]byte, 9)
+		prefix[0] = 0xfe
+		binary.LittleEndian.PutUint64(prefix[1:], n)
+	}
+	return append(prefix, val...)
+}
+
+// TestStreamQueryResultPackets_LargeRowMultiFragment verifies that a result row
+// larger than MaxPacketSize (split by MySQL into multiple physical packets) is
+// forwarded without being truncated, and round-trips through RawResultParser.
+// The value is filled with 0xff so a continuation fragment begins with 0xff
+// (ErrPacket) — which must not be mistaken for a terminal packet.
+func TestStreamQueryResultPackets_LargeRowMultiFragment(t *testing.T) {
+	reader := newQueryMockReader()
+	tsv := &TabletServer{}
+	send, chunks := collectRawSender()
+
+	value := make([]byte, 1<<24) // 16MiB
+	for i := range value {
+		value[i] = 0xff
+	}
+
+	go func() {
+		reader.WritePacket(lenEncColumnCount(1))
+		reader.WritePacket(makeTestColumnDefPayload("val"))
+		// Split the logical row payload into physical fragments per the
+		// MaxPacketSize rule.
+		logical := lenEncStringBytes(value)
+		for len(logical) >= mysql.MaxPacketSize {
+			reader.WritePacket(logical[:mysql.MaxPacketSize])
+			logical = logical[mysql.MaxPacketSize:]
+		}
+		reader.WritePacket(logical) // final fragment (< MaxPacketSize)
+		reader.WritePacket(eofPayload())
+	}()
+
+	require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, send))
+
+	parser := mysql.NewRawResultParser()
+	var fields []*querypb.Field
+	var rows [][]sqltypes.Value
+	for _, c := range *chunks {
+		require.NoError(t, parser.Feed(c, func(r *sqltypes.Result) error {
+			if r.Fields != nil {
+				fields = r.Fields
+			}
+			rows = append(rows, r.Rows...)
+			return nil
+		}))
+	}
+	require.Len(t, fields, 1)
+	require.Len(t, rows, 1)
+	require.Equal(t, value, rows[0][0].Raw())
+}
