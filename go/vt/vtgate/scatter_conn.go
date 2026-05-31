@@ -457,7 +457,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				// Route streaming queries through the *Raw RPCs, which forward raw
 				// MySQL wire-protocol bytes that rawStreamCallback decodes back into
 				// sqltypes.Result via a RawResultParser.
-				rawCb := rawStreamCallback(observedCallback)
+				rawCb := rawStreamCallback(rs.Target.Keyspace, opts, observedCallback)
 
 				switch info.actionNeeded {
 				case nothing:
@@ -467,7 +467,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 							info.actionNeeded = reserve
 							var state queryservice.ReservedState
-							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStreamCallback(observedCallback))
+							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, observedCallback))
 							reservedID = state.ReservedID
 							alias = state.TabletAlias
 						})
@@ -482,7 +482,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 							info.actionNeeded = reserveBegin
 							var state queryservice.ReservedTransactionState
-							state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(observedCallback))
+							state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, observedCallback))
 							transactionID = state.TransactionID
 							reservedID = state.ReservedID
 							alias = state.TabletAlias
@@ -495,7 +495,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					alias = state.TabletAlias
 				case reserveBegin:
 					var state queryservice.ReservedTransactionState
-					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(observedCallback))
+					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, observedCallback))
 					transactionID = state.TransactionID
 					reservedID = state.ReservedID
 					alias = state.TabletAlias
@@ -564,13 +564,30 @@ func (stc *ScatterConn) StreamExecuteMulti(
 // rawStreamCallback wraps a Result callback with a RawResultParser that
 // converts raw MySQL wire protocol bytes into sqltypes.Result objects.
 // Each invocation returns a new callback with its own parser instance.
-func rawStreamCallback(callback func(*sqltypes.Result) error) func(raw []byte) error {
+//
+// When full field metadata was requested (IncludeFields == ALL), it rewrites
+// each field's Database to the keyspace name before delivering the result. The
+// non-raw path does this on the tablet (QueryExecutor.Stream calls
+// Result.ReplaceKeyspace before the result reaches vtgate); the raw path
+// forwards opaque bytes that carry the physical MySQL DB name, so vtgate must
+// do it here. ReplaceKeyspace is idempotent when the DB name already equals the
+// keyspace, so applying it unconditionally for ALL matches the non-raw path in
+// both cases.
+func rawStreamCallback(keyspace string, opts *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) func(raw []byte) error {
+	replaceKeyspace := sqltypes.IncludeFieldsOrDefault(opts) == querypb.ExecuteOptions_ALL
 	var parser *mysql.RawResultParser
 	return func(raw []byte) error {
 		if parser == nil {
 			parser = mysql.NewRawResultParser()
 		}
-		return parser.Feed(raw, callback)
+		return parser.Feed(raw, func(result *sqltypes.Result) error {
+			if replaceKeyspace {
+				// No-op on fields-less (row-only) results and on fields whose
+				// Database is already the keyspace.
+				result.ReplaceKeyspace(keyspace)
+			}
+			return callback(result)
+		})
 	}
 }
 

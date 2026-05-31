@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"log/slog"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -697,4 +698,51 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 		assert.Equal(t, nothing, info.actionNeeded)
 		assert.Nil(t, info.alias)
 	})
+}
+
+// TestStreamExecuteMultiRawReplacesKeyspace verifies that the raw streaming
+// path rewrites field.Database to the keyspace name for full-metadata (ALL)
+// results, matching the non-raw path (where the tablet does this before vtgate
+// observes the result). The raw path forwards the physical MySQL DB name on the
+// wire, so vtgate must rewrite it.
+func TestStreamExecuteMultiRawReplacesKeyspace(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	const keyspace = "TestStreamExecuteMultiRawReplacesKeyspace"
+
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(keyspace)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// The field carries the physical MySQL DB name, as it arrives on the raw
+	// wire; the default sandbox fixtures leave Database empty, so set it here.
+	sbc.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32, Database: "vt_physical_db"},
+		},
+		Rows: [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
+	}})
+
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
+	rss, err := res.ResolveDestination(ctx, keyspace, topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0"}))
+	require.NoError(t, err)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	})
+
+	var mu sync.Mutex
+	var gotDatabase string
+	errs := sc.StreamExecuteMulti(ctx, nil, "query", rss,
+		[]map[string]*querypb.BindVariable{nil}, session, true, /*autocommit*/
+		func(r *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(r.Fields) > 0 {
+				gotDatabase = r.Fields[0].Database
+			}
+			return nil
+		}, nullResultsObserver{}, false)
+	require.NoError(t, vterrors.Aggregate(errs))
+	require.Equal(t, keyspace, gotDatabase)
 }
