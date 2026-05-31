@@ -41,6 +41,12 @@ import (
 
 // startEtcd starts an etcd subprocess, and waits for it to be ready.
 func startEtcd(t *testing.T, clientPort, peerPort int) (string, *exec.Cmd) {
+	t.Helper()
+
+	if _, err := exec.LookPath("etcd"); err != nil {
+		t.Skipf("skipping integration test: etcd binary not found: %v", err)
+	}
+
 	// Create a temporary directory.
 	dataDir := t.TempDir()
 
@@ -97,6 +103,12 @@ func startEtcd(t *testing.T, clientPort, peerPort int) (string, *exec.Cmd) {
 
 // startEtcdWithTLS starts an etcd subprocess with TLS setup, and waits for it to be ready.
 func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs) {
+	t.Helper()
+
+	if _, err := exec.LookPath("etcd"); err != nil {
+		t.Skipf("skipping integration test: etcd binary not found: %v", err)
+	}
+
 	// Create a temporary directory.
 	dataDir := t.TempDir()
 

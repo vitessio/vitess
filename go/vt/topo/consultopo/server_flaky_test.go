@@ -44,6 +44,12 @@ import (
 // Returns the exec.Cmd forked, the config file to remove after the test,
 // and the server address to RPC-connect to.
 func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
+	t.Helper()
+
+	if _, err := exec.LookPath("consul"); err != nil {
+		t.Skipf("skipping integration test: consul binary not found: %v", err)
+	}
+
 	// Create a temporary config file, as ports cannot all be set
 	// via command line. The file name has to end with '.json' so
 	// we're not using TempFile.
