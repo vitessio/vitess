@@ -1350,23 +1350,60 @@ func (tsv *TabletServer) streamQueryResultPackets(
 		return packetLength, firstByte, nil
 	}
 
+	// readColumnCountPacket reads the column-count packet (forwarding its raw
+	// bytes via readPacket, like every other packet) and returns the decoded
+	// length-encoded column count. done is true for OK (zero-column) and ERR
+	// packets, where the caller should just flush and stop.
+	//
+	// The column-count field is a length-encoded integer: for counts < 251 the
+	// first byte is the value, but for larger counts (MySQL allows up to 4096
+	// columns) it is a 0xfc/0xfd/0xfe marker followed by the value. We must
+	// decode it with the same logic the vtgate-side RawResultParser uses, or
+	// the two ends disagree on how many column-definition packets follow and
+	// the whole stream is mis-framed.
+	readColumnCountPacket := func() (colCount int, done bool, err error) {
+		// readPayload writes the packet payload into buf starting at this
+		// offset; readPacket then advances bufOffset past it.
+		payloadStart := bufOffset + mysql.PacketHeaderSize
+
+		packetLength, firstByte, err := readPacket()
+		if err != nil {
+			return 0, false, err
+		}
+
+		switch firstByte {
+		case mysql.ErrPacket, mysql.OKPacket:
+			// ERR, or OK = result set with zero columns. Nothing to frame.
+			return 0, true, nil
+		case 0xfb:
+			// LOCAL INFILE request (LOAD DATA LOCAL INFILE). It needs the
+			// client to stream a file back to the server, which the one-shot
+			// raw streaming path cannot do. Mirror readComQueryResponse.
+			return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "LOAD DATA LOCAL INFILE is not supported by raw streaming")
+		}
+
+		// The count packet is the first packet read into an empty buffer and is
+		// at most 9 bytes, so readPayload always took the fast path and the full
+		// payload is contiguous at buf[payloadStart:payloadStart+packetLength].
+		payloadEnd := payloadStart + packetLength
+		if payloadEnd > bufOffset || payloadEnd > len(buf) {
+			return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column count packet not contiguous in buffer")
+		}
+		count, _, ok := mysql.ReadLenEncInt(buf[payloadStart:payloadEnd], 0)
+		if !ok {
+			return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to decode column count")
+		}
+		return int(count), false, nil
+	}
+
 	// Phase 1: Read column count packet
-	_, firstByte, err := readPacket()
+	colCount, done, err := readColumnCountPacket()
 	if err != nil {
 		return err
 	}
-
-	// Check for ERR or OK (0 columns)
-	if firstByte == mysql.ErrPacket {
+	if done {
 		return flush()
 	}
-	if firstByte == mysql.OKPacket {
-		return flush()
-	}
-
-	// Parse column count from the first byte (it's a lenenc int)
-	// For small counts (< 251), the first byte IS the count
-	colCount := int(firstByte)
 
 	// Phase 2: Read column definition packets
 	for range colCount {

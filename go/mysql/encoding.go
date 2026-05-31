@@ -275,6 +275,16 @@ func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
 	}
 }
 
+// ReadLenEncInt decodes a MySQL length-encoded integer starting at pos. It is
+// an exported wrapper around the internal decoder so callers outside this
+// package (e.g. the raw streaming producer in vttablet) decode counts with the
+// exact same logic the rest of the protocol code uses, rather than
+// reimplementing the wire format. It returns the value, the position after the
+// integer, and whether the decode succeeded.
+func ReadLenEncInt(data []byte, pos int) (uint64, int, bool) {
+	return readLenEncInt(data, pos)
+}
+
 func readLenEncString(data []byte, pos int) (string, int, bool) {
 	size, pos, ok := readLenEncInt(data, pos)
 	if !ok {
