@@ -19,6 +19,7 @@ package grpcqueryservice
 import (
 	"context"
 	"io"
+	"sync"
 
 	"google.golang.org/grpc"
 
@@ -34,6 +35,16 @@ import (
 )
 
 const rawStreamBufSize = 256 * 1024
+
+// rawStreamBufPool reuses the per-query raw streaming buffer across *Raw RPC
+// invocations. Each handler serves a single query (the client opens a fresh
+// stream per query), so without this pool every query would allocate a new
+// 256KB buffer. The buffer's contents are fully serialized by stream.Send
+// before the handler returns, so it is safe to return to the pool afterwards.
+var rawStreamBufPool = sync.Pool{New: func() any {
+	b := make([]byte, rawStreamBufSize)
+	return &b
+}}
 
 // query is the gRPC query service implementation.
 // It implements the queryservice.QueryServer interface.
@@ -305,7 +316,9 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 func (q *query) StreamExecuteRaw(stream queryservicepb.Query_StreamExecuteRawServer) (err error) {
 	defer q.server.HandlePanic(&err)
 
-	buf := make([]byte, rawStreamBufSize)
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	defer rawStreamBufPool.Put(bufp)
+	buf := *bufp
 
 	for {
 		request, err := stream.Recv()
@@ -549,7 +562,9 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 func (q *query) BeginStreamExecuteRaw(stream queryservicepb.Query_BeginStreamExecuteRawServer) (err error) {
 	defer q.server.HandlePanic(&err)
 
-	buf := make([]byte, rawStreamBufSize)
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	defer rawStreamBufPool.Put(bufp)
+	buf := *bufp
 
 	for {
 		request, err := stream.Recv()
@@ -588,7 +603,9 @@ func (q *query) BeginStreamExecuteRaw(stream queryservicepb.Query_BeginStreamExe
 func (q *query) ReserveStreamExecuteRaw(stream queryservicepb.Query_ReserveStreamExecuteRawServer) (err error) {
 	defer q.server.HandlePanic(&err)
 
-	buf := make([]byte, rawStreamBufSize)
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	defer rawStreamBufPool.Put(bufp)
+	buf := *bufp
 
 	for {
 		request, err := stream.Recv()
@@ -626,7 +643,9 @@ func (q *query) ReserveStreamExecuteRaw(stream queryservicepb.Query_ReserveStrea
 func (q *query) ReserveBeginStreamExecuteRaw(stream queryservicepb.Query_ReserveBeginStreamExecuteRawServer) (err error) {
 	defer q.server.HandlePanic(&err)
 
-	buf := make([]byte, rawStreamBufSize)
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	defer rawStreamBufPool.Put(bufp)
+	buf := *bufp
 
 	for {
 		request, err := stream.Recv()
