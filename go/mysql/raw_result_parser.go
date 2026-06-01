@@ -86,11 +86,7 @@ func (p *RawResultParser) Feed(chunk []byte, callback func(*sqltypes.Result) err
 	data := p.buf
 
 	consumed := 0
-	for {
-		if p.state == rawParserStateDone {
-			break
-		}
-
+	for p.state != rawParserStateDone {
 		remaining := len(data) - consumed
 		// Need at least a header to proceed
 		if remaining < PacketHeaderSize {

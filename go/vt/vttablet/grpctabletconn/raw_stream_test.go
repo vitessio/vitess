@@ -100,7 +100,7 @@ func TestStreamExecuteRawNoPool(t *testing.T) {
 	}
 	conn := dialRawStreamingTablet(ctx, t, svc)
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		var got []byte
 		state, err := conn.StreamExecuteRaw(ctx, nil, tabletconntest.TestTarget, "select 1", nil, 0, 0, nil, nil, func(raw []byte) error {
 			got = append(got, raw...)

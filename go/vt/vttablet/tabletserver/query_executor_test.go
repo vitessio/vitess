@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1156,7 +1157,7 @@ func TestQueryExecutorStreamRawFetchLastInsertID(t *testing.T) {
 	}{
 		{name: "changed to non-zero", lastInsertID: "42", wantInsertID: 42, wantInsertIDSet: true},
 		{name: "changed to zero", lastInsertID: "0", wantInsertID: 0, wantInsertIDSet: true},
-		{name: "unset", lastInsertID: fmt.Sprintf("%d", uint64(resetLastIDValue)), wantInsertID: 0, wantInsertIDSet: false},
+		{name: "unset", lastInsertID: strconv.FormatUint(uint64(resetLastIDValue), 10), wantInsertID: 0, wantInsertIDSet: false},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {

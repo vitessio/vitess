@@ -560,10 +560,7 @@ func lenEncStringBytes(val []byte) []byte {
 func frameLogical(seq byte, logical []byte) ([]byte, byte) {
 	var out []byte
 	for {
-		n := len(logical)
-		if n > MaxPacketSize {
-			n = MaxPacketSize
-		}
+		n := min(len(logical), MaxPacketSize)
 		out = append(out, makePacket(seq, logical[:n])...)
 		seq++
 		if n < MaxPacketSize {
