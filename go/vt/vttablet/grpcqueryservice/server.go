@@ -334,16 +334,21 @@ func (q *query) StreamExecuteRaw(stream queryservicepb.Query_StreamExecuteRawSer
 			request.ImmediateCallerId,
 		)
 
-		resp := querypb.StreamExecuteRawResponseFromVTPool()
-		state, queryErr := q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte) error {
-			resp.Raw = raw
-			return stream.Send(resp)
-		})
-		// Drop the reference to the pooled streaming buffer before returning the
-		// message to the vtproto pool; otherwise the pooled response would pin a
-		// 256KB buffer (which also lives in rawStreamBufPool).
-		resp.Raw = nil
-		resp.ReturnToVTPool()
+		state, queryErr := func() (queryservice.StreamExecuteRawState, error) {
+			resp := querypb.StreamExecuteRawResponseFromVTPool()
+			// Drop the reference to the pooled streaming buffer before returning
+			// the message to the vtproto pool (otherwise the pooled response would
+			// pin a 256KB buffer that also lives in rawStreamBufPool). Deferred so
+			// the response is returned even if the server call panics.
+			defer func() {
+				resp.Raw = nil
+				resp.ReturnToVTPool()
+			}()
+			return q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte) error {
+				resp.Raw = raw
+				return stream.Send(resp)
+			})
+		}()
 
 		// Always send terminal message with done=true (errors are in-band)
 		if err := stream.Send(&querypb.StreamExecuteRawResponse{
@@ -586,16 +591,21 @@ func (q *query) BeginStreamExecuteRaw(stream queryservicepb.Query_BeginStreamExe
 			request.ImmediateCallerId,
 		)
 
-		resp := querypb.BeginStreamExecuteRawResponseFromVTPool()
-		state, queryErr := q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, buf, func(raw []byte) error {
-			resp.Raw = raw
-			return stream.Send(resp)
-		})
-		// Drop the reference to the pooled streaming buffer before returning the
-		// message to the vtproto pool; otherwise the pooled response would pin a
-		// 256KB buffer (which also lives in rawStreamBufPool).
-		resp.Raw = nil
-		resp.ReturnToVTPool()
+		state, queryErr := func() (queryservice.TransactionState, error) {
+			resp := querypb.BeginStreamExecuteRawResponseFromVTPool()
+			// Drop the reference to the pooled streaming buffer before returning
+			// the message to the vtproto pool (otherwise the pooled response would
+			// pin a 256KB buffer that also lives in rawStreamBufPool). Deferred so
+			// the response is returned even if the server call panics.
+			defer func() {
+				resp.Raw = nil
+				resp.ReturnToVTPool()
+			}()
+			return q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, buf, func(raw []byte) error {
+				resp.Raw = raw
+				return stream.Send(resp)
+			})
+		}()
 
 		if err := stream.Send(&querypb.BeginStreamExecuteRawResponse{
 			Done:                true,
@@ -633,16 +643,21 @@ func (q *query) ReserveStreamExecuteRaw(stream queryservicepb.Query_ReserveStrea
 			request.ImmediateCallerId,
 		)
 
-		resp := querypb.ReserveStreamExecuteRawResponseFromVTPool()
-		state, queryErr := q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, buf, func(raw []byte) error {
-			resp.Raw = raw
-			return stream.Send(resp)
-		})
-		// Drop the reference to the pooled streaming buffer before returning the
-		// message to the vtproto pool; otherwise the pooled response would pin a
-		// 256KB buffer (which also lives in rawStreamBufPool).
-		resp.Raw = nil
-		resp.ReturnToVTPool()
+		state, queryErr := func() (queryservice.ReservedState, error) {
+			resp := querypb.ReserveStreamExecuteRawResponseFromVTPool()
+			// Drop the reference to the pooled streaming buffer before returning
+			// the message to the vtproto pool (otherwise the pooled response would
+			// pin a 256KB buffer that also lives in rawStreamBufPool). Deferred so
+			// the response is returned even if the server call panics.
+			defer func() {
+				resp.Raw = nil
+				resp.ReturnToVTPool()
+			}()
+			return q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, buf, func(raw []byte) error {
+				resp.Raw = raw
+				return stream.Send(resp)
+			})
+		}()
 
 		if err := stream.Send(&querypb.ReserveStreamExecuteRawResponse{
 			Done:            true,
@@ -679,16 +694,21 @@ func (q *query) ReserveBeginStreamExecuteRaw(stream queryservicepb.Query_Reserve
 			request.ImmediateCallerId,
 		)
 
-		resp := querypb.ReserveBeginStreamExecuteRawResponseFromVTPool()
-		state, queryErr := q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, buf, func(raw []byte) error {
-			resp.Raw = raw
-			return stream.Send(resp)
-		})
-		// Drop the reference to the pooled streaming buffer before returning the
-		// message to the vtproto pool; otherwise the pooled response would pin a
-		// 256KB buffer (which also lives in rawStreamBufPool).
-		resp.Raw = nil
-		resp.ReturnToVTPool()
+		state, queryErr := func() (queryservice.ReservedTransactionState, error) {
+			resp := querypb.ReserveBeginStreamExecuteRawResponseFromVTPool()
+			// Drop the reference to the pooled streaming buffer before returning
+			// the message to the vtproto pool (otherwise the pooled response would
+			// pin a 256KB buffer that also lives in rawStreamBufPool). Deferred so
+			// the response is returned even if the server call panics.
+			defer func() {
+				resp.Raw = nil
+				resp.ReturnToVTPool()
+			}()
+			return q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, buf, func(raw []byte) error {
+				resp.Raw = raw
+				return stream.Send(resp)
+			})
+		}()
 
 		if err := stream.Send(&querypb.ReserveBeginStreamExecuteRawResponse{
 			Done:                true,

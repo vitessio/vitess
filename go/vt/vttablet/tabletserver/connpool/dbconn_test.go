@@ -768,3 +768,30 @@ func TestDBConnStreamRawCtxKill(t *testing.T) {
 		run(t, true /* insideTxn */, true /* expectConnKill */)
 	})
 }
+
+// TestDBConnStreamRawRequiresDeprecateEOF verifies that StreamRaw fails fast when
+// the MySQL connection did not negotiate CLIENT_DEPRECATE_EOF, since the raw
+// framing depends on it. The callback must not run and no query is sent.
+func TestDBConnStreamRawRequiresDeprecateEOF(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	// Simulate a connection that did not negotiate CLIENT_DEPRECATE_EOF.
+	dbConn.conn.Capabilities &^= mysql.CapabilityClientDeprecateEOF
+
+	called := false
+	err = dbConn.StreamRaw(t.Context(), "select * from t", false, func(*mysql.Conn) error {
+		called = true
+		return nil
+	})
+	require.ErrorContains(t, err, "CLIENT_DEPRECATE_EOF")
+	require.False(t, called, "fn must not run when DEPRECATE_EOF is absent")
+}

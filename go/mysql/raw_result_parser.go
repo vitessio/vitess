@@ -31,6 +31,12 @@ const (
 	rawParserStateDone
 )
 
+// fieldsPreallocCap caps the initial capacity reserved for the field slice from
+// a result set's column count, so a malformed packet claiming an absurd column
+// count cannot force a large up-front allocation. The slice still grows to the
+// real column count as definitions arrive.
+const fieldsPreallocCap = 256
+
 // RawResultParser is a stateful parser that converts raw MySQL wire protocol
 // bytes into *sqltypes.Result objects. It is used by the gRPC client to parse
 // incoming raw chunks from StreamExecuteRaw.
@@ -215,6 +221,15 @@ func (p *RawResultParser) handleColumnCount(payload []byte, callback func(*sqlty
 		return callback(result)
 	}
 
+	// A 0xfb byte at the column-count position is a LOCAL INFILE request, which
+	// the raw streaming path does not support (the tablet rejects it before
+	// forwarding). Guard here too so a stray 0xfb is not silently decoded as a
+	// column count of 251.
+	if payload[0] == 0xfb {
+		p.state = rawParserStateDone
+		return errors.New("LOCAL INFILE is not supported by raw streaming")
+	}
+
 	// Parse column count
 	colCount, _, ok := readLenEncInt(payload, 0)
 	if !ok {
@@ -222,18 +237,21 @@ func (p *RawResultParser) handleColumnCount(payload []byte, callback func(*sqlty
 	}
 	p.colCount = int(colCount)
 	p.colsRead = 0
-	p.fields = make([]*querypb.Field, p.colCount)
-	for i := range p.fields {
-		p.fields[i] = &querypb.Field{}
-	}
+	// Allocate lazily and grow as column definitions arrive. Cap the initial
+	// capacity so a malformed count packet claiming a huge column count cannot
+	// force a large up-front allocation; a legitimate wide result set just grows
+	// the slice as its definitions stream in.
+	p.fields = make([]*querypb.Field, 0, min(p.colCount, fieldsPreallocCap))
 	p.state = rawParserStateColumnDefs
 	return nil
 }
 
 func (p *RawResultParser) handleColumnDef(payload []byte, _ func(*sqltypes.Result) error) error {
-	if err := ParseColumnDefinition(payload, p.fields[p.colsRead], p.colsRead); err != nil {
+	field := &querypb.Field{}
+	if err := ParseColumnDefinition(payload, field, p.colsRead); err != nil {
 		return err
 	}
+	p.fields = append(p.fields, field)
 	p.colsRead++
 	if p.colsRead == p.colCount {
 		// No mid-stream EOF packet (CLIENT_DEPRECATE_EOF is always negotiated).

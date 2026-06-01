@@ -217,6 +217,37 @@ func TestRawResultParser_ErrorPacket(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRawResultParser_LocalInfileRejected(t *testing.T) {
+	parser := NewRawResultParser()
+
+	// A 0xfb byte at the column-count position is a LOCAL INFILE request, which
+	// the raw path does not support. It must error rather than be decoded as a
+	// column count of 251.
+	chunk := makePacket(1, []byte{0xfb, '/', 't', 'm', 'p', '/', 'f'})
+	err := parser.Feed(chunk, func(*sqltypes.Result) error {
+		require.Fail(t, "callback should not be invoked")
+		return nil
+	})
+	require.ErrorContains(t, err, "LOCAL INFILE")
+}
+
+func TestRawResultParser_HugeColumnCountBounded(t *testing.T) {
+	parser := NewRawResultParser()
+
+	// A malformed column-count packet claiming ~16M columns (0xfd + 3-byte int)
+	// must not trigger a large up-front allocation: the field slice is grown
+	// lazily, so its initial capacity stays bounded by fieldsPreallocCap.
+	chunk := makePacket(1, []byte{0xfd, 0xff, 0xff, 0xff})
+	err := parser.Feed(chunk, func(*sqltypes.Result) error {
+		require.Fail(t, "callback should not be invoked")
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, rawParserStateColumnDefs, parser.state)
+	require.Equal(t, 0xffffff, parser.colCount)
+	require.LessOrEqual(t, cap(parser.fields), fieldsPreallocCap)
+}
+
 func TestRawResultParser_EmptyResultSet(t *testing.T) {
 	parser := NewRawResultParser()
 

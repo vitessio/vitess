@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -37,6 +38,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const protocolName = "grpc"
@@ -233,6 +235,13 @@ func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservic
 	defer resp.ReturnToVTPool()
 	for {
 		if err := stream.RecvMsg(resp); err != nil {
+			if err == io.EOF {
+				// The server always closes with a terminal done=true message, so a
+				// clean EOF before we have seen it means the stream was truncated.
+				// ErrorFromGRPC maps io.EOF to nil, so guard it here to fail loudly
+				// instead of returning empty state as a success.
+				return state, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "raw stream ended before the terminal done message")
+			}
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
 		if resp.Done {
@@ -296,6 +305,13 @@ func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ querys
 	defer resp.ReturnToVTPool()
 	for {
 		if err := stream.RecvMsg(resp); err != nil {
+			if err == io.EOF {
+				// The server always closes with a terminal done=true message, so a
+				// clean EOF before we have seen it means the stream was truncated.
+				// ErrorFromGRPC maps io.EOF to nil, so guard it here to fail loudly
+				// instead of returning empty state as a success.
+				return state, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "raw stream ended before the terminal done message")
+			}
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
 		if resp.Done {
@@ -362,6 +378,13 @@ func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ quer
 	defer resp.ReturnToVTPool()
 	for {
 		if err := stream.RecvMsg(resp); err != nil {
+			if err == io.EOF {
+				// The server always closes with a terminal done=true message, so a
+				// clean EOF before we have seen it means the stream was truncated.
+				// ErrorFromGRPC maps io.EOF to nil, so guard it here to fail loudly
+				// instead of returning empty state as a success.
+				return state, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "raw stream ended before the terminal done message")
+			}
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
 		if resp.Done {
@@ -427,6 +450,13 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _
 	defer resp.ReturnToVTPool()
 	for {
 		if err := stream.RecvMsg(resp); err != nil {
+			if err == io.EOF {
+				// The server always closes with a terminal done=true message, so a
+				// clean EOF before we have seen it means the stream was truncated.
+				// ErrorFromGRPC maps io.EOF to nil, so guard it here to fail loudly
+				// instead of returning empty state as a success.
+				return state, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "raw stream ended before the terminal done message")
+			}
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
 		if resp.Done {
