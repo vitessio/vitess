@@ -268,19 +268,19 @@ func TestMoveTablesComplete(t *testing.T) {
 					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table2Name),
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
@@ -323,7 +323,7 @@ func TestMoveTablesComplete(t *testing.T) {
 					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
@@ -368,19 +368,19 @@ func TestMoveTablesComplete(t *testing.T) {
 					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table1Name, sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table2Name, sourceKeyspaceName, table2Name),
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table3Name, sourceKeyspaceName, table3Name),
 					result: &querypb.QueryResult{},
 				},
-				&queryResult{
+				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
