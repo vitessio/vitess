@@ -161,7 +161,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		BeforeAnalyses: []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			return a.IsClusterPrimary && a.LastCheckValid && a.InnoDBLongSemaphoreWaitSeen && a.CountValidReplicas > 0
+			return a.IsClusterPrimary && a.LastCheckValid && a.InnoDBLongSemaphoreWaitSeen && a.CountValidReplicas > 0 && isStaleBinlogCoordinates
 		},
 	},
 

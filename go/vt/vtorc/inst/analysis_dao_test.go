@@ -143,11 +143,46 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CountValidReplicatingReplicas: 4,
 				IsPrimary:                     1,
 				InnoDBLongSemaphoreWaitSeen:   1,
+				IsStaleBinlogCoordinates:      1,
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
 			codeWanted:     InnoDBStalledPrimary,
+		},
+		{
+			// MY-012985 alone is not sufficient — without a corroborating stale
+			// binlog position the warning could be a stale entry in the 10s
+			// lookback window or a non-write-blocking InnoDB latch wait. The
+			// CountLoggingReplicas / CountValidOracleGTIDReplicas fields are set
+			// only to silence unrelated structure-warning entries so we can
+			// assert a truly-empty result.
+			name: "InnoDBStalledPrimary_NoStaleBinlogDoesNotFire",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              "none",
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 4,
+				CountLoggingReplicas:          4,
+				CountValidOracleGTIDReplicas:  4,
+				IsPrimary:                     1,
+				InnoDBLongSemaphoreWaitSeen:   1,
+				IsStaleBinlogCoordinates:      0,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     NoProblem,
 		},
 		{
 			name: "InnoDBStalledPrimary_NoValidReplicasDoesNotFire",
