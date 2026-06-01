@@ -457,7 +457,6 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				// Route streaming queries through the *Raw RPCs, which forward raw
 				// MySQL wire-protocol bytes that rawStreamCallback decodes back into
 				// sqltypes.Result via a RawResultParser.
-				rawCb := rawStreamCallback(rs.Target.Keyspace, opts, observedCallback)
 
 				// LAST_INSERT_ID for FetchLastInsertId queries cannot ride the raw
 				// bytes (MySQL hardcodes last_insert_id=0 in a streamed SELECT
@@ -465,6 +464,19 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				// surface it as an extra Result, mirroring the non-raw path.
 				var insertID uint64
 				var insertIDChanged bool
+
+				// A bare OK packet (e.g. a non-streamed response) can still carry a
+				// non-zero last_insert_id on the wire, which the parser surfaces
+				// directly. Track that so we don't also emit the out-of-band Result
+				// for the same update, mirroring the non-raw path's lastInsertIDSet.
+				insertIDSeenOnWire := false
+				trackedCallback := func(reply *sqltypes.Result) error {
+					if reply != nil && reply.InsertIDUpdated() {
+						insertIDSeenOnWire = true
+					}
+					return observedCallback(reply)
+				}
+				rawCb := rawStreamCallback(rs.Target.Keyspace, opts, trackedCallback)
 
 				switch info.actionNeeded {
 				case nothing:
@@ -476,7 +488,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 							info.actionNeeded = reserve
 							var state queryservice.ReservedState
-							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, observedCallback))
+							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, trackedCallback))
 							reservedID = state.ReservedID
 							alias = state.TabletAlias
 							insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
@@ -493,7 +505,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 							info.actionNeeded = reserveBegin
 							var state queryservice.ReservedTransactionState
-							state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, observedCallback))
+							state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, trackedCallback))
 							transactionID = state.TransactionID
 							reservedID = state.ReservedID
 							alias = state.TabletAlias
@@ -508,7 +520,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 				case reserveBegin:
 					var state queryservice.ReservedTransactionState
-					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, observedCallback))
+					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, trackedCallback))
 					transactionID = state.TransactionID
 					reservedID = state.ReservedID
 					alias = state.TabletAlias
@@ -517,7 +529,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 				}
 
-				if err == nil && insertIDChanged {
+				if err == nil && insertIDChanged && !insertIDSeenOnWire {
 					if cbErr := observedCallback(&sqltypes.Result{InsertID: insertID, InsertIDChanged: true}); cbErr != nil {
 						err = cbErr
 					}

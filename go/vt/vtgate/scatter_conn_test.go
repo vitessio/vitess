@@ -795,3 +795,50 @@ func TestStreamExecuteMultiRawSurfacesInsertID(t *testing.T) {
 	require.NoError(t, vterrors.Aggregate(errs))
 	require.True(t, insertIDChangedSeen, "raw streaming must surface LAST_INSERT_ID(0) via the changed bit")
 }
+
+// TestStreamExecuteMultiRawDeduplicatesInsertID verifies that when a non-zero
+// LAST_INSERT_ID is already surfaced on the wire (a bare OK packet carries it),
+// the raw path does not also emit the out-of-band synthetic Result. Otherwise
+// vtgate would report the same InsertID update twice. This mirrors the non-raw
+// path's lastInsertIDSet suppression.
+func TestStreamExecuteMultiRawDeduplicatesInsertID(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	const keyspace = "TestStreamExecuteMultiRawDeduplicatesInsertID"
+
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(keyspace)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// A non-zero InsertID is encoded into the terminal OK packet, so it arrives
+	// on the wire and the parser surfaces it directly.
+	sbc.SetResults([]*sqltypes.Result{{
+		Fields:          []*querypb.Field{{Name: "id", Type: sqltypes.Int32}},
+		Rows:            [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
+		InsertID:        42,
+		InsertIDChanged: true,
+	}})
+
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
+	rss, err := res.ResolveDestination(ctx, keyspace, topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0"}))
+	require.NoError(t, err)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{FetchLastInsertId: true},
+	})
+
+	var mu sync.Mutex
+	insertIDUpdates := 0
+	errs := sc.StreamExecuteMulti(ctx, nil, "select last_insert_id(42)", rss,
+		[]map[string]*querypb.BindVariable{nil}, session, true, /*autocommit*/
+		func(r *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if r != nil && r.InsertIDUpdated() {
+				insertIDUpdates++
+			}
+			return nil
+		}, nullResultsObserver{}, true /*fetchLastInsertID*/)
+	require.NoError(t, vterrors.Aggregate(errs))
+	require.Equal(t, 1, insertIDUpdates, "InsertID update already on the wire must not be duplicated by the synthetic Result")
+}
