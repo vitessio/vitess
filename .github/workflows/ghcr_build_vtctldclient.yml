@@ -1,0 +1,75 @@
+# .github/workflows/ghcr_build_vtctldclient.yml — Publish vtctldclient to GHCR
+#
+# Builds the vtctldclient multi-arch image (amd64 + arm64) and pushes
+# to ghcr.io/block/vitess/vtctldclient.
+#
+# Triggers:
+#   - Push to release-24.0: build + push (tagged as "latest" and SHA)
+#   - Tag v*:               build + push (tagged with version)
+#   - Pull request:         build only (no push)
+
+name: Build and Push vtctldclient to GHCR
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [release-24.0]
+  pull_request:
+    paths:
+      - 'docker/vtctldclient/**'
+      - 'go/cmd/vtctldclient/**'
+      - '.github/workflows/ghcr_build_vtctldclient.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: block/vitess/vtctldclient
+
+jobs:
+  build-and-push:
+    name: Build vtctldclient
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        id: meta
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=semver,pattern=v{{version}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/release-24.0' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@b32b51a8eda65d6793cd0494a773d4f6bcef32dc # v6.11.0
+        with:
+          context: .
+          file: ./docker/vtctldclient/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

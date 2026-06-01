@@ -28,7 +28,9 @@ USER vitess
 # Re-copy sources from working tree.
 COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
 
-RUN make install-testing PREFIX=/vt/install
+# NOVTADMINBUILD: vttestserver doesn't need the vtadmin web UI, and the
+# npm/vite toolchain doesn't work under QEMU cross-compilation.
+RUN NOVTADMINBUILD=1 make install-testing PREFIX=/vt/install
 
 # Start over and build the final image.
 FROM debian:bookworm-slim@sha256:4724b8cc51e33e398f0e2e15e18d5ec2851ff0c2280647e1310bc1642182655d
