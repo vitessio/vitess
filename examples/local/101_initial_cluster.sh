@@ -33,6 +33,8 @@ if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ../common/scripts/zk-up.sh
 elif [ "${TOPO}" = "consul" ]; then
 	CELL=zone1 ../common/scripts/consul-up.sh
+elif [ "${TOPO}" = "mysql" ]; then
+	CELL=zone1 ../common/scripts/mysql-up.sh
 else
 	CELL=zone1 ../common/scripts/etcd-up.sh
 fi
