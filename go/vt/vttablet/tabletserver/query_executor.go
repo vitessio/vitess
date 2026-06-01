@@ -437,11 +437,18 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 // query throttling, connection acquisition (including system settings) and
 // QueryList registration as Stream. buf is the reusable read buffer.
 //
-// Unlike Stream it does not use the stream consolidator (which shares parsed
-// *sqltypes.Result across clients), does not fetch last_insert_id on the tablet
-// (the terminal OK packet is forwarded and decoded by the client-side parser),
-// and does not rewrite the keyspace in field metadata (there is no parsed
-// result to rewrite on the tablet).
+// Unlike Stream it does not use the stream consolidator, which shares parsed
+// *sqltypes.Result across clients (raw bytes can't be shared without parsing).
+//
+// Two parity gaps versus Stream:
+//   - Keyspace rewrite of field metadata happens on the vtgate side instead of
+//     here (the tablet has no parsed result to rewrite); see rawStreamCallback
+//     in go/vt/vtgate/scatter_conn.go.
+//   - FetchLastInsertId is NOT honored for raw streaming. MySQL hardcodes a
+//     SELECT resultset terminator's last_insert_id to 0, so the value a
+//     LAST_INSERT_ID(x) call set is never on the wire; propagating it would
+//     require a tablet-side reset + "select last_insert_id()" refetch and an
+//     out-of-band channel to vtgate. Deferred as a follow-up.
 func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error) error {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
