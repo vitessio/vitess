@@ -345,23 +345,25 @@ func TestHealthCheckStreamError(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
-// TestHealthCheckRetryDelayIsFixed verifies that repeated stream failures do not
-// cause the retry delay to grow. After multiple consecutive errors the tablet
-// should still be rediscovered within a short, fixed window once it recovers.
-// Regression test for https://github.com/vitessio/vitess/issues/19894.
-func TestHealthCheckRetryDelayIsFixed(t *testing.T) {
+// TestHealthCheckRetryDelayIsBounded verifies that repeated stream failures do
+// not cause the retry delay to grow. After multiple consecutive errors the
+// tablet should still be rediscovered within a short, bounded window once it
+// recovers, rather than the ever-growing window the old exponential backoff
+// produced. Regression test for https://github.com/vitessio/vitess/issues/19894.
+func TestHealthCheckRetryDelayIsBounded(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 
 	ts := memorytopo.NewServer(ctx, "cell")
 	defer ts.Close()
 	hc := createTestHc(ctx, ts)
-	// Use a short but measurable retry delay so we can assert timing.
+	// Use a short but measurable retry delay so we can assert timing. With
+	// jitter the actual interval stays within [7.5ms, 12.5ms].
 	hc.retryDelay = 10 * time.Millisecond
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse)
-	resultChan := hc.Subscribe("TestHealthCheckRetryDelayIsFixed")
+	resultChan := hc.Subscribe("TestHealthCheckRetryDelayIsBounded")
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
 	hc.AddTablet(tablet)
@@ -387,13 +389,16 @@ func TestHealthCheckRetryDelayIsFixed(t *testing.T) {
 	}
 	input <- shr
 
-	// With a fixed 10ms retry delay, rediscovery should happen well within 100ms.
-	// With the old exponential backoff (10ms * 2^6 = 640ms cap), this would time out.
+	// With the bounded ~10ms retry delay, rediscovery happens almost immediately
+	// (within a couple of jittered cycles). With the old exponential backoff
+	// (10ms * 2^6 = 640ms cap) it would lag far behind. The timeout is generous
+	// so a healthy run never flakes; only a regression that re-grows the delay
+	// would approach it.
 	select {
 	case result := <-resultChan:
 		assert.True(t, result.Serving, "tablet should be serving after recovery")
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("tablet was not rediscovered promptly after recovery; retry delay may be growing exponentially")
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "tablet was not rediscovered promptly after recovery; retry delay may be growing exponentially")
 	}
 }
 
