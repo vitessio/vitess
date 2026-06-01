@@ -85,6 +85,12 @@ func TestControllerPlan(t *testing.T) {
 		in:  "insert into other values(null)",
 		err: "invalid database name: ",
 	}, {
+		// Custom per-shard sidecar qualifiers (e.g. _vt_ks_80) are not
+		// accepted in controller_plan; the DBClient layer rewrites _vt
+		// to the actual sidecar name.
+		in:  "insert into _vt_ks_80.vreplication values(null)",
+		err: "invalid database name: _vt_ks_80",
+	}, {
 		in:  "insert into _vt.vreplication partition(a) values(null)",
 		err: "unsupported construct: insert into _vt.vreplication partition (a) values (null)",
 	}, {

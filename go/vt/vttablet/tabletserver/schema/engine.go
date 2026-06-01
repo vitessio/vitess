@@ -170,9 +170,11 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		log.Info(fmt.Sprintf("syncSidecarDB took %d ms", time.Since(start).Milliseconds()))
 	}(time.Now())
 
+	currentSidecarIdent := sidecar.GetIdentifier()
+
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			_, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("use %s", sidecar.GetIdentifier()).Query, maxRows, false)
+			_, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("use %s", currentSidecarIdent).Query, maxRows, false)
 			if err != nil {
 				return nil, err
 			}
