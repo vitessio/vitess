@@ -122,8 +122,26 @@ func makeTestRowPayload(values ...string) []byte {
 	return payload
 }
 
+// okTerminalPayload builds a terminal packet payload in the CLIENT_DEPRECATE_EOF
+// format the real tablet/MySQL sends: a 0xFE marker followed by length-encoded
+// affected_rows and last_insert_id, then status_flags and warnings. insertID
+// must be < 251 so its length-encoded form is a single byte. Using the real
+// OK-in-EOF layout (rather than the legacy 5-byte EOF) keeps the producer→parser
+// round-trip honest: the parser decodes this format, so the bytes are not merely
+// aligned by coincidence.
+func okTerminalPayload(insertID byte, statusFlags uint16) []byte {
+	return []byte{
+		mysql.EOFPacket,
+		0x00,                                      // affected_rows (lenenc, 0)
+		insertID,                                  // last_insert_id (lenenc, < 251)
+		byte(statusFlags), byte(statusFlags >> 8), // status_flags (little-endian)
+		0x00, 0x00, // warnings
+	}
+}
+
+// eofPayload is the terminal OK packet for a result set with no extra metadata.
 func eofPayload() []byte {
-	return []byte{mysql.EOFPacket, 0, 0, 0, 0}
+	return okTerminalPayload(0, 0)
 }
 
 func collectRawSender() (func([]byte) error, *[][]byte) {
@@ -244,7 +262,7 @@ func TestStreamQueryResultPackets_MultipleRows(t *testing.T) {
 	expectedSize := (mysql.PacketHeaderSize + 1) + // col count
 		2*(mysql.PacketHeaderSize+len(makeTestColumnDefPayload("col1"))) + // 2 col defs
 		3*(mysql.PacketHeaderSize+len(makeTestRowPayload("a", "b"))) + // 3 rows
-		(mysql.PacketHeaderSize + 5) // terminal EOF
+		(mysql.PacketHeaderSize + len(eofPayload())) // terminal EOF
 	assert.Equal(t, expectedSize, totalBytes)
 }
 
@@ -561,4 +579,56 @@ func TestStreamQueryResultPackets_RewriteKeyspaceSmallBuffer(t *testing.T) {
 		assert.Equalf(t, keyspace, f.Database, "column %d schema must be rewritten to the keyspace", i)
 		assert.Equalf(t, "c"+string(rune('0'+i)), f.Name, "column %d name must survive", i)
 	}
+}
+
+// TestStreamQueryResultPackets_RoundTripToParser feeds the producer's framed
+// output straight into the consumer's RawResultParser and verifies the decoded
+// fields, rows, and terminal metadata all match. It uses a non-trivial terminal
+// (non-zero last_insert_id and status flags) so the OK-in-EOF terminal format is
+// genuinely decoded by the parser rather than aligned by coincidence, pinning
+// the two ends of the wire framing against each other.
+func TestStreamQueryResultPackets_RoundTripToParser(t *testing.T) {
+	reader := newQueryMockReader()
+	tsv := &TabletServer{}
+	send, chunks := collectRawSender()
+
+	go func() {
+		reader.WritePacket([]byte{1}) // 1 column
+		reader.WritePacket(makeTestColumnDefPayloadSchema("testdb", "lid"))
+		reader.WritePacket(makeTestRowPayload("42"))
+		reader.WritePacket(okTerminalPayload(42, 0x0002)) // last_insert_id=42, autocommit
+	}()
+
+	require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send))
+
+	parser := mysql.NewRawResultParser()
+	var (
+		fields      []*querypb.Field
+		rows        [][]sqltypes.Value
+		insertID    uint64
+		statusFlags uint16
+	)
+	for _, c := range *chunks {
+		require.NoError(t, parser.Feed(c, func(r *sqltypes.Result) error {
+			if r.Fields != nil {
+				fields = r.Fields
+			}
+			rows = append(rows, r.Rows...)
+			if r.InsertIDChanged {
+				insertID = r.InsertID
+			}
+			if r.StatusFlags != 0 {
+				statusFlags = r.StatusFlags
+			}
+			return nil
+		}))
+	}
+	require.NoError(t, parser.Finish())
+
+	require.Len(t, fields, 1)
+	assert.Equal(t, "lid", fields[0].Name)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "42", rows[0][0].ToString())
+	assert.Equal(t, uint64(42), insertID, "terminal last_insert_id must round-trip")
+	assert.Equal(t, uint16(0x0002), statusFlags, "terminal status flags must round-trip")
 }
