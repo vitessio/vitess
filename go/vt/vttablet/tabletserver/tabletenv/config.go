@@ -136,6 +136,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream-buffer-size.")
 
+	fs.IntVar(&currentConfig.RawStreamBufferSize, "queryserver-config-raw-stream-buffer-size", defaultConfig.RawStreamBufferSize, "query server raw streaming buffer size, the maximum number of wire-protocol bytes buffered before being flushed to vtgate on the experimental raw streaming path (StreamExecuteRaw). The raw path forwards unparsed MySQL packets, so it is tuned independently of queryserver-config-stream-buffer-size.")
+
 	fs.Int64Var(&currentConfig.QueryCacheMemory, "queryserver-config-query-cache-memory", defaultConfig.QueryCacheMemory, "query server query cache size in bytes, maximum amount of memory to be used for caching. vttablet analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 
 	fs.DurationVar(&currentConfig.SchemaReloadInterval, "queryserver-config-schema-reload-time", defaultConfig.SchemaReloadInterval, "query server schema reload time, how often vttablet reloads schemas from underlying MySQL instance. vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.")
@@ -338,6 +340,7 @@ type TabletConfig struct {
 	Consolidator                string        `json:"consolidator,omitempty"`
 	PassthroughDML              bool          `json:"passthroughDML,omitempty"`
 	StreamBufferSize            int           `json:"streamBufferSize,omitempty"`
+	RawStreamBufferSize         int           `json:"rawStreamBufferSize,omitempty"`
 	ConsolidatorStreamTotalSize int64         `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize int64         `json:"consolidatorStreamQuerySize,omitempty"`
 	ConsolidatorQueryWaiterCap  int64         `json:"consolidatorMaxQueryWait,omitempty"`
@@ -1105,7 +1108,10 @@ var defaultConfig = TabletConfig{
 	// great (the overhead makes the final packets on the wire about twice
 	// bigger than this).
 	StreamBufferSize: 32 * 1024,
-	QueryCacheMemory: 32 * 1024 * 1024, // 32 mb for our query cache
+	// The raw streaming path forwards unparsed MySQL wire packets, so it is
+	// tuned independently of StreamBufferSize and defaults to a larger buffer.
+	RawStreamBufferSize: 256 * 1024,
+	QueryCacheMemory:    32 * 1024 * 1024, // 32 mb for our query cache
 	// The doorkeeper for the plan cache is disabled by default in endtoend tests to ensure
 	// results are consistent between runs.
 	QueryCacheDoorkeeper: !servenv.TestingEndtoend,

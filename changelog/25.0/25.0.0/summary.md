@@ -134,4 +134,6 @@ This differs from the legacy `StreamExecute` path, which rewrites every non-empt
 
 The legacy `StreamExecute` path's behavior is unchanged for now; it will be corrected separately.
 
+The raw streaming path's buffer size is tunable via a new `--queryserver-config-raw-stream-buffer-size` VTTablet flag (default 256KiB). Because the raw path forwards unparsed MySQL wire packets, it is configured independently of `--queryserver-config-stream-buffer-size`.
+
 See [#20215](https://github.com/vitessio/vitess/pull/20215) for details.

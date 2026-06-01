@@ -85,6 +85,10 @@ var logPoolFull = logutil.NewThrottledLogger("PoolFull", 1*time.Minute)
 
 var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", 1*time.Minute)
 
+// rawStreamBufSize is the fallback buffer size used by streamQueryResultPackets
+// only when no buffer is supplied by the caller (e.g. unit tests). In
+// production the gRPC handler always supplies a buffer sized by
+// queryserver-config-raw-stream-buffer-size; it matches that flag's default.
 const rawStreamBufSize = 256 * 1024
 
 // TabletServer implements the RPC interface for the query service.

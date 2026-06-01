@@ -160,6 +160,7 @@ oltpReadPool:
   size: 16
 queryCacheDoorkeeper: true
 queryCacheMemory: 33554432
+rawStreamBufferSize: 262144
 replicationTracker:
   heartbeatIntervalSeconds: 250ms
   mode: disable

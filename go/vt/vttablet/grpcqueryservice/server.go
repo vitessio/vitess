@@ -28,21 +28,22 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 )
 
-const rawStreamBufSize = 256 * 1024
-
 // rawStreamBufPool reuses the per-query raw streaming buffer across *Raw RPC
 // invocations. Each handler serves a single query (the client opens a fresh
 // stream per query), so without this pool every query would allocate a new
-// 256KB buffer. The buffer's contents are fully serialized by stream.Send
-// before the handler returns, so it is safe to return to the pool afterwards.
+// buffer. The buffer's contents are fully serialized by stream.Send before the
+// handler returns, so it is safe to return to the pool afterwards. Buffers are
+// sized to queryserver-config-raw-stream-buffer-size, read lazily so flag
+// parsing has completed by the time the first stream is served.
 var rawStreamBufPool = sync.Pool{New: func() any {
-	b := make([]byte, rawStreamBufSize)
+	b := make([]byte, tabletenv.NewCurrentConfig().RawStreamBufferSize)
 	return &b
 }}
 
