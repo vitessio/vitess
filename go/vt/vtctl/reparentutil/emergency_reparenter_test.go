@@ -2573,6 +2573,151 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsAfterRelayLogApply(t *testin
 	})
 }
 
+// TestEmergencyReparenterDoesNotRestartReplicationOnPromotedPrimary verifies
+// that when PromoteReplica succeeds but a downstream step fails (e.g. all
+// replicas fail SetReplicationSource), the deferred cleanup does NOT call
+// StartReplication on the just-promoted tablet. Doing so would disable
+// semi-sync on the new primary, fail with ER_BAD_SLAVE, and mask the real
+// ERS error.
+func TestEmergencyReparenterDoesNotRestartReplicationOnPromotedPrimary(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			promotedAlias    = "zone1-0000000101"
+			survivorAlias    = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+		// Primary is dead; both replicas have their IO threads stopped by ERS.
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(promotedAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(survivorAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		// Both replicas successfully apply their relay logs.
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(promotedAlias), relayLogPosition).
+			Return(nil).
+			AnyTimes()
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(survivorAlias), relayLogPosition).
+			Return(nil).
+			AnyTimes()
+
+		// Errant-GTID detection: equal journal length keeps both candidates.
+		tmc.EXPECT().
+			ReadReparentJournalInfo(gomock.Any(), gomock.Any()).
+			Return(int32(1), nil).
+			AnyTimes()
+
+		// PromoteReplica SUCCEEDS on the chosen new primary — this is the
+		// crux of the regression: tablet type is now PRIMARY.
+		tmc.EXPECT().
+			PromoteReplica(gomock.Any(), tabletAliasMatcher(promotedAlias), gomock.Any()).
+			Return(relayLogPosition, nil).
+			Times(1)
+
+		// PopulateReparentJournal succeeds.
+		tmc.EXPECT().
+			PopulateReparentJournal(gomock.Any(), tabletAliasMatcher(promotedAlias), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		// SetReplicationSource fails on every non-promoted tablet (dead primary
+		// + survivor), forcing reparentReplicas to return an error AFTER
+		// PromoteReplica has already succeeded.
+		tmc.EXPECT().
+			SetReplicationSource(gomock.Any(), tabletAliasMatcher(primaryAlias), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(assert.AnError).
+			AnyTimes()
+
+		tmc.EXPECT().
+			SetReplicationSource(gomock.Any(), tabletAliasMatcher(survivorAlias), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(assert.AnError).
+			AnyTimes()
+
+		// The non-promoted survivor must have its replication restarted by
+		// the deferred cleanup. The promoted tablet must NOT — gomock will
+		// fail the test if StartReplication is called for it because no
+		// expectation is registered.
+		tmc.EXPECT().
+			StartReplication(gomock.Any(), tabletAliasMatcher(survivorAlias), gomock.Any()).
+			Return(nil).
+			Times(1)
+
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+		})
+
+		testutil.AddTablets(
+			ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: time.Second,
+			NewPrimaryAlias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		})
+
+		require.Error(t, err)
+	})
+}
+
 // tabletAliasMatcher matches tablets by alias string for gomock expectations.
 func tabletAliasMatcher(alias string) gomock.Matcher {
 	return gomock.Cond(func(tablet *topodatapb.Tablet) bool {
@@ -3047,7 +3192,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false, nil)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -5012,7 +5157,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */, nil /* primaryPromoted */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -5882,7 +6027,7 @@ func TestParentContextCancelled(t *testing.T) {
 		time.Sleep(time.Second)
 		cancel()
 	}()
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, true)
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, true, nil)
 	require.NoError(t, err)
 }
 

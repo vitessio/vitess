@@ -180,6 +180,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// the ERS restarts them as part of a successful reparent.
 		replicasToRestart []*topodatapb.Tablet
 
+		// newPrimary is the tablet ERS is trying to promote. primaryPromoted becomes true
+		// once PromoteReplica/InitPrimary succeeds on it inside reparentReplicas — at that
+		// point the tablet is no longer a replica, so the deferred cleanup must NOT call
+		// StartReplication on it even if a downstream step fails.
+		newPrimary      *topodatapb.Tablet
+		primaryPromoted bool
+
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
@@ -199,6 +206,26 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
+		// If PromoteReplica/InitPrimary succeeded inside reparentReplicas but a
+		// downstream step failed (PopulateReparentJournal, or replica
+		// SetReplicationSource), the candidate is now a PRIMARY in MySQL. Calling
+		// StartReplication on it would disable semi-sync, fail with ER_BAD_SLAVE,
+		// and mask the real ERS error. Filter it out of the restart set.
+		cleanupReplicas := replicasToRestart
+		if primaryPromoted && newPrimary != nil {
+			cleanupReplicas = make([]*topodatapb.Tablet, 0, len(replicasToRestart))
+			for _, replica := range replicasToRestart {
+				if topoproto.TabletAliasEqual(replica.Alias, newPrimary.Alias) {
+					erp.logger.Infof("not restarting replication on %s after failed ERS: tablet was already promoted to PRIMARY", topoproto.TabletAliasString(replica.Alias))
+					continue
+				}
+				cleanupReplicas = append(cleanupReplicas, replica)
+			}
+		}
+		if len(cleanupReplicas) == 0 {
+			return
+		}
+
 		// We create a new context with a fresh timeout so that the parent context does not cancel early while
 		// we attempt to restart replication on the stopped replicas.
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
@@ -210,7 +237,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
-		cleanupErr := erp.restartReplicationOnStoppedReplicas(ctx, prevPrimary, replicasToRestart, opts.durability)
+		cleanupErr := erp.restartReplicationOnStoppedReplicas(ctx, prevPrimary, cleanupReplicas, opts.durability)
 		if cleanupErr == nil {
 			return
 		}
@@ -436,7 +463,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// initialize the newPrimary with the intermediate source, override this value if it is not the ideal candidate
-	newPrimary := intermediateSource
+	newPrimary = intermediateSource
 	if !isIdeal {
 		// we now reparent all the tablets to start replicating from the intermediate source
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
@@ -478,7 +505,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Since the new primary tablet belongs to the validCandidateTablets list, we no longer need any additional constraint checks
 
 	// Final step is to promote our primary candidate
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, false /* intermediateReparent */)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, stoppedReplicationSnapshot.statusMap, opts, false /* intermediateReparent */, &primaryPromoted)
 	if err != nil {
 		return err
 	}
@@ -946,7 +973,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 
 	// we reparent all the other valid tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, true /* intermediateReparent */)
+	reachableTablets, err := erp.reparentReplicas(ctx, ev, source, validTabletMap, statusMap, opts, true /* intermediateReparent */, nil /* primaryPromoted */)
 	if err != nil {
 		return nil, err
 	}
@@ -979,6 +1006,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// Since ERS can sometimes promote a tablet, which isn't a candidate for promotion, if it is the most advanced, we don't want to
 	// call PromoteReplica on it. We just want to get all replicas to replicate from it to get caught up, after which we'll promote the primary
 	// candidate separately. During the final promotion, we call `PromoteReplica` and `PopulateReparentJournal`.
+	primaryPromoted *bool, // optional out-pointer set to true once PromoteReplica/InitPrimary succeeds. The deferred cleanup in reparentShardLocked uses this to avoid running StartReplication on the just-promoted PRIMARY when a downstream step fails. Pass nil from the intermediate reparent path (where handlePrimary is a no-op).
 ) ([]*topodatapb.Tablet, error) {
 	var (
 		replicasStartedReplication []*topodatapb.Tablet
@@ -1025,6 +1053,14 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			}
 			if err != nil {
 				return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary", alias)
+			}
+			// Signal that the tablet is now PRIMARY so the caller's deferred cleanup
+			// will not run StartReplication on it if a later step fails. Must be set
+			// before PopulateReparentJournal: a journal-write failure leaves the
+			// tablet promoted, and restarting replication on it would disable
+			// semi-sync and fail with ER_BAD_SLAVE.
+			if primaryPromoted != nil {
+				*primaryPromoted = true
 			}
 			erp.logger.Infof("populating reparent journal on new primary %v", alias)
 			err = erp.tmc.PopulateReparentJournal(primaryCtx, tablet, now, opts.lockAction, tablet.Alias, position)

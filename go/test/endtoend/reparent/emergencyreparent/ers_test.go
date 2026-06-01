@@ -712,9 +712,13 @@ func TestERSSplitBrainDetection(t *testing.T) {
 	// Detach tablets[2] and tablets[3] from replication and make them writable.
 	// Each subsequent INSERT will generate a GTID under that tablet's own
 	// server UUID, producing two-sided GTID divergence (split-brain).
+	// super_read_only must be cleared explicitly: Vitess leaves demoted replicas
+	// at super_read_only=1, which blocks the direct INSERT below regardless of
+	// read_only.
 	detachAndMakeWritable := []string{
 		"STOP REPLICA",
 		"RESET REPLICA ALL",
+		"SET GLOBAL super_read_only = OFF",
 		"SET GLOBAL read_only = OFF",
 	}
 	utils.RunSQLs(ctx, t, detachAndMakeWritable, tablets[2])
