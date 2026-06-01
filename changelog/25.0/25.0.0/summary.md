@@ -19,6 +19,7 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+        - [Raw streaming corrects `information_schema` field metadata](#vttablet-raw-streaming-information-schema)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -124,3 +125,13 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+#### <a id="vttablet-raw-streaming-information-schema"/>Raw streaming corrects `information_schema` field metadata</a>
+
+On the raw streaming path (gated by the new `--experimental-raw-streaming` VTGate flag), the tablet now rewrites the physical MySQL database name to the keyspace name in result-set field metadata **only for fields whose database is the physical DB name**, leaving other schemas such as `information_schema` untouched.
+
+This differs from the legacy `StreamExecute` path, which rewrites every non-empty field database to the keyspace name unconditionally — clobbering `information_schema` and other schemas. The raw path's behavior is the correct one and matches the (non-streaming) `Execute` path. Queries that select metadata columns sourced from `information_schema` will therefore report the real schema name on the raw path instead of the keyspace name.
+
+The legacy `StreamExecute` path's behavior is unchanged for now; it will be corrected separately.
+
+See [#20215](https://github.com/vitessio/vitess/pull/20215) for details.

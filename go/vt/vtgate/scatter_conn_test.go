@@ -700,25 +700,29 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 	})
 }
 
-// TestStreamExecuteMultiRawReplacesKeyspace verifies that the raw streaming
-// path rewrites field.Database to the keyspace name for full-metadata (ALL)
-// results, matching the non-raw path (where the tablet does this before vtgate
-// observes the result). The raw path forwards the physical MySQL DB name on the
-// wire, so vtgate must rewrite it.
-func TestStreamExecuteMultiRawReplacesKeyspace(t *testing.T) {
+// TestStreamExecuteMultiRawForwardsFieldDatabase verifies that the raw streaming
+// path forwards field.Database from the wire verbatim, without any vtgate-side
+// rewrite. The keyspace rewrite of field metadata now happens on the tablet
+// (streamQueryResultPackets diverts column-definition packets through the
+// rewriter), so by the time vtgate parses the raw bytes the keyspace name is
+// already in place. The SandboxConn does not simulate the tablet-side rewrite,
+// so whatever Database the fixture sets is exactly what vtgate must deliver.
+func TestStreamExecuteMultiRawForwardsFieldDatabase(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	const keyspace = "TestStreamExecuteMultiRawReplacesKeyspace"
+	const keyspace = "TestStreamExecuteMultiRawForwardsFieldDatabase"
 
 	hc := discovery.NewFakeHealthCheck(nil)
 	createSandbox(keyspace)
 	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
 	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 
-	// The field carries the physical MySQL DB name, as it arrives on the raw
-	// wire; the default sandbox fixtures leave Database empty, so set it here.
+	// The field carries the Database exactly as it arrives on the raw wire. The
+	// tablet would already have rewritten the physical DB name to the keyspace;
+	// the sandbox doesn't, so vtgate must forward this value unchanged.
+	const wireDatabase = "already_rewritten_keyspace"
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int32, Database: "vt_physical_db"},
+			{Name: "id", Type: sqltypes.Int32, Database: wireDatabase},
 		},
 		Rows: [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
 	}})
@@ -744,7 +748,7 @@ func TestStreamExecuteMultiRawReplacesKeyspace(t *testing.T) {
 			return nil
 		}, nullResultsObserver{}, false)
 	require.NoError(t, vterrors.Aggregate(errs))
-	require.Equal(t, keyspace, gotDatabase)
+	require.Equal(t, wireDatabase, gotDatabase)
 }
 
 // TestStreamExecuteMultiRawSurfacesInsertID verifies that the raw streaming path

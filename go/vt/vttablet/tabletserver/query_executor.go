@@ -441,9 +441,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 // Unlike Stream it does not use the stream consolidator, which shares parsed
 // *sqltypes.Result across clients (raw bytes can't be shared without parsing).
 //
-// One parity gap versus Stream remains: keyspace rewrite of field metadata
-// happens on the vtgate side instead of here (the tablet has no parsed result
-// to rewrite); see rawStreamCallback in go/vt/vtgate/scatter_conn.go.
+// Like Stream, it rewrites the physical MySQL DB name in field metadata to the
+// keyspace name when IncludeFields == ALL; streamQueryResultPackets diverts the
+// column-definition packets through the rewriter so vtgate receives the same
+// bytes the non-raw path would have produced.
 //
 // FetchLastInsertId is honored: MySQL hardcodes a SELECT resultset terminator's
 // last_insert_id to 0, so the value a LAST_INSERT_ID(x) call set is never on the
@@ -476,6 +477,19 @@ func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error)
 		return queryservice.StreamExecuteRawState{}, err
 	}
 
+	// Decide whether to rewrite field metadata's schema (physical MySQL DB name)
+	// to the keyspace name, matching the non-raw QueryExecutor.Stream path. We
+	// gate exactly like Stream (query_executor.go, the StreamExecute path):
+	// IncludeFields == ALL and the keyspace differs from the physical DB name —
+	// and deliberately do NOT add the PlanSelect/PlanSelectImpossible plan gate
+	// that the inline TabletServer.Execute path uses. This is the streaming RPC,
+	// so it must behave like Stream for byte-for-byte parity; Stream applies the
+	// rewrite for every streamed plan, not just selects.
+	var replaceKeyspace string
+	if sqltypes.IncludeFieldsOrDefault(qre.options) == querypb.ExecuteOptions_ALL && qre.tsv.sm.target.Keyspace != qre.tsv.config.DB.DBName {
+		replaceKeyspace = qre.tsv.sm.target.Keyspace
+	}
+
 	// if we have a transaction id, let's use the txPool for this query
 	var conn *connpool.PooledConn
 	if qre.connID != 0 {
@@ -499,7 +513,7 @@ func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error)
 		conn = dbConn
 	}
 
-	return qre.execStreamRawSQL(conn, qre.connID != 0, sql, buf, callback)
+	return qre.execStreamRawSQL(conn, qre.connID != 0, sql, buf, qre.tsv.config.DB.DBName, replaceKeyspace, callback)
 }
 
 // MessageStream streams messages from a message table.
@@ -1369,7 +1383,7 @@ func (qre *QueryExecutor) registerQueryDetail(conn *connpool.Conn, isTransaction
 // query in the QueryList (for terminability) and forwards raw MySQL wire
 // protocol packets through streamQueryResultPackets instead of parsing them
 // into sqltypes.Result.
-func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransaction bool, sql string, buf []byte, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
+func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransaction bool, sql string, buf []byte, rewriteDBName string, rewriteKeyspace string, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamRawSQL")
 	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
@@ -1391,7 +1405,7 @@ func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransact
 	defer remove()
 
 	err = conn.Conn.StreamRaw(ctx, sql, isTransaction, func(mysqlConn *mysql.Conn) error {
-		return qre.tsv.streamQueryResultPackets(ctx, mysqlConn, buf, callback)
+		return qre.tsv.streamQueryResultPackets(ctx, mysqlConn, buf, rewriteDBName, rewriteKeyspace, callback)
 	})
 	if err != nil || !qre.options.GetFetchLastInsertId() {
 		return queryservice.StreamExecuteRawState{}, err

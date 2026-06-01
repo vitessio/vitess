@@ -126,6 +126,12 @@ func lenEncStringSize(value string) int {
 	return lenEncIntSize(uint64(l)) + l
 }
 
+// LenEncStringSize returns the number of bytes that the length-encoded encoding
+// of value occupies (the length prefix plus the string bytes).
+func LenEncStringSize(value string) int {
+	return lenEncStringSize(value)
+}
+
 func writeLenEncString(data []byte, pos int, value string) int {
 	pos = writeLenEncInt(data, pos, uint64(len(value)))
 	return writeEOFString(data, pos, value)

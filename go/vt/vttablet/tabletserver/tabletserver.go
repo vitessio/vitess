@@ -1236,10 +1236,20 @@ type packetReader interface {
 // streamQueryResultPackets streams raw MySQL result set packets from a connection.
 // It reads the column count, column definitions, optional mid-stream EOF,
 // and row data packets, forwarding them as raw bytes through the send callback.
+//
+// When rewriteKeyspace is non-empty, each column-definition packet whose schema
+// equals rewriteDBName has its schema rewritten to rewriteKeyspace before being
+// forwarded. This mirrors the non-raw StreamExecute path, where the tablet
+// replaces the physical MySQL DB name with the keyspace name in field metadata
+// (see QueryExecutor.Stream and TabletServer.Execute). Schemas that differ from
+// the physical DB name (e.g. information_schema) are left untouched. When
+// rewriteKeyspace is empty the whole stream stays on the zero-copy fast path.
 func (tsv *TabletServer) streamQueryResultPackets(
 	ctx context.Context,
 	reader packetReader,
 	buf []byte,
+	rewriteDBName string,
+	rewriteKeyspace string,
 	send func([]byte) error,
 ) error {
 	if len(buf) == 0 {
@@ -1397,10 +1407,66 @@ func (tsv *TabletServer) streamQueryResultPackets(
 		return flush()
 	}
 
-	// Phase 2: Read column definition packets
-	for range colCount {
-		if _, _, err := readPacket(); err != nil {
-			return err
+	// Phase 2: Read column definition packets.
+	//
+	// On the zero-copy fast path (no keyspace rewrite requested) each packet is
+	// read straight into buf and batched with its neighbours. When a rewrite is
+	// requested we read each packet into buf the same way and rewrite its schema
+	// in place: the keyspace name rarely matches the physical DB name's length,
+	// so RewriteColumnDefinitionSchemaInPlace shifts the rest of the packet
+	// within buf and recomputes its 3-byte length header. We reserve room for
+	// the worst-case growth before reading so the rewrite never overflows buf,
+	// and the rewritten packets are batched and flushed just like the fast path.
+	// No per-column allocation happens on either path.
+	if rewriteKeyspace == "" {
+		for range colCount {
+			if _, _, err := readPacket(); err != nil {
+				return err
+			}
+		}
+	} else {
+		// A rewrite replaces the schema field with the keyspace name, so a packet
+		// can grow by at most the encoded size of the keyspace (the worst case is
+		// an empty original schema); reserve that much trailing room so the
+		// in-place rewrite always fits.
+		growth := mysql.LenEncStringSize(rewriteKeyspace)
+		for range colCount {
+			var hdr [mysql.PacketHeaderSize]byte
+			packetLength, err := reader.ReadHeaderInto(hdr[:])
+			if err != nil {
+				if cause := context.Cause(ctx); cause != nil {
+					return cause
+				}
+				return vterrors.Wrapf(err, "failed to read column definition header")
+			}
+
+			// Ensure the packet plus worst-case rewrite growth fits contiguously
+			// in buf; flush first to free space if needed.
+			need := mysql.PacketHeaderSize + packetLength + growth
+			if bufOffset+need > len(buf) {
+				if err := flush(); err != nil {
+					return err
+				}
+			}
+			if need > len(buf) {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column definition packet too large for stream buffer: %d bytes", packetLength)
+			}
+
+			packetStart := bufOffset
+			copy(buf[bufOffset:], hdr[:])
+			bufOffset += mysql.PacketHeaderSize
+			if packetLength > 0 {
+				if err := reader.ReadDataInto(buf[bufOffset : bufOffset+packetLength]); err != nil {
+					return vterrors.Wrapf(err, "failed to read column definition payload")
+				}
+				bufOffset += packetLength
+			}
+
+			newOffset, _, err := mysql.RewriteColumnDefinitionSchemaInPlace(buf, packetStart, bufOffset, rewriteDBName, rewriteKeyspace)
+			if err != nil {
+				return err
+			}
+			bufOffset = newOffset
 		}
 	}
 

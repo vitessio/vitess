@@ -83,6 +83,10 @@ func (m *queryMockReader) Close() {
 }
 
 func makeTestColumnDefPayload(name string) []byte {
+	return makeTestColumnDefPayloadSchema("testdb", name)
+}
+
+func makeTestColumnDefPayloadSchema(schema, name string) []byte {
 	var payload []byte
 
 	writeLenEncStr := func(s string) {
@@ -91,7 +95,7 @@ func makeTestColumnDefPayload(name string) []byte {
 	}
 
 	writeLenEncStr("def")            // catalog
-	writeLenEncStr("testdb")         // schema
+	writeLenEncStr(schema)           // schema
 	writeLenEncStr("testtable")      // table
 	writeLenEncStr("testtable")      // org_table
 	writeLenEncStr(name)             // name
@@ -153,7 +157,7 @@ func TestStreamQueryResultPackets_Simple(t *testing.T) {
 		reader.WritePacket(eofPayload())
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send)
 	require.NoError(t, err)
 
 	// We should have received at least one chunk
@@ -184,7 +188,7 @@ func TestStreamQueryResultPackets_SingleRow(t *testing.T) {
 		reader.WritePacket(eofPayload())
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send)
 	require.NoError(t, err)
 	require.NotEmpty(t, *chunks)
 }
@@ -207,7 +211,7 @@ func TestStreamQueryResultPackets_ErrorResponse(t *testing.T) {
 		reader.WritePacket(errPayload)
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send)
 	require.NoError(t, err) // Flush should succeed; error is in the raw bytes
 }
 
@@ -227,7 +231,7 @@ func TestStreamQueryResultPackets_MultipleRows(t *testing.T) {
 		reader.WritePacket(eofPayload())                     // Terminal EOF
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send)
 	require.NoError(t, err)
 	require.NotEmpty(t, *chunks)
 
@@ -261,7 +265,7 @@ func TestStreamQueryResultPackets_ContextCancellation(t *testing.T) {
 		reader.Close()
 	}()
 
-	err := tsv.streamQueryResultPackets(ctx, reader, nil, send)
+	err := tsv.streamQueryResultPackets(ctx, reader, nil, "", "", send)
 	// Should get an error (either context cancelled or connection closed)
 	require.Error(t, err)
 }
@@ -312,7 +316,7 @@ func TestStreamQueryResultPackets_WideResultSet(t *testing.T) {
 				reader.WritePacket(eofPayload())
 			}()
 
-			require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, send))
+			require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send))
 
 			parser := mysql.NewRawResultParser()
 			var fields []*querypb.Field
@@ -362,7 +366,7 @@ func TestStreamQueryResultPackets_WideResultSetNoRows(t *testing.T) {
 		reader.Close() // nothing follows a result set on an idle connection
 	}()
 
-	require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, send))
+	require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send))
 
 	parser := mysql.NewRawResultParser()
 	var fields []*querypb.Field
@@ -390,7 +394,7 @@ func TestStreamQueryResultPackets_LocalInfile(t *testing.T) {
 		reader.WritePacket(append([]byte{0xfb}, []byte("/tmp/data.csv")...))
 	}()
 
-	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, send)
+	err := tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send)
 	require.ErrorContains(t, err, "LOCAL INFILE")
 }
 
@@ -442,7 +446,7 @@ func TestStreamQueryResultPackets_LargeRowMultiFragment(t *testing.T) {
 		reader.WritePacket(eofPayload())
 	}()
 
-	require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, send))
+	require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, "", "", send))
 
 	parser := mysql.NewRawResultParser()
 	var fields []*querypb.Field
@@ -459,4 +463,102 @@ func TestStreamQueryResultPackets_LargeRowMultiFragment(t *testing.T) {
 	require.Len(t, fields, 1)
 	require.Len(t, rows, 1)
 	require.Equal(t, value, rows[0][0].Raw())
+}
+
+// TestStreamQueryResultPackets_RewriteKeyspace verifies the parity corner of the
+// tablet-side keyspace rewrite: when a rewrite is requested, a field whose
+// schema is the physical MySQL DB name is rewritten to the keyspace name, while
+// a field referencing another schema (information_schema) is left untouched —
+// exactly as the non-raw StreamExecute path behaves. Without the rewrite the
+// physical DB name would reach vtgate unchanged, so this fails on the
+// pre-rewrite producer.
+func TestStreamQueryResultPackets_RewriteKeyspace(t *testing.T) {
+	const (
+		physicalDB = "vt_customer"
+		keyspace   = "customer"
+	)
+
+	reader := newQueryMockReader()
+	tsv := &TabletServer{}
+	send, chunks := collectRawSender()
+
+	go func() {
+		reader.WritePacket([]byte{2}) // 2 columns
+		// Column 0: belongs to the physical DB → must be rewritten to keyspace.
+		reader.WritePacket(makeTestColumnDefPayloadSchema(physicalDB, "id"))
+		// Column 1: information_schema → must be left untouched (parity corner).
+		reader.WritePacket(makeTestColumnDefPayloadSchema("information_schema", "TABLE_NAME"))
+		reader.WritePacket(makeTestRowPayload("1", "users"))
+		reader.WritePacket(eofPayload())
+	}()
+
+	require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, nil, physicalDB, keyspace, send))
+
+	parser := mysql.NewRawResultParser()
+	var fields []*querypb.Field
+	for _, c := range *chunks {
+		require.NoError(t, parser.Feed(c, func(r *sqltypes.Result) error {
+			if r.Fields != nil {
+				fields = r.Fields
+			}
+			return nil
+		}))
+	}
+
+	require.Len(t, fields, 2)
+	assert.Equal(t, keyspace, fields[0].Database, "physical DB name must be rewritten to the keyspace")
+	assert.Equal(t, "information_schema", fields[1].Database, "information_schema must be left untouched")
+	// Names and other metadata must survive the rewrite intact.
+	assert.Equal(t, "id", fields[0].Name)
+	assert.Equal(t, "TABLE_NAME", fields[1].Name)
+}
+
+// TestStreamQueryResultPackets_RewriteKeyspaceSmallBuffer exercises the rewrite
+// path when the column definitions do not all fit in buf at once: the producer
+// must flush the batched definitions mid-phase and keep rewriting subsequent
+// packets correctly after the buffer is reset. The buffer is sized to hold a
+// single column-definition packet, forcing a flush between every column.
+func TestStreamQueryResultPackets_RewriteKeyspaceSmallBuffer(t *testing.T) {
+	const (
+		physicalDB = "vt_customer"
+		keyspace   = "customer"
+	)
+
+	col := makeTestColumnDefPayloadSchema(physicalDB, "c0")
+	// Room for exactly one full column-definition packet (header + payload) plus
+	// the rewrite's reserved growth, but not two — so each new column forces a
+	// flush of the batched ones.
+	buf := make([]byte, mysql.PacketHeaderSize+len(col)+mysql.LenEncStringSize(keyspace))
+
+	reader := newQueryMockReader()
+	tsv := &TabletServer{}
+	send, chunks := collectRawSender()
+
+	go func() {
+		reader.WritePacket([]byte{3}) // 3 columns
+		reader.WritePacket(makeTestColumnDefPayloadSchema(physicalDB, "c0"))
+		reader.WritePacket(makeTestColumnDefPayloadSchema(physicalDB, "c1"))
+		reader.WritePacket(makeTestColumnDefPayloadSchema(physicalDB, "c2"))
+		reader.WritePacket(makeTestRowPayload("1", "2", "3"))
+		reader.WritePacket(eofPayload())
+	}()
+
+	require.NoError(t, tsv.streamQueryResultPackets(context.Background(), reader, buf, physicalDB, keyspace, send))
+
+	parser := mysql.NewRawResultParser()
+	var fields []*querypb.Field
+	for _, c := range *chunks {
+		require.NoError(t, parser.Feed(c, func(r *sqltypes.Result) error {
+			if r.Fields != nil {
+				fields = r.Fields
+			}
+			return nil
+		}))
+	}
+
+	require.Len(t, fields, 3)
+	for i, f := range fields {
+		assert.Equalf(t, keyspace, f.Database, "column %d schema must be rewritten to the keyspace", i)
+		assert.Equalf(t, "c"+string(rune('0'+i)), f.Name, "column %d name must survive", i)
+	}
 }
