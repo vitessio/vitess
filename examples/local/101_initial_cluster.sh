@@ -19,6 +19,17 @@
 
 source ../common/env.sh
 
+# vtorc cannot reach the tablets unless $hostname resolves.
+if ! getent hosts "$hostname" >/dev/null 2>&1; then
+	cat >&2 <<EOF
+ERROR: "$hostname" does not resolve.
+
+Fix by running:
+    echo "127.0.0.1 localhost $hostname" | sudo tee -a /etc/hosts
+EOF
+	exit 1
+fi
+
 # This is done here as a means to support testing the experimental
 # custom sidecar database name work in a wide variety of scenarios
 # as the local examples are used to test many features locally.
