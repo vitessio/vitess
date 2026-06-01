@@ -1001,6 +1001,68 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
+			name: "lower MySQL release wins even when slightly behind in position",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
 			name: "no active primary in shard",
 			tmc: &chooseNewPrimaryTestTMClient{
 				replicationStatuses: map[string]*replicationdatapb.Status{

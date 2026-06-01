@@ -57,12 +57,11 @@ const (
 
 // ElectNewPrimary finds a tablet that should become a primary after reparent.
 // The criteria for the new primary-elect are (preferably) to be in the same
-// cell as the current primary, and to be different from avoidPrimaryAlias. The
-// tablet with the most advanced replication position is preferred, then promotion
-// rules (operator intent), then the lowest MySQL version to maintain replication
-// compatibility (replicas must be >= primary version). Further ties are broken by
-// InnoDB buffer pool size and tablet alias. Tablets taking backups are excluded
-// from consideration.
+// cell as the current primary, and to be different from avoidPrimaryAlias.
+// Candidates are sorted by: promotion rules (operator intent), then the lowest
+// MySQL release (major.minor) to maintain replication compatibility (replicas
+// must be >= primary version), then replication position, InnoDB buffer pool
+// size, and tablet alias. Tablets taking backups are not considered.
 // Note that the search for the most advanced replication position will race
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
@@ -169,8 +168,9 @@ func ElectNewPrimary(
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot find a tablet to reparent to%v", reasonsToInvalidate.String())
 	}
 
-	// sort preferred tablets for finding the best primary
-	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, mysqlVersions, opts.durability)
+	// sort preferred tablets for finding the best primary — PRS prefers version over position
+	// because it always catches the elected tablet up to the old primary's exact position.
+	err = sortTabletsForReparent(validTablets, tabletPositions, innodbBufferPool, mysqlVersions, opts.durability, SortForPRS)
 	if err != nil {
 		return nil, err
 	}

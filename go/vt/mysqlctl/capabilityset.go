@@ -43,15 +43,15 @@ func newCapabilitySet(f MySQLFlavor, v ServerVersion) (c capabilitySet) {
 }
 
 func (c *capabilitySet) hasMySQLUpgradeInServer() bool {
-	return c.isMySQLLike() && c.version.AtLeast(ServerVersion{Major: 8, Minor: 0, Patch: 16})
+	return c.isMySQLLike() && c.version.atLeast(ServerVersion{Major: 8, Minor: 0, Patch: 16})
 }
 
 func (c *capabilitySet) hasInitializeInServer() bool {
-	return c.isMySQLLike() && c.version.AtLeast(ServerVersion{Major: 5, Minor: 7, Patch: 0})
+	return c.isMySQLLike() && c.version.atLeast(ServerVersion{Major: 5, Minor: 7, Patch: 0})
 }
 
 func (c *capabilitySet) hasMaria104InstallDb() bool {
-	return c.isMariaDB() && c.version.AtLeast(ServerVersion{Major: 10, Minor: 4, Patch: 0})
+	return c.isMariaDB() && c.version.atLeast(ServerVersion{Major: 10, Minor: 4, Patch: 0})
 }
 
 // IsMySQLLike tests if the server is either MySQL

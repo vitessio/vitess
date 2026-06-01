@@ -191,7 +191,7 @@ func TestReparentSorter(t *testing.T) {
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, testcase.mysqlVersions, durability)
+			err := sortTabletsForReparent(testcase.tablets, testcase.positions, testcase.innodbBufferPool, testcase.mysqlVersions, durability, SortForERS)
 			if testcase.containsErr != "" {
 				require.EqualError(t, err, testcase.containsErr)
 			} else {
@@ -204,6 +204,7 @@ func TestReparentSorter(t *testing.T) {
 
 func TestReparentSorter_MySQLVersion(t *testing.T) {
 	sid1 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 
 	tabletA := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
@@ -217,8 +218,10 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 		Type:  topodatapb.TabletType_REPLICA,
 	}
-
-	sid2 := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+	tabletRdonly := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 103},
+		Type:  topodatapb.TabletType_RDONLY,
+	}
 
 	posAdvanced := &RelayLogPositions{
 		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
@@ -247,48 +250,87 @@ func TestReparentSorter_MySQLVersion(t *testing.T) {
 		tablets       []*topodatapb.Tablet
 		positions     []*RelayLogPositions
 		mysqlVersions []mysqlctl.ServerVersion
+		mode          SortMode
 		sortedTablets []*topodatapb.Tablet
 	}{
 		{
-			name:          "lower version preferred when positions are equal",
+			name:          "ERS: lower version preferred when positions are equal",
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
 			positions:     []*RelayLogPositions{posAdvanced, posAdvanced},
 			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
 			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
 		},
 		{
-			name:          "position wins over lower version",
+			name:          "ERS: position wins over lower version",
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
 			positions:     []*RelayLogPositions{posAdvanced, posBehind},
 			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
 			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
 		},
 		{
-			name:          "same version falls through to position",
+			name:          "ERS: same version falls through to position",
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
 			positions:     []*RelayLogPositions{posAdvanced, posBehind},
 			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql80},
 			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
 		},
 		{
-			name:          "unknown version sorts last",
+			name:          "ERS: unknown version sorts last",
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB, tabletC},
 			positions:     []*RelayLogPositions{posAdvanced, posAdvanced, posAdvanced},
 			mysqlVersions: []mysqlctl.ServerVersion{unknownVersion, mysql84, mysql80},
 			sortedTablets: []*topodatapb.Tablet{tabletC, tabletB, tabletA},
 		},
 		{
-			name:          "nil version slice preserves position-based ordering",
+			name:          "ERS: nil version slice preserves position-based ordering",
 			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
 			positions:     []*RelayLogPositions{posBehind, posAdvanced},
 			mysqlVersions: nil,
 			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
 		},
+		{
+			name:          "ERS: position still wins when lower version is behind",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
+			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
+		},
+		{
+			name:          "ERS: position gates before promotion rules - advanced MustNot beats behind Neutral",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletRdonly},
+			positions:     []*RelayLogPositions{posBehind, posAdvanced},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql80},
+			sortedTablets: []*topodatapb.Tablet{tabletRdonly, tabletA},
+		},
+		{
+			name:          "PRS: lower release wins even when slightly behind in position",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql84, mysql80},
+			mode:          SortForPRS,
+			sortedTablets: []*topodatapb.Tablet{tabletB, tabletA},
+		},
+		{
+			name:          "PRS: same release falls through to position",
+			tablets:       []*topodatapb.Tablet{tabletA, tabletB},
+			positions:     []*RelayLogPositions{posAdvanced, posBehind},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql80},
+			mode:          SortForPRS,
+			sortedTablets: []*topodatapb.Tablet{tabletA, tabletB},
+		},
+		{
+			name:          "PRS: promotion rule gates before version - MustNot on lower version loses",
+			tablets:       []*topodatapb.Tablet{tabletRdonly, tabletA},
+			positions:     []*RelayLogPositions{posAdvanced, posAdvanced},
+			mysqlVersions: []mysqlctl.ServerVersion{mysql80, mysql84},
+			mode:          SortForPRS,
+			sortedTablets: []*topodatapb.Tablet{tabletA, tabletRdonly},
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := sortTabletsForReparent(tc.tablets, tc.positions, nil, tc.mysqlVersions, durability)
+			err := sortTabletsForReparent(tc.tablets, tc.positions, nil, tc.mysqlVersions, durability, tc.mode)
 			require.NoError(t, err)
 			require.Equal(t, tc.sortedTablets, tc.tablets)
 		})

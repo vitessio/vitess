@@ -30,24 +30,37 @@ import (
 
 var unknownVersion = mysqlctl.ServerVersion{Major: math.MaxInt, Minor: math.MaxInt, Patch: math.MaxInt}
 
-// reparentSorter sorts tablets by GTID positions, promotion rules, MySQL version, and InnoDB buffer pool size
-// aimed at finding the best candidate for intermediate promotion in ERS, and the new primary in PRS.
+// SortMode controls the priority order used when sorting reparent candidates.
+type SortMode int
+
+const (
+	// SortForERS sorts by: position > promotion rules > version > buffer pool > alias.
+	// Position is paramount because ERS must minimize data loss.
+	SortForERS SortMode = iota
+	// SortForPRS sorts by: promotion rules > version > position > buffer pool > alias.
+	// PRS always catches the elected tablet up to the old primary's position, so version
+	// compatibility matters more than replication position.
+	SortForPRS
+)
+
+// reparentSorter sorts tablets for candidate election during reparent operations.
 type reparentSorter struct {
 	tablets          []*topodatapb.Tablet
 	positions        []*RelayLogPositions
 	innodbBufferPool []int
 	mysqlVersions    []mysqlctl.ServerVersion
 	durability       policy.Durabler
+	mode             SortMode
 }
 
-// newReparentSorter creates a new reparentSorter
-func newReparentSorter(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, innodbBufferPool []int, mysqlVersions []mysqlctl.ServerVersion, durability policy.Durabler) *reparentSorter {
+func newReparentSorter(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, innodbBufferPool []int, mysqlVersions []mysqlctl.ServerVersion, durability policy.Durabler, mode SortMode) *reparentSorter {
 	return &reparentSorter{
 		tablets:          tablets,
 		positions:        positions,
 		durability:       durability,
 		innodbBufferPool: innodbBufferPool,
 		mysqlVersions:    mysqlVersions,
+		mode:             mode,
 	}
 }
 
@@ -66,7 +79,8 @@ func (rs *reparentSorter) Swap(i, j int) {
 	}
 }
 
-// Less implements the Interface for sorting
+// Less implements the Interface for sorting.
+// Returning true means [i] is a better candidate for promotion than [j].
 func (rs *reparentSorter) Less(i, j int) bool {
 	// Returning "true" in this function means [i] is before [j] in the sorting order,
 	// which will lead to [i] be a better candidate for promotion
@@ -80,21 +94,27 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return true
 	}
 
-	// sort by combined positions. if equal, also sort by the executed GTID positions.
+	if rs.mode == SortForPRS {
+		return rs.lessPRS(i, j)
+	}
+	return rs.lessERS(i, j)
+}
+
+// lessERS sorts for ERS: position > promotion rules > version > buffer pool > alias.
+// Position is paramount because ERS must minimize data loss.
+func (rs *reparentSorter) lessERS(i, j int) bool {
 	jPositions := rs.positions[j]
 	iPositions := rs.positions[i]
 
 	if !iPositions.AtLeast(jPositions) {
-		// [i] does not have all GTIDs that [j] does
+		// [i] is missing GTIDs that [j] has — [j] is more advanced
 		return false
 	}
 	if !jPositions.AtLeast(iPositions) {
-		// [j] does not have all GTIDs that [i] does
+		// [j] is missing GTIDs that [i] has — [i] is more advanced
 		return true
 	}
 
-	// At this point, both have the same GTIDs.
-	// Check promotion rules next — they represent explicit operator intent.
 	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[i])
 
@@ -102,45 +122,96 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		return !jPromotionRule.BetterThan(iPromotionRule)
 	}
 
-	// Same promotion rule. Prefer lower MySQL release (major.minor) to maintain replication
-	// compatibility — replicas must be at the same or higher version than the primary.
-	// Patch differences within the same release are ignored.
-	if len(rs.mysqlVersions) != 0 {
-		iVersion := rs.mysqlVersions[i]
-		jVersion := rs.mysqlVersions[j]
-		if !iVersion.IsSameRelease(jVersion) {
-			iAtLeastJ := iVersion.ReleaseAtLeast(jVersion)
-			jAtLeastI := jVersion.ReleaseAtLeast(iVersion)
-			if !iAtLeastJ {
-				return true
-			}
-			if !jAtLeastI {
-				return false
-			}
-		}
+	if v := rs.compareVersion(i, j); v != 0 {
+		return v < 0
 	}
 
-	if len(rs.innodbBufferPool) != 0 {
-		if rs.innodbBufferPool[i] > rs.innodbBufferPool[j] {
-			return true
-		}
-		if rs.innodbBufferPool[j] > rs.innodbBufferPool[i] {
-			return false
-		}
+	if v := rs.compareBufferPool(i, j); v != 0 {
+		return v < 0
 	}
 
-	// All else equal, use the full tablet alias as a stable tiebreaker so
-	// that sort order is deterministic across runs, including across cells.
+	return rs.compareAlias(i, j)
+}
+
+// lessPRS sorts for PRS: promotion rules > version > position > buffer pool > alias.
+// PRS always catches the elected tablet up to the old primary's position, so replication
+// position is irrelevant for data safety. Version compatibility matters more because
+// promoting a newer-version primary breaks replication for older-version replicas.
+func (rs *reparentSorter) lessPRS(i, j int) bool {
+	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
+	iPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[i])
+
+	if jPromotionRule != iPromotionRule {
+		return !jPromotionRule.BetterThan(iPromotionRule)
+	}
+
+	if v := rs.compareVersion(i, j); v != 0 {
+		return v < 0
+	}
+
+	jPositions := rs.positions[j]
+	iPositions := rs.positions[i]
+
+	if !iPositions.AtLeast(jPositions) {
+		// [i] is missing GTIDs that [j] has — [j] is more advanced
+		return false
+	}
+	if !jPositions.AtLeast(iPositions) {
+		// [j] is missing GTIDs that [i] has — [i] is more advanced
+		return true
+	}
+
+	if v := rs.compareBufferPool(i, j); v != 0 {
+		return v < 0
+	}
+
+	return rs.compareAlias(i, j)
+}
+
+// compareVersion returns -1 if i has a lower release, +1 if j does, 0 if same.
+// Only major.minor is compared; patch differences are ignored.
+func (rs *reparentSorter) compareVersion(i, j int) int {
+	if len(rs.mysqlVersions) == 0 {
+		return 0
+	}
+	iVersion := rs.mysqlVersions[i]
+	jVersion := rs.mysqlVersions[j]
+	if iVersion.IsSameRelease(jVersion) {
+		return 0
+	}
+	if !iVersion.ReleaseAtLeast(jVersion) {
+		return -1
+	}
+	if !jVersion.ReleaseAtLeast(iVersion) {
+		return 1
+	}
+	return 0
+}
+
+func (rs *reparentSorter) compareBufferPool(i, j int) int {
+	if len(rs.innodbBufferPool) == 0 {
+		return 0
+	}
+	if rs.innodbBufferPool[i] > rs.innodbBufferPool[j] {
+		return -1
+	}
+	if rs.innodbBufferPool[j] > rs.innodbBufferPool[i] {
+		return 1
+	}
+	return 0
+}
+
+func (rs *reparentSorter) compareAlias(i, j int) bool {
 	if rs.tablets[i].Alias.Cell != rs.tablets[j].Alias.Cell {
 		return rs.tablets[i].Alias.Cell < rs.tablets[j].Alias.Cell
 	}
 	return rs.tablets[i].Alias.Uid < rs.tablets[j].Alias.Uid
 }
 
-// sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
-// Tablets are sorted by: replication position (most advanced preferred), promotion rules (operator intent),
-// MySQL version (lowest preferred to maintain replication compatibility), InnoDB buffer pool size, and tablet alias.
-func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, innodbBufferPool []int, mysqlVersions []mysqlctl.ServerVersion, durability policy.Durabler) error {
+// sortTabletsForReparent sorts tablets for candidate election.
+// With SortForPRS, the order is: promotion rules > version > position > buffer pool > alias.
+// With SortForERS, the order is: position > promotion rules > version > buffer pool > alias.
+func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []*RelayLogPositions, innodbBufferPool []int, mysqlVersions []mysqlctl.ServerVersion, durability policy.Durabler, mode SortMode) error {
 	if len(tablets) != len(positions) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
 	}
@@ -151,6 +222,6 @@ func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []*RelayLogP
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and mysql versions")
 	}
 
-	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, mysqlVersions, durability))
+	sort.Sort(newReparentSorter(tablets, positions, innodbBufferPool, mysqlVersions, durability, mode))
 	return nil
 }

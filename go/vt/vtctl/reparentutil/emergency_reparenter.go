@@ -511,8 +511,8 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		mysqlVersions[i] = v
 	}
 
-	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForReparent(validTablets, tabletPositions, nil, mysqlVersions, opts.durability)
+	// sort the tablets for finding the best intermediate source in ERS — position first to minimize data loss
+	err = sortTabletsForReparent(validTablets, tabletPositions, nil, mysqlVersions, opts.durability, SortForERS)
 	if err != nil {
 		return nil, nil, err
 	}
