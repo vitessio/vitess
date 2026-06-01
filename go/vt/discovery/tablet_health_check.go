@@ -19,6 +19,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -243,7 +244,6 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 	// Initialize error counter
 	hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 0)
 
-	retryDelay := hc.retryDelay
 	for {
 		streamCtx, streamCancel := context.WithCancel(thc.ctx)
 
@@ -275,8 +275,6 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 
 		// Read stream health responses.
 		err := thc.stream(streamCtx, func(shr *query.StreamHealthResponse) error {
-			// We received a message. Reset the back-off.
-			retryDelay = hc.retryDelay
 			// Don't block on send to avoid deadlocks.
 			select {
 			case servingStatus <- shr.Serving:
@@ -318,14 +316,28 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
 		// Sleep until the next retry is up or the context is done/canceled.
-		// We use a fixed retry interval instead of exponential backoff so that
-		// vtgate rediscovers recovered tablets promptly. See #19894.
+		// We use a fixed retry interval with jitter instead of exponential backoff
+		// so that vtgate rediscovers recovered tablets promptly without the fleet
+		// stampeding the tablet in lockstep after a shared outage. See #19894.
 		select {
 		case <-thc.ctx.Done():
 			return
-		case <-time.After(retryDelay):
+		case <-time.After(retryInterval(hc.retryDelay)):
 		}
 	}
+}
+
+// retryInterval returns the configured retry delay with +/-25% jitter applied.
+// The jitter de-synchronizes reconnection attempts across vtgate instances so a
+// fleet recovering from a shared tablet outage does not stampede the tablet at
+// the same instant, while never growing the interval the way exponential
+// backoff did. See #19894.
+func retryInterval(base time.Duration) time.Duration {
+	if base <= 0 {
+		return base
+	}
+	// Spread uniformly within [base-base/4, base+base/4).
+	return base - base/4 + time.Duration(rand.Int64N(int64(base/2)))
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
