@@ -169,9 +169,12 @@ func (l *Lock) description() PrimitiveDescription {
 	other := map[string]any{
 		"FieldQuery": l.FieldQuery,
 	}
-	lf := make([]string, 0, len(l.LockFunctions))
-	for _, f := range l.LockFunctions {
-		lf = append(lf, sqlparser.String(f.Typ))
+	var lf []string
+	if len(l.LockFunctions) > 0 {
+		lf = make([]string, 0, len(l.LockFunctions))
+		for _, f := range l.LockFunctions {
+			lf = append(lf, sqlparser.String(f.Typ))
+		}
 	}
 	other["lock_func"] = lf
 	return PrimitiveDescription{

@@ -151,9 +151,12 @@ func (dml *DMLWithInput) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 }
 
 func (dml *DMLWithInput) description() PrimitiveDescription {
-	offsets := make([]string, 0, len(dml.OutputCols))
-	for idx, offset := range dml.OutputCols {
-		offsets = append(offsets, fmt.Sprintf("%d:%v", idx, offset))
+	var offsets []string
+	if len(dml.OutputCols) > 0 {
+		offsets = make([]string, 0, len(dml.OutputCols))
+		for idx, offset := range dml.OutputCols {
+			offsets = append(offsets, fmt.Sprintf("%d:%v", idx, offset))
+		}
 	}
 	other := map[string]any{
 		"Offset": offsets,
