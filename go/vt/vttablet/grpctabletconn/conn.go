@@ -190,7 +190,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, _ queryservice.S
 }
 
 // StreamExecuteRaw executes a streaming query and returns raw MySQL wire protocol bytes.
-func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) error {
+func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, _ []byte, callback func(raw []byte) error) (state queryservice.StreamExecuteRawState, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -207,7 +207,7 @@ func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservic
 		return stream, nil
 	}()
 	if err != nil {
-		return err
+		return state, err
 	}
 
 	req := &querypb.StreamExecuteRawRequest{
@@ -223,29 +223,31 @@ func (conn *gRPCQueryClient) StreamExecuteRaw(ctx context.Context, _ queryservic
 		ReservedId:    reservedID,
 	}
 	if err := stream.Send(req); err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return state, tabletconn.ErrorFromGRPC(err)
 	}
 	if err := stream.CloseSend(); err != nil {
-		return tabletconn.ErrorFromGRPC(err)
+		return state, tabletconn.ErrorFromGRPC(err)
 	}
 
 	resp := querypb.StreamExecuteRawResponseFromVTPool()
 	defer resp.ReturnToVTPool()
 	for {
 		if err := stream.RecvMsg(resp); err != nil {
-			return tabletconn.ErrorFromGRPC(err)
+			return state, tabletconn.ErrorFromGRPC(err)
 		}
 		if resp.Done {
+			state.InsertID = resp.GetInsertId()
+			state.InsertIDChanged = resp.GetInsertIdChanged()
 			if resp.Error != nil {
-				return tabletconn.ErrorFromVTRPC(resp.Error)
+				return state, tabletconn.ErrorFromVTRPC(resp.Error)
 			}
-			return nil
+			return state, nil
 		}
 		if err := callback(resp.Raw); err != nil {
 			if err == io.EOF {
-				return nil
+				return state, nil
 			}
-			return err
+			return state, err
 		}
 		resp.ResetVT()
 	}
@@ -300,6 +302,8 @@ func (conn *gRPCQueryClient) BeginStreamExecuteRaw(ctx context.Context, _ querys
 			state.TransactionID = resp.GetTransactionId()
 			state.TabletAlias = resp.GetTabletAlias()
 			state.SessionStateChanges = resp.GetSessionStateChanges()
+			state.InsertID = resp.GetInsertId()
+			state.InsertIDChanged = resp.GetInsertIdChanged()
 			if resp.Error != nil {
 				return state, tabletconn.ErrorFromVTRPC(resp.Error)
 			}
@@ -363,6 +367,8 @@ func (conn *gRPCQueryClient) ReserveStreamExecuteRaw(ctx context.Context, _ quer
 		if resp.Done {
 			state.ReservedID = resp.GetReservedId()
 			state.TabletAlias = resp.GetTabletAlias()
+			state.InsertID = resp.GetInsertId()
+			state.InsertIDChanged = resp.GetInsertIdChanged()
 			if resp.Error != nil {
 				return state, tabletconn.ErrorFromVTRPC(resp.Error)
 			}
@@ -428,6 +434,8 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecuteRaw(ctx context.Context, _
 			state.ReservedID = resp.GetReservedId()
 			state.TabletAlias = resp.GetTabletAlias()
 			state.SessionStateChanges = resp.GetSessionStateChanges()
+			state.InsertID = resp.GetInsertId()
+			state.InsertIDChanged = resp.GetInsertIdChanged()
 			if resp.Error != nil {
 				return state, tabletconn.ErrorFromVTRPC(resp.Error)
 			}

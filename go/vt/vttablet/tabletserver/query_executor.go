@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -440,16 +441,16 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 // Unlike Stream it does not use the stream consolidator, which shares parsed
 // *sqltypes.Result across clients (raw bytes can't be shared without parsing).
 //
-// Two parity gaps versus Stream:
-//   - Keyspace rewrite of field metadata happens on the vtgate side instead of
-//     here (the tablet has no parsed result to rewrite); see rawStreamCallback
-//     in go/vt/vtgate/scatter_conn.go.
-//   - FetchLastInsertId is NOT honored for raw streaming. MySQL hardcodes a
-//     SELECT resultset terminator's last_insert_id to 0, so the value a
-//     LAST_INSERT_ID(x) call set is never on the wire; propagating it would
-//     require a tablet-side reset + "select last_insert_id()" refetch and an
-//     out-of-band channel to vtgate. Deferred as a follow-up.
-func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error) error {
+// One parity gap versus Stream remains: keyspace rewrite of field metadata
+// happens on the vtgate side instead of here (the tablet has no parsed result
+// to rewrite); see rawStreamCallback in go/vt/vtgate/scatter_conn.go.
+//
+// FetchLastInsertId is honored: MySQL hardcodes a SELECT resultset terminator's
+// last_insert_id to 0, so the value a LAST_INSERT_ID(x) call set is never on the
+// wire. As in the non-raw path we reset the connection's last insert id before
+// the query and refetch it with "select last_insert_id()" afterwards, returning
+// it in the StreamExecuteRawState so vtgate can surface it out-of-band.
+func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
@@ -459,11 +460,11 @@ func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error)
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
-		return err
+		return queryservice.StreamExecuteRawState{}, err
 	}
 
 	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
-		return reqThrottledErr
+		return queryservice.StreamExecuteRawState{}, reqThrottledErr
 	}
 
 	if qre.plan.PlanID == p.PlanSelectStream && qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
@@ -472,7 +473,7 @@ func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error)
 
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
-		return err
+		return queryservice.StreamExecuteRawState{}, err
 	}
 
 	// if we have a transaction id, let's use the txPool for this query
@@ -480,19 +481,19 @@ func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error)
 	if qre.connID != 0 {
 		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for raw streaming query")
 		if err != nil {
-			return err
+			return queryservice.StreamExecuteRawState{}, err
 		}
 		defer txConn.Unlock()
 		if qre.setting != nil {
 			if _, err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
-				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+				return queryservice.StreamExecuteRawState{}, vterrors.Wrap(err, "failed to execute system setting on the connection")
 			}
 		}
 		conn = txConn.UnderlyingDBConn()
 	} else {
 		dbConn, err := qre.getStreamConn()
 		if err != nil {
-			return err
+			return queryservice.StreamExecuteRawState{}, err
 		}
 		defer dbConn.Recycle()
 		conn = dbConn
@@ -1368,7 +1369,7 @@ func (qre *QueryExecutor) registerQueryDetail(conn *connpool.Conn, isTransaction
 // query in the QueryList (for terminability) and forwards raw MySQL wire
 // protocol packets through streamQueryResultPackets instead of parsing them
 // into sqltypes.Result.
-func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransaction bool, sql string, buf []byte, callback func(raw []byte) error) error {
+func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransaction bool, sql string, buf []byte, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamRawSQL")
 	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
@@ -1376,15 +1377,31 @@ func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransact
 	start := time.Now()
 	defer qre.logStats.AddRewrittenSQL(sql, start)
 
+	// MySQL hardcodes last_insert_id=0 in a streamed SELECT terminator, so we
+	// reset the connection's last insert id before the query and refetch it
+	// afterwards (the value never rides the raw bytes for a SELECT).
+	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+
 	remove, err := qre.registerQueryDetail(conn.Conn, isTransaction)
 	if err != nil {
-		return err
+		return queryservice.StreamExecuteRawState{}, err
 	}
 	defer remove()
 
-	return conn.Conn.StreamRaw(ctx, sql, isTransaction, func(mysqlConn *mysql.Conn) error {
+	err = conn.Conn.StreamRaw(ctx, sql, isTransaction, func(mysqlConn *mysql.Conn) error {
 		return qre.tsv.streamQueryResultPackets(ctx, mysqlConn, buf, callback)
 	})
+	if err != nil || !qre.options.GetFetchLastInsertId() {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+
+	res := &sqltypes.Result{}
+	if err = qre.fetchLastInsertID(ctx, conn.Conn, res); err != nil {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+	return queryservice.StreamExecuteRawState{InsertID: res.InsertID, InsertIDChanged: res.InsertIDChanged}, nil
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {

@@ -459,9 +459,18 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				// sqltypes.Result via a RawResultParser.
 				rawCb := rawStreamCallback(rs.Target.Keyspace, opts, observedCallback)
 
+				// LAST_INSERT_ID for FetchLastInsertId queries cannot ride the raw
+				// bytes (MySQL hardcodes last_insert_id=0 in a streamed SELECT
+				// terminator), so it comes back out-of-band in the state and we
+				// surface it as an extra Result, mirroring the non-raw path.
+				var insertID uint64
+				var insertIDChanged bool
+
 				switch info.actionNeeded {
 				case nothing:
-					err = qs.StreamExecuteRaw(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, nil, rawCb)
+					var state queryservice.StreamExecuteRawState
+					state, err = qs.StreamExecuteRaw(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, nil, rawCb)
+					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 					if err != nil {
 						retryRequest(func() {
 							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
@@ -470,6 +479,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, observedCallback))
 							reservedID = state.ReservedID
 							alias = state.TabletAlias
+							insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 						})
 					}
 				case begin:
@@ -477,6 +487,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					state, err = qs.BeginStreamExecuteRaw(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, nil, rawCb)
 					transactionID = state.TransactionID
 					alias = state.TabletAlias
+					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 					if err != nil {
 						retryRequest(func() {
 							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
@@ -486,6 +497,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 							transactionID = state.TransactionID
 							reservedID = state.ReservedID
 							alias = state.TabletAlias
+							insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 						})
 					}
 				case reserve:
@@ -493,14 +505,22 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, nil, rawCb)
 					reservedID = state.ReservedID
 					alias = state.TabletAlias
+					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 				case reserveBegin:
 					var state queryservice.ReservedTransactionState
 					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(rs.Target.Keyspace, opts, observedCallback))
 					transactionID = state.TransactionID
 					reservedID = state.ReservedID
 					alias = state.TabletAlias
+					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 				default:
 					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
+				}
+
+				if err == nil && insertIDChanged {
+					if cbErr := observedCallback(&sqltypes.Result{InsertID: insertID, InsertIDChanged: true}); cbErr != nil {
+						err = cbErr
+					}
 				}
 			} else {
 				switch info.actionNeeded {

@@ -494,10 +494,10 @@ func (itc *internalTabletConn) StreamExecute(
 }
 
 // StreamExecuteRaw is part of queryservice.QueryService
-func (itc *internalTabletConn) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) error {
+func (itc *internalTabletConn) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	err := itc.tablet.qsc.QueryService().StreamExecuteRaw(ctx, session, target, query, bindVars, transactionID, reservedID, options, buf, callback)
-	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+	state, err := itc.tablet.qsc.QueryService().StreamExecuteRaw(ctx, session, target, query, bindVars, transactionID, reservedID, options, buf, callback)
+	return state, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // BeginStreamExecuteRaw is part of queryservice.QueryService

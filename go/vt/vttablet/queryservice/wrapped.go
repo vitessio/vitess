@@ -268,19 +268,20 @@ func (ws *wrappedService) StreamExecute(ctx context.Context, session Session, ta
 	return wrapFatalTxErrorInVTError(err, transactionID != 0, vterrors.VT15001)
 }
 
-func (ws *wrappedService) StreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) error {
+func (ws *wrappedService) StreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (state StreamExecuteRawState, err error) {
 	inDedicatedConn := transactionID != 0 || reservedID != 0
 	opts := WrapOpts{InTransaction: inDedicatedConn, Session: session}
-	err := ws.wrapper(ctx, target, ws.impl, "StreamExecuteRaw", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+	err = ws.wrapper(ctx, target, ws.impl, "StreamExecuteRaw", opts, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		streamingStarted := false
-		innerErr := conn.StreamExecuteRaw(ctx, session, target, query, bindVars, transactionID, reservedID, options, buf, func(raw []byte) error {
+		var innerErr error
+		state, innerErr = conn.StreamExecuteRaw(ctx, session, target, query, bindVars, transactionID, reservedID, options, buf, func(raw []byte) error {
 			streamingStarted = true
 			return callback(raw)
 		})
 		retryable := canRetry(ctx, innerErr) && (!streamingStarted)
 		return retryable, innerErr
 	})
-	return wrapFatalTxErrorInVTError(err, transactionID != 0, vterrors.VT15001)
+	return state, wrapFatalTxErrorInVTError(err, transactionID != 0, vterrors.VT15001)
 }
 
 func (ws *wrappedService) BeginExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (state TransactionState, qr *sqltypes.Result, err error) {

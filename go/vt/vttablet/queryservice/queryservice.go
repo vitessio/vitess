@@ -91,8 +91,10 @@ type QueryService interface {
 	StreamExecute(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
 	// StreamExecuteRaw executes a streaming query and returns raw MySQL wire
 	// protocol bytes instead of parsed result objects. The callback receives
-	// 256KB chunks of raw bytes.
-	StreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) error
+	// 256KB chunks of raw bytes. The returned StreamExecuteRawState carries the
+	// LAST_INSERT_ID value for FetchLastInsertId queries, which MySQL hardcodes
+	// to 0 in a streamed SELECT terminator and therefore cannot ride the bytes.
+	StreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (StreamExecuteRawState, error)
 
 	// Combo methods, they also return the transactionID from the
 	// Begin part. If err != nil, the transactionID may still be
@@ -154,11 +156,15 @@ type TransactionState struct {
 	TransactionID       int64
 	TabletAlias         *topodatapb.TabletAlias
 	SessionStateChanges string
+	InsertID            uint64
+	InsertIDChanged     bool
 }
 
 type ReservedState struct {
-	ReservedID  int64
-	TabletAlias *topodatapb.TabletAlias
+	ReservedID      int64
+	TabletAlias     *topodatapb.TabletAlias
+	InsertID        uint64
+	InsertIDChanged bool
 }
 
 type ReservedTransactionState struct {
@@ -166,4 +172,16 @@ type ReservedTransactionState struct {
 	TransactionID       int64
 	TabletAlias         *topodatapb.TabletAlias
 	SessionStateChanges string
+	InsertID            uint64
+	InsertIDChanged     bool
+}
+
+// StreamExecuteRawState carries the LAST_INSERT_ID value produced by a raw
+// streaming query. MySQL hardcodes last_insert_id=0 in a streamed SELECT
+// terminator, so FetchLastInsertId queries on the raw path return the value
+// here instead of on the wire. InsertIDChanged distinguishes a real
+// LAST_INSERT_ID(0) from an unset value.
+type StreamExecuteRawState struct {
+	InsertID        uint64
+	InsertIDChanged bool
 }

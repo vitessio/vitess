@@ -1095,6 +1095,12 @@ message StreamExecuteRawResponse {
   // error contains an application level error if necessary. Only set on
   // the terminal message (done=true).
   vtrpc.RPCError error = 3;
+  // insert_id / insert_id_changed carry LAST_INSERT_ID for FetchLastInsertId
+  // queries. MySQL hardcodes last_insert_id=0 in a streamed SELECT terminator,
+  // so the value is refetched on the tablet and delivered here on the terminal
+  // (done=true) message. Mirrors QueryResult.insert_id / insert_id_changed.
+  uint64 insert_id = 4;
+  bool insert_id_changed = 5;
 }
 
 // BeginStreamExecuteRawRequest is the payload to BeginStreamExecuteRaw
@@ -1127,6 +1133,9 @@ message BeginStreamExecuteRawResponse {
   // The session_state_changes might be set if the transaction is a snapshot transaction
   // and the MySQL implementation supports getting a start gtid on snapshot
   string session_state_changes = 6;
+  // insert_id / insert_id_changed carry LAST_INSERT_ID; see StreamExecuteRawResponse.
+  uint64 insert_id = 7;
+  bool insert_id_changed = 8;
 }
 
 // ReserveStreamExecuteRawRequest is the payload to ReserveStreamExecuteRaw
@@ -1153,6 +1162,9 @@ message ReserveStreamExecuteRawResponse {
   // The following fields might be non-zero even if an error is present.
   int64 reserved_id = 4;
   topodata.TabletAlias tablet_alias = 5;
+  // insert_id / insert_id_changed carry LAST_INSERT_ID; see StreamExecuteRawResponse.
+  uint64 insert_id = 6;
+  bool insert_id_changed = 7;
 }
 
 // ReserveBeginStreamExecuteRawRequest is the payload to ReserveBeginStreamExecuteRaw
@@ -1186,4 +1198,7 @@ message ReserveBeginStreamExecuteRawResponse {
   // The session_state_changes might be set if the transaction is a snapshot transaction
   // and the MySQL implementation supports getting a start gtid on snapshot
   string session_state_changes = 7;
+  // insert_id / insert_id_changed carry LAST_INSERT_ID; see StreamExecuteRawResponse.
+  uint64 insert_id = 8;
+  bool insert_id_changed = 9;
 }

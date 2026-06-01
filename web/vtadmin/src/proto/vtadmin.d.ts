@@ -50616,6 +50616,12 @@ export namespace query {
 
         /** StreamExecuteRawResponse error */
         error?: (vtrpc.IRPCError|null);
+
+        /** StreamExecuteRawResponse insert_id */
+        insert_id?: (number|Long|null);
+
+        /** StreamExecuteRawResponse insert_id_changed */
+        insert_id_changed?: (boolean|null);
     }
 
     /** Represents a StreamExecuteRawResponse. */
@@ -50635,6 +50641,12 @@ export namespace query {
 
         /** StreamExecuteRawResponse error. */
         public error?: (vtrpc.IRPCError|null);
+
+        /** StreamExecuteRawResponse insert_id. */
+        public insert_id: (number|Long);
+
+        /** StreamExecuteRawResponse insert_id_changed. */
+        public insert_id_changed: boolean;
 
         /**
          * Creates a new StreamExecuteRawResponse instance using the specified properties.
@@ -50867,6 +50879,12 @@ export namespace query {
 
         /** BeginStreamExecuteRawResponse session_state_changes */
         session_state_changes?: (string|null);
+
+        /** BeginStreamExecuteRawResponse insert_id */
+        insert_id?: (number|Long|null);
+
+        /** BeginStreamExecuteRawResponse insert_id_changed */
+        insert_id_changed?: (boolean|null);
     }
 
     /** Represents a BeginStreamExecuteRawResponse. */
@@ -50895,6 +50913,12 @@ export namespace query {
 
         /** BeginStreamExecuteRawResponse session_state_changes. */
         public session_state_changes: string;
+
+        /** BeginStreamExecuteRawResponse insert_id. */
+        public insert_id: (number|Long);
+
+        /** BeginStreamExecuteRawResponse insert_id_changed. */
+        public insert_id_changed: boolean;
 
         /**
          * Creates a new BeginStreamExecuteRawResponse instance using the specified properties.
@@ -51124,6 +51148,12 @@ export namespace query {
 
         /** ReserveStreamExecuteRawResponse tablet_alias */
         tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveStreamExecuteRawResponse insert_id */
+        insert_id?: (number|Long|null);
+
+        /** ReserveStreamExecuteRawResponse insert_id_changed */
+        insert_id_changed?: (boolean|null);
     }
 
     /** Represents a ReserveStreamExecuteRawResponse. */
@@ -51149,6 +51179,12 @@ export namespace query {
 
         /** ReserveStreamExecuteRawResponse tablet_alias. */
         public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ReserveStreamExecuteRawResponse insert_id. */
+        public insert_id: (number|Long);
+
+        /** ReserveStreamExecuteRawResponse insert_id_changed. */
+        public insert_id_changed: boolean;
 
         /**
          * Creates a new ReserveStreamExecuteRawResponse instance using the specified properties.
@@ -51384,6 +51420,12 @@ export namespace query {
 
         /** ReserveBeginStreamExecuteRawResponse session_state_changes */
         session_state_changes?: (string|null);
+
+        /** ReserveBeginStreamExecuteRawResponse insert_id */
+        insert_id?: (number|Long|null);
+
+        /** ReserveBeginStreamExecuteRawResponse insert_id_changed */
+        insert_id_changed?: (boolean|null);
     }
 
     /** Represents a ReserveBeginStreamExecuteRawResponse. */
@@ -51415,6 +51457,12 @@ export namespace query {
 
         /** ReserveBeginStreamExecuteRawResponse session_state_changes. */
         public session_state_changes: string;
+
+        /** ReserveBeginStreamExecuteRawResponse insert_id. */
+        public insert_id: (number|Long);
+
+        /** ReserveBeginStreamExecuteRawResponse insert_id_changed. */
+        public insert_id_changed: boolean;
 
         /**
          * Creates a new ReserveBeginStreamExecuteRawResponse instance using the specified properties.

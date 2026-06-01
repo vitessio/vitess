@@ -37,16 +37,18 @@ import (
 // client's one-stream-per-query (no pool) lifecycle end to end.
 type rawStreamingService struct {
 	*tabletconntest.FakeQueryService
-	chunks [][]byte
+	chunks          [][]byte
+	insertID        uint64
+	insertIDChanged bool
 }
 
-func (s *rawStreamingService) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) error {
+func (s *rawStreamingService) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
 	for _, c := range s.chunks {
 		if err := callback(c); err != nil {
-			return err
+			return queryservice.StreamExecuteRawState{}, err
 		}
 	}
-	return nil
+	return queryservice.StreamExecuteRawState{InsertID: s.insertID, InsertIDChanged: s.insertIDChanged}, nil
 }
 
 func (s *rawStreamingService) BeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.TransactionState, error) {
@@ -55,7 +57,7 @@ func (s *rawStreamingService) BeginStreamExecuteRaw(ctx context.Context, session
 			return queryservice.TransactionState{}, err
 		}
 	}
-	return queryservice.TransactionState{TransactionID: 1234, TabletAlias: tabletconntest.TestAlias}, nil
+	return queryservice.TransactionState{TransactionID: 1234, TabletAlias: tabletconntest.TestAlias, InsertID: s.insertID, InsertIDChanged: s.insertIDChanged}, nil
 }
 
 // dialRawStreamingTablet stands up a real gRPC query server backed by svc and
@@ -100,13 +102,37 @@ func TestStreamExecuteRawNoPool(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		var got []byte
-		err := conn.StreamExecuteRaw(ctx, nil, tabletconntest.TestTarget, "select 1", nil, 0, 0, nil, nil, func(raw []byte) error {
+		state, err := conn.StreamExecuteRaw(ctx, nil, tabletconntest.TestTarget, "select 1", nil, 0, 0, nil, nil, func(raw []byte) error {
 			got = append(got, raw...)
 			return nil
 		})
 		require.NoError(t, err)
 		require.Equal(t, "hello world", string(got))
+		require.False(t, state.InsertIDChanged)
 	}
+}
+
+// TestStreamExecuteRawInsertID verifies the terminal done=true message carries
+// the out-of-band LAST_INSERT_ID back to the client. Because MySQL hardcodes
+// last_insert_id=0 in a streamed SELECT terminator, the value rides the proto
+// response rather than the raw bytes, including the explicit changed bit so a
+// genuine LAST_INSERT_ID(0) is distinguishable from "unset".
+func TestStreamExecuteRawInsertID(t *testing.T) {
+	ctx := t.Context()
+	svc := &rawStreamingService{
+		FakeQueryService: tabletconntest.CreateFakeServer(t),
+		chunks:           [][]byte{[]byte("rows")},
+		insertID:         0,
+		insertIDChanged:  true,
+	}
+	conn := dialRawStreamingTablet(ctx, t, svc)
+
+	state, err := conn.StreamExecuteRaw(ctx, nil, tabletconntest.TestTarget, "select last_insert_id(0)", nil, 0, 0, nil, nil, func(raw []byte) error {
+		return nil
+	})
+	require.NoError(t, err)
+	require.True(t, state.InsertIDChanged)
+	require.Equal(t, uint64(0), state.InsertID)
 }
 
 // TestBeginStreamExecuteRawNoPool verifies the terminal done=true message

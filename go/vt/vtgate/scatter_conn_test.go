@@ -746,3 +746,52 @@ func TestStreamExecuteMultiRawReplacesKeyspace(t *testing.T) {
 	require.NoError(t, vterrors.Aggregate(errs))
 	require.Equal(t, keyspace, gotDatabase)
 }
+
+// TestStreamExecuteMultiRawSurfacesInsertID verifies that the raw streaming path
+// surfaces LAST_INSERT_ID out-of-band as an extra Result. MySQL hardcodes
+// last_insert_id=0 in a streamed SELECT terminator, so for the discriminating
+// LAST_INSERT_ID(0) case the value can only travel via the StreamExecuteRawState
+// (with InsertIDChanged set); the raw bytes alone cannot express it. scatter_conn
+// must turn that state into a Result the caller observes.
+func TestStreamExecuteMultiRawSurfacesInsertID(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	const keyspace = "TestStreamExecuteMultiRawSurfacesInsertID"
+
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(keyspace)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// Simulate LAST_INSERT_ID(0): the changed bit is set but the value is 0, so
+	// it is indistinguishable from "unset" on the wire and must ride the state.
+	sbc.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Int32}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
+
+		InsertID:        0,
+		InsertIDChanged: true,
+	}})
+
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
+	rss, err := res.ResolveDestination(ctx, keyspace, topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0"}))
+	require.NoError(t, err)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{FetchLastInsertId: true},
+	})
+
+	var mu sync.Mutex
+	var insertIDChangedSeen bool
+	errs := sc.StreamExecuteMulti(ctx, nil, "select last_insert_id(0)", rss,
+		[]map[string]*querypb.BindVariable{nil}, session, true, /*autocommit*/
+		func(r *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if r != nil && r.InsertIDChanged {
+				insertIDChangedSeen = true
+			}
+			return nil
+		}, nullResultsObserver{}, true /*fetchLastInsertID*/)
+	require.NoError(t, vterrors.Aggregate(errs))
+	require.True(t, insertIDChangedSeen, "raw streaming must surface LAST_INSERT_ID(0) via the changed bit")
+}

@@ -335,7 +335,7 @@ func (q *query) StreamExecuteRaw(stream queryservicepb.Query_StreamExecuteRawSer
 		)
 
 		resp := querypb.StreamExecuteRawResponseFromVTPool()
-		queryErr := q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte) error {
+		state, queryErr := q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte) error {
 			resp.Raw = raw
 			return stream.Send(resp)
 		})
@@ -347,8 +347,10 @@ func (q *query) StreamExecuteRaw(stream queryservicepb.Query_StreamExecuteRawSer
 
 		// Always send terminal message with done=true (errors are in-band)
 		if err := stream.Send(&querypb.StreamExecuteRawResponse{
-			Done:  true,
-			Error: vterrors.ToVTRPC(queryErr),
+			Done:            true,
+			Error:           vterrors.ToVTRPC(queryErr),
+			InsertId:        state.InsertID,
+			InsertIdChanged: state.InsertIDChanged,
 		}); err != nil {
 			return err
 		}
@@ -601,6 +603,8 @@ func (q *query) BeginStreamExecuteRaw(stream queryservicepb.Query_BeginStreamExe
 			TransactionId:       state.TransactionID,
 			TabletAlias:         state.TabletAlias,
 			SessionStateChanges: state.SessionStateChanges,
+			InsertId:            state.InsertID,
+			InsertIdChanged:     state.InsertIDChanged,
 		}); err != nil {
 			return err
 		}
@@ -641,10 +645,12 @@ func (q *query) ReserveStreamExecuteRaw(stream queryservicepb.Query_ReserveStrea
 		resp.ReturnToVTPool()
 
 		if err := stream.Send(&querypb.ReserveStreamExecuteRawResponse{
-			Done:        true,
-			Error:       vterrors.ToVTRPC(queryErr),
-			ReservedId:  state.ReservedID,
-			TabletAlias: state.TabletAlias,
+			Done:            true,
+			Error:           vterrors.ToVTRPC(queryErr),
+			ReservedId:      state.ReservedID,
+			TabletAlias:     state.TabletAlias,
+			InsertId:        state.InsertID,
+			InsertIdChanged: state.InsertIDChanged,
 		}); err != nil {
 			return err
 		}
@@ -691,6 +697,8 @@ func (q *query) ReserveBeginStreamExecuteRaw(stream queryservicepb.Query_Reserve
 			TransactionId:       state.TransactionID,
 			TabletAlias:         state.TabletAlias,
 			SessionStateChanges: state.SessionStateChanges,
+			InsertId:            state.InsertID,
+			InsertIdChanged:     state.InsertIDChanged,
 		}); err != nil {
 			return err
 		}

@@ -5831,9 +5831,15 @@ type StreamExecuteRawResponse struct {
 	Done bool `protobuf:"varint,2,opt,name=done,proto3" json:"done,omitempty"`
 	// error contains an application level error if necessary. Only set on
 	// the terminal message (done=true).
-	Error         *vtrpc.RPCError `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Error *vtrpc.RPCError `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	// insert_id / insert_id_changed carry LAST_INSERT_ID for FetchLastInsertId
+	// queries. MySQL hardcodes last_insert_id=0 in a streamed SELECT terminator,
+	// so the value is refetched on the tablet and delivered here on the terminal
+	// (done=true) message. Mirrors QueryResult.insert_id / insert_id_changed.
+	InsertId        uint64 `protobuf:"varint,4,opt,name=insert_id,json=insertId,proto3" json:"insert_id,omitempty"`
+	InsertIdChanged bool   `protobuf:"varint,5,opt,name=insert_id_changed,json=insertIdChanged,proto3" json:"insert_id_changed,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *StreamExecuteRawResponse) Reset() {
@@ -5885,6 +5891,20 @@ func (x *StreamExecuteRawResponse) GetError() *vtrpc.RPCError {
 		return x.Error
 	}
 	return nil
+}
+
+func (x *StreamExecuteRawResponse) GetInsertId() uint64 {
+	if x != nil {
+		return x.InsertId
+	}
+	return 0
+}
+
+func (x *StreamExecuteRawResponse) GetInsertIdChanged() bool {
+	if x != nil {
+		return x.InsertIdChanged
+	}
+	return false
 }
 
 // BeginStreamExecuteRawRequest is the payload to BeginStreamExecuteRaw
@@ -5997,8 +6017,11 @@ type BeginStreamExecuteRawResponse struct {
 	// The session_state_changes might be set if the transaction is a snapshot transaction
 	// and the MySQL implementation supports getting a start gtid on snapshot
 	SessionStateChanges string `protobuf:"bytes,6,opt,name=session_state_changes,json=sessionStateChanges,proto3" json:"session_state_changes,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// insert_id / insert_id_changed carry LAST_INSERT_ID; see StreamExecuteRawResponse.
+	InsertId        uint64 `protobuf:"varint,7,opt,name=insert_id,json=insertId,proto3" json:"insert_id,omitempty"`
+	InsertIdChanged bool   `protobuf:"varint,8,opt,name=insert_id_changed,json=insertIdChanged,proto3" json:"insert_id_changed,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *BeginStreamExecuteRawResponse) Reset() {
@@ -6071,6 +6094,20 @@ func (x *BeginStreamExecuteRawResponse) GetSessionStateChanges() string {
 		return x.SessionStateChanges
 	}
 	return ""
+}
+
+func (x *BeginStreamExecuteRawResponse) GetInsertId() uint64 {
+	if x != nil {
+		return x.InsertId
+	}
+	return 0
+}
+
+func (x *BeginStreamExecuteRawResponse) GetInsertIdChanged() bool {
+	if x != nil {
+		return x.InsertIdChanged
+	}
+	return false
 }
 
 // ReserveStreamExecuteRawRequest is the payload to ReserveStreamExecuteRaw
@@ -6175,10 +6212,13 @@ type ReserveStreamExecuteRawResponse struct {
 	// done signals the end of a query's result stream on a bidi stream.
 	Done bool `protobuf:"varint,3,opt,name=done,proto3" json:"done,omitempty"`
 	// The following fields might be non-zero even if an error is present.
-	ReservedId    int64                 `protobuf:"varint,4,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
-	TabletAlias   *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ReservedId  int64                 `protobuf:"varint,4,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
+	TabletAlias *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
+	// insert_id / insert_id_changed carry LAST_INSERT_ID; see StreamExecuteRawResponse.
+	InsertId        uint64 `protobuf:"varint,6,opt,name=insert_id,json=insertId,proto3" json:"insert_id,omitempty"`
+	InsertIdChanged bool   `protobuf:"varint,7,opt,name=insert_id_changed,json=insertIdChanged,proto3" json:"insert_id_changed,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ReserveStreamExecuteRawResponse) Reset() {
@@ -6244,6 +6284,20 @@ func (x *ReserveStreamExecuteRawResponse) GetTabletAlias() *topodata.TabletAlias
 		return x.TabletAlias
 	}
 	return nil
+}
+
+func (x *ReserveStreamExecuteRawResponse) GetInsertId() uint64 {
+	if x != nil {
+		return x.InsertId
+	}
+	return 0
+}
+
+func (x *ReserveStreamExecuteRawResponse) GetInsertIdChanged() bool {
+	if x != nil {
+		return x.InsertIdChanged
+	}
+	return false
 }
 
 // ReserveBeginStreamExecuteRawRequest is the payload to ReserveBeginStreamExecuteRaw
@@ -6357,8 +6411,11 @@ type ReserveBeginStreamExecuteRawResponse struct {
 	// The session_state_changes might be set if the transaction is a snapshot transaction
 	// and the MySQL implementation supports getting a start gtid on snapshot
 	SessionStateChanges string `protobuf:"bytes,7,opt,name=session_state_changes,json=sessionStateChanges,proto3" json:"session_state_changes,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// insert_id / insert_id_changed carry LAST_INSERT_ID; see StreamExecuteRawResponse.
+	InsertId        uint64 `protobuf:"varint,8,opt,name=insert_id,json=insertId,proto3" json:"insert_id,omitempty"`
+	InsertIdChanged bool   `protobuf:"varint,9,opt,name=insert_id_changed,json=insertIdChanged,proto3" json:"insert_id_changed,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ReserveBeginStreamExecuteRawResponse) Reset() {
@@ -6438,6 +6495,20 @@ func (x *ReserveBeginStreamExecuteRawResponse) GetSessionStateChanges() string {
 		return x.SessionStateChanges
 	}
 	return ""
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetInsertId() uint64 {
+	if x != nil {
+		return x.InsertId
+	}
+	return 0
+}
+
+func (x *ReserveBeginStreamExecuteRawResponse) GetInsertIdChanged() bool {
+	if x != nil {
+		return x.InsertIdChanged
+	}
+	return false
 }
 
 // One individual Statement in a transaction.
@@ -6945,11 +7016,13 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
 	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\"g\n" +
+	"reservedId\"\xb0\x01\n" +
 	"\x18StreamExecuteRawResponse\x12\x10\n" +
 	"\x03raw\x18\x01 \x01(\fR\x03raw\x12\x12\n" +
 	"\x04done\x18\x02 \x01(\bR\x04done\x12%\n" +
-	"\x05error\x18\x03 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\"\xe9\x02\n" +
+	"\x05error\x18\x03 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x1b\n" +
+	"\tinsert_id\x18\x04 \x01(\x04R\binsertId\x12*\n" +
+	"\x11insert_id_changed\x18\x05 \x01(\bR\x0finsertIdChanged\"\xe9\x02\n" +
 	"\x1cBeginStreamExecuteRawRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6959,14 +7032,16 @@ const file_query_proto_rawDesc = "" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\"\x81\x02\n" +
+	"reservedId\"\xca\x02\n" +
 	"\x1dBeginStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
 	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x12\n" +
 	"\x04done\x18\x03 \x01(\bR\x04done\x12%\n" +
 	"\x0etransaction_id\x18\x04 \x01(\x03R\rtransactionId\x128\n" +
 	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
-	"\x15session_state_changes\x18\x06 \x01(\tR\x13sessionStateChanges\"\xf1\x02\n" +
+	"\x15session_state_changes\x18\x06 \x01(\tR\x13sessionStateChanges\x12\x1b\n" +
+	"\tinsert_id\x18\a \x01(\x04R\binsertId\x12*\n" +
+	"\x11insert_id_changed\x18\b \x01(\bR\x0finsertIdChanged\"\xf1\x02\n" +
 	"\x1eReserveStreamExecuteRawRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6975,14 +7050,16 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
 	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vpre_queries\x18\a \x03(\tR\n" +
-	"preQueries\"\xc9\x01\n" +
+	"preQueries\"\x92\x02\n" +
 	"\x1fReserveStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
 	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x12\n" +
 	"\x04done\x18\x03 \x01(\bR\x04done\x12\x1f\n" +
 	"\vreserved_id\x18\x04 \x01(\x03R\n" +
 	"reservedId\x128\n" +
-	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\xfd\x02\n" +
+	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12\x1b\n" +
+	"\tinsert_id\x18\x06 \x01(\x04R\binsertId\x12*\n" +
+	"\x11insert_id_changed\x18\a \x01(\bR\x0finsertIdChanged\"\xfd\x02\n" +
 	"#ReserveBeginStreamExecuteRawRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6991,7 +7068,7 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12,\n" +
-	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\xa9\x02\n" +
+	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\xf2\x02\n" +
 	"$ReserveBeginStreamExecuteRawResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12\x10\n" +
 	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x12\n" +
@@ -7000,7 +7077,9 @@ const file_query_proto_rawDesc = "" +
 	"\vreserved_id\x18\x05 \x01(\x03R\n" +
 	"reservedId\x128\n" +
 	"\ftablet_alias\x18\x06 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
-	"\x15session_state_changes\x18\a \x01(\tR\x13sessionStateChanges*\x92\x03\n" +
+	"\x15session_state_changes\x18\a \x01(\tR\x13sessionStateChanges\x12\x1b\n" +
+	"\tinsert_id\x18\b \x01(\x04R\binsertId\x12*\n" +
+	"\x11insert_id_changed\x18\t \x01(\bR\x0finsertIdChanged*\x92\x03\n" +
 	"\tMySqlFlag\x12\t\n" +
 	"\x05EMPTY\x10\x00\x12\x11\n" +
 	"\rNOT_NULL_FLAG\x10\x01\x12\x10\n" +

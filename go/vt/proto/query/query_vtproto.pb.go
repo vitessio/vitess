@@ -1568,6 +1568,8 @@ func (m *StreamExecuteRawResponse) CloneVT() *StreamExecuteRawResponse {
 	r := StreamExecuteRawResponseFromVTPool()
 	r.Done = m.Done
 	r.Error = m.Error.CloneVT()
+	r.InsertId = m.InsertId
+	r.InsertIdChanged = m.InsertIdChanged
 	if rhs := m.Raw; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
@@ -1621,6 +1623,8 @@ func (m *BeginStreamExecuteRawResponse) CloneVT() *BeginStreamExecuteRawResponse
 	r.TransactionId = m.TransactionId
 	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.SessionStateChanges = m.SessionStateChanges
+	r.InsertId = m.InsertId
+	r.InsertIdChanged = m.InsertIdChanged
 	if rhs := m.Raw; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
@@ -1673,6 +1677,8 @@ func (m *ReserveStreamExecuteRawResponse) CloneVT() *ReserveStreamExecuteRawResp
 	r.Done = m.Done
 	r.ReservedId = m.ReservedId
 	r.TabletAlias = m.TabletAlias.CloneVT()
+	r.InsertId = m.InsertId
+	r.InsertIdChanged = m.InsertIdChanged
 	if rhs := m.Raw; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
@@ -1731,6 +1737,8 @@ func (m *ReserveBeginStreamExecuteRawResponse) CloneVT() *ReserveBeginStreamExec
 	r.ReservedId = m.ReservedId
 	r.TabletAlias = m.TabletAlias.CloneVT()
 	r.SessionStateChanges = m.SessionStateChanges
+	r.InsertId = m.InsertId
+	r.InsertIdChanged = m.InsertIdChanged
 	if rhs := m.Raw; rhs != nil {
 		tmpBytes := make([]byte, len(rhs))
 		copy(tmpBytes, rhs)
@@ -6354,6 +6362,21 @@ func (m *StreamExecuteRawResponse) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.InsertIdChanged {
+		i--
+		if m.InsertIdChanged {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
+	}
+	if m.InsertId != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.InsertId))
+		i--
+		dAtA[i] = 0x20
+	}
 	if m.Error != nil {
 		size, err := m.Error.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -6510,6 +6533,21 @@ func (m *BeginStreamExecuteRawResponse) MarshalToSizedBufferVT(dAtA []byte) (int
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.InsertIdChanged {
+		i--
+		if m.InsertIdChanged {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
+	if m.InsertId != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.InsertId))
+		i--
+		dAtA[i] = 0x38
 	}
 	if len(m.SessionStateChanges) > 0 {
 		i -= len(m.SessionStateChanges)
@@ -6690,6 +6728,21 @@ func (m *ReserveStreamExecuteRawResponse) MarshalToSizedBufferVT(dAtA []byte) (i
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.InsertIdChanged {
+		i--
+		if m.InsertIdChanged {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x38
+	}
+	if m.InsertId != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.InsertId))
+		i--
+		dAtA[i] = 0x30
+	}
 	if m.TabletAlias != nil {
 		size, err := m.TabletAlias.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -6865,6 +6918,21 @@ func (m *ReserveBeginStreamExecuteRawResponse) MarshalToSizedBufferVT(dAtA []byt
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.InsertIdChanged {
+		i--
+		if m.InsertIdChanged {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x48
+	}
+	if m.InsertId != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.InsertId))
+		i--
+		dAtA[i] = 0x40
 	}
 	if len(m.SessionStateChanges) > 0 {
 		i -= len(m.SessionStateChanges)
@@ -8811,6 +8879,12 @@ func (m *StreamExecuteRawResponse) SizeVT() (n int) {
 		l = m.Error.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.InsertId != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.InsertId))
+	}
+	if m.InsertIdChanged {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -8882,6 +8956,12 @@ func (m *BeginStreamExecuteRawResponse) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
+	if m.InsertId != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.InsertId))
+	}
+	if m.InsertIdChanged {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -8948,6 +9028,12 @@ func (m *ReserveStreamExecuteRawResponse) SizeVT() (n int) {
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.InsertId != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.InsertId))
+	}
+	if m.InsertIdChanged {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -9025,6 +9111,12 @@ func (m *ReserveBeginStreamExecuteRawResponse) SizeVT() (n int) {
 	l = len(m.SessionStateChanges)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.InsertId != 0 {
+		n += 1 + protohelpers.SizeOfVarint(uint64(m.InsertId))
+	}
+	if m.InsertIdChanged {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -21001,6 +21093,45 @@ func (m *StreamExecuteRawResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertId", wireType)
+			}
+			m.InsertId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.InsertId |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertIdChanged", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.InsertIdChanged = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -21511,6 +21642,45 @@ func (m *BeginStreamExecuteRawResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertId", wireType)
+			}
+			m.InsertId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.InsertId |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertIdChanged", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.InsertIdChanged = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -21989,6 +22159,45 @@ func (m *ReserveStreamExecuteRawResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertId", wireType)
+			}
+			m.InsertId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.InsertId |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 7:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertIdChanged", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.InsertIdChanged = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -22531,6 +22740,45 @@ func (m *ReserveBeginStreamExecuteRawResponse) UnmarshalVT(dAtA []byte) error {
 			}
 			m.SessionStateChanges = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertId", wireType)
+			}
+			m.InsertId = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.InsertId |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field InsertIdChanged", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.InsertIdChanged = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -1132,13 +1132,57 @@ func TestQueryExecutorStreamRawTableAclNoPermission(t *testing.T) {
 	// StreamRaw should fail because the current user has no read permission,
 	// and it must fail before streaming any bytes.
 	called := false
-	err := qre.StreamRaw(nil, func(raw []byte) error {
+	_, err := qre.StreamRaw(nil, func(raw []byte) error {
 		called = true
 		return nil
 	})
 	require.Error(t, err)
 	require.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err))
 	require.False(t, called, "callback must not run when permission is denied")
+}
+
+// TestQueryExecutorStreamRawFetchLastInsertID verifies the raw streaming path
+// honors FetchLastInsertId. MySQL hardcodes last_insert_id=0 in a streamed
+// SELECT terminator, so the value is never on the wire; StreamRaw must reset
+// the connection's last insert id before the query and refetch it afterwards,
+// returning it in the StreamExecuteRawState. The changed bit must distinguish a
+// genuine LAST_INSERT_ID(0) from an unset value.
+func TestQueryExecutorStreamRawFetchLastInsertID(t *testing.T) {
+	testcases := []struct {
+		name            string
+		lastInsertID    string
+		wantInsertID    uint64
+		wantInsertIDSet bool
+	}{
+		{name: "changed to non-zero", lastInsertID: "42", wantInsertID: 42, wantInsertIDSet: true},
+		{name: "changed to zero", lastInsertID: "0", wantInsertID: 0, wantInsertIDSet: true},
+		{name: "unset", lastInsertID: fmt.Sprintf("%d", uint64(resetLastIDValue)), wantInsertID: 0, wantInsertIDSet: false},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			query := "select * from test_table limit 1000"
+			db.AddQuery(query, &sqltypes.Result{Fields: getTestTableFields()})
+			db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{Fields: getTestTableFields()})
+			db.AddQuery(resetLastIDQuery, &sqltypes.Result{})
+			db.AddQuery("select last_insert_id()", sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("last_insert_id()", "uint64"),
+				tc.lastInsertID,
+			))
+
+			ctx := t.Context()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
+			qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+			qre.options = &querypb.ExecuteOptions{FetchLastInsertId: true}
+
+			state, err := qre.StreamRaw(nil, func(raw []byte) error { return nil })
+			require.NoError(t, err)
+			require.Equal(t, tc.wantInsertIDSet, state.InsertIDChanged)
+			require.Equal(t, tc.wantInsertID, state.InsertID)
+		})
+	}
 }
 
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
