@@ -70,6 +70,18 @@ func NewRawResultParser() *RawResultParser {
 	}
 }
 
+// Finish reports whether the parser consumed a complete result set. The caller
+// must invoke it once the byte stream has ended (i.e. the transport signalled
+// completion). It returns an error when the stream ended before the terminal
+// packet — meaning the result set was truncated — so a truncated decode fails
+// loudly here instead of silently yielding a partial result.
+func (p *RawResultParser) Finish() error {
+	if p.state != rawParserStateDone {
+		return errors.New("raw result stream ended before the terminal packet")
+	}
+	return nil
+}
+
 // Feed parses raw MySQL wire protocol bytes, calling the callback for each
 // complete result. The first result has Fields set. Subsequent results have Rows.
 // All rows parsed from a single chunk are batched into a single callback.

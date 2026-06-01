@@ -136,6 +136,31 @@ func TestRawResultParser_SimpleResultSet(t *testing.T) {
 	assert.Equal(t, "bob", results[0].Rows[1][0].ToString())
 }
 
+func TestRawResultParser_FinishComplete(t *testing.T) {
+	parser := NewRawResultParser()
+
+	chunk := makePacket(1, []byte{1}) // 1 column
+	chunk = append(chunk, makeColumnDefPacket(2, "name", 0x0f, 0)...)
+	chunk = append(chunk, makeRowPacket(3, "alice")...)
+	chunk = append(chunk, makeEOFPacket(4)...) // terminal
+
+	require.NoError(t, parser.Feed(chunk, func(*sqltypes.Result) error { return nil }))
+	// A complete result set leaves the parser in its done state.
+	require.NoError(t, parser.Finish())
+}
+
+func TestRawResultParser_FinishTruncated(t *testing.T) {
+	parser := NewRawResultParser()
+
+	chunk := makePacket(1, []byte{1}) // 1 column
+	chunk = append(chunk, makeColumnDefPacket(2, "name", 0x0f, 0)...)
+	chunk = append(chunk, makeRowPacket(3, "alice")...)
+	// No terminal packet: the stream is truncated.
+
+	require.NoError(t, parser.Feed(chunk, func(*sqltypes.Result) error { return nil }))
+	require.ErrorContains(t, parser.Finish(), "terminal packet")
+}
+
 func TestRawResultParser_IntColumn(t *testing.T) {
 	parser := NewRawResultParser()
 

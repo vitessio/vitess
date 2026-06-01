@@ -476,19 +476,20 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					}
 					return observedCallback(reply)
 				}
-				rawCb := rawStreamCallback(trackedCallback)
+				rawStream := newRawResultStream(trackedCallback)
 
 				switch info.actionNeeded {
 				case nothing:
 					var state queryservice.StreamExecuteRawState
-					state, err = qs.StreamExecuteRaw(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, nil, rawCb)
+					state, err = qs.StreamExecuteRaw(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, nil, rawStream.feed)
 					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 					if err != nil {
 						retryRequest(func() {
 							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 							info.actionNeeded = reserve
 							var state queryservice.ReservedState
-							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStreamCallback(trackedCallback))
+							rawStream = newRawResultStream(trackedCallback)
+							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStream.feed)
 							reservedID = state.ReservedID
 							alias = state.TabletAlias
 							insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
@@ -496,7 +497,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					}
 				case begin:
 					var state queryservice.TransactionState
-					state, err = qs.BeginStreamExecuteRaw(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, nil, rawCb)
+					state, err = qs.BeginStreamExecuteRaw(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, nil, rawStream.feed)
 					transactionID = state.TransactionID
 					alias = state.TabletAlias
 					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
@@ -505,7 +506,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 							info.actionNeeded = reserveBegin
 							var state queryservice.ReservedTransactionState
-							state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(trackedCallback))
+							rawStream = newRawResultStream(trackedCallback)
+							state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStream.feed)
 							transactionID = state.TransactionID
 							reservedID = state.ReservedID
 							alias = state.TabletAlias
@@ -514,19 +516,28 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					}
 				case reserve:
 					var state queryservice.ReservedState
-					state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, nil, rawCb)
+					state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, nil, rawStream.feed)
 					reservedID = state.ReservedID
 					alias = state.TabletAlias
 					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 				case reserveBegin:
 					var state queryservice.ReservedTransactionState
-					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStreamCallback(trackedCallback))
+					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStream.feed)
 					transactionID = state.TransactionID
 					reservedID = state.ReservedID
 					alias = state.TabletAlias
 					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
 				default:
 					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
+				}
+
+				// On success, verify the raw byte stream delivered a complete
+				// result set; a truncated stream fails loudly rather than yielding
+				// a partial result.
+				if err == nil {
+					if fErr := rawStream.finish(); fErr != nil {
+						err = fErr
+					}
 				}
 
 				if err == nil && insertIDChanged && !insertIDSeenOnWire {
@@ -593,23 +604,42 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	return allErrors.GetErrors()
 }
 
-// rawStreamCallback wraps a Result callback with a RawResultParser that
-// converts raw MySQL wire protocol bytes into sqltypes.Result objects.
-// Each invocation returns a new callback with its own parser instance.
+// rawResultStream decodes the raw MySQL wire-protocol bytes of a single raw
+// streaming RPC into sqltypes.Result objects via a RawResultParser, forwarding
+// each result to the wrapped callback. A fresh rawResultStream is used per
+// streaming attempt (including retries), since each has its own parser state.
 //
 // Field metadata's physical MySQL DB name is rewritten to the keyspace name on
 // the tablet side (streamQueryResultPackets diverts column-definition packets
 // through the rewriter for IncludeFields == ALL), exactly as the non-raw
 // StreamExecute path does, so the raw bytes already carry the keyspace name and
 // vtgate forwards the parsed result as-is.
-func rawStreamCallback(callback func(*sqltypes.Result) error) func(raw []byte) error {
-	var parser *mysql.RawResultParser
-	return func(raw []byte) error {
-		if parser == nil {
-			parser = mysql.NewRawResultParser()
-		}
-		return parser.Feed(raw, callback)
+type rawResultStream struct {
+	callback func(*sqltypes.Result) error
+	parser   *mysql.RawResultParser
+}
+
+func newRawResultStream(callback func(*sqltypes.Result) error) *rawResultStream {
+	return &rawResultStream{callback: callback}
+}
+
+// feed is the raw-bytes callback passed to the *Raw RPCs.
+func (s *rawResultStream) feed(raw []byte) error {
+	if s.parser == nil {
+		s.parser = mysql.NewRawResultParser()
 	}
+	return s.parser.Feed(raw, s.callback)
+}
+
+// finish verifies the stream delivered a complete result set. It must be called
+// only after the RPC returned successfully; it fails loudly if the result set
+// was truncated (the byte stream ended before the terminal packet).
+func (s *rawResultStream) finish() error {
+	if s.parser == nil {
+		// No raw bytes were delivered, so there is no partial result to detect.
+		return nil
+	}
+	return s.parser.Finish()
 }
 
 // timeTracker is a convenience wrapper used by MessageStream
