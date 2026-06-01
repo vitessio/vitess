@@ -152,6 +152,103 @@ func TestSingleDbPreFailOnFind(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestAllowCrossShardDirectiveBypassesSingleDbCheck tests that the ALLOW_CROSS_SHARD
+// directive allows a query to span multiple shards in SINGLE transaction mode.
+func TestAllowCrossShardDirectiveBypassesSingleDbCheck(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{
+		InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE,
+	})
+
+	// First shard session — always succeeds
+	err := session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
+		info(1, 0),
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+
+	// Second shard WITHOUT directive — should fail
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
+		info(1, 1),
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "multi-db transaction attempted")
+
+	// Reset: start fresh session
+	session = NewSafeSession(&vtgatepb.Session{
+		InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE,
+	})
+
+	// First shard session
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
+		info(1, 0),
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+
+	// Second shard WITH allowCrossShard directive — should succeed
+	session.SetAllowCrossShard(true)
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
+		info(1, 1),
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+
+	// Verify directive is per-query: reset flag, third shard should fail
+	session.SetAllowCrossShard(false)
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "2"},
+		info(1, 2),
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "multi-db transaction attempted")
+}
+
+// TestAllowCrossShardDirectiveOnFindAndChange tests the directive with FindAndChangeSessionIfInSingleTxMode.
+func TestAllowCrossShardDirectiveOnFindAndChange(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{
+		InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE,
+	})
+
+	// Create read-only shard session on shard 0 (simulating a vindex query)
+	session.execReadQuery = true
+	err := session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "0"},
+		info(1, 0),
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+	session.execReadQuery = false
+
+	// Create shard session on shard 1
+	err = session.AppendOrUpdate(
+		&querypb.Target{Keyspace: "keyspace", Shard: "1"},
+		info(1, 1),
+		nil,
+		vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+
+	// Find shard 0 for a write query WITHOUT directive — should fail
+	// because shard 0 is ReadOnly and a write would make it non-ReadOnly,
+	// exceeding the cross-shard limit
+	_, err = session.FindAndChangeSessionIfInSingleTxMode(
+		"keyspace", "0", topodatapb.TabletType_UNKNOWN, vtgatepb.TransactionMode_SINGLE)
+	require.Error(t, err)
+
+	// Same query WITH allowCrossShard — should succeed
+	session.SetAllowCrossShard(true)
+	ss, err := session.FindAndChangeSessionIfInSingleTxMode(
+		"keyspace", "0", topodatapb.TabletType_UNKNOWN, vtgatepb.TransactionMode_SINGLE)
+	require.NoError(t, err)
+	require.NotNil(t, ss)
+	session.SetAllowCrossShard(false)
+}
+
 func TestPrequeries(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{
 		SystemVariables: map[string]string{

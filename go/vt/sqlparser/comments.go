@@ -45,6 +45,10 @@ const (
 	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no_scatter`.
 	DirectiveAllowScatter = "ALLOW_SCATTER"
+	// DirectiveAllowCrossShard skips the SINGLE transaction mode cross-shard check for this query.
+	// Use /*vt+ ALLOW_CROSS_SHARD */ to allow a query to span multiple shards within a SINGLE-mode
+	// transaction without triggering "multi-db transaction attempted".
+	DirectiveAllowCrossShard = "ALLOW_CROSS_SHARD"
 	// DirectiveAllowHashJoin lets the planner use hash join if possible
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 	// DirectiveQueryPlanner lets the user specify per query which planner should be used
@@ -532,6 +536,11 @@ func IgnoreMaxMaxMemoryRowsDirective(stmt Statement) bool {
 // AllowScatterDirective returns true if the allow scatter override is set to true
 func AllowScatterDirective(stmt Statement) bool {
 	return checkDirective(stmt, DirectiveAllowScatter)
+}
+
+// AllowCrossShardDirective returns true if the cross-shard override is set to true
+func AllowCrossShardDirective(stmt Statement) bool {
+	return checkDirective(stmt, DirectiveAllowCrossShard)
 }
 
 func checkDirective(stmt Statement, key string) bool {

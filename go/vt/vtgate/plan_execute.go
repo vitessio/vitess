@@ -171,6 +171,12 @@ func (e *Executor) newExecute(
 		// Set the session variable to indicate if the query is a read query or not.
 		safeSession.SetExecReadQuery(plan.QueryType.IsReadStatement())
 
+		// Scope the ALLOW_CROSS_SHARD directive to this execute call so nested
+		// executor.Execute() invocations (e.g. from vindex lookups) cannot clobber the outer setting.
+		prevAllowCrossShard := safeSession.GetAllowCrossShard()
+		safeSession.SetAllowCrossShard(sqlparser.AllowCrossShardDirective(stmt))
+		defer safeSession.SetAllowCrossShard(prevAllowCrossShard)
+
 		// Execute the plan.
 		if plan.Instructions.NeedsTransaction() {
 			err = e.insideTransaction(ctx, safeSession, logStats,
