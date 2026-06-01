@@ -50559,6 +50559,9 @@ export namespace replicationdata {
 
         /** Status semi_sync_replica_status */
         semi_sync_replica_status?: (boolean|null);
+
+        /** Status server_version */
+        server_version?: (string|null);
     }
 
     /** Represents a Status. */
@@ -50650,6 +50653,9 @@ export namespace replicationdata {
 
         /** Status semi_sync_replica_status. */
         public semi_sync_replica_status: boolean;
+
+        /** Status server_version. */
+        public server_version: string;
 
         /**
          * Creates a new Status instance using the specified properties.
