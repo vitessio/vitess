@@ -50,18 +50,17 @@ import (
 )
 
 const (
-	CheckAndRecoverGenericProblemRecoveryName        string = "CheckAndRecoverGenericProblem"
-	RestartArbitraryDirectReplicaRecoveryName        string = "RestartArbitraryDirectReplica"
-	RestartAllDirectReplicasRecoveryName             string = "RestartAllDirectReplicas"
-	RecoverDeadPrimaryRecoveryName                   string = "RecoverDeadPrimary"
-	RecoverIncapacitatedPrimaryRecoveryName          string = "RecoverIncapacitatedPrimary"
-	RecoverPrimaryTabletDeletedRecoveryName          string = "RecoverPrimaryTabletDeleted"
-	RecoverPrimaryHasPrimaryRecoveryName             string = "RecoverPrimaryHasPrimary"
-	CheckAndRecoverLockedSemiSyncPrimaryRecoveryName string = "CheckAndRecoverLockedSemiSyncPrimary"
-	ElectNewPrimaryRecoveryName                      string = "ElectNewPrimary"
-	FixPrimaryRecoveryName                           string = "FixPrimary"
-	FixReplicaRecoveryName                           string = "FixReplica"
-	RecoverErrantGTIDDetectedName                    string = "RecoverErrantGTIDDetected"
+	CheckAndRecoverGenericProblemRecoveryName string = "CheckAndRecoverGenericProblem"
+	RestartArbitraryDirectReplicaRecoveryName string = "RestartArbitraryDirectReplica"
+	RestartAllDirectReplicasRecoveryName      string = "RestartAllDirectReplicas"
+	RecoverDeadPrimaryRecoveryName            string = "RecoverDeadPrimary"
+	RecoverIncapacitatedPrimaryRecoveryName   string = "RecoverIncapacitatedPrimary"
+	RecoverPrimaryTabletDeletedRecoveryName   string = "RecoverPrimaryTabletDeleted"
+	RecoverPrimaryHasPrimaryRecoveryName      string = "RecoverPrimaryHasPrimary"
+	ElectNewPrimaryRecoveryName               string = "ElectNewPrimary"
+	FixPrimaryRecoveryName                    string = "FixPrimary"
+	FixReplicaRecoveryName                    string = "FixReplica"
+	RecoverErrantGTIDDetectedName             string = "RecoverErrantGTIDDetected"
 
 	// ReconcileStaleTopoPrimaryRecoveryName is a recovery for tablets that have a stale type of PRIMARY
 	// in the topology but a newer primary has been elected.
@@ -154,7 +153,6 @@ const (
 	recoverIncapacitatedPrimaryFunc
 	recoverPrimaryTabletDeletedFunc
 	recoverPrimaryHasPrimaryFunc
-	recoverLockedSemiSyncPrimaryFunc
 	electNewPrimaryFunc
 	fixPrimaryFunc
 	fixReplicaFunc
@@ -470,12 +468,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry *inst.D
 }
 
 // checkAndRecoverGenericProblem is a general-purpose recovery function
-func checkAndRecoverLockedSemiSyncPrimary(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (recoveryAttempted bool, topologyRecovery *TopologyRecovery, err error) {
-	logger.Warn("No actions in checkAndRecoverLockedSemiSyncPrimary")
-	return false, nil, nil
-}
-
-// checkAndRecoverGenericProblem is a general-purpose recovery function
 func checkAndRecoverGenericProblem(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) (bool, *TopologyRecovery, error) {
 	logger.Warn("No actions in checkAndRecoverGenericProblem")
 	return false, nil, nil
@@ -685,8 +677,6 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoveryFunc = recoverErrantGTIDDetectedFunc
 	case inst.PrimaryHasPrimary:
 		recoveryFunc = recoverPrimaryHasPrimaryFunc
-	case inst.LockedSemiSyncPrimary:
-		recoveryFunc = recoverLockedSemiSyncPrimaryFunc
 	case inst.ClusterHasNoPrimary:
 		recoveryFunc = electNewPrimaryFunc
 	case inst.PrimaryIsReadOnly, inst.PrimarySemiSyncMustBeSet, inst.PrimarySemiSyncMustNotBeSet, inst.PrimaryCurrentTypeMismatch:
@@ -740,8 +730,6 @@ func hasActionableRecovery(recoveryFunctionCode recoveryFunction) bool {
 		return true
 	case recoverPrimaryHasPrimaryFunc:
 		return true
-	case recoverLockedSemiSyncPrimaryFunc:
-		return true
 	case electNewPrimaryFunc:
 		return true
 	case fixPrimaryFunc:
@@ -778,8 +766,6 @@ func getCheckAndRecoverFunction(recoveryFunctionCode recoveryFunction) (
 		return recoverPrimaryTabletDeleted
 	case recoverPrimaryHasPrimaryFunc:
 		return recoverPrimaryHasPrimary
-	case recoverLockedSemiSyncPrimaryFunc:
-		return checkAndRecoverLockedSemiSyncPrimary
 	case electNewPrimaryFunc:
 		return electNewPrimary
 	case fixPrimaryFunc:
@@ -815,8 +801,6 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 		return RecoverPrimaryTabletDeletedRecoveryName
 	case recoverPrimaryHasPrimaryFunc:
 		return RecoverPrimaryHasPrimaryRecoveryName
-	case recoverLockedSemiSyncPrimaryFunc:
-		return CheckAndRecoverLockedSemiSyncPrimaryRecoveryName
 	case electNewPrimaryFunc:
 		return ElectNewPrimaryRecoveryName
 	case fixPrimaryFunc:
