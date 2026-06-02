@@ -58,7 +58,6 @@ const (
 	AllPrimaryReplicasNotReplicating       AnalysisCode = "AllPrimaryReplicasNotReplicating"
 	AllPrimaryReplicasNotReplicatingOrDead AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
 	LockedSemiSyncPrimaryHypothesis        AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
-	LockedSemiSyncPrimary                  AnalysisCode = "LockedSemiSyncPrimary"
 	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
