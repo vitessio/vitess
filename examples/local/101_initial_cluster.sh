@@ -20,12 +20,15 @@
 source ../common/env.sh
 
 # vtorc cannot reach the tablets unless $hostname resolves.
-if ! getent hosts "$hostname" >/dev/null 2>&1; then
+# Set SKIP_HOSTNAME_CHECK=1 to bypass.
+if [[ -z ${SKIP_HOSTNAME_CHECK} ]] && ! sed 's/#.*//' /etc/hosts | grep -qw "$hostname"; then
 	cat >&2 <<EOF
-ERROR: "$hostname" does not resolve.
+ERROR: "$hostname" is not mapped in /etc/hosts.
 
 Fix by running:
     echo "127.0.0.1 localhost $hostname" | sudo tee -a /etc/hosts
+
+Or set SKIP_HOSTNAME_CHECK=1 to skip this check.
 EOF
 	exit 1
 fi
