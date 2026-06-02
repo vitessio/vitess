@@ -1659,6 +1659,10 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 // This is a regression test for a bug where the hook was launched in a
 // goroutine that was killed by os.Exit(1) before it could complete.
 func testRestoreDoneHookOnFailure(t *testing.T) {
+	// Ensure a clean cluster state — preceding tests (e.g., terminatedRestore)
+	// may have torn down all tablets.
+	restartPrimaryAndReplica(t)
+
 	// 1. Install a vttablet_restore_done hook that writes env vars to a file.
 	vtroot := os.Getenv("VTROOT")
 	require.NotEmpty(t, vtroot, "VTROOT must be set")

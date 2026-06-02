@@ -197,13 +197,14 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	)
 
 	// Declare the hook defer before the lock so it runs after unlock (LIFO).
-	// The hook can block up to 30s and does not need the action lock.
+	// Broadcast health first so vtgate sees updated state immediately, then
+	// run the hook which can block up to 30s.
 	defer func() {
 		if startTime.IsZero() {
 			return
 		}
-		tm.invokeRestoreDoneHook(startTime, restoreErr, backupEngine)
 		tm.QueryServiceControl.BroadcastHealth()
+		tm.invokeRestoreDoneHook(startTime, restoreErr, backupEngine)
 	}()
 
 	if err := tm.lock(ctx); err != nil {
