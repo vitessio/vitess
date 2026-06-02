@@ -126,6 +126,12 @@ func lenEncStringSize(value string) int {
 	return lenEncIntSize(uint64(l)) + l
 }
 
+// LenEncStringSize returns the number of bytes that the length-encoded encoding
+// of value occupies (the length prefix plus the string bytes).
+func LenEncStringSize(value string) int {
+	return lenEncStringSize(value)
+}
+
 func writeLenEncString(data []byte, pos int, value string) int {
 	pos = writeLenEncInt(data, pos, uint64(len(value)))
 	return writeEOFString(data, pos, value)
@@ -273,6 +279,16 @@ func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
 	default:
 		return uint64(data[0]), pos + 1, true
 	}
+}
+
+// ReadLenEncInt decodes a MySQL length-encoded integer starting at pos. It is
+// an exported wrapper around the internal decoder so callers outside this
+// package (e.g. the raw streaming producer in vttablet) decode counts with the
+// exact same logic the rest of the protocol code uses, rather than
+// reimplementing the wire format. It returns the value, the position after the
+// integer, and whether the decode succeeded.
+func ReadLenEncInt(data []byte, pos int) (uint64, int, bool) {
+	return readLenEncInt(data, pos)
 }
 
 func readLenEncString(data []byte, pos int) (string, int, bool) {

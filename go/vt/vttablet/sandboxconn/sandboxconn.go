@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -390,6 +391,76 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, session queryservice.
 
 	sbc.sExecMu.Unlock()
 	return nil
+}
+
+// StreamExecuteRaw is part of the QueryService interface.
+func (sbc *SandboxConn) StreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
+	var results []*sqltypes.Result
+	err := sbc.StreamExecute(ctx, session, target, query, bindVars, transactionID, reservedID, options, func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	})
+	if err != nil {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+	insertID, insertIDChanged := rawInsertID(results)
+	raw := mysql.EncodeResultToMySQLPackets(results)
+	return queryservice.StreamExecuteRawState{InsertID: insertID, InsertIDChanged: insertIDChanged}, callback(raw)
+}
+
+func (sbc *SandboxConn) BeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.TransactionState, error) {
+	var results []*sqltypes.Result
+	state, err := sbc.BeginStreamExecute(ctx, session, target, preQueries, sql, bindVariables, reservedID, options, func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	})
+	if err != nil {
+		return state, err
+	}
+	state.InsertID, state.InsertIDChanged = rawInsertID(results)
+	raw := mysql.EncodeResultToMySQLPackets(results)
+	return state, callback(raw)
+}
+
+func (sbc *SandboxConn) ReserveStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.ReservedState, error) {
+	var results []*sqltypes.Result
+	state, err := sbc.ReserveStreamExecute(ctx, session, target, preQueries, sql, bindVariables, transactionID, options, func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	})
+	if err != nil {
+		return state, err
+	}
+	state.InsertID, state.InsertIDChanged = rawInsertID(results)
+	raw := mysql.EncodeResultToMySQLPackets(results)
+	return state, callback(raw)
+}
+
+func (sbc *SandboxConn) ReserveBeginStreamExecuteRaw(ctx context.Context, session queryservice.Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (queryservice.ReservedTransactionState, error) {
+	var results []*sqltypes.Result
+	state, err := sbc.ReserveBeginStreamExecute(ctx, session, target, preQueries, postBeginQueries, sql, bindVariables, options, func(r *sqltypes.Result) error {
+		results = append(results, r)
+		return nil
+	})
+	if err != nil {
+		return state, err
+	}
+	state.InsertID, state.InsertIDChanged = rawInsertID(results)
+	raw := mysql.EncodeResultToMySQLPackets(results)
+	return state, callback(raw)
+}
+
+// rawInsertID mirrors the tablet's out-of-band LAST_INSERT_ID handling for the
+// raw path: the real tablet refetches last_insert_id and returns it in the
+// StreamExecuteRawState rather than on the wire. The non-raw StreamExecute
+// surfaces it as a Result with InsertIDChanged set, so we pull it back out here.
+func rawInsertID(results []*sqltypes.Result) (uint64, bool) {
+	for _, r := range results {
+		if r != nil && r.InsertIDUpdated() {
+			return r.InsertID, r.InsertIDChanged
+		}
+	}
+	return 0, false
 }
 
 // Begin is part of the QueryService interface.

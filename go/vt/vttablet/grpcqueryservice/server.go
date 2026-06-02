@@ -18,6 +18,8 @@ package grpcqueryservice
 
 import (
 	"context"
+	"io"
+	"sync"
 
 	"google.golang.org/grpc"
 
@@ -26,11 +28,24 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
 )
+
+// rawStreamBufPool reuses the per-query raw streaming buffer across *Raw RPC
+// invocations. Each handler serves a single query (the client opens a fresh
+// stream per query), so without this pool every query would allocate a new
+// buffer. The buffer's contents are fully serialized by stream.Send before the
+// handler returns, so it is safe to return to the pool afterwards. Buffers are
+// sized to queryserver-config-raw-stream-buffer-size, read lazily so flag
+// parsing has completed by the time the first stream is served.
+var rawStreamBufPool = sync.Pool{New: func() any {
+	b := make([]byte, tabletenv.NewCurrentConfig().RawStreamBufferSize)
+	return &b
+}}
 
 // query is the gRPC query service implementation.
 // It implements the queryservice.QueryServer interface.
@@ -298,6 +313,56 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 	return vterrors.ToGRPC(err)
 }
 
+// StreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) StreamExecuteRaw(stream queryservicepb.Query_StreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	defer rawStreamBufPool.Put(bufp)
+	buf := *bufp
+
+	for {
+		request, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+			request.EffectiveCallerId,
+			request.ImmediateCallerId,
+		)
+
+		state, queryErr := func() (queryservice.StreamExecuteRawState, error) {
+			resp := querypb.StreamExecuteRawResponseFromVTPool()
+			// Drop the reference to the pooled streaming buffer before returning
+			// the message to the vtproto pool (otherwise the pooled response would
+			// pin a 256KB buffer that also lives in rawStreamBufPool). Deferred so
+			// the response is returned even if the server call panics.
+			defer func() {
+				resp.Raw = nil
+				resp.ReturnToVTPool()
+			}()
+			return q.server.StreamExecuteRaw(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, buf, func(raw []byte) error {
+				resp.Raw = raw
+				return stream.Send(resp)
+			})
+		}()
+
+		// Always send terminal message with done=true (errors are in-band)
+		if err := stream.Send(&querypb.StreamExecuteRawResponse{
+			Done:            true,
+			Error:           vterrors.ToVTRPC(queryErr),
+			InsertId:        state.InsertID,
+			InsertIdChanged: state.InsertIDChanged,
+		}); err != nil {
+			return err
+		}
+	}
+}
+
 // MessageStream is part of the queryservice.QueryServer interface
 func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream queryservicepb.Query_MessageStreamServer) (err error) {
 	defer q.server.HandlePanic(&err)
@@ -503,6 +568,162 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 		SessionStateChanges: state.SessionStateChanges,
 	})
 	return vterrors.ToGRPC(err)
+}
+
+// BeginStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) BeginStreamExecuteRaw(stream queryservicepb.Query_BeginStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	defer rawStreamBufPool.Put(bufp)
+	buf := *bufp
+
+	for {
+		request, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+			request.EffectiveCallerId,
+			request.ImmediateCallerId,
+		)
+
+		state, queryErr := func() (queryservice.TransactionState, error) {
+			resp := querypb.BeginStreamExecuteRawResponseFromVTPool()
+			// Drop the reference to the pooled streaming buffer before returning
+			// the message to the vtproto pool (otherwise the pooled response would
+			// pin a 256KB buffer that also lives in rawStreamBufPool). Deferred so
+			// the response is returned even if the server call panics.
+			defer func() {
+				resp.Raw = nil
+				resp.ReturnToVTPool()
+			}()
+			return q.server.BeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, buf, func(raw []byte) error {
+				resp.Raw = raw
+				return stream.Send(resp)
+			})
+		}()
+
+		if err := stream.Send(&querypb.BeginStreamExecuteRawResponse{
+			Done:                true,
+			Error:               vterrors.ToVTRPC(queryErr),
+			TransactionId:       state.TransactionID,
+			TabletAlias:         state.TabletAlias,
+			SessionStateChanges: state.SessionStateChanges,
+			InsertId:            state.InsertID,
+			InsertIdChanged:     state.InsertIDChanged,
+		}); err != nil {
+			return err
+		}
+	}
+}
+
+// ReserveStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) ReserveStreamExecuteRaw(stream queryservicepb.Query_ReserveStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	defer rawStreamBufPool.Put(bufp)
+	buf := *bufp
+
+	for {
+		request, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+			request.EffectiveCallerId,
+			request.ImmediateCallerId,
+		)
+
+		state, queryErr := func() (queryservice.ReservedState, error) {
+			resp := querypb.ReserveStreamExecuteRawResponseFromVTPool()
+			// Drop the reference to the pooled streaming buffer before returning
+			// the message to the vtproto pool (otherwise the pooled response would
+			// pin a 256KB buffer that also lives in rawStreamBufPool). Deferred so
+			// the response is returned even if the server call panics.
+			defer func() {
+				resp.Raw = nil
+				resp.ReturnToVTPool()
+			}()
+			return q.server.ReserveStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, buf, func(raw []byte) error {
+				resp.Raw = raw
+				return stream.Send(resp)
+			})
+		}()
+
+		if err := stream.Send(&querypb.ReserveStreamExecuteRawResponse{
+			Done:            true,
+			Error:           vterrors.ToVTRPC(queryErr),
+			ReservedId:      state.ReservedID,
+			TabletAlias:     state.TabletAlias,
+			InsertId:        state.InsertID,
+			InsertIdChanged: state.InsertIDChanged,
+		}); err != nil {
+			return err
+		}
+	}
+}
+
+// ReserveBeginStreamExecuteRaw is part of the queryservice.QueryServer interface
+func (q *query) ReserveBeginStreamExecuteRaw(stream queryservicepb.Query_ReserveBeginStreamExecuteRawServer) (err error) {
+	defer q.server.HandlePanic(&err)
+
+	bufp := rawStreamBufPool.Get().(*[]byte)
+	defer rawStreamBufPool.Put(bufp)
+	buf := *bufp
+
+	for {
+		request, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+			request.EffectiveCallerId,
+			request.ImmediateCallerId,
+		)
+
+		state, queryErr := func() (queryservice.ReservedTransactionState, error) {
+			resp := querypb.ReserveBeginStreamExecuteRawResponseFromVTPool()
+			// Drop the reference to the pooled streaming buffer before returning
+			// the message to the vtproto pool (otherwise the pooled response would
+			// pin a 256KB buffer that also lives in rawStreamBufPool). Deferred so
+			// the response is returned even if the server call panics.
+			defer func() {
+				resp.Raw = nil
+				resp.ReturnToVTPool()
+			}()
+			return q.server.ReserveBeginStreamExecuteRaw(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, buf, func(raw []byte) error {
+				resp.Raw = raw
+				return stream.Send(resp)
+			})
+		}()
+
+		if err := stream.Send(&querypb.ReserveBeginStreamExecuteRawResponse{
+			Done:                true,
+			Error:               vterrors.ToVTRPC(queryErr),
+			ReservedId:          state.ReservedID,
+			TransactionId:       state.TransactionID,
+			TabletAlias:         state.TabletAlias,
+			SessionStateChanges: state.SessionStateChanges,
+			InsertId:            state.InsertID,
+			InsertIdChanged:     state.InsertIDChanged,
+		}); err != nil {
+			return err
+		}
+	}
 }
 
 // Release implements the QueryServer interface

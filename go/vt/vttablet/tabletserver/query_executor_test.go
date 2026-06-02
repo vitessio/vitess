@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1098,6 +1099,91 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	_, err = qre.Execute()
 	require.Error(t, err, "got: nil, want: error")
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
+}
+
+// TestQueryExecutorStreamRawTableAclNoPermission verifies the raw streaming
+// path enforces table ACLs (checkPermissions) like the parsed path: a user
+// without read permission is denied before any connection is acquired.
+func TestQueryExecutorStreamRawTableAclNoPermission(t *testing.T) {
+	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
+	tableacl.Register(aclName, &simpleacl.Factory{})
+	tableacl.SetDefaultACL(aclName)
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "select * from test_table limit 1000"
+	db.AddQuery(query, &sqltypes.Result{Fields: getTestTableFields()})
+	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
+		Fields: getTestTableFields(),
+	})
+
+	callerID := &querypb.VTGateCallerID{Username: "u2"}
+	ctx := callerid.NewContext(t.Context(), nil, callerID)
+	config := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "group02",
+			TableNamesOrPrefixes: []string{"test_table"},
+			Readers:              []string{"superuser"},
+		}},
+	}
+	require.NoError(t, tableacl.InitFromProto(config))
+
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	defer tsv.StopService()
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	// StreamRaw should fail because the current user has no read permission,
+	// and it must fail before streaming any bytes.
+	called := false
+	_, err := qre.StreamRaw(nil, func(raw []byte) error {
+		called = true
+		return nil
+	})
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err))
+	require.False(t, called, "callback must not run when permission is denied")
+}
+
+// TestQueryExecutorStreamRawFetchLastInsertID verifies the raw streaming path
+// honors FetchLastInsertId. MySQL hardcodes last_insert_id=0 in a streamed
+// SELECT terminator, so the value is never on the wire; StreamRaw must reset
+// the connection's last insert id before the query and refetch it afterwards,
+// returning it in the StreamExecuteRawState. The changed bit must distinguish a
+// genuine LAST_INSERT_ID(0) from an unset value.
+func TestQueryExecutorStreamRawFetchLastInsertID(t *testing.T) {
+	testcases := []struct {
+		name            string
+		lastInsertID    string
+		wantInsertID    uint64
+		wantInsertIDSet bool
+	}{
+		{name: "changed to non-zero", lastInsertID: "42", wantInsertID: 42, wantInsertIDSet: true},
+		{name: "changed to zero", lastInsertID: "0", wantInsertID: 0, wantInsertIDSet: true},
+		{name: "unset", lastInsertID: strconv.FormatUint(uint64(resetLastIDValue), 10), wantInsertID: 0, wantInsertIDSet: false},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			query := "select * from test_table limit 1000"
+			db.AddQuery(query, &sqltypes.Result{Fields: getTestTableFields()})
+			db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{Fields: getTestTableFields()})
+			db.AddQuery(resetLastIDQuery, &sqltypes.Result{})
+			db.AddQuery("select last_insert_id()", sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("last_insert_id()", "uint64"),
+				tc.lastInsertID,
+			))
+
+			ctx := t.Context()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
+			qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+			qre.options = &querypb.ExecuteOptions{FetchLastInsertId: true}
+
+			state, err := qre.StreamRaw(nil, func(raw []byte) error { return nil })
+			require.NoError(t, err)
+			require.Equal(t, tc.wantInsertIDSet, state.InsertIDChanged)
+			require.Equal(t, tc.wantInsertID, state.InsertID)
+		})
+	}
 }
 
 func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {

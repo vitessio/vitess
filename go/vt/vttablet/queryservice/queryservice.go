@@ -89,6 +89,12 @@ type QueryService interface {
 	Execute(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
 	// StreamExecute for query execution with streaming
 	StreamExecute(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
+	// StreamExecuteRaw executes a streaming query and returns raw MySQL wire
+	// protocol bytes instead of parsed result objects. The callback receives
+	// 256KB chunks of raw bytes. The returned StreamExecuteRawState carries the
+	// LAST_INSERT_ID value for FetchLastInsertId queries, which MySQL hardcodes
+	// to 0 in a streamed SELECT terminator and therefore cannot ride the bytes.
+	StreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (StreamExecuteRawState, error)
 
 	// Combo methods, they also return the transactionID from the
 	// Begin part. If err != nil, the transactionID may still be
@@ -96,6 +102,8 @@ type QueryService interface {
 	// Integrity Error)
 	BeginExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions) (TransactionState, *sqltypes.Result, error)
 	BeginStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (TransactionState, error)
+	// BeginStreamExecuteRaw combines Begin and StreamExecuteRaw.
+	BeginStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (TransactionState, error)
 
 	// Messaging methods.
 	MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error
@@ -126,10 +134,14 @@ type QueryService interface {
 	ReserveBeginExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (ReservedTransactionState, *sqltypes.Result, error)
 
 	ReserveBeginStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (ReservedTransactionState, error)
+	// ReserveBeginStreamExecuteRaw combines Reserve, Begin, and StreamExecuteRaw.
+	ReserveBeginStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (ReservedTransactionState, error)
 
 	ReserveExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (ReservedState, *sqltypes.Result, error)
 
 	ReserveStreamExecute(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (ReservedState, error)
+	// ReserveStreamExecuteRaw executes a raw streaming query on a reserved connection.
+	ReserveStreamExecuteRaw(ctx context.Context, session Session, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, buf []byte, callback func(raw []byte) error) (ReservedState, error)
 
 	Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error
 
@@ -144,11 +156,15 @@ type TransactionState struct {
 	TransactionID       int64
 	TabletAlias         *topodatapb.TabletAlias
 	SessionStateChanges string
+	InsertID            uint64
+	InsertIDChanged     bool
 }
 
 type ReservedState struct {
-	ReservedID  int64
-	TabletAlias *topodatapb.TabletAlias
+	ReservedID      int64
+	TabletAlias     *topodatapb.TabletAlias
+	InsertID        uint64
+	InsertIDChanged bool
 }
 
 type ReservedTransactionState struct {
@@ -156,4 +172,16 @@ type ReservedTransactionState struct {
 	TransactionID       int64
 	TabletAlias         *topodatapb.TabletAlias
 	SessionStateChanges string
+	InsertID            uint64
+	InsertIDChanged     bool
+}
+
+// StreamExecuteRawState carries the LAST_INSERT_ID value produced by a raw
+// streaming query. MySQL hardcodes last_insert_id=0 in a streamed SELECT
+// terminator, so FetchLastInsertId queries on the raw path return the value
+// here instead of on the wire. InsertIDChanged distinguishes a real
+// LAST_INSERT_ID(0) from an unset value.
+type StreamExecuteRawState struct {
+	InsertID        uint64
+	InsertIDChanged bool
 }

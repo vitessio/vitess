@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
@@ -700,4 +701,97 @@ func executeWithTimeout(
 	// Here, kill call happens after 100ms but took 1000ms to complete.
 	require.WithinDuration(t, timeQuery, timeKill, 150*time.Millisecond)
 	require.WithinDuration(t, timeKill, timeDone, responseTime)
+}
+
+// TestDBConnStreamRawCtxKill verifies that cancelling a raw stream kills the
+// connection when it is transactional/reserved (a query inside a transaction
+// cannot be safely killed on its own) but kills only the query otherwise.
+func TestDBConnStreamRawCtxKill(t *testing.T) {
+	run := func(t *testing.T, insideTxn, expectConnKill bool) {
+		db := fakesqldb.New(t)
+		defer db.Close()
+		connPool := newPool()
+		params := dbconfigs.New(db.ConnParams())
+		connPool.Open(params, params, params)
+		defer connPool.Close()
+
+		const query = "select * from t"
+		db.AddQuery(query, &sqltypes.Result{})
+
+		var killConn, killQuery atomic.Bool
+		// Register the more specific pattern first.
+		db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) { killQuery.Store(true) })
+		db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) { killConn.Store(true) })
+
+		dbConn, err := newPooledConn(context.Background(), connPool, params)
+		require.NoError(t, err)
+		defer dbConn.Close()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		started := make(chan struct{})
+		errCh := make(chan error, 1)
+		go func() {
+			// fn blocks until the context is cancelled, simulating a raw reader
+			// stalled waiting for more wire packets.
+			errCh <- dbConn.StreamRaw(ctx, query, insideTxn, func(_ *mysql.Conn) error {
+				close(started)
+				<-ctx.Done()
+				return ctx.Err()
+			})
+		}()
+		<-started
+		cancel()
+
+		select {
+		case err := <-errCh:
+			require.Error(t, err)
+			require.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "StreamRaw did not return after context cancel")
+		}
+
+		// terminate kills synchronously before StreamRaw returns, so the
+		// callbacks have already fired by the time errCh is readable.
+		if expectConnKill {
+			assert.True(t, killConn.Load(), "expected kill <id> (connection) for transactional raw stream")
+			assert.False(t, killQuery.Load(), "must not kill query for transactional raw stream")
+		} else {
+			assert.True(t, killQuery.Load(), "expected kill query <id> for pooled raw stream")
+			assert.False(t, killConn.Load(), "must not kill connection for pooled raw stream")
+		}
+	}
+
+	t.Run("pooled raw stream kills the query", func(t *testing.T) {
+		run(t, false /* insideTxn */, false /* expectConnKill */)
+	})
+	t.Run("transactional raw stream kills the connection", func(t *testing.T) {
+		run(t, true /* insideTxn */, true /* expectConnKill */)
+	})
+}
+
+// TestDBConnStreamRawRequiresDeprecateEOF verifies that StreamRaw fails fast when
+// the MySQL connection did not negotiate CLIENT_DEPRECATE_EOF, since the raw
+// framing depends on it. The callback must not run and no query is sent.
+func TestDBConnStreamRawRequiresDeprecateEOF(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	params := dbconfigs.New(db.ConnParams())
+	connPool.Open(params, params, params)
+	defer connPool.Close()
+
+	dbConn, err := newPooledConn(context.Background(), connPool, params)
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	// Simulate a connection that did not negotiate CLIENT_DEPRECATE_EOF.
+	dbConn.conn.Capabilities &^= mysql.CapabilityClientDeprecateEOF
+
+	called := false
+	err = dbConn.StreamRaw(t.Context(), "select * from t", false, func(*mysql.Conn) error {
+		called = true
+		return nil
+	})
+	require.ErrorContains(t, err, "CLIENT_DEPRECATE_EOF")
+	require.False(t, called, "fn must not run when DEPRECATE_EOF is absent")
 }

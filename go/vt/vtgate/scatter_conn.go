@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -452,48 +453,142 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				}
 			}
 
-			switch info.actionNeeded {
-			case nothing:
-				err = qs.StreamExecute(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, observedCallback)
-				if err != nil {
-					retryRequest(func() {
-						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
-						info.actionNeeded = reserve
-						var state queryservice.ReservedState
-						state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, observedCallback)
-						reservedID = state.ReservedID
-						alias = state.TabletAlias
-					})
+			if experimentalRawStreaming {
+				// Route streaming queries through the *Raw RPCs, which forward raw
+				// MySQL wire-protocol bytes that rawStreamCallback decodes back into
+				// sqltypes.Result via a RawResultParser.
+
+				// LAST_INSERT_ID for FetchLastInsertId queries cannot ride the raw
+				// bytes (MySQL hardcodes last_insert_id=0 in a streamed SELECT
+				// terminator), so it comes back out-of-band in the state and we
+				// surface it as an extra Result, mirroring the non-raw path.
+				var insertID uint64
+				var insertIDChanged bool
+
+				// A bare OK packet (e.g. a non-streamed response) can still carry a
+				// non-zero last_insert_id on the wire, which the parser surfaces
+				// directly. Track that so we don't also emit the out-of-band Result
+				// for the same update, mirroring the non-raw path's lastInsertIDSet.
+				insertIDSeenOnWire := false
+				trackedCallback := func(reply *sqltypes.Result) error {
+					if reply != nil && reply.InsertIDUpdated() {
+						insertIDSeenOnWire = true
+					}
+					return observedCallback(reply)
 				}
-			case begin:
-				var state queryservice.TransactionState
-				state, err = qs.BeginStreamExecute(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, observedCallback)
-				transactionID = state.TransactionID
-				alias = state.TabletAlias
-				if err != nil {
-					retryRequest(func() {
-						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
-						info.actionNeeded = reserveBegin
-						var state queryservice.ReservedTransactionState
-						state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
-						transactionID = state.TransactionID
-						reservedID = state.ReservedID
-						alias = state.TabletAlias
-					})
+				rawStream := newRawResultStream(trackedCallback)
+
+				switch info.actionNeeded {
+				case nothing:
+					var state queryservice.StreamExecuteRawState
+					state, err = qs.StreamExecuteRaw(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, nil, rawStream.feed)
+					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
+					if err != nil {
+						retryRequest(func() {
+							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+							info.actionNeeded = reserve
+							var state queryservice.ReservedState
+							rawStream = newRawResultStream(trackedCallback)
+							state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, nil, rawStream.feed)
+							reservedID = state.ReservedID
+							alias = state.TabletAlias
+							insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
+						})
+					}
+				case begin:
+					var state queryservice.TransactionState
+					state, err = qs.BeginStreamExecuteRaw(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, nil, rawStream.feed)
+					transactionID = state.TransactionID
+					alias = state.TabletAlias
+					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
+					if err != nil {
+						retryRequest(func() {
+							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+							info.actionNeeded = reserveBegin
+							var state queryservice.ReservedTransactionState
+							rawStream = newRawResultStream(trackedCallback)
+							state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStream.feed)
+							transactionID = state.TransactionID
+							reservedID = state.ReservedID
+							alias = state.TabletAlias
+							insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
+						})
+					}
+				case reserve:
+					var state queryservice.ReservedState
+					state, err = qs.ReserveStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, nil, rawStream.feed)
+					reservedID = state.ReservedID
+					alias = state.TabletAlias
+					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
+				case reserveBegin:
+					var state queryservice.ReservedTransactionState
+					state, err = qs.ReserveBeginStreamExecuteRaw(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, nil, rawStream.feed)
+					transactionID = state.TransactionID
+					reservedID = state.ReservedID
+					alias = state.TabletAlias
+					insertID, insertIDChanged = state.InsertID, state.InsertIDChanged
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 				}
-			case reserve:
-				var state queryservice.ReservedState
-				state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, observedCallback)
-				reservedID = state.ReservedID
-				alias = state.TabletAlias
-			case reserveBegin:
-				var state queryservice.ReservedTransactionState
-				state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
-				transactionID = state.TransactionID
-				reservedID = state.ReservedID
-				alias = state.TabletAlias
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
+
+				// On success, verify the raw byte stream delivered a complete
+				// result set; a truncated stream fails loudly rather than yielding
+				// a partial result.
+				if err == nil {
+					if fErr := rawStream.finish(); fErr != nil {
+						err = fErr
+					}
+				}
+
+				if err == nil && insertIDChanged && !insertIDSeenOnWire {
+					if cbErr := observedCallback(&sqltypes.Result{InsertID: insertID, InsertIDChanged: true}); cbErr != nil {
+						err = cbErr
+					}
+				}
+			} else {
+				switch info.actionNeeded {
+				case nothing:
+					err = qs.StreamExecute(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, observedCallback)
+					if err != nil {
+						retryRequest(func() {
+							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+							info.actionNeeded = reserve
+							var state queryservice.ReservedState
+							state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, observedCallback)
+							reservedID = state.ReservedID
+							alias = state.TabletAlias
+						})
+					}
+				case begin:
+					var state queryservice.TransactionState
+					state, err = qs.BeginStreamExecute(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, observedCallback)
+					transactionID = state.TransactionID
+					alias = state.TabletAlias
+					if err != nil {
+						retryRequest(func() {
+							// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+							info.actionNeeded = reserveBegin
+							var state queryservice.ReservedTransactionState
+							state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
+							transactionID = state.TransactionID
+							reservedID = state.ReservedID
+							alias = state.TabletAlias
+						})
+					}
+				case reserve:
+					var state queryservice.ReservedState
+					state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, observedCallback)
+					reservedID = state.ReservedID
+					alias = state.TabletAlias
+				case reserveBegin:
+					var state queryservice.ReservedTransactionState
+					state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
+					transactionID = state.TransactionID
+					reservedID = state.ReservedID
+					alias = state.TabletAlias
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
+				}
 			}
 			session.Log(primitive, rs.Target, rs.Gateway, query, info.actionNeeded == begin || info.actionNeeded == reserveBegin, bindVars[i])
 
@@ -507,6 +602,44 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		},
 	)
 	return allErrors.GetErrors()
+}
+
+// rawResultStream decodes the raw MySQL wire-protocol bytes of a single raw
+// streaming RPC into sqltypes.Result objects via a RawResultParser, forwarding
+// each result to the wrapped callback. A fresh rawResultStream is used per
+// streaming attempt (including retries), since each has its own parser state.
+//
+// Field metadata's physical MySQL DB name is rewritten to the keyspace name on
+// the tablet side (streamQueryResultPackets diverts column-definition packets
+// through the rewriter for IncludeFields == ALL), exactly as the non-raw
+// StreamExecute path does, so the raw bytes already carry the keyspace name and
+// vtgate forwards the parsed result as-is.
+type rawResultStream struct {
+	callback func(*sqltypes.Result) error
+	parser   *mysql.RawResultParser
+}
+
+func newRawResultStream(callback func(*sqltypes.Result) error) *rawResultStream {
+	return &rawResultStream{callback: callback}
+}
+
+// feed is the raw-bytes callback passed to the *Raw RPCs.
+func (s *rawResultStream) feed(raw []byte) error {
+	if s.parser == nil {
+		s.parser = mysql.NewRawResultParser()
+	}
+	return s.parser.Feed(raw, s.callback)
+}
+
+// finish verifies the stream delivered a complete result set. It must be called
+// only after the RPC returned successfully; it fails loudly if the result set
+// was truncated (the byte stream ended before the terminal packet).
+func (s *rawResultStream) finish() error {
+	if s.parser == nil {
+		// No raw bytes were delivered, so there is no partial result to detect.
+		return nil
+	}
+	return s.parser.Finish()
 }
 
 // timeTracker is a convenience wrapper used by MessageStream

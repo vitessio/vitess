@@ -86,6 +86,7 @@ var (
 	noScatter                 bool
 	preventCrossKeyspaceReads bool
 	enableShardRouting        bool
+	experimentalRawStreaming  = true
 
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
@@ -199,6 +200,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &noScatter, "no-scatter", noScatter, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
 	utils.SetFlagBoolVar(fs, &preventCrossKeyspaceReads, "prevent-cross-keyspace-reads", preventCrossKeyspaceReads, "when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs")
 	fs.BoolVar(&enableShardRouting, "enable-partial-keyspace-migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
+	fs.BoolVar(&experimentalRawStreaming, "experimental-raw-streaming", experimentalRawStreaming, "(Experimental) Route streaming queries through the raw MySQL wire-protocol path, forwarding raw bytes from vttablet and parsing them once in vtgate. Enabled by default for now.")
 	utils.SetFlagDurationVar(fs, &healthCheckRetryDelay, "healthcheck-retry-delay", healthCheckRetryDelay, "health check retry delay")
 	utils.SetFlagDurationVar(fs, &healthCheckTimeout, "healthcheck-timeout", healthCheckTimeout, "the health check timeout period")
 	utils.SetFlagIntVar(fs, &maxPayloadSize, "max-payload-size", maxPayloadSize, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")

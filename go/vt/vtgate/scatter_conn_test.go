@@ -18,11 +18,13 @@ package vtgate
 
 import (
 	"log/slog"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -697,4 +699,180 @@ func TestActionInfoWithTabletAlias(t *testing.T) {
 		assert.Equal(t, nothing, info.actionNeeded)
 		assert.Nil(t, info.alias)
 	})
+}
+
+// TestStreamExecuteMultiRawForwardsFieldDatabase verifies that the raw streaming
+// path forwards field.Database from the wire verbatim, without any vtgate-side
+// rewrite. The keyspace rewrite of field metadata now happens on the tablet
+// (streamQueryResultPackets diverts column-definition packets through the
+// rewriter), so by the time vtgate parses the raw bytes the keyspace name is
+// already in place. The SandboxConn does not simulate the tablet-side rewrite,
+// so whatever Database the fixture sets is exactly what vtgate must deliver.
+func TestStreamExecuteMultiRawForwardsFieldDatabase(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	const keyspace = "TestStreamExecuteMultiRawForwardsFieldDatabase"
+
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(keyspace)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// The field carries the Database exactly as it arrives on the raw wire. The
+	// tablet would already have rewritten the physical DB name to the keyspace;
+	// the sandbox doesn't, so vtgate must forward this value unchanged.
+	const wireDatabase = "already_rewritten_keyspace"
+	sbc.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32, Database: wireDatabase},
+		},
+		Rows: [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
+	}})
+
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
+	rss, err := res.ResolveDestination(ctx, keyspace, topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0"}))
+	require.NoError(t, err)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+	})
+
+	var mu sync.Mutex
+	var gotDatabase string
+	errs := sc.StreamExecuteMulti(ctx, nil, "query", rss,
+		[]map[string]*querypb.BindVariable{nil}, session, true, /*autocommit*/
+		func(r *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(r.Fields) > 0 {
+				gotDatabase = r.Fields[0].Database
+			}
+			return nil
+		}, nullResultsObserver{}, false)
+	require.NoError(t, vterrors.Aggregate(errs))
+	require.Equal(t, wireDatabase, gotDatabase)
+}
+
+// TestStreamExecuteMultiRawSurfacesInsertID verifies that the raw streaming path
+// surfaces LAST_INSERT_ID out-of-band as an extra Result. MySQL hardcodes
+// last_insert_id=0 in a streamed SELECT terminator, so for the discriminating
+// LAST_INSERT_ID(0) case the value can only travel via the StreamExecuteRawState
+// (with InsertIDChanged set); the raw bytes alone cannot express it. scatter_conn
+// must turn that state into a Result the caller observes.
+func TestStreamExecuteMultiRawSurfacesInsertID(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	const keyspace = "TestStreamExecuteMultiRawSurfacesInsertID"
+
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(keyspace)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// Simulate LAST_INSERT_ID(0): the changed bit is set but the value is 0, so
+	// it is indistinguishable from "unset" on the wire and must ride the state.
+	sbc.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Int32}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
+
+		InsertID:        0,
+		InsertIDChanged: true,
+	}})
+
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
+	rss, err := res.ResolveDestination(ctx, keyspace, topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0"}))
+	require.NoError(t, err)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{FetchLastInsertId: true},
+	})
+
+	var mu sync.Mutex
+	var insertIDChangedSeen bool
+	errs := sc.StreamExecuteMulti(ctx, nil, "select last_insert_id(0)", rss,
+		[]map[string]*querypb.BindVariable{nil}, session, true, /*autocommit*/
+		func(r *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if r != nil && r.InsertIDChanged {
+				insertIDChangedSeen = true
+			}
+			return nil
+		}, nullResultsObserver{}, true /*fetchLastInsertID*/)
+	require.NoError(t, vterrors.Aggregate(errs))
+	require.True(t, insertIDChangedSeen, "raw streaming must surface LAST_INSERT_ID(0) via the changed bit")
+}
+
+// TestStreamExecuteMultiRawDeduplicatesInsertID verifies that when a non-zero
+// LAST_INSERT_ID is already surfaced on the wire (a bare OK packet carries it),
+// the raw path does not also emit the out-of-band synthetic Result. Otherwise
+// vtgate would report the same InsertID update twice. This mirrors the non-raw
+// path's lastInsertIDSet suppression.
+func TestStreamExecuteMultiRawDeduplicatesInsertID(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	const keyspace = "TestStreamExecuteMultiRawDeduplicatesInsertID"
+
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(keyspace)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc := hc.AddTestTablet("aa", "0", 1, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	// A fields-less OK response (e.g. a DML) carries last_insert_id directly in
+	// its terminal OK packet, so the parser surfaces it on the wire. (A streamed
+	// SELECT cannot: MySQL hardcodes the SELECT terminator's last_insert_id to 0,
+	// which is why the LAST_INSERT_ID(0) case has to ride the state instead.)
+	sbc.SetResults([]*sqltypes.Result{{
+		RowsAffected:    1,
+		InsertID:        42,
+		InsertIDChanged: true,
+	}})
+
+	res := srvtopo.NewResolver(newSandboxForCells(ctx, []string{"aa"}), sc.gateway, "aa")
+	rss, err := res.ResolveDestination(ctx, keyspace, topodatapb.TabletType_REPLICA, key.DestinationShards([]string{"0"}))
+	require.NoError(t, err)
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{FetchLastInsertId: true},
+	})
+
+	var mu sync.Mutex
+	insertIDUpdates := 0
+	errs := sc.StreamExecuteMulti(ctx, nil, "insert into t(val) values ('x')", rss,
+		[]map[string]*querypb.BindVariable{nil}, session, true, /*autocommit*/
+		func(r *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if r != nil && r.InsertIDUpdated() {
+				insertIDUpdates++
+			}
+			return nil
+		}, nullResultsObserver{}, true /*fetchLastInsertID*/)
+	require.NoError(t, vterrors.Aggregate(errs))
+	require.Equal(t, 1, insertIDUpdates, "InsertID update already on the wire must not be duplicated by the synthetic Result")
+}
+
+// TestRawResultStreamFinishTruncated verifies the raw streaming consumer fails
+// loudly when the byte stream ends before the terminal packet: finish() reports
+// an error so a truncated result set surfaces instead of a silent partial.
+func TestRawResultStreamFinishTruncated(t *testing.T) {
+	complete := mysql.EncodeResultToMySQLPackets([]*sqltypes.Result{{
+		Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Int32}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
+	}})
+	// Drop the tail so the terminal packet never completes.
+	truncated := complete[:len(complete)-1]
+
+	s := newRawResultStream(func(*sqltypes.Result) error { return nil })
+	require.NoError(t, s.feed(truncated))
+	require.Error(t, s.finish())
+}
+
+// TestRawResultStreamFinishComplete verifies finish() accepts a complete stream.
+func TestRawResultStreamFinishComplete(t *testing.T) {
+	complete := mysql.EncodeResultToMySQLPackets([]*sqltypes.Result{{
+		Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Int32}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt32(1)}},
+	}})
+
+	s := newRawResultStream(func(*sqltypes.Result) error { return nil })
+	require.NoError(t, s.feed(complete))
+	require.NoError(t, s.finish())
 }

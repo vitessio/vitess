@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -430,6 +431,89 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 		return callback(result)
 	})
+}
+
+// StreamRaw mirrors Stream but forwards raw MySQL wire-protocol bytes through
+// callback instead of parsed Results. It performs the same table-ACL checks,
+// query throttling, connection acquisition (including system settings) and
+// QueryList registration as Stream. buf is the reusable read buffer.
+//
+// Unlike Stream it does not use the stream consolidator, which shares parsed
+// *sqltypes.Result across clients (raw bytes can't be shared without parsing).
+//
+// Like Stream, it rewrites the physical MySQL DB name in field metadata to the
+// keyspace name when IncludeFields == ALL; streamQueryResultPackets diverts the
+// column-definition packets through the rewriter so vtgate receives the same
+// bytes the non-raw path would have produced.
+//
+// FetchLastInsertId is honored: MySQL hardcodes a SELECT resultset terminator's
+// last_insert_id to 0, so the value a LAST_INSERT_ID(x) call set is never on the
+// wire. As in the non-raw path we reset the connection's last insert id before
+// the query and refetch it with "select last_insert_id()" afterwards, returning
+// it in the StreamExecuteRawState so vtgate can surface it out-of-band.
+func (qre *QueryExecutor) StreamRaw(buf []byte, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
+	qre.logStats.PlanType = qre.plan.PlanID.String()
+
+	defer func(start time.Time) {
+		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
+		qre.tsv.stats.QueryTimingsByTabletType.Record(qre.targetTabletType.String(), start)
+		qre.recordUserQuery("StreamRaw", int64(time.Since(start)))
+	}(time.Now())
+
+	if err := qre.checkPermissions(); err != nil {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+
+	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
+		return queryservice.StreamExecuteRawState{}, reqThrottledErr
+	}
+
+	if qre.plan.PlanID == p.PlanSelectStream && qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
+		qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
+	}
+
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+
+	// Decide whether to rewrite field metadata's schema (physical MySQL DB name)
+	// to the keyspace name, matching the non-raw QueryExecutor.Stream path. We
+	// gate exactly like Stream (query_executor.go, the StreamExecute path):
+	// IncludeFields == ALL and the keyspace differs from the physical DB name —
+	// and deliberately do NOT add the PlanSelect/PlanSelectImpossible plan gate
+	// that the inline TabletServer.Execute path uses. This is the streaming RPC,
+	// so it must behave like Stream for byte-for-byte parity; Stream applies the
+	// rewrite for every streamed plan, not just selects.
+	var replaceKeyspace string
+	if sqltypes.IncludeFieldsOrDefault(qre.options) == querypb.ExecuteOptions_ALL && qre.tsv.sm.target.Keyspace != qre.tsv.config.DB.DBName {
+		replaceKeyspace = qre.tsv.sm.target.Keyspace
+	}
+
+	// if we have a transaction id, let's use the txPool for this query
+	var conn *connpool.PooledConn
+	if qre.connID != 0 {
+		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for raw streaming query")
+		if err != nil {
+			return queryservice.StreamExecuteRawState{}, err
+		}
+		defer txConn.Unlock()
+		if qre.setting != nil {
+			if _, err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+				return queryservice.StreamExecuteRawState{}, vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+		}
+		conn = txConn.UnderlyingDBConn()
+	} else {
+		dbConn, err := qre.getStreamConn()
+		if err != nil {
+			return queryservice.StreamExecuteRawState{}, err
+		}
+		defer dbConn.Recycle()
+		conn = dbConn
+	}
+
+	return qre.execStreamRawSQL(conn, qre.connID != 0, sql, buf, qre.tsv.config.DB.DBName, replaceKeyspace, callback)
 }
 
 // MessageStream streams messages from a message table.
@@ -1277,6 +1361,63 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 	return nil
 }
 
+// registerQueryDetail registers a QueryDetail for conn in the appropriate
+// QueryList so long-running stream queries are force-terminated during a
+// serving-type change (unserveCommon>terminateAllQueries in state_manager.go).
+// Transactional/reserved connections go to statefulql, OLAP connections to
+// olapql; registering everything in olapql previously left stateful streams
+// uncleaned. It returns a function that removes the registration.
+func (qre *QueryExecutor) registerQueryDetail(conn *connpool.Conn, isTransaction bool) (func(), error) {
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	ql := qre.tsv.olapql
+	if isTransaction {
+		ql = qre.tsv.statefulql
+	}
+	if err := ql.Add(qd); err != nil {
+		return nil, err
+	}
+	return func() { ql.Remove(qd) }, nil
+}
+
+// execStreamRawSQL is the raw-bytes sibling of execStreamSQL. It registers the
+// query in the QueryList (for terminability) and forwards raw MySQL wire
+// protocol packets through streamQueryResultPackets instead of parsing them
+// into sqltypes.Result.
+func (qre *QueryExecutor) execStreamRawSQL(conn *connpool.PooledConn, isTransaction bool, sql string, buf []byte, rewriteDBName string, rewriteKeyspace string, callback func(raw []byte) error) (queryservice.StreamExecuteRawState, error) {
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamRawSQL")
+	defer span.Finish()
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
+
+	start := time.Now()
+	defer qre.logStats.AddRewrittenSQL(sql, start)
+
+	// MySQL hardcodes last_insert_id=0 in a streamed SELECT terminator, so we
+	// reset the connection's last insert id before the query and refetch it
+	// afterwards (the value never rides the raw bytes for a SELECT).
+	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+
+	remove, err := qre.registerQueryDetail(conn.Conn, isTransaction)
+	if err != nil {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+	defer remove()
+
+	err = conn.Conn.StreamRaw(ctx, sql, isTransaction, func(mysqlConn *mysql.Conn) error {
+		return qre.tsv.streamQueryResultPackets(ctx, mysqlConn, buf, rewriteDBName, rewriteKeyspace, callback)
+	})
+	if err != nil || !qre.options.GetFetchLastInsertId() {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+
+	res := &sqltypes.Result{}
+	if err = qre.fetchLastInsertID(ctx, conn.Conn, res); err != nil {
+		return queryservice.StreamExecuteRawState{}, err
+	}
+	return queryservice.StreamExecuteRawState{InsertID: res.InsertID, InsertIDChanged: res.InsertIDChanged}, nil
+}
+
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	defer span.Finish()
@@ -1285,16 +1426,15 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	start := time.Now()
 	defer qre.logStats.AddRewrittenSQL(sql, start)
 
-	// Add query detail object into QueryExecutor TableServer list w.r.t if it is a transactional or not. Previously we were adding it
-	// to olapql list regardless but that resulted in problems, where long-running stream queries which can be stateful (or transactional)
-	// weren't getting cleaned up during unserveCommon>terminateAllQueries in state_manager.go.
-	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
-	// once their grace period is over.
-	qd := NewQueryDetail(qre.logStats.Ctx, conn.Conn)
-
 	if err := qre.resetLastInsertIDIfNeeded(ctx, conn.Conn); err != nil {
 		return err
 	}
+
+	remove, err := qre.registerQueryDetail(conn.Conn, isTransaction)
+	if err != nil {
+		return err
+	}
+	defer remove()
 
 	lastInsertIDSet := false
 	cb := func(result *sqltypes.Result) error {
@@ -1304,20 +1444,9 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 		return callback(result)
 	}
 
-	var err error
 	if isTransaction {
-		err = qre.tsv.statefulql.Add(qd)
-		if err != nil {
-			return err
-		}
-		defer qre.tsv.statefulql.Remove(qd)
 		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	} else {
-		err = qre.tsv.olapql.Add(qd)
-		if err != nil {
-			return err
-		}
-		defer qre.tsv.olapql.Remove(qd)
 		err = conn.Conn.Stream(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
 

@@ -64,6 +64,7 @@ Flags:
       --enable-set-var                                                   This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections (default true)
       --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
       --enable-views                                                     Enable views support in vtgate. (default true)
+      --experimental-raw-streaming                                       (Experimental) Route streaming queries through the raw MySQL wire-protocol path, forwarding raw bytes from vttablet and parsing them once in vtgate. Enabled by default for now. (default true)
       --foreign-key-mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
       --gate-query-cache-memory int                                      gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache. (default 33554432)
       --gateway-initial-tablet-timeout duration                          At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type (default 30s)

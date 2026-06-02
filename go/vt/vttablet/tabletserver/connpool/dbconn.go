@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
@@ -352,6 +353,56 @@ func (dbc *Conn) StreamOnce(
 		streamBufferSize,
 		true, // Once means we are in a txn
 	)
+}
+
+// StreamRaw sends a COM_QUERY and calls fn with the underlying mysql.Conn
+// for raw packet reading. Context cancellation terminates the connection.
+func (dbc *Conn) StreamRaw(ctx context.Context, query string, insideTxn bool, fn func(conn *mysql.Conn) error) error {
+	dbc.current.Store(&query)
+	defer dbc.current.Store(nil)
+
+	now := time.Now()
+	defer dbc.stats.MySQLTimings.Record("ExecStream", now)
+
+	// The raw streaming framing assumes the modern result-set protocol: the
+	// terminal packet is an OK-format EOF and there is no intermediate EOF after
+	// the column definitions. Both only hold when CLIENT_DEPRECATE_EOF was
+	// negotiated, so fail fast here rather than silently mis-frame the stream.
+	if dbc.conn.Capabilities&mysql.CapabilityClientDeprecateEOF == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "raw streaming requires CLIENT_DEPRECATE_EOF, which the connection to MySQL did not negotiate")
+	}
+
+	if err := dbc.conn.WriteComQuery(query); err != nil {
+		return err
+	}
+
+	// Register termination as a context.AfterFunc callback, mirroring streamOnce.
+	// terminate runs only if the context is actually cancelled; on cancellation
+	// it unblocks fn's pending read by killing the query (or the whole connection
+	// when inside a transaction, which cannot be safely killed on its own). Using
+	// stop()'s return value — rather than a select on ctx.Done() vs the result —
+	// avoids spuriously killing and reporting a cancellation for a stream that
+	// finished at the same instant the context was cancelled.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	stop := context.AfterFunc(ctx, func() {
+		defer wg.Done()
+		dbc.terminate(ctx, insideTxn, now)
+	})
+	err := fn(dbc.conn.Conn)
+	if !stop() {
+		// The context was cancelled and terminate has started; wait for it to
+		// finish so the kill completes and the dba pool connection is released
+		// before we return.
+		wg.Wait()
+		return dbc.Err()
+	}
+	// Check for errors set by an explicit Kill call from another goroutine (not
+	// triggered by context cancellation).
+	if dbcErr := dbc.Err(); dbcErr != nil {
+		return dbcErr
+	}
+	return err
 }
 
 var (
