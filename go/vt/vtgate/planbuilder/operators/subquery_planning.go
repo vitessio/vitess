@@ -168,6 +168,11 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 							if expr.Name != sq.ArgName {
 								return true
 							}
+						case sqlparser.ListArg:
+							// DML IN/NOT IN subqueries use ListArg placeholders, not Argument.
+							if string(expr) != sq.ArgName {
+								return true
+							}
 						default:
 							return true
 						}
