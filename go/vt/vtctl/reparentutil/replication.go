@@ -336,6 +336,13 @@ func stopReplicationAndBuildStatusMaps(
 				m.Lock()
 				res.primaryStatusMap[alias] = primaryStatus
 				res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+				if primaryStatus.ServerVersion != "" {
+					if _, v, parseErr := mysqlctl.ParseVersionString(primaryStatus.ServerVersion); parseErr == nil {
+						res.mysqlVersions[alias] = v
+					} else {
+						logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", primaryStatus.ServerVersion, alias, parseErr)
+					}
+				}
 				m.Unlock()
 			} else {
 				logger.Warningf("failed to get replication status from %v: %v", alias, err)

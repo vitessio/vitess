@@ -464,6 +464,7 @@ type PrimaryStatus struct {
 	Position      string                 `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	FilePosition  string                 `protobuf:"bytes,2,opt,name=file_position,json=filePosition,proto3" json:"file_position,omitempty"`
 	ServerUuid    string                 `protobuf:"bytes,3,opt,name=server_uuid,json=serverUuid,proto3" json:"server_uuid,omitempty"`
+	ServerVersion string                 `protobuf:"bytes,4,opt,name=server_version,json=serverVersion,proto3" json:"server_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -515,6 +516,13 @@ func (x *PrimaryStatus) GetFilePosition() string {
 func (x *PrimaryStatus) GetServerUuid() string {
 	if x != nil {
 		return x.ServerUuid
+	}
+	return ""
+}
+
+func (x *PrimaryStatus) GetServerVersion() string {
+	if x != nil {
+		return x.ServerVersion
 	}
 	return ""
 }
@@ -802,12 +810,13 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\x13replica_net_timeout\x18\x02 \x01(\x05R\x11replicaNetTimeout\"w\n" +
 	"\x15StopReplicationStatus\x12/\n" +
 	"\x06before\x18\x01 \x01(\v2\x17.replicationdata.StatusR\x06before\x12-\n" +
-	"\x05after\x18\x02 \x01(\v2\x17.replicationdata.StatusR\x05after\"q\n" +
+	"\x05after\x18\x02 \x01(\v2\x17.replicationdata.StatusR\x05after\"\x98\x01\n" +
 	"\rPrimaryStatus\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x12#\n" +
 	"\rfile_position\x18\x02 \x01(\tR\ffilePosition\x12\x1f\n" +
 	"\vserver_uuid\x18\x03 \x01(\tR\n" +
-	"serverUuid\"\xce\t\n" +
+	"serverUuid\x12%\n" +
+	"\x0eserver_version\x18\x04 \x01(\tR\rserverVersion\"\xce\t\n" +
 	"\n" +
 	"FullStatus\x12\x1b\n" +
 	"\tserver_id\x18\x01 \x01(\rR\bserverId\x12\x1f\n" +

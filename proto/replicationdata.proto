@@ -86,6 +86,7 @@ message PrimaryStatus {
   string position = 1;
   string file_position = 2;
   string server_uuid = 3;
+  string server_version = 4;
 }
 
 // FullStatus contains the full status of MySQL including the replication information, semi-sync information, GTID information among others
