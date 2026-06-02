@@ -18,7 +18,6 @@ USER root
 
 # Setup private repo
 ARG GH_ACCESS_TOKEN
-ENV GH_ACCESS_TOKEN=${GH_ACCESS_TOKEN}
 RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
 
 # Install dependencies
