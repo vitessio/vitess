@@ -944,5 +944,93 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "optimizer hints on outer query are preserved through VindexLookup transformation (issue #20224)",
+    "query": "select /*+ MAX_EXECUTION_TIME(8000) */ user.id, user.Name, user.col from user where user.Name in (select * from (select /*+ MAX_EXECUTION_TIME(8000) */ user.Name from user where user.col = 1 order by user.id desc limit 60, 30) as subquery_for_limit) order by user.id desc limit 30",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select /*+ MAX_EXECUTION_TIME(8000) */ user.id, user.Name, user.col from user where user.Name in (select * from (select /*+ MAX_EXECUTION_TIME(8000) */ user.Name from user where user.col = 1 order by user.id desc limit 60, 30) as subquery_for_limit) order by user.id desc limit 30",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "30",
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "30",
+                "Offset": "60",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `Name`, subquery_for_limit.id, weight_string(subquery_for_limit.id) from (select `user`.`Name`, `user`.id from `user` where 1 != 1) as subquery_for_limit where 1 != 1",
+                    "OrderBy": "(1|2) DESC",
+                    "Query": "select /*+ MAX_EXECUTION_TIME(8000) */ `Name`, subquery_for_limit.id, weight_string(subquery_for_limit.id) from (select `user`.`Name`, `user`.id from `user` where `user`.col = 1) as subquery_for_limit order by subquery_for_limit.id desc limit 90"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "VindexLookup",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "Values": [
+                  "::__sq1"
+                ],
+                "Vindex": "name_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.id, `user`.`Name`, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
+                    "OrderBy": "(0|3) DESC",
+                    "Query": "select /*+ MAX_EXECUTION_TIME(8000) */ `user`.id, `user`.`Name`, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values and `user`.`Name` in ::__vals order by `user`.id desc",
+                    "ResultColumns": 3
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
