@@ -90,6 +90,7 @@ func TestBuiltinBackupChunked(t *testing.T) {
 // TestBuiltinBackupNonChunked verifies that with the default threshold of 0, no chunking
 // occurs and the MANIFEST remains compatible with older Vitess versions.
 func TestBuiltinBackupNonChunked(t *testing.T) {
+	defer setDefaultCommonArgs()
 	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
 	require.Nilf(t, err, "setup failed with status code %d", code)
 	defer TearDownCluster()

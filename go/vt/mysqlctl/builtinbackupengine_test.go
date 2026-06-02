@@ -410,6 +410,45 @@ func TestRestoreChunkedRetryPreservesData(t *testing.T) {
 	assert.Equal(t, chunk2Data, content[20:30], "chunk 2 should still be intact after retry")
 }
 
+func TestRestoreFileEntriesSetupErrIsFatal(t *testing.T) {
+	tmpDir := t.TempDir()
+	cnf := &Mycnf{DataDir: tmpDir}
+
+	fes := []FileEntry{
+		{
+			Base: backupData,
+			Name: "good.ibd",
+		},
+		{
+			Base: "invalid-base",
+			Name: "bad.ibd",
+			Chunks: []FileChunk{
+				{StorageName: "1-0", Offset: 0, Size: 10},
+			},
+		},
+	}
+
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(_ context.Context, filename string) (io.ReadCloser, error) {
+			return nil, errors.New("simulated read failure")
+		},
+	}
+
+	bm := builtinBackupManifest{SkipCompress: true}
+	params := RestoreParams{
+		Cnf:         cnf,
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+
+	be := &BuiltinBackupEngine{}
+	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errRestoreFatal)
+}
+
 func TestExecuteBackupRejectsOversizedChunkSize(t *testing.T) {
 	oldThreshold := backupFileChunkThreshold
 	oldSize := backupFileChunkSize

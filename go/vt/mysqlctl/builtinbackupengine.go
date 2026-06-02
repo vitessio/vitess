@@ -101,6 +101,8 @@ var (
 	backupFileChunkThreshold uint64                          // 0 means chunking is disabled
 	backupFileChunkSize      uint64 = 1 * 1024 * 1024 * 1024 // 1 GiB
 	minBackupFileChunkSize   uint64 = 4 * 1024 * 1024        // 4 MiB minimum to prevent the accidental allocation of a huge amount of files
+
+	errRestoreFatal = errors.New("fatal restore error")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -1315,6 +1317,9 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	}
 
 	restoreErr := be.restoreFileEntries(ctx, fes, bh, bm, params, createdDir)
+	if errors.Is(restoreErr, errRestoreFatal) {
+		return "", restoreErr
+	}
 	files := bh.GetFailedFiles()
 	if restoreErr != nil && len(files) == 0 {
 		return "", restoreErr
@@ -1457,6 +1462,10 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		}
 	}
 
+	if setupErr != nil {
+		return fmt.Errorf("%w: %w", errRestoreFatal, setupErr)
+	}
+
 	// Phase 2: Dispatch all work items concurrently.
 	for _, wi := range workItems {
 		g.Go(func() error {
@@ -1490,9 +1499,6 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 	}
 
 	_ = g.Wait()
-	if setupErr != nil {
-		return setupErr
-	}
 	return bh.Error()
 }
 
