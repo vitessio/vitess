@@ -1592,19 +1592,6 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 	return onlineDDL, row, nil
 }
 
-// readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
-func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) ([]string, error) {
-	pending, err := e.readPendingMigrations(ctx)
-	if err != nil {
-		return nil, err
-	}
-	uuids := make([]string, len(pending))
-	for i, pm := range pending {
-		uuids[i] = pm.uuid
-	}
-	return uuids, nil
-}
-
 // readPendingMigrations returns pending migrations (queued/ready/running) with their migration contexts.
 func (e *Executor) readPendingMigrations(ctx context.Context) ([]pendingMigration, error) {
 	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
@@ -1779,8 +1766,10 @@ func (e *Executor) ThrottleMigration(ctx context.Context, uuid string, expireStr
 	return emptyResult, nil
 }
 
-// ThrottleAllMigrations
-func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal) (result *sqltypes.Result, err error) {
+// ThrottleAllMigrations throttles all pending migrations. When migrationContext is non-empty only
+// migrations whose migration_context matches are throttled (THROTTLE CONTEXT 'ctx'). When
+// migrationContext is empty all pending migrations are throttled (THROTTLE ALL).
+func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString string, ratioLiteral *sqlparser.Literal, migrationContext string) (result *sqltypes.Result, err error) {
 	duration, ratio, err := e.validateThrottleParams(ctx, expireString, ratioLiteral)
 	if err != nil {
 		return nil, err
@@ -1788,8 +1777,26 @@ func (e *Executor) ThrottleAllMigrations(ctx context.Context, expireString strin
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
-	_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio, false)
-	return emptyResult, nil
+	if migrationContext == "" {
+		_ = e.lagThrottler.ThrottleApp(throttlerapp.OnlineDDLName.String(), time.Now().Add(duration), ratio, false)
+		return emptyResult, nil
+	}
+	pendingMigrations, err := e.readPendingMigrations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result = &sqltypes.Result{}
+	for _, pm := range pendingMigrations {
+		if pm.migrationContext != migrationContext {
+			continue
+		}
+		res, err := e.ThrottleMigration(ctx, pm.uuid, expireString, ratioLiteral)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	return result, nil
 }
 
 // UnthrottleMigration
@@ -1802,14 +1809,34 @@ func (e *Executor) UnthrottleMigration(ctx context.Context, uuid string) (result
 	return emptyResult, nil
 }
 
-// UnthrottleAllMigrations
-func (e *Executor) UnthrottleAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+// UnthrottleAllMigrations unthrottles all pending migrations. When migrationContext is non-empty
+// only migrations whose migration_context matches are unthrottled (UNTHROTTLE CONTEXT 'ctx'). When
+// migrationContext is empty all pending migrations are unthrottled (UNTHROTTLE ALL).
+func (e *Executor) UnthrottleAllMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if err := e.lagThrottler.CheckIsOpen(); err != nil {
 		return nil, err
 	}
-	defer e.triggerNextCheckInterval()
-	_ = e.lagThrottler.UnthrottleApp(throttlerapp.OnlineDDLName.String())
-	return emptyResult, nil
+	if migrationContext == "" {
+		defer e.triggerNextCheckInterval()
+		_ = e.lagThrottler.UnthrottleApp(throttlerapp.OnlineDDLName.String())
+		return emptyResult, nil
+	}
+	pendingMigrations, err := e.readPendingMigrations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result = &sqltypes.Result{}
+	for _, pm := range pendingMigrations {
+		if pm.migrationContext != migrationContext {
+			continue
+		}
+		res, err := e.UnthrottleMigration(ctx, pm.uuid)
+		if err != nil {
+			return result, err
+		}
+		result.AppendResult(res)
+	}
+	return result, nil
 }
 
 // scheduleNextMigration attempts to schedule a single migration to run next.
@@ -4297,10 +4324,12 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	return rs, nil
 }
 
-// CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
-// all we do is set retain_artifacts_seconds to a very small number (it's actually a negative) so that the
-// next iteration of gcArtifacts() picks up the migration's artifacts and schedules them for deletion
-func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+// CleanupAllMigrations marks terminal migrations (complete/cancelled/failed) as ready for artifact
+// cleanup by setting retain_artifacts_seconds to a negative value; the next gcArtifacts() run then
+// schedules their artifacts for deletion. When migrationContext is non-empty only migrations whose
+// migration_context matches are affected (CLEANUP CONTEXT 'ctx'). When migrationContext is empty
+// all eligible migrations are affected (CLEANUP ALL).
+func (e *Executor) CleanupAllMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
@@ -4308,7 +4337,18 @@ func (e *Executor) CleanupAllMigrations(ctx context.Context) (result *sqltypes.R
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	rs, err := e.execQuery(ctx, sqlUpdateReadyForCleanupAll)
+	var rs *sqltypes.Result
+	if migrationContext == "" {
+		rs, err = e.execQuery(ctx, sqlUpdateReadyForCleanupAll)
+	} else {
+		query, bindErr := sqlparser.ParseAndBind(sqlUpdateReadyForCleanupAllByContext,
+			sqltypes.StringBindVariable(migrationContext),
+		)
+		if bindErr != nil {
+			return nil, bindErr
+		}
+		rs, err = e.execQuery(ctx, query)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -4351,28 +4391,36 @@ func (e *Executor) ForceCutOverMigration(ctx context.Context, uuid string) (resu
 	return rs, nil
 }
 
-// ForceCutOverPendingMigrations sets force_cutover flag for all pending migrations
-func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+// ForceCutOverPendingMigrations sets the force_cutover flag for pending migrations. When
+// migrationContext is non-empty only migrations whose migration_context matches are affected
+// (FORCE_CUTOVER CONTEXT 'ctx'). When migrationContext is empty all pending migrations are
+// affected (FORCE_CUTOVER ALL).
+func (e *Executor) ForceCutOverPendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return result, err
 	}
-	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
-	for _, uuid := range uuids {
-		log.Info("ForceCutOverPendingMigrations: applying to " + uuid)
-		res, err := e.ForceCutOverMigration(ctx, uuid)
+	matched := 0
+	for _, pm := range pendingMigrations {
+		if migrationContext != "" && migrationContext != pm.migrationContext {
+			continue
+		}
+		matched++
+		log.Info("ForceCutOverPendingMigrations: applying to " + pm.uuid)
+		res, err := e.ForceCutOverMigration(ctx, pm.uuid)
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: done iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("ForceCutOverPendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
 	return result, nil
 }
 
@@ -4444,29 +4492,36 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string, shardsArg
 	return rs, nil
 }
 
-// CompletePendingMigrations completes all pending migrations (that are expected to run or are running)
-// for this keyspace
-func (e *Executor) CompletePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+// CompletePendingMigrations completes all pending migrations for this keyspace. When
+// migrationContext is non-empty only migrations whose migration_context matches are completed
+// (COMPLETE CONTEXT 'ctx'). When migrationContext is empty all pending migrations are completed
+// (COMPLETE ALL).
+func (e *Executor) CompletePendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return result, err
 	}
-	log.Info(fmt.Sprintf("CompletePendingMigrations: iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("CompletePendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
-	for _, uuid := range uuids {
-		log.Info("CompletePendingMigrations: completing " + uuid)
-		res, err := e.CompleteMigration(ctx, uuid, "")
+	matched := 0
+	for _, pm := range pendingMigrations {
+		if migrationContext != "" && migrationContext != pm.migrationContext {
+			continue
+		}
+		matched++
+		log.Info("CompletePendingMigrations: completing " + pm.uuid)
+		res, err := e.CompleteMigration(ctx, pm.uuid, "")
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("CompletePendingMigrations: done iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("CompletePendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
 	return result, nil
 }
 
@@ -4498,29 +4553,36 @@ func (e *Executor) PostponeCompleteMigration(ctx context.Context, uuid string) (
 	return rs, nil
 }
 
-// PostponeCompletePendingMigrations sets postpone_completion for all pending migrations (that are expected to run or are running)
-// for this keyspace
-func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+// PostponeCompletePendingMigrations sets postpone_completion for all pending migrations for this
+// keyspace. When migrationContext is non-empty only migrations whose migration_context matches are
+// affected (POSTPONE COMPLETE CONTEXT 'ctx'). When migrationContext is empty all pending
+// migrations are affected (POSTPONE COMPLETE ALL).
+func (e *Executor) PostponeCompletePendingMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
 
-	uuids, err := e.readPendingMigrationsUUIDs(ctx)
+	pendingMigrations, err := e.readPendingMigrations(ctx)
 	if err != nil {
 		return result, err
 	}
-	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: iterating %v migrations", len(pendingMigrations)))
 
 	result = &sqltypes.Result{}
-	for _, uuid := range uuids {
-		log.Info("PostponeCompletePendingMigrations: postpone completion of " + uuid)
-		res, err := e.PostponeCompleteMigration(ctx, uuid)
+	matched := 0
+	for _, pm := range pendingMigrations {
+		if migrationContext != "" && migrationContext != pm.migrationContext {
+			continue
+		}
+		matched++
+		log.Info("PostponeCompletePendingMigrations: postpone completion of " + pm.uuid)
+		res, err := e.PostponeCompleteMigration(ctx, pm.uuid)
 		if err != nil {
 			return result, err
 		}
 		result.AppendResult(res)
 	}
-	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: done iterating %v migrations", len(uuids)))
+	log.Info(fmt.Sprintf("PostponeCompletePendingMigrations: done iterating %v migrations, matched %d", len(pendingMigrations), matched))
 	return result, nil
 }
 
@@ -4556,8 +4618,11 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 	return rs, nil
 }
 
-// LaunchMigrations launches all launch-postponed queued migrations for this keyspace
-func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+// LaunchMigrations launches all launch-postponed queued migrations for this keyspace. When
+// migrationContext is non-empty only migrations whose migration_context matches are launched
+// (LAUNCH CONTEXT 'ctx'). When migrationContext is empty all postponed migrations are launched
+// (LAUNCH ALL).
+func (e *Executor) LaunchMigrations(ctx context.Context, migrationContext string) (result *sqltypes.Result, err error) {
 	if e.isOpen.Load() == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, schema.ErrOnlineDDLDisabled.Error())
 	}
@@ -4571,6 +4636,10 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 	result = &sqltypes.Result{}
 	for _, row := range rows {
 		uuid := row["migration_uuid"].ToString()
+		mc := row["migration_context"].ToString()
+		if migrationContext != "" && migrationContext != mc {
+			continue
+		}
 		log.Info("LaunchMigrations: unpostponing " + uuid)
 		res, err := e.LaunchMigration(ctx, uuid, "")
 		if err != nil {

@@ -12,6 +12,8 @@
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
     - **[VTOrc](#major-changes-vtorc)**
         - [Gossip Protocol for Primary Tablet Failure Detection](#vtorc-gossip-protocol)
+    - **[Deprecations](#deprecations)**
+        - [CLI Flags](#deprecated-cli-flags)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
@@ -111,6 +113,16 @@ VTOrc introduces a new analysis type: `PrimaryTabletUnreachableByQuorum`. This a
 Both vttablet and VTOrc expose a `/debug/gossip` endpoint showing current gossip state, member status, and configuration.
 
 See [#19686](https://github.com/vitessio/vitess/pull/19686) for implementation details.
+
+### <a id="deprecations"/>Deprecations</a>
+
+#### <a id="deprecated-cli-flags"/>CLI Flags</a>
+
+The VTGate flag `--legacy-replication-lag-algorithm` is now deprecated and is a no-op. VTGate always uses the simpler replication lag algorithm based on low lag, high lag and the minimum number of tablets. A detailed explanation of the algorithm [is available in this code comment](https://github.com/vitessio/vitess/blob/main/go/vt/discovery/replicationlag.go).
+
+The flag will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
+
+**Impact**: Remove any usage of the `--legacy-replication-lag-algorithm` flag from VTGate startup scripts or configuration.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

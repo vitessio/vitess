@@ -446,19 +446,35 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 	case CleanupMigrationType:
 		alterType = "cleanup"
 	case CleanupAllMigrationType:
-		alterType = "cleanup all"
+		if node.Context != "" {
+			alterType = "cleanup"
+		} else {
+			alterType = "cleanup all"
+		}
 	case LaunchMigrationType:
 		alterType = "launch"
 	case LaunchAllMigrationType:
-		alterType = "launch all"
+		if node.Context != "" {
+			alterType = "launch"
+		} else {
+			alterType = "launch all"
+		}
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CompleteAllMigrationType:
-		alterType = "complete all"
+		if node.Context != "" {
+			alterType = "complete"
+		} else {
+			alterType = "complete all"
+		}
 	case PostponeCompleteMigrationType:
 		alterType = "postpone complete"
 	case PostponeCompleteAllMigrationType:
-		alterType = "postpone complete all"
+		if node.Context != "" {
+			alterType = "postpone complete"
+		} else {
+			alterType = "postpone complete all"
+		}
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
@@ -470,15 +486,27 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 	case ThrottleMigrationType:
 		alterType = "throttle"
 	case ThrottleAllMigrationType:
-		alterType = "throttle all"
+		if node.Context != "" {
+			alterType = "throttle"
+		} else {
+			alterType = "throttle all"
+		}
 	case UnthrottleMigrationType:
 		alterType = "unthrottle"
 	case UnthrottleAllMigrationType:
-		alterType = "unthrottle all"
+		if node.Context != "" {
+			alterType = "unthrottle"
+		} else {
+			alterType = "unthrottle all"
+		}
 	case ForceCutOverMigrationType:
 		alterType = "force_cutover"
 	case ForceCutOverAllMigrationType:
-		alterType = "force_cutover all"
+		if node.Context != "" {
+			alterType = "force_cutover"
+		} else {
+			alterType = "force_cutover all"
+		}
 	case SetCutOverThresholdMigrationType:
 		alterType = "cutover_threshold"
 	}
@@ -488,6 +516,10 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(encodeSQLString(node.Threshold))
 	}
+	if node.Context != "" {
+		buf.WriteString(" context ")
+		buf.WriteString(encodeSQLString(node.Context))
+	}
 	if node.Expire != "" {
 		buf.WriteString(" expire ")
 		buf.WriteString(encodeSQLString(node.Expire))
@@ -495,10 +527,6 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 	if node.Ratio != nil {
 		buf.WriteString(" ratio ")
 		node.Ratio.FormatFast(buf)
-	}
-	if node.Context != "" {
-		buf.WriteString(" context ")
-		buf.WriteString(encodeSQLString(node.Context))
 	}
 	if node.Shards != "" {
 		buf.WriteString(" vitess_shards ")

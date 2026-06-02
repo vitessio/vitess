@@ -209,11 +209,11 @@ func primeTxPoolWithConnection(t *testing.T, ctx context.Context) (*fakesqldb.DB
 	t.Helper()
 	db := fakesqldb.New(t)
 	txPool, _ := newTxPool()
+	params := dbconfigs.New(db.ConnParams())
+	txPool.Open(params, params, params)
 	// Set the capacity to 1 to ensure that the db connection is reused.
 	err := txPool.scp.conns.SetCapacity(t.Context(), 1)
 	require.NoError(t, err)
-	params := dbconfigs.New(db.ConnParams())
-	txPool.Open(params, params, params)
 
 	// Run a query to trigger a database connection. That connection will be
 	// reused by subsequent transactions.
