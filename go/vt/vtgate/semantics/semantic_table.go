@@ -235,6 +235,9 @@ func (st *SemTable) GetChildForeignKeysList() []vindexes.ChildFKInfo {
 	for _, infos := range st.childForeignKeysInvolved {
 		total += len(infos)
 	}
+	if total == 0 {
+		return nil
+	}
 	childFkInfos := make([]vindexes.ChildFKInfo, 0, total)
 	for _, infos := range st.childForeignKeysInvolved {
 		childFkInfos = append(childFkInfos, infos...)
@@ -265,6 +268,9 @@ func (st *SemTable) GetParentForeignKeysList() []vindexes.ParentFKInfo {
 	total := 0
 	for _, infos := range st.parentForeignKeysInvolved {
 		total += len(infos)
+	}
+	if total == 0 {
+		return nil
 	}
 	parentFkInfos := make([]vindexes.ParentFKInfo, 0, total)
 	for _, infos := range st.parentForeignKeysInvolved {
@@ -904,7 +910,7 @@ func (st *SemTable) AndExpressions(exprs ...sqlparser.Expr) sqlparser.Expr {
 	case 1:
 		return exprs[0]
 	default:
-		result := (sqlparser.Expr)(nil)
+		result := sqlparser.Expr(nil)
 	outer:
 		// we'll loop and remove any duplicates
 		for i, expr := range exprs {
