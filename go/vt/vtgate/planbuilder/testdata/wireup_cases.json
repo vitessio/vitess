@@ -1032,5 +1032,32 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "optimizer hints on outer query are preserved when subquery is merged inline (issue #20224)",
+    "query": "select /*+ MAX_EXECUTION_TIME(8000) */ id, name from user where id in (select user_id from user_extra where user_id = 5)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select /*+ MAX_EXECUTION_TIME(8000) */ id, name from user where id in (select user_id from user_extra where user_id = 5)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, `name` from `user` where 1 != 1",
+        "Query": "select /*+ MAX_EXECUTION_TIME(8000) */ id, `name` from `user` where id in (select user_id from user_extra where user_id = 5)",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
