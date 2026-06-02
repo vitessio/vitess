@@ -1,3 +1,6 @@
+# Claude Code agent worktrees (ephemeral, not for version control)
+.claude/worktrees/
+
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.py[cod]
 
