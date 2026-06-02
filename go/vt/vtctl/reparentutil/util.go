@@ -147,6 +147,8 @@ func ElectNewPrimary(
 						_, parsed, parseErr := mysqlctl.ParseVersionString(serverVersion)
 						if parseErr == nil {
 							v = parsed
+						} else {
+							logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", serverVersion, topoproto.TabletAliasString(tb.Alias), parseErr)
 						}
 					}
 					mysqlVersions = append(mysqlVersions, v)
@@ -394,7 +396,9 @@ func findCandidate(
 		bestVersion = v
 	}
 
-	// If best is on the same release as the intermediate source, prefer intermediate source to avoid catch-up.
+	// The first loop finds the lowest-version candidate without bias. Now that we know
+	// the best version, check if the intermediate source is on the same release — if so,
+	// prefer it because it already holds the most-advanced position and won't need catch-up.
 	if sourceVersion.IsSameRelease(bestVersion) {
 		for _, candidate := range possibleCandidates {
 			if topoproto.TabletAliasEqual(intermediateSource.Alias, candidate.Alias) {

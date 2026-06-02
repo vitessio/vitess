@@ -1131,7 +1131,6 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	}
 	after := replication.ReplicationStatusToProto(rsAfter)
 	after.BackupRunning = tm.IsBackupRunning()
-	after.ServerVersion = before.ServerVersion
 
 	rs.Position = rsAfter.Position
 	rs.RelayLogPosition = rsAfter.RelayLogPosition

@@ -359,6 +359,8 @@ func stopReplicationAndBuildStatusMaps(
 			if stopReplicationStatus.Before != nil && stopReplicationStatus.Before.ServerVersion != "" {
 				if _, v, parseErr := mysqlctl.ParseVersionString(stopReplicationStatus.Before.ServerVersion); parseErr == nil {
 					res.mysqlVersions[alias] = v
+				} else {
+					logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", stopReplicationStatus.Before.ServerVersion, alias, parseErr)
 				}
 			}
 			m.Unlock()
