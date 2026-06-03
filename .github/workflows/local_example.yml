@@ -62,7 +62,7 @@ jobs:
       if: steps.changes.outputs.examples == 'true'
       uses: ./.github/actions/build-bootstrap
       with:
-        ssh-private-key: ${{ env.VITESS_ADDONS_DEPLOY_KEY }}
+        vitess-addons-deploy-key: ${{ env.VITESS_ADDONS_DEPLOY_KEY }}
 
     - name: Set up Go
       if: steps.changes.outputs.examples == 'true'
