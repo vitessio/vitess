@@ -10,8 +10,8 @@ inputs:
     description: "Bootstrap image flavor (e.g. mysql84)"
     required: false
     default: "mysql84"
-  gh-access-token:
-    description: "GitHub access token for private dependencies"
+  ssh-private-key:
+    description: "SSH deploy key for private dependencies"
     required: false
     default: ""
 
@@ -32,4 +32,4 @@ runs:
       env:
         BOOTSTRAP_VERSION: ${{ inputs.bootstrap-version }}
         BOOTSTRAP_FLAVOR: ${{ inputs.bootstrap-flavor }}
-        GH_ACCESS_TOKEN: ${{ inputs.gh-access-token }}
+        SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}

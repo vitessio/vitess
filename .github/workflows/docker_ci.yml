@@ -11,7 +11,7 @@ permissions: read-all
 
 env:
   GOPRIVATE: github.com/slackhq/vitess-addons
-  GH_ACCESS_TOKEN: "${{ secrets.GH_ACCESS_TOKEN }}"
+  SSH_PRIVATE_KEY: "${{ secrets.SSH_PRIVATE_KEY }}"
   BOOTSTRAP_VERSION: "ci"
   BOOTSTRAP_FLAVOR: "mysql84"
 
@@ -69,9 +69,14 @@ jobs:
               - 'java/**'
               - '.github/workflows/docker_ci.yml'
 
-      - name: Setup GitHub access token
+      - name: Setup SSH deploy key
         if: steps.changes.outputs.end_to_end == 'true'
-        run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git config --global url.git@github.com:.insteadOf https://github.com/
 
       - name: Build bootstrap images
         if: steps.changes.outputs.end_to_end == 'true'
@@ -79,7 +84,7 @@ jobs:
         with:
           bootstrap-version: ${{ env.BOOTSTRAP_VERSION }}
           bootstrap-flavor: ${{ env.BOOTSTRAP_FLAVOR }}
-          gh-access-token: ${{ env.GH_ACCESS_TOKEN }}
+          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'

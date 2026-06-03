@@ -38,10 +38,18 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
     chown -R vitess:vitess /vt /home/vitess
 
 # Setup private repo access
-ARG GH_ACCESS_TOKEN
+ARG SSH_PRIVATE_KEY
 ENV GOPRIVATE=github.com/slackhq/vitess-addons
-RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/ && \
-    su vitess -c "git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/"
+RUN mkdir -p /root/.ssh /home/vitess/.ssh && \
+    echo "$SSH_PRIVATE_KEY" > /root/.ssh/id_ed25519 && \
+    cp /root/.ssh/id_ed25519 /home/vitess/.ssh/id_ed25519 && \
+    chmod 600 /root/.ssh/id_ed25519 /home/vitess/.ssh/id_ed25519 && \
+    chown vitess:vitess /home/vitess/.ssh/id_ed25519 && \
+    ssh-keyscan github.com >> /root/.ssh/known_hosts && \
+    cp /root/.ssh/known_hosts /home/vitess/.ssh/known_hosts && \
+    chown vitess:vitess /home/vitess/.ssh/known_hosts && \
+    git config --global url.git@github.com:.insteadOf https://github.com/ && \
+    su vitess -c "git config --global url.git@github.com:.insteadOf https://github.com/"
 
 # Download vendored Go dependencies
 RUN cd /vt/src/vitess.io/vitess && \

@@ -18,7 +18,7 @@ variable "BOOTSTRAP_FLAVOR" {
   default = "mysql84"
 }
 
-variable "GH_ACCESS_TOKEN" {
+variable "SSH_PRIVATE_KEY" {
   default = ""
 }
 
@@ -31,7 +31,7 @@ target "common" {
   dockerfile = "docker/bootstrap/Dockerfile.common"
   tags       = ["vitess/bootstrap:${BOOTSTRAP_VERSION}-common"]
   args = {
-    GH_ACCESS_TOKEN = GH_ACCESS_TOKEN
+    SSH_PRIVATE_KEY = SSH_PRIVATE_KEY
   }
 }
 

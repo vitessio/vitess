@@ -83,9 +83,14 @@ jobs:
         go-version-file: go.mod
 
 {{if .GoPrivate}}
-    - name: Setup GitHub access token
+    - name: Setup SSH deploy key
       if: steps.changes.outputs.end_to_end == 'true'
-      run: git config --global url.https://${{`{{ secrets.GH_ACCESS_TOKEN }}`}}@github.com/.insteadOf https://github.com/
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{`{{ secrets.SSH_PRIVATE_KEY }}`}}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+        git config --global url.git@github.com:.insteadOf https://github.com/
 {{end}}
 
     - name: Set up python

@@ -50,9 +50,9 @@ const (
 )
 
 // To support a private git repository, set goPrivate to a repo in
-// github.com/org/repo format. This assumes a GitHub PAT token is
-// set as a repo secret named GH_ACCESS_TOKEN. The GitHub PAT must
-// have read access to your vitess fork/repo.
+// github.com/org/repo format. This assumes an SSH deploy key is
+// set as a repo secret named SSH_PRIVATE_KEY with read access to
+// the private dependency repo.
 const goPrivate = "github.com/slackhq/vitess-addons"
 
 const (

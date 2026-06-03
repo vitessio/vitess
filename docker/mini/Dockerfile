@@ -17,8 +17,12 @@ FROM vitess/lite
 USER root
 
 # Setup private repo
-ARG GH_ACCESS_TOKEN
-RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+ARG SSH_PRIVATE_KEY
+RUN mkdir -p /root/.ssh && \
+    echo "$SSH_PRIVATE_KEY" > /root/.ssh/id_ed25519 && \
+    chmod 600 /root/.ssh/id_ed25519 && \
+    ssh-keyscan github.com >> /root/.ssh/known_hosts && \
+    git config --global url.git@github.com:.insteadOf https://github.com/
 
 # Install dependencies
 COPY docker/utils/install_dependencies.sh /vt/dist/install_dependencies.sh
