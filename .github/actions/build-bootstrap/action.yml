@@ -10,7 +10,7 @@ inputs:
     description: "Bootstrap image flavor (e.g. mysql84)"
     required: false
     default: "mysql84"
-  ssh-private-key:
+  vitess-addons-deploy-key:
     description: "SSH deploy key for private dependencies"
     required: false
     default: ""
@@ -32,4 +32,4 @@ runs:
       env:
         BOOTSTRAP_VERSION: ${{ inputs.bootstrap-version }}
         BOOTSTRAP_FLAVOR: ${{ inputs.bootstrap-flavor }}
-        SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+        VITESS_ADDONS_DEPLOY_KEY: ${{ inputs.vitess-addons-deploy-key }}

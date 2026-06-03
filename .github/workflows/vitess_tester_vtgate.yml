@@ -69,9 +69,11 @@ jobs:
 
     - name: Setup SSH deploy key
       if: steps.changes.outputs.end_to_end == 'true'
+      env:
+        VITESS_ADDONS_DEPLOY_KEY: ${{ secrets.VITESS_ADDONS_DEPLOY_KEY }}
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.VITESS_ADDONS_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+        echo "$VITESS_ADDONS_DEPLOY_KEY" > ~/.ssh/id_ed25519
         chmod 600 ~/.ssh/id_ed25519
         ssh-keyscan github.com >> ~/.ssh/known_hosts
         git config --global url.git@github.com:.insteadOf https://github.com/

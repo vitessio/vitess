@@ -11,7 +11,7 @@ permissions: read-all
 
 env:
   GOPRIVATE: github.com/slackhq/vitess-addons
-  SSH_PRIVATE_KEY: "${{ secrets.SSH_PRIVATE_KEY }}"
+  VITESS_ADDONS_DEPLOY_KEY: "${{ secrets.VITESS_ADDONS_DEPLOY_KEY }}"
   BOOTSTRAP_VERSION: "ci"
   BOOTSTRAP_FLAVOR: "mysql84"
 
@@ -73,7 +73,7 @@ jobs:
         if: steps.changes.outputs.end_to_end == 'true'
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          echo "$VITESS_ADDONS_DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           git config --global url.git@github.com:.insteadOf https://github.com/
@@ -84,7 +84,7 @@ jobs:
         with:
           bootstrap-version: ${{ env.BOOTSTRAP_VERSION }}
           bootstrap-flavor: ${{ env.BOOTSTRAP_FLAVOR }}
-          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+          vitess-addons-deploy-key: ${{ env.VITESS_ADDONS_DEPLOY_KEY }}
 
       - name: Set up Go
         if: steps.changes.outputs.end_to_end == 'true'
