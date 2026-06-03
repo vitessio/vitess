@@ -488,7 +488,7 @@ EOF
 kind delete cluster --name kind || true
 
 # Build the docker image for vitess/lite using the local code
-docker build -f docker/lite/Dockerfile --build-arg SSH_PRIVATE_KEY="$SSH_PRIVATE_KEY" -t vitess/lite:pr .
+docker build -f docker/lite/Dockerfile --build-arg VITESS_ADDONS_DEPLOY_KEY="$VITESS_ADDONS_DEPLOY_KEY" -t vitess/lite:pr .
 # Build the docker image for vitess/vtadmin using the local code
 docker build -f docker/binaries/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr ./docker/binaries/vtadmin
 

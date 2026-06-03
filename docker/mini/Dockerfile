@@ -17,9 +17,9 @@ FROM vitess/lite
 USER root
 
 # Setup private repo
-ARG SSH_PRIVATE_KEY
+ARG VITESS_ADDONS_DEPLOY_KEY
 RUN mkdir -p /root/.ssh && \
-    echo "$SSH_PRIVATE_KEY" > /root/.ssh/id_ed25519 && \
+    echo "$VITESS_ADDONS_DEPLOY_KEY" > /root/.ssh/id_ed25519 && \
     chmod 600 /root/.ssh/id_ed25519 && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts && \
     git config --global url.git@github.com:.insteadOf https://github.com/

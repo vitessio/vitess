@@ -63,7 +63,7 @@ if [ -f "docker/bootstrap/Dockerfile.$flavor" ]; then
     docker build \
       -f docker/bootstrap/Dockerfile.$flavor \
       -t $image \
-      --build-arg SSH_PRIVATE_KEY="$SSH_PRIVATE_KEY" \
+      --build-arg VITESS_ADDONS_DEPLOY_KEY="$VITESS_ADDONS_DEPLOY_KEY" \
       --build-arg bootstrap_version=$version \
       --build-arg image=$base_image \
       .

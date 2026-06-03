@@ -51,7 +51,7 @@ const (
 
 // To support a private git repository, set goPrivate to a repo in
 // github.com/org/repo format. This assumes an SSH deploy key is
-// set as a repo secret named SSH_PRIVATE_KEY with read access to
+// set as a repo secret named VITESS_ADDONS_DEPLOY_KEY with read access to
 // the private dependency repo.
 const goPrivate = "github.com/slackhq/vitess-addons"
 
