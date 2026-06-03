@@ -17,7 +17,7 @@ jobs:
     runs-on: vitess-ubuntu24-16cpu-1
     env:
       GOPRIVATE: github.com/slackhq/vitess-addons
-      GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
     steps:
       - name: Skip CI
@@ -125,9 +125,14 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Setup GitHub access token
+      - name: Setup SSH deploy key
         if: steps.changes.outputs.go_files == 'true'
-        run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+        run: |
+        mkdir -p ~/.ssh
+        echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+        git config --global url.git@github.com:.insteadOf https://github.com/
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
