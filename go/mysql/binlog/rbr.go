@@ -624,6 +624,12 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 				s = s[1:]
 			}
 			s = strings.TrimLeft(s, "0")
+			// Ensure at least one digit precedes the decimal point so values
+			// like 0.1 round-trip as "0.1" instead of ".1" (invalid JSON when
+			// the decimal appears inside a JSON column).
+			if strings.HasPrefix(s, ".") {
+				s = "0" + s
+			}
 			if isNegative {
 				s = "-" + s
 			}
