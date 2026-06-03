@@ -34,9 +34,12 @@ RUN mkdir -p /vt/vtdataroot /home/vitess
 RUN chown -R vitess:vitess /vt /home/vitess
 
 # Setup private repo
-ARG GH_ACCESS_TOKEN
-ENV GH_ACCESS_TOKEN=${GH_ACCESS_TOKEN}
-RUN git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+ARG VITESS_ADDONS_DEPLOY_KEY
+RUN mkdir -p /root/.ssh && \
+    echo "$VITESS_ADDONS_DEPLOY_KEY" > /root/.ssh/id_ed25519 && \
+    chmod 600 /root/.ssh/id_ed25519 && \
+    ssh-keyscan github.com >> /root/.ssh/known_hosts && \
+    git config --global url.git@github.com:.insteadOf https://github.com/
 
 USER vitess
 

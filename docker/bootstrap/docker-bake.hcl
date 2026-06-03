@@ -18,7 +18,7 @@ variable "BOOTSTRAP_FLAVOR" {
   default = "mysql84"
 }
 
-variable "GH_ACCESS_TOKEN" {
+variable "VITESS_ADDONS_DEPLOY_KEY" {
   default = ""
 }
 
@@ -31,7 +31,7 @@ target "common" {
   dockerfile = "docker/bootstrap/Dockerfile.common"
   tags       = ["vitess/bootstrap:${BOOTSTRAP_VERSION}-common"]
   args = {
-    GH_ACCESS_TOKEN = GH_ACCESS_TOKEN
+    VITESS_ADDONS_DEPLOY_KEY = VITESS_ADDONS_DEPLOY_KEY
   }
 }
 

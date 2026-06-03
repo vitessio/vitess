@@ -185,7 +185,7 @@ bashcmd=$(append_cmd "$bashcmd" "export EXTRA_BIN=/tmp/bin")
 bashcmd=$(append_cmd "$bashcmd" "export GOPRIVATE=$GOPRIVATE")
 
 # Setup private repo
-bashcmd=$(append_cmd "$bashcmd" "git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/")
+bashcmd=$(append_cmd "$bashcmd" "mkdir -p ~/.ssh && echo \"$VITESS_ADDONS_DEPLOY_KEY\" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519 && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null && git config --global url.git@github.com:.insteadOf https://github.com/")
 
 bashcmd=$(append_cmd "$bashcmd" "mkdir -p dist; mkdir -p bin; mkdir -p lib; mkdir -p vthook")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/dist; ln -s /vt/src/vitess.io/vitess/dist /vt/dist")

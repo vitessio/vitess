@@ -21,7 +21,7 @@ jobs:
     runs-on: vitess-ubuntu24-16cpu-1
     env:
       GOPRIVATE: github.com/slackhq/vitess-addons
-      GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+      VITESS_ADDONS_DEPLOY_KEY: ${{ secrets.VITESS_ADDONS_DEPLOY_KEY }}
 
     steps:
     - name: Skip CI
@@ -100,7 +100,12 @@ jobs:
 
     - name: Setup github.com/slackhq/vitess-addons access token
       if: steps.changes.outputs.end_to_end == 'true'
-      run: git config --global url.https://$GH_ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+      run: |
+        mkdir -p ~/.ssh
+        echo "$VITESS_ADDONS_DEPLOY_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+        git config --global url.git@github.com:.insteadOf https://github.com/
 
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ steps.output-previous-release-ref.outputs.previous_release_ref }})
