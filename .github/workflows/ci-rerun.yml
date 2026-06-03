@@ -102,8 +102,13 @@ jobs:
                 per_page: 100,
               });
 
+              const isCurrentPullRequestRun = run =>
+                run.event === 'pull_request' &&
+                run.pull_requests?.some(pull => pull.number === pr.number);
+
               const failedRuns = runsData.workflow_runs.filter(
-                run => run.status === 'completed' &&
+                run => isCurrentPullRequestRun(run) &&
+                       run.status === 'completed' &&
                        (run.conclusion === 'failure' ||
                         run.conclusion === 'cancelled' ||
                         run.conclusion === 'startup_failure')
