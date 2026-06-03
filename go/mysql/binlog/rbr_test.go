@@ -477,6 +477,30 @@ func TestCellLengthAndData(t *testing.T) {
 		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
 			[]byte("1.10")),
 	}, {
+		typ:      TypeNewDecimal,
+		metadata: 2<<8 | 1, // DECIMAL(2,1), value 0.1
+		data:     []byte{0x80, 0x01},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0.1")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 2<<8 | 1, // DECIMAL(2,1), value -0.1
+		data:     []byte{0x7F, 0xFE},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("-0.1")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 1<<8 | 1, // DECIMAL(1,1), value 0.5
+		data:     []byte{0x85},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0.5")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 3<<8 | 2, // DECIMAL(3,2), value 0.05
+		data:     []byte{0x80, 0x05},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("0.05")),
+	}, {
 		typ:      TypeBlob,
 		metadata: 1,
 		data:     []byte{0x3, 'a', 'b', 'c'},
