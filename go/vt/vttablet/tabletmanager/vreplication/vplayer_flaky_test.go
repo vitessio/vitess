@@ -2036,8 +2036,9 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) // For debugging only
+	pos0 := primaryPositionParsed(t)
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
+<<<<<<< HEAD
 	pos1 := primaryPosition(t)
 	// The stop position must be the GTID of the first DDL
 	expectDBClientQueries(t, qh.Expect(
@@ -2047,10 +2048,39 @@ func TestPlayerDDL(t *testing.T) {
 		"commit",
 	))
 	pos2b := primaryPosition(t)
+||||||| parent of e4428f4976 (vreplication: fix TestPlayerDDL flake on multi-source GTID positions (#20229))
+	pos1 := primaryPosition(t)
+	// The stop position must be the GTID of the first DDL
+	expectDBClientQueries(t, qh.Expect(
+		"begin",
+		posOrPrevRegex(pos1),
+		"/update _vt.vreplication set state='Stopped'",
+		"commit",
+	))
+	pos2b := primaryPosition(t)
+=======
+	pos1 := primaryPositionParsed(t)
+	// The stop position must be the GTID of the first DDL, which lies between
+	// the positions observed before and after the ALTER.
+	expectDBClientQueries(t, qh.Expect("begin").
+		Then(qh.PosBetween(pos0, pos1)).
+		Then(qh.Immediately(
+			"/update _vt.vreplication set state='Stopped'",
+			"commit",
+		)))
+	pos2b := primaryPositionParsed(t)
+>>>>>>> e4428f4976 (vreplication: fix TestPlayerDDL flake on multi-source GTID positions (#20229))
 	execStatements(t, []string{"alter table t1 drop column val"})
+<<<<<<< HEAD
 	pos2 := primaryPosition(t)
 	log.Errorf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v",
 		pos0, pos1, pos2b, pos2) // For debugging only: to check what are the positions when test works and if/when it fails
+||||||| parent of e4428f4976 (vreplication: fix TestPlayerDDL flake on multi-source GTID positions (#20229))
+	pos2 := primaryPosition(t)
+	log.Error(fmt.Sprintf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v", pos0, pos1, pos2b, pos2)) // For debugging only: to check what are the positions when test works and if/when it fails
+=======
+	pos2 := primaryPositionParsed(t)
+>>>>>>> e4428f4976 (vreplication: fix TestPlayerDDL flake on multi-source GTID positions (#20229))
 	// Restart vreplication
 	if _, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id)); err != nil {
 		t.Fatal(err)
@@ -2062,10 +2092,12 @@ func TestPlayerDDL(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"begin",
-		fmt.Sprintf("/update.*'%s'", pos2),
-		"/update _vt.vreplication set state='Stopped'",
-		"commit",
-	))
+	).
+		Then(qh.PosBetween(pos2b, pos2)).
+		Then(qh.Immediately(
+			"/update _vt.vreplication set state='Stopped'",
+			"commit",
+		)))
 	cancel()
 	bls = &binlogdatapb.BinlogSource{
 		Keyspace: env.KeyspaceName,
