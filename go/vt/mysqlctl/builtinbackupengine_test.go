@@ -377,7 +377,9 @@ func TestRestoreChunkedRetryPreservesData(t *testing.T) {
 	require.NoError(t, createChunkedDestinations(fes, cnf, ""))
 
 	// First pass: chunk 0-1 will fail.
-	_ = be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
+	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
+	require.Error(t, err)
+	require.Len(t, bh.GetFailedFiles(), 1)
 
 	// Verify chunks 0 and 2 were written correctly.
 	filePath := tmpDir + "/testfile.ibd"
