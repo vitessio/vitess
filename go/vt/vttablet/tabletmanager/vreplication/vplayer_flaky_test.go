@@ -1934,7 +1934,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_decimal values(1, 0, 1, null, 0, 1.1, 1)",
-		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,.0,1.1,1.0)",
+		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,0.0,1.1,1.0)",
 		table:  "vitess_decimal",
 		data: [][]string{
 			{"1", "0", "1", "", "0.0", "1.1", "1.0"},
