@@ -106,10 +106,6 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 			newAnalysisCode:  inst.PrimaryHasPrimary,
 			shouldBeEqual:    false,
 		}, {
-			prevAnalysisCode: inst.LockedSemiSyncPrimary,
-			newAnalysisCode:  inst.PrimaryHasPrimary,
-			shouldBeEqual:    false,
-		}, {
 			prevAnalysisCode: inst.PrimaryIsReadOnly,
 			newAnalysisCode:  inst.PrimarySemiSyncMustNotBeSet,
 			shouldBeEqual:    true,

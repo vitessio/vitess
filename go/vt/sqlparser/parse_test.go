@@ -2659,6 +2659,8 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration cleanup all",
 }, {
+	input: "alter vitess_migration cleanup context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40'",
@@ -2666,6 +2668,8 @@ var validSQL = []struct {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40,40-80'",
 }, {
 	input: "alter vitess_migration launch all",
+}, {
+	input: "alter vitess_migration launch context 'some-context'",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
 }, {
@@ -2675,13 +2679,19 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration complete all",
 }, {
+	input: "alter vitess_migration complete context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' postpone complete",
 }, {
 	input: "alter vitess_migration postpone complete all",
 }, {
+	input: "alter vitess_migration postpone complete context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 }, {
 	input: "alter vitess_migration force_cutover all",
+}, {
+	input: "alter vitess_migration force_cutover context 'some-context'",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
 }, {
@@ -2706,7 +2716,17 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration throttle all",
 }, {
+	input: "alter vitess_migration throttle context 'some-context'",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' expire '1h'",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' ratio 0.7",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' expire '1h' ratio 0.7",
+}, {
 	input: "alter vitess_migration unthrottle all",
+}, {
+	input: "alter vitess_migration unthrottle context 'some-context'",
 }, {
 	input: "alter vitess_migration throttle all expire '1h'",
 }, {
@@ -6492,6 +6512,30 @@ var invalidSQL = []struct {
 }{{
 	input:  "alter vitess_migration cancel context ''",
 	output: "migration context cannot be empty at position 41",
+}, {
+	input:  "alter vitess_migration cleanup context ''",
+	output: "migration context cannot be empty at position 42",
+}, {
+	input:  "alter vitess_migration launch context ''",
+	output: "migration context cannot be empty at position 41",
+}, {
+	input:  "alter vitess_migration complete context ''",
+	output: "migration context cannot be empty at position 43",
+}, {
+	input:  "alter vitess_migration postpone complete context ''",
+	output: "migration context cannot be empty at position 52",
+}, {
+	input:  "alter vitess_migration force_cutover context ''",
+	output: "migration context cannot be empty at position 48",
+}, {
+	input:  "alter vitess_migration throttle context ''",
+	output: "migration context cannot be empty at position 43",
+}, {
+	input:  "alter vitess_migration throttle context '' expire '1h' ratio 0.7",
+	output: "migration context cannot be empty at position 65 near '0.7'",
+}, {
+	input:  "alter vitess_migration unthrottle context ''",
+	output: "migration context cannot be empty at position 45",
 }, {
 	input:  "select : from t",
 	output: "syntax error at position 9 near ':'",
