@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VReplication](#bug-fixes-vreplication)**
+        - [Fixed invalid JSON output for DECIMAL values with zero integer parts](#vreplication-decimal-json-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,19 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-decimal-json-fix"/>Fixed invalid JSON output for DECIMAL values with zero integer parts</a>
+
+Fixed a bug where DECIMAL values stored in JSON columns produced invalid JSON when the integer part was zero. Values like `0.1` or `0.000000001` were incorrectly serialized as `.1` or `.000000001` (missing the leading zero), which violates RFC 8259.
+
+This affected VReplication workflows (MoveTables, Reshard, etc.) replicating tables with JSON columns containing DECIMAL scalars created via `JSON_OBJECT()` or similar functions. On older versions, the invalid JSON passed through silently; on v25+ with the streaming JSON encoder from [#19878](https://github.com/vitessio/vitess/pull/19878), workflows failed with: `unexpected character '.' in JSON`.
+
+A related issue caused DECIMAL values with scale 0 (e.g., `DECIMAL(20,0)`) to include extraneous leading zeroes—a value of `1` might decode as `000000000000000001`.
+
+Both issues are now fixed. DECIMAL values in JSON columns are serialized correctly.
+
+See [#20228](https://github.com/vitessio/vitess/pull/20228) and [#20232](https://github.com/vitessio/vitess/pull/20232) for details.
