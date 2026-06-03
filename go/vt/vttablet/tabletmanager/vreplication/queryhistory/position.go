@@ -7,7 +7,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 )
 
-var posUpdateRegex = regexp.MustCompile(`update _vt\.vreplication set pos='(MySQL56/[^']*)'`)
+var posUpdateRegex = regexp.MustCompile(`update _vt\.vreplication set pos='([^']*)'`)
 
 // PosBetween returns an ExpectationSequencerFn that appends an expectation for
 // an "update _vt.vreplication set pos=..." query whose recorded GTID position

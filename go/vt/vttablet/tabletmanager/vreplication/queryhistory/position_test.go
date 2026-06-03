@@ -63,6 +63,15 @@ func TestPosBetween(t *testing.T) {
 			wantMatched: true,
 		},
 		{
+			// The vreplication test env can run with a MariaDB GTID flavor,
+			// so the matcher must not assume a MySQL56 position prefix.
+			name:        "mariadb flavor in range",
+			lower:       "MariaDB/0-1-100",
+			upper:       "MariaDB/0-1-110",
+			query:       posQuery("MariaDB/0-1-105"),
+			wantMatched: true,
+		},
+		{
 			name:        "below lower bound",
 			lower:       "MySQL56/" + uuidA + ":1-100",
 			upper:       "MySQL56/" + uuidA + ":1-110",
