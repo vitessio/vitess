@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -762,4 +763,119 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
+}
+
+func TestStopReplicationAndGetStatus_ServerVersion(t *testing.T) {
+	tests := []struct {
+		name            string
+		mode            replicationdatapb.StopReplicationMode
+		replicating     bool
+		ioRunning       bool
+		expectedQueries []string
+		stopIOErr       error
+		stopReplErr     error
+		afterStatusErr  bool
+		expectErr       string
+	}{
+		{
+			name:            "IOTHREADONLY success",
+			mode:            replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			replicating:     true,
+			ioRunning:       true,
+			expectedQueries: []string{"STOP REPLICA IO_THREAD"},
+		},
+		{
+			name:        "IOTHREADONLY with IO thread already stopped",
+			mode:        replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			replicating: false,
+			ioRunning:   false,
+		},
+		{
+			name:        "IOTHREADONLY with stopIOThread failure",
+			mode:        replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			replicating: true,
+			ioRunning:   true,
+			stopIOErr:   errors.New("injected IO stop error"),
+			expectErr:   "stop io thread failed",
+		},
+		{
+			name:            "IOTHREADONLY with after-status failure",
+			mode:            replicationdatapb.StopReplicationMode_IOTHREADONLY,
+			replicating:     true,
+			ioRunning:       true,
+			expectedQueries: []string{"STOP REPLICA IO_THREAD"},
+			afterStatusErr:  true,
+			expectErr:       "acquiring replication status failed",
+		},
+		{
+			name:            "IOANDSQLTHREAD success",
+			mode:            replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			replicating:     true,
+			ioRunning:       true,
+			expectedQueries: []string{"STOP REPLICA"},
+		},
+		{
+			name:        "IOANDSQLTHREAD with replication not healthy",
+			mode:        replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			replicating: false,
+			ioRunning:   false,
+		},
+		{
+			name:            "IOANDSQLTHREAD with after-status failure",
+			mode:            replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			replicating:     true,
+			ioRunning:       true,
+			expectedQueries: []string{"STOP REPLICA"},
+			afterStatusErr:  true,
+			expectErr:       "acquiring replication status failed",
+		},
+		{
+			name:        "IOANDSQLTHREAD with stopReplication failure",
+			mode:        replicationdatapb.StopReplicationMode_IOANDSQLTHREAD,
+			replicating: true,
+			ioRunning:   true,
+			stopReplErr: errors.New("injected stop error"),
+			expectErr:   "stop replication failed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+			fakeMysqlDaemon.Replicating = tc.replicating
+			fakeMysqlDaemon.IOThreadRunning = tc.ioRunning
+			fakeMysqlDaemon.Version = "Ver 8.0.35"
+
+			if tc.expectedQueries != nil {
+				fakeMysqlDaemon.ExpectedExecuteSuperQueryList = tc.expectedQueries
+			}
+			if tc.stopIOErr != nil {
+				fakeMysqlDaemon.ExecuteSuperQueryErrorMap = map[string]error{
+					"STOP REPLICA IO_THREAD": tc.stopIOErr,
+				}
+			}
+			if tc.stopReplErr != nil {
+				fakeMysqlDaemon.StopReplicationError = tc.stopReplErr
+			}
+			if tc.afterStatusErr {
+				// The callback fires during the stop query execution, which happens
+				// before the second ReplicationStatus call that fetches the "after" state.
+				fakeMysqlDaemon.ExecuteSuperQueryListCallback = func() {
+					fakeMysqlDaemon.ReplicationStatusError = errors.New("injected after-status error")
+				}
+			}
+
+			tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, nil)
+
+			resp, err := tm.StopReplicationAndGetStatus(t.Context(), tc.mode)
+			if tc.expectErr != "" {
+				require.ErrorContains(t, err, tc.expectErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.NotNil(t, resp.Status)
+			require.Equal(t, "Ver 8.0.35", resp.Status.Before.ServerVersion)
+		})
+	}
 }
