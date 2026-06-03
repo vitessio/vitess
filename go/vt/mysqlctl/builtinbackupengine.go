@@ -198,7 +198,10 @@ type FileChunk struct {
 // computeFileChunks splits a file of the given size into chunks of chunkSize bytes.
 // The fileIndex is used to generate storage names in "fileIndex-chunkIndex" format.
 func computeFileChunks(fileIndex int, fileSize, chunkSize int64) []FileChunk {
-	numChunks := (fileSize + chunkSize - 1) / chunkSize
+	numChunks := fileSize / chunkSize
+	if fileSize%chunkSize != 0 {
+		numChunks++
+	}
 	chunks := make([]FileChunk, numChunks)
 	for j := range numChunks {
 		offset := j * chunkSize

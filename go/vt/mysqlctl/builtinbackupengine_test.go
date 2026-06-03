@@ -248,6 +248,15 @@ func TestComputeFileChunks(t *testing.T) {
 				{StorageName: "0-0", Offset: 0, Size: 1},
 			},
 		},
+		{
+			name:      "max int64 chunk size",
+			fileIndex: 0,
+			fileSize:  100,
+			chunkSize: math.MaxInt64,
+			wantChunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 100},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
