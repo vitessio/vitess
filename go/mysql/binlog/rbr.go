@@ -573,8 +573,6 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		switch dig2bytes[frac0x] {
 		case 0:
 			// Nothing to do
-			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
-				txt.Bytes()), l, nil
 		case 1:
 			// one byte, 1 or 2 digits
 			val = uint32(d[pos])
