@@ -180,10 +180,17 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// the ERS restarts them as part of a successful reparent.
 		replicasToRestart []*topodatapb.Tablet
 
-		// newPrimary is the tablet ERS is trying to promote. primaryPromoted becomes true
-		// once PromoteReplica/InitPrimary succeeds on it inside reparentReplicas — at that
-		// point the tablet is no longer a replica, so the deferred cleanup must NOT call
-		// StartReplication on it even if a downstream step fails.
+		// newPrimary is the tablet ERS is trying to promote. primaryPromoted flips
+		// to true the moment ERS issues InitPrimary/PromoteReplica on it inside
+		// reparentReplicas — not after the call returns. Those RPCs mutate the
+		// target server (read_only off, reset replica, semi-sync, tablet type) and
+		// can return an error after some or all of that has landed (timeout,
+		// post-promote fixSemiSync/changeTypeLocked failures). Once the call is
+		// in flight we must treat the tablet as potentially-PRIMARY and skip the
+		// generic cleanup: the remaining tablets still have prevPrimary as their
+		// replication source, and resuming it via StartReplication would either
+		// reconnect them to the old primary or hit the tablet that may already be
+		// writable.
 		newPrimary      *topodatapb.Tablet
 		primaryPromoted bool
 
@@ -206,23 +213,20 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
-		// If PromoteReplica/InitPrimary succeeded inside reparentReplicas but a
-		// downstream step failed (PopulateReparentJournal, or replica
-		// SetReplicationSource), the candidate is now a PRIMARY in MySQL. Calling
-		// StartReplication on it would disable semi-sync, fail with ER_BAD_SLAVE,
-		// and mask the real ERS error. Filter it out of the restart set.
-		cleanupReplicas := replicasToRestart
-		if primaryPromoted && newPrimary != nil {
-			cleanupReplicas = make([]*topodatapb.Tablet, 0, len(replicasToRestart))
+		// Once a promotion has been attempted, the deferred cleanup must not run.
+		// InitPrimary/PromoteReplica have side effects (read_only off, reset
+		// replica, semi-sync, tablet type) and can fail after some or all of those
+		// have landed server-side — so even an RPC error leaves the target tablet
+		// potentially-PRIMARY. Running StartReplication on the remaining tablets
+		// would either reconnect them to prevPrimary (the old/dead primary) or hit
+		// the now-writable promotion target. Operators handling this abort path run
+		// a follow-up reparent or repoint manually.
+		if primaryPromoted {
+			aliases := make([]string, 0, len(replicasToRestart))
 			for _, replica := range replicasToRestart {
-				if topoproto.TabletAliasEqual(replica.Alias, newPrimary.Alias) {
-					erp.logger.Infof("not restarting replication on %s after failed ERS: tablet was already promoted to PRIMARY", topoproto.TabletAliasString(replica.Alias))
-					continue
-				}
-				cleanupReplicas = append(cleanupReplicas, replica)
+				aliases = append(aliases, topoproto.TabletAliasString(replica.Alias))
 			}
-		}
-		if len(cleanupReplicas) == 0 {
+			erp.logger.Warningf("skipping replication restart cleanup after failed ERS: a promotion was already attempted, so resuming replication against prevPrimary would reconnect tablets to the old primary or hit a potentially-writable promotion target. Repoint or run a follow-up reparent for: %v", aliases)
 			return
 		}
 
@@ -237,7 +241,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return
 		}
 
-		cleanupErr := erp.restartReplicationOnStoppedReplicas(ctx, prevPrimary, cleanupReplicas, opts.durability)
+		cleanupErr := erp.restartReplicationOnStoppedReplicas(ctx, prevPrimary, replicasToRestart, opts.durability)
 		if cleanupErr == nil {
 			return
 		}
@@ -850,25 +854,20 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		// pre-wait Executed — Executed.Equal(Combined) is the proxy for "safe to promote
 		// without losing received-but-unapplied transactions". The strictly-behind skip
 		// prevents preferring a lagger that would lose the winner's leading data.
+		//
+		// We must also reject applied candidates strictly dominated by *another* applied
+		// candidate. Under partial-order GTID shapes (e.g. winner A unapplied at {uuidA};
+		// B applied at {uuidB:1-10}; C applied at {uuidB:1-3}) both B and C are eligible
+		// vs. the winner, but C is dominated by B. Picking C would silently lose B's
+		// transactions. Two-pass: collect eligible applied candidates, then pick a
+		// maximal one (not strictly dominated by any other eligible candidate).
 		if !winningPosition.Executed.Equal(winningPosition.Combined) {
-			for i := range validTablets {
-				if i == winningIdx {
-					continue
-				}
-				otherPos := tabletPositions[i]
-				if !otherPos.Executed.Equal(otherPos.Combined) {
-					continue
-				}
-				// Skip strictly-behind candidates: winner.Combined dominates other.Combined.
-				if winningPosition.Combined.AtLeast(otherPos.Combined) && !otherPos.Combined.AtLeast(winningPosition.Combined) {
-					continue
-				}
+			if i := pickNonDominatedAppliedSwap(winningIdx, winningPosition, tabletPositions); i >= 0 {
 				erp.logger.Warningf("findMostAdvanced: sort winner %v is unapplied (Executed != Combined) under split-brain non-total ordering — preferring applied candidate %v",
 					topoproto.TabletAliasString(winningPrimaryTablet.Alias),
 					topoproto.TabletAliasString(validTablets[i].Alias))
 				winningPrimaryTablet = validTablets[i]
-				winningPosition = otherPos
-				break
+				winningPosition = tabletPositions[i]
 			}
 		}
 	}
@@ -953,6 +952,58 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	return winningPrimaryTablet, validTablets, nil
 }
 
+// pickNonDominatedAppliedSwap returns an index in positions of an applied
+// candidate to swap to when the sort winner at winnerIdx is unapplied
+// (Executed != Combined), or -1 if no such candidate exists. The returned
+// candidate is guaranteed not to be strictly dominated by another eligible
+// applied candidate — otherwise, under partial-order GTID shapes, a
+// downstream promotion could silently lose transactions from the dominator
+// (e.g. winner A unapplied at {uuidA}; B applied at {uuidB:1-10};
+// C applied at {uuidB:1-3}: picking C would lose B's writes).
+//
+// A candidate at index i is eligible when:
+//   - i != winnerIdx
+//   - positions[i].Executed.Equal(positions[i].Combined) (applied)
+//   - positions[i].Combined is not strictly behind winnerPos.Combined
+//
+// Iteration is over the input slice in its given order. Callers that rely on
+// sort-comparator dominance (e.g. findMostAdvanced via sortTabletsForReparent)
+// already get B-before-C in practice, but the second pass here is defensive
+// against future refactors that bypass the sort or change its semantics.
+func pickNonDominatedAppliedSwap(winnerIdx int, winnerPos *RelayLogPositions, positions []*RelayLogPositions) int {
+	eligible := make([]int, 0, len(positions))
+	for i, p := range positions {
+		if i == winnerIdx {
+			continue
+		}
+		if !p.Executed.Equal(p.Combined) {
+			continue
+		}
+		// Skip strictly-behind candidates: winner.Combined dominates p.Combined.
+		if winnerPos.Combined.AtLeast(p.Combined) && !p.Combined.AtLeast(winnerPos.Combined) {
+			continue
+		}
+		eligible = append(eligible, i)
+	}
+
+	for _, i := range eligible {
+		dominated := false
+		for _, j := range eligible {
+			if i == j {
+				continue
+			}
+			if positions[j].Combined.AtLeast(positions[i].Combined) && !positions[i].Combined.AtLeast(positions[j].Combined) {
+				dominated = true
+				break
+			}
+		}
+		if !dominated {
+			return i
+		}
+	}
+	return -1
+}
+
 // promoteIntermediateSource reparents all the other tablets to start replicating from the intermediate source.
 // It does not promote this tablet to a primary instance, we only let other replicas start replicating from this tablet
 func (erp *EmergencyReparenter) promoteIntermediateSource(
@@ -1006,7 +1057,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// Since ERS can sometimes promote a tablet, which isn't a candidate for promotion, if it is the most advanced, we don't want to
 	// call PromoteReplica on it. We just want to get all replicas to replicate from it to get caught up, after which we'll promote the primary
 	// candidate separately. During the final promotion, we call `PromoteReplica` and `PopulateReparentJournal`.
-	primaryPromoted *bool, // optional out-pointer set to true once PromoteReplica/InitPrimary succeeds. The deferred cleanup in reparentShardLocked uses this to avoid running StartReplication on the just-promoted PRIMARY when a downstream step fails. Pass nil from the intermediate reparent path (where handlePrimary is a no-op).
+	primaryPromoted *bool, // optional out-pointer set to true as soon as InitPrimary/PromoteReplica is issued (before the RPC returns). The deferred cleanup in reparentShardLocked uses this to skip the generic StartReplication cleanup whenever the promotion attempt may have produced server-side side effects, including ambiguous RPC failures. Pass nil from the intermediate reparent path (where handlePrimary is a no-op).
 ) ([]*topodatapb.Tablet, error) {
 	var (
 		replicasStartedReplication []*topodatapb.Tablet
@@ -1040,6 +1091,18 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 	handlePrimary := func(alias string, tablet *topodatapb.Tablet) error {
 		if !intermediateReparent {
+			// Signal "promotion attempted" BEFORE issuing the RPC. InitPrimary and
+			// PromoteReplica have side effects on the target tablet (read_only off,
+			// reset replica, semi-sync fixup, tablet type change) — an RPC error
+			// from these calls can happen after some or all of those side effects
+			// have landed server-side (timeout, fixSemiSync/changeTypeLocked failing
+			// post-promote). We must treat the tablet as potentially-PRIMARY from
+			// the moment the call is issued so the caller's deferred cleanup does
+			// not later run StartReplication on a tablet that may already be
+			// writable, which would disable semi-sync and mask the real ERS error.
+			if primaryPromoted != nil {
+				*primaryPromoted = true
+			}
 			var position string
 			var err error
 			if ev.ShardInfo.PrimaryAlias == nil {
@@ -1053,14 +1116,6 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			}
 			if err != nil {
 				return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary", alias)
-			}
-			// Signal that the tablet is now PRIMARY so the caller's deferred cleanup
-			// will not run StartReplication on it if a later step fails. Must be set
-			// before PopulateReparentJournal: a journal-write failure leaves the
-			// tablet promoted, and restarting replication on it would disable
-			// semi-sync and fail with ER_BAD_SLAVE.
-			if primaryPromoted != nil {
-				*primaryPromoted = true
 			}
 			erp.logger.Infof("populating reparent journal on new primary %v", alias)
 			err = erp.tmc.PopulateReparentJournal(primaryCtx, tablet, now, opts.lockAction, tablet.Alias, position)

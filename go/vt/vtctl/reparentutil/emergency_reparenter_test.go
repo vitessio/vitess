@@ -2435,14 +2435,16 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 	})
 }
 
-// TestEmergencyReparenterRestartsStoppedIOThreadsAfterRelayLogApply verifies
-// that ERS restarts replication on replicas whose IO threads it stopped when
-// promotion fails AFTER relay-log application has already succeeded. Prevents
-// regression of a bug where replicasToRestart was cleared just before the
-// promotion attempt, so a PromoteReplica/SetReplicationSource/waitForCatchUp
-// failure would silently skip the deferred cleanup and leave replicas with
-// IO_THREAD stopped.
-func TestEmergencyReparenterRestartsStoppedIOThreadsAfterRelayLogApply(t *testing.T) {
+// TestEmergencyReparenterSkipsCleanupOnPromoteReplicaError verifies that once
+// ERS has issued the PromoteReplica RPC, the deferred cleanup is skipped even
+// if the RPC returns an error. PromoteReplica has server-side side effects
+// (read_only off, reset replica, semi-sync, tablet type) that can land before
+// an error is returned, so the target tablet may already be writable as a
+// PRIMARY. Running StartReplication on the remaining tablets at that point
+// would either reconnect them to the dead/old primary (their configured
+// source is still prevPrimary) or hit a tablet that's now writable —
+// disabling semi-sync and masking the real ERS error.
+func TestEmergencyReparenterSkipsCleanupOnPromoteReplicaError(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := t.Context()
 
@@ -2502,8 +2504,10 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsAfterRelayLogApply(t *testin
 			Return(int32(1), nil).
 			AnyTimes()
 
-		// PromoteReplica fails on the new primary, triggering the
-		// post-relay-log-apply abort path.
+		// PromoteReplica fails on the new primary. From ERS's perspective the
+		// target tablet may already be PRIMARY server-side (the error could be
+		// post-side-effect), so the deferred cleanup must skip the IO-stopped
+		// replicas entirely.
 		tmc.EXPECT().
 			PromoteReplica(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return("", assert.AnError).
@@ -2516,8 +2520,123 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsAfterRelayLogApply(t *testin
 			Return(nil).
 			AnyTimes()
 
-		// Both replicas whose IO threads ERS stopped must have replication
-		// restarted by the deferred cleanup.
+		// No StartReplication expectation is registered: the deferred cleanup
+		// must NOT call it on either replica once promotion has been attempted.
+		// gomock will fail the test if any such call slips through.
+
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+		})
+
+		testutil.AddTablets(
+			ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: time.Second,
+		})
+
+		require.Error(t, err)
+	})
+}
+
+// TestEmergencyReparenterRestartsStoppedIOThreadsOnPrePromotionAbort verifies
+// the cleanup-runs path: when ERS aborts BEFORE InitPrimary/PromoteReplica is
+// attempted (here via every WaitForPosition failing so applyRelayLogsAndReconcile
+// returns "all candidates failed"), the deferred cleanup must restart
+// replication on the replicas whose IO threads ERS stopped. This preserves the
+// regression coverage previously provided by the post-relay-log-apply test —
+// now that PromoteReplica errors are treated as potentially-side-effected and
+// skip cleanup, we need a separate test for the still-safe pre-promotion path.
+func TestEmergencyReparenterRestartsStoppedIOThreadsOnPrePromotionAbort(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			stoppedIOAlias1  = "zone1-0000000101"
+			stoppedIOAlias2  = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+		// Dead primary; both replicas have IO stopped by ERS.
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		// Both candidates fail to apply relay logs — applyRelayLogsAndReconcile
+		// returns "all candidates failed" and ERS aborts before PromoteReplica
+		// is ever called.
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), relayLogPosition).
+			Return(assert.AnError).
+			AnyTimes()
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), relayLogPosition).
+			Return(assert.AnError).
+			AnyTimes()
+
+		// No PromoteReplica / PopulateReparentJournal / SetReplicationSource
+		// expectations: ERS must abort before reaching the final reparentReplicas.
+		// gomock will fail if any of those slip through.
+
+		// Both replicas whose IO ERS stopped must have replication restarted by
+		// the deferred cleanup — primaryPromoted is false at this point.
 		tmc.EXPECT().
 			StartReplication(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), false).
 			Return(nil).
@@ -2573,13 +2692,14 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsAfterRelayLogApply(t *testin
 	})
 }
 
-// TestEmergencyReparenterDoesNotRestartReplicationOnPromotedPrimary verifies
-// that when PromoteReplica succeeds but a downstream step fails (e.g. all
-// replicas fail SetReplicationSource), the deferred cleanup does NOT call
-// StartReplication on the just-promoted tablet. Doing so would disable
-// semi-sync on the new primary, fail with ER_BAD_SLAVE, and mask the real
-// ERS error.
-func TestEmergencyReparenterDoesNotRestartReplicationOnPromotedPrimary(t *testing.T) {
+// TestEmergencyReparenterSkipsCleanupAfterPromotionSucceeds verifies that when
+// PromoteReplica succeeds but a downstream step fails (e.g. all replicas fail
+// SetReplicationSource), the deferred cleanup does NOT call StartReplication
+// on any tablet. The remaining replicas still have prevPrimary configured as
+// their replication source, so StartReplication would reconnect them to the
+// old/dead primary while a new one is already writable. Operators must
+// repoint manually or run a follow-up reparent.
+func TestEmergencyReparenterSkipsCleanupAfterPromotionSucceeds(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := t.Context()
 
@@ -2663,14 +2783,138 @@ func TestEmergencyReparenterDoesNotRestartReplicationOnPromotedPrimary(t *testin
 			Return(assert.AnError).
 			AnyTimes()
 
-		// The non-promoted survivor must have its replication restarted by
-		// the deferred cleanup. The promoted tablet must NOT — gomock will
-		// fail the test if StartReplication is called for it because no
-		// expectation is registered.
+		// No StartReplication expectation is registered for any tablet: the
+		// deferred cleanup must skip the entire restart step once promotion
+		// has succeeded. gomock will fail the test if StartReplication is
+		// called on any tablet.
+
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+		})
+
+		testutil.AddTablets(
+			ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: time.Second,
+			NewPrimaryAlias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		})
+
+		require.Error(t, err)
+	})
+}
+
+// TestEmergencyReparenterSkipsCleanupAfterPopulateReparentJournalFails covers
+// the post-promotion abort path mattlord called out: PromoteReplica succeeds,
+// PopulateReparentJournal fails. The deferred cleanup must not run
+// StartReplication on any tablet, because the survivors' replication source
+// is still prevPrimary and resuming it would reconnect them to the old
+// primary while a new one is already writable.
+func TestEmergencyReparenterSkipsCleanupAfterPopulateReparentJournalFails(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			promotedAlias    = "zone1-0000000101"
+			survivorAlias    = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
 		tmc.EXPECT().
-			StartReplication(gomock.Any(), tabletAliasMatcher(survivorAlias), gomock.Any()).
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(promotedAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(survivorAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(promotedAlias), relayLogPosition).
 			Return(nil).
+			AnyTimes()
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(survivorAlias), relayLogPosition).
+			Return(nil).
+			AnyTimes()
+
+		tmc.EXPECT().
+			ReadReparentJournalInfo(gomock.Any(), gomock.Any()).
+			Return(int32(1), nil).
+			AnyTimes()
+
+		// PromoteReplica succeeds — primaryPromoted flips to true.
+		tmc.EXPECT().
+			PromoteReplica(gomock.Any(), tabletAliasMatcher(promotedAlias), gomock.Any()).
+			Return(relayLogPosition, nil).
 			Times(1)
+
+		// PopulateReparentJournal fails — this is the abort point.
+		tmc.EXPECT().
+			PopulateReparentJournal(gomock.Any(), tabletAliasMatcher(promotedAlias), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(assert.AnError).
+			Times(1)
+
+		// SetReplicationSource may race with PromoteReplica's failure — allow any
+		// outcome. The test asserts on cleanup, not the fanout.
+		tmc.EXPECT().
+			SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		// No StartReplication expectation: any call from cleanup fails the test.
 
 		ts := memorytopo.NewServer(ctx, "zone1")
 		defer ts.Close()
@@ -4640,6 +4884,104 @@ func TestEmergencyReparenter_findMostAdvanced_SwapToDominatorOnCycle(t *testing.
 		winner, _, err := erp.findMostAdvanced(validCandidates, tabletMap, opts, "ks", "0")
 		require.NoError(t, err)
 		require.NotEqual(t, uint32(100), winner.Alias.Uid, "dominated tablet C (alias 100) must never be the winner — swap-to-dominator loop should correct any cycle-induced sort output (iteration %d)", i)
+	}
+}
+
+// TestPickNonDominatedAppliedSwap is the Codex P1 regression for the Safety
+// net #2 fallback in findMostAdvanced. When the sort winner is unapplied
+// (Executed != Combined), the fallback must prefer an applied candidate, but
+// among multiple eligible applied candidates it must skip any strictly
+// dominated by another eligible candidate — otherwise we silently lose
+// transactions from the dominator.
+//
+// The helper is exercised directly with a hand-rolled positions slice that
+// places the dominated candidate (C) BEFORE its dominator (B). The sort
+// comparator in reparent_sorter.go would normally place B before C, which
+// hides the bug end-to-end via findMostAdvanced; this test validates the
+// invariant the helper actually guards against any future refactor that
+// bypasses or relaxes the sort.
+func TestPickNonDominatedAppliedSwap(t *testing.T) {
+	uuidA := replication.SID{0xaa, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+	uuidB := replication.SID{0xbb, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
+
+	mk := func(uuid replication.SID, n int64, applied bool) *RelayLogPositions {
+		p := &RelayLogPositions{
+			Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+			Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		}
+		for seq := int64(1); seq <= n; seq++ {
+			g := replication.Mysql56GTID{Server: uuid, Sequence: seq}
+			p.Combined.GTIDSet = p.Combined.GTIDSet.AddGTID(g)
+			if applied {
+				p.Executed.GTIDSet = p.Executed.GTIDSet.AddGTID(g)
+			}
+		}
+		return p
+	}
+
+	// A unapplied {uuidA:1-5}; B applied {uuidB:1-10}; C applied {uuidB:1-3}.
+	// A is incomparable to B and C; B strictly dominates C.
+	positionA := mk(uuidA, 5, false)
+	positionB := mk(uuidB, 10, true)
+	positionC := mk(uuidB, 3, true)
+
+	tests := []struct {
+		name      string
+		winnerIdx int
+		winner    *RelayLogPositions
+		positions []*RelayLogPositions
+		want      int
+	}{
+		{
+			// The Codex shape: C placed before B. Without the dominance
+			// check the helper would return C's index; with it, it must
+			// return B's.
+			name:      "dominated_applied_candidate_before_dominator_picks_dominator",
+			winnerIdx: 0,
+			winner:    positionA,
+			positions: []*RelayLogPositions{positionA, positionC, positionB},
+			want:      2,
+		},
+		{
+			// Dominator first: still pick dominator (sanity).
+			name:      "dominator_before_dominated_picks_dominator",
+			winnerIdx: 0,
+			winner:    positionA,
+			positions: []*RelayLogPositions{positionA, positionB, positionC},
+			want:      1,
+		},
+		{
+			// Single applied candidate (no dominance interaction): pick it.
+			name:      "single_applied_candidate_picked",
+			winnerIdx: 0,
+			winner:    positionA,
+			positions: []*RelayLogPositions{positionA, positionB},
+			want:      1,
+		},
+		{
+			// All other candidates strictly behind winner → none eligible.
+			name:      "only_strictly_behind_returns_minus_one",
+			winnerIdx: 0,
+			winner:    mk(uuidA, 10, false),
+			positions: []*RelayLogPositions{mk(uuidA, 10, false), mk(uuidA, 5, true)},
+			want:      -1,
+		},
+		{
+			// No applied candidate at all → none eligible.
+			name:      "no_applied_candidate_returns_minus_one",
+			winnerIdx: 0,
+			winner:    positionA,
+			positions: []*RelayLogPositions{positionA, mk(uuidB, 10, false)},
+			want:      -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := pickNonDominatedAppliedSwap(tt.winnerIdx, tt.winner, tt.positions)
+			require.Equal(t, tt.want, got)
+		})
 	}
 }
 
