@@ -617,23 +617,35 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 
 		// remove preceding 0s from the integral part, otherwise we get "000000000001.23" instead of "1.23"
 		trimPrecedingZeroes := func(b []byte) []byte {
-			s := string(b)
-			isNegative := false
-			if s[0] == '-' {
-				isNegative = true
-				s = s[1:]
+			isNegative := b[0] == '-'
+			if isNegative {
+				b = b[1:]
 			}
-			s = strings.TrimLeft(s, "0")
+			i := 0
+			for i < len(b) && b[i] == '0' {
+				i++
+			}
+			b = b[i:]
 			// Ensure at least one digit precedes the decimal point so values
 			// like 0.1 round-trip as "0.1" instead of ".1" (invalid JSON when
 			// the decimal appears inside a JSON column).
-			if strings.HasPrefix(s, ".") {
-				s = "0" + s
-			}
+			needLeadingZero := len(b) > 0 && b[0] == '.'
+
+			size := len(b)
 			if isNegative {
-				s = "-" + s
+				size++
 			}
-			return []byte(s)
+			if needLeadingZero {
+				size++
+			}
+			out := make([]byte, 0, size)
+			if isNegative {
+				out = append(out, '-')
+			}
+			if needLeadingZero {
+				out = append(out, '0')
+			}
+			return append(out, b...)
 		}
 		return sqltypes.MakeTrusted(querypb.Type_DECIMAL, trimPrecedingZeroes(txt.Bytes())), l, nil
 
