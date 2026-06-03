@@ -164,13 +164,7 @@ func NewClient() *Client {
 // validateTablet confirms the tablet record contains the necessary fields
 // for talking gRPC.
 func validateTablet(tablet *topodatapb.Tablet) error {
-	// v24+ adds a TabletShutdownTime field that is set to "now" on clean shutdown.
 	if tablet.TabletShutdownTime != nil {
-		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutdown")
-	}
-
-	// <= v23 compatibility to similuate missing TabletShutdownTime field. Remove in v25.
-	if tablet.Hostname == "" && tablet.MysqlHostname == "" && tablet.PortMap == nil && tablet.Type != topodatapb.TabletType_UNKNOWN {
 		return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutdown")
 	}
 

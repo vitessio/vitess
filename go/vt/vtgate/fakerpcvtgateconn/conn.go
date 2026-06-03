@@ -105,7 +105,8 @@ func (conn *FakeVTGateConn) Execute(
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
 		return nil, nil, fmt.Errorf(
-			"Execute: %+v, want %+v", query, response.execQuery)
+			"Execute: %+v, want %+v", query, response.execQuery,
+		)
 	}
 	reply := *response.reply
 	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_PRIMARY)
@@ -188,7 +189,8 @@ func (conn *FakeVTGateConn) Prepare(ctx context.Context, session *vtgatepb.Sessi
 	}
 	if !reflect.DeepEqual(query, response.execQuery) {
 		return nil, nil, 0, fmt.Errorf(
-			"Prepare: %+v, want %+v", query, response.execQuery)
+			"Prepare: %+v, want %+v", query, response.execQuery,
+		)
 	}
 	reply := *response.reply
 	s := newSession(true, "test_keyspace", []string{}, topodatapb.TabletType_PRIMARY)
@@ -222,7 +224,7 @@ func newSession(
 	shards []string,
 	tabletType topodatapb.TabletType,
 ) *vtgatepb.Session {
-	shardSessions := make([]*vtgatepb.Session_ShardSession, len(shards))
+	shardSessions := make([]*vtgatepb.Session_ShardSession, 0, len(shards))
 	for _, shard := range shards {
 		shardSessions = append(shardSessions, &vtgatepb.Session_ShardSession{
 			Target: &querypb.Target{

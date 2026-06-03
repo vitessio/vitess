@@ -7,6 +7,11 @@
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
     - **[Breaking Changes](#breaking-changes)**
+        - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
+        - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
+        - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
+    - **[Deprecations](#deprecations)**
+        - [CLI Flags](#deprecated-cli-flags)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
@@ -24,6 +29,46 @@
 ### <a id="new-support"/>New Support</a>
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
+
+#### <a id="vttablet-watch-replication-stream-removed"/>`--watch-replication-stream` flag removed</a>
+
+The deprecated `--watch-replication-stream` VTTablet flag has been removed.
+
+**Migration**: remove `--watch-replication-stream` from VTTablet startup arguments.
+
+**Impact**: VTTablet will fail to start if `--watch-replication-stream` is still passed.
+
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19204](https://github.com/vitessio/vitess/pull/19204) for the original deprecation.
+
+#### <a id="vtorc-snapshot-topology-removed"/>Snapshot Topology feature removed</a>
+
+VTOrc's Snapshot Topology feature, [deprecated in v24](../../24.0/24.0.0/summary.md#vtorc-snapshot-topology-deprecation), has been removed. This includes the `--snapshot-topology-interval` flag and the `database_instance_topology_history` table.
+
+**Migration**: remove `--snapshot-topology-interval` from VTOrc startup arguments.
+
+**Impact**: VTOrc will fail to start if `--snapshot-topology-interval` is still passed.
+
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19070](https://github.com/vitessio/vitess/pull/19070) for the original deprecation.
+
+#### <a id="vtorc-cell-required"/>VTOrc `--cell` flag is now required</a>
+
+The `--cell` VTOrc flag, [introduced in v24](../../24.0/24.0.0/summary.md#vtorc-cell-flag), is now required.
+
+**Migration**: ensure `--cell` is set on every VTOrc deployment.
+
+**Impact**: VTOrc will fail to start with a `FAILED_PRECONDITION` error if `--cell` is empty.
+
+See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19047](https://github.com/vitessio/vitess/pull/19047) for the original `--cell` flag introduction.
+
+### <a id="deprecations"/>Deprecations</a>
+
+#### <a id="deprecated-cli-flags"/>CLI Flags</a>
+
+The VTGate flag `--legacy-replication-lag-algorithm` is now deprecated and is a no-op. VTGate always uses the simpler replication lag algorithm based on low lag, high lag and the minimum number of tablets. A detailed explanation of the algorithm [is available in this code comment](https://github.com/vitessio/vitess/blob/main/go/vt/discovery/replicationlag.go).
+
+The flag will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
+
+**Impact**: Remove any usage of the `--legacy-replication-lag-algorithm` flag from VTGate startup scripts or configuration.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 

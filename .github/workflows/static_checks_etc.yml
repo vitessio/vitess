@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99 # v2.19.2
         with:
           egress-policy: audit
 
@@ -195,6 +195,17 @@ jobs:
             .github/ISSUE_TEMPLATE/*.yml \
             .github/workflows/*.yml
 
+      - name: Get golangci-lint version
+        if: steps.changes.outputs.go_files == 'true'
+        id: golangci_lint_version
+        run: |
+          version=$(grep "^export GOLANGCI_LINT_VER=" build.env | cut -d= -f2)
+          if [ -z "$version" ]; then
+            echo "Could not determine GOLANGCI_LINT_VER from build.env"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
         timeout-minutes: 15
@@ -204,7 +215,7 @@ jobs:
           install-mode: "goinstall"
           skip-cache: true
           working-directory: go
-          version: v2.9.0
+          version: ${{ steps.golangci_lint_version.outputs.version }}
 
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'

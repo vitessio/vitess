@@ -68,7 +68,7 @@ func (gr *Graph[C]) PrintGraph() string {
 		adjacencyList := fmt.Sprintf("%v -", vertex)
 		var adjacencyListSb69 strings.Builder
 		for _, end := range edges {
-			adjacencyListSb69.WriteString(fmt.Sprintf(" %v", end))
+			fmt.Fprintf(&adjacencyListSb69, " %v", end)
 		}
 		adjacencyList += adjacencyListSb69.String()
 		adjacencyLists = append(adjacencyLists, adjacencyList)
