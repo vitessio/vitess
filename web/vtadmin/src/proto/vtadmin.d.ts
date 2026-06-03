@@ -50958,6 +50958,9 @@ export namespace replicationdata {
 
         /** PrimaryStatus server_uuid */
         server_uuid?: (string|null);
+
+        /** PrimaryStatus server_version */
+        server_version?: (string|null);
     }
 
     /** Represents a PrimaryStatus. */
@@ -50977,6 +50980,9 @@ export namespace replicationdata {
 
         /** PrimaryStatus server_uuid. */
         public server_uuid: string;
+
+        /** PrimaryStatus server_version. */
+        public server_version: string;
 
         /**
          * Creates a new PrimaryStatus instance using the specified properties.
