@@ -619,13 +619,7 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 		trimPrecedingZeroes := func(b []byte) []byte {
 			isNegative := b[0] == '-'
 			if isNegative {
-<<<<<<< HEAD
-				s = fmt.Sprintf("-%s", s)
-||||||| parent of 20dc60f830 (binlog: preserve leading zero on DECIMAL JSON values like 0.1 (#20228))
-				s = "-" + s
-=======
 				b = b[1:]
->>>>>>> 20dc60f830 (binlog: preserve leading zero on DECIMAL JSON values like 0.1 (#20228))
 			}
 			i := 0
 			for i < len(b) && b[i] == '0' {
