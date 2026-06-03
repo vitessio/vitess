@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -205,6 +206,34 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, keys)
 		})
 	}
+}
+
+// TestFindPositionsOfAllCandidates_ErrorNotDuplicated verifies that when
+// FindPositionsOfAllCandidates wraps an error the underlying cause message is
+// not repeated twice in the output. vterrors.Wrapf already appends the cause
+// via "wrapper: cause", so including the cause in the format string would
+// duplicate it.
+func TestFindPositionsOfAllCandidates_ErrorNotDuplicated(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := FindPositionsOfAllCandidates(
+		map[string]*replicationdatapb.StopReplicationStatus{
+			"r1": {After: &replicationdatapb.Status{
+				SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+				RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+			}},
+		},
+		map[string]*replicationdatapb.PrimaryStatus{
+			"p1": {Position: "InvalidFlavor/1234"},
+		},
+	)
+	require.Error(t, err)
+
+	cause := vterrors.Cause(err)
+	require.NotNil(t, cause)
+	causeMsg := cause.Error()
+	assert.Equal(t, 1, strings.Count(err.Error(), causeMsg),
+		"cause message must appear exactly once in the wrapped error")
 }
 
 // stopReplicationAndBuildStatusMapsTestTMClient implements

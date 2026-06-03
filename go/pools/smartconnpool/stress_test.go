@@ -162,6 +162,362 @@ func TestStress(t *testing.T) {
 	require.NoError(t, wg.Wait())
 }
 
+func TestStressFull(t *testing.T) {
+	const (
+		MaxCapacity      = 32
+		NumWorkers       = 16
+		CoverageTimeout  = 30 * time.Second
+		ShutdownTimeout  = 30 * time.Second
+		MinSuccessfulGet = 2000
+	)
+
+	var (
+		connsMu        sync.Mutex
+		allConns       []*StressConn
+		successfulGets atomic.Int64
+		capacitySets   atomic.Int64
+		refreshChecks  atomic.Int64
+	)
+
+	connect := func(_ context.Context) (*StressConn, error) {
+		c := &StressConn{}
+		connsMu.Lock()
+		allConns = append(allConns, c)
+		connsMu.Unlock()
+		return c, nil
+	}
+	connCount := func() int {
+		connsMu.Lock()
+		defer connsMu.Unlock()
+		return len(allConns)
+	}
+
+	refresh := func() (bool, error) {
+		return refreshChecks.Add(1)%4 == 0, nil
+	}
+
+	pool := NewPool[*StressConn](&Config[*StressConn]{
+		Capacity:        MaxCapacity,
+		IdleTimeout:     10 * time.Millisecond,
+		RefreshInterval: 25 * time.Millisecond,
+	}).Open(connect, refresh)
+
+	settings := []*Setting{
+		nil,
+		NewSetting("set a=1", "set a=0"),
+		NewSetting("set b=1", "set b=0"),
+		NewSetting("set c=1", "set c=0"),
+	}
+
+	var (
+		wg   errgroup.Group
+		stop atomic.Bool
+	)
+
+	for i := range NumWorkers {
+		worker := i
+		tid := int32(worker + 1)
+		wg.Go(func() error {
+			rng := rand.New(rand.NewPCG(uint64(worker+1), uint64(worker+101)))
+
+			for !stop.Load() {
+				ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+				conn, err := pool.Get(ctx, settings[rng.IntN(len(settings))])
+				cancel()
+				if err != nil {
+					runtime.Gosched()
+					continue
+				}
+
+				previousOwner := conn.Conn.owner.Swap(tid)
+				if previousOwner != 0 {
+					return fmt.Errorf("conn handed out concurrently: %d still owned it when %d acquired", previousOwner, tid)
+				}
+				runtime.Gosched()
+				previousOwner = conn.Conn.owner.Swap(0)
+				if previousOwner != tid {
+					return fmt.Errorf("conn owner overwritten under us: expected %d, got %d", tid, previousOwner)
+				}
+				successfulGets.Add(1)
+
+				switch rng.IntN(50) {
+				case 0:
+					conn.Conn.closed.Store(true)
+					conn.Recycle()
+				case 1:
+					conn.Conn.closed.Store(true)
+					conn.Taint()
+				default:
+					conn.Recycle()
+				}
+			}
+			return nil
+		})
+	}
+
+	wg.Go(func() error {
+		rng := rand.New(rand.NewPCG(1, 2))
+
+		for !stop.Load() {
+			ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+			_ = pool.SetCapacity(ctx, int64(rng.IntN(MaxCapacity+1)))
+			cancel()
+			capacitySets.Add(1)
+			runtime.Gosched()
+		}
+		return nil
+	})
+
+	status := func() string {
+		return fmt.Sprintf("capacity=%d active=%d borrowed=%d open=%d isOpen=%v successfulGets=%d capacitySets=%d refreshChecks=%d",
+			pool.Capacity(), pool.Active(), pool.InUse(), connCount(), pool.IsOpen(), successfulGets.Load(), capacitySets.Load(), refreshChecks.Load())
+	}
+
+	coverageReached := assert.Eventuallyf(t, func() bool {
+		return successfulGets.Load() >= MinSuccessfulGet &&
+			capacitySets.Load() >= 10 &&
+			refreshChecks.Load() >= 4
+	}, CoverageTimeout, time.Millisecond, "stress coverage was not reached: %s", status())
+
+	stop.Store(true)
+	waitForStressTraffic(t, -1, &wg, ShutdownTimeout, status)
+
+	restoreCtx, restoreCancel := context.WithTimeout(t.Context(), ShutdownTimeout)
+	restoreErr := pool.SetCapacity(restoreCtx, MaxCapacity)
+	restoreCancel()
+	require.NoError(t, restoreErr)
+
+	closeCtx, closeCancel := context.WithTimeout(t.Context(), ShutdownTimeout)
+	closeErr := pool.CloseWithContext(closeCtx)
+	closeCancel()
+	require.NoError(t, closeErr)
+
+	if !coverageReached {
+		require.FailNowf(t, "stress coverage was not reached", "%s", status())
+	}
+
+	require.EqualValues(t, 0, pool.active.Load(), "active should be 0 after Close")
+	require.EqualValues(t, 0, pool.borrowed.Load(), "borrowed should be 0 after Close")
+
+	connsMu.Lock()
+	defer connsMu.Unlock()
+
+	var leaked int
+	for _, c := range allConns {
+		if !c.IsClosed() {
+			leaked++
+		}
+	}
+	require.Equalf(t, 0, leaked, "leaked %d connections out of %d ever opened", leaked, len(allConns))
+	t.Logf("stress test exercised %d connections", len(allConns))
+}
+
+func TestStressRefreshReopenSetCapacityClose(t *testing.T) {
+	const Cycles = 50
+
+	for cycle := range Cycles {
+		if !t.Run(fmt.Sprintf("cycle-%03d", cycle), func(t *testing.T) {
+			runStressRefreshReopenSetCapacityCloseCycle(t, cycle)
+		}) {
+			return
+		}
+	}
+}
+
+func runStressRefreshReopenSetCapacityCloseCycle(t *testing.T, cycle int) {
+	t.Helper()
+
+	const (
+		MaxCapacity   = 12
+		NumWorkers    = 16
+		NumCapWorkers = 3
+		StartupWait   = 30 * time.Second
+		CloseTimeout  = 30 * time.Second
+		Watchdog      = 30 * time.Second
+	)
+
+	var (
+		connsMu            sync.Mutex
+		allConns           []*StressConn
+		liveGetWorkers     atomic.Int64
+		liveCapWorkers     atomic.Int64
+		successfulGets     atomic.Int64
+		refreshChecks      atomic.Int64
+		connectsAfterClose atomic.Int64
+		closeStarted       atomic.Bool
+		capacityInProgress atomic.Bool
+	)
+
+	connect := func(_ context.Context) (*StressConn, error) {
+		if closeStarted.Load() {
+			connectsAfterClose.Add(1)
+		}
+
+		c := &StressConn{}
+		connsMu.Lock()
+		allConns = append(allConns, c)
+		connsMu.Unlock()
+		return c, nil
+	}
+	connCount := func() int {
+		connsMu.Lock()
+		defer connsMu.Unlock()
+		return len(allConns)
+	}
+
+	refresh := func() (bool, error) {
+		refreshChecks.Add(1)
+		return true, nil
+	}
+
+	pool := NewPool[*StressConn](&Config[*StressConn]{
+		Capacity:        MaxCapacity,
+		IdleTimeout:     10 * time.Millisecond,
+		RefreshInterval: time.Millisecond,
+	}).Open(connect, refresh)
+
+	settings := []*Setting{
+		nil,
+		NewSetting("set refresh a=1", "set refresh a=0"),
+		NewSetting("set refresh b=1", "set refresh b=0"),
+		NewSetting("set refresh c=1", "set refresh c=0"),
+	}
+
+	var (
+		wg   errgroup.Group
+		stop atomic.Bool
+	)
+
+	for i := range NumWorkers {
+		worker := i
+		tid := int32(worker + 1)
+		wg.Go(func() error {
+			liveGetWorkers.Add(1)
+			defer liveGetWorkers.Add(-1)
+
+			rng := rand.New(rand.NewPCG(uint64(cycle+1), uint64(worker+201)))
+
+			for !stop.Load() {
+				ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
+				conn, err := pool.Get(ctx, settings[rng.IntN(len(settings))])
+				cancel()
+				if err != nil {
+					runtime.Gosched()
+					continue
+				}
+				if conn.Conn.IsClosed() {
+					return fmt.Errorf("cycle %d: closed conn handed out to worker %d", cycle, tid)
+				}
+
+				previousOwner := conn.Conn.owner.Swap(tid)
+				if previousOwner != 0 {
+					return fmt.Errorf("cycle %d: conn handed out concurrently: %d still owned it when %d acquired", cycle, previousOwner, tid)
+				}
+				if rng.IntN(3) == 0 {
+					runtime.Gosched()
+				}
+				previousOwner = conn.Conn.owner.Swap(0)
+				if previousOwner != tid {
+					return fmt.Errorf("cycle %d: conn owner overwritten under us: expected %d, got %d", cycle, tid, previousOwner)
+				}
+				successfulGets.Add(1)
+
+				if rng.IntN(20) == 0 {
+					conn.Conn.closed.Store(true)
+					conn.Recycle()
+					continue
+				}
+				conn.Recycle()
+			}
+			return nil
+		})
+	}
+
+	for i := range NumCapWorkers {
+		worker := i
+		wg.Go(func() error {
+			liveCapWorkers.Add(1)
+			defer liveCapWorkers.Add(-1)
+
+			rng := rand.New(rand.NewPCG(uint64(cycle+1), uint64(worker+301)))
+
+			for !stop.Load() {
+				ctx, cancel := context.WithTimeout(t.Context(), 150*time.Millisecond)
+				capacityInProgress.Store(true)
+				_ = pool.SetCapacity(ctx, int64(rng.IntN(MaxCapacity+1)))
+				capacityInProgress.Store(false)
+				cancel()
+				runtime.Gosched()
+			}
+			return nil
+		})
+	}
+
+	status := func() string {
+		return fmt.Sprintf("capacity=%d active=%d borrowed=%d open=%d isOpen=%v liveGetWorkers=%d liveCapWorkers=%d successfulGets=%d refreshChecks=%d connectsAfterClose=%d capacityInProgress=%v",
+			pool.Capacity(), pool.Active(), pool.InUse(), connCount(), pool.IsOpen(), liveGetWorkers.Load(), liveCapWorkers.Load(), successfulGets.Load(), refreshChecks.Load(), connectsAfterClose.Load(), capacityInProgress.Load())
+	}
+
+	started := assert.Eventuallyf(t, func() bool {
+		return liveGetWorkers.Load() == NumWorkers &&
+			liveCapWorkers.Load() == NumCapWorkers &&
+			successfulGets.Load() >= NumWorkers &&
+			refreshChecks.Load() > 0
+	}, StartupWait, time.Millisecond, "cycle %d: stress workers did not start: %s", cycle, status())
+	if !started {
+		stop.Store(true)
+		waitForStressTraffic(t, cycle, &wg, Watchdog, status)
+		closeCtx, closeCancel := context.WithTimeout(t.Context(), CloseTimeout)
+		_ = pool.CloseWithContext(closeCtx)
+		closeCancel()
+		require.FailNowf(t, "stress workers did not start", "cycle %d: %s", cycle, status())
+	}
+
+	closeCtx, cancelClose := context.WithTimeout(t.Context(), CloseTimeout)
+	closeDone := make(chan error, 1)
+	closeStarted.Store(true)
+	go func() {
+		closeDone <- pool.CloseWithContext(closeCtx)
+	}()
+
+	var closeErr error
+	closeReturned := assert.Eventuallyf(t, func() bool {
+		select {
+		case closeErr = <-closeDone:
+			return true
+		default:
+			return false
+		}
+	}, Watchdog, time.Millisecond, "cycle %d: CloseWithContext stalled during refresh/capacity churn: %s", cycle, status())
+	cancelClose()
+
+	stop.Store(true)
+
+	if !closeReturned {
+		require.FailNowf(t, "CloseWithContext stalled during refresh/capacity churn", "cycle %d: %s", cycle, status())
+	}
+	waitForStressTraffic(t, cycle, &wg, Watchdog, status)
+
+	require.NoErrorf(t, closeErr, "cycle %d: CloseWithContext failed during refresh/capacity churn: %s", cycle, status())
+	require.Falsef(t, pool.IsOpen(), "cycle %d: pool should be closed", cycle)
+	require.EqualValuesf(t, 0, pool.Capacity(), "cycle %d: capacity should be 0 after Close: %s", cycle, status())
+	require.EqualValuesf(t, 0, pool.Active(), "cycle %d: active should be 0 after Close: %s", cycle, status())
+	require.EqualValuesf(t, 0, pool.InUse(), "cycle %d: borrowed should be 0 after Close: %s", cycle, status())
+
+	finalStatus := status()
+	connsMu.Lock()
+	defer connsMu.Unlock()
+
+	var leaked int
+	for _, c := range allConns {
+		if !c.IsClosed() {
+			leaked++
+		}
+	}
+	require.Equalf(t, 0, leaked, "cycle %d: leaked %d connections out of %d ever opened; %s",
+		cycle, leaked, len(allConns), finalStatus)
+}
+
 // TestStressCloseDuringReconnectStorm exercises CloseWithContext racing
 // against in-flight reconnects. Workers churn conns (Get / Recycle, plus
 // occasional Taint), and a storm of Taints is launched with the test's
