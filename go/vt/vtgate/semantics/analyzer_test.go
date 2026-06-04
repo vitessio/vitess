@@ -923,6 +923,23 @@ func TestValuesStatementUnion(t *testing.T) {
 	}
 }
 
+func TestValuesStatementUnionRejectsListArg(t *testing.T) {
+	queries := []string{
+		"select 1 union values ::vals",
+		"values ::vals union select 1",
+		"values ::vals union values ::other",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+			_, err = Analyze(stmt, "", fakeSchemaInfo())
+			require.ErrorContains(t, err, "VT12001: unsupported: VALUES list argument in UNION statements")
+		})
+	}
+}
+
 func TestUnionOrderByRewrite(t *testing.T) {
 	query := "select tabl1.id from tabl1 union select 1 order by 1"
 

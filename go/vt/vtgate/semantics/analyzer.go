@@ -291,6 +291,10 @@ func containsStar(s []sqlparser.SelectExpr) bool {
 }
 
 func checkUnionColumns(union *sqlparser.Union) error {
+	if unionHasValuesListArg(union) {
+		return vterrors.VT12001("VALUES list argument in UNION statements")
+	}
+
 	firstProj := union.Left.GetColumns()
 	if containsStar(firstProj) {
 		// if we still have *, we can't figure out if the query is invalid or not
@@ -310,6 +314,20 @@ func checkUnionColumns(union *sqlparser.Union) error {
 	}
 
 	return nil
+}
+
+func unionHasValuesListArg(union *sqlparser.Union) bool {
+	return tableStatementHasValuesListArg(union.Left) || tableStatementHasValuesListArg(union.Right)
+}
+
+func tableStatementHasValuesListArg(stmt sqlparser.TableStatement) bool {
+	switch stmt := stmt.(type) {
+	case *sqlparser.ValuesStatement:
+		return stmt.ListArg != ""
+	case *sqlparser.Union:
+		return unionHasValuesListArg(stmt)
+	}
+	return false
 }
 
 /*
