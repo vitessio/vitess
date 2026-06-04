@@ -711,11 +711,14 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	// case inst.AllPrimaryReplicasStale:
 	//   recoveryFunc = recoverGenericProblemFunc
 
-	// If --cells-no-recovery contains the analyzed tablet's cell, skip the
-	// recovery action while still surfacing detection through the rest of the
-	// pipeline. Discovery is unaffected, so VTOrc retains a complete view of
+	// If --cells-no-recovery contains the analyzed (failed) tablet's cell, skip
+	// the recovery action while still surfacing detection through the rest of
+	// the pipeline. Discovery is unaffected, so VTOrc retains a complete view of
 	// the topology and never mistakes a primary in another cell for "no
-	// primary".
+	// primary". Note this only gates on the analyzed tablet's cell: it does not
+	// by itself stop ERS, triggered by a failure in an allowed cell, from
+	// choosing a promotion candidate that lives in a no-recovery cell; use
+	// --prevent-cross-cell-promotion for that.
 	if recoverySkipCode == RecoverySkipNone &&
 		hasActionableRecovery(recoveryFunc) &&
 		len(cellsNoRecovery) > 0 &&
