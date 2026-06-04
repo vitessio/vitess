@@ -24,10 +24,14 @@ runs:
 
         # We have to install this old version of libaio1. See also:
         # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
-        wget https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb && \
-          echo "2dcfe0b49d7cccfbf1bd6a3f627cf44bea9f51fb32f7e0e552a0df75698e0d27  libaio1_0.3.112-13build1_amd64.deb" | sha256sum --check && \
-          sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb && \
-          rm libaio1_0.3.112-13build1_amd64.deb
+        wget \
+          --tries=3 \
+          --waitretry=2 \
+          --timeout=30 \
+          https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb && \
+        echo "2dcfe0b49d7cccfbf1bd6a3f627cf44bea9f51fb32f7e0e552a0df75698e0d27  libaio1_0.3.112-13build1_amd64.deb" | sha256sum --check && \
+        sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb && \
+        rm libaio1_0.3.112-13build1_amd64.deb
 
         # Get key to latest MySQL repo
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
@@ -41,9 +45,11 @@ runs:
           sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
           sudo apt-get update
           # libtinfo5 is also needed for older MySQL 5.7 builds.
-          curl -L -O https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
-            echo "ab89265d8dd18bda6a29d7c796367d6d9f22a39a8fa83589577321e7caf3857b  libtinfo5_6.3-2ubuntu0.1_amd64.deb" | sha256sum --check
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          curl -fsSL -O https://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb \
+            --retry 3 \
+            --retry-delay 2 && \
+            echo "ab89265d8dd18bda6a29d7c796367d6d9f22a39a8fa83589577321e7caf3857b  libtinfo5_6.3-2ubuntu0.1_amd64.deb" | sha256sum --check && \
+            sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
           sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
         elif [[ "${{ inputs.flavor }}" == "mysql-8.0" ]]; then
           echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
