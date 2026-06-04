@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -120,8 +121,28 @@ func getEmergencyReparentShardDisabledStats() map[string]int64 {
 // RegisterFlags registers the flags required by VTOrc
 func RegisterFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringSliceVar(fs, &clustersToWatch, "clusters-to-watch", clustersToWatch, "Comma-separated list of keyspaces or keyspace/keyranges that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
-	utils.SetFlagStringSliceVar(fs, &cellsNoRecovery, "cells-no-recovery", cellsNoRecovery, "Comma-separated list of cells for which VTOrc will detect problems but skip recovery actions. Discovery still spans all cells. Example: \"cell1,cell2\"")
+	utils.SetFlagStringSliceVar(fs, &cellsNoRecovery, "cells-no-recovery", cellsNoRecovery, "Comma-separated list of cells in which VTOrc skips recovery actions when the analyzed (failed) tablet is in one of these cells. Detection still happens and discovery still spans all cells. Cells are validated against the topology at startup. Example: \"cell1,cell2\"")
 	utils.SetFlagDurationVar(fs, &shutdownWaitTime, "shutdown-wait-time", shutdownWaitTime, "Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM")
+}
+
+// validateCellsNoRecovery ensures every cell passed to --cells-no-recovery
+// exists in the topology. Recovery skipping relies on an exact match against
+// the analyzed tablet's cell, so an unknown cell name would silently disable
+// the intended protection; return an error so the caller can fail fast.
+func validateCellsNoRecovery(ctx context.Context) error {
+	if len(cellsNoRecovery) == 0 {
+		return nil
+	}
+	knownCells, err := ts.GetKnownCells(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get known cells while validating --cells-no-recovery: %w", err)
+	}
+	for _, cell := range cellsNoRecovery {
+		if !slices.Contains(knownCells, cell) {
+			return fmt.Errorf("--cells-no-recovery contains cell %q which does not exist in the topology (known cells: %v)", cell, knownCells)
+		}
+	}
+	return nil
 }
 
 // initializeShardsToWatch parses the --clusters_to_watch flag-value
@@ -205,6 +226,14 @@ func OpenTabletDiscovery() <-chan time.Time {
 	// it on a timer.
 	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 	defer cancel()
+	// Validate --cells-no-recovery against the topology's known cells. The
+	// recovery-skip decision is an exact cell-name match, so a typo or stale
+	// cell name would silently fail to protect the intended cell. Fail fast at
+	// startup instead.
+	if err := validateCellsNoRecovery(ctx); err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	}
 	if err := refreshAllInformation(ctx); err != nil {
 		log.Error(fmt.Sprintf("failed to initialize topo information: %+v", err))
 	}

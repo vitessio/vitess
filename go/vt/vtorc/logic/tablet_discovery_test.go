@@ -901,3 +901,58 @@ func TestGetAllTablets(t *testing.T) {
 	}
 }
 
+// TestValidateCellsNoRecovery verifies that validateCellsNoRecovery accepts an
+// empty list and cells that exist in the topology, and rejects a cell name that
+// is not a known topo cell (guarding against typos silently disabling the
+// recovery-skip protection).
+func TestValidateCellsNoRecovery(t *testing.T) {
+	oldTs := ts
+	oldCellsNoRecovery := cellsNoRecovery
+	defer func() {
+		ts = oldTs
+		cellsNoRecovery = oldCellsNoRecovery
+	}()
+
+	cell2 := "zone-2"
+	ctx := t.Context()
+	ts = memorytopo.NewServer(ctx, cell1, cell2)
+
+	tests := []struct {
+		name            string
+		cellsNoRecovery []string
+		wantErr         bool
+	}{
+		{
+			name:            "empty list is valid",
+			cellsNoRecovery: nil,
+			wantErr:         false,
+		},
+		{
+			name:            "single known cell is valid",
+			cellsNoRecovery: []string{cell1},
+			wantErr:         false,
+		},
+		{
+			name:            "multiple known cells are valid",
+			cellsNoRecovery: []string{cell1, cell2},
+			wantErr:         false,
+		},
+		{
+			name:            "unknown cell is rejected",
+			cellsNoRecovery: []string{cell1, "nonexistent-cell"},
+			wantErr:         true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cellsNoRecovery = tt.cellsNoRecovery
+			err := validateCellsNoRecovery(ctx)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "does not exist in the topology")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
