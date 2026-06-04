@@ -35,31 +35,39 @@ func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 	require.NotNil(t, fuseHelperCmd, "fuse helper not initialized in TestMain")
 	assertHelperAlive(t)
 
-	require.NoError(t,
+	require.NoError(
+		t,
 		primaryTablet.VttabletProcess.WaitForTabletStatusesForTimeout(
-			[]string{"SERVING"}, tabletStatusTimeout),
+			[]string{"SERVING"}, tabletStatusTimeout,
+		),
 		"primary tablet did not reach SERVING before stall",
 	)
 
-	require.NoError(t,
+	require.NoError(
+		t,
 		syscall.Kill(fuseHelperCmd.Process.Pid, syscall.SIGUSR1),
 		"failed to send SIGUSR1 (stall) to fuse helper",
 	)
 
-	require.NoError(t,
+	require.NoError(
+		t,
 		primaryTablet.VttabletProcess.WaitForTabletStatusesForTimeout(
-			[]string{"NOT_SERVING"}, tabletStatusTimeout),
+			[]string{"NOT_SERVING"}, tabletStatusTimeout,
+		),
 		"primary tablet did not transition to NOT_SERVING after disk stall",
 	)
 
-	require.NoError(t,
+	require.NoError(
+		t,
 		syscall.Kill(fuseHelperCmd.Process.Pid, syscall.SIGHUP),
 		"failed to send SIGHUP (clear) to fuse helper",
 	)
 
-	require.NoError(t,
+	require.NoError(
+		t,
 		primaryTablet.VttabletProcess.WaitForTabletStatusesForTimeout(
-			[]string{"SERVING"}, tabletStatusTimeout),
+			[]string{"SERVING"}, tabletStatusTimeout,
+		),
 		"primary tablet did not recover to SERVING after disk unstall",
 	)
 
@@ -77,7 +85,7 @@ func assertHelperAlive(t *testing.T) {
 	t.Helper()
 	select {
 	case <-helperDied:
-		t.Fatalf("fuse_helper exited unexpectedly: %v", helperWaitErr)
+		require.Failf(t, "fuse_helper exited unexpectedly", "wait error: %v", helperWaitErr)
 	default:
 	}
 }
