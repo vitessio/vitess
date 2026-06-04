@@ -53,3 +53,10 @@ func TestRetryIntervalNonPositive(t *testing.T) {
 	assert.Equal(t, time.Duration(0), retryInterval(0))
 	assert.Equal(t, -time.Second, retryInterval(-time.Second))
 }
+
+// TestRetryIntervalTinyBase verifies that a positive base too small to jitter
+// (base/2 truncates to zero) is returned unchanged rather than panicking inside
+// rand.Int64N, which rejects a non-positive argument.
+func TestRetryIntervalTinyBase(t *testing.T) {
+	assert.Equal(t, time.Nanosecond, retryInterval(time.Nanosecond))
+}

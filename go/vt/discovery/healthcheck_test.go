@@ -376,7 +376,7 @@ func TestHealthCheckRetryDelayIsBounded(t *testing.T) {
 
 	// Send multiple consecutive stream errors to simulate a prolonged outage
 	// where the tablet is unreachable for many retry cycles.
-	const numErrors = 6 // with exponential backoff this would reach 320ms (10*2^5)
+	const numErrors = 8 // with exponential backoff the post-recovery sleep would reach ~1.28s (10ms*2^7)
 	for range numErrors {
 		fc.errCh <- errors.New("connection refused")
 		<-resultChan // drain the not-serving update
@@ -401,13 +401,14 @@ func TestHealthCheckRetryDelayIsBounded(t *testing.T) {
 	input <- shr
 
 	// The fixed retry delay (~10ms +/- jitter) rediscovers the tablet within a
-	// single cycle. The old exponential backoff would sleep ~320ms after
-	// numErrors failures (10ms * 2^5), so a regression that regrows the delay
-	// blows past this bound. The 5s arm only trips on a true hang.
+	// single cycle. The old exponential backoff would sleep ~1.28s after
+	// numErrors failures (10ms * 2^7), so the 400ms bound sits far above the fixed
+	// interval (no CI-timing flakiness) yet well below the backoff value, failing
+	// clearly if the delay regrows. The 5s arm only trips on a true hang.
 	select {
 	case result := <-resultChan:
 		assert.True(t, result.Serving, "tablet should be serving after recovery")
-		assert.Less(t, time.Since(start), 100*time.Millisecond,
+		assert.Less(t, time.Since(start), 400*time.Millisecond,
 			"rediscovery took too long after recovery; retry delay may be growing exponentially")
 	case <-time.After(5 * time.Second):
 		require.Fail(t, "tablet was not rediscovered after recovery")

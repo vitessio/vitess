@@ -333,11 +333,15 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 // the same instant, while never growing the interval the way exponential
 // backoff did. See #19894.
 func retryInterval(base time.Duration) time.Duration {
-	if base <= 0 {
+	// half is the jitter span passed to rand.Int64N, which panics on n <= 0. For
+	// a non-positive base, or one so small that base/2 truncates to zero (sub-2ns),
+	// there is no room to jitter, so return the base unchanged.
+	half := base / 2
+	if half <= 0 {
 		return base
 	}
 	// Spread uniformly within [base-base/4, base+base/4).
-	return base - base/4 + time.Duration(rand.Int64N(int64(base/2)))
+	return base - base/4 + time.Duration(rand.Int64N(int64(half)))
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
