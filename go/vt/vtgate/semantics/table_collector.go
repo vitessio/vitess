@@ -154,6 +154,10 @@ func (tc *tableCollector) visitAliasedTableExpr(node *sqlparser.AliasedTableExpr
 }
 
 func (tc *tableCollector) visitUnion(union *sqlparser.Union) error {
+	if unionHasValuesListArg(union) {
+		return vterrors.VT12001("VALUES list argument in UNION statements")
+	}
+
 	expanded, selectExprs := getColumnNames(union.GetColumns())
 	info := unionInfo{
 		isAuthoritative: expanded,
