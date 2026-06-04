@@ -61,3 +61,27 @@ func TestValuesStatementPlanning(t *testing.T) {
 		})
 	}
 }
+
+func TestValuesStatementPlanningRejectsSubqueries(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := vindexes.BuildVSchema(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"main": {Sharded: false},
+		},
+	}, sqlparser.NewTestParser())
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+	vw.Keyspace = vschema.Keyspaces["main"].Keyspace
+
+	tests := []string{
+		"values row((select sku from product limit 1))",
+		"select * from (values row((select sku from product limit 1))) as dt",
+	}
+
+	for _, query := range tests {
+		t.Run(query, func(t *testing.T) {
+			_, err := TestBuilder(query, vw, vw.CurrentDb())
+			require.ErrorContains(t, err, "VT12001: unsupported: subqueries in VALUES statements")
+		})
+	}
+}

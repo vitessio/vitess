@@ -36,6 +36,8 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		return &LockOnlyWithDualError{Node: node}
 	case *sqlparser.Union:
 		return checkUnion(node)
+	case *sqlparser.ValuesStatement:
+		return checkValuesStatement(node)
 	case *sqlparser.JSONTableExpr:
 		return &JSONTablesError{}
 	case *sqlparser.DerivedTable:
@@ -54,6 +56,25 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	}
 
+	return nil
+}
+
+func checkValuesStatement(values *sqlparser.ValuesStatement) error {
+	if len(values.Rows) == 0 {
+		return nil
+	}
+
+	foundSubquery := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			foundSubquery = true
+			return false, nil
+		}
+		return !foundSubquery, nil
+	}, values.Rows)
+	if foundSubquery {
+		return vterrors.VT12001("subqueries in VALUES statements")
+	}
 	return nil
 }
 

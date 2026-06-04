@@ -77,6 +77,9 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	if err != nil {
 		return nil, err
 	}
+	if statementHasValuesSubquery(stmt) {
+		return nil, vterrors.VT12001("subqueries in VALUES statements")
+	}
 	// Store the foreign key mode like we do for vcursor.
 	vw, isVw := vschema.(*vschemawrapper.VSchemaWrapper)
 	if isVw {
@@ -104,6 +107,9 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 
 // BuildFromStmt builds a plan based on the AST provided.
 func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, bindVarNeeds *sqlparser.BindVarNeeds, cfg dynamicconfig.DDL) (*engine.Plan, error) {
+	if statementHasValuesSubquery(stmt) {
+		return nil, vterrors.VT12001("subqueries in VALUES statements")
+	}
 	if err := checkDeniedSetVarHints(stmt, vschema); err != nil {
 		return nil, err
 	}
@@ -120,6 +126,33 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 		tablesUsed = planResult.tables
 	}
 	return engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed), nil
+}
+
+func statementHasValuesSubquery(stmt sqlparser.Statement) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if values, ok := node.(*sqlparser.ValuesStatement); ok {
+			found = valuesRowsHaveSubquery(values)
+		}
+		return !found, nil
+	}, stmt)
+	return found
+}
+
+func valuesRowsHaveSubquery(values *sqlparser.ValuesStatement) bool {
+	if len(values.Rows) == 0 {
+		return false
+	}
+
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			found = true
+			return false, nil
+		}
+		return !found, nil
+	}, values.Rows)
+	return found
 }
 
 func checkDeniedSetVarHints(stmt sqlparser.Statement, vschema plancontext.VSchema) error {

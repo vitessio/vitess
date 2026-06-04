@@ -578,6 +578,9 @@ func (tc *tableCollector) addValuesDerivedTable(
 	if len(values.Rows) == 0 && values.ListArg == "" {
 		return vterrors.VT12001("VALUES statement without rows in derived table")
 	}
+	if values.ListArg != "" && len(columns) == 0 {
+		return vterrors.VT12001("VALUES list argument in derived table requires column aliases")
+	}
 
 	size := valuesColumnCount(values, columns)
 	if len(columns) > 0 && len(values.Rows) > 0 && len(columns) != size {
