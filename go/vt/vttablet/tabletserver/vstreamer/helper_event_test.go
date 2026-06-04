@@ -330,7 +330,16 @@ func (ts *TestSpec) Init() {
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
+<<<<<<< HEAD
 	dropStatement := fmt.Sprintf("drop table if exists %s", strings.Join(ts.schema.TableNames(), ", "))
+||||||| parent of eb43df1839 (vstreamer: make `TestSpec.Close()` nil-safe (#20246))
+	dropStatement := "drop table if exists " + strings.Join(ts.schema.TableNames(), ", ")
+=======
+	if ts.schema == nil {
+		return
+	}
+	dropStatement := "drop table if exists " + strings.Join(ts.schema.TableNames(), ", ")
+>>>>>>> eb43df1839 (vstreamer: make `TestSpec.Close()` nil-safe (#20246))
 	execStatement(ts.t, dropStatement)
 }
 
