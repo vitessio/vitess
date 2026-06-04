@@ -84,8 +84,10 @@ var (
 	noScatter          bool
 	enableShardRouting bool
 
-	// healthCheckRetryDelay is the time to wait before retrying healthcheck
-	healthCheckRetryDelay = 2 * time.Millisecond
+	// healthCheckRetryDelay is the fixed interval between healthcheck reconnection
+	// attempts. Since it is now a steady-state interval rather than a backoff seed,
+	// it defaults to discovery's 5s instead of a few milliseconds.
+	healthCheckRetryDelay = discovery.DefaultHealthCheckRetryDelay
 	// healthCheckTimeout is the timeout on the RPC call to tablets
 	healthCheckTimeout = time.Minute
 
