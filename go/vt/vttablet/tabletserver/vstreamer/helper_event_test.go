@@ -327,8 +327,20 @@ func (ts *TestSpec) Init() {
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
+	if ts.schema == nil {
+		return
+	}
 	dropStatement := "drop table if exists " + strings.Join(ts.schema.TableNames(), ", ")
 	execStatement(ts.t, dropStatement)
+}
+
+// TestSpecCloseWithoutSchema verifies that Close() is safe to call when the
+// schema was never populated. Tests defer Close() before calling Init(), so a
+// panic inside Init() (for example when MySQL fails to start) runs Close() with
+// a nil schema; it must not panic and mask the original failure.
+func TestSpecCloseWithoutSchema(t *testing.T) {
+	ts := &TestSpec{t: t}
+	require.NotPanics(t, ts.Close)
 }
 
 func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[string]string) {
