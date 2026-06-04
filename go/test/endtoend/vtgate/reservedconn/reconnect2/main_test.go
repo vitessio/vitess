@@ -17,7 +17,6 @@ limitations under the License.
 package reservedconn
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -102,7 +101,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestTabletChange(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -122,7 +121,7 @@ func TestTabletChange(t *testing.T) {
 }
 
 func TestTabletChangeStreaming(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 

@@ -177,9 +177,7 @@ func testWithAutoSchemaFromChangeDir(t *testing.T) {
 			matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
 		}
 	}
-	if !matchFoundAfterAutoSchemaApply {
-		assert.Fail(t, "Auto schema is not consumed")
-	}
+	assert.True(t, matchFoundAfterAutoSchemaApply, "Auto schema is not consumed")
 	defer os.RemoveAll(path.Join(schemaChangeDirectory, keyspaceName))
 }
 

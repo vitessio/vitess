@@ -120,26 +120,18 @@ func TestResetSequence(t *testing.T) {
 		}},
 	}
 	qr, err := client.Execute("select next value from vitess_reset_seq", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	utils.MustMatch(t, &want, qr)
 
 	// Reset primaryship
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Ensure the next value skips previously cached values.
 	want.Rows[0][0] = sqltypes.NewInt64(4)
 	qr, err = client.Execute("select next value from vitess_reset_seq", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	utils.MustMatch(t, &want, qr)
 }

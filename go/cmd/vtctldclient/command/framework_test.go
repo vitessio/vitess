@@ -144,7 +144,7 @@ func NewFakeTablet(t *testing.T, ts *topo.Server, cell string, uid uint32, table
 	delete(tablet.PortMap, "start_http_server")
 	_, force := tablet.PortMap["force_init"]
 	delete(tablet.PortMap, "force_init")
-	if err := ts.InitTablet(context.Background(), tablet, force, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := ts.InitTablet(t.Context(), tablet, force, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		require.FailNow(t, "cannot create tablet %v: %v", uid, err)
 	}
 
@@ -201,7 +201,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, ts *topo.Server) {
 	// Create a test tm on that port, and re-read the record
 	// (it has new ports and IP).
 	ft.TM = &tabletmanager.TabletManager{
-		BatchCtx:            context.Background(),
+		BatchCtx:            t.Context(),
 		TopoServer:          ts,
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
@@ -225,7 +225,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, ts *topo.Server) {
 	step := 10 * time.Millisecond
 	c := tmclient.NewTabletManagerClient()
 	for timeout >= 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		err := c.Ping(ctx, ft.TM.Tablet())
 		cancel()
 		if err == nil {

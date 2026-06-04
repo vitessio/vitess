@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -31,7 +32,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -358,7 +358,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat-interval", "250ms",
 			"--heartbeat-on-demand-duration", "5s",
 			"--migration-check-interval", "3s",
-			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{}
 
@@ -466,7 +465,7 @@ func waitForReplicaCatchup(t *testing.T, ctx context.Context, replica *cluster.V
 }
 
 func waitForReplicationCatchup(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	primaryPos := getTabletPosition(t, primary)
 	var wg sync.WaitGroup
@@ -837,9 +836,9 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 					// are unsopported and can be rejected.
 					onUpdateAction = sqlparser.NoAction
 				}
-				b.WriteString(fmt.Sprintf(sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction]))
+				fmt.Fprintf(&b, sql, referenceActionMap[onDeleteAction], referenceActionMap[onUpdateAction])
 			default:
-				b.WriteString(fmt.Sprintf(sql, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction]))
+				fmt.Fprintf(&b, sql, referenceActionMap[tcase.onDeleteAction], referenceActionMap[tcase.onUpdateAction])
 			}
 			b.WriteString(";")
 		}
@@ -944,7 +943,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 // waitForTable waits until table is seen in VTGate
 func waitForTable(t *testing.T, tableName string, conn *mysql.Conn) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -977,7 +976,7 @@ func checkTable(t *testing.T, showTableName string, expectHint string) {
 // checkTablesCount checks the number of tables in the given tablet
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%s';`, showTableName)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	rowcount := 0
 	for {

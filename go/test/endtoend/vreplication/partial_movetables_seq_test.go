@@ -230,10 +230,9 @@ func (tc *vrepTestCase) setupKeyspaces(keyspaces []string) {
 
 func (tc *vrepTestCase) setupKeyspace(ks *keyspace) {
 	t := tc.t
-	if _, err := tc.vc.AddKeyspace(t, []*Cell{tc.vc.Cells["zone1"]}, ks.name, strings.Join(ks.shards, ","),
-		ks.vschema, ks.schema, 0, 0, int(ks.baseID), nil); err != nil {
-		t.Fatal(err)
-	}
+	_, err := tc.vc.AddKeyspace(t, []*Cell{tc.vc.Cells["zone1"]}, ks.name, strings.Join(ks.shards, ","),
+		ks.vschema, ks.schema, 0, 0, int(ks.baseID), nil)
+	require.NoError(t, err)
 	if tc.vtgate == nil {
 		defaultCellName := "zone1"
 		defaultCell := tc.vc.Cells[defaultCellName]

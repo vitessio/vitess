@@ -98,17 +98,17 @@ func ElectNewPrimary(
 		case opts.NewPrimaryAlias != nil:
 			// If newPrimaryAlias is provided, then that is the only valid tablet, even if it is not of type replica or in a different cell.
 			if !topoproto.TabletAliasEqual(tablet.Alias, opts.NewPrimaryAlias) {
-				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v does not match the new primary alias provided", topoproto.TabletAliasString(tablet.Alias)))
+				fmt.Fprintf(&reasonsToInvalidate, "\n%v does not match the new primary alias provided", topoproto.TabletAliasString(tablet.Alias))
 				continue
 			}
 		case !opts.AllowCrossCellPromotion && primaryCell != "" && tablet.Alias.Cell != primaryCell:
-			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not in the same cell as the previous primary", topoproto.TabletAliasString(tablet.Alias)))
+			fmt.Fprintf(&reasonsToInvalidate, "\n%v is not in the same cell as the previous primary", topoproto.TabletAliasString(tablet.Alias))
 			continue
 		case opts.AvoidPrimaryAlias != nil && topoproto.TabletAliasEqual(tablet.Alias, opts.AvoidPrimaryAlias):
-			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias)))
+			fmt.Fprintf(&reasonsToInvalidate, "\n%v matches the primary alias to avoid", topoproto.TabletAliasString(tablet.Alias))
 			continue
 		case tablet.Type != topodatapb.TabletType_REPLICA:
-			reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is not a replica", topoproto.TabletAliasString(tablet.Alias)))
+			fmt.Fprintf(&reasonsToInvalidate, "\n%v is not a replica", topoproto.TabletAliasString(tablet.Alias))
 			continue
 		}
 
@@ -132,16 +132,16 @@ func ElectNewPrimary(
 			defer mu.Unlock()
 			if err == nil && (opts.TolerableReplLag == 0 || opts.TolerableReplLag >= replLag) {
 				if takingBackup {
-					reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v is taking a backup", topoproto.TabletAliasString(tablet.Alias)))
+					fmt.Fprintf(&reasonsToInvalidate, "\n%v is taking a backup", topoproto.TabletAliasString(tablet.Alias))
 				} else if replUnknown {
-					reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v position known but unknown replication status", topoproto.TabletAliasString(tablet.Alias)))
+					fmt.Fprintf(&reasonsToInvalidate, "\n%v position known but unknown replication status", topoproto.TabletAliasString(tablet.Alias))
 				} else {
 					validTablets = append(validTablets, tb)
 					tabletPositions = append(tabletPositions, pos)
 					innodbBufferPool = append(innodbBufferPool, innodbBufferPoolData[topoproto.TabletAliasString(tb.Alias)])
 				}
 			} else {
-				reasonsToInvalidate.WriteString(fmt.Sprintf("\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag))
+				fmt.Fprintf(&reasonsToInvalidate, "\n%v has %v replication lag which is more than the tolerable amount", topoproto.TabletAliasString(tablet.Alias), replLag)
 			}
 			return err
 		})

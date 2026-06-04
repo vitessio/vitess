@@ -1,7 +1,6 @@
 package dynamic
 
 import (
-	"context"
 	"encoding/base32"
 	"encoding/base64"
 	"testing"
@@ -62,7 +61,7 @@ func TestClusterFromString(t *testing.T) {
 
 			enc := tt.encoder([]byte(tt.s))
 
-			c, id, err := ClusterFromString(context.Background(), enc)
+			c, id, err := ClusterFromString(t.Context(), enc)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Nil(t, c, "when err != nil, cluster must be nil")

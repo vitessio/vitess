@@ -17,10 +17,9 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -89,7 +88,7 @@ func TestHashCreateVindex(t *testing.T) {
 }
 
 func TestHashMap(t *testing.T) {
-	got, err := hashTest.Map(context.Background(), nil, []sqltypes.Value{
+	got, err := hashTest.Map(t.Context(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -120,29 +119,20 @@ func TestHashMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\xf7}H\xaaݡ\xf1\xbb")),
 		key.DestinationKeyspaceID([]byte("\x95\xf8\xa5\xe5\xdd1\xd9\x00")),
 	}
-	if !reflect.DeepEqual(got, want) {
-		for i, v := range got {
-			if v.String() != want[i].String() {
-				t.Errorf("Map() %d: %#v, want %#v", i, v, want[i])
-			}
-		}
+	for i, v := range got {
+		assert.Equalf(t, want[i].String(), v.String(), "Map() %d: %#v, want %#v", i, v, want[i])
 	}
 }
 
 func TestHashVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
 	ksids := [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x16k@\xb4J\xbaK\xd6")}
-	got, err := hashTest.Verify(context.Background(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []bool{true, false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
-	}
+	got, err := hashTest.Verify(t.Context(), nil, ids, ksids)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false}, got, "binaryMD5.Verify")
 
 	// Failure test
-	_, err = hashTest.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = hashTest.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }
 
@@ -178,15 +168,10 @@ func TestHashReverseMap(t *testing.T) {
 		sqltypes.NewUint64(9223372036854775807),  // 2^63 - 1
 		sqltypes.NewUint64(uint64(negmax)),       // - 2^63
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReverseMap(): %v, want %v", got, want)
-	}
+	assert.Equal(t, want, got, "ReverseMap()")
 }
 
 func TestHashReverseMapNeg(t *testing.T) {
 	_, err := hashTest.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6\x16k@\xb4J\xbaK\xd6")})
-	want := "invalid keyspace id: 166b40b44aba4bd6166b40b44aba4bd6"
-	if err.Error() != want {
-		t.Error(err)
-	}
+	require.EqualError(t, err, "invalid keyspace id: 166b40b44aba4bd6166b40b44aba4bd6")
 }

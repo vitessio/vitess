@@ -16,7 +16,6 @@ limitations under the License.
 package primary
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -85,7 +84,6 @@ func TestMain(m *testing.M) {
 		// Set extra tablet args for lock timeout
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--lock-tables-timeout", "5s",
-			"--watch-replication-stream",
 			"--enable-replication-reporter",
 		}
 
@@ -166,7 +164,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	// Capture the current PTS.
-	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), &replicaTablet, 1)
+	shrs, err := clusterInstance.StreamTabletHealth(t.Context(), &replicaTablet, 1)
 	require.NoError(t, err)
 
 	streamHealthRes1 := shrs[0]
@@ -190,7 +188,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make sure that the PTS did not change
-	shrs, err = clusterInstance.StreamTabletHealth(context.Background(), &replicaTablet, 1)
+	shrs, err = clusterInstance.StreamTabletHealth(t.Context(), &replicaTablet, 1)
 	require.NoError(t, err)
 
 	streamHealthRes2 := shrs[0]

@@ -89,7 +89,7 @@ func TestVStreamSkew(t *testing.T) {
 	for idx, tcase := range tcases {
 		t.Run("", func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
 
 				ks := fmt.Sprintf("TestVStreamSkew-%d", idx)
@@ -297,6 +297,14 @@ func TestVStreamEvents(t *testing.T) {
 	require.ErrorIs(t, vterrors.UnwrapAll(err), context.Canceled)
 
 	require.ElementsMatch(t, []*binlogdatapb.VStreamResponse{want1, want2}, receivedEvents)
+
+	// Confirm that the VStream request sent to the tablet had NoTimeouts=true so that the
+	// MAX_EXECUTION_TIME query hint is not added to copy/sync queries (see issue #20039).
+	require.NotEmpty(t, sbc0.VStreamRequests)
+	for _, req := range sbc0.VStreamRequests {
+		require.NotNil(t, req.Options)
+		require.True(t, req.Options.NoTimeouts, "expected VStream request Options.NoTimeouts to be true")
+	}
 }
 
 func BenchmarkVStreamEvents(b *testing.B) {
@@ -435,7 +443,7 @@ func TestVStreamChunks(t *testing.T) {
 		switch events[0].Type {
 		case binlogdatapb.VEventType_ROW:
 			if doneCounting {
-				t.Errorf("Unexpected event, only expecting DDL: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, only expecting DDL: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			rowEncountered = true
@@ -443,20 +451,20 @@ func TestVStreamChunks(t *testing.T) {
 
 		case binlogdatapb.VEventType_COMMIT:
 			if !rowEncountered {
-				t.Errorf("Unexpected event, COMMIT after non-rows: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, COMMIT after non-rows: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			doneCounting = true
 
 		case binlogdatapb.VEventType_DDL:
 			if !doneCounting && rowEncountered {
-				t.Errorf("Unexpected event, DDL during ROW events: %v", events[0])
+				assert.Failf(t, "unexpected event", "Unexpected event, DDL during ROW events: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			ddlCount += 1
 
 		default:
-			t.Errorf("Unexpected event: %v", events[0])
+			assert.Failf(t, "unexpected event", "Unexpected event: %v", events[0])
 			return fmt.Errorf("unexpected event: %v", events[0])
 		}
 
@@ -1770,11 +1778,9 @@ func TestResolveVStreamParams(t *testing.T) {
 		}},
 	}
 	for _, tcase := range testcases {
-		vgtid, filter, flags, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
+		vgtid, filter, flags, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
 		if tcase.err != "" {
-			if err == nil || !strings.Contains(err.Error(), tcase.err) {
-				t.Errorf("resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
-			}
+			assert.ErrorContainsf(t, err, tcase.err, "resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
 			continue
 		}
 		require.NoError(t, err, tcase.input)
@@ -1815,10 +1821,10 @@ func TestResolveVStreamParams(t *testing.T) {
 		input := &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{tcase.input},
 		}
-		vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
+		vgtid, _, _, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, input, nil, nil)
 		require.NoError(t, err, tcase.input)
 		if got, expectTestVStreamShardNumber := len(vgtid.ShardGtids), 8; expectTestVStreamShardNumber >= got {
-			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
+			assert.Failf(t, "too few shards", "len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
 		}
 		for _, s := range vgtid.ShardGtids {
 			require.Equal(t, tcase.input.Gtid, s.Gtid)
@@ -1835,7 +1841,7 @@ func TestResolveVStreamParams(t *testing.T) {
 					Gtid:     "current",
 				}},
 			}
-			_, _, flags2, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, vgtid, nil, flags)
+			_, _, flags2, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, vgtid, nil, flags)
 			require.NoError(t, err)
 			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
 		})

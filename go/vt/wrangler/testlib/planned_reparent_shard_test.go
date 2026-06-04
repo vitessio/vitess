@@ -61,7 +61,7 @@ func TestPlannedReparentShardNoPrimaryProvided(t *testing.T) {
 	oldPrimary := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_PRIMARY, nil)
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
+	reparenttestutil.SetKeyspaceDurability(t.Context(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
@@ -177,7 +177,7 @@ func TestPlannedReparentShardNoError(t *testing.T) {
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
+	reparenttestutil.SetKeyspaceDurability(t.Context(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
@@ -313,7 +313,7 @@ func TestPlannedReparentInitialization(t *testing.T) {
 	newPrimary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	goodReplica1 := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
+	reparenttestutil.SetKeyspaceDurability(t.Context(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// new primary
 	newPrimary.FakeMysqlDaemon.ReadOnly = true
@@ -911,7 +911,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	// After the first call to PRS has failed, we don't know whether `SetReplicationSource` RPC has succeeded on the oldPrimary or not.
 	// This causes the test to become non-deterministic. To prevent this, we call `SetReplicationSource` on the oldPrimary again, and make sure it has succeeded.
 	// We also wait until the oldPrimary has demoted itself to a replica type.
-	err = wr.TabletManagerClient().SetReplicationSource(context.Background(), oldPrimary.Tablet, newPrimary.Tablet.Alias, 0, "", false, false, 0)
+	err = wr.TabletManagerClient().SetReplicationSource(t.Context(), oldPrimary.Tablet, newPrimary.Tablet.Alias, 0, "", false, false, 0)
 	require.NoError(t, err)
 	waitForTabletType(t, wr, oldPrimary.Tablet.Alias, topodatapb.TabletType_REPLICA)
 

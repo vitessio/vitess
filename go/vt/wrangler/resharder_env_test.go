@@ -24,6 +24,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -72,7 +73,7 @@ func getPartition(t *testing.T, shards []string) *topodatapb.SrvKeyspace_Keyspac
 }
 
 func initTopo(t *testing.T, topo *topo.Server, keyspace string, sources, targets, cells []string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	srvKeyspace := &topodatapb.SrvKeyspace{
 		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{},
 	}
@@ -248,7 +249,7 @@ func (tmc *testResharderTMClient) verifyQueries(t *testing.T) {
 			for _, qr := range qrs {
 				list = append(list, qr.query)
 			}
-			t.Errorf("tablet %v: following queries were not run during the test: \n%v", tabletID, strings.Join(list, "\n"))
+			assert.Failf(t, "unexecuted queries", "tablet %v: following queries were not run during the test: \n%v", tabletID, strings.Join(list, "\n"))
 		}
 	}
 }

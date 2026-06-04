@@ -18,6 +18,8 @@ package metro
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMetroHash(t *testing.T) {
@@ -35,13 +37,9 @@ func TestMetroHash(t *testing.T) {
 	var metro Metro128
 	metro.Init(0)
 	_, _ = metro.Write([]byte(TestString))
-	if TestSeed0 != metro.Sum128() {
-		t.Errorf("bad hash (seed=0)")
-	}
+	assert.Equal(t, TestSeed0, metro.Sum128(), "bad hash (seed=0)")
 
 	metro.Init(1)
 	_, _ = metro.Write([]byte(TestString))
-	if TestSeed1 != metro.Sum128() {
-		t.Errorf("bad hash (seed=1)")
-	}
+	assert.Equal(t, TestSeed1, metro.Sum128(), "bad hash (seed=1)")
 }

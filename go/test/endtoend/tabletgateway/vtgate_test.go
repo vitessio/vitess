@@ -167,7 +167,7 @@ func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
 			return
 		}
 		if i > maxRetries {
-			t.Fatalf("retried %d times and failed", maxRetries)
+			require.Failf(t, "retry exhausted", "retried %d times and failed", maxRetries)
 			return
 		}
 		i++

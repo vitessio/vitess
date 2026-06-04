@@ -152,6 +152,28 @@ func TestEqualFilterOnScatter(t *testing.T) {
 	}
 }
 
+// TestNullPredicateFilterOnScatter ensures that a scatter HAVING clause whose
+// predicate evaluates to NULL for some groups does not error out the query. The
+// streaming (OLAP) path used to error on a NULL predicate result instead of
+// treating it as false, aborting the whole stream.
+func TestNullPredicateFilterOnScatter(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',null), (2,'a',null), (3,'b',10), (4,'b',20)")
+
+	workloads := []string{"oltp", "olap"}
+	for _, workload := range workloads {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, fmt.Sprintf("set workload = '%s'", workload))
+
+			// Group 'a' has sum(val2) = NULL, so the predicate evaluates to NULL
+			// and the group is filtered out. Group 'b' has sum(val2) = 30.
+			mcmp.AssertMatches("select val1, sum(val2) as s from aggr_test group by val1 having sum(val2) > 5 order by val1", `[[VARCHAR("b") DECIMAL(30)]]`)
+		})
+	}
+}
+
 func TestAggrOnJoin(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()

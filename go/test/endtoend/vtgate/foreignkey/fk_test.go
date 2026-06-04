@@ -183,11 +183,11 @@ func TestUpdateWithFK(t *testing.T) {
 
 // TestVstreamForFKBinLog tests that dml queries with fks are written with child row first approach in the binary logs.
 func TestVstreamForFKBinLog(t *testing.T) {
-	vtgateConn, err := cluster.DialVTGate(context.Background(), t.Name(), vtgateGrpcAddress, "fk_user", "")
+	vtgateConn, err := cluster.DialVTGate(t.Context(), t.Name(), vtgateGrpcAddress, "fk_user", "")
 	require.NoError(t, err)
 	defer vtgateConn.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	ch := make(chan *binlogdatapb.VEvent)
@@ -277,7 +277,9 @@ func runVStream(t *testing.T, ctx context.Context, ch chan *binlogdatapb.VEvent,
 			if err == io.EOF || ctx.Err() != nil {
 				return
 			}
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 
 			for _, ev := range evs {
 				if ev.Type == binlogdatapb.VEventType_ROW {
@@ -295,7 +297,7 @@ func drainEvents(t *testing.T, ch chan *binlogdatapb.VEvent, count int) []string
 		case re := <-ch:
 			rowEvents = append(rowEvents, re.RowEvent.String())
 		case <-time.After(10 * time.Second):
-			t.Fatalf("timeout waiting for event number: %d", i+1)
+			require.Failf(t, "timeout", "timeout waiting for event number: %d", i+1)
 		}
 	}
 	return rowEvents

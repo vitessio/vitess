@@ -432,7 +432,7 @@ func assertStepsEqual(t *testing.T, walk, expected []step) {
 		t.Run(fmt.Sprintf("step %d", i), func(t *testing.T) {
 			t.Helper()
 			if expectedSize <= i {
-				t.Fatalf("❌️ - Expected less elements %v", walk[i:])
+				require.Failf(t, "unexpected extra elements", "❌️ - Expected less elements %v", walk[i:])
 			} else {
 				e := expected[i]
 				if reflect.DeepEqual(e, step) {
@@ -450,13 +450,13 @@ func assertStepsEqual(t *testing.T, walk, expected []step) {
 							fmt.Println(line)
 						}
 					}
-					t.Fatalf("❌️ - Expected: %s Got: %s\n", e.String(), step.String())
+					require.Failf(t, "rewrite step mismatch", "❌️ - Expected: %s Got: %s\n", e.String(), step.String())
 				}
 			}
 		})
 	}
 	walkSize := len(walk)
 	if expectedSize > walkSize {
-		t.Errorf("❌️ - Expected more elements %v", expected[walkSize:])
+		assert.Failf(t, "missing expected elements", "❌️ - Expected more elements %v", expected[walkSize:])
 	}
 }

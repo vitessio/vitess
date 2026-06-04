@@ -17,12 +17,12 @@ limitations under the License.
 package kill
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -31,7 +31,7 @@ import (
 
 // TestKillConnection kills its own connection and checks the error message received.
 func TestKillOwnConnection(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -45,11 +45,11 @@ func TestKillOwnConnection(t *testing.T) {
 
 // TestKillDifferentConnection kills different connection and check relevant error messages.
 func TestKillDifferentConnection(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	killConn, err := mysql.Connect(context.Background(), &vtParams)
+	killConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
 
@@ -68,7 +68,7 @@ func TestKillDifferentConnection(t *testing.T) {
 
 // TestKillOwnQuery kills the kill statement itself
 func TestKillOwnQuery(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -83,11 +83,11 @@ func TestKillDifferentConnectionQuery(t *testing.T) {
 	setupData(t, false)
 	defer dropData(t)
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	killConn, err := mysql.Connect(context.Background(), &vtParams)
+	killConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
 
@@ -111,7 +111,7 @@ func TestKillDifferentConnectionQuery(t *testing.T) {
 			_, err = utils.ExecAllowError(t, killConn, fmt.Sprintf("kill query %d", conn.ConnectionID))
 			require.NoError(t, err)
 		case <-time.After(5 * time.Second):
-			t.Fatal("test did not complete in 5 seconds.")
+			require.Fail(t, "test did not complete in 5 seconds.")
 		}
 	}
 }
@@ -148,14 +148,14 @@ func TestKillOnHungQuery(t *testing.T) {
 }
 
 func testHungQuery(t *testing.T, execFunc func(*mysql.Conn) error, killFunc func(*mysql.Conn, *mysql.Conn), errMsgs ...string) {
-	killConn, err := mysql.Connect(context.Background(), &vtParams)
+	killConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
 
 	utils.Exec(t, killConn, "begin")
 	utils.Exec(t, killConn, "insert into test(id, msg, extra) values (1, 'a', 'e')")
 
-	hungConn, err := mysql.Connect(context.Background(), &vtParams)
+	hungConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer hungConn.Close()
 
@@ -199,12 +199,12 @@ func TestKillStmtOnHugeData(t *testing.T) {
 }
 
 func testHugeData(t *testing.T, workload string, execFunc func(*mysql.Conn) error, killFunc func(*mysql.Conn, *mysql.Conn), errMsgs ...string) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 	utils.Exec(t, conn, "set workload = "+workload)
 
-	killConn, err := mysql.Connect(context.Background(), &vtParams)
+	killConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer killConn.Close()
 	utils.Exec(t, killConn, "set workload = "+workload)
@@ -227,7 +227,7 @@ func runQueryInGoRoutineAndCheckError(t *testing.T, conn *mysql.Conn, killConn *
 				return
 			}
 		}
-		require.Failf(t, "error message does not match", "%v does not contain any of %v", err.Error(), errMsgs)
+		assert.Failf(t, "error message does not match", "%v does not contain any of %v", err.Error(), errMsgs)
 		done <- true
 	}()
 
@@ -239,7 +239,7 @@ func runQueryInGoRoutineAndCheckError(t *testing.T, conn *mysql.Conn, killConn *
 		case <-time.After(20 * time.Millisecond):
 			killFunc(conn, killConn)
 		case <-totalTime:
-			t.Fatal("test did not complete in 5 seconds.")
+			require.Fail(t, "test did not complete in 5 seconds.")
 		}
 	}
 }

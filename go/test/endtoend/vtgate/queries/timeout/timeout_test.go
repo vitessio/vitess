@@ -17,7 +17,6 @@ limitations under the License.
 package misc
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -165,7 +164,7 @@ func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=0 */ sleep(5) from dual")
 
 	// open second session
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	conn2, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn2.Close()
 

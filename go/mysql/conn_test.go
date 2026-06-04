@@ -82,7 +82,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 
@@ -91,14 +91,14 @@ func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
 	copy(dataWithHeader[PacketHeaderSize:], data)
 
 	if err := cConn.writePacket(dataWithHeader); err != nil {
-		t.Fatalf("writePacket failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
 func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 	cConn.startWriterBuffering()
@@ -107,21 +107,21 @@ func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
 	buf, pos := cConn.startEphemeralPacketWithHeader(len(data))
 	copy(buf[pos:], data)
 	if err := cConn.writeEphemeralPacket(); err != nil {
-		t.Fatalf("writeEphemeralPacket(false) failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
 func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
-			t.Fatalf("%v", x)
+			require.Failf(t, "panic recovered", "%v", x)
 		}
 	}()
 
 	buf, pos := cConn.startEphemeralPacketWithHeader(len(data))
 	copy(buf[pos:], data)
 	if err := cConn.writeEphemeralPacket(); err != nil {
-		t.Fatalf("writeEphemeralPacket(true) failed: %v", err)
+		require.NoError(t, err)
 	}
 }
 
@@ -140,7 +140,7 @@ func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 
 	received, err := read()
 	if err != nil || !bytes.Equal(data, received) {
-		t.Fatalf("ReadPacket failed: %v %v", received, err)
+		require.Failf(t, "ReadPacket failed", "ReadPacket failed: %v %v", received, err)
 	}
 	wg.Wait()
 }
@@ -784,7 +784,7 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		_, _, isInt := readLenEncInt(bytes, 0)
 		isEOF := cConn.isEOFPacket(bytes)
 		if (isInt && isEOF) || (!isInt && !isEOF) {
-			t.Fatalf("0xfe bytestring is EOF xor Int. Bytes %v", bytes)
+			require.Failf(t, "0xfe bytestring should be EOF xor Int", "0xfe bytestring is EOF xor Int. Bytes %v", bytes)
 		}
 	}
 }
@@ -944,6 +944,47 @@ func TestMultiStatement(t *testing.T) {
 			require.Nil(t, data)
 		})
 	}
+}
+
+type slowQueryMultiHandler struct {
+	testRun
+}
+
+func (h slowQueryMultiHandler) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	if err := callback(sqltypes.QueryResponse{QueryResult: selectRowsResult}, true, true); err != nil {
+		return err
+	}
+	c.StatusFlags |= ServerQueryWasSlow
+	c.SetPendingMultiResultStatusFlags(c.StatusFlags)
+	c.StatusFlags &^= ServerQueryWasSlow
+	return callback(sqltypes.QueryResponse{QueryResult: &sqltypes.Result{}}, false, true)
+}
+
+func TestMultiStatementUsesCurrentStatusFlagsForOKOnlyResults(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.multiQuery = true
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	err := cConn.WriteComQuery("select 1; set autocommit = 1")
+	require.NoError(t, err)
+
+	res := sConn.handleNextCommand(slowQueryMultiHandler{})
+	require.True(t, res)
+
+	data, more, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotZero(t, data.StatusFlags&ServerQueryWasSlow)
+
+	data, more, _, err = cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	assert.Zero(t, data.StatusFlags&ServerQueryWasSlow)
 }
 
 func TestMultiStatementOnSplitError(t *testing.T) {
@@ -1188,7 +1229,7 @@ func randSeq(n int) string {
 func TestPrepareAndExecute(t *testing.T) {
 	// this test starts a lot of clients that all send prepared statement parameter values
 	// and check that the handler received the correct input
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	for i := range 100 {
 		startGoRoutine(ctx, t, fmt.Sprintf("%d:%s", i, randSeq(i)))
@@ -1219,21 +1260,35 @@ func startGoRoutine(ctx context.Context, t *testing.T, s string) {
 		mockData := preparePacket(t, sql)
 
 		err := cConn.writePacket(mockData)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		handler := &testRun{paramCounts: 1}
 
 		ok := sConn.handleNextCommand(handler)
-		require.True(t, ok, "error handling command for id: %s", s)
+		if !assert.True(t, ok, "error handling command for id: %s", s) {
+			return
+		}
 
 		prepareData, ok := sConn.PrepareData[sConn.StatementID]
-		require.True(t, ok, "prepare data not found for id: %d", sConn.StatementID)
-		require.Equal(t, uint16(1), prepareData.ParamsCount)
-		require.NotNil(t, prepareData.BindVars)
+		if !assert.True(t, ok, "prepare data not found for id: %d", sConn.StatementID) {
+			return
+		}
+		if !assert.Equal(t, uint16(1), prepareData.ParamsCount) {
+			return
+		}
+		if !assert.NotNil(t, prepareData.BindVars) {
+			return
+		}
 
 		resp, err := cConn.ReadPacket()
-		require.NoError(t, err)
-		require.EqualValues(t, 0, resp[0])
+		if !assert.NoError(t, err) {
+			return
+		}
+		if !assert.EqualValues(t, 0, resp[0]) {
+			return
+		}
 
 		for count := 0; ; count++ {
 			select {
@@ -1268,6 +1323,64 @@ func createSendLongDataPacket(stmtID uint32, paramID uint16, data []byte) []byte
 	packet = append(packet, paramIDBinary...) // append param ID
 	packet = append(packet, data...)          // append data
 	return packet
+}
+
+func createComStmtResetPacket(stmtID uint32) []byte {
+	packet := []byte{0, 0, 0, 0, ComStmtReset, 0, 0, 0, 0}
+	binary.LittleEndian.PutUint32(packet[5:], stmtID)
+	return packet
+}
+
+type slowQueryTestHandler struct {
+	testRun
+	queryResults map[string]*sqltypes.Result
+	slowQueries  map[string]bool
+}
+
+func (h slowQueryTestHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	query = strings.TrimSpace(query)
+	query = strings.TrimSuffix(query, ";")
+	query = strings.TrimSpace(query)
+	result, ok := h.queryResults[query]
+	if !ok {
+		return fmt.Errorf("unexpected query: %s", query)
+	}
+	if h.slowQueries[query] {
+		c.StatusFlags |= ServerQueryWasSlow
+	} else {
+		c.StatusFlags &^= ServerQueryWasSlow
+	}
+	return callback(result)
+}
+
+func (h slowQueryTestHandler) ComQueryMulti(c *Conn, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) error {
+	queries, err := h.Env().Parser().SplitStatementToPieces(sql)
+	if err != nil {
+		return err
+	}
+	if len(queries) == 0 {
+		return sqlerror.NewSQLErrorFromError(sqlparser.ErrEmpty)
+	}
+	for i, query := range queries {
+		firstPacket := true
+		err = h.ComQuery(c, query, func(result *sqltypes.Result) error {
+			err = callback(sqltypes.QueryResponse{QueryResult: result}, i < len(queries)-1, firstPacket)
+			firstPacket = false
+			return err
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (h slowQueryTestHandler) WarningCount(*Conn) uint16 {
+	return 0
+}
+
+func (h slowQueryTestHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
 }
 
 type testRun struct {
@@ -1439,4 +1552,128 @@ func TestWritePacketHeader(t *testing.T) {
 
 		assert.Equal(t, uint8(3), sConn.sequence)
 	})
+}
+
+func TestMultiQueryProtocolUsesCurrentSlowFlagForOKOnlyStatements(t *testing.T) {
+	testCases := []struct {
+		name       string
+		firstSlow  bool
+		secondSlow bool
+	}{
+		{name: "slow-then-fast", firstSlow: true, secondSlow: false},
+		{name: "fast-then-slow", firstSlow: false, secondSlow: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, sConn, cConn := createSocketPair(t)
+			sConn.multiQuery = true
+			sConn.Capabilities |= CapabilityClientMultiStatements
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
+
+			handler := slowQueryTestHandler{
+				queryResults: map[string]*sqltypes.Result{
+					"select 1":            selectRowsResult,
+					"update t set id = 2": {RowsAffected: 1},
+				},
+				slowQueries: map[string]bool{
+					"select 1":            tc.firstSlow,
+					"update t set id = 2": tc.secondSlow,
+				},
+			}
+
+			err := cConn.WriteComQuery("select 1; update t set id = 2")
+			require.NoError(t, err)
+			require.True(t, sConn.handleNextCommand(handler))
+
+			result, more, _, err := cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.True(t, more)
+			assert.Equal(t, tc.firstSlow, result.StatusFlags&ServerQueryWasSlow != 0)
+
+			result, more, _, err = cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.False(t, more)
+			assert.Equal(t, tc.secondSlow, result.StatusFlags&ServerQueryWasSlow != 0)
+			assert.Zero(t, sConn.StatusFlags&ServerQueryWasSlow)
+		})
+	}
+}
+
+func TestQueryWasSlowFlagDoesNotLeakToLaterCommands(t *testing.T) {
+	testCases := []struct {
+		name          string
+		prepareServer func(*Conn)
+		writeCommand  func(*Conn) error
+	}{
+		{
+			name: "com_ping",
+			prepareServer: func(sConn *Conn) {
+				sConn.listener = &Listener{}
+			},
+			writeCommand: func(cConn *Conn) error {
+				cConn.sequence = 0
+				return cConn.writePacket([]byte{0, 0, 0, 0, ComPing})
+			},
+		},
+		{
+			name: "com_stmt_reset",
+			prepareServer: func(sConn *Conn) {
+				sConn.PrepareData[1] = &PrepareData{
+					StatementID: 1,
+					ParamsCount: 1,
+					BindVars:    map[string]*querypb.BindVariable{"v1": nil},
+				}
+			},
+			writeCommand: func(cConn *Conn) error {
+				cConn.sequence = 0
+				return cConn.writePacket(createComStmtResetPacket(1))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			listener, sConn, cConn := createSocketPair(t)
+			defer func() {
+				listener.Close()
+				sConn.Close()
+				cConn.Close()
+			}()
+
+			handler := slowQueryTestHandler{
+				queryResults: map[string]*sqltypes.Result{
+					"select 1": selectRowsResult,
+				},
+				slowQueries: map[string]bool{
+					"select 1": true,
+				},
+			}
+
+			err := cConn.WriteComQuery("select 1")
+			require.NoError(t, err)
+			require.True(t, sConn.handleNextCommand(handler))
+
+			result, more, _, err := cConn.ReadQueryResult(100, true)
+			require.NoError(t, err)
+			require.False(t, more)
+			assert.NotZero(t, result.StatusFlags&ServerQueryWasSlow)
+			assert.Zero(t, sConn.StatusFlags&ServerQueryWasSlow)
+
+			tc.prepareServer(sConn)
+			err = tc.writeCommand(cConn)
+			require.NoError(t, err)
+			require.True(t, sConn.handleNextCommand(handler))
+
+			data, err := cConn.ReadPacket()
+			require.NoError(t, err)
+			var ok PacketOK
+			require.NoError(t, cConn.parseOKPacket(&ok, data))
+			assert.Zero(t, ok.statusFlags&ServerQueryWasSlow)
+		})
+	}
 }

@@ -23,13 +23,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -273,7 +273,7 @@ func TestCreateVReplicationWorkflow(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+					require.Failf(t, "panic in test", "Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
 				}
 			}()
 
@@ -931,12 +931,15 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 	notCopying := sqltypes.MakeTestResult(copyStatusFields)
 	copying := sqltypes.MakeTestResult(copyStatusFields, "1")
 
+	invalidState := binlogdatapb.VReplicationWorkflowState(9999)
+
 	tests := []struct {
 		name                     string
 		request                  *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest
 		query                    string
 		isCopying                bool
 		initiallyNonEmptyMessage bool
+		wantErr                  string
 	}{
 		{
 			name: "update cells",
@@ -1064,6 +1067,16 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', message = '', options = json_set(options, '$.config', json_object(), '$.config."password"', 'secret', '$.config."user"', 'admin') where id in (%d)`,
 				keyspace, shard, "zone2", vreplID),
 		},
+		{
+			name: "invalid state value",
+			request: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+				Workflow:    workflow,
+				State:       &invalidState,
+				Cells:       textutil.SimulatedNullStringSlice,
+				TabletTypes: textutil.SimulatedNullTabletTypeSlice,
+			},
+			wantErr: fmt.Sprintf("invalid state value: %d", invalidState),
+		},
 	}
 
 	for _, tt := range tests {
@@ -1074,12 +1087,14 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 				if err := recover(); err != nil {
 					log.Info(fmt.Sprintf("Got panic in test: %v", err))
 					log.Flush()
-					t.Errorf("Recovered from panic: %v, stack: %s", err, debug.Stack())
+					require.Failf(t, "panic in test", "Recovered from panic: %v, stack: %s", err, debug.Stack())
 				}
 			}()
 
 			require.NotNil(t, tt.request, "No request provided")
-			require.NotEqual(t, "", tt.query, "No expected query provided")
+			if tt.wantErr == "" {
+				require.NotEqual(t, "", tt.query, "No expected query provided")
+			}
 
 			// These are the same for each RPC call.
 			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
@@ -1088,23 +1103,29 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 			} else {
 				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(selectQuery, selectRes, nil)
 			}
-			if tt.request.State == nil || *tt.request.State == binlogdatapb.VReplicationWorkflowState_Running {
-				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
-				if tt.isCopying {
-					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, copying, nil)
-				} else {
-					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, notCopying, nil)
+			if tt.wantErr == "" {
+				if tt.request.State == nil || *tt.request.State == binlogdatapb.VReplicationWorkflowState_Running {
+					tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
+					if tt.isCopying {
+						tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, copying, nil)
+					} else {
+						tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(getCopyStateQuery, notCopying, nil)
+					}
 				}
+				// This is our expected query, which will also short circuit
+				// the test with an error as at this point we've tested what
+				// we wanted to test.
+				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
+				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(idQuery, idRes, nil)
+				tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
 			}
-			// This is our expected query, which will also short circuit
-			// the test with an error as at this point we've tested what
-			// we wanted to test.
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest("use "+sidecar.GetIdentifier(), &sqltypes.Result{}, nil)
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(idQuery, idRes, nil)
-			tenv.tmc.tablets[tabletUID].vrdbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, errShortCircuit)
 			_, err = tenv.tmc.tablets[tabletUID].tm.UpdateVReplicationWorkflow(ctx, tt.request)
 			tenv.tmc.tablets[tabletUID].vrdbClient.Wait()
-			require.ErrorIs(t, err, errShortCircuit)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.ErrorIs(t, err, errShortCircuit)
+			}
 		})
 	}
 }
@@ -1168,8 +1189,8 @@ func TestUpdateVReplicationWorkflows(t *testing.T) {
 			// This is needed because MockDBClient uses t.Fatal()
 			// which doesn't play well with subtests.
 			defer func() {
-				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v", err)
+				if r := recover(); r != nil {
+					require.Failf(t, "panic in test", "Recovered from panic: %v", r)
 				}
 			}()
 
@@ -1376,7 +1397,7 @@ func TestSourceShardSelection(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+					require.Failf(t, "panic in test", "Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
 				}
 			}()
 
@@ -1657,7 +1678,7 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+					require.Failf(t, "panic in test", "Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
 				}
 			}()
 
@@ -1670,12 +1691,10 @@ func TestHasVReplicationWorkflows(t *testing.T) {
 
 			got, err := tenv.tmc.HasVReplicationWorkflows(ctx, tt.tablet.tablet, req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("TabletManager.HasVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
+				assert.Failf(t, "unexpected error result", "TabletManager.HasVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("TabletManager.HasVReplicationWorkflows() = %v, want %v", got, tt.want)
-			}
+			assert.Equalf(t, tt.want, got, "TabletManager.HasVReplicationWorkflows() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -1773,7 +1792,7 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
-					t.Errorf("Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
+					require.Failf(t, "panic in test", "Recovered from panic: %v; Stack: %s", err, string(debug.Stack()))
 				}
 			}()
 
@@ -1789,7 +1808,7 @@ func TestReadVReplicationWorkflows(t *testing.T) {
 
 			_, err := tenv.tmc.ReadVReplicationWorkflows(ctx, tablet.tablet, tt.req)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("TabletManager.ReadVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
+				assert.Failf(t, "unexpected error result", "TabletManager.ReadVReplicationWorkflows() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 		})
@@ -4584,7 +4603,7 @@ func TestBuildUpdateVReplicationWorkflowsQuery(t *testing.T) {
 }
 
 func TestDeleteTableData(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	sourceKs := "sourceks"
 	sourceShard := "0"

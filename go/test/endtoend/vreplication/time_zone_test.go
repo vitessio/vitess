@@ -75,9 +75,8 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	insertInitialData(t)
 
-	if _, err := vc.AddKeyspace(t, cells, defaultTargetKs, "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, defaultTargetKsOpts); err != nil {
-		t.Fatal(err)
-	}
+	_, err := vc.AddKeyspace(t, cells, defaultTargetKs, "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, defaultTargetKsOpts)
+	require.NoError(t, err)
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[defaultTargetKs]
 	customerTab := custKs.Shards["0"].Tablets["zone1-200"].Vttablet
 

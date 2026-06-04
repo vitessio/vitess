@@ -17,7 +17,6 @@ limitations under the License.
 package testlib
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -53,7 +52,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 
 	// create shard and tablets
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
-		t.Fatalf("GetOrCreateShard failed: %v", err)
+		require.NoError(t, err)
 	}
 	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
 	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
@@ -63,7 +62,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardFields failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// primary action loop (to initialize host and port)
@@ -103,24 +102,19 @@ func TestShardReplicationStatuses(t *testing.T) {
 
 	// run ShardReplicationStatuses
 	ti, rs, err := reparentutil.ShardReplicationStatuses(ctx, wr.TopoServer(), wr.TabletManagerClient(), "test_keyspace", "0")
-	if err != nil {
-		t.Fatalf("ShardReplicationStatuses failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// check result (make primary first in the array)
-	if len(ti) != 2 || len(rs) != 2 {
-		t.Fatalf("ShardReplicationStatuses returned wrong results: %v %v", ti, rs)
-	}
+	require.Falsef(t, len(ti) != 2 || len(rs) != 2, "ShardReplicationStatuses returned wrong results: %v %v", ti, rs)
 	if topoproto.TabletAliasEqual(ti[0].Alias, replica.Tablet.Alias) {
 		ti[0], ti[1] = ti[1], ti[0]
 		rs[0], rs[1] = rs[1], rs[0]
 	}
-	if !topoproto.TabletAliasEqual(ti[0].Alias, primary.Tablet.Alias) ||
+	require.Falsef(t, !topoproto.TabletAliasEqual(ti[0].Alias, primary.Tablet.Alias) ||
 		!topoproto.TabletAliasEqual(ti[1].Alias, replica.Tablet.Alias) ||
 		rs[0].SourceHost != "" ||
-		rs[1].SourceHost != primary.Tablet.Hostname {
-		t.Fatalf("ShardReplicationStatuses returend wrong results: %v %v", ti, rs)
-	}
+		rs[1].SourceHost != primary.Tablet.Hostname,
+		"ShardReplicationStatuses returend wrong results: %v %v", ti, rs)
 }
 
 func TestReparentTablet(t *testing.T) {
@@ -136,18 +130,18 @@ func TestReparentTablet(t *testing.T) {
 
 	// create shard and tablets
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
-		t.Fatalf("CreateShard failed: %v", err)
+		require.NoError(t, err)
 	}
 	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
 	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
+	reparenttestutil.SetKeyspaceDurability(t.Context(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// mark the primary inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
 		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardFields failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// primary action loop (to initialize host and port)
@@ -174,12 +168,12 @@ func TestReparentTablet(t *testing.T) {
 
 	// run ReparentTablet
 	if err := wr.ReparentTablet(ctx, replica.Tablet.Alias); err != nil {
-		t.Fatalf("ReparentTablet failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// check what was run
 	if err := replica.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
-		t.Fatalf("replica.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
+		require.NoError(t, err)
 	}
 	checkSemiSyncEnabled(t, false, true, replica)
 }
@@ -195,7 +189,7 @@ func TestSetReplicationSource(t *testing.T) {
 	require.NoError(t, err, "CreateShard failed")
 
 	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
-	reparenttestutil.SetKeyspaceDurability(context.Background(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
+	reparenttestutil.SetKeyspaceDurability(t.Context(), t, ts, "test_keyspace", policy.DurabilitySemiSync)
 
 	// mark the primary inside the shard
 	_, err = ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {

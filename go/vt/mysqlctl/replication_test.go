@@ -137,11 +137,11 @@ func TestWaitForReplicationStart(t *testing.T) {
 		fakemysqld.Close()
 	}()
 
-	err := WaitForReplicationStart(context.Background(), fakemysqld, 2)
+	err := WaitForReplicationStart(t.Context(), fakemysqld, 2)
 	assert.NoError(t, err)
 
 	fakemysqld.ReplicationStatusError = errors.New("test error")
-	err = WaitForReplicationStart(context.Background(), fakemysqld, 2)
+	err = WaitForReplicationStart(t.Context(), fakemysqld, 2)
 	assert.ErrorContains(t, err, "test error")
 
 	params := db.ConnParams()
@@ -154,7 +154,7 @@ func TestWaitForReplicationStart(t *testing.T) {
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
 	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "test sql error|test io error"))
 
-	err = WaitForReplicationStart(context.Background(), testMysqld, 2)
+	err = WaitForReplicationStart(t.Context(), testMysqld, 2)
 	assert.ErrorContains(t, err, "Last_SQL_Error: test sql error, Last_IO_Error: test io error")
 }
 
@@ -171,7 +171,7 @@ func TestGetMysqlPort(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	res, err := testMysqld.GetMysqlPort(ctx)
 	assert.Equal(t, int32(12), res)
@@ -196,7 +196,7 @@ func TestGetServerID(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := testMysqld.GetServerID(ctx)
 	assert.Equal(t, uint32(12), res)
 	assert.NoError(t, err)
@@ -223,7 +223,7 @@ func TestGetServerUUID(t *testing.T) {
 	uuid := "test_uuid"
 	db.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(sqltypes.MakeTestFields("test_field", "varchar"), uuid))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := testMysqld.GetServerUUID(ctx)
 	assert.Equal(t, uuid, res)
 	assert.NoError(t, err)
@@ -248,7 +248,7 @@ func TestWaitSourcePos(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err := testMysqld.WaitSourcePos(ctx, replication.Position{GTIDSet: replication.Mysql56GTIDSet{}})
 	assert.NoError(t, err)
 
@@ -271,12 +271,12 @@ func TestReplicationStatus(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.ReplicationStatus(context.Background())
+	res, err := testMysqld.ReplicationStatus(t.Context())
 	assert.NoError(t, err)
 	assert.True(t, res.ReplicationLagUnknown)
 
 	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
-	res, err = testMysqld.ReplicationStatus(context.Background())
+	res, err = testMysqld.ReplicationStatus(t.Context())
 	assert.Error(t, err)
 	assert.False(t, res.ReplicationLagUnknown)
 }
@@ -297,7 +297,7 @@ func TestPrimaryStatus(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := testMysqld.PrimaryStatus(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
@@ -324,7 +324,7 @@ func TestReplicationConfiguration(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	replConfig, err := testMysqld.ReplicationConfiguration(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, replConfig)
@@ -350,7 +350,7 @@ func TestGetGTIDPurged(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := testMysqld.GetGTIDPurged(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17", res.String())
@@ -370,7 +370,7 @@ func TestPrimaryPosition(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.PrimaryPosition(context.Background())
+	res, err := testMysqld.PrimaryPosition(t.Context())
 	assert.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17", res.String())
 }
@@ -390,7 +390,7 @@ func TestSetReplicationPosition(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	pos := replication.Position{GTIDSet: replication.Mysql56GTIDSet{}}
 	sid := replication.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
@@ -422,7 +422,7 @@ func TestSetReplicationSource(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// We expect query containing passed host and port to be executed
 	err := testMysqld.SetReplicationSource(ctx, "test_host", 2, 0, true, true)
@@ -446,7 +446,7 @@ func TestResetReplication(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err := testMysqld.ResetReplication(ctx)
 	assert.ErrorContains(t, err, "RESET REPLICA ALL")
 
@@ -478,7 +478,7 @@ func TestResetReplicationParameters(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err := testMysqld.ResetReplicationParameters(ctx)
 	assert.ErrorContains(t, err, "RESET REPLICA ALL")
 
@@ -501,7 +501,7 @@ func TestFindReplicas(t *testing.T) {
 		"SHOW PROCESSLIST": sqltypes.MakeTestResult(sqltypes.MakeTestFields("Id|User|Host|db|Command|Time|State|Info", "varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar"), "1|user1|localhost:12|db1|Binlog Dump|54|Has sent all binlog to replica|NULL"),
 	}
 
-	res, err := FindReplicas(context.Background(), fakemysqld)
+	res, err := FindReplicas(t.Context(), fakemysqld)
 	assert.NoError(t, err)
 
 	want, err := net.LookupHost("localhost")
@@ -524,7 +524,7 @@ func TestGetBinlogInformation(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	bin, logBin, replicaUpdate, rowImage, err := testMysqld.GetBinlogInformation(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, "binlog", bin)
@@ -548,7 +548,7 @@ func TestGetGTIDMode(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := testMysqld.GetGTIDMode(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, in, res)
@@ -568,7 +568,7 @@ func TestFlushBinaryLogs(t *testing.T) {
 	defer testMysqld.Close()
 
 	// We expect this query to be executed
-	err := testMysqld.FlushBinaryLogs(context.Background())
+	err := testMysqld.FlushBinaryLogs(t.Context())
 	assert.ErrorContains(t, err, "FLUSH BINARY LOGS")
 }
 
@@ -587,7 +587,7 @@ func TestGetBinaryLogs(t *testing.T) {
 
 	db.AddQuery("SHOW BINARY LOGS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field", "varchar"), "binlog1", "binlog2"))
 
-	res, err := testMysqld.GetBinaryLogs(context.Background())
+	res, err := testMysqld.GetBinaryLogs(t.Context())
 	assert.NoError(t, err)
 	assert.Len(t, res, 2)
 	assert.Contains(t, res, "binlog1")
@@ -608,7 +608,7 @@ func TestGetPreviousGTIDs(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := testMysqld.GetPreviousGTIDs(ctx, "binlog")
 	assert.NoError(t, err)
 	assert.Equal(t, "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8", res)
@@ -628,15 +628,15 @@ func TestSetSemiSyncEnabled(t *testing.T) {
 	defer testMysqld.Close()
 
 	// We expect this query to be executed
-	err := testMysqld.SetSemiSyncEnabled(context.Background(), true, true)
+	err := testMysqld.SetSemiSyncEnabled(t.Context(), true, true)
 	assert.ErrorIs(t, err, ErrNoSemiSync)
 
 	// We expect this query to be executed
-	err = testMysqld.SetSemiSyncEnabled(context.Background(), true, false)
+	err = testMysqld.SetSemiSyncEnabled(t.Context(), true, false)
 	assert.ErrorIs(t, err, ErrNoSemiSync)
 
 	// We expect this query to be executed
-	err = testMysqld.SetSemiSyncEnabled(context.Background(), false, true)
+	err = testMysqld.SetSemiSyncEnabled(t.Context(), false, true)
 	assert.ErrorIs(t, err, ErrNoSemiSync)
 }
 
@@ -654,7 +654,7 @@ func TestSemiSyncEnabled(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	p, r := testMysqld.SemiSyncEnabled(context.Background())
+	p, r := testMysqld.SemiSyncEnabled(t.Context())
 	assert.False(t, p)
 	assert.True(t, r)
 }
@@ -674,7 +674,7 @@ func TestSemiSyncStatus(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	p, r := testMysqld.SemiSyncStatus(context.Background())
+	p, r := testMysqld.SemiSyncStatus(t.Context())
 	assert.True(t, p)
 	assert.False(t, r)
 }
@@ -694,7 +694,7 @@ func TestSemiSyncClients(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res := testMysqld.SemiSyncClients(context.Background())
+	res := testMysqld.SemiSyncClients(t.Context())
 	assert.Equal(t, uint32(12), res)
 }
 
@@ -713,7 +713,7 @@ func TestSemiSyncSettings(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	timeout, replicas := testMysqld.SemiSyncSettings(context.Background())
+	timeout, replicas := testMysqld.SemiSyncSettings(t.Context())
 	assert.Equal(t, uint64(123), timeout)
 	assert.Equal(t, uint32(80), replicas)
 }
@@ -733,13 +733,13 @@ func TestSemiSyncReplicationStatus(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.SemiSyncReplicationStatus(context.Background())
+	res, err := testMysqld.SemiSyncReplicationStatus(t.Context())
 	assert.NoError(t, err)
 	assert.True(t, res)
 
 	db.AddQuery("SHOW STATUS LIKE 'rpl_semi_sync_replica_status'", sqltypes.MakeTestResult(sqltypes.MakeTestFields("field1|field2", "varchar|uint64"), "rpl_semi_sync_replica_status|OFF"))
 
-	res, err = testMysqld.SemiSyncReplicationStatus(context.Background())
+	res, err = testMysqld.SemiSyncReplicationStatus(t.Context())
 	assert.NoError(t, err)
 	assert.False(t, res)
 }

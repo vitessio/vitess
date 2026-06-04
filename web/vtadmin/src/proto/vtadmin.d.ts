@@ -51515,6 +51515,9 @@ export namespace vschema {
 
         /** Keyspace multi_tenant_spec */
         multi_tenant_spec?: (vschema.IMultiTenantSpec|null);
+
+        /** Keyspace prevent_cross_keyspace_reads */
+        prevent_cross_keyspace_reads?: (boolean|null);
     }
 
     /** Represents a Keyspace. */
@@ -51543,6 +51546,9 @@ export namespace vschema {
 
         /** Keyspace multi_tenant_spec. */
         public multi_tenant_spec?: (vschema.IMultiTenantSpec|null);
+
+        /** Keyspace prevent_cross_keyspace_reads. */
+        public prevent_cross_keyspace_reads: boolean;
 
         /**
          * Creates a new Keyspace instance using the specified properties.

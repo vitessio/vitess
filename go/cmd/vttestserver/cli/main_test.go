@@ -219,7 +219,7 @@ func TestCreateDbaTCPUser(t *testing.T) {
 	}()
 
 	// Ensure that the vt_dba_tcp user was created and can connect through TCP/IP connection.
-	ctx := context.Background()
+	ctx := t.Context()
 	vtParams := mysql.ConnParams{
 		Host:  "127.0.0.1",
 		Uname: "vt_dba_tcp",
@@ -249,7 +249,7 @@ func TestCanGetKeyspaces(t *testing.T) {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	assertGetKeyspaces(ctx, t, clusterInstance)
 }
@@ -264,7 +264,7 @@ func TestGatewayInitialTabletTimeout(t *testing.T) {
 	defer cluster.TearDown()
 
 	// Verify the cluster is functional by getting keyspaces
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	assertGetKeyspaces(ctx, t, cluster)
 }
@@ -291,7 +291,7 @@ func TestExternalTopoServerConsul(t *testing.T) {
 	require.NoError(t, err)
 	defer cluster.TearDown()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	assertGetKeyspaces(ctx, t, cluster)
 }
@@ -432,12 +432,12 @@ func execOnCluster(cluster vttest.LocalCluster, keyspace string, f func(*mysql.C
 func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected columnVindex) {
 	server := fmt.Sprintf("localhost:%v", cluster.GrpcPort())
 	args := []string{"GetVSchema", expected.keyspace}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := vtctlclient.RunCommandAndWait(ctx, server, args, func(e *logutilpb.Event) {
 		var keyspace vschemapb.Keyspace
 		if err := protojson.Unmarshal([]byte(e.Value), &keyspace); err != nil {
-			t.Error(err)
+			assert.NoError(t, err)
 		}
 
 		columnVindex := keyspace.Tables[expected.table].ColumnVindexes[0]
@@ -450,9 +450,7 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 }
 
 func assertEqual(t *testing.T, actual string, expected string, message string) {
-	if actual != expected {
-		t.Errorf("%s: actual %s, expected %s", message, actual, expected)
-	}
+	assert.Equalf(t, expected, actual, "%s: actual %s, expected %s", message, actual, expected)
 }
 
 func resetConfig(conf vttest.Config) {
@@ -515,18 +513,14 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 		"-dev",
 		"-http-port", strconv.Itoa(port))
 	err := cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start consul: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Create a client to connect to the created consul.
 	serverAddr := fmt.Sprintf("localhost:%v", port)
 	cfg := api.DefaultConfig()
 	cfg.Address = serverAddr
 	c, err := api.NewClient(cfg)
-	if err != nil {
-		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
-	}
+	require.NoErrorf(t, err, "api.NewClient(%v) failed", serverAddr)
 
 	// Wait until we can list "/", or timeout.
 	start := time.Now()
@@ -537,7 +531,7 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 			break
 		}
 		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
+			require.FailNowf(t, "timeout", "Failed to start consul daemon in time. Consul is returning error: %v", err)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

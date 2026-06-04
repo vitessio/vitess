@@ -32,6 +32,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/icuregex"
@@ -192,7 +193,7 @@ func ParseTestFile(t testing.TB, filename string) []TestPattern {
 		if err == ErrSkip {
 			return
 		}
-		t.Errorf("Parse error: %v\n%03d: %s", err, lineno, scanner.Text())
+		assert.Failf(t, "Parse error", "%v\n%03d: %s", err, lineno, scanner.Text())
 	}
 
 	for scanner.Scan() {
@@ -235,7 +236,7 @@ func ParseTestFile(t testing.TB, filename string) []TestPattern {
 func (tp *TestPattern) fail(t testing.TB, msg string, args ...any) bool {
 	t.Helper()
 	msg = fmt.Sprintf(msg, args...)
-	t.Errorf("%s (in line %d)\nregexp: %s\ninput: %q\noriginal: %s", msg, tp.Lineno, tp.Pattern, tp.Input, tp.Line)
+	assert.Failf(t, "test pattern failed", "%s (in line %d)\nregexp: %s\ninput: %q\noriginal: %s", msg, tp.Lineno, tp.Pattern, tp.Input, tp.Line)
 	return false
 }
 

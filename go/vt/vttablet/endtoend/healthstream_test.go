@@ -106,7 +106,7 @@ func TestSchemaChange(t *testing.T) {
 						// This is what we wanted!
 						return
 					}
-					t.Errorf("timed out waiting for a schema notification")
+					assert.Fail(t, "timed out waiting for a schema notification")
 					return
 				}
 			}

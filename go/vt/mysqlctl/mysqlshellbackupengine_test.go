@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -143,7 +142,7 @@ func TestMySQLShellBackupRestorePreCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mysqlShellLoadFlags = tt.flags
-			shouldDeleteUsers, err := engine.restorePreCheck(context.Background(), RestoreParams{})
+			shouldDeleteUsers, err := engine.restorePreCheck(t.Context(), RestoreParams{})
 			assert.ErrorIs(t, err, tt.err)
 			assert.Equal(t, tt.shouldDeleteUsers, shouldDeleteUsers)
 		})
@@ -204,7 +203,7 @@ func TestMySQLShellBackupRestorePreCheckDisableRedolog(t *testing.T) {
 		t.Run(tt.version, func(t *testing.T) {
 			fakeMysqld.Version = tt.version
 
-			_, err := engine.restorePreCheck(context.Background(), params)
+			_, err := engine.restorePreCheck(t.Context(), params)
 			require.ErrorIs(t, err, tt.err)
 		})
 	}
@@ -331,7 +330,7 @@ func TestCleanupMySQL(t *testing.T) {
 				Logger: logutil.NewMemoryLogger(),
 			}
 
-			err := cleanupMySQL(context.Background(), params, tt.shouldDeleteUsers)
+			err := cleanupMySQL(t.Context(), params, tt.shouldDeleteUsers)
 			require.NoError(t, err)
 
 			require.Equal(t, len(tt.expectedDropDBs)+len(tt.expectedDropUsers), mysql.ExpectedExecuteSuperQueryCurrent,
@@ -388,10 +387,10 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		generateTestFile(t, be.binaryName, fmt.Sprintf(
 			"#!/bin/bash\n>&2 echo %s; echo \"backup completed\"; sleep 0.01", mysqlShellLockMessage))
 
-		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
+		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
 		require.NoError(t, err)
 
-		_, err = be.ExecuteBackup(context.Background(), params, bh)
+		_, err = be.ExecuteBackup(t.Context(), params, bh)
 		require.NoError(t, err)
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 
@@ -424,12 +423,12 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		// this simulates mysqlshell completing, but we don't see the message that is released its lock.
 		generateTestFile(t, be.binaryName, "#!/bin/bash\nexit 0")
 
-		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
+		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
 		require.NoError(t, err)
 
 		// in this case the backup was successful, but even if we didn't see mysqlsh release its lock
 		// we make sure it is released at the end.
-		_, err = be.ExecuteBackup(context.Background(), params, bh)
+		_, err = be.ExecuteBackup(t.Context(), params, bh)
 		require.NoError(t, err)
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 
@@ -451,10 +450,10 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		// this simulates the backup process failing.
 		generateTestFile(t, be.binaryName, "#!/bin/bash\nexit 1")
 
-		bh, err := bs.StartBackup(context.Background(), t.TempDir(), t.Name())
+		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
 		require.NoError(t, err)
 
-		_, err = be.ExecuteBackup(context.Background(), params, bh)
+		_, err = be.ExecuteBackup(t.Context(), params, bh)
 		require.ErrorContains(t, err, "mysqlshell failed")
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 	})

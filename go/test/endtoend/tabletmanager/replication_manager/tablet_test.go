@@ -208,7 +208,7 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 }
 
 func TestReparentJournalInfo(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	for _, vttablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		length, err := tmClient.ReadReparentJournalInfo(ctx, getTablet(vttablet.GrpcPort))

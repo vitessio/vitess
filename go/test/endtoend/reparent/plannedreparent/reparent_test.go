@@ -17,7 +17,6 @@ limitations under the License.
 package plannedreparent
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -94,13 +93,13 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// make tablets[1 lag from the other tablets by setting the delay to a large number
-	utils.RunSQLs(context.Background(), t, []string{`stop replica`, `CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 1999`, `start replica;`}, tablets[1])
+	utils.RunSQLs(t.Context(), t, []string{`stop replica`, `CHANGE REPLICATION SOURCE TO SOURCE_DELAY = 1999`, `start replica;`}, tablets[1])
 
 	// insert another row in tablets[1
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
 
 	// assert that there is indeed only 1 row in tablets[1
-	res := utils.RunSQL(context.Background(), t, `select msg from vt_insert_test`, tablets[1])
+	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
 	assert.Equal(t, 1, len(res.Rows))
 
 	// Perform a graceful reparent operation

@@ -303,7 +303,7 @@ func waitForErrantGTIDTabletCount(t *testing.T, vtorc *cluster.VTOrcProcess, err
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timed out waiting for errant gtid count in the metrics to be %v", errantGTIDCountWanted)
+			require.Failf(t, "errant gtid count timeout", "Timed out waiting for errant gtid count in the metrics to be %v", errantGTIDCountWanted)
 			return
 		default:
 			_, resp, err := utils.MakeAPICall(t, vtorc, "/debug/vars")

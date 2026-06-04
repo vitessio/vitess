@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -29,6 +28,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -833,17 +833,13 @@ func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	if len(f.log) == 0 && len(want) == 0 {
 		return
 	}
-	if !reflect.DeepEqual(f.log, want) {
-		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
-	}
+	assert.Equalf(t, want, f.log, "got:\n%s\nwant:\n%s", strings.Join(f.log, "\n"), strings.Join(want, "\n"))
 	utils.MustMatch(t, want, f.log, "")
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {
 	t.Helper()
-	if !reflect.DeepEqual(f.warnings, want) {
-		t.Errorf("vc.warnings:\n%+v\nwant:\n%+v", f.warnings, want)
-	}
+	assert.Equalf(t, want, f.warnings, "vc.warnings:\n%+v\nwant:\n%+v", f.warnings, want)
 }
 
 func (f *loggingVCursor) Rewind() {
@@ -957,15 +953,11 @@ func expectResult(t *testing.T, result, want *sqltypes.Result) {
 	t.Helper()
 	fieldsResult := fmt.Sprintf("%v", result.Fields)
 	fieldsWant := fmt.Sprintf("%v", want.Fields)
-	if fieldsResult != fieldsWant {
-		t.Errorf("mismatch in Fields\n%s\nwant:\n%s", fieldsResult, fieldsWant)
-	}
+	assert.Equalf(t, fieldsWant, fieldsResult, "mismatch in Fields\n%s\nwant:\n%s", fieldsResult, fieldsWant)
 
 	rowsResult := fmt.Sprintf("%v", result.Rows)
 	rowsWant := fmt.Sprintf("%v", want.Rows)
-	if rowsResult != rowsWant {
-		t.Errorf("mismatch in Rows:\n%s\nwant:\n%s", rowsResult, rowsWant)
-	}
+	assert.Equalf(t, rowsWant, rowsResult, "mismatch in Rows:\n%s\nwant:\n%s", rowsResult, rowsWant)
 }
 
 func expectResultAnyOrder(t *testing.T, result, want *sqltypes.Result) {
@@ -985,7 +977,7 @@ func expectResultAnyOrder(t *testing.T, result, want *sqltypes.Result) {
 	slices.SortFunc(result.Rows, f)
 	slices.SortFunc(want.Rows, f)
 	if diff := cmp.Diff(want, result); diff != "" {
-		t.Errorf("result: %+v, want %+v\ndiff: %s", result, want, diff)
+		assert.Failf(t, "expectResultAnyOrder mismatch", "result: %+v, want %+v\ndiff: %s", result, want, diff)
 	}
 }
 

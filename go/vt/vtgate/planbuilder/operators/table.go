@@ -56,6 +56,9 @@ func (to *Table) Clone([]Operator) Operator {
 
 // Introduces implements the PhysicalOperator interface
 func (to *Table) introducesTableID() semantics.TableSet {
+	if to.QTable == nil {
+		return semantics.EmptyTableSet()
+	}
 	return to.QTable.ID
 }
 
@@ -108,7 +111,7 @@ func (to *Table) AddCol(col *sqlparser.ColName) {
 }
 
 func (to *Table) TablesUsed(in []string) []string {
-	if sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
+	if to.QTable == nil || to.VTable == nil || sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
 		return in
 	}
 	return append(in, QualifiedString(to.VTable.Keyspace, to.VTable.Name.String()))
@@ -131,7 +134,17 @@ func addColumn(ctx *plancontext.PlanningContext, op ColNameColumns, e sqlparser.
 }
 
 func (to *Table) ShortDescription() string {
-	tbl := to.VTable.String()
+	if to.QTable == nil {
+		return "dual"
+	}
+	var tbl string
+	if to.VTable != nil {
+		tbl = to.VTable.String()
+	} else {
+		// CTE recursive references and other virtual tables have no vschema
+		// entity behind them — fall back to the QueryTable's name.
+		tbl = sqlparser.String(to.QTable.Table)
+	}
 	var alias, where string
 	if to.QTable.Alias.As.NotEmpty() {
 		alias = " AS " + to.QTable.Alias.As.String()

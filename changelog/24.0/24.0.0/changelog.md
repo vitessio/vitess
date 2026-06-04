@@ -383,7 +383,6 @@
  * `vtorc`: improve logging in `DiscoverInstance`, remove old metric [#19010](https://github.com/vitessio/vitess/pull/19010)
  * `vtorc`: add cell/location context [#19047](https://github.com/vitessio/vitess/pull/19047)
  * VTOrc: Monitor for flappy / overloaded primaries and PRS->ERS as needed [#19328](https://github.com/vitessio/vitess/pull/19328)
- * Add flag for cells to watch to VTOrc [#19354](https://github.com/vitessio/vitess/pull/19354)
  * `vtorc`: support analysis ordering, improve semi-sync rollout [#19427](https://github.com/vitessio/vitess/pull/19427)
  * `vtorc`: improvements to analysis ordering, handle semi-sync disable [#19488](https://github.com/vitessio/vitess/pull/19488)
  * vtorc: change `StaleTopoPrimary` recovery to be best-effort [#19502](https://github.com/vitessio/vitess/pull/19502)

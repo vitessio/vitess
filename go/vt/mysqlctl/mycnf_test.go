@@ -124,9 +124,7 @@ func NoTestMycnfHook(t *testing.T) {
 	mycnf := NewMycnf(uid, 0)
 	mycnf.Path = cnf.Path
 	mycnf, err = ReadMycnf(mycnf, 0)
-	if err != nil {
-		t.Errorf("failed reading, err %v", err)
-	} else {
+	if assert.NoError(t, err) {
 		t.Logf("socket file %v", mycnf.SocketFile)
 	}
 	// Tablet UID should be 11111, which determines tablet/data dir.

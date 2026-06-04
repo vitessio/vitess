@@ -1602,7 +1602,6 @@
         "Query": "insert into unsharded select 1 from dual union select 1 from dual"
       },
       "TablesUsed": [
-        "main.dual",
         "main.unsharded"
       ]
     },
@@ -3084,7 +3083,6 @@
         "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1)"
       },
       "TablesUsed": [
-        "main.dual",
         "main.user_privacy_consents"
       ]
     },
@@ -4003,7 +4001,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     },
@@ -4043,7 +4040,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     },
@@ -7207,6 +7203,56 @@
       "TablesUsed": [
         "user.user",
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "UPDATE: IN subquery in SET that merges into the outer route",
+    "query": "update user set col = (1 in (select id from (select * from user) as t where id = 5)) where id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (1 in (select id from (select * from user) as t where id = 5)) where id = 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update `user` set col = 1 in (select id from (select * from `user`) as t where id = 5) where id = 5",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UPDATE: NOT IN subquery in SET that merges into the outer route",
+    "query": "update user set col = (1 not in (select id from (select * from user) as t where id = 5)) where id = 5",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "UPDATE",
+      "Original": "update user set col = (1 not in (select id from (select * from user) as t where id = 5)) where id = 5",
+      "Instructions": {
+        "OperatorType": "Update",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "update `user` set col = 1 not in (select id from (select * from `user`) as t where id = 5) where id = 5",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

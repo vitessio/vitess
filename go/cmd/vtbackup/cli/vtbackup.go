@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -741,6 +742,8 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 				log.Warn(fmt.Sprintf("Failed to restart replication: %v", err))
 			}
 		} else {
+			// Clear last error as MySQL's replication is healthy
+			lastErr.Record(nil)
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 		}
 	}
@@ -1006,10 +1009,9 @@ func lastCompleteBackup(ctx context.Context, backups []backupstorage.BackupHandl
 	}
 
 	// Backups are sorted in ascending order by start time. Start at the end.
-	for i := len(backups) - 1; i >= 0; i-- {
+	for _, backup := range slices.Backward(backups) {
 		// Check if this backup is complete by looking for the MANIFEST file,
 		// which is written at the end after all files are uploaded.
-		backup := backups[i]
 		if err := checkBackupComplete(ctx, backup); err != nil {
 			log.Warn(fmt.Sprintf("Ignoring backup %v because it's incomplete: %v", backup.Name(), err))
 			continue

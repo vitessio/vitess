@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"strings"
@@ -111,14 +110,10 @@ func TestFKExt(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	lg = &SimpleLoadGenerator{}
-	lg.Init(context.Background(), vc)
+	lg.Init(t.Context(), vc)
 	lg.SetDBStrategy("vtgate", fkextConfig.sourceKeyspaceName)
-	if lg.Load() != nil {
-		t.Fatal("Load failed")
-	}
-	if lg.Start() != nil {
-		t.Fatal("Start failed")
-	}
+	require.NoError(t, lg.Load(), "Load failed")
+	require.NoError(t, lg.Start(), "Start failed")
 	t.Run("Import from external db", func(t *testing.T) {
 		// Import data into vitess from sourceKeyspace to target1Keyspace, both unsharded.
 		importIntoVitess(t)
@@ -137,9 +132,7 @@ func TestFKExt(t *testing.T) {
 		materializeTables(t)
 	})
 	lg.SetDBStrategy("vtgate", fkextConfig.target2KeyspaceName)
-	if lg.Start() != nil {
-		t.Fatal("Start failed")
-	}
+	require.NoError(t, lg.Start(), "Start failed")
 	threeShards := "-40,40-c0,c0-"
 	keyspaceName := fkextConfig.target2KeyspaceName
 	ks := vc.Cells[fkextConfig.cell].Keyspaces[keyspaceName]
@@ -259,9 +252,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	//	t.Fatal("WaitForAdditionalRows failed")
 	//}
 	waitForLowLag(t, keyspace, workflowName+"_reverse")
-	if compareRowCounts(t, keyspace, strings.Split(sourceShards, ","), strings.Split(targetShards, ",")) != nil {
-		t.Fatal("Row counts do not match")
-	}
+	require.NoError(t, compareRowCounts(t, keyspace, strings.Split(sourceShards, ","), strings.Split(targetShards, ",")), "Row counts do not match")
 	vdiff(t, keyspace, workflowName+"_reverse", fkextConfig.cell, nil)
 
 	rs.ReverseReadsAndWrites()
@@ -269,9 +260,7 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	//	t.Fatal("WaitForAdditionalRows failed")
 	//}
 	waitForLowLag(t, keyspace, workflowName)
-	if compareRowCounts(t, keyspace, strings.Split(targetShards, ","), strings.Split(sourceShards, ",")) != nil {
-		t.Fatal("Row counts do not match")
-	}
+	require.NoError(t, compareRowCounts(t, keyspace, strings.Split(targetShards, ","), strings.Split(sourceShards, ",")), "Row counts do not match")
 	vdiff(t, keyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 
@@ -295,9 +284,7 @@ func areRowCountsEqual(t *testing.T) bool {
 
 // validateMaterializeRowCounts expects the Load generator to be stopped before calling it.
 func validateMaterializeRowCounts(t *testing.T) {
-	if lg.State() != LoadGeneratorStateStopped {
-		t.Fatal("Load generator was unexpectedly still running when validateMaterializeRowCounts was called -- this will produce unreliable results.")
-	}
+	require.Equal(t, LoadGeneratorStateStopped, lg.State(), "Load generator was unexpectedly still running when validateMaterializeRowCounts was called -- this will produce unreliable results.")
 	areRowCountsEqual2 := func() bool {
 		return areRowCountsEqual(t)
 	}
@@ -362,35 +349,25 @@ func doMoveTables(t *testing.T, sourceKeyspace, targetKeyspace, workflowName, ta
 	vdiff(t, targetKeyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 	lg.SetDBStrategy("vtgate", targetKeyspace)
-	if lg.Start() != nil {
-		t.Fatal("Start failed")
-	}
+	require.NoError(t, lg.Start(), "Start failed")
 
 	mt.SwitchReadsAndWrites()
 
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	require.NoError(t, lg.WaitForAdditionalRows(100), "WaitForAdditionalRows failed")
 
 	waitForLowLag(t, sourceKeyspace, workflowName+"_reverse")
 	vdiff(t, sourceKeyspace, workflowName+"_reverse", fkextConfig.cell, nil)
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	require.NoError(t, lg.WaitForAdditionalRows(100), "WaitForAdditionalRows failed")
 
 	mt.ReverseReadsAndWrites()
-	if lg.WaitForAdditionalRows(100) != nil {
-		t.Fatal("WaitForAdditionalRows failed")
-	}
+	require.NoError(t, lg.WaitForAdditionalRows(100), "WaitForAdditionalRows failed")
 	waitForLowLag(t, targetKeyspace, workflowName)
 	time.Sleep(5 * time.Second)
 	vdiff(t, targetKeyspace, workflowName, fkextConfig.cell, nil)
 	lg.Stop()
 	mt.SwitchReadsAndWrites()
 	mt.Complete()
-	if err := vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules={}"); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules={}"))
 }
 
 func importIntoVitess(t *testing.T) {
@@ -412,9 +389,7 @@ func dropReplicaConstraints(t *testing.T, keyspaceName string, tablet *cluster.V
 	require.Equal(t, "replica", strings.ToLower(tablet.TabletType))
 	dbName := "vt_" + keyspaceName
 	qr, err := tablet.QueryTablet(fmt.Sprintf(getConstraintsQuery, dbName), keyspaceName, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	for _, row := range qr.Rows {
 		constraintName := row[0].ToString()
 		tableName := row[1].ToString()

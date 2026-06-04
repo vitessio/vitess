@@ -159,9 +159,8 @@ func TestMysql56GTIDSetString(t *testing.T) {
 
 func TestMysql56GTIDSetFlavor(t *testing.T) {
 	input := Mysql56GTIDSet{}
-	if got, want := input.Flavor(), "MySQL56"; got != want {
-		t.Errorf("%#v.Flavor() = %#v, want %#v", input, got, want)
-	}
+	got := input.Flavor()
+	assert.Equalf(t, "MySQL56", got, "%#v.Flavor() = %#v, want %#v", input, got, "MySQL56")
 }
 
 func TestMysql56GTIDSetContainsGTID(t *testing.T) {
@@ -193,9 +192,8 @@ func TestMysql56GTIDSetContainsGTID(t *testing.T) {
 	}
 
 	for input, want := range table {
-		if got := set.ContainsGTID(input); got != want {
-			t.Errorf("ContainsGTID(%#v) = %#v, want %#v", input, got, want)
-		}
+		got := set.ContainsGTID(input)
+		assert.Equalf(t, want, got, "ContainsGTID(%#v) = %#v, want %#v", input, got, want)
 	}
 }
 
@@ -257,9 +255,7 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 	}
 
 	for _, other := range notContained {
-		if set.Contains(other) {
-			t.Errorf("Contains(%#v) = true, want false", other)
-		}
+		assert.Falsef(t, set.Contains(other), "Contains(%#v) = true, want false", other)
 	}
 }
 
@@ -352,13 +348,9 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 	}
 
 	for _, other := range notEqual {
-		if set.Equal(other) {
-			t.Errorf("%#v.Equal(%#v) = true, want false", set, other)
-		}
+		assert.Falsef(t, set.Equal(other), "%#v.Equal(%#v) = true, want false", set, other)
 		// Equality should be transitive.
-		if other.Equal(set) {
-			t.Errorf("%#v.Equal(%#v) = true, want false", other, set)
-		}
+		assert.Falsef(t, other.Equal(set), "%#v.Equal(%#v) = true, want false", other, set)
 	}
 }
 

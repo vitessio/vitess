@@ -59,7 +59,7 @@ type testcase struct {
 }
 
 func checkIfOptionIsSupported(t *testing.T, variable string) bool {
-	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("show variables like '%s'", variable))
+	qr, err := env.Mysqld.FetchSuperQuery(t.Context(), fmt.Sprintf("show variables like '%s'", variable))
 	require.NoError(t, err)
 	require.NotNil(t, qr)
 	return len(qr.Rows) == 1
@@ -360,7 +360,7 @@ func TestVersion(t *testing.T) {
 		engine = oldEngine
 	}()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err := env.SchemaEngine.EnableHistorian(true)
 	require.NoError(t, err)
 	defer env.SchemaEngine.EnableHistorian(false)
@@ -788,7 +788,7 @@ func TestSidecarDBTables(t *testing.T) {
 	options := &binlogdatapb.VStreamOptions{
 		InternalTables: []string{"internal1", "internal2"},
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Second))
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(10*time.Second))
 	defer cancel()
 	wantRowEvents := map[string]int{
 		"t1":        2,
@@ -839,7 +839,7 @@ func TestVStreamMissingFieldsInLastPK(t *testing.T) {
 	for _, tpk := range tablePKs {
 		tpk.Lastpk.Fields = nil
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	ch := make(chan []*binlogdatapb.VEvent)
 	err := vstream(ctx, t, "", tablePKs, filter, ch, false)
 	require.ErrorContains(t, err, "lastpk for table t1 has no fields defined")
@@ -859,11 +859,9 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	insertSomeRows(t, 10)
 	log.Info("Pos after bulk insert: " + primaryPosition(t))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	qr, err := env.Mysqld.FetchSuperQuery(ctx, "SELECT count(*) as cnt from t1, t2 where t1.id11 = t2.id21")
-	if err != nil {
-		t.Fatal("Query failed")
-	}
+	require.NoError(t, err, "Query failed")
 	require.Equal(t, "[[INT64(10)]]", fmt.Sprintf("%v", qr.Rows))
 
 	filter := &binlogdatapb.Filter{
@@ -1084,9 +1082,7 @@ func TestVStreamCopyWithDifferentFilters(t *testing.T) {
 		}, nil)
 	}()
 	wg.Wait()
-	if errGoroutine != nil {
-		t.Fatal(errGoroutine.Error())
-	}
+	require.NoError(t, errGoroutine)
 }
 
 // TestFilteredVarBinary confirms that adding a filter using a varbinary column results in the correct set of events.
@@ -1410,7 +1406,7 @@ func TestOther(t *testing.T) {
 	// customRun is a modified version of runCases.
 	customRun := func(mode string) {
 		t.Logf("Run mode: %v", mode)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		wg, ch := startStream(ctx, t, nil, "", nil)
 		defer wg.Wait()
@@ -1431,7 +1427,7 @@ func TestOther(t *testing.T) {
 		}
 		cancel()
 		if evs, ok := <-ch; ok {
-			t.Fatalf("unexpected evs: %v", evs)
+			require.Failf(t, "unexpected evs", "%v", evs)
 		}
 	}
 	customRun("gtid")
@@ -1794,9 +1790,7 @@ func TestDDLDropColumn(t *testing.T) {
 	defer close(ch)
 	err := vstream(ctx, t, pos, nil, nil, ch, false)
 	want := "cannot determine table columns"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	assert.ErrorContains(t, err, want, "err: %v, must contain %s", err, want)
 }
 
 func TestUnsentDDL(t *testing.T) {
@@ -1839,7 +1833,7 @@ func TestVStreamFilteredTerminalEventsFlushBufferedState(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	var (
@@ -2292,7 +2286,7 @@ func TestMinimalMode(t *testing.T) {
 		env = oldEnv
 	}()
 	newEngine(t, ctx, "minimal")
-	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
+	err := engine.Stream(t.Context(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 
@@ -2383,7 +2377,7 @@ func TestRowsQueryEvent(t *testing.T) {
 }
 
 func TestHeartbeat(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	wg, ch := startStream(ctx, t, nil, "", nil)
@@ -2410,10 +2404,12 @@ func TestFullyThrottledTimeout(t *testing.T) {
 	defer waitTimer.Stop()
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
 		wg.Wait()
-		require.Zero(t, len(evs))
-		close(done)
+		if !assert.Zero(t, len(evs)) {
+			return
+		}
 	}()
 
 	select {
@@ -2455,9 +2451,7 @@ func TestNoFutureGTID(t *testing.T) {
 	defer close(ch)
 	err = vstream(ctx, t, future, nil, nil, ch, false)
 	want := vterrors.GTIDSetMismatch
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain %s", err, want)
-	}
+	assert.ErrorContains(t, err, want, "err: %v, must contain %s", err, want)
 }
 
 func TestFilteredMultipleWhere(t *testing.T) {
@@ -2821,7 +2815,7 @@ func TestUVStreamerNoCopyWithGTID(t *testing.T) {
 	defer execStatements(t, []string{
 		"drop table t1",
 	})
-	ctx := context.Background()
+	ctx := t.Context()
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  "t1",

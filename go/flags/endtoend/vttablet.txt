@@ -82,6 +82,7 @@ Flags:
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consolidator-cache-proto3-rows                                   If true, the consolidation leader pre-caches proto3-encoded rows so that waiters avoid redundant encoding work.
       --consolidator-query-waiter-cap int                                Configure the maximum number of clients allowed to wait on the consolidator.
+      --consolidator-reject-on-cap                                       If true, reject queries with a RESOURCE_EXHAUSTED error when the global consolidator waiter cap is exceeded, instead of falling back to independent execution. The cap is enforced globally across all consolidated queries, not per-query.
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
@@ -205,7 +206,7 @@ Flags:
       --init-db-name-override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init-keyspace string                                             (init parameter) keyspace to use for this tablet
       --init-shard string                                                (init parameter) shard to use for this tablet
-      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, and SPARE. The default is REPLICA.
+      --init-tablet-type string                                          (init parameter) tablet type to use for this tablet. Valid values are: REPLICA, RDONLY, EXPERIMENTAL and SPARE. The default is REPLICA.
       --init-tablet-type-lookup                                          (Experimental, init parameter) if enabled, uses tablet alias to look up the tablet type from the existing topology record on restart and use that instead of init-tablet-type. This allows tablets to maintain their changed roles (e.g., RDONLY/DRAINED) across restarts. If disabled or if no topology record exists, init-tablet-type will be used.
       --init-tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
       --init-timeout duration                                            (init parameter) timeout to use for the init phase. (default 1m0s)

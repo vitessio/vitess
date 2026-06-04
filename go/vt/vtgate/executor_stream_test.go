@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -46,9 +47,7 @@ func TestStreamSQLUnsharded(t *testing.T) {
 	result, err := executorStreamMessages(executor, sql)
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.Truef(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func TestStreamSQLSharded(t *testing.T) {
@@ -89,9 +88,7 @@ func TestStreamSQLSharded(t *testing.T) {
 			sandboxconn.StreamRowResult.Rows[0],
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	assert.Truef(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {

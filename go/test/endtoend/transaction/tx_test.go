@@ -17,7 +17,6 @@ limitations under the License.
 package transaction
 
 import (
-	"context"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -231,7 +230,7 @@ func TestTransactionIsolationInTx(t *testing.T) {
 
 func start(t *testing.T) func() {
 	deleteAll := func() {
-		conn, err := mysql.Connect(context.Background(), &vtParams)
+		conn, err := mysql.Connect(t.Context(), &vtParams)
 		require.NoError(t, err)
 		tables := []string{"test", "twopc_user"}
 		for _, table := range tables {

@@ -95,7 +95,7 @@ func TestShowOnlineDDL_Cancel(t *testing.T) {
 
 func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	fakeTopo := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")

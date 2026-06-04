@@ -70,7 +70,8 @@ type EmergencyReparentOptions struct {
 }
 
 // counters for Emergency Reparent Shard
-var ersCounter = stats.NewCountersWithMultiLabels("EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
+var ersCounter = stats.NewCountersWithMultiLabels(
+	"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
 	[]string{"Keyspace", "Shard", "Result"},
 )
 
@@ -201,7 +202,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	ev.ShardInfo = *shardInfo
 
 	if opts.ExpectedPrimaryAlias != nil && !topoproto.TabletAliasEqual(opts.ExpectedPrimaryAlias, shardInfo.PrimaryAlias) {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s",
+		return vterrors.Errorf(
+			vtrpc.Code_FAILED_PRECONDITION, "primary %s is not equal to expected alias %s",
 			topoproto.TabletAliasString(shardInfo.PrimaryAlias),
 			topoproto.TabletAliasString(opts.ExpectedPrimaryAlias),
 		)
@@ -233,7 +235,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err = erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
+		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v", keyspace, shard)
 	}
 
 	// Stop replication on all the tablets and build their status map
@@ -249,7 +251,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
+		return vterrors.Wrapf(err, "failed to stop replication and build status maps")
 	}
 
 	// check that we still have the shard lock. If we don't then we can terminate at this point
@@ -476,7 +478,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	rec := errgroup.Wait(groupCancel, errCh)
 
 	if len(rec.Errors) != 0 {
-		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided waitReplicasTimeout (%s): %v", waitReplicasTimeout, rec.Error())
+		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
 	return nil
@@ -639,12 +641,12 @@ func (erp *EmergencyReparenter) reparentReplicas(
 				position, err = erp.tmc.PromoteReplica(primaryCtx, tablet, policy.SemiSyncAckers(opts.durability, tablet) > 0)
 			}
 			if err != nil {
-				return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", alias, err)
+				return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary", alias)
 			}
 			erp.logger.Infof("populating reparent journal on new primary %v", alias)
 			err = erp.tmc.PopulateReparentJournal(primaryCtx, tablet, now, opts.lockAction, tablet.Alias, position)
 			if err != nil {
-				return vterrors.Wrapf(err, "failed to PopulateReparentJournal on primary: %v", err)
+				return vterrors.Wrapf(err, "failed to PopulateReparentJournal on primary")
 			}
 		}
 		return nil
@@ -658,7 +660,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		if status, ok := statusMap[alias]; ok {
 			fs, err := ReplicaWasRunning(status)
 			if err != nil {
-				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus: %v", alias, err)
+				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus", alias)
 				rec.RecordError(err)
 
 				return
@@ -669,7 +671,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet), 0)
 		if err != nil {
-			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
+			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed", alias)
 			rec.RecordError(err)
 
 			return
@@ -747,7 +749,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			// Technically, rec.Errors should never be greater than numReplicas,
 			// but it's better to err on the side of caution here, but also
 			// we're going to be explicit that this is doubly unexpected.
-			return nil, vterrors.Wrapf(rec.Error(), "received more errors (= %d) than replicas (= %d), which should be impossible: %v", errCount, numReplicas, rec.Error())
+			return nil, vterrors.Wrapf(rec.Error(), "received more errors (= %d) than replicas (= %d), which should be impossible", errCount, numReplicas)
 		case errCount == numReplicas:
 			if len(tabletMap) <= 2 {
 				// If there are at most 2 tablets in the tablet map, we shouldn't be failing the promotion if the replica fails to SetReplicationSource.
@@ -755,7 +757,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 				erp.logger.Warningf("Failed to set the MySQL replication source during ERS but because there is only one other tablet we assume it is the one that had failed and will progress with the reparent. Error: %v", rec.Error())
 				return nil, nil
 			}
-			return nil, vterrors.Wrapf(rec.Error(), "%d replica(s) failed: %v", numReplicas, rec.Error())
+			return nil, vterrors.Wrapf(rec.Error(), "%d replica(s) failed", numReplicas)
 		default:
 			return replicasStartedReplication, nil
 		}
@@ -1043,7 +1045,7 @@ func (erp *EmergencyReparenter) gatherReparenJournalInfo(
 	rec := errgroup.Wait(groupCancel, errCh)
 
 	if len(rec.Errors) != 0 {
-		return nil, vterrors.Wrapf(rec.Error(), "could not read reparent journal information within the provided waitReplicasTimeout (%s): %v", waitReplicasTimeout, rec.Error())
+		return nil, vterrors.Wrapf(rec.Error(), "could not read reparent journal information within the provided waitReplicasTimeout (%s)", waitReplicasTimeout)
 	}
 
 	return reparentJournalLen, nil

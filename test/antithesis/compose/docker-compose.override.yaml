@@ -1,9 +1,20 @@
+x-vitess-build: &vitess-build
+  build:
+    context: ../../..
+    dockerfile: test/antithesis/compose/Dockerfile.vitess-instrumented
+
+x-vttablet-override: &vttablet-override
+  <<: *vitess-build
+  ports:
+    - "15999"
+    - "3306"
+
 services:
   antithesis-client:
     build:
       context: ./antithesis-client
       dockerfile: Dockerfile
-    # for quick local development  
+    # for quick local development
     # volumes:
     #   - ./antithesis-client/crud:/opt/antithesis/test/v1/crud
     #   - ./antithesis-client/bank-test:/opt/antithesis/test/v1/bank-test
@@ -16,7 +27,11 @@ services:
     ports:
       - "3306"
 
+  vtorc:
+    <<: *vitess-build
+
   vtctld:
+    <<: *vitess-build
     ports:
       - "15999"
 
@@ -25,46 +40,28 @@ services:
       - "15999"
 
   vttablet101:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet102:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet104:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet201:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet202:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet204:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet301:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet302:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override
 
   vttablet304:
-    ports:
-      - "15999"
-      - "3306"
+    <<: *vttablet-override

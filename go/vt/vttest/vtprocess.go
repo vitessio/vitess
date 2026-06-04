@@ -171,6 +171,10 @@ func (vtp *VtProcess) WaitStart() (err error) {
 
 		select {
 		case err := <-vtp.exit:
+			// Drop the exec.Cmd so a subsequent WaitTerminate() does not
+			// signal a dead pid and then block forever on the already-drained
+			// exit channel.
+			vtp.proc = nil
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtp.Name, err)
 		default:
 			time.Sleep(300 * time.Millisecond)
@@ -178,7 +182,9 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	}
 
 	vtp.proc.Process.Kill()
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, <-vtp.exit)
+	exitErr := <-vtp.exit
+	vtp.proc = nil
+	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, exitErr)
 }
 
 const (
@@ -246,6 +252,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		fmt.Sprintf("--enable-direct-ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable-system-settings=%t", args.EnableSystemSettings),
 		fmt.Sprintf("--no-scatter=%t", args.NoScatter),
+		fmt.Sprintf("--prevent-cross-keyspace-reads=%t", args.PreventCrossKeyspaceReads),
 	}...)
 
 	// If topo tablet refresh interval is not defined then we will give it value of 10s. Please note

@@ -79,33 +79,26 @@ func compareProtoResponse(t *testing.T, actualJSON []byte, expected proto.Messag
 	actual := proto.Clone(expected)
 	proto.Reset(actual)
 
-	if err := unmarshalProto(actualJSON, actual); err != nil {
-		t.Fatalf("Failed to unmarshal response for %s: %v\nResponse: %s", path, err, string(actualJSON))
-	}
+	require.NoErrorf(t, unmarshalProto(actualJSON, actual), "Failed to unmarshal response for %s\nResponse: %s", path, string(actualJSON))
 
 	if !proto.Equal(actual, expected) {
 		actualJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(actual)
 		expectedJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(expected)
-		t.Fatalf("Proto comparison failed for %s:\nActual: %s\nExpected: %s", path, string(actualJSON), string(expectedJSON))
+		require.Failf(t, "Proto comparison failed", "Proto comparison failed for %s:\nActual: %s\nExpected: %s", path, string(actualJSON), string(expectedJSON))
 	}
 }
 
 // compareProtoSliceResponse compares the actual JSON array response with expected proto objects
 func compareProtoSliceResponse(t *testing.T, actualJSON []byte, expected []proto.Message, msgType proto.Message, path string) {
 	actual, err := unmarshalProtoSlice(actualJSON, msgType)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response for %s: %v\nResponse: %s", path, err, string(actualJSON))
-	}
-
-	if len(actual) != len(expected) {
-		t.Fatalf("Length mismatch for %s: got %d, want %d", path, len(actual), len(expected))
-	}
+	require.NoErrorf(t, err, "Failed to unmarshal response for %s\nResponse: %s", path, string(actualJSON))
+	require.Lenf(t, actual, len(expected), "Length mismatch for %s", path)
 
 	for i, actualItem := range actual {
 		if !proto.Equal(actualItem, expected[i]) {
 			actualJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(actualItem)
 			expectedJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(expected[i])
-			t.Fatalf("Proto comparison failed for %s[%d]:\nActual: %s\nExpected: %s", path, i, string(actualJSON), string(expectedJSON))
+			require.Failf(t, "Proto comparison failed", "Proto comparison failed for %s[%d]:\nActual: %s\nExpected: %s", path, i, string(actualJSON), string(expectedJSON))
 		}
 	}
 }
@@ -113,36 +106,25 @@ func compareProtoSliceResponse(t *testing.T, actualJSON []byte, expected []proto
 // compareTabletWithURLResponse compares the actual JSON response with expected TabletWithURL objects
 func compareTabletWithURLResponse(t *testing.T, actualJSON []byte, expected *TabletWithURL, path string) {
 	var actual TabletWithURL
-	if err := json.Unmarshal(actualJSON, &actual); err != nil {
-		t.Fatalf("Failed to unmarshal response for %s: %v\nResponse: %s", path, err, string(actualJSON))
-	}
+	require.NoErrorf(t, json.Unmarshal(actualJSON, &actual), "Failed to unmarshal response for %s\nResponse: %s", path, string(actualJSON))
 
 	// Compare the structs by marshaling them to JSON for comparison
 	actualJSON2, _ := json.Marshal(actual)
 	expectedJSON, _ := json.Marshal(expected)
 
-	if string(actualJSON2) != string(expectedJSON) {
-		t.Fatalf("TabletWithURL comparison failed for %s:\nActual: %s\nExpected: %s", path, string(actualJSON2), string(expectedJSON))
-	}
+	require.Equalf(t, string(expectedJSON), string(actualJSON2), "TabletWithURL comparison failed for %s", path)
 }
 
 // compareTabletWithURLSliceResponse compares the actual JSON array response with expected TabletWithURL objects
 func compareTabletWithURLSliceResponse(t *testing.T, actualJSON []byte, expected []*TabletWithURL, path string) {
 	var actual []TabletWithURL
-	if err := json.Unmarshal(actualJSON, &actual); err != nil {
-		t.Fatalf("Failed to unmarshal response for %s: %v\nResponse: %s", path, err, string(actualJSON))
-	}
-
-	if len(actual) != len(expected) {
-		t.Fatalf("Length mismatch for %s: got %d, want %d", path, len(actual), len(expected))
-	}
+	require.NoErrorf(t, json.Unmarshal(actualJSON, &actual), "Failed to unmarshal response for %s\nResponse: %s", path, string(actualJSON))
+	require.Lenf(t, actual, len(expected), "Length mismatch for %s", path)
 
 	for i, actualItem := range actual {
 		actualJSON2, _ := json.Marshal(actualItem)
 		expectedJSON, _ := json.Marshal(expected[i])
-		if string(actualJSON2) != string(expectedJSON) {
-			t.Fatalf("TabletWithURL comparison failed for %s[%d]:\nActual: %s\nExpected: %s", path, i, string(actualJSON2), string(expectedJSON))
-		}
+		require.Equalf(t, string(expectedJSON), string(actualJSON2), "TabletWithURL comparison failed for %s[%d]", path, i)
 	}
 }
 
@@ -555,7 +537,7 @@ func TestAPI(t *testing.T) {
 				require.NoError(t, err)
 				defer resp.Body.Close()
 			default:
-				t.Fatalf("[%v] unknown method: %v", in.path, in.method)
+				require.Failf(t, "unknown method", "[%v] unknown method: %v", in.path, in.method)
 			}
 
 			body, err := io.ReadAll(resp.Body)
@@ -573,9 +555,7 @@ func TestAPI(t *testing.T) {
 					got = strings.TrimSpace(string(body))
 				}
 				// Use contains instead of prefix for more flexible matching
-				if !strings.Contains(got, want) {
-					t.Fatalf("For path [%v] got\n'%v', want to contain\n'%v'", in.path, got, want)
-				}
+				require.Containsf(t, got, want, "For path [%v] got\n'%v', want to contain\n'%v'", in.path, got, want)
 			} else if in.expectedProto != nil {
 				// Compare single proto object
 				compareProtoResponse(t, body, in.expectedProto, in.path)
@@ -611,20 +591,14 @@ func compareOutputProto(t *testing.T, body []byte, expected proto.Message, path 
 		Error  string `json:"Error"`
 		Output string `json:"Output"`
 	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		t.Fatalf("Failed to unmarshal vtctl response for %s: %v\nResponse: %s", path, err, string(body))
-	}
-	if resp.Error != "" {
-		t.Fatalf("Expected no error for %s, got: %s", path, resp.Error)
-	}
+	require.NoErrorf(t, json.Unmarshal(body, &resp), "Failed to unmarshal vtctl response for %s\nResponse: %s", path, string(body))
+	require.Emptyf(t, resp.Error, "Expected no error for %s, got: %s", path, resp.Error)
 	actual := proto.Clone(expected)
 	proto.Reset(actual)
-	if err := protojson.Unmarshal([]byte(resp.Output), actual); err != nil {
-		t.Fatalf("Failed to unmarshal Output as proto for %s: %v\nOutput: %s", path, err, resp.Output)
-	}
+	require.NoErrorf(t, protojson.Unmarshal([]byte(resp.Output), actual), "Failed to unmarshal Output as proto for %s\nOutput: %s", path, resp.Output)
 	if !proto.Equal(actual, expected) {
 		actualJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(actual)
 		expectedJSON, _ := protojson.MarshalOptions{Multiline: true}.Marshal(expected)
-		t.Fatalf("Proto Output comparison failed for %s:\nActual: %s\nExpected: %s", path, string(actualJSON), string(expectedJSON))
+		require.Failf(t, "Proto Output comparison failed", "Proto Output comparison failed for %s:\nActual: %s\nExpected: %s", path, string(actualJSON), string(expectedJSON))
 	}
 }

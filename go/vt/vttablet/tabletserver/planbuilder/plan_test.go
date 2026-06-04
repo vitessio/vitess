@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -98,7 +99,6 @@ func testPlan(t *testing.T, fileName string) {
 				out = string(bout)
 			}
 			if out != tcase.output {
-				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 				if err != nil {
 					out = fmt.Sprintf("\"%s\"", out)
 				} else {
@@ -106,6 +106,7 @@ func testPlan(t *testing.T, fileName string) {
 					out = string(bout)
 				}
 				fmt.Printf("\"in> %s\"\nout>%s\nexpected: %s\n\n", tcase.input, out, tcase.output)
+				assert.Failf(t, "plan mismatch", "Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 			}
 		})
 	}
@@ -131,14 +132,11 @@ func TestPlanInReservedConn(t *testing.T) {
 			if err != nil {
 				out = err.Error()
 			} else {
-				bout, err := json.Marshal(plan)
-				if err != nil {
-					t.Fatalf("Error marshalling %v: %v", plan, err)
-				}
+				bout, mErr := json.Marshal(plan)
+				require.NoErrorf(t, mErr, "Error marshalling %v", plan)
 				out = string(bout)
 			}
 			if out != tcase.output {
-				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 				if err != nil {
 					out = fmt.Sprintf("\"%s\"", out)
 				} else {
@@ -146,6 +144,7 @@ func TestPlanInReservedConn(t *testing.T) {
 					out = string(bout)
 				}
 				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
+				assert.Failf(t, "plan mismatch", "Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 			}
 		})
 	}
@@ -165,30 +164,22 @@ func TestCustom(t *testing.T) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		if len(files) == 0 {
-			t.Fatalf("No test files for %s", schemFile)
-		}
+		require.NotEmptyf(t, files, "No test files for %s", schemFile)
 		for _, file := range files {
 			t.Logf("Testing file %s", file)
 			for tcase := range iterateExecFile(file) {
 				statement, err := parser.Parse(tcase.input)
-				if err != nil {
-					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
-				}
+				require.NoErrorf(t, err, "Got error parsing sql: %v", tcase.input)
 				plan, err := Build(vtenv.NewTestEnv(), statement, schem, "dbName", false)
 				var out string
 				if err != nil {
 					out = err.Error()
 				} else {
-					bout, err := json.Marshal(plan)
-					if err != nil {
-						t.Fatalf("Error marshalling %v: %v", plan, err)
-					}
+					bout, mErr := json.Marshal(plan)
+					require.NoErrorf(t, mErr, "Error marshalling %v", plan)
 					out = string(bout)
 				}
-				if out != tcase.output {
-					t.Errorf("File: %s: Line:%v\ngot  = %s\nwant = %s", file, tcase.lineno, out, tcase.output)
-				}
+				assert.Equalf(t, tcase.output, out, "File: %s: Line:%v", file, tcase.lineno)
 			}
 		}
 	}
@@ -208,15 +199,11 @@ func TestStreamPlan(t *testing.T) {
 		if err != nil {
 			out = err.Error()
 		} else {
-			bout, err := json.Marshal(plan)
-			if err != nil {
-				t.Fatalf("Error marshalling %v: %v", plan, err)
-			}
+			bout, mErr := json.Marshal(plan)
+			require.NoErrorf(t, mErr, "Error marshalling %v", plan)
 			out = string(bout)
 		}
-		if out != tcase.output {
-			t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "Line:%v", tcase.lineno)
 	}
 }
 
@@ -238,21 +225,13 @@ func TestMessageStreamingPlan(t *testing.T) {
 	bout, _ = json.Marshal(wantPlan)
 	wantJSON := string(bout)
 
-	if planJSON != wantJSON {
-		t.Errorf("BuildMessageStreaming: \n%s, want\n%s", planJSON, wantJSON)
-	}
+	assert.Equalf(t, wantJSON, planJSON, "BuildMessageStreaming")
 
 	_, err = BuildMessageStreaming("absent", testSchema)
-	want := "table absent not found in schema"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildMessageStreaming(absent) error: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "table absent not found in schema", "BuildMessageStreaming(absent)")
 
 	_, err = BuildMessageStreaming("a", testSchema)
-	want = "'a' is not a message table"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildMessageStreaming(absent) error: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, "'a' is not a message table", "BuildMessageStreaming(absent)")
 }
 
 func TestLockPlan(t *testing.T) {
@@ -271,14 +250,11 @@ func TestLockPlan(t *testing.T) {
 			if err != nil {
 				out = err.Error()
 			} else {
-				bout, err := json.Marshal(plan)
-				if err != nil {
-					t.Fatalf("Error marshalling %v: %v", plan, err)
-				}
+				bout, mErr := json.Marshal(plan)
+				require.NoErrorf(t, mErr, "Error marshalling %v", plan)
 				out = string(bout)
 			}
 			if out != tcase.output {
-				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 				if err != nil {
 					out = fmt.Sprintf("\"%s\"", out)
 				} else {
@@ -286,6 +262,7 @@ func TestLockPlan(t *testing.T) {
 					out = string(bout)
 				}
 				fmt.Printf("\"in> %s\"\nout>%s\nexpected: %s\n\n", tcase.input, out, tcase.output)
+				assert.Failf(t, "plan mismatch", "Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 			}
 		})
 	}

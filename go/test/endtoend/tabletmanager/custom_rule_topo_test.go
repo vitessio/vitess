@@ -16,7 +16,6 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
@@ -80,7 +79,7 @@ func TestTopoCustomRule(t *testing.T) {
 	// It might take a while to replicate the two rows.
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		qr, err := clusterInstance.ExecOnTablet(context.Background(), rTablet, "select id, value from t1", nil, nil)
+		qr, err := clusterInstance.ExecOnTablet(t.Context(), rTablet, "select id, value from t1", nil, nil)
 		if err == nil {
 			if len(qr.Rows) == 2 {
 				break
@@ -105,7 +104,7 @@ func TestTopoCustomRule(t *testing.T) {
 	// And wait until the query fails with the right error.
 	timeout = time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		if _, err := clusterInstance.ExecOnTablet(context.Background(), rTablet, "select id, value from t1", nil, nil); err != nil {
+		if _, err := clusterInstance.ExecOnTablet(t.Context(), rTablet, "select id, value from t1", nil, nil); err != nil {
 			assert.Contains(t, err.Error(), "disallow select on table t1")
 			break
 		}
