@@ -362,7 +362,10 @@ func TestHealthCheckRetryDelayIsBounded(t *testing.T) {
 	defer hc.Close()
 
 	tablet := createTestTablet(0, "cell", "a")
-	input := make(chan *querypb.StreamHealthResponse)
+	// input is buffered so the recovery send below does not block until the
+	// healthcheck goroutine has already slept and reconnected. See the timing
+	// comment where the healthy response is sent.
+	input := make(chan *querypb.StreamHealthResponse, 1)
 	resultChan := hc.Subscribe("TestHealthCheckRetryDelayIsBounded")
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
@@ -379,7 +382,8 @@ func TestHealthCheckRetryDelayIsBounded(t *testing.T) {
 		<-resultChan // drain the not-serving update
 	}
 
-	// Now the tablet recovers. Send a healthy response.
+	// The tablet recovers. Build the healthy response up front so the timing
+	// window below covers only the reconnect delay, not test bookkeeping.
 	shr := &querypb.StreamHealthResponse{
 		TabletAlias:               tablet.Alias,
 		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
@@ -387,18 +391,26 @@ func TestHealthCheckRetryDelayIsBounded(t *testing.T) {
 		PrimaryTermStartTimestamp: 0,
 		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
+
+	// Because input is buffered, this send returns immediately instead of
+	// blocking until the healthcheck goroutine has finished its retry sleep and
+	// reconnected. That is what lets us start timing before the sleep and
+	// actually measure it. With an unbuffered channel the send would absorb the
+	// sleep, and the test would pass even if exponential backoff were restored.
+	start := time.Now()
 	input <- shr
 
-	// With the bounded ~10ms retry delay, rediscovery happens almost immediately
-	// (within a couple of jittered cycles). With the old exponential backoff
-	// (10ms * 2^6 = 640ms cap) it would lag far behind. The timeout is generous
-	// so a healthy run never flakes; only a regression that re-grows the delay
-	// would approach it.
+	// The fixed retry delay (~10ms +/- jitter) rediscovers the tablet within a
+	// single cycle. The old exponential backoff would sleep ~320ms after
+	// numErrors failures (10ms * 2^5), so a regression that regrows the delay
+	// blows past this bound. The 5s arm only trips on a true hang.
 	select {
 	case result := <-resultChan:
 		assert.True(t, result.Serving, "tablet should be serving after recovery")
-	case <-time.After(30 * time.Second):
-		require.Fail(t, "tablet was not rediscovered promptly after recovery; retry delay may be growing exponentially")
+		assert.Less(t, time.Since(start), 100*time.Millisecond,
+			"rediscovery took too long after recovery; retry delay may be growing exponentially")
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "tablet was not rediscovered after recovery")
 	}
 }
 
