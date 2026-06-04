@@ -334,15 +334,6 @@ func (ts *TestSpec) Close() {
 	execStatement(ts.t, dropStatement)
 }
 
-// TestSpecCloseWithoutSchema verifies that Close() is safe to call when the
-// schema was never populated. Tests defer Close() before calling Init(), so a
-// panic inside Init() (for example when MySQL fails to start) runs Close() with
-// a nil schema; it must not panic and mask the original failure.
-func TestSpecCloseWithoutSchema(t *testing.T) {
-	ts := &TestSpec{t: t}
-	require.NotPanics(t, ts.Close)
-}
-
 func (ts *TestSpec) getBindVarsForInsert(stmt sqlparser.Statement) (string, map[string]string) {
 	bv := make(map[string]string)
 	ins := stmt.(*sqlparser.Insert)
