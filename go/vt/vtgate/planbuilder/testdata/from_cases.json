@@ -1638,21 +1638,7 @@
   {
     "comment": "values list arg derived table",
     "query": "select 1 from (values ::vals) as sub",
-    "plan": {
-      "Type": "Passthrough",
-      "QueryType": "SELECT",
-      "Original": "select 1 from (values ::vals) as sub",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from (values ::vals limit 0) as sub where 1 != 1",
-        "Query": "select 1 from (values ::vals) as sub"
-      }
-    }
+    "plan": "VT12001: unsupported: VALUES list argument in derived table requires column aliases"
   },
   {
     "comment": "values list arg derived table with explicit column aliases",
