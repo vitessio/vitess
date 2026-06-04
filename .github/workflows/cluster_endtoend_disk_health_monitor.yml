@@ -51,7 +51,8 @@ jobs:
           token: ""
           filters: |
             end_to_end:
-              - 'go/vt/vttablet/tabletserver/disk_health_monitor*.go'
+              - 'go/vt/vttablet/tabletserver/**'
+              - 'go/test/endtoend/cluster/**'
               - 'go/test/endtoend/tabletmanager/disk_health_monitor/**'
               - 'test/config.json'
               - 'test.go'
