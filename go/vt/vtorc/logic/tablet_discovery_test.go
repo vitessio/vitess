@@ -216,7 +216,7 @@ func TestShouldWatchTablet(t *testing.T) {
 	}
 
 	for _, tt := range testCases {
-		t.Run(fmt.Sprintf("%v-Tablet-%v-%v", strings.Join(tt.in, ","), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
+		t.Run(fmt.Sprintf("clusters=%v,Tablet-%v-%v-%v", strings.Join(tt.in, ","), tt.tablet.GetAlias().GetCell(), tt.tablet.GetKeyspace(), tt.tablet.GetShard()), func(t *testing.T) {
 			clustersToWatch = tt.in
 			err := initializeShardsToWatch()
 			require.NoError(t, err)
