@@ -175,11 +175,11 @@ func (d *Distinct) Inputs() ([]Primitive, []map[string]any) {
 func (d *Distinct) description() PrimitiveDescription {
 	other := map[string]any{}
 
-	var colls []string
-	for _, checkCol := range d.CheckCols {
-		colls = append(colls, checkCol.String())
-	}
-	if colls != nil {
+	if len(d.CheckCols) > 0 {
+		colls := make([]string, 0, len(d.CheckCols))
+		for _, checkCol := range d.CheckCols {
+			colls = append(colls, checkCol.String())
+		}
 		other["Collations"] = colls
 	}
 

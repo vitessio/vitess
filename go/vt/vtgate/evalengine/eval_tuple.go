@@ -45,7 +45,7 @@ func newEvalTuple(values []*querypb.Value, collation collations.ID) (*evalTuple,
 }
 
 func (e *evalTuple) ToRawBytes() []byte {
-	var vals []sqltypes.Value
+	vals := make([]sqltypes.Value, 0, len(e.t))
 	for _, e2 := range e.t {
 		v, err := sqltypes.NewValue(e2.SQLType(), e2.ToRawBytes())
 		if err != nil {

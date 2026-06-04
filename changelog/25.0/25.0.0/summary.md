@@ -10,6 +10,8 @@
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
         - [VTOrc `--cell` flag is now required](#vtorc-cell-required)
+    - **[Deprecations](#deprecations)**
+        - [CLI Flags](#deprecated-cli-flags)
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
@@ -55,6 +57,16 @@ The `--cell` VTOrc flag, [introduced in v24](../../24.0/24.0.0/summary.md#vtorc-
 **Impact**: VTOrc will fail to start with a `FAILED_PRECONDITION` error if `--cell` is empty.
 
 See [#20048](https://github.com/vitessio/vitess/pull/20048) for the removal and [#19047](https://github.com/vitessio/vitess/pull/19047) for the original `--cell` flag introduction.
+
+### <a id="deprecations"/>Deprecations</a>
+
+#### <a id="deprecated-cli-flags"/>CLI Flags</a>
+
+The VTGate flag `--legacy-replication-lag-algorithm` is now deprecated and is a no-op. VTGate always uses the simpler replication lag algorithm based on low lag, high lag and the minimum number of tablets. A detailed explanation of the algorithm [is available in this code comment](https://github.com/vitessio/vitess/blob/main/go/vt/discovery/replicationlag.go).
+
+The flag will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/18914.
+
+**Impact**: Remove any usage of the `--legacy-replication-lag-algorithm` flag from VTGate startup scripts or configuration.
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
