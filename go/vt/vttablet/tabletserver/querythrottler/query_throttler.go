@@ -338,17 +338,15 @@ func (qt *QueryThrottler) buildLabels(strategyName, workload, priorityStr string
 }
 
 // extractWorkloadName extracts the workload name from ExecuteOptions.
-// If no workload name is provided, returns a default value.
+// Returns "unknown" whenever no workload was supplied — both when ExecuteOptions
+// itself is nil and when it carries an empty WorkloadName. The two cases were
+// previously distinguished as "unknown"/"default" but the split only added
+// metric-label cardinality without giving operators an actionable signal.
 func extractWorkloadName(options *querypb.ExecuteOptions) string {
-	if options == nil {
+	if options == nil || options.WorkloadName == "" {
 		return "unknown"
 	}
-
-	if options.WorkloadName != "" {
-		return options.WorkloadName
-	}
-
-	return "default"
+	return options.WorkloadName
 }
 
 // extractPriority extracts the priority from ExecuteOptions.

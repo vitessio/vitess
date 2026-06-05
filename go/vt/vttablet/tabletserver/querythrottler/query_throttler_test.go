@@ -306,11 +306,11 @@ func TestQueryThrottler_extractWorkloadName(t *testing.T) {
 			want:    "unknown",
 		},
 		{
-			name: "empty workload name returns default",
+			name: "empty workload name returns unknown",
 			options: &querypb.ExecuteOptions{
 				WorkloadName: "",
 			},
-			want: "default",
+			want: "unknown",
 		},
 		{
 			name: "custom workload name returns the name",

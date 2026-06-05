@@ -51,7 +51,7 @@ func toQueryAttributesForTest(options *querypb.ExecuteOptions) registry.QueryAtt
 		return registry.QueryAttributes{WorkloadName: "unknown", Priority: 100}
 	}
 
-	workloadName := "default"
+	workloadName := "unknown"
 	if options.WorkloadName != "" {
 		workloadName = options.WorkloadName
 	}
