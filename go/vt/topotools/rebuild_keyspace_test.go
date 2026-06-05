@@ -56,6 +56,13 @@ func TestRebuildKeyspaceCopiesQueryThrottlerConfig(t *testing.T) {
 
 	srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
 	require.NoError(t, err)
+	// This NotNil is the load-bearing assertion the production fix exists to
+	// satisfy: RebuildKeyspaceLocked must copy ki.QueryThrottlerConfig into the
+	// SrvKeyspace value it writes to topo. Without the fix, srvKeyspaceMap is
+	// built with only ThrottlerConfig and this returns nil, failing here with a
+	// message that names exactly what regressed.
+	require.NotNil(t, srvKeyspace.GetQueryThrottlerConfig(),
+		"RebuildKeyspace did not propagate Keyspace.QueryThrottlerConfig to SrvKeyspace — production fix in rebuild_keyspace.go (srvKeyspaceMap[cell] = &SrvKeyspace{QueryThrottlerConfig: ki.QueryThrottlerConfig, ...}) is missing")
 	assert.True(t, proto.Equal(queryThrottlerConfig, srvKeyspace.GetQueryThrottlerConfig()),
 		"SrvKeyspace.QueryThrottlerConfig mismatch: want %v, got %v", queryThrottlerConfig, srvKeyspace.GetQueryThrottlerConfig())
 }

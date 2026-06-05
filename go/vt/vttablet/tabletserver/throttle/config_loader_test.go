@@ -67,3 +67,65 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_PicksMinFloorWhenUnsorted(
 	require.Equal(t, float64(10), tc.MetricThresholds["lag"],
 		"underlying throttler floor must be the TRUE minimum threshold (10), not thresholds[0] (50) — defensive sort on receipt required")
 }
+
+// TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules verifies the
+// cross-rule MIN reduction: when the same metric appears in MULTIPLE rules
+// (different tablet types, different statement types, or both), the underlying
+// throttler's floor is the GLOBAL minimum across all of them, not whichever rule
+// happens to be visited first by the map iteration. Independent metrics keep
+// their own thresholds, and the AppCheckedMetrics name list deduplicates so the
+// same metric is registered once even when it appears in many rules.
+//
+// This exercises the math.Min branch that the existing patch coverage missed.
+func TestConvertQueryThrottlerConfigToThrottlerConfig_MinAcrossRules(t *testing.T) {
+	// Same `lag` metric appears in TWO rules with different floors; an
+	// independent `cpu` metric appears in a third rule.
+	//   PRIMARY/SELECT/lag → floor 25
+	//   PRIMARY/INSERT/cpu → floor 80 (different metric, independent)
+	//   REPLICA/SELECT/lag → floor 5  ← global minimum across `lag` rules
+	cfg := &querythrottlerpb.Config{
+		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		Enabled:  true,
+		TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+			TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+				"PRIMARY": {
+					StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+						"SELECT": {
+							MetricRules: map[string]*querythrottlerpb.MetricRule{
+								"lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 25, Throttle: 50}}},
+							},
+						},
+						"INSERT": {
+							MetricRules: map[string]*querythrottlerpb.MetricRule{
+								"cpu": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 80, Throttle: 100}}},
+							},
+						},
+					},
+				},
+				"REPLICA": {
+					StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+						"SELECT": {
+							MetricRules: map[string]*querythrottlerpb.MetricRule{
+								"lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5, Throttle: 25}}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	tc := convertQueryThrottlerConfigToThrottlerConfig(cfg)
+	require.NotNil(t, tc)
+
+	require.Equal(t, float64(5), tc.MetricThresholds["lag"],
+		"`lag` floor must be the GLOBAL minimum across all rules (5), not whichever rule was visited first (25)")
+	require.Equal(t, float64(80), tc.MetricThresholds["cpu"],
+		"independent metric `cpu` must keep its own threshold")
+
+	appName := throttlerapp.QueryThrottlerName.String()
+	require.NotNil(t, tc.AppCheckedMetrics[appName])
+	names := tc.AppCheckedMetrics[appName].GetNames()
+	require.Len(t, names, 2, "AppCheckedMetrics names must contain each unique metric exactly once (no duplicates from multiple rules)")
+	require.ElementsMatch(t, []string{"lag", "cpu"}, names)
+}
