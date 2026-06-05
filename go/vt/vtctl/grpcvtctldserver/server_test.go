@@ -4744,6 +4744,18 @@ func TestFillReparentResponseFromEvent(t *testing.T) {
 		assert.Equal(t, "-", s)
 		assert.Nil(t, pp)
 	})
+
+	t.Run("zero ShardInfo early return skips promotedPrimary even if NewPrimary is set", func(t *testing.T) {
+		t.Parallel()
+		k, s := "ks", "-"
+		var pp *topodatapb.TabletAlias
+		ev := &events.Reparent{}
+		ev.NewPrimary = &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+		fillReparentResponseFromEvent(&k, &s, &pp, ev)
+		assert.Equal(t, "ks", k)
+		assert.Equal(t, "-", s)
+		assert.Nil(t, pp) // early return on nil Shard; NewPrimary not copied
+	})
 }
 
 func TestEmergencyReparentShard(t *testing.T) {
