@@ -100,8 +100,15 @@ func (vc *vdbClient) BeginImmediate() error {
 	if err := vc.DBClient.Begin(); err != nil {
 		return err
 	}
+	// The "begin" entry is for Retry's replay loop, which calls vc.Begin()
+	// when it sees "begin" in the buffer. BEGIN has already gone down the
+	// wire above, so advance queriesPos past it: any later
+	// ExecuteTrxQueryBatch / CommitTrxQueryBatch must not include this
+	// "begin" in its multi-statement, because a nested BEGIN would
+	// implicit-commit the current transaction and break atomicity with
+	// the immediate writes the caller is about to do.
 	vc.queries = []string{"begin"}
-	vc.queriesPos = 0
+	vc.queriesPos = 1
 	vc.batchSize = 0
 	vc.InTransaction = true
 	vc.startTime = time.Now()

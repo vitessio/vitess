@@ -988,6 +988,20 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			// All were found. We must register journal.
 		}
+		// Register the journal before persisting the position so that if
+		// registerJournal fails we have not advanced past the journal event
+		// — otherwise the workflow stops at a position past the journal and
+		// the journal is silently skipped on restart. registerJournal is
+		// idempotent (see Engine.registerJournal in engine.go: per-key lookup,
+		// existing-participant guard), so re-entering this handler if the
+		// position write below fails is safe.
+		log.Info(fmt.Sprintf("Binlog event registering journal event %+v", event.Journal))
+		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
+			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
+				return err
+			}
+			return io.EOF
+		}
 		if event.EventGtid != "" {
 			journalPos, err := vp.journalEventPosition(event.EventGtid)
 			if err != nil {
@@ -998,13 +1012,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 			vp.recordPositionSave(journalPos, false)
-		}
-		log.Info(fmt.Sprintf("Binlog event registering journal event %+v", event.Journal))
-		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
-			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
-				return err
-			}
-			return io.EOF
 		}
 		if stats != nil {
 			stats.Send(fmt.Sprintf("%v", event.Journal))

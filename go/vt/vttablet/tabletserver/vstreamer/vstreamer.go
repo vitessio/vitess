@@ -449,6 +449,15 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					if !throttledTime.CompareAndSwap(0, curtime) {
 						if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
 							throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeout)
+							// Close throttledEvents so the main parseEvents loop's
+							// `case ev, ok := <-throttledEvents` fires with ok=false
+							// and can return the throttler error (or a pending
+							// source error). Without this close, if pendingStreamErr
+							// is already set the main loop's throttlerErrs case
+							// `continue`s and the only remaining live select case
+							// is hbTimer.C, which spins forever swallowing the
+							// pending error until the caller cancels.
+							close(throttledEvents)
 							return
 						}
 					}

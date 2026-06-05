@@ -6290,15 +6290,18 @@ func TestSetState_BatchedTransactionDefersStateUpdateUntilCommit(t *testing.T) {
 	assert.Contains(t, recording.queries[0], "update _vt.vreplication set state='Stopped'")
 }
 
-// TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites covers the
-// worker batch-mode stop-position path. The caller adds the position update
-// via AddQueryToTrxBatch, then setStateWithDBClientImmediate runs the
-// state UPDATE and the vreplication_log INSERT via ExecuteFetch (those
-// were appended to the trx batch buffer by ExecuteFetch), and finally
-// CommitTrxQueryBatch should not replay them — otherwise reaching
-// stopPos doubles every vreplication_log row and breaks atomicity of
-// the position + state writes (issue spotted by review on
-// parallel_apply.go:2091-2101).
+// TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites exercises
+// the worker batch-mode stop-position pattern at parallel_apply.go: the
+// caller buffers the position update with AddQueryToTrxBatch, then flushes
+// the batch with ExecuteTrxQueryBatch so the upcoming immediate writes share
+// the same MySQL transaction, runs setStateWithDBClientImmediate to emit
+// the state UPDATE and vreplication_log INSERT via ExecuteFetch, marks
+// those already-executed queries as flushed, and finally calls
+// CommitTrxQueryBatch which must send only ";commit" — not a replay of
+// every prior query. Skipping any step in this dance doubles the
+// vreplication_log row and (in the previous fix) broke atomicity with the
+// position save by implicit-committing the active transaction via a
+// nested BEGIN.
 func TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	recording := &recordingDBClient{}
@@ -6360,6 +6363,25 @@ func TestSetStateImmediate_FollowedByAddQueryToTrxBatchPreservesNoDuplicate(t *t
 	// (LogStateChange) and one from the follow-up AddQueryToTrxBatch.
 	assert.Equal(t, 2, strings.Count(joined, "insert into _vt.vreplication_log"),
 		"each vreplication_log INSERT must be sent exactly once. Queries: %v", recording.queries)
+}
+
+// TestBeginImmediate_AdvancesQueriesPosPastBeginSeed pins that BeginImmediate
+// leaves vc.queriesPos past the synthetic "begin" entry it seeds. BEGIN was
+// already sent on the wire by BeginImmediate; the buffer entry only exists so
+// Retry's replay loop calls vc.Begin() instead of ExecuteFetch("begin"). Any
+// subsequent ExecuteTrxQueryBatch / CommitTrxQueryBatch must not include it
+// in its multi-statement, or the nested BEGIN would implicit-commit the
+// active transaction and break atomicity with whatever the caller has done
+// so far.
+func TestBeginImmediate_AdvancesQueriesPosPastBeginSeed(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	recording := &recordingDBClient{}
+	dbClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	dbClient.maxBatchSize = 1024
+
+	require.NoError(t, dbClient.BeginImmediate())
+	assert.Equal(t, []string{"begin"}, dbClient.queries)
+	assert.Equal(t, int64(1), dbClient.queriesPos)
 }
 
 // ---------- enqueueCommitOnly tests ----------
