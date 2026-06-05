@@ -20,10 +20,11 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"reflect"
 	"sort"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
@@ -228,12 +229,8 @@ func (s *TabletThrottlerStrategy) UpdateConfig(cfg *querythrottlerpb.Config) {
 		newTabletCfg = &querythrottlerpb.TabletStrategyConfig{}
 	}
 
-	// Skip the store when nothing changed. reflect.DeepEqual is used here for the
-	// same reasons as in the prior in-strategy watch callback: TabletStrategyConfig
-	// is 3-level nested (TabletRules -> StatementRuleSet -> MetricRuleSet), manual
-	// comparison would be ~50 lines of nested loops, and this runs in the rare
-	// config-update path (not the query hot path).
-	if reflect.DeepEqual(s.config.Load(), newTabletCfg) {
+	// Skip the store when nothing changed.
+	if proto.Equal(s.config.Load(), newTabletCfg) {
 		return
 	}
 	s.config.Store(newTabletCfg)

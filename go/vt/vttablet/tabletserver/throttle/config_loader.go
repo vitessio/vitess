@@ -18,6 +18,7 @@ package throttle
 
 import (
 	"math"
+	"sort"
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
@@ -86,6 +87,16 @@ func convertQueryThrottlerConfigToThrottlerConfig(qtCfg *querythrottlerpb.Config
 					if _, ok := seenMetrics[metricName]; !ok {
 						metricsNames = append(metricsNames, metricName)
 						seenMetrics[metricName] = true
+					}
+					// Defensively sort thresholds ascending by Above so thresholds[0]
+					// is the true minimum (the "floor" the underlying throttler should
+					// trigger on). sanitizeQueryThrottlerConfig sorts on the RPC write
+					// path, but a direct topo write would bypass it and silently pick
+					// an arbitrary threshold here.
+					if len(thresholds) > 1 {
+						sort.Slice(thresholds, func(i, j int) bool {
+							return thresholds[i].GetAbove() < thresholds[j].GetAbove()
+						})
 					}
 					thresholdValue := thresholds[0].GetAbove()
 					if existingValue, exists := metricThresholds[metricName]; exists {

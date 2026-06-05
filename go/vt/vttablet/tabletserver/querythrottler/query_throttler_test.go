@@ -1185,3 +1185,70 @@ func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *test
 	require.Equal(t, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, snap.cfg.GetStrategy(),
 		"snapshot cfg must NOT be replaced with the post-shutdown update")
 }
+
+// TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt verifies that
+// HandleConfigUpdate sorts each MetricRule's Thresholds slice ascending by Above
+// before storing the new cfg. GetThrottleDecision relies on sort.Search and
+// therefore on ascending order; sanitizeQueryThrottlerConfig only sorts on the
+// RPC write path, so a direct topo write that landed unsorted thresholds would
+// silently corrupt throttling decisions. Sorting on receipt here closes that gap.
+func TestQueryThrottler_HandleConfigUpdate_SortsThresholdsOnReceipt(t *testing.T) {
+	ctx := t.Context()
+
+	// Seed the snapshot with a different strategy so the incoming TABLET_THROTTLER
+	// SrvKeyspace is treated as a strategy change — the new cfg is then built
+	// into the snapshot rather than short-circuited by proto.Equal.
+	qt := &QueryThrottler{
+		ctx:          ctx,
+		tabletConfig: &tabletenv.TabletConfig{},
+	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN},
+		strategy: &mockThrottlingStrategy{},
+	})
+	// Inject a deterministic factory so building the new strategy doesn't pull
+	// in production dependencies (selectThrottlingStrategy needs a real client).
+	qt.newStrategyFactory = func(_ *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+		return &mockThrottlingStrategy{}
+	}
+
+	// Thresholds intentionally given OUT OF ORDER to simulate a direct topo write
+	// that bypassed the RPC sanitizer.
+	unsorted := []*querythrottlerpb.ThrottleThreshold{
+		{Above: 50, Throttle: 100},
+		{Above: 10, Throttle: 25},
+		{Above: 25, Throttle: 50},
+	}
+	srvks := &topodatapb.SrvKeyspace{
+		QueryThrottlerConfig: &querythrottlerpb.Config{
+			Enabled:  true,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+					"PRIMARY": {
+						StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+							"SELECT": {
+								MetricRules: map[string]*querythrottlerpb.MetricRule{
+									"lag": {Thresholds: unsorted},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	qt.HandleConfigUpdate(srvks, nil)
+
+	storedThresholds := qt.snapshot.Load().cfg.
+		GetTabletStrategyConfig().
+		GetTabletRules()["PRIMARY"].
+		GetStatementRules()["SELECT"].
+		GetMetricRules()["lag"].
+		GetThresholds()
+	require.Len(t, storedThresholds, 3)
+	require.Equal(t, float64(10), storedThresholds[0].GetAbove(), "thresholds[0] must be the minimum after defensive sort")
+	require.Equal(t, float64(25), storedThresholds[1].GetAbove())
+	require.Equal(t, float64(50), storedThresholds[2].GetAbove())
+}
