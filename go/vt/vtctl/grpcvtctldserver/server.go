@@ -1285,7 +1285,7 @@ func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.Delet
 // reparentShardLocked returned before populating it), the caller's default values
 // are preserved unchanged.
 func fillReparentResponseFromEvent(keyspace, shard *string, promotedPrimary **topodatapb.TabletAlias, ev *events.Reparent) {
-	if ev == nil {
+	if ev == nil || ev.ShardInfo.Shard == nil {
 		return
 	}
 	if k, s := ev.ShardInfo.Keyspace(), ev.ShardInfo.ShardName(); k != "" && s != "" {
