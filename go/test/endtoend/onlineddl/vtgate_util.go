@@ -224,11 +224,33 @@ func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 	}
 }
 
+// CheckCompleteContextMigrations completes all pending migrations with a given context and expects number of affected rows.
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCompleteContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
+	query := fmt.Sprintf("alter vitess_migration complete context '%s'", migrationContext)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
 // CheckCompleteAllMigrations completes all pending migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	completeQuery := "alter vitess_migration complete all"
 	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
+// CheckPostponeCompleteContextMigrations postpones completion of all pending migrations with a given context and expects number of affected rows.
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckPostponeCompleteContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
+	query := fmt.Sprintf("alter vitess_migration postpone complete context '%s'", migrationContext)
+	r := VtgateExecQuery(t, vtParams, query, "")
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -257,6 +279,29 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	}
 }
 
+// CheckCancelContextMigrations cancels all pending migrations with a given context and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCancelContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
+	cancelQuery := fmt.Sprintf("alter vitess_migration cancel context '%s'", migrationContext)
+	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
+// CheckCleanupContextMigrations cleans up terminal migrations with a given context and expects number of affected rows.
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckCleanupContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) uint64 {
+	query := fmt.Sprintf("alter vitess_migration cleanup context '%s'", migrationContext)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+	return r.RowsAffected
+}
+
 // CheckCleanupAllMigrations cleans up all applicable migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCleanupAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) uint64 {
@@ -269,11 +314,33 @@ func CheckCleanupAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectC
 	return r.RowsAffected
 }
 
+// CheckLaunchContextMigrations launches all queued postponed migrations with a given context and expects number of affected rows.
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckLaunchContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
+	query := fmt.Sprintf("alter vitess_migration launch context '%s'", migrationContext)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
 // CheckLaunchAllMigrations launches all queued posponed migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	completeQuery := "alter vitess_migration launch all"
 	r := VtgateExecQuery(t, vtParams, completeQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
+// CheckForceCutOverContextMigrations marks all pending migrations with a given context for forced cut-over and expects number of affected rows.
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckForceCutOverContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string, expectCount int) {
+	query := fmt.Sprintf("alter vitess_migration force_cutover context '%s'", migrationContext)
+	r := VtgateExecQuery(t, vtParams, query, "")
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -378,6 +445,49 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	}
 }
 
+// WaitForMigrationReviewedTimestamp waits until reviewed_timestamp is set for the given
+// migration on all shards. This is needed before LaunchMigrations, which uses a query
+// that requires reviewed_timestamp IS NOT NULL.
+func WaitForMigrationReviewedTimestamp(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration) {
+	t.Helper()
+	shardNames := map[string]bool{}
+	for _, shard := range shards {
+		shardNames[shard.Name] = true
+	}
+	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		countReviewed := 0
+		r := VtgateExecQuery(t, vtParams, query, "")
+		for _, row := range r.Named().Rows {
+			shardName := row["shard"].ToString()
+			if !shardNames[shardName] {
+				continue
+			}
+			if row["migration_uuid"].ToString() == uuid && row["reviewed_timestamp"].ToString() != "" {
+				countReviewed++
+			}
+		}
+		if countReviewed == len(shards) {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			require.Failf(t, "timed out", "waiting for reviewed_timestamp on migration %s", uuid)
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts
 func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectArtifacts bool) {
 	r := ReadMigrations(t, vtParams, uuid)
@@ -420,9 +530,21 @@ func ThrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 	_ = VtgateExecQuery(t, vtParams, query, "")
 }
 
+// ThrottleContextMigrations throttles all pending migrations with a given context.
+func ThrottleContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string) {
+	query := fmt.Sprintf("alter vitess_migration throttle context '%s' expire '24h' ratio 1", migrationContext)
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
 // UnthrottleAllMigrations cancels migration throttling
 func UnthrottleAllMigrations(t *testing.T, vtParams *mysql.ConnParams) {
 	query := "alter vitess_migration unthrottle all"
+	_ = VtgateExecQuery(t, vtParams, query, "")
+}
+
+// UnthrottleContextMigrations unthrottles all pending migrations with a given context.
+func UnthrottleContextMigrations(t *testing.T, vtParams *mysql.ConnParams, migrationContext string) {
+	query := fmt.Sprintf("alter vitess_migration unthrottle context '%s'", migrationContext)
 	_ = VtgateExecQuery(t, vtParams, query, "")
 }
 

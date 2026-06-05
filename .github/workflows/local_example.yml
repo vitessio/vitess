@@ -17,14 +17,14 @@ jobs:
 
   build:
     name: Local example using ${{ matrix.topo }} on Ubuntu
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
     strategy:
       matrix:
         topo: [etcd, zk2]
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+      uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99 # v2.19.2
       with:
         egress-policy: audit
 

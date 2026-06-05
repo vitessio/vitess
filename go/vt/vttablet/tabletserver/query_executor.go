@@ -775,6 +775,9 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 				startTime := time.Now()
 				q.Wait()
 				qre.tsv.stats.WaitTimings.Record("Consolidations", startTime)
+			} else if qre.tsv.config.ConsolidatorRejectOnCap {
+				q.AddWaiterCounter(-1)
+				return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "consolidator waiter cap exceeded")
 			} else {
 				// Waiter cap exceeded, fall back to independent query execution
 				waiterCapExceeded = true
@@ -1031,35 +1034,35 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.CleanupMigrationType:
 		return qre.tsv.onlineDDLExecutor.CleanupMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CleanupAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CleanupAllMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.CleanupAllMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.LaunchMigrationType:
 		return qre.tsv.onlineDDLExecutor.LaunchMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
 	case sqlparser.LaunchAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.CompleteMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
 	case sqlparser.CompleteAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.PostponeCompleteMigrationType:
 		return qre.tsv.onlineDDLExecutor.PostponeCompleteMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.PostponeCompleteAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.PostponeCompletePendingMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.PostponeCompletePendingMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.CancelMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user", true)
 	case sqlparser.CancelAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user", true)
+		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, alterMigration.Context, true)
 	case sqlparser.ThrottleMigrationType:
 		return qre.tsv.onlineDDLExecutor.ThrottleMigration(qre.ctx, alterMigration.UUID, alterMigration.Expire, alterMigration.Ratio)
 	case sqlparser.ThrottleAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.ThrottleAllMigrations(qre.ctx, alterMigration.Expire, alterMigration.Ratio)
+		return qre.tsv.onlineDDLExecutor.ThrottleAllMigrations(qre.ctx, alterMigration.Expire, alterMigration.Ratio, alterMigration.Context)
 	case sqlparser.UnthrottleMigrationType:
 		return qre.tsv.onlineDDLExecutor.UnthrottleMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.UnthrottleAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.UnthrottleAllMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.UnthrottleAllMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.ForceCutOverMigrationType:
 		return qre.tsv.onlineDDLExecutor.ForceCutOverMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.ForceCutOverAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.ForceCutOverPendingMigrations(qre.ctx)
+		return qre.tsv.onlineDDLExecutor.ForceCutOverPendingMigrations(qre.ctx, alterMigration.Context)
 	case sqlparser.SetCutOverThresholdMigrationType:
 		return qre.tsv.onlineDDLExecutor.SetMigrationCutOverThreshold(qre.ctx, alterMigration.UUID, alterMigration.Threshold)
 	}

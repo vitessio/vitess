@@ -1936,7 +1936,7 @@ func TestPlayerTypes(t *testing.T) {
 		},
 	}, {
 		input:  "insert into vitess_decimal values(1, 0, 1, null, 0, 1.1, 1)",
-		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,.0,1.1,1.0)",
+		output: "insert into vitess_decimal(id,d1,d2,d3,d4,d5,d6) values (1,0,1,null,0.0,1.1,1.0)",
 		table:  "vitess_decimal",
 		data: [][]string{
 			{"1", "0", "1", "", "0.0", "1.1", "1.0"},
@@ -2053,20 +2053,20 @@ func TestPlayerDDL(t *testing.T) {
 		OnDdl:    binlogdatapb.OnDDLAction_STOP,
 	}
 	cancel, id := startVReplication(t, bls, "")
-	pos0 := primaryPosition(t) // For debugging only
+	pos0 := primaryPositionParsed(t)
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
-	pos1 := primaryPosition(t)
-	// The stop position must be the GTID of the first DDL
-	expectDBClientQueries(t, qh.Expect(
-		"begin",
-		posOrPrevRegex(pos1),
-		"/update _vt.vreplication set state='Stopped'",
-		"commit",
-	))
-	pos2b := primaryPosition(t)
+	pos1 := primaryPositionParsed(t)
+	// The stop position must be the GTID of the first DDL, which lies between
+	// the positions observed before and after the ALTER.
+	expectDBClientQueries(t, qh.Expect("begin").
+		Then(qh.PosBetween(pos0, pos1)).
+		Then(qh.Immediately(
+			"/update _vt.vreplication set state='Stopped'",
+			"commit",
+		)))
+	pos2b := primaryPositionParsed(t)
 	execStatements(t, []string{"alter table t1 drop column val"})
-	pos2 := primaryPosition(t)
-	log.Error(fmt.Sprintf("Expected log:: TestPlayerDDL Positions are: before first alter %v, after first alter %v, before second alter %v, after second alter %v", pos0, pos1, pos2b, pos2)) // For debugging only: to check what are the positions when test works and if/when it fails
+	pos2 := primaryPositionParsed(t)
 	// Restart vreplication
 	_, err := playerEngine.Exec(fmt.Sprintf(`update _vt.vreplication set state = 'Running', message='' where id=%d`, id))
 	require.NoError(t, err)
@@ -2077,10 +2077,12 @@ func TestPlayerDDL(t *testing.T) {
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update.*'Running'",
 		"begin",
-		fmt.Sprintf("/update.*'%s'", pos2),
-		"/update _vt.vreplication set state='Stopped'",
-		"commit",
-	))
+	).
+		Then(qh.PosBetween(pos2b, pos2)).
+		Then(qh.Immediately(
+			"/update _vt.vreplication set state='Stopped'",
+			"commit",
+		)))
 	cancel()
 	bls = &binlogdatapb.BinlogSource{
 		Keyspace: env.KeyspaceName,
@@ -2281,32 +2283,6 @@ func TestPlayerStopPos(t *testing.T) {
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
 	))
-}
-
-func posOrPrevRegex(pos string) string {
-	positions := []string{pos}
-	if prev, ok := decrementPosition(pos); ok {
-		positions = append(positions, prev)
-		if prev2, ok := decrementPosition(prev); ok {
-			positions = append(positions, prev2)
-		}
-	}
-	for i := range positions {
-		positions[i] = regexp.QuoteMeta(positions[i])
-	}
-	return fmt.Sprintf("/update _vt.vreplication set pos='(%s)'", strings.Join(positions, "|"))
-}
-
-func decrementPosition(pos string) (string, bool) {
-	idx := strings.LastIndex(pos, "-")
-	if idx == -1 || idx+1 >= len(pos) {
-		return "", false
-	}
-	val, err := strconv.Atoi(pos[idx+1:])
-	if err != nil || val <= 0 {
-		return "", false
-	}
-	return pos[:idx+1] + strconv.Itoa(val-1), true
 }
 
 func TestPlayerStopAtOther(t *testing.T) {

@@ -20,23 +20,16 @@ import { TextInput } from '../TextInput';
 import style from './DataFilter.module.scss';
 
 interface Props {
-    autoFocus?: boolean;
     onChange?: React.ChangeEventHandler<HTMLInputElement>;
     onClear?: React.MouseEventHandler<HTMLButtonElement>;
     placeholder?: string;
     value?: string | null | undefined;
 }
 
-export const DataFilter = ({ autoFocus, onChange, onClear, placeholder, value }: Props) => {
+export const DataFilter = ({ onChange, onClear, placeholder, value }: Props) => {
     return (
         <div className={style.controls}>
-            <TextInput
-                autoFocus={autoFocus}
-                iconLeft={Icons.search}
-                onChange={onChange}
-                placeholder={placeholder}
-                value={value || ''}
-            />
+            <TextInput iconLeft={Icons.search} onChange={onChange} placeholder={placeholder} value={value || ''} />
             <button className="btn btn-secondary" disabled={!value} onClick={onClear} type="button">
                 Clear filters
             </button>
