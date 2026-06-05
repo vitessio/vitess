@@ -588,3 +588,85 @@ func TestTabletThrottlerStrategy_StopWithoutStartCancelsContext(t *testing.T) {
 	strategy.Stop()
 	require.Error(t, strategy.ctx.Err(), "Stop() must cancel the strategy context even when Start() was never called")
 }
+
+// nilResultThrottleClient is the canonical "ctx was canceled" return signature from a
+// real ThrottleCheckOK caller: a nil CheckResult paired with checkOk=false. Used to
+// reproduce the Stop-races-refresh race in refreshCache.
+type nilResultThrottleClient struct{}
+
+func (nilResultThrottleClient) ThrottleCheckOK(ctx context.Context, _ throttlerapp.Name) (*throttle.CheckResult, bool) {
+	return nil, false
+}
+
+// TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState verifies
+// that when Stop() races an in-flight refresh and the underlying ThrottleCheckOK returns
+// (nil, false) due to context cancellation, refreshCache does NOT overwrite the prior
+// good cached state. Before the fix, refreshCache only treated DeadlineExceeded as a
+// failure — Canceled fell through to the store path and poisoned the cache with a nil
+// result, which would later panic in Evaluate's metric loop.
+func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState(t *testing.T) {
+	strategy := NewTabletThrottlerStrategy(nilResultThrottleClient{}, &querythrottlerpb.TabletStrategyConfig{}, createTestTabletConfig())
+
+	// Prime with a known-good state — what a successful prior refresh would have produced.
+	primed := &cacheState{
+		ok: true,
+		result: &throttle.CheckResult{
+			Metrics: map[string]*throttle.MetricResult{
+				"lag": {ResponseCode: tabletmanagerdata.CheckThrottlerResponseCode_OK, Value: 1},
+			},
+		},
+		refreshedAt: time.Now(),
+	}
+	strategy.cachedState.Store(primed)
+
+	// Cancel the strategy ctx — simulates Stop() running concurrently with a refresh
+	// that has not yet returned. The derived ctx in refreshCache inherits this cancellation.
+	strategy.cancel()
+
+	// Run a refresh against the canceled ctx. The client returns (nil, false), the
+	// ctx error is context.Canceled (not DeadlineExceeded), and the prior primed
+	// state must be preserved rather than overwritten.
+	strategy.refreshCache()
+
+	require.Same(t, primed, strategy.cachedState.Load(),
+		"canceled refresh must preserve the prior good cache state, not overwrite it with (nil, false)")
+}
+
+// TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen verifies the
+// defense-in-depth guard: even if some future change causes refreshCache to store a
+// cacheState with result=nil, Evaluate must fail open rather than panic on the
+// `for ... range checkResult.Metrics` loop.
+func TestTabletThrottlerStrategy_Evaluate_NilCachedResultFailsOpen(t *testing.T) {
+	cfg := makeTabletStrategyConfig(
+		topodatapb.TabletType_PRIMARY.String(),
+		"SELECT",
+		"lag",
+		makeThresholds(10, 100),
+	)
+	strategy := newTestStrategyWithRandom(
+		NewFakeThrottleClientWrapper(nil, false),
+		cfg,
+		testRandomFuncs{
+			randFloat64: func() float64 { return 0.5 },
+			randIntN:    func(n int) int { return 99 },
+		},
+	)
+
+	// Inject a cacheState{ok:false, result:nil} directly — the exact shape refreshCache
+	// would have stored on a Canceled ctx before the fix. running=true so the hot-path
+	// fail-open (returns checkOk=true when !running) does NOT mask the bug.
+	strategy.cachedState.Store(&cacheState{ok: false, result: nil, refreshedAt: time.Now()})
+	strategy.running.Store(true)
+
+	options := &querypb.ExecuteOptions{Priority: "100"}
+	require.NotPanics(t, func() {
+		decision := strategy.Evaluate(
+			context.Background(),
+			topodatapb.TabletType_PRIMARY,
+			&sqlparser.ParsedQuery{Query: "SELECT * FROM t"},
+			1,
+			toQueryAttributesForTest(options),
+		)
+		require.False(t, decision.Throttle, "nil cached result must fail open, not throttle")
+	}, "Evaluate must not panic when cached result is nil")
+}

@@ -18,7 +18,6 @@ package tabletthrottler
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"reflect"
@@ -262,6 +261,11 @@ func (s *TabletThrottlerStrategy) runCacheUpdater() {
 // also check whether the existing cache has aged past cacheStalenessThreshold and bump
 // CacheStaleRefreshes — so operators can alert on prolonged outages without per-query
 // time arithmetic in the hot path.
+//
+// A failed refresh is any of: a derived-ctx error (DeadlineExceeded from our timeout
+// OR Canceled from a Stop racing the in-flight call) OR a nil checkResult returned
+// by the throttler client. Storing a nil result would later panic in Evaluate's
+// metric loop, so we discard it here.
 func (s *TabletThrottlerStrategy) refreshCache() {
 	ctx, cancel := context.WithTimeout(s.ctx, throttleCheckTimeout)
 	defer cancel()
@@ -270,7 +274,7 @@ func (s *TabletThrottlerStrategy) refreshCache() {
 	checkResult, checkOk := s.throttlerClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
 
 	status := cacheRefreshStatusSuccess
-	if err := ctx.Err(); errors.Is(err, context.DeadlineExceeded) {
+	if ctx.Err() != nil || checkResult == nil {
 		status = cacheRefreshStatusTimeout
 		cacheRefreshFailures.Add(1)
 		if s.isStale(s.cachedState.Load()) {
@@ -416,8 +420,11 @@ func (s *TabletThrottlerStrategy) Evaluate(ctx context.Context, targetTabletType
 	// in the hot path. checkResult may be nil in that case, but the early return
 	// on checkOk below skips the metrics evaluation that would dereference it.
 	checkResult, checkOk := s.getCachedThrottleResult()
-	// If check passes, system is not overloaded → allow query
-	if checkOk {
+	// If check passes, system is not overloaded → allow query.
+	// checkResult==nil is defense-in-depth: refreshCache must never store a nil
+	// result, but if a future change regresses we fail open here rather than
+	// panicking on the `for ... range checkResult.Metrics` loop below.
+	if checkOk || checkResult == nil {
 		s.recordFullDecision(tabletTypeStr, stmtType, decisionOutcomeAllowed, decisionReasonNoMetricBreach, startTime)
 		return registry.ThrottleDecision{
 			Throttle: false,
