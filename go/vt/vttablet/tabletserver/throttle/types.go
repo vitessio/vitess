@@ -32,8 +32,8 @@ const (
 func (t ThrottlerType) ToProto() tabletmanagerdatapb.ThrottlerType {
 	switch t {
 	case QueryTabletThrottler:
-		return tabletmanagerdatapb.ThrottlerType_DedicatedQueryThrottler
+		return tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER
 	default:
-		return tabletmanagerdatapb.ThrottlerType_DefaultLagThrottler
+		return tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER
 	}
 }

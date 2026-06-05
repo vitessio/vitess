@@ -2996,7 +2996,7 @@ type CheckThrottlerRequest struct {
 	SkipRequestHeartbeats bool `protobuf:"varint,4,opt,name=skip_request_heartbeats,json=skipRequestHeartbeats,proto3" json:"skip_request_heartbeats,omitempty"`
 	// OKIfNotExists asks the throttler to return OK even if the metric does not exist
 	OkIfNotExists bool `protobuf:"varint,5,opt,name=ok_if_not_exists,json=okIfNotExists,proto3" json:"ok_if_not_exists,omitempty"`
-	// ThrottlerType specifies which throttler to check (defaults to DefaultLagThrottler)
+	// ThrottlerType specifies which throttler to check (defaults to DEFAULT_LAG_THROTTLER)
 	ThrottlerType tabletmanagerdata.ThrottlerType `protobuf:"varint,6,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -7440,7 +7440,7 @@ type GetThrottlerStatusRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// TabletAlias is the alias of the tablet to probe
 	TabletAlias *topodata.TabletAlias `protobuf:"bytes,1,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
-	// ThrottlerType specifies which throttler to query (defaults to DefaultLagThrottler)
+	// ThrottlerType specifies which throttler to query (defaults to DEFAULT_LAG_THROTTLER)
 	ThrottlerType tabletmanagerdata.ThrottlerType `protobuf:"varint,2,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

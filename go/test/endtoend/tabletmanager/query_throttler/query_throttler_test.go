@@ -83,7 +83,7 @@ func waitForQueryThrottlerStatus(t *testing.T, tablet *cluster.Vttablet, wantEna
 
 	req := &vtctldatapb.GetThrottlerStatusRequest{
 		TabletAlias:   tabletAlias,
-		ThrottlerType: tabletmanagerdatapb.ThrottlerType_DedicatedQueryThrottler,
+		ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
 	}
 
 	var lastResp *vtctldatapb.GetThrottlerStatusResponse
@@ -121,7 +121,7 @@ func waitForQueryThrottlerCheck(t *testing.T, tablet *cluster.Vttablet, wantResp
 
 	req := &vtctldatapb.CheckThrottlerRequest{
 		TabletAlias:   tabletAlias,
-		ThrottlerType: tabletmanagerdatapb.ThrottlerType_DedicatedQueryThrottler,
+		ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
 	}
 
 	var lastResp *vtctldatapb.CheckThrottlerResponse
@@ -301,7 +301,7 @@ func waitForUnthrottledQuery(t *testing.T, query string) {
 			if parseErr == nil {
 				checkResp, checkErr := vtctldClient.CheckThrottler(ctx, &vtctldatapb.CheckThrottlerRequest{
 					TabletAlias:   tabletAlias,
-					ThrottlerType: tabletmanagerdatapb.ThrottlerType_DedicatedQueryThrottler,
+					ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
 				})
 				t.Logf("waitForUnthrottledQuery attempt %d: CheckThrottler resp (err=%v): %v", attempt, checkErr, checkResp)
 			}

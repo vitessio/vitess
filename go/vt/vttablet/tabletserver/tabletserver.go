@@ -2027,7 +2027,7 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.CheckResult {
 	var t *throttle.Throttler
 	switch throttlerType {
-	case tabletmanagerdatapb.ThrottlerType_DedicatedQueryThrottler:
+	case tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER:
 		t = tsv.qThrottler
 	default:
 		t = tsv.lagThrottler
@@ -2039,7 +2039,7 @@ func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, fla
 func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.ThrottlerStatus {
 	var t *throttle.Throttler
 	switch throttlerType {
-	case tabletmanagerdatapb.ThrottlerType_DedicatedQueryThrottler:
+	case tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER:
 		t = tsv.qThrottler
 	default:
 		t = tsv.lagThrottler

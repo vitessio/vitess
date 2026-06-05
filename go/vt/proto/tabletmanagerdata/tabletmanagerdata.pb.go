@@ -160,19 +160,19 @@ func (CheckThrottlerResponseCode) EnumDescriptor() ([]byte, []int) {
 type ThrottlerType int32
 
 const (
-	ThrottlerType_DefaultLagThrottler     ThrottlerType = 0 // Default - replication lag throttler
-	ThrottlerType_DedicatedQueryThrottler ThrottlerType = 1 // Dedicated query throttler
+	ThrottlerType_DEFAULT_LAG_THROTTLER     ThrottlerType = 0 // Default - replication lag throttler
+	ThrottlerType_DEDICATED_QUERY_THROTTLER ThrottlerType = 1 // Dedicated query throttler
 )
 
 // Enum value maps for ThrottlerType.
 var (
 	ThrottlerType_name = map[int32]string{
-		0: "DefaultLagThrottler",
-		1: "DedicatedQueryThrottler",
+		0: "DEFAULT_LAG_THROTTLER",
+		1: "DEDICATED_QUERY_THROTTLER",
 	}
 	ThrottlerType_value = map[string]int32{
-		"DefaultLagThrottler":     0,
-		"DedicatedQueryThrottler": 1,
+		"DEFAULT_LAG_THROTTLER":     0,
+		"DEDICATED_QUERY_THROTTLER": 1,
 	}
 )
 
@@ -7285,7 +7285,7 @@ type CheckThrottlerRequest struct {
 	SkipRequestHeartbeats bool `protobuf:"varint,3,opt,name=skip_request_heartbeats,json=skipRequestHeartbeats,proto3" json:"skip_request_heartbeats,omitempty"`
 	// OKIfNotExists asks the throttler to return OK even if the metric does not exist
 	OkIfNotExists bool `protobuf:"varint,4,opt,name=ok_if_not_exists,json=okIfNotExists,proto3" json:"ok_if_not_exists,omitempty"`
-	// ThrottlerType specifies which throttler to check (defaults to DefaultLagThrottler)
+	// ThrottlerType specifies which throttler to check (defaults to DEFAULT_LAG_THROTTLER)
 	ThrottlerType ThrottlerType `protobuf:"varint,6,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -7353,7 +7353,7 @@ func (x *CheckThrottlerRequest) GetThrottlerType() ThrottlerType {
 	if x != nil {
 		return x.ThrottlerType
 	}
-	return ThrottlerType_DefaultLagThrottler
+	return ThrottlerType_DEFAULT_LAG_THROTTLER
 }
 
 type CheckThrottlerResponse struct {
@@ -7477,7 +7477,7 @@ func (x *CheckThrottlerResponse) GetResponseCode() CheckThrottlerResponseCode {
 
 type GetThrottlerStatusRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// ThrottlerType specifies which throttler to query (defaults to DefaultLagThrottler)
+	// ThrottlerType specifies which throttler to query (defaults to DEFAULT_LAG_THROTTLER)
 	ThrottlerType ThrottlerType `protobuf:"varint,1,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -7517,7 +7517,7 @@ func (x *GetThrottlerStatusRequest) GetThrottlerType() ThrottlerType {
 	if x != nil {
 		return x.ThrottlerType
 	}
-	return ThrottlerType_DefaultLagThrottler
+	return ThrottlerType_DEFAULT_LAG_THROTTLER
 }
 
 type GetThrottlerStatusResponse struct {
@@ -9190,10 +9190,10 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\n" +
 	"APP_DENIED\x10\x03\x12\x12\n" +
 	"\x0eUNKNOWN_METRIC\x10\x04\x12\x12\n" +
-	"\x0eINTERNAL_ERROR\x10\x05*E\n" +
-	"\rThrottlerType\x12\x17\n" +
-	"\x13DefaultLagThrottler\x10\x00\x12\x1b\n" +
-	"\x17DedicatedQueryThrottler\x10\x01B0Z.vitess.io/vitess/go/vt/proto/tabletmanagerdatab\x06proto3"
+	"\x0eINTERNAL_ERROR\x10\x05*I\n" +
+	"\rThrottlerType\x12\x19\n" +
+	"\x15DEFAULT_LAG_THROTTLER\x10\x00\x12\x1d\n" +
+	"\x19DEDICATED_QUERY_THROTTLER\x10\x01B0Z.vitess.io/vitess/go/vt/proto/tabletmanagerdatab\x06proto3"
 
 var (
 	file_tabletmanagerdata_proto_rawDescOnce sync.Once
