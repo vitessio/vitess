@@ -639,164 +639,6 @@ func TestQueryThrottler_HandleConfigUpdate__NoChange(t *testing.T) {
 	require.Equal(t, oldStrategy, snap.strategy, "strategy should remain unchanged")
 }
 
-// TestIsConfigUpdateRequired tests the isConfigUpdateRequired function.
-func TestIsConfigUpdateRequired(t *testing.T) {
-	tests := []struct {
-		name     string
-		oldCfg   *querythrottlerpb.Config
-		newCfg   *querythrottlerpb.Config
-		expected bool
-	}{
-		{
-			name: "No changes - configs identical",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			expected: false,
-		},
-		{
-			name: "Enabled changed from true to false",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  false,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			expected: true,
-		},
-		{
-			name: "Enabled changed from false to true",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  false,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			expected: true,
-		},
-		{
-			name: "DryRun changed from false to true",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   true,
-			},
-			expected: true,
-		},
-		{
-			name: "DryRun changed from true to false",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   true,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			expected: true,
-		},
-		{
-			name: "Multiple fields changed - Enabled and DryRun",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  false,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   true,
-			},
-			expected: true,
-		},
-		{
-			name: "Multiple fields changed - Enabled and StrategyName",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  false,
-				Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
-				DryRun:   false,
-			},
-			expected: true,
-		},
-		{
-			name: "Multiple fields changed - StrategyName and DryRun",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
-				DryRun:   true,
-			},
-			expected: true,
-		},
-		{
-			name: "All three fields changed",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  true,
-				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  false,
-				Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
-				DryRun:   true,
-			},
-			expected: true,
-		},
-		{
-			name: "All fields false/default - no change",
-			oldCfg: &querythrottlerpb.Config{
-				Enabled:  false,
-				Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
-				DryRun:   false,
-			},
-			newCfg: &querythrottlerpb.Config{
-				Enabled:  false,
-				Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
-				DryRun:   false,
-			},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isConfigUpdateRequired(tt.oldCfg, tt.newCfg)
-			require.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 // TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad tests that initial configuration is loaded successfully when GetSrvKeyspace succeeds.
 func TestQueryThrottler_startSrvKeyspaceWatch_InitialLoad(t *testing.T) {
 	ctx := t.Context()
@@ -1112,4 +954,147 @@ func TestQueryThrottler_ConcurrentThrottleAndConfigUpdate(t *testing.T) {
 
 	close(stop)
 	wg.Wait()
+}
+
+// TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap is the
+// regression test for the dual-watch race described in PR review #3: when a single
+// SrvKeyspace update flips a top-level field (e.g. Enabled or DryRun) AND changes the
+// nested TabletStrategyConfig AND keeps the same Strategy, the strategy's nested
+// config must be updated synchronously before the snapshot swap. Without the fix,
+// QueryThrottler would publish the new top-level snapshot while leaving the strategy's
+// stale nested config in place until the strategy's own SrvKeyspace watch fired,
+// briefly throttling queries against the old rules.
+func TestQueryThrottler_HandleConfigUpdate_PushesNestedConfigBeforeSnapshotSwap(t *testing.T) {
+	ctx := t.Context()
+
+	oldStrategy := &mockThrottlingStrategy{}
+	qt := &QueryThrottler{
+		ctx:          ctx,
+		tabletConfig: &tabletenv.TabletConfig{},
+	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg: &querythrottlerpb.Config{
+			Enabled:  false,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		},
+		strategy: oldStrategy,
+	})
+
+	// Single SrvKeyspace update: flip Enabled false->true AND add nested rules.
+	// Strategy enum is unchanged, so the strategy instance is reused.
+	newCfg := &querythrottlerpb.Config{
+		Enabled:  true,
+		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+			TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+				"PRIMARY": {
+					StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+						"SELECT": {
+							MetricRules: map[string]*querythrottlerpb.MetricRule{
+								"lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 20, Throttle: 75}}},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	srvks := &topodatapb.SrvKeyspace{QueryThrottlerConfig: newCfg}
+
+	require.True(t, qt.HandleConfigUpdate(srvks, nil))
+
+	// The strategy instance must be reused (Strategy enum unchanged) — guards against
+	// future refactors that accidentally rebuild on Enabled changes.
+	snap := qt.snapshot.Load()
+	require.Same(t, oldStrategy, snap.strategy, "strategy instance must not change when Strategy enum is unchanged")
+	require.True(t, snap.cfg.GetEnabled(), "snapshot must reflect the new Enabled=true")
+
+	// Core assertion: UpdateConfig was called with the new cfg before HandleConfigUpdate
+	// returned. Without the fix, this slice would be empty — the strategy would have
+	// kept its old nested config until its own watch fired separately.
+	require.Len(t, oldStrategy.updateConfigCfgs, 1, "UpdateConfig must be invoked exactly once before the snapshot swap")
+	pushed := oldStrategy.updateConfigCfgs[0]
+	require.True(t, pushed.GetEnabled(), "pushed cfg must reflect new Enabled=true")
+	require.Contains(t, pushed.GetTabletStrategyConfig().GetTabletRules(), "PRIMARY", "pushed cfg must carry the new nested rules")
+}
+
+// TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates is the regression
+// test for the fact that the old isConfigUpdateRequired helper only compared the three
+// top-level scalar fields (Enabled, Strategy, DryRun). With the strategy's own
+// SrvKeyspace watch removed, a SrvKeyspace update that changes ONLY the nested
+// TabletStrategyConfig — without touching any top-level field — would be silently
+// dropped: HandleConfigUpdate would short-circuit, never calling UpdateConfig on
+// the active strategy. The fix replaces that helper with a full proto.Equal
+// comparison so any change in the nested config also reaches the strategy.
+func TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates(t *testing.T) {
+	ctx := t.Context()
+
+	initialNested := &querythrottlerpb.TabletStrategyConfig{
+		TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+			"PRIMARY": {
+				StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+					"SELECT": {
+						MetricRules: map[string]*querythrottlerpb.MetricRule{
+							"lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 10, Throttle: 25}}},
+						},
+					},
+				},
+			},
+		},
+	}
+	oldStrategy := &mockThrottlingStrategy{}
+	qt := &QueryThrottler{
+		ctx:          ctx,
+		tabletConfig: &tabletenv.TabletConfig{},
+	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg: &querythrottlerpb.Config{
+			Enabled:              true,
+			Strategy:             querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			DryRun:               false,
+			TabletStrategyConfig: initialNested,
+		},
+		strategy: oldStrategy,
+	})
+
+	// New SrvKeyspace: identical top-level fields, but the nested rules changed
+	// (different threshold on the same metric). This is the case the old
+	// isConfigUpdateRequired helper missed.
+	newNested := &querythrottlerpb.TabletStrategyConfig{
+		TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+			"PRIMARY": {
+				StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+					"SELECT": {
+						MetricRules: map[string]*querythrottlerpb.MetricRule{
+							"lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5, Throttle: 99}}},
+						},
+					},
+				},
+			},
+		},
+	}
+	srvks := &topodatapb.SrvKeyspace{QueryThrottlerConfig: &querythrottlerpb.Config{
+		Enabled:              true,
+		Strategy:             querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		DryRun:               false,
+		TabletStrategyConfig: newNested,
+	}}
+
+	require.True(t, qt.HandleConfigUpdate(srvks, nil))
+
+	// The strategy must have been told about the nested change. Without the proto.Equal
+	// guard replacing isConfigUpdateRequired, this slice would be empty: the old helper
+	// only looked at Enabled/Strategy/DryRun (all unchanged) and short-circuited.
+	require.Len(t, oldStrategy.updateConfigCfgs, 1, "UpdateConfig must be invoked when only the nested TabletStrategyConfig changes")
+	pushed := oldStrategy.updateConfigCfgs[0].GetTabletStrategyConfig().GetTabletRules()["PRIMARY"].GetStatementRules()["SELECT"].GetMetricRules()["lag"].GetThresholds()
+	require.Len(t, pushed, 1)
+	require.Equal(t, float64(5), pushed[0].GetAbove(), "pushed cfg must carry the new threshold")
+	require.Equal(t, int32(99), pushed[0].GetThrottle(), "pushed cfg must carry the new throttle ratio")
+
+	// And the snapshot must also reflect the new nested config.
+	snap := qt.snapshot.Load()
+	require.Same(t, oldStrategy, snap.strategy, "strategy instance must not change for a nested-only update")
+	snapThresholds := snap.cfg.GetTabletStrategyConfig().GetTabletRules()["PRIMARY"].GetStatementRules()["SELECT"].GetMetricRules()["lag"].GetThresholds()
+	require.Len(t, snapThresholds, 1)
+	require.Equal(t, float64(5), snapThresholds[0].GetAbove(), "snapshot cfg must carry the new nested config")
 }

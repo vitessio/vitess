@@ -18,7 +18,6 @@ package tabletthrottler
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -28,15 +27,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
-	"vitess.io/vitess/go/vt/topo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -48,11 +43,6 @@ func createTestTabletConfig() *tabletenv.TabletConfig {
 	return &tabletenv.TabletConfig{
 		TabletThrottlerCacheUpdateInterval: 10 * time.Millisecond,
 	}
-}
-
-// createTestEnv creates a minimal env for testing
-func createTestEnv() tabletenv.Env {
-	return tabletenv.NewEnv(vtenv.NewTestEnv(), createTestTabletConfig(), "TestTabletThrottlerStrategy")
 }
 
 // toQueryAttributesForTest converts ExecuteOptions to QueryAttributes for testing.
@@ -119,7 +109,7 @@ type testRandomFuncs struct {
 
 // newTestStrategyWithRandom creates a TabletThrottlerStrategy with injected random functions for deterministic testing.
 func newTestStrategyWithRandom(client ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, randFuncs testRandomFuncs) *TabletThrottlerStrategy {
-	strategy := NewTabletThrottlerStrategy(client, cfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
+	strategy := NewTabletThrottlerStrategy(client, cfg, createTestTabletConfig())
 	if randFuncs.randFloat64 != nil {
 		strategy.randFloat64 = randFuncs.randFloat64
 	}
@@ -129,15 +119,14 @@ func newTestStrategyWithRandom(client ThrottlerClientWrapper, cfg *querythrottle
 	return strategy
 }
 
-// createTestSrvKeyspaceWithConfig creates a test SrvKeyspace with the given TabletStrategyConfig.
-func createTestSrvKeyspaceWithConfig(cfg *querythrottlerpb.TabletStrategyConfig) *topodatapb.SrvKeyspace {
-	return &topodatapb.SrvKeyspace{
-		QueryThrottlerConfig: &querythrottlerpb.Config{
-			Enabled:              true,
-			Strategy:             querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
-			DryRun:               false,
-			TabletStrategyConfig: cfg,
-		},
+// createTestQueryThrottlerConfig creates a Config (the type accepted by UpdateConfig)
+// wrapping the given TabletStrategyConfig.
+func createTestQueryThrottlerConfig(cfg *querythrottlerpb.TabletStrategyConfig) *querythrottlerpb.Config {
+	return &querythrottlerpb.Config{
+		Enabled:              true,
+		Strategy:             querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		DryRun:               false,
+		TabletStrategyConfig: cfg,
 	}
 }
 
@@ -152,8 +141,8 @@ func TestTabletThrottlerStrategy_Evaluate_NilParsedQuery(t *testing.T) {
 		makeThresholds(10, 100),
 	)
 
-	env := createTestEnv()
-	strategy := NewTabletThrottlerStrategy(mockClient, cfg, createTestTabletConfig(), env, "test_keyspace", "test_cell", nil)
+	tabletCfg := createTestTabletConfig()
+	strategy := NewTabletThrottlerStrategy(mockClient, cfg, tabletCfg)
 
 	decision := strategy.Evaluate(
 		context.Background(),
@@ -295,7 +284,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 func TestTabletThrottlerStrategy_CachingLifecycle(t *testing.T) {
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 	cfg := &querythrottlerpb.TabletStrategyConfig{}
-	strategy := NewTabletThrottlerStrategy(ftcw, cfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
+	strategy := NewTabletThrottlerStrategy(ftcw, cfg, createTestTabletConfig())
 
 	require.False(t, strategy.running.Load())
 
@@ -418,113 +407,61 @@ func TestTabletThrottlerStrategy_BinarySearchThrottleDecision(t *testing.T) {
 	}
 }
 
-// TestTabletThrottlerStrategy_HandleConfigUpdate_ErrorHandling tests error handling in HandleConfigUpdate.
-func TestTabletThrottlerStrategy_HandleConfigUpdate_ErrorHandling(t *testing.T) {
-	tests := []struct {
-		name           string
-		inputErr       error
-		expectedResult bool
-	}{
-		{
-			name:           "ContextCanceledError",
-			inputErr:       context.Canceled,
-			expectedResult: true,
-		},
-		{
-			name:           "NoNodeError",
-			inputErr:       topo.NewError(topo.NoNode, "keyspace/test_keyspace"),
-			expectedResult: true,
-		},
-		{
-			name:           "InterruptedError",
-			inputErr:       topo.NewError(topo.Interrupted, "interrupted"),
-			expectedResult: true,
-		},
-		{
-			name:           "TransientNetworkError",
-			inputErr:       errors.New("temporary network error"),
-			expectedResult: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			strategy := NewTabletThrottlerStrategy(nil, nil, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
-
-			srvks := &topodatapb.SrvKeyspace{}
-			result := strategy.HandleConfigUpdate(srvks, tt.inputErr)
-
-			require.Equal(t, tt.expectedResult, result)
-		})
-	}
-}
-
-// TestTabletThrottlerStrategy_HandleConfigUpdate_SuccessfulUpdate verifies that config updates are applied correctly.
-func TestTabletThrottlerStrategy_HandleConfigUpdate_SuccessfulUpdate(t *testing.T) {
+// TestTabletThrottlerStrategy_UpdateConfig_AppliesNewRules verifies that UpdateConfig
+// stores the new nested config so subsequent Evaluate calls observe it. UpdateConfig is
+// invoked synchronously by QueryThrottler.HandleConfigUpdate before the snapshot swap,
+// so this test exercises the same code path that eliminates the dual-watch race.
+func TestTabletThrottlerStrategy_UpdateConfig_AppliesNewRules(t *testing.T) {
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
 	initialCfg := makeTabletStrategyConfig("PRIMARY", "INSERT", "lag", makeThresholds(10, 50))
-	strategy := NewTabletThrottlerStrategy(ftcw, initialCfg, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
+	strategy := NewTabletThrottlerStrategy(ftcw, initialCfg, createTestTabletConfig())
 
 	newCfg := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(20, 75))
-	newSrvks := createTestSrvKeyspaceWithConfig(newCfg)
-
-	result := strategy.HandleConfigUpdate(newSrvks, nil)
-	require.True(t, result, "callback should return true")
+	strategy.UpdateConfig(createTestQueryThrottlerConfig(newCfg))
 
 	actualCfg := strategy.config.Load()
 	require.NotNil(t, actualCfg)
 	require.NotNil(t, actualCfg.TabletRules["PRIMARY"])
+	require.Contains(t, actualCfg.TabletRules["PRIMARY"].StatementRules, "SELECT", "new rule should be visible after UpdateConfig")
+	require.NotContains(t, actualCfg.TabletRules["PRIMARY"].StatementRules, "INSERT", "old rule should be replaced")
 }
 
-// TestTabletThrottlerStrategy_StartSrvKeyspaceWatch tests that Start() invokes the
-// SrvKeyspace watch only when the topology server, keyspace, and cell are all set.
-func TestTabletThrottlerStrategy_StartSrvKeyspaceWatch(t *testing.T) {
-	tests := []struct {
-		name               string
-		srvTopoServer      srvtopo.Server
-		keyspace           string
-		cell               string
-		expectWatchStarted bool
-	}{
-		{
-			name:               "NilServer_EmptyKeyspace_EmptyCell",
-			srvTopoServer:      nil,
-			keyspace:           "",
-			cell:               "",
-			expectWatchStarted: false,
-		},
-		{
-			name:               "ValidServer_ValidKeyspace_ValidCell",
-			srvTopoServer:      srvtopotest.NewPassthroughSrvTopoServer(),
-			keyspace:           "test_keyspace",
-			cell:               "test_cell",
-			expectWatchStarted: true,
-		},
-	}
+// TestTabletThrottlerStrategy_UpdateConfig_NilNestedNormalizesToEmpty verifies that
+// UpdateConfig handles a Config whose TabletStrategyConfig is nil by normalizing to
+// an empty config — preventing Evaluate from panicking on a nil proto field access.
+func TestTabletThrottlerStrategy_UpdateConfig_NilNestedNormalizesToEmpty(t *testing.T) {
+	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
-			strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig(), createTestEnv(), tt.keyspace, tt.cell, tt.srvTopoServer)
-			t.Cleanup(strategy.Stop)
+	initialCfg := makeTabletStrategyConfig("PRIMARY", "INSERT", "lag", makeThresholds(10, 50))
+	strategy := NewTabletThrottlerStrategy(ftcw, initialCfg, createTestTabletConfig())
 
-			require.False(t, strategy.watchStarted.Load(), "constructor must not start the SrvKeyspace watch")
+	strategy.UpdateConfig(&querythrottlerpb.Config{
+		Enabled:              true,
+		Strategy:             querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		TabletStrategyConfig: nil,
+	})
 
-			strategy.Start()
+	actualCfg := strategy.config.Load()
+	require.NotNil(t, actualCfg, "UpdateConfig with nil nested config must store an empty config, not nil")
+	require.Empty(t, actualCfg.TabletRules)
+}
 
-			if tt.expectWatchStarted {
-				require.Eventually(t, func() bool {
-					return strategy.watchStarted.Load()
-				}, 1*time.Second, 10*time.Millisecond)
-				return
-			}
+// TestTabletThrottlerStrategy_UpdateConfig_NoOpWhenUnchanged verifies that UpdateConfig
+// skips the store when the new config is deep-equal to the current one. This mirrors the
+// behavior of the (now-removed) in-strategy SrvKeyspace watch callback.
+func TestTabletThrottlerStrategy_UpdateConfig_NoOpWhenUnchanged(t *testing.T) {
+	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
-			require.Never(t, func() bool {
-				return strategy.watchStarted.Load()
-			}, 100*time.Millisecond, 10*time.Millisecond)
-		})
-	}
+	cfg := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(20, 75))
+	strategy := NewTabletThrottlerStrategy(ftcw, cfg, createTestTabletConfig())
+	before := strategy.config.Load()
+
+	// Same logical config (deep-equal but distinct pointer) must not swap the pointer.
+	dup := makeTabletStrategyConfig("PRIMARY", "SELECT", "lag", makeThresholds(20, 75))
+	strategy.UpdateConfig(createTestQueryThrottlerConfig(dup))
+
+	require.Same(t, before, strategy.config.Load(), "UpdateConfig must not swap when the new config is unchanged")
 }
 
 // slowThrottleClientWrapper simulates a slow/timeout-prone client
@@ -568,7 +505,7 @@ func TestTabletThrottlerStrategy_FailOpenWhenCacheNotPrimed(t *testing.T) {
 		delay:           5 * time.Second,
 	}
 
-	strategy := NewTabletThrottlerStrategy(slowClient, &querythrottlerpb.TabletStrategyConfig{}, createTestTabletConfig(), createTestEnv(), "test-keyspace", "test-cell", nil)
+	strategy := NewTabletThrottlerStrategy(slowClient, &querythrottlerpb.TabletStrategyConfig{}, createTestTabletConfig())
 
 	start := time.Now()
 	result, ok := strategy.getCachedThrottleResult()
@@ -640,75 +577,14 @@ func TestFakeThrottleClientWrapper_ThreadSafety(t *testing.T) {
 	require.Equal(t, finalOk, checkOk)
 }
 
-// watchTrackingSrvTopo wraps PassthroughSrvTopoServer to observe SrvKeyspace watch lifecycle.
-// WatchSrvKeyspace records each invocation, blocks until ctx is cancelled, and signals exit.
-type watchTrackingSrvTopo struct {
-	*srvtopotest.PassthroughSrvTopoServer
-	watchInvocations atomic.Int64
-	watchExited      chan struct{}
-	exitOnce         sync.Once
-}
-
-func newWatchTrackingSrvTopo() *watchTrackingSrvTopo {
-	return &watchTrackingSrvTopo{
-		PassthroughSrvTopoServer: srvtopotest.NewPassthroughSrvTopoServer(),
-		watchExited:              make(chan struct{}),
-	}
-}
-
-func (s *watchTrackingSrvTopo) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
-	s.watchInvocations.Add(1)
-	<-ctx.Done()
-	s.exitOnce.Do(func() { close(s.watchExited) })
-}
-
-// TestTabletThrottlerStrategy_ConstructorIsSideEffectFree verifies that NewTabletThrottlerStrategy
-// does not spawn the SrvKeyspace watch goroutine. The watch must only be started by Start(), so a
-// strategy that is constructed but never installed (e.g. because a concurrent Shutdown raced with
-// QueryThrottler.HandleConfigUpdate) cannot leak its watch goroutine.
-func TestTabletThrottlerStrategy_ConstructorIsSideEffectFree(t *testing.T) {
-	topoSrv := newWatchTrackingSrvTopo()
-	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
-
-	strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig(), createTestEnv(), "test-ks", "test-cell", topoSrv)
-	t.Cleanup(strategy.Stop)
-
-	require.Never(t, func() bool {
-		return topoSrv.watchInvocations.Load() > 0
-	}, 100*time.Millisecond, 10*time.Millisecond, "constructor must not spawn the SrvKeyspace watch")
-	require.False(t, strategy.watchStarted.Load(), "watchStarted flag must not be set before Start()")
-}
-
 // TestTabletThrottlerStrategy_StopWithoutStartCancelsContext verifies that Stop() is safe
 // to call on a strategy that was never Started. The strategy context must be cancelled
 // so any background work tied to it would exit immediately, even if Start() is never called.
 func TestTabletThrottlerStrategy_StopWithoutStartCancelsContext(t *testing.T) {
-	topoSrv := newWatchTrackingSrvTopo()
 	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
 
-	strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig(), createTestEnv(), "test-ks", "test-cell", topoSrv)
+	strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig())
 
 	strategy.Stop()
 	require.Error(t, strategy.ctx.Err(), "Stop() must cancel the strategy context even when Start() was never called")
-}
-
-// TestTabletThrottlerStrategy_WatchLifecycle verifies the full happy-path watch lifecycle:
-// Start() spawns the SrvKeyspace watch and Stop() lets the watch goroutine exit promptly.
-func TestTabletThrottlerStrategy_WatchLifecycle(t *testing.T) {
-	topoSrv := newWatchTrackingSrvTopo()
-	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
-
-	strategy := NewTabletThrottlerStrategy(ftcw, nil, createTestTabletConfig(), createTestEnv(), "test-ks", "test-cell", topoSrv)
-
-	strategy.Start()
-	require.Eventually(t, func() bool {
-		return topoSrv.watchInvocations.Load() == 1
-	}, 1*time.Second, 10*time.Millisecond, "Start() must spawn the SrvKeyspace watch exactly once")
-
-	strategy.Stop()
-	select {
-	case <-topoSrv.watchExited:
-	case <-time.After(1 * time.Second):
-		require.Fail(t, "SrvKeyspace watch goroutine did not exit after Stop()")
-	}
 }

@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -389,15 +391,22 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	// callback writes to qt.snapshot, so the read here is also single-writer.
 	currentSnap := qt.snapshot.Load()
 
-	// If the config is not changed, return early.
-	if !isConfigUpdateRequired(currentSnap.cfg, newCfg) {
+	// Full proto.Equal short-circuit: skip all work when the new SrvKeyspace carries
+	// an identical Config (top-level + nested). Replaces an older helper that only
+	// compared the three top-level scalars (Enabled, Strategy, DryRun) and silently
+	// dropped nested-only TabletStrategyConfig updates once the strategy stopped
+	// running its own SrvKeyspace watch.
+	if proto.Equal(currentSnap.cfg, newCfg) {
 		return true
 	}
 
 	needsStrategyChange := currentSnap.cfg.GetStrategy() != newCfg.GetStrategy()
 	newStrategy := currentSnap.strategy
 	if needsStrategyChange {
-		// Build the new strategy outside the lock; this can be slow (opens a topo watch).
+		// Build the new strategy outside the lock; this can be slow (e.g. wiring
+		// up dependencies). The factory consumes newCfg, so the freshly built
+		// strategy already holds the latest nested config — no UpdateConfig call
+		// is needed below for this path.
 		newStrategy = selectThrottlingStrategy(newCfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
 	}
 
@@ -410,6 +419,13 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 
 		if needsStrategyChange && newStrategy != nil {
 			newStrategy.Start()
+		} else if newStrategy != nil {
+			// Strategy unchanged: push the new config into the live strategy
+			// BEFORE publishing the new snapshot so the (top-level, nested)
+			// pair becomes visible atomically. Without this synchronous push,
+			// re-enabling with new rules could briefly throttle against the
+			// strategy's stale nested config.
+			newStrategy.UpdateConfig(newCfg)
 		}
 		qt.snapshot.Store(&stateSnapshot{
 			cfg:      newCfg,
@@ -437,23 +453,4 @@ func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Cli
 		SrvTopoServer:  srvTopoServer,
 	}
 	return registry.CreateStrategy(cfg, deps)
-}
-
-// isConfigUpdateRequired checks if the new config is different from the old config.
-// This only checks for enabled, strategy name, and dry run because the strategy itself will update the strategy-specific config
-// during runtime by having a separate watcher similar to the one used in QueryThrottler.
-func isConfigUpdateRequired(oldCfg, newCfg *querythrottlerpb.Config) bool {
-	if oldCfg.GetEnabled() != newCfg.GetEnabled() {
-		return true
-	}
-
-	if oldCfg.GetStrategy() != newCfg.GetStrategy() {
-		return true
-	}
-
-	if oldCfg.GetDryRun() != newCfg.GetDryRun() {
-		return true
-	}
-
-	return false
 }

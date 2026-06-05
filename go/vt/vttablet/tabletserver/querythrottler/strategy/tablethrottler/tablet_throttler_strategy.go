@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 	"reflect"
 	"sort"
@@ -33,8 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -70,7 +67,7 @@ func (f *tabletThrottlerStrategyFactory) New(deps registry.Deps, cfg *querythrot
 	if tabletCfg == nil {
 		tabletCfg = &querythrottlerpb.TabletStrategyConfig{}
 	}
-	return NewTabletThrottlerStrategy(deps.ThrottleClient, tabletCfg, deps.TabletConfig, deps.Env, deps.Keyspace, deps.Cell, deps.SrvTopoServer), nil
+	return NewTabletThrottlerStrategy(deps.ThrottleClient, tabletCfg, deps.TabletConfig), nil
 }
 
 // Configuration constants for caching behavior
@@ -113,9 +110,6 @@ type TabletThrottlerStrategy struct {
 	throttlerClient ThrottlerClientWrapper
 	config          atomic.Pointer[querythrottlerpb.TabletStrategyConfig]
 	tabletConfig    *tabletenv.TabletConfig
-	keyspace        string // keyspace for targeted SrvKeyspace watch
-	cell            string
-	srvTopoServer   srvtopo.Server
 
 	// Caching field for throttle check results - single atomic for race-free access
 	cachedState atomic.Pointer[cacheState]
@@ -126,9 +120,6 @@ type TabletThrottlerStrategy struct {
 	updateTicker *time.Ticker
 	done         chan struct{}
 	running      atomic.Bool
-
-	// SrvKeyspace watch lifecycle management
-	watchStarted atomic.Bool
 
 	fastPathLatencySampleRate float64
 
@@ -142,7 +133,11 @@ type TabletThrottlerStrategy struct {
 }
 
 // NewTabletThrottlerStrategy creates a new TabletThrottlerStrategy.
-func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, tabletConfig *tabletenv.TabletConfig, env tabletenv.Env, keyspace string, cell string, srvTopoServer srvtopo.Server) *TabletThrottlerStrategy {
+//
+// The strategy does not watch SrvKeyspace itself. Config updates flow exclusively
+// through UpdateConfig, invoked by QueryThrottler.HandleConfigUpdate under the
+// snapshot lock so the top-level and nested config are published atomically.
+func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *querythrottlerpb.TabletStrategyConfig, tabletConfig *tabletenv.TabletConfig) *TabletThrottlerStrategy {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	strategy := &TabletThrottlerStrategy{
@@ -150,9 +145,6 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 		tabletConfig:              tabletConfig,
 		ctx:                       ctx,
 		cancel:                    cancel,
-		keyspace:                  keyspace,
-		cell:                      cell,
-		srvTopoServer:             srvTopoServer,
 		done:                      make(chan struct{}),
 		fastPathLatencySampleRate: 0.1,
 		cacheStalenessThreshold:   cacheStalenessMultiplier * resolveCacheUpdateInterval(tabletConfig),
@@ -170,8 +162,8 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 	return strategy
 }
 
-// Start begins the background throttle check updater and SrvKeyspace watch.
-// Keeping these spawns out of the constructor makes NewTabletThrottlerStrategy
+// Start begins the background throttle check updater.
+// Keeping the spawn out of the constructor makes NewTabletThrottlerStrategy
 // side-effect-free: a strategy that is built but never installed (e.g. because
 // QueryThrottler.HandleConfigUpdate races with Shutdown and the strategy is
 // discarded before the snapshot swap) cannot leak background goroutines.
@@ -184,7 +176,6 @@ func (s *TabletThrottlerStrategy) Start() {
 		s.updateTicker = time.NewTicker(updateInterval)
 		go s.runCacheUpdater()
 
-		s.startSrvKeyspaceWatch()
 		log.Info("TabletThrottlerStrategy: started background throttle cache updater")
 	}
 }
@@ -207,42 +198,46 @@ func resolveCacheUpdateInterval(cfg *tabletenv.TabletConfig) time.Duration {
 // so any goroutine bound to s.ctx (now or added later) exits promptly, while the
 // ticker/done-wait cleanup only runs when the cache updater was actually started.
 func (s *TabletThrottlerStrategy) Stop() {
-	// Cancel the strategy context unconditionally so the SrvKeyspace watch
-	// goroutine (and any future spawn tied to s.ctx) exits even if Start was
-	// never called. cancel() is idempotent, so repeated Stop calls are safe.
+	// Cancel the strategy context unconditionally so any goroutine bound to s.ctx
+	// (now or added later) exits even if Start was never called. cancel() is
+	// idempotent, so repeated Stop calls are safe.
 	s.cancel()
-	s.watchStarted.Store(false)
 
 	if s.running.CompareAndSwap(true, false) {
 		if s.updateTicker != nil {
 			s.updateTicker.Stop()
 		}
 		<-s.done // Wait for cache updater to finish
-		log.Info("TabletThrottlerStrategy: stopped background throttle cache updater and watch")
+		log.Info("TabletThrottlerStrategy: stopped background throttle cache updater")
 	}
 }
 
-// startSrvKeyspaceWatch starts watching the SrvKeyspace for event-driven config updates.
-// This uses the topo server watch mechanism to receive immediate notifications when the SrvKeyspace configuration changes.
-func (s *TabletThrottlerStrategy) startSrvKeyspaceWatch() {
-	log.Info("TabletThrottlerStrategy: starting SrvKeyspace watch", slog.String("keyspace", s.keyspace), slog.String("cell", s.cell))
-	// Only start once
-	if !s.watchStarted.CompareAndSwap(false, true) {
-		return
+// UpdateConfig applies a new querythrottler config to this live strategy. It is
+// invoked synchronously by QueryThrottler.HandleConfigUpdate before the snapshot
+// is swapped, so the (top-level, nested) config pair becomes visible together.
+// This replaces the strategy's prior independent SrvKeyspace watch and removes
+// the race where a top-level Enabled flip could be published while the nested
+// rules still held a stale value.
+//
+// UpdateConfig is safe to call before Start: it only mutates the atomic config
+// pointer that Evaluate reads from on the hot path.
+func (s *TabletThrottlerStrategy) UpdateConfig(cfg *querythrottlerpb.Config) {
+	newTabletCfg := cfg.GetTabletStrategyConfig()
+	if newTabletCfg == nil {
+		// Normalize to an empty config so Evaluate() can safely read TabletRules
+		// (direct field access on a nil proto would panic).
+		newTabletCfg = &querythrottlerpb.TabletStrategyConfig{}
 	}
 
-	if s.srvTopoServer == nil || s.keyspace == "" || s.cell == "" {
-		log.Warn("TabletThrottlerStrategy: cannot start SrvKeyspace watch", slog.Bool("srvTopoServer", s.srvTopoServer != nil), slog.String("keyspace", s.keyspace), slog.String("cell", s.cell))
-		s.watchStarted.Store(false)
+	// Skip the store when nothing changed. reflect.DeepEqual is used here for the
+	// same reasons as in the prior in-strategy watch callback: TabletStrategyConfig
+	// is 3-level nested (TabletRules -> StatementRuleSet -> MetricRuleSet), manual
+	// comparison would be ~50 lines of nested loops, and this runs in the rare
+	// config-update path (not the query hot path).
+	if reflect.DeepEqual(s.config.Load(), newTabletCfg) {
 		return
 	}
-
-	// Start the watch using the main context. When s.cancel() is called in Stop(), the resilient watcher will detect the context cancellation and stop retrying.
-	go func() {
-		s.srvTopoServer.WatchSrvKeyspace(s.ctx, s.cell, s.keyspace, s.HandleConfigUpdate)
-	}()
-
-	log.Info("TabletThrottlerStrategy: started event-driven watch for SrvKeyspace", slog.String("keyspace", s.keyspace), slog.String("cell", s.cell))
+	s.config.Store(newTabletCfg)
 }
 
 // runCacheUpdater runs in a background goroutine to periodically refresh cached throttle results.
@@ -522,49 +517,4 @@ func (s *TabletThrottlerStrategy) recordFullDecision(tabletType, stmtType, outco
 	decisionCount.Add([]string{tabletType, stmtType, decisionPathFull, outcome, reason}, 1)
 
 	fullDecisionLatency.Record([]string{tabletType, stmtType, outcome}, start)
-}
-
-// HandleConfigUpdate is the callback invoked when the SrvKeyspace topology changes.
-// It loads the updated TabletThrottlerStrategy configuration from the topo server and updates the strategy's internal configuration accordingly.
-// IMPORTANT: This method is designed ONLY to be called as a callback from srvtopo.WatchSrvKeyspace.
-// It relies on the resilient watcher's auto-retry behavior (see go/vt/srvtopo/watch.go) and should not be called directly from other contexts.
-// Return value contract (required by WatchSrvKeyspace):
-//   - Always returns true to keep the watch alive. Errors are logged but never stop the watch.
-func (s *TabletThrottlerStrategy) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err error) bool {
-	// Log errors by type for observability, but always keep watching.
-	// The resilient watcher will automatically retry on transient errors.
-	if err != nil {
-		switch {
-		case topo.IsErrType(err, topo.NoNode):
-			log.Warn("tabletThrottler.HandleConfigUpdate: keyspace not found in topology (may not be created yet)", slog.String("keyspace", s.keyspace), slog.String("error", err.Error()))
-		case errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted):
-			log.Info("tabletThrottler.HandleConfigUpdate: watch interrupted", slog.String("keyspace", s.keyspace), slog.String("error", err.Error()))
-		default:
-			log.Error("tabletThrottler.HandleConfigUpdate: SrvKeyspace watch error", slog.String("keyspace", s.keyspace), slog.String("error", err.Error()))
-		}
-		return true
-	}
-
-	newCfg := srvks.GetQueryThrottlerConfig().GetTabletStrategyConfig()
-	if newCfg == nil {
-		log.Error("tabletThrottler.HandleConfigUpdate: TabletStrategyConfig is nil, ignoring config update", slog.String("keyspace", s.keyspace))
-		return true
-	}
-
-	// Check if config actually changed before updating.
-	// We use reflect.DeepEqual here instead of manual field comparison because:
-	// 1. TabletStrategyConfig has 3-level nested maps (TabletRules -> StatementRuleSet -> MetricRuleSet)
-	// 2. Manual comparison would require ~50 lines of nested loops and is error-prone
-	// 3. Performance is not critical here - this runs in watch callback (~1/minute), not in query hot path
-	// 4. reflect.DeepEqual overhead (~1-2 microseconds) is negligible for async callback
-	currentCfg := s.config.Load()
-	if reflect.DeepEqual(currentCfg, newCfg) {
-		return true
-	}
-
-	// Using atomic.Pointer ensures race-free reads in Evaluate() without needing locks
-	s.config.Store(newCfg)
-
-	log.Info("tabletThrottler.HandleConfigUpdate: config updated", slog.String("keyspace", s.keyspace))
-	return true
 }

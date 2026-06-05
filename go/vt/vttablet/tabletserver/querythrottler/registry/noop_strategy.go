@@ -53,6 +53,11 @@ func (s *NoOpStrategy) Stop() {
 	// No-op: NoOpStrategy has no resources to clean up
 }
 
+// UpdateConfig is a no-op for the NoOpStrategy since it has no nested config to apply.
+func (s *NoOpStrategy) UpdateConfig(_ *querythrottlerpb.Config) {
+	// No-op: NoOpStrategy ignores config updates by design.
+}
+
 // GetStrategyName returns the name of the strategy.
 func (s *NoOpStrategy) GetStrategyName() string {
 	return querythrottlerpb.ThrottlingStrategy_UNKNOWN.String()
