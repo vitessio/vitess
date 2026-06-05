@@ -71,20 +71,14 @@ func TestPrimaryVttabletProcessDeath(t *testing.T) {
 	require.NotNil(t, primary, "should have elected a primary")
 	t.Logf("initial primary: %s", primary.Alias)
 
-	// Identify a replica that should be promotable once the primary's vttablet dies, and collect
-	// the remaining (non-primary) tablets so we can verify replication before the failure.
-	var replica *cluster.Vttablet
+	// Collect the remaining (non-primary) tablets so we can verify replication before the failure.
 	var nonPrimaryTablets []*cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
 		if tablet.Alias == primary.Alias {
 			continue
 		}
 		nonPrimaryTablets = append(nonPrimaryTablets, tablet)
-		if replica == nil && tablet.Type == "replica" {
-			replica = tablet
-		}
 	}
-	require.NotNil(t, replica, "could not find a replica tablet to promote")
 
 	// Make sure replication is healthy before we induce the failure.
 	utils.CheckReplication(t, clusterInfo, primary, nonPrimaryTablets, 10*time.Second)
@@ -103,13 +97,26 @@ func TestPrimaryVttabletProcessDeath(t *testing.T) {
 	// VTOrc should promote a replica. We use a non-fatal primary lookup so the poll tolerates the
 	// brief window during the reparent when the shard has no primary. The timeout is generous
 	// because CI runners can be slow and several detection intervals must elapse first.
+	var promotedAlias string
 	assert.Eventually(t, func() bool {
 		newPrimaryAlias := currentPrimaryAlias(t, keyspace, shard0)
-		return newPrimaryAlias != "" && newPrimaryAlias != primary.Alias
+		if newPrimaryAlias == "" || newPrimaryAlias == primary.Alias {
+			return false
+		}
+		promotedAlias = newPrimaryAlias
+		return true
 	}, 90*time.Second, 1*time.Second, "expected VTOrc to promote a new primary after the primary vttablet died")
 
 	// Confirm the new primary is fully healthy and that the promotion was specifically an ERS.
-	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+	var promotedTablet *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == promotedAlias {
+			promotedTablet = tablet
+			break
+		}
+	}
+	require.NotNil(t, promotedTablet, "could not find promoted tablet %s", promotedAlias)
+	utils.CheckPrimaryTablet(t, clusterInfo, promotedTablet, true)
 	utils.WaitForSuccessfulERSCount(t, vtOrcProcess, keyspace.Name, shard0.Name, 1)
 
 	// We killed this tablet's vttablet, so drop it from the global list before the suite tears down.

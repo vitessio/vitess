@@ -103,6 +103,27 @@ func TestPrimaryDownByQuorum(t *testing.T) {
 			expected: false,
 		},
 		{
+			name: "fresh observer with stale primary ping is discounted",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, time.Minute, now), now)
+			},
+			opts:     defaultOpts(),
+			expected: false,
+		},
+		{
+			name: "missing primary ping timestamp is discounted",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", []*replicationdatapb.ShardPeerHealth{{
+					TabletAlias:             primary,
+					ConsecutivePingFailures: 3,
+				}}, now)
+			},
+			opts:     defaultOpts(),
+			expected: false,
+		},
+		{
 			name: "failures below threshold -> up",
 			seed: func() {
 				resetShardPeerHealth()
@@ -119,6 +140,33 @@ func TestPrimaryDownByQuorum(t *testing.T) {
 				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now)
 			},
 			opts:     QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 1.0, MinObservers: 2},
+			expected: false,
+		},
+		{
+			name: "zero failure threshold fails closed",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 0, 0, now), now)
+			},
+			opts:     QuorumOptions{FailureThreshold: 0, Freshness: 5 * time.Second, Fraction: 1.0, MinObservers: 1},
+			expected: false,
+		},
+		{
+			name: "zero quorum fraction fails closed",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 0, 0, now), now)
+			},
+			opts:     QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 0, MinObservers: 1},
+			expected: false,
+		},
+		{
+			name: "negative freshness fails closed",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now)
+			},
+			opts:     QuorumOptions{FailureThreshold: 3, Freshness: -time.Second, Fraction: 1.0, MinObservers: 1},
 			expected: false,
 		},
 		{

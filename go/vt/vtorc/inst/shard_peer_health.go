@@ -40,6 +40,11 @@ type QuorumOptions struct {
 	MinObservers     int           // minimum eligible observers required to act
 }
 
+// valid keeps invalid dynamic config from turning quorum detection into a fail-open path.
+func (opts QuorumOptions) valid() bool {
+	return opts.FailureThreshold >= 1 && opts.Freshness > 0 && opts.Fraction > 0 && opts.Fraction <= 1 && opts.MinObservers >= 1
+}
+
 type peerReport struct {
 	consecutiveFailures int64
 	lastAttemptedPing   time.Time
@@ -105,7 +110,7 @@ func RecordShardPeerHealth(
 // PrimaryDownByQuorum reports whether a quorum of fresh REPLICA/RDONLY observers in the
 // given keyspace/shard consider the primary's vttablet unreachable.
 func PrimaryDownByQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, opts QuorumOptions, now time.Time) bool {
-	if primaryAlias == nil || opts.MinObservers < 1 {
+	if primaryAlias == nil || !opts.valid() {
 		return false
 	}
 	primary := topoproto.TabletAliasString(primaryAlias)
@@ -128,6 +133,9 @@ func PrimaryDownByQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard s
 		report, ok := rec.peers[primary]
 		if !ok {
 			continue // this observer has not pinged the primary
+		}
+		if report.lastAttemptedPing.IsZero() || report.lastAttemptedPing.After(now) || now.Sub(report.lastAttemptedPing) > opts.Freshness {
+			continue
 		}
 		total++
 		if report.consecutiveFailures >= int64(opts.FailureThreshold) {
