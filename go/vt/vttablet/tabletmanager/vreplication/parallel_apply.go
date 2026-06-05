@@ -25,6 +25,7 @@ import (
 	"maps"
 	"math"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -790,8 +791,7 @@ func writesetErrorForcesSerialization(err error) bool {
 // with a non-zero timestamp that isn't a throttled heartbeat. Returns the
 // timestamp and currentTime from that event, or (0, 0) if none qualifies.
 func computeLastEventTimestamp(events []*binlogdatapb.VEvent) (timestamp, currentTime int64) {
-	for i := len(events) - 1; i >= 0; i-- {
-		ev := events[i]
+	for _, ev := range slices.Backward(events) {
 		if ev.Timestamp == 0 {
 			continue
 		}
