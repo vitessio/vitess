@@ -1098,3 +1098,90 @@ func TestQueryThrottler_HandleConfigUpdate_NestedOnlyChangePropagates(t *testing
 	require.Len(t, snapThresholds, 1)
 	require.Equal(t, float64(5), snapThresholds[0].GetAbove(), "snapshot cfg must carry the new nested config")
 }
+
+// TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown is the regression
+// test for PR review #4: HandleConfigUpdate builds the new strategy outside qt.mu, so
+// if Shutdown wins the lock first the callback can still proceed to Start() and store
+// the new strategy after Shutdown has returned — leaking the tablet strategy's ticker
+// and SrvKeyspace watch goroutines.
+//
+// The interleaving is forced deterministically via the newStrategyFactory hook: the
+// factory blocks on a channel after the callback has reached it but before the
+// callback can acquire qt.mu. While the factory is parked, the main goroutine runs
+// Shutdown (uncontended, so it wins the lock immediately), then releases the factory
+// so the callback proceeds and tries to take the lock that Shutdown has since
+// released. The callback must observe the shutdown flag and discard the freshly
+// built strategy.
+func TestQueryThrottler_HandleConfigUpdate_DiscardsStrategyAfterShutdown(t *testing.T) {
+	ctx := t.Context()
+
+	originalMock := &mockThrottlingStrategy{}
+	qt := &QueryThrottler{
+		ctx:          ctx,
+		tabletConfig: &tabletenv.TabletConfig{},
+	}
+	qt.snapshot.Store(&stateSnapshot{
+		cfg: &querythrottlerpb.Config{
+			Enabled:  true,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		},
+		strategy: originalMock,
+	})
+
+	// Factory blocks until the test releases it, deterministically parking the
+	// callback between strategy build and the lock acquisition.
+	newMock := &mockThrottlingStrategy{}
+	factoryEntered := make(chan struct{})
+	factoryReleased := make(chan struct{})
+	qt.newStrategyFactory = func(_ *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+		close(factoryEntered)
+		<-factoryReleased
+		return newMock
+	}
+
+	// Strategy enum changes, so HandleConfigUpdate hits the needsStrategyChange path
+	// that builds via the factory.
+	srvks := &topodatapb.SrvKeyspace{
+		QueryThrottlerConfig: &querythrottlerpb.Config{
+			Enabled:  true,
+			Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
+		},
+	}
+
+	callbackDone := make(chan struct{})
+	go func() {
+		defer close(callbackDone)
+		qt.HandleConfigUpdate(srvks, nil)
+	}()
+
+	// Wait until the callback is parked inside the factory; only then is the
+	// "Shutdown wins the lock first" ordering guaranteed.
+	<-factoryEntered
+
+	// Shutdown takes qt.mu uncontended (the callback is still in the factory),
+	// flips the shutdown flag, stops originalMock, and releases the lock.
+	qt.Shutdown()
+
+	// Releasing the factory lets the callback continue: it returns newMock and
+	// then acquires qt.mu, where it must see shutdown=true and bail out.
+	close(factoryReleased)
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-callbackDone:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "HandleConfigUpdate callback should return after Shutdown")
+
+	// Invariants after the race resolves:
+	require.False(t, newMock.started, "discarded strategy must not be Start()'d after Shutdown")
+	require.True(t, newMock.stopped, "discarded strategy must be Stop()'d as defense-in-depth so its background work cannot leak")
+	require.True(t, originalMock.stopped, "Shutdown must have Stop()'d the original strategy")
+
+	snap := qt.snapshot.Load()
+	require.Same(t, originalMock, snap.strategy, "snapshot must NOT be swapped to the discarded strategy")
+	require.Equal(t, querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER, snap.cfg.GetStrategy(),
+		"snapshot cfg must NOT be replaced with the post-shutdown update")
+}

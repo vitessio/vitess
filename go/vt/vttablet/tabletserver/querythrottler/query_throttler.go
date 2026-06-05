@@ -108,6 +108,14 @@ type QueryThrottler struct {
 	mu           sync.Mutex
 	watchStarted atomic.Bool
 
+	// shutdown, guarded by mu, latches true the first time Shutdown() runs. A
+	// concurrent HandleConfigUpdate callback that built its new strategy outside
+	// the lock must check this flag once it acquires mu and discard its work —
+	// without it, a callback that loses the lock race to Shutdown would still
+	// Start() and publish a strategy, leaking the strategy's background
+	// goroutines (ticker, srvtopo watch) past process-level shutdown.
+	shutdown bool
+
 	// snapshot holds the current immutable {cfg, strategy} pair. Always non-nil after NewQueryThrottler. Updated via atomic Store in HandleConfigUpdate.
 	snapshot atomic.Pointer[stateSnapshot]
 
@@ -115,6 +123,11 @@ type QueryThrottler struct {
 	// Read once at construction from env.Config().EnablePerWorkloadTableMetrics; the
 	// workload value is otherwise unbounded (client-supplied via WORKLOAD_NAME directive).
 	perWorkloadMetrics bool
+
+	// newStrategyFactory builds a strategy from a config snapshot. NewQueryThrottler
+	// wires this to selectThrottlingStrategy with all production deps; tests that
+	// bypass NewQueryThrottler may leave it nil and buildNewStrategy falls back.
+	newStrategyFactory func(*querythrottlerpb.Config) registry.ThrottlingStrategyHandler
 
 	env tabletenv.Env
 }
@@ -134,6 +147,9 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 		srvTopoServer:      srvTopoServer,
 		env:                env,
 		perWorkloadMetrics: perWorkloadMetrics,
+	}
+	qt.newStrategyFactory = func(cfg *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+		return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
 	}
 
 	// Initialize snapshot with empty config and default NoOp strategy so Throttle()
@@ -155,6 +171,12 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 func (qt *QueryThrottler) Shutdown() {
 	qt.mu.Lock()
 	defer qt.mu.Unlock()
+
+	// Latch shutdown before doing anything else so a concurrent
+	// HandleConfigUpdate callback that is currently blocked on qt.mu observes it
+	// the moment it acquires the lock — and discards any strategy it built
+	// outside the lock rather than Start()'ing it past Shutdown.
+	qt.shutdown = true
 
 	// Cancel the watch context to stop the watch goroutine
 	if qt.cancelWatchContext != nil {
@@ -407,15 +429,24 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		// up dependencies). The factory consumes newCfg, so the freshly built
 		// strategy already holds the latest nested config — no UpdateConfig call
 		// is needed below for this path.
-		newStrategy = selectThrottlingStrategy(newCfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
+		newStrategy = qt.buildNewStrategy(newCfg)
 	}
 
 	// Take the lock only for the swap to serialize with Shutdown. Start() runs
 	// under the lock to match the original behavior (consistent with strategy
 	// installation). Throttle() never contends on this lock.
+	shutdownLost := false
 	func() {
 		qt.mu.Lock()
 		defer qt.mu.Unlock()
+
+		// Shutdown may have run while we were building newStrategy outside the
+		// lock. If so, drop the update on the floor; the discarded strategy is
+		// Stop()'d below as defense-in-depth.
+		if qt.shutdown {
+			shutdownLost = true
+			return
+		}
 
 		if needsStrategyChange && newStrategy != nil {
 			newStrategy.Start()
@@ -432,6 +463,18 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 			strategy: newStrategy,
 		})
 	}()
+
+	if shutdownLost {
+		// The freshly built strategy was never installed. Stop() it so any
+		// side effects the constructor may have spawned (current
+		// TabletThrottlerStrategy is side-effect-free, but future changes may
+		// not be) are released rather than leaked.
+		if needsStrategyChange && newStrategy != nil {
+			newStrategy.Stop()
+		}
+		log.Info("HandleConfigUpdate: discarded config update after Shutdown for keyspace=" + qt.keyspace)
+		return true
+	}
 
 	// Stop the old strategy outside the lock; this can be slow.
 	if needsStrategyChange && currentSnap.strategy != nil {
@@ -453,4 +496,15 @@ func selectThrottlingStrategy(cfg *querythrottlerpb.Config, client *throttle.Cli
 		SrvTopoServer:  srvTopoServer,
 	}
 	return registry.CreateStrategy(cfg, deps)
+}
+
+// buildNewStrategy routes strategy construction through the optional test hook
+// newStrategyFactory; tests can swap it for deterministic injection. When unset
+// (tests that bypass NewQueryThrottler), falls back to the production wiring so
+// existing tests continue to work unchanged.
+func (qt *QueryThrottler) buildNewStrategy(cfg *querythrottlerpb.Config) registry.ThrottlingStrategyHandler {
+	if qt.newStrategyFactory != nil {
+		return qt.newStrategyFactory(cfg)
+	}
+	return selectThrottlingStrategy(cfg, qt.throttlerClient, qt.tabletConfig, qt.env, qt.keyspace, qt.cell, qt.srvTopoServer)
 }
