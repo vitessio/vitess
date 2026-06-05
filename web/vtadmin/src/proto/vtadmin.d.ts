@@ -36647,8 +36647,8 @@ export namespace tabletmanagerdata {
 
     /** ThrottlerType enum. */
     enum ThrottlerType {
-        DefaultLagThrottler = 0,
-        DedicatedQueryThrottler = 1
+        DEFAULT_LAG_THROTTLER = 0,
+        DEDICATED_QUERY_THROTTLER = 1
     }
 
     /** Properties of a CheckThrottlerResponse. */
