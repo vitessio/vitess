@@ -18,6 +18,9 @@ vtorc \
   --cell $cell \
   --port $port \
   --log-format text \
+  --emergency-reparent-on-tablet-unreachable \
+  --shard-quorum-fraction=1.0 \
+  --shard-quorum-min-observers=1 \
   > "${log_dir}/vtorc.out" 2>&1 &
 
 vtorc_pid=$!

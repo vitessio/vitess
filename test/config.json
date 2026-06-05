@@ -2278,6 +2278,21 @@
         "memory-check"
       ]
     },
+    "vtorc_tablet_health": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtorc/tablethealth"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtorc",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "memory-check"
+      ]
+    },
     "vtorc_api": {
       "File": "unused.go",
       "Packages": [

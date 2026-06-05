@@ -175,6 +175,10 @@ type TabletManager struct {
 	// tmc is used to run an RPC against other vttablets.
 	tmc tmclient.TabletManagerClient
 
+	// shardHealthMonitor pings shard peers and reports their liveness in FullStatus.
+	// It is nil unless --track-shard-tablet-health is set.
+	shardHealthMonitor *shardHealthMonitor
+
 	// tmState manages the TabletManager state.
 	tmState *tmState
 
@@ -462,6 +466,26 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.exportStats()
 	servenv.OnRun(tm.registerTabletManager)
 
+	// Start the shard-peer health monitor before the restore handling below,
+	// which returns early when --restore-from-backup is set (even when there is
+	// no backup and the tablet starts up empty). Wiring it here ensures tablets
+	// that use --restore-from-backup still run the monitor.
+	if trackShardTabletHealth {
+		keyspace := tablet.Keyspace
+		shard := tablet.Shard
+		listPeers := func(ctx context.Context) (map[string]*topo.TabletInfo, error) {
+			return tm.TopoServer.GetTabletMapForShard(ctx, keyspace, shard)
+		}
+		tm.shardHealthMonitor = newShardHealthMonitor(
+			tm.tmc,
+			listPeers,
+			topoproto.TabletAliasString(tablet.Alias),
+			shardTabletHealthInterval,
+			shardTabletHealthInterval,
+		)
+		tm.shardHealthMonitor.Start(tm.BatchCtx)
+	}
+
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
 		return err
@@ -485,6 +509,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		return err
 	}
 	tm.tmState.Open()
+
 	return nil
 }
 
@@ -492,6 +517,10 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
 func (tm *TabletManager) Close() {
+	if tm.shardHealthMonitor != nil {
+		tm.shardHealthMonitor.Stop()
+	}
+
 	// Stop the shard sync loop and wait for it to exit. We do this in Close()
 	// rather than registering it as an OnTerm hook so the shard sync loop keeps
 	// running during lame duck.

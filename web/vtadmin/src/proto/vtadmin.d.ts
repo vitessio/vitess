@@ -51050,6 +51050,121 @@ export namespace replicationdata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ShardPeerHealth. */
+    interface IShardPeerHealth {
+
+        /** ShardPeerHealth tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ShardPeerHealth consecutive_ping_failures */
+        consecutive_ping_failures?: (number|Long|null);
+
+        /** ShardPeerHealth last_successful_ping */
+        last_successful_ping?: (vttime.ITime|null);
+
+        /** ShardPeerHealth last_attempted_ping */
+        last_attempted_ping?: (vttime.ITime|null);
+    }
+
+    /** Represents a ShardPeerHealth. */
+    class ShardPeerHealth implements IShardPeerHealth {
+
+        /**
+         * Constructs a new ShardPeerHealth.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: replicationdata.IShardPeerHealth);
+
+        /** ShardPeerHealth tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** ShardPeerHealth consecutive_ping_failures. */
+        public consecutive_ping_failures: (number|Long);
+
+        /** ShardPeerHealth last_successful_ping. */
+        public last_successful_ping?: (vttime.ITime|null);
+
+        /** ShardPeerHealth last_attempted_ping. */
+        public last_attempted_ping?: (vttime.ITime|null);
+
+        /**
+         * Creates a new ShardPeerHealth instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardPeerHealth instance
+         */
+        public static create(properties?: replicationdata.IShardPeerHealth): replicationdata.ShardPeerHealth;
+
+        /**
+         * Encodes the specified ShardPeerHealth message. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @param message ShardPeerHealth message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: replicationdata.IShardPeerHealth, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardPeerHealth message, length delimited. Does not implicitly {@link replicationdata.ShardPeerHealth.verify|verify} messages.
+         * @param message ShardPeerHealth message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: replicationdata.IShardPeerHealth, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.ShardPeerHealth;
+
+        /**
+         * Decodes a ShardPeerHealth message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardPeerHealth
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.ShardPeerHealth;
+
+        /**
+         * Verifies a ShardPeerHealth message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardPeerHealth message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardPeerHealth
+         */
+        public static fromObject(object: { [k: string]: any }): replicationdata.ShardPeerHealth;
+
+        /**
+         * Creates a plain object from a ShardPeerHealth message. Also converts values to other types if specified.
+         * @param message ShardPeerHealth
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: replicationdata.ShardPeerHealth, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardPeerHealth to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ShardPeerHealth
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
     /** Properties of a FullStatus. */
     interface IFullStatus {
 
@@ -51127,6 +51242,9 @@ export namespace replicationdata {
 
         /** FullStatus tablet_type */
         tablet_type?: (topodata.TabletType|null);
+
+        /** FullStatus shard_peer_health */
+        shard_peer_health?: (replicationdata.IShardPeerHealth[]|null);
     }
 
     /** Represents a FullStatus. */
@@ -51212,6 +51330,9 @@ export namespace replicationdata {
 
         /** FullStatus tablet_type. */
         public tablet_type: topodata.TabletType;
+
+        /** FullStatus shard_peer_health. */
+        public shard_peer_health: replicationdata.IShardPeerHealth[];
 
         /**
          * Creates a new FullStatus instance using the specified properties.

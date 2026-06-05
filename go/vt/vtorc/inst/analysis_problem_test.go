@@ -15,11 +15,15 @@ package inst
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/protoutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
 func TestSortDetectionAnalysisMatchedProblems(t *testing.T) {
@@ -326,4 +330,34 @@ func TestGroupDetectionAnalysesByShard(t *testing.T) {
 	ks2 := result["ks2/0"]
 	require.Len(t, ks2, 1)
 	assert.Equal(t, PrimaryIsReadOnly, ks2[0].Analysis)
+}
+
+func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
+	now := time.Now()
+	primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	// Enable the feature for this test.
+	require.NoError(t, config.SetShardQuorumTestConfig(true))
+	t.Cleanup(func() { _ = config.SetShardQuorumTestConfig(false) })
+
+	resetShardPeerHealth()
+	RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, "ks", "0",
+		[]*replicationdatapb.ShardPeerHealth{{TabletAlias: primary, ConsecutivePingFailures: 5, LastAttemptedPing: protoutil.TimeToProto(now)}}, now)
+	RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, topodatapb.TabletType_REPLICA, "ks", "0",
+		[]*replicationdatapb.ShardPeerHealth{{TabletAlias: primary, ConsecutivePingFailures: 5, LastAttemptedPing: protoutil.TimeToProto(now)}}, now)
+
+	a := &DetectionAnalysis{
+		IsClusterPrimary:      true,
+		LastCheckValid:        false,
+		AnalyzedInstanceAlias: primary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	problem := GetDetectionAnalysisProblem(PrimaryTabletUnreachableByQuorum)
+	require.NotNil(t, problem)
+	assert.True(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
+
+	// If VTOrc can still reach the primary, no match.
+	a.LastCheckValid = true
+	assert.False(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
 }

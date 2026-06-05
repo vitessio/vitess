@@ -19,11 +19,13 @@ package inst
 import (
 	"math"
 	"slices"
+	"time"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
 const (
@@ -185,6 +187,22 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    PrimaryTabletUnreachableByQuorum,
+			Description: "Primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas",
+			Priority:    detectionAnalysisPriorityShardWideAction,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			if !config.ERSOnTabletUnreachableEnabled() {
+				return false
+			}
+			if !a.IsClusterPrimary || a.LastCheckValid {
+				return false
+			}
+			return PrimaryDownByQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, quorumOptionsFromConfig(), time.Now())
 		},
 	},
 
@@ -479,6 +497,16 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			return a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0
 		},
 	},
+}
+
+// quorumOptionsFromConfig builds QuorumOptions from the current VTOrc configuration.
+func quorumOptionsFromConfig() QuorumOptions {
+	return QuorumOptions{
+		FailureThreshold: config.GetShardTabletHealthFailureThreshold(),
+		Freshness:        config.GetShardTabletHealthFreshness(),
+		Fraction:         config.GetShardQuorumFraction(),
+		MinObservers:     config.GetShardQuorumMinObservers(),
+	}
 }
 
 func sortDetectionAnalysisMatchedProblems(allProblems []*DetectionAnalysisProblem) {
