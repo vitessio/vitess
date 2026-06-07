@@ -181,7 +181,6 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtTabletExtraArgs = []string{
 			"--heartbeat-interval", "250ms",
 			"--migration-check-interval", "5s",
-			"--watch-replication-stream",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
 			"--ddl-strategy", "online",
@@ -854,6 +853,35 @@ func TestVreplSchemaChanges(t *testing.T) {
 				default:
 					require.NoError(t, fmt.Errorf("unexpected shard name: %s", shard))
 				}
+			}
+		})
+	})
+	t.Run("Revert a migration completed on both shards", func(t *testing.T) {
+		var uuid string
+		t.Run("run migration, expect completion on both shards", func(t *testing.T) {
+			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", false)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		})
+		var revertUUID string
+		t.Run("issue revert migration", func(t *testing.T) {
+			revertQuery := fmt.Sprintf("revert vitess_migration '%s'", uuid)
+			output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.ApplySchemaParams{DDLStrategy: "vitess"})
+			require.NoError(t, err)
+			revertUUID = strings.TrimSpace(output)
+			assert.NotEmpty(t, revertUUID)
+		})
+		t.Run("revert completes on both shards", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("validate both shards show complete in SHOW VITESS_MIGRATIONS", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, revertUUID)
+			require.NotNil(t, rs)
+			require.Equal(t, 2, len(rs.Rows))
+			for _, row := range rs.Named().Rows {
+				status := row["migration_status"].ToString()
+				assert.Equal(t, string(schema.OnlineDDLStatusComplete), status, "shard %s", row["shard"].ToString())
 			}
 		})
 	})

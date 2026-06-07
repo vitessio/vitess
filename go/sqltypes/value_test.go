@@ -215,6 +215,14 @@ func TestNew(t *testing.T) {
 	assert.ErrorContains(t, err, "invalid JSON value")
 }
 
+func TestNewFromBytes(t *testing.T) {
+	assert.Equal(t, NewDate("2021-02-03"), NewDateFromBytes([]byte("2021-02-03")))
+	assert.Equal(t, NewTime("12:34:56"), NewTimeFromBytes([]byte("12:34:56")))
+	assert.Equal(t, NewDatetime("2021-02-03 12:34:56"), NewDatetimeFromBytes([]byte("2021-02-03 12:34:56")))
+	assert.Equal(t, NewDecimal("3.14"), NewDecimalFromBytes([]byte("3.14")))
+	assert.Equal(t, NewVarBinary("\x00\x01"), NewVarBinaryFromBytes([]byte("\x00\x01")))
+}
+
 func TestMakeTrusted(t *testing.T) {
 	v := MakeTrusted(Null, []byte("abcd"))
 	assert.Equal(t, NULL, v)
