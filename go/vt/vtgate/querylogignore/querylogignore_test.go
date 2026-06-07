@@ -169,3 +169,42 @@ func BenchmarkShouldIgnore_EmptyFastPath(b *testing.B) {
 		}
 	}
 }
+
+func TestGetFunc_CachesIgnoreSet(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "patterns.txt")
+	require.NoError(t, os.WriteFile(path, []byte("select :vtg1\n"), 0o644))
+
+	parser := newParser(t)
+	rawVal := "@" + path
+
+	// Reset the cache to a known state.
+	ignoreSetCache.mu.Lock()
+	ignoreSetCache.rawVal = ""
+	ignoreSetCache.parsed = nil
+	ignoreSetCache.mu.Unlock()
+
+	t.Cleanup(func() {
+		ignoreSetCache.mu.Lock()
+		ignoreSetCache.rawVal = ""
+		ignoreSetCache.parsed = nil
+		ignoreSetCache.mu.Unlock()
+	})
+
+	// First call: builds the IgnoreSet (reads the file).
+	first := cachedIgnoreSet(rawVal)
+	require.NotNil(t, first)
+	assert.True(t, first.ShouldIgnore("select 1", parser))
+
+	// Second call with the same raw value: must return the exact same pointer.
+	second := cachedIgnoreSet(rawVal)
+	assert.Same(t, first, second, "repeated Get with unchanged config must return cached *IgnoreSet")
+
+	// Mutate the file on disk — the cache should NOT notice (keyed on raw string).
+	require.NoError(t, os.WriteFile(path, []byte("select :vtg1\nselect $$\n"), 0o644))
+	third := cachedIgnoreSet(rawVal)
+	assert.Same(t, first, third, "file content change without config reload must not bust cache")
+
+	// Change the raw value — cache must invalidate.
+	fourth := cachedIgnoreSet("select $$")
+	assert.NotSame(t, first, fourth, "different raw value must produce a new *IgnoreSet")
+}
