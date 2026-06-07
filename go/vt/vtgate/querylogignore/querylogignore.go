@@ -28,6 +28,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -191,6 +192,34 @@ func mustNewParser() *sqlparser.Parser {
 	return p
 }
 
+// ignoreSetCache caches the most recently parsed *IgnoreSet keyed by the
+// raw config string. This avoids re-parsing patterns (and re-reading
+// @file contents) on every call to IgnorePatterns.Get() in the query-log
+// hot path.
+//
+// For @file values, only the flag string (e.g. "@/etc/patterns.txt") is
+// the cache key — file content changes require a config reload or process
+// restart to take effect.
+var ignoreSetCache struct {
+	mu     sync.Mutex
+	rawVal string
+	parsed *IgnoreSet
+}
+
+func cachedIgnoreSet(rawVal string) *IgnoreSet {
+	ignoreSetCache.mu.Lock()
+	defer ignoreSetCache.mu.Unlock()
+
+	if ignoreSetCache.parsed != nil && ignoreSetCache.rawVal == rawVal {
+		return ignoreSetCache.parsed
+	}
+
+	parsed := NewIgnoreSet(rawVal, flagParser)
+	ignoreSetCache.rawVal = rawVal
+	ignoreSetCache.parsed = parsed
+	return parsed
+}
+
 // IgnorePatterns is the Viper-managed flag value backing
 // --query-log-ignore-patterns. Empty by default. Reloadable via Viper.
 var IgnorePatterns = viperutil.Configure(
@@ -201,11 +230,7 @@ var IgnorePatterns = viperutil.Configure(
 		Dynamic:  true,
 		GetFunc: func(v *viper.Viper) func(key string) *IgnoreSet {
 			return func(key string) *IgnoreSet {
-				newVal := v.GetString(key)
-				if cur, ok := v.Get(key).(*IgnoreSet); ok && cur.source == newVal {
-					return cur
-				}
-				return NewIgnoreSet(newVal, flagParser)
+				return cachedIgnoreSet(v.GetString(key))
 			}
 		},
 	},
