@@ -1304,6 +1304,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
 	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
 	span.Annotate("wait_for_all_tablets", req.WaitForAllTablets)
+	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
 
 	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
@@ -1314,7 +1315,8 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		logstream = append(logstream, e)
 	})
 
-	ev, err := reparentutil.NewEmergencyReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+	ev, err := reparentutil.NewEmergencyReparenter(s.ts, s.tmc, logger).ReparentShard(
+		ctx,
 		req.Keyspace,
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
@@ -1324,6 +1326,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			WaitAllTablets:            req.WaitForAllTablets,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 			ExpectedPrimaryAlias:      req.ExpectedPrimary,
+			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
 		},
 	)
 
@@ -3315,7 +3318,8 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		logstream = append(logstream, e)
 	})
 
-	ev, err := reparentutil.NewPlannedReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+	ev, err := reparentutil.NewPlannedReparenter(s.ts, s.tmc, logger).ReparentShard(
+		ctx,
 		req.Keyspace,
 		req.Shard,
 		reparentutil.PlannedReparentOptions{
@@ -5496,7 +5500,8 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 			r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
 			primarySchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, si.PrimaryAlias, r)
 			if err != nil {
-				errorMessage := fmt.Sprintf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
+				errorMessage := fmt.Sprintf(
+					"GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
 					excludeTables, includeViews, keyspace, shard, err,
 				)
 				shardResult.Results = append(shardResult.Results, errorMessage)

@@ -4340,8 +4340,13 @@ type EmergencyReparentShardRequest struct {
 	// ExpectedPrimary is the optional alias we expect to be the current primary in order for
 	// the reparent operation to succeed.
 	ExpectedPrimary *topodata.TabletAlias `protobuf:"bytes,8,opt,name=expected_primary,json=expectedPrimary,proto3" json:"expected_primary,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// AllowSplitBrainPromotion lets ERS proceed when two leading candidates have incomparable
+	// Combined GTID positions (suspected split-brain). By default ERS aborts with FAILED_PRECONDITION
+	// in that case; setting this true logs a WARN and continues, accepting that the losing side's
+	// unique GTIDs will become errant on those tablets. Intended as a deliberate operator override.
+	AllowSplitBrainPromotion bool `protobuf:"varint,9,opt,name=allow_split_brain_promotion,json=allowSplitBrainPromotion,proto3" json:"allow_split_brain_promotion,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *EmergencyReparentShardRequest) Reset() {
@@ -4428,6 +4433,13 @@ func (x *EmergencyReparentShardRequest) GetExpectedPrimary() *topodata.TabletAli
 		return x.ExpectedPrimary
 	}
 	return nil
+}
+
+func (x *EmergencyReparentShardRequest) GetAllowSplitBrainPromotion() bool {
+	if x != nil {
+		return x.AllowSplitBrainPromotion
+	}
+	return false
 }
 
 type EmergencyReparentShardResponse struct {
@@ -17843,7 +17855,7 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x14DeleteTabletsRequest\x12<\n" +
 	"\x0etablet_aliases\x18\x01 \x03(\v2\x15.topodata.TabletAliasR\rtabletAliases\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\"\x17\n" +
-	"\x15DeleteTabletsResponse\"\xc3\x03\n" +
+	"\x15DeleteTabletsResponse\"\x82\x04\n" +
 	"\x1dEmergencyReparentShardRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x126\n" +
@@ -17853,7 +17865,8 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x15wait_replicas_timeout\x18\x05 \x01(\v2\x10.vttime.DurationR\x13waitReplicasTimeout\x12?\n" +
 	"\x1cprevent_cross_cell_promotion\x18\x06 \x01(\bR\x19preventCrossCellPromotion\x12/\n" +
 	"\x14wait_for_all_tablets\x18\a \x01(\bR\x11waitForAllTablets\x12@\n" +
-	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\"\xbc\x01\n" +
+	"\x10expected_primary\x18\b \x01(\v2\x15.topodata.TabletAliasR\x0fexpectedPrimary\x12=\n" +
+	"\x1ballow_split_brain_promotion\x18\t \x01(\bR\x18allowSplitBrainPromotion\"\xbc\x01\n" +
 	"\x1eEmergencyReparentShardResponse\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x14\n" +
 	"\x05shard\x18\x02 \x01(\tR\x05shard\x12@\n" +
