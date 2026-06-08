@@ -74,6 +74,7 @@ Flags:
       --clone-restart-wait-timeout duration                              Timeout for waiting for MySQL to restart after CLONE REMOTE. (default 5m0s)
       --compression-engine-name string                                   compressor engine used for compression. (default "pargzip")
       --compression-level int                                            what level to pass to the compressor. (default 1)
+      --concurrency-limiter-dry-run                                      If true, the concurrency limiter records metrics and emits rejection signals but always admits requests.
       --config-file string                                               Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling        Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                               Name of the config file (without extension) to search for. (default "vtconfig")
@@ -143,6 +144,7 @@ Flags:
       --disk-write-interval duration                                     how often to write to the disk to check whether it is stalled (default 5s)
       --disk-write-timeout duration                                      if writes exceed this duration, the disk is considered stalled (default 30s)
       --emit-stats                                                       If set, emit stats to push-based monitoring and stats backends
+      --enable-concurrency-limiter                                       If true, per-query concurrency limits encoded in /*vt+ CONCURRENCY=... */ directives will be enforced.
       --enable-consolidator                                              This option enables the query consolidator. (default true)
       --enable-consolidator-replicas                                     This option enables the query consolidator only on replicas.
       --enable-hot-row-protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.

@@ -62,6 +62,12 @@ const (
 	// DirectivePriority specifies the priority of a workload. It should be an integer between 0 and MaxPriorityValue,
 	// where 0 is the highest priority, and MaxPriorityValue is the lowest one.
 	DirectivePriority = "PRIORITY"
+	// DirectiveConcurrency encodes one or more concurrency-limiter specs on a query.
+	// Format: CONCURRENCY=key:value:limit[,key:value:limit...]
+	// The directive must appear immediately after the leading SQL verb (SELECT, INSERT, etc.)
+	// so that it is not stripped as a margin comment. Limit=0 means observe-only.
+	// Example: SELECT /*vt+ CONCURRENCY=workload:OLAP:5,caller:analytics:3 */ * FROM t
+	DirectiveConcurrency = "CONCURRENCY"
 
 	// MaxPriorityValue specifies the maximum value allowed for the priority query directive. Valid priority values are
 	// between zero and MaxPriorityValue.

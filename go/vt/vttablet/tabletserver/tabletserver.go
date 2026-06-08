@@ -65,6 +65,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/gc"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/limiter"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler"
@@ -145,6 +146,7 @@ type TabletServer struct {
 	env *vtenv.Environment
 
 	queryThrottler *querythrottler.QueryThrottler
+	limiter        *limiter.Limiter
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -198,7 +200,9 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
 	tsv.binlogDumper = NewBinlogDumpEngine()
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
+	tsv.limiter = limiter.New(tsv)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
+	tsv.qe.limiter = tsv.limiter
 	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
 	tsv.te = NewTxEngine(tsv, tsv.hs.sendUnresolvedTransactionSignal)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
@@ -1163,7 +1167,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 			}
 
 			return waitErr
-		})
+		},
+	)
 	return txDone, err
 }
 

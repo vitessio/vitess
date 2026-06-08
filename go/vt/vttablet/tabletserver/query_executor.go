@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/limiter"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	eschema "vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -160,6 +161,15 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
 		return nil, reqThrottledErr
+	}
+
+	if qre.tsv.config.EnableConcurrencyLimiter && len(qre.plan.LimiterSpecs) > 0 {
+		dryRun := qre.tsv.config.ConcurrencyLimiterDryRun
+		ok, failed := qre.tsv.limiter.Acquire(qre.plan.LimiterSpecs, dryRun)
+		if !ok {
+			return nil, limiter.RejectedError(failed)
+		}
+		defer qre.tsv.limiter.Release(qre.plan.LimiterSpecs)
 	}
 
 	if qre.plan.PlanID == p.PlanNextval {
@@ -355,6 +365,15 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 
 	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
 		return reqThrottledErr
+	}
+
+	if qre.tsv.config.EnableConcurrencyLimiter && len(qre.plan.LimiterSpecs) > 0 {
+		dryRun := qre.tsv.config.ConcurrencyLimiterDryRun
+		ok, failed := qre.tsv.limiter.Acquire(qre.plan.LimiterSpecs, dryRun)
+		if !ok {
+			return limiter.RejectedError(failed)
+		}
+		defer qre.tsv.limiter.Release(qre.plan.LimiterSpecs)
 	}
 
 	switch qre.plan.PlanID {

@@ -179,6 +179,10 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.TxThrottlerDryRun, "tx-throttler-dry-run", defaultConfig.TxThrottlerDryRun, "If present, the transaction throttler only records metrics about requests received and throttled, but does not actually throttle any requests.")
 	fs.DurationVar(&currentConfig.TxThrottlerTopoRefreshInterval, "tx-throttler-topo-refresh-interval", time.Minute*5, "The rate that the transaction throttler will refresh the topology to find cells.")
 
+	// Concurrency limiter config
+	utils.SetFlagBoolVar(fs, &currentConfig.EnableConcurrencyLimiter, "enable-concurrency-limiter", defaultConfig.EnableConcurrencyLimiter, "If true, per-query concurrency limits encoded in /*vt+ CONCURRENCY=... */ directives will be enforced.")
+	utils.SetFlagBoolVar(fs, &currentConfig.ConcurrencyLimiterDryRun, "concurrency-limiter-dry-run", defaultConfig.ConcurrencyLimiterDryRun, "If true, the concurrency limiter records metrics and emits rejection signals but always admits requests.")
+
 	utils.SetFlagBoolVar(fs, &enableHotRowProtection, "enable-hot-row-protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	utils.SetFlagBoolVar(fs, &enableHotRowProtectionDryRun, "enable-hot-row-protection-dry-run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
 	utils.SetFlagIntVar(fs, &currentConfig.HotRowProtection.MaxQueueSize, "hot-row-protection-max-queue-size", defaultConfig.HotRowProtection.MaxQueueSize, "Maximum number of BeginExecute RPCs which will be queued for the same row (range).")
@@ -370,6 +374,9 @@ type TabletConfig struct {
 	TxThrottlerTabletTypes         *topoproto.TabletTypeListFlag `json:"-"`
 	TxThrottlerTopoRefreshInterval time.Duration                 `json:"-"`
 	TxThrottlerDryRun              bool                          `json:"-"`
+
+	EnableConcurrencyLimiter bool `json:"-"`
+	ConcurrencyLimiterDryRun bool `json:"-"`
 
 	EnableTableGC bool `json:"-"` // can be turned off programmatically by tests
 
@@ -1125,6 +1132,9 @@ var defaultConfig = TabletConfig{
 	TxThrottlerTabletTypes:         &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA},
 	TxThrottlerDryRun:              false,
 	TxThrottlerTopoRefreshInterval: time.Minute * 5,
+
+	EnableConcurrencyLimiter: false,
+	ConcurrencyLimiterDryRun: false,
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 

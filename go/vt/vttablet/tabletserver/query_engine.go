@@ -46,6 +46,7 @@ import (
 	tacl "vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/limiter"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -62,6 +63,10 @@ type TabletPlan struct {
 	Original   string
 	Rules      *rules.Rules
 	Authorized []*tableacl.ACLResult
+	// LimiterSpecs holds the concurrency-limiter specs parsed from the query's
+	// /*vt+ CONCURRENCY=... */ directive. It is populated once in getPlan/getStreamPlan
+	// and is read-only afterward — safe for concurrent use from a cached plan.
+	LimiterSpecs []limiter.Spec
 
 	QueryCount   uint64
 	Time         uint64
@@ -146,9 +151,10 @@ type currentSchema struct {
 // Close: There should be no more pending queries when this
 // function is called.
 type QueryEngine struct {
-	isOpen atomic.Bool
-	env    tabletenv.Env
-	se     *schema.Engine
+	isOpen  atomic.Bool
+	env     tabletenv.Env
+	se      *schema.Engine
+	limiter *limiter.Limiter
 
 	// mu protects the following fields.
 	schemaMu sync.Mutex
@@ -377,6 +383,37 @@ func (qe *QueryEngine) Close() {
 
 var errNoCache = errors.New("plan should not be cached")
 
+// parseLimiterSpecs extracts concurrency-limiter specs from the /*vt+ CONCURRENCY=... */
+// directive on the parsed statement. Returns nil when the feature is disabled, when the
+// statement carries no directive, or when parsing fails (error is logged and counted).
+func (qe *QueryEngine) parseLimiterSpecs(statement sqlparser.Statement) []limiter.Spec {
+	if !qe.env.Config().EnableConcurrencyLimiter {
+		return nil
+	}
+	commented, ok := statement.(sqlparser.Commented)
+	if !ok {
+		return nil
+	}
+	raw, found := commented.GetParsedComments().Directives().GetString(sqlparser.DirectiveConcurrency, "")
+	if !found || raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	specs := make([]limiter.Spec, 0, len(parts))
+	for _, p := range parts {
+		s, err := limiter.ParseSpec(strings.TrimSpace(p))
+		if err != nil {
+			log.Warn(fmt.Sprintf("concurrency limiter: ignoring malformed CONCURRENCY directive %q: %v", raw, err))
+			if qe.limiter != nil {
+				qe.limiter.IncSpecParseErrors()
+			}
+			return nil
+		}
+		specs = append(specs, s)
+	}
+	return specs
+}
+
 func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit bool) (*TabletPlan, error) {
 	statement, err := qe.env.Environment().Parser().Parse(sql)
 	if err != nil {
@@ -389,6 +426,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
 	plan.buildAuthorized()
+	plan.LimiterSpecs = qe.parseLimiterSpecs(statement)
 	if sqlparser.CachePlan(statement) {
 		return plan, nil
 	}
@@ -434,6 +472,7 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	plan := &TabletPlan{Plan: splan, Original: sql}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
+	plan.LimiterSpecs = qe.parseLimiterSpecs(statement)
 
 	if sqlparser.CachePlan(statement) {
 		return plan, nil
