@@ -419,7 +419,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 		}()
 	}
 
-	vs.wg.Go(func() {
+	var sendWg sync.WaitGroup
+	sendWg.Go(func() {
 		// sendEvents returns either if the given context has been canceled or if
 		// an error is returned from the callback. If the callback returns an error,
 		// we need to cancel the context to stop the other stream goroutines
@@ -435,6 +436,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 		vs.startOneStream(ctx, sgtid)
 	}
 	vs.wg.Wait()
+	close(vs.eventCh)
+	sendWg.Wait()
 
 	return vs.getError()
 }
@@ -474,7 +477,10 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				vs.setError(ctx.Err(), "context ended while sending events")
 			})
 			return
-		case evs := <-vs.eventCh:
+		case evs, ok := <-vs.eventCh:
+			if !ok {
+				return
+			}
 			if err := send(evs); err != nil {
 				log.Info(fmt.Sprintf("Error in vstream send events to client: %v", err))
 				vs.once.Do(func() {
