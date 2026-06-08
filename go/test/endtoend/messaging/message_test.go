@@ -91,7 +91,6 @@ func TestMessage(t *testing.T) {
 
 	defer utils.Exec(t, conn, "drop table vitess_message")
 
-	utils.Exec(t, streamConn, "set workload = 'olap'")
 	err = streamConn.ExecuteStreamFetch("stream * from vitess_message")
 	require.NoError(t, err)
 
@@ -223,7 +222,6 @@ func TestThreeColMessage(t *testing.T) {
 	utils.Exec(t, conn, createThreeColMessage)
 	defer utils.Exec(t, conn, "drop table vitess_message3")
 
-	utils.Exec(t, streamConn, "set workload = 'olap'")
 	err = streamConn.ExecuteStreamFetch("stream * from vitess_message3")
 	require.NoError(t, err)
 
@@ -316,7 +314,6 @@ func TestSpecificStreamingColsMessage(t *testing.T) {
 	utils.Exec(t, conn, createSpecificStreamingColsMessage)
 	defer utils.Exec(t, conn, "drop table vitess_message4")
 
-	utils.Exec(t, streamConn, "set workload = 'olap'")
 	err = streamConn.ExecuteStreamFetch("stream * from vitess_message4")
 	require.NoError(t, err)
 

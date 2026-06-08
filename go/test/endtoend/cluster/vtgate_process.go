@@ -32,12 +32,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/shlex"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
+
+const vtgateExtraArgsEnv = "VTTEST_VTGATE_EXTRA_ARGS"
 
 // VtgateProcess is a generic handle for a running vtgate .
 // It can be spawned manually
@@ -169,12 +173,16 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	}
 
 	args = append(args, "--log-format", "text")
+	extraArgs, err := vtgate.extraArgs()
+	if err != nil {
+		return err
+	}
 
 	// If no explicit --mysql-server-version has been specified then we autodetect
 	// the MySQL version that will be used for the test and base the vtgate's
 	// mysql server version on that.
 	msvflag := false
-	for _, f := range vtgate.ExtraArgs {
+	for _, f := range extraArgs {
 		if strings.Contains(f, "mysql-server-version") {
 			msvflag = true
 			break
@@ -219,7 +227,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		vtgate.proc.Args = append(vtgate.proc.Args, "--test.coverprofile="+getCoveragePath("vtgate.out"))
 	}
 
-	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
+	vtgate.proc.Args = append(vtgate.proc.Args, extraArgs...)
 
 	errFile, err := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))
 	if err != nil {
@@ -421,6 +429,19 @@ func (vtgate *VtgateProcess) GetVars() map[string]any {
 		return resultMap
 	}
 	return nil
+}
+
+func (vtgate *VtgateProcess) extraArgs() ([]string, error) {
+	args := append([]string(nil), vtgate.ExtraArgs...)
+	envArgs := strings.TrimSpace(os.Getenv(vtgateExtraArgsEnv))
+	if envArgs == "" {
+		return args, nil
+	}
+	parsedArgs, err := shlex.Split(envArgs)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", vtgateExtraArgsEnv, err)
+	}
+	return append(args, parsedArgs...), nil
 }
 
 // ReadVSchema reads the vschema from the vtgate endpoint for it and returns

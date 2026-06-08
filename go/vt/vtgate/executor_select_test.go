@@ -568,6 +568,27 @@ func TestGen4SelectDBA(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
+func TestStreamSystemSchemaQueryWithoutQualifier(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+	sbc1.Queries = nil
+
+	query := "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
+	err := executor.StreamExecute(t.Context(), nil, "TestStreamSystemSchemaQueryWithoutQualifier",
+		econtext.NewSafeSession(&vtgatepb.Session{TargetString: "information_schema"}),
+		query, map[string]*querypb.BindVariable{}, func(*sqltypes.Result) error {
+			return nil
+		})
+	require.NoError(t, err)
+
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "select t.table_schema, t.`table_name`, c.`column_name`, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = :__vtschemaname /* VARCHAR */ and c.table_schema = t.table_schema and c.`table_name` = t.`table_name` order by t.table_schema asc, t.`table_name` asc, c.`column_name` asc",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__replacevtschemaname": sqltypes.Int64BindVariable(1),
+		},
+	}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
 func TestUnsharded(t *testing.T) {
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
@@ -3285,6 +3306,28 @@ func TestOnlyOptimizedPlan(t *testing.T) {
 	require.ErrorContains(t, sp.BaselineErr, "VT12001: unsupported: subquery with aggregation in order by")
 }
 
+func TestStreamPreparedWindowUsesOptimizedPlan(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	logChan := executor.queryLogger.Subscribe("Test")
+	defer executor.queryLogger.Unsubscribe(logChan)
+
+	sql := "select e.id, row_number() over (partition by e.id order by s.id) as rownum from `user` e, `user` s where e.id = ? and s.id = ?"
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+	bv := map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(1),
+		"v2": sqltypes.Int64BindVariable(1),
+	}
+
+	err := executor.StreamExecutePrepared(ctx, nil, "TestExecuteStream", session, sql, bv, func(*sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", sql, 1)
+	sp := assertOptimizedPlanCondition(t, executor, sql, engine.Condition{A: "v1", B: "v2"})
+	require.NotNil(t, sp)
+	require.ErrorContains(t, sp.BaselineErr, "VT12001: unsupported: window functions are only supported for single-shard queries")
+}
+
 // TestPrepareWithUnsupportedQuery tests that the fields returned by the query on unsupported query.
 func TestPrepareWithUnsupportedQuery(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
@@ -3416,6 +3459,22 @@ func TestSelectLock(t *testing.T) {
 	wantSession.LastLockHeartbeat = session.LastLockHeartbeat // copying as this is current timestamp value.
 	utils.MustMatch(t, wantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, wantSession, session.Session, "")
+}
+
+func TestStreamSelectLockUpdatesSession(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	session := &vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{
+			Workload: querypb.ExecuteOptions_OLAP,
+		},
+	}
+
+	err := executor.StreamExecute(t.Context(), nil, "TestExecuteStream", econtext.NewSafeSession(session), "select get_lock('lock name', 10) from dual", nil, func(*sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, session.LockSession)
+	require.Equal(t, map[string]int64{"lock name": 1}, session.AdvisoryLock)
 }
 
 func TestLockReserve(t *testing.T) {

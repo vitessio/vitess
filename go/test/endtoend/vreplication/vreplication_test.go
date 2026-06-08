@@ -120,7 +120,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 
 	insertInitialData(t)
 
-	_, err = vtgateConn.ExecuteFetch("use "+defaultSourceKs, 1, false)
+	_, err = vtgateConn.ExecuteFetch("use "+sqlescape.EscapeID(defaultSourceKs), 1, false)
 	require.NoError(t, err)
 
 	addColDDL := fmt.Sprintf("alter table %s add column %s varchar(64)", table, newColumn)
@@ -187,7 +187,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm that the worfklow stopped because of the DDL
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), "Message==Stopped at DDL "+addColDDL)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), "message==Stopped at DDL "+addColDDL)
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, defaultTargetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm that we updated the stats on the target tablet as expected.
@@ -228,6 +228,10 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	defaultCell := vc.Cells[cell]
 	// To test vstreamer source throttling for the MoveTables operation
 	maxSourceTrxHistory := int64(5)
+	origExtraVTTabletArgs := extraVTTabletArgs
+	t.Cleanup(func() {
+		extraVTTabletArgs = origExtraVTTabletArgs
+	})
 	extraVTTabletArgs = []string{
 		// We rely on holding open transactions to generate innodb history so extend the timeout
 		// to avoid flakiness when the CI is very slow.
@@ -263,14 +267,30 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
+	origDefaultSourceKsOpts := maps.Clone(defaultSourceKsOpts)
+	origDefaultTargetKsOpts := maps.Clone(defaultTargetKsOpts)
+	t.Cleanup(func() {
+		defaultSourceKsOpts = origDefaultSourceKsOpts
+		defaultTargetKsOpts = origDefaultTargetKsOpts
+	})
 	defaultSourceKsOpts["DBTypeVersion"] = "mysql-8.0"
 	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "noblob")
 }
 
 func TestVreplicationCopyParallel(t *testing.T) {
+	origDefaultSourceKsOpts := maps.Clone(defaultSourceKsOpts)
+	origDefaultTargetKsOpts := maps.Clone(defaultTargetKsOpts)
+	t.Cleanup(func() {
+		defaultSourceKsOpts = origDefaultSourceKsOpts
+		defaultTargetKsOpts = origDefaultTargetKsOpts
+	})
 	defaultSourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	defaultTargetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	origExtraVTTabletArgs := extraVTTabletArgs
+	t.Cleanup(func() {
+		extraVTTabletArgs = origExtraVTTabletArgs
+	})
 	extraVTTabletArgs = []string{
 		parallelInsertWorkers,
 	}
@@ -398,6 +418,12 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 }
 
 func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
+	origDefaultSourceKsOpts := maps.Clone(defaultSourceKsOpts)
+	origDefaultTargetKsOpts := maps.Clone(defaultTargetKsOpts)
+	t.Cleanup(func() {
+		defaultSourceKsOpts = origDefaultSourceKsOpts
+		defaultTargetKsOpts = origDefaultTargetKsOpts
+	})
 	defaultSourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t, "")
@@ -407,6 +433,12 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 // and a MySQL target as while MariaDB is not supported in Vitess v14+ we want
 // MariaDB users to have a way to migrate into Vitess.
 func TestMoveTablesMariaDBToMySQL(t *testing.T) {
+	origDefaultSourceKsOpts := maps.Clone(defaultSourceKsOpts)
+	origDefaultTargetKsOpts := maps.Clone(defaultTargetKsOpts)
+	t.Cleanup(func() {
+		defaultSourceKsOpts = origDefaultSourceKsOpts
+		defaultTargetKsOpts = origDefaultTargetKsOpts
+	})
 	defaultSourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
 	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testVreplicationWorkflows(t, true /* only do MoveTables */, "")
@@ -743,43 +775,46 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 		Host: "localhost",
 		Port: vtgate.MySQLServerPort,
 	}
-	ch := make(chan bool, 1)
+	streamConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer streamConn.Close()
+
+	wantFields := []*querypb.Field{{
+		Name: "op",
+		Type: sqltypes.VarChar,
+	}, {
+		Name: "pid",
+		Type: sqltypes.Int32,
+	}, {
+		Name: "description",
+		Type: sqltypes.VarBinary,
+	}, {
+		Name: "date1",
+		Type: sqltypes.Datetime,
+	}, {
+		Name: "date2",
+		Type: sqltypes.Datetime,
+	}}
+
+	type streamResult struct {
+		fields []*querypb.Field
+		row1   []sqltypes.Value
+		row2   []sqltypes.Value
+		err    error
+	}
+
+	ch := make(chan streamResult, 1)
 	go func() {
-		defer func() { ch <- true }()
-		streamConn, err := mysql.Connect(ctx, &vtParams)
-		if !assert.NoError(t, err) {
-			return
-		}
-		defer streamConn.Close()
-		_, err = streamConn.ExecuteFetch("set workload='olap'", 1000, false)
-		if !assert.NoError(t, err) {
-			return
-		}
-
 		query := "vstream * from " + table
-		err = streamConn.ExecuteStreamFetch(query)
-		if !assert.NoError(t, err) {
+		err := streamConn.ExecuteStreamFetch(query)
+		if err != nil {
+			ch <- streamResult{err: err}
 			return
 		}
 
-		wantFields := []*querypb.Field{{
-			Name: "op",
-			Type: sqltypes.VarChar,
-		}, {
-			Name: "pid",
-			Type: sqltypes.Int32,
-		}, {
-			Name: "description",
-			Type: sqltypes.VarBinary,
-		}, {
-			Name: "date1",
-			Type: sqltypes.Datetime,
-		}, {
-			Name: "date2",
-			Type: sqltypes.Datetime,
-		}}
 		gotFields, err := streamConn.Fields()
-		if !assert.NoError(t, err) {
+		if err != nil {
+			ch <- streamResult{err: err}
 			return
 		}
 		for i, field := range gotFields {
@@ -788,26 +823,51 @@ func testVStreamFrom(t *testing.T, vtgate *cluster.VtgateProcess, table string, 
 				Type: field.Type,
 			}
 		}
-		utils.MustMatch(t, wantFields, gotFields)
 
 		gotRows, err := streamConn.FetchNext(nil)
-		if !assert.NoError(t, err) {
+		if err != nil {
+			ch <- streamResult{err: err}
 			return
 		}
-		log.Info(fmt.Sprintf("QR1:%v\n", gotRows))
 
-		gotRows, err = streamConn.FetchNext(nil)
-		if !assert.NoError(t, err) {
+		gotRows2, err := streamConn.FetchNext(nil)
+		if err != nil {
+			ch <- streamResult{err: err}
 			return
 		}
-		log.Info(fmt.Sprintf("QR2:%+v\n", gotRows))
+		ch <- streamResult{fields: gotFields, row1: gotRows, row2: gotRows2}
 	}()
 
-	select {
-	case <-ch:
-		return
-	case <-time.After(5 * time.Second):
-		require.Fail(t, "nothing streamed within timeout")
+	insertConn, closeInsertConn := getVTGateConn()
+	defer closeInsertConn()
+
+	nextPID := 900000 + int(time.Now().UnixNano()%100000)
+	insertRows := func() {
+		for range expectedRowCount {
+			execVtgateQuery(t, insertConn, defaultSourceKs, fmt.Sprintf("insert into %s(pid, description) values(%d, 'vstream-test-%d')", table, nextPID, nextPID))
+			nextPID++
+		}
+	}
+
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(defaultTick)
+	defer ticker.Stop()
+	insertRows()
+	for {
+		select {
+		case got := <-ch:
+			require.NoError(t, got.err)
+			utils.MustMatch(t, wantFields, got.fields)
+			log.Info(fmt.Sprintf("QR1:%v\n", got.row1))
+			log.Info(fmt.Sprintf("QR2:%+v\n", got.row2))
+			return
+		case <-ticker.C:
+			insertRows()
+		case <-timer.C:
+			streamConn.Close()
+			require.Failf(t, "nothing streamed within timeout", "No VStream rows were received within %s", defaultTimeout)
+		}
 	}
 }
 
@@ -1169,11 +1229,17 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		var sourceTablets, targetTablets []*cluster.VttabletProcess
 
 		// Test multi-primary setups, like a Galera cluster, which have auto increment steps > 1.
+		resetAutoIncrement := func() {
+			for _, tablet := range tablets {
+				require.NoError(t, tablet.MultiQueryTabletWithDB("set @@session.auto_increment_increment = 1; set @@global.auto_increment_increment = 1", ""))
+			}
+		}
 		for _, tablet := range tablets {
 			autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
 				autoIncrementStep, autoIncrementStep)
-			tablet.QueryTablet(autoIncrementSetQuery, "", false)
+			require.NoError(t, tablet.MultiQueryTabletWithDB(autoIncrementSetQuery, ""))
 		}
+		t.Cleanup(resetAutoIncrement)
 		reshardAction(t, "Create", workflow, ksName, sourceShards, targetShards, sourceCellOrAlias, "replica,primary")
 
 		targetShards = "," + targetShards + ","
@@ -1202,6 +1268,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		}
 		// Now let's confirm that it works as expected with an error.
 		reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary")
+		resetAutoIncrement()
 		reshardAction(t, "Complete", workflow, ksName, "", "", "", "")
 		for tabletName, count := range counts {
 			if tablets[tabletName] == nil {
@@ -1677,12 +1744,16 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 }
 
 func ensureCanSwitch(t *testing.T, workflowType, cells, ksWorkflow string) {
+	ensureCanSwitchAction(t, workflowType, cells, ksWorkflow, workflowActionSwitchTraffic)
+}
+
+func ensureCanSwitchAction(t *testing.T, workflowType, cells, ksWorkflow, action string) {
 	ks, wf, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok)
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic",
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, action,
 			"--cells="+cells, "--dry-run")
 		if err == nil {
 			return
@@ -1708,7 +1779,7 @@ func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse b
 	if reverse {
 		command = "ReverseTraffic"
 	}
-	ensureCanSwitch(t, workflowType, cells, ksWorkflow)
+	ensureCanSwitchAction(t, workflowType, cells, ksWorkflow, command)
 	ks, wf, ok := strings.Cut(ksWorkflow, ".")
 	require.True(t, ok)
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command,
@@ -1730,7 +1801,7 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 		command = "ReverseTraffic"
 	}
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
-	ensureCanSwitch(t, workflowType, "", ksWorkflow)
+	ensureCanSwitchAction(t, workflowType, "", ksWorkflow, command)
 	defaultTargetKs, workflow, found := strings.Cut(ksWorkflow, ".")
 	require.True(t, found)
 	if workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables.String() {
@@ -2013,8 +2084,8 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 func generateInnoDBRowHistory(t *testing.T, defaultSourceKs string, neededTrxHistory int64) *mysql.Conn {
 	dbConn1 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	dbConn2 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	execQuery(t, dbConn1, "use "+defaultSourceKs)
-	execQuery(t, dbConn2, "use "+defaultSourceKs)
+	execQuery(t, dbConn1, "use "+sqlescape.EscapeID(defaultSourceKs))
+	execQuery(t, dbConn2, "use "+sqlescape.EscapeID(defaultSourceKs))
 	offset := int64(1000)
 	limit := int64(neededTrxHistory * 100)
 	insertStmt := strings.Builder{}

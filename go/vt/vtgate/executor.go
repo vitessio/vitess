@@ -322,6 +322,31 @@ func (e *Executor) StreamExecute(
 	bindVars map[string]*querypb.BindVariable,
 	callback func(*sqltypes.Result) error,
 ) error {
+	return e.streamExecute(ctx, mysqlCtx, method, safeSession, sql, bindVars, false, callback)
+}
+
+func (e *Executor) StreamExecutePrepared(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	method string,
+	safeSession *econtext.SafeSession,
+	sql string,
+	bindVars map[string]*querypb.BindVariable,
+	callback func(*sqltypes.Result) error,
+) error {
+	return e.streamExecute(ctx, mysqlCtx, method, safeSession, sql, bindVars, true, callback)
+}
+
+func (e *Executor) streamExecute(
+	ctx context.Context,
+	mysqlCtx vtgateservice.MySQLConnection,
+	method string,
+	safeSession *econtext.SafeSession,
+	sql string,
+	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
+	callback func(*sqltypes.Result) error,
+) error {
 	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
 	span.Annotate("method", method)
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
@@ -335,20 +360,56 @@ func (e *Executor) StreamExecute(
 		var seenResults atomic.Bool
 		var resultMu sync.Mutex
 		result := &sqltypes.Result{}
+		nonRowResult := &sqltypes.Result{}
+		sendFields := func() error {
+			return nil
+		}
+		setResultMetadata := func() bool {
+			return false
+		}
 		if canReturnRows(plan.QueryType) {
+			fieldsSent := true
+			var rowsAffected uint64
+			var insertID uint64
+			var insertIDChanged bool
+			sendFields = func() error {
+				if fieldsSent || len(result.Fields) == 0 {
+					return nil
+				}
+				if err := callback(result.Metadata()); err != nil {
+					return err
+				}
+				fieldsSent = true
+				seenResults.Store(true)
+				return nil
+			}
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
+				rowsAffected += qr.RowsAffected
+				if qr.InsertIDUpdated() {
+					insertID = qr.InsertID
+					insertIDChanged = true
+				}
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
 				byteCount := 0
-				if len(qr.Fields) > 0 {
-					result.Fields = qr.Fields
-					if err := callback(qr.Metadata()); err != nil {
+				if len(qr.Fields) > 0 && (plan.QueryType != sqlparser.StmtStream || !seenResults.Load()) {
+					if err := sendFields(); err != nil {
 						return err
 					}
-					seenResults.Store(true)
+					result.Fields = qr.Fields
+					fieldsSent = false
+					if len(qr.Rows) == 0 {
+						return sendFields()
+					}
+				}
+
+				if len(qr.Rows) > 0 {
+					if err := sendFields(); err != nil {
+						return err
+					}
 				}
 
 				for _, row := range qr.Rows {
@@ -359,6 +420,9 @@ func (e *Executor) StreamExecute(
 					}
 
 					if byteCount >= e.config.StreamSize {
+						if err := sendFields(); err != nil {
+							return err
+						}
 						err := callback(result)
 						seenResults.Store(true)
 						result = &sqltypes.Result{}
@@ -367,6 +431,30 @@ func (e *Executor) StreamExecute(
 							return err
 						}
 					}
+				}
+				if plan.QueryType == sqlparser.StmtStream && len(result.Rows) > 0 {
+					err := callback(result)
+					seenResults.Store(true)
+					result = &sqltypes.Result{}
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			setResultMetadata = func() bool {
+				result.RowsAffected = rowsAffected
+				if insertIDChanged {
+					result.InsertID = insertID
+					result.InsertIDChanged = true
+				}
+				return rowsAffected != 0 || insertIDChanged
+			}
+		} else {
+			srr.callback = func(qr *sqltypes.Result) error {
+				nonRowResult.AppendResult(qr)
+				if qr.SessionStateChanges != "" {
+					nonRowResult.SessionStateChanges = qr.SessionStateChanges
 				}
 				return nil
 			}
@@ -395,6 +483,10 @@ func (e *Executor) StreamExecute(
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
+			logStats.Error = err
+			logStats.TablesUsed = nil
+			logStats.RoutingIndexesUsed = nil
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), nil)
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
 				return err
 			}
@@ -404,25 +496,34 @@ func (e *Executor) StreamExecute(
 			return err
 		}
 
+		// 5: Log and add statistics
+		updateLogStats()
+
 		if !canReturnRows(plan.QueryType) {
-			updateLogStats()
-			return nil
+			return callback(nonRowResult)
 		}
 
 		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Load() {
+		hasResultMetadata := setResultMetadata()
+		if len(result.Fields) > 0 {
+			if err := sendFields(); err != nil {
+				return err
+			}
+		}
+		if len(result.Rows) > 0 {
+			if err := callback(result); err != nil {
+				return err
+			}
+		} else if !seenResults.Load() || hasResultMetadata {
 			if err := callback(result); err != nil {
 				return err
 			}
 		}
 
-		// 5: Log and add statistics
-		updateLogStats()
-
 		return err
 	}
 
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, false, logStats, resultHandler, srr.storeResultStats)
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
@@ -450,7 +551,7 @@ func (e *Executor) StreamExecute(
 
 func canReturnRows(stmtType sqlparser.StatementType) bool {
 	switch stmtType {
-	case sqlparser.StmtSelect, sqlparser.StmtShow, sqlparser.StmtExplain, sqlparser.StmtCallProc:
+	case sqlparser.StmtSelect, sqlparser.StmtStream, sqlparser.StmtShow, sqlparser.StmtExplain, sqlparser.StmtCallProc:
 		return true
 	default:
 		return false

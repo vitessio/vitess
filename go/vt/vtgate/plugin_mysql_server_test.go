@@ -447,6 +447,8 @@ func TestKillMethods(t *testing.T) {
 }
 
 func TestComQueryMulti(t *testing.T) {
+	setMySQLServerUseStreamingForTest(t, false)
+
 	testcases := []struct {
 		name           string
 		sql            string
@@ -943,6 +945,154 @@ func TestComQueryMulti(t *testing.T) {
 			assert.Equal(t, len(tt.queryResponses), idx)
 		})
 	}
+}
+
+func TestMySQLServerUseStreamingDefault(t *testing.T) {
+	assert.False(t, mysqlServerUseStreaming)
+}
+
+func TestMySQLServerUseStreamingWithOLTPWorkload(t *testing.T) {
+	setMySQLServerUseStreamingForTest(t, true)
+
+	executor, _, _, _, _ := createExecutorEnv(t)
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlConn.Capabilities = mysqlConn.Capabilities | mysql.CapabilityClientMultiStatements
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+	vh.session(mysqlConn).Options.Workload = querypb.ExecuteOptions_OLTP
+
+	assertStreamingResults := func(t *testing.T, results []*sqltypes.Result) {
+		t.Helper()
+		require.Greater(t, len(results), 1)
+		assert.NotEmpty(t, results[0].Fields)
+		assert.Empty(t, results[0].Rows)
+		assert.Equal(t, querypb.ExecuteOptions_OLTP, vh.session(mysqlConn).Options.Workload)
+	}
+
+	t.Run("ComQuery", func(t *testing.T) {
+		var results []*sqltypes.Result
+		err := vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
+			results = append(results, result)
+			return nil
+		})
+		require.NoError(t, err)
+		assertStreamingResults(t, results)
+	})
+
+	t.Run("ComQueryMulti", func(t *testing.T) {
+		var results []*sqltypes.Result
+		err := vh.ComQueryMulti(mysqlConn, "select 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+			results = append(results, qr.QueryResult)
+			return nil
+		})
+		require.NoError(t, err)
+		assertStreamingResults(t, results)
+	})
+
+	t.Run("ComStmtExecute", func(t *testing.T) {
+		var results []*sqltypes.Result
+		err := vh.ComStmtExecute(mysqlConn, &mysql.PrepareData{PrepareStmt: "select 1"}, func(result *sqltypes.Result) error {
+			results = append(results, result)
+			return nil
+		})
+		require.NoError(t, err)
+		assertStreamingResults(t, results)
+	})
+}
+
+func TestComStmtExecuteDefaultStreamingKeepsPreparedSemantics(t *testing.T) {
+	setMySQLServerUseStreamingForTest(t, true)
+
+	executor, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	mysqlConn := mysql.GetTestConn()
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+	vh.session(mysqlConn).Options.Workload = querypb.ExecuteOptions_OLTP
+
+	prepare := &mysql.PrepareData{
+		PrepareStmt: "select id from `user` where id = ? and `name` = 'alice'",
+		BindVars: map[string]*querypb.BindVariable{
+			"v1": sqltypes.Int64BindVariable(1),
+		},
+	}
+	err := vh.ComStmtExecute(mysqlConn, prepare, func(*sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	require.Len(t, sbc1.Queries, 1)
+	assert.Equal(t, "select id from `user` where id = :v1 and `name` = 'alice'", sbc1.Queries[0].Sql)
+	assert.Equal(t, map[string]*querypb.BindVariable{
+		"v1": sqltypes.Int64BindVariable(1),
+	}, sbc1.Queries[0].BindVariables)
+}
+
+func TestComQueryMultiDefaultStreamingFrames(t *testing.T) {
+	setMySQLServerUseStreamingForTest(t, true)
+
+	executor, _, _, _, _ := createExecutorEnv(t)
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlConn.Capabilities = mysqlConn.Capabilities | mysql.CapabilityClientMultiStatements
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+	vh.session(mysqlConn).Options.Workload = querypb.ExecuteOptions_OLTP
+
+	var gotMore []bool
+	var gotFirstPacket []bool
+	var gotErrors []error
+	var gotRows [][]sqltypes.Value
+	err = vh.ComQueryMulti(mysqlConn, "select 1; select 2; parsing error; select 3;", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		gotMore = append(gotMore, more)
+		gotFirstPacket = append(gotFirstPacket, firstPacket)
+		gotErrors = append(gotErrors, qr.QueryError)
+		if qr.QueryResult != nil {
+			gotRows = append(gotRows, qr.QueryResult.Rows...)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, true, true, true, true, true, false}, gotMore)
+	assert.Equal(t, []bool{true, false, false, true, false, false, true}, gotFirstPacket)
+	require.Len(t, gotErrors, 7)
+	assert.Nil(t, gotErrors[0])
+	assert.Nil(t, gotErrors[1])
+	assert.Nil(t, gotErrors[2])
+	assert.Nil(t, gotErrors[3])
+	assert.Nil(t, gotErrors[4])
+	assert.Nil(t, gotErrors[5])
+	require.Error(t, gotErrors[6])
+	assert.ErrorContains(t, gotErrors[6], "syntax error")
+	require.Len(t, gotRows, 2)
+	assert.Equal(t, sqltypes.NewInt64(1), gotRows[0][0])
+	assert.Equal(t, sqltypes.NewInt64(2), gotRows[1][0])
+}
+
+func setMySQLServerUseStreamingForTest(t *testing.T, value bool) {
+	t.Helper()
+
+	originalUseStreaming := mysqlServerUseStreaming
+	mysqlServerUseStreaming = value
+	t.Cleanup(func() {
+		mysqlServerUseStreaming = originalUseStreaming
+	})
 }
 
 func TestSlowQueryStatusFlagsComQuery(t *testing.T) {

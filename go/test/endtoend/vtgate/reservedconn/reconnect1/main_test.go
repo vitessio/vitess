@@ -19,6 +19,7 @@ package reservedconn
 import (
 	"flag"
 	"os"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -98,6 +99,15 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func requireMySQLServerUseStreaming(t *testing.T) {
+	t.Helper()
+
+	args := os.Getenv("VTTEST_VTGATE_EXTRA_ARGS")
+	if !strings.Contains(args, "--mysql-server-use-streaming") || strings.Contains(args, "--mysql-server-use-streaming=false") {
+		t.Skip("requires --mysql-server-use-streaming=true")
+	}
+}
+
 func TestServingChange(t *testing.T) {
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
@@ -138,12 +148,13 @@ func TestServingChange(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestServingChangeStreaming(t *testing.T) {
+func TestServingChangeDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "set workload = olap")
 	utils.Exec(t, conn, "use @rdonly")
 	utils.Exec(t, conn, "set sql_mode = ''")
 
@@ -168,9 +179,7 @@ func TestServingChangeStreaming(t *testing.T) {
 
 	// check if connection is still available
 	_, err = utils.ExecAllowError(t, conn, "select 1")
-	if err != nil {
-		t.Skip("connection is closed, cannot continue with the test")
-	}
+	require.NoError(t, err)
 
 	// changing replica tablet to rdonly to make rdonly available for serving.
 	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()

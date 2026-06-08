@@ -83,6 +83,12 @@ innodb, to confirm that vtgate's fkmanaged mode is working properly.
 
 func TestFKExt(t *testing.T) {
 	setSidecarDBName("_vt")
+	origExtraVTTabletArgs := extraVTTabletArgs
+	origExtraVTGateArgs := extraVTGateArgs
+	t.Cleanup(func() {
+		extraVTTabletArgs = origExtraVTTabletArgs
+		extraVTGateArgs = origExtraVTGateArgs
+	})
 
 	// Ensure that there are multiple copy phase cycles per table.
 	extraVTTabletArgs = append(extraVTTabletArgs,
@@ -90,7 +96,6 @@ func TestFKExt(t *testing.T) {
 		"--queryserver-config-schema-change-signal",
 		parallelInsertWorkers)
 	extraVTGateArgs = append(extraVTGateArgs, "--schema-change-signal"+"=true", "--planner-version", "Gen4")
-	defer func() { extraVTTabletArgs = nil }()
 	initFKExtConfig(t)
 
 	cellName := fkextConfig.cell

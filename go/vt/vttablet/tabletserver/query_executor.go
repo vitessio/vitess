@@ -162,14 +162,17 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, reqThrottledErr
 	}
 
+	return qre.executePlan()
+}
+
+func (qre *QueryExecutor) executePlan() (*sqltypes.Result, error) {
 	if qre.plan.PlanID == p.PlanNextval {
 		return qre.execNextval()
 	}
 
 	if qre.connID != 0 {
-		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
 		if err != nil {
 			return nil, err
 		}
@@ -340,13 +343,42 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(callback StreamCallback) error {
+func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
+	var rowsAffected uint64
+	var rowsReturned uint64
+	statsCallback := func(result *sqltypes.Result) error {
+		if result != nil {
+			rowsAffected += result.RowsAffected
+			rowsReturned += uint64(len(result.Rows))
+		}
+		return callback(result)
+	}
+
 	defer func(start time.Time) {
+		duration := time.Since(start)
 		qre.tsv.stats.QueryTimings.Record(qre.plan.PlanID.String(), start)
 		qre.tsv.stats.QueryTimingsByTabletType.Record(qre.targetTabletType.String(), start)
-		qre.recordUserQuery("Stream", int64(time.Since(start)))
+		qre.recordUserQuery("Stream", int64(duration))
+
+		mysqlTime := qre.logStats.MysqlResponseTime
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
+		}
+
+		errCode := vterrors.Code(err).String()
+		var errorCount uint64
+		if err != nil {
+			errorCount = 1
+		}
+
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(rowsAffected), int64(rowsReturned), int64(errorCount), errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, rowsAffected, rowsReturned, errorCount)
+		qre.logStats.RowsAffected = int(rowsAffected)
+		qre.logStats.RowsReturned = int(rowsReturned)
+		qre.tsv.Stats().ResultHistogram.Add(int64(rowsReturned))
 	}(time.Now())
 
 	if err := qre.checkPermissions(); err != nil {
@@ -358,6 +390,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	switch qre.plan.PlanID {
+	case p.PlanNextval,
+		p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL,
+		p.PlanUpdateLimit, p.PlanDeleteLimit, p.PlanSet, p.PlanLoad,
+		p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush,
+		p.PlanSavepoint, p.PlanRelease, p.PlanSRollback, p.PlanUnlockTables, p.PlanCallProc,
+		p.PlanAlterMigration, p.PlanRevertMigration,
+		p.PlanShow, p.PlanShowMigrations, p.PlanShowMigrationLogs, p.PlanShowThrottledApps, p.PlanShowThrottlerStatus:
+		return qre.streamResult(statsCallback, qre.executePlan)
 	case p.PlanSelectStream:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
@@ -376,14 +416,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
 		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
-			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, callback,
+			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, statsCallback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()
 					if err != nil {
 						return err
 					}
 					defer dbConn.Recycle()
-					return qre.execStreamSQL(dbConn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
+					return qre.execStreamSQL(dbConn, qre.connID != 0, sql, true, func(result *sqltypes.Result) error {
 						// this stream result is potentially used by more than one client, so
 						// the consolidator will return it to the pool once it knows it's no longer
 						// being shared
@@ -420,7 +460,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		conn = dbConn
 	}
 
-	return qre.execStreamSQL(conn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, qre.connID != 0, sql, true, func(result *sqltypes.Result) error {
 		// this stream result is only used by the calling client, so it can be
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
@@ -428,8 +468,16 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(replaceKeyspace)
 		}
-		return callback(result)
+		return statsCallback(result)
 	})
+}
+
+func (qre *QueryExecutor) streamResult(callback StreamCallback, exec func() (*sqltypes.Result, error)) error {
+	qr, err := exec()
+	if err != nil {
+		return err
+	}
+	return callback(qr)
 }
 
 // MessageStream streams messages from a message table.
@@ -552,7 +600,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 				groupStr = fmt.Sprintf(", in groups [%s],", strings.Join(callerID.Groups, ", "))
 			}
 			aclState = acl.ACLDenied
-			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, groupStr, tableName)
+			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.aclCommandName(), callerID.Username, groupStr, tableName)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
@@ -560,6 +608,15 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	}
 	aclState = acl.ACLAllow
 	return nil
+}
+
+func (qre *QueryExecutor) aclCommandName() string {
+	switch qre.plan.PlanID {
+	case p.PlanSelectStream:
+		return p.PlanSelect.String()
+	default:
+		return qre.plan.PlanID.String()
+	}
 }
 
 func (qre *QueryExecutor) generateACLStatsKey(tableName string, authorized *tableacl.ACLResult, callerID *querypb.VTGateCallerID) []string {
@@ -824,13 +881,21 @@ func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Resu
 func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if count > maxrows {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
-		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
+		username := ""
+		if callerID != nil {
+			username = callerID.Username
+		}
+		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "caller id: %s: row count exceeded %d", username, maxrows)
 	}
 	warnThreshold := qre.tsv.qe.warnResultSize.Load()
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+		username := ""
+		if callerID != nil {
+			username = callerID.Username
+		}
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warn(fmt.Sprintf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser())))
+		log.Warn(fmt.Sprintf("caller id: %s row count %v exceeds warning threshold %v: %q", username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser())))
 	}
 	return nil
 }
@@ -1277,7 +1342,7 @@ func (qre *QueryExecutor) fetchLastInsertID(ctx context.Context, conn *connpool.
 	return nil
 }
 
-func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction bool, sql string, enforceMaxRows bool, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
 	defer span.Finish()
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
@@ -1297,9 +1362,20 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 	}
 
 	lastInsertIDSet := false
+	maxrows := qre.tsv.qe.maxResultSize.Load()
+	enforceMaxRows = enforceMaxRows && maxrows > 0 && qre.options.GetWorkload() != querypb.ExecuteOptions_OLAP
+	var rowsReturned int64
 	cb := func(result *sqltypes.Result) error {
-		if result != nil && result.InsertIDUpdated() {
-			lastInsertIDSet = true
+		if result != nil {
+			if result.InsertIDUpdated() {
+				lastInsertIDSet = true
+			}
+			rowsReturned += int64(len(result.Rows))
+			if enforceMaxRows {
+				if err := qre.verifyRowCount(rowsReturned, maxrows); err != nil {
+					return err
+				}
+			}
 		}
 		return callback(result)
 	}
@@ -1404,7 +1480,7 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isTransaction */, query, false, func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
 			tableName := row[0].ToString()
@@ -1430,7 +1506,7 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isTransaction */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isTransaction */, query, false, func(result *sqltypes.Result) error {
 		var udfs []*querypb.UDFInfo
 		for _, row := range result.Rows {
 			aggr := strings.EqualFold(row[2].ToString(), "aggregate")

@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -139,6 +140,15 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func requireMySQLServerUseStreaming(t *testing.T) {
+	t.Helper()
+
+	args := os.Getenv("VTTEST_VTGATE_EXTRA_ARGS")
+	if !strings.Contains(args, "--mysql-server-use-streaming") || strings.Contains(args, "--mysql-server-use-streaming=false") {
+		t.Skip("requires --mysql-server-use-streaming=true")
+	}
 }
 
 func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {

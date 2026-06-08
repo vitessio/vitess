@@ -136,6 +136,10 @@ func TestVDiff2(t *testing.T) {
 	cellNames := "zone5,zone1,zone2,zone3,zone4"
 	sourceShards := []string{"0"}
 	targetShards := []string{"-80", "80-"}
+	origExtraVTTabletArgs := extraVTTabletArgs
+	t.Cleanup(func() {
+		extraVTTabletArgs = origExtraVTTabletArgs
+	})
 	extraVTTabletArgs = []string{
 		// This forces us to use multiple vstream packets even with small test tables.
 		"--vstream-packet-size=1",

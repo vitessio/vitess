@@ -29,9 +29,11 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	queryservicepb "vitess.io/vitess/go/vt/proto/queryservice"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
@@ -121,12 +123,14 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 // mockQueryClient is a mock query client that returns an error from Streaming calls,
 // but only after storing the context that was passed to the RPC.
 type mockQueryClient struct {
-	lastCallCtx context.Context
+	lastCallCtx              context.Context
+	lastStreamExecuteRequest *querypb.StreamExecuteRequest
 	queryservicepb.QueryClient
 }
 
 func (m *mockQueryClient) StreamExecute(ctx context.Context, in *querypb.StreamExecuteRequest, opts ...grpc.CallOption) (queryservicepb.Query_StreamExecuteClient, error) {
 	m.lastCallCtx = ctx
+	m.lastStreamExecuteRequest = in
 	return nil, errors.New("A general error")
 }
 
@@ -229,4 +233,36 @@ func TestGoRoutineLeakPrevention(t *testing.T) {
 		return nil
 	})
 	require.Error(t, mqc.lastCallCtx.Err())
+}
+
+func TestStreamExecuteCopiesCallerIDs(t *testing.T) {
+	mqc := &mockQueryClient{}
+	qc := &gRPCQueryClient{
+		mu: sync.RWMutex{},
+		cc: &grpc.ClientConn{},
+		c:  mqc,
+	}
+	effective := &vtrpcpb.CallerID{
+		Principal:    "principal",
+		Component:    "component",
+		Subcomponent: "subcomponent",
+		Groups:       []string{"effective-group"},
+	}
+	immediate := &querypb.VTGateCallerID{
+		Username: "username",
+		Groups:   []string{"immediate-group"},
+	}
+	ctx := callerid.NewContext(t.Context(), effective, immediate)
+
+	_ = qc.StreamExecute(ctx, nil, nil, "", nil, 0, 0, nil, func(result *sqltypes.Result) error {
+		return nil
+	})
+
+	require.NotNil(t, mqc.lastStreamExecuteRequest)
+	require.Equal(t, effective, mqc.lastStreamExecuteRequest.EffectiveCallerId)
+	require.Equal(t, immediate, mqc.lastStreamExecuteRequest.ImmediateCallerId)
+	require.NotSame(t, effective, mqc.lastStreamExecuteRequest.EffectiveCallerId)
+	require.NotSame(t, immediate, mqc.lastStreamExecuteRequest.ImmediateCallerId)
+	require.NotSame(t, &effective.Groups[0], &mqc.lastStreamExecuteRequest.EffectiveCallerId.Groups[0])
+	require.NotSame(t, &immediate.Groups[0], &mqc.lastStreamExecuteRequest.ImmediateCallerId.Groups[0])
 }

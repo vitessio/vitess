@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -33,6 +34,8 @@ const streamBufferSize = 8
 // StreamConsolidator is a data structure capable of merging several identical streaming queries so only
 // one query is executed in MySQL and its response is fanned out to all the clients simultaneously.
 type StreamConsolidator struct {
+	*sync2.ConsolidatorCache
+
 	mu                             sync.Mutex
 	inflight                       map[string]*streamInFlight
 	memory                         int64
@@ -46,11 +49,12 @@ type StreamConsolidator struct {
 // only use up to maxMemoryQuery bytes of memory as a history buffer to catch up.
 func NewStreamConsolidator(maxMemoryTotal, maxMemoryQuery int64, cleanup StreamCallback) *StreamConsolidator {
 	return &StreamConsolidator{
-		inflight:       make(map[string]*streamInFlight),
-		maxMemoryTotal: maxMemoryTotal,
-		maxMemoryQuery: maxMemoryQuery,
-		blocking:       false,
-		cleanup:        cleanup,
+		ConsolidatorCache: sync2.NewConsolidatorCache(1000),
+		inflight:          make(map[string]*streamInFlight),
+		maxMemoryTotal:    maxMemoryTotal,
+		maxMemoryQuery:    maxMemoryQuery,
+		blocking:          false,
+		cleanup:           cleanup,
 	}
 }
 
@@ -102,6 +106,7 @@ func (sc *StreamConsolidator) Consolidate(waitTimings *servenv.TimingsWrapper, l
 
 	// if we have a followChan, we're following up on a query that is already being served
 	if followChan != nil {
+		sc.Record(sql)
 		startTime := time.Now()
 		defer func() {
 			memchange := inflight.unfollow(followChan, sc.cleanup)

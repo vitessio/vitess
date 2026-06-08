@@ -185,13 +185,17 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	if hj.Opcode == LeftJoin {
 		res := &sqltypes.Result{}
 		if sendFields.CompareAndSwap(true, false) {
-			// If we still have not sent the fields, we need to fetch
-			// the fields from the RHS to be able to build the result fields
-			rres, err := hj.Right.GetFields(ctx, vcursor, bindVars)
-			if err != nil {
-				return err
+			var rfields []*querypb.Field
+			if hj.needsRightFields() {
+				// If we still have not sent the fields, we need to fetch
+				// the fields from the RHS to be able to build the result fields.
+				rres, err := hj.Right.GetFields(ctx, vcursor, bindVars)
+				if err != nil {
+					return err
+				}
+				rfields = rres.Fields
 			}
-			res.Fields = joinFields(lfields, rres.Fields, hj.Cols)
+			res.Fields = joinFields(lfields, rfields, hj.Cols)
 		}
 		// this will only be called when all the concurrent access to the pt has
 		// ceased, so we don't need to lock it here
@@ -199,6 +203,15 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 		return callback(res)
 	}
 	return nil
+}
+
+func (hj *HashJoin) needsRightFields() bool {
+	for _, col := range hj.Cols {
+		if col > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // GetFields implements the Primitive interface

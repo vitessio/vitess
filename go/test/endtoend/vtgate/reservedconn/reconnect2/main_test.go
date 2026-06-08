@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -100,6 +101,15 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func requireMySQLServerUseStreaming(t *testing.T) {
+	t.Helper()
+
+	args := os.Getenv("VTTEST_VTGATE_EXTRA_ARGS")
+	if !strings.Contains(args, "--mysql-server-use-streaming") || strings.Contains(args, "--mysql-server-use-streaming=false") {
+		t.Skip("requires --mysql-server-use-streaming=true")
+	}
+}
+
 func TestTabletChange(t *testing.T) {
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
@@ -120,12 +130,13 @@ func TestTabletChange(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestTabletChangeStreaming(t *testing.T) {
+func TestTabletChangeDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, "set workload = olap")
 	utils.Exec(t, conn, "use @primary")
 	utils.Exec(t, conn, "set sql_mode = ''")
 

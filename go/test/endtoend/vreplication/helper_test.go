@@ -354,11 +354,20 @@ func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow stri
 // additional stream sub-state such as "message==for vdiff".
 // Invalid checks are ignored.
 func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) {
+	waitForWorkflowStates(t, vc, ksWorkflow, []string{wantState}, fieldEqualityChecks...)
+}
+
+func waitForWorkflowStates(t *testing.T, vc *VitessCluster, ksWorkflow string, wantStates []string, fieldEqualityChecks ...string) {
 	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	defer timer.Stop()
-	log.Info(fmt.Sprintf("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState))
+	wantStateSet := make(map[string]struct{}, len(wantStates))
+	for _, wantState := range wantStates {
+		wantStateSet[wantState] = struct{}{}
+	}
+	wantStatesStr := strings.Join(wantStates, ", ")
+	log.Info(fmt.Sprintf("Waiting for workflow %q to fully reach one of these states: %s", ksWorkflow, wantStatesStr))
 	for {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
 		require.NoError(t, err, output)
@@ -371,7 +380,8 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			streams.ForEach(func(streamId, stream gjson.Result) bool {
 				info := stream.Map()
 				state = info["state"].String()
-				if state == wantState {
+				_, stateMatches := wantStateSet[state]
+				if stateMatches {
 					for i := range fieldEqualityChecks {
 						if kvparts := strings.Split(fieldEqualityChecks[i], "=="); len(kvparts) == 2 {
 							key := kvparts[0]
@@ -382,7 +392,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 							}
 						}
 					}
-					if wantState == binlogdatapb.VReplicationWorkflowState_Running.String() &&
+					if state == binlogdatapb.VReplicationWorkflowState_Running.String() &&
 						(info["position"].Exists() && info["position"].String() == "") {
 						done = false
 					}
@@ -394,7 +404,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			return true
 		})
 		if done {
-			log.Info(fmt.Sprintf("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState))
+			log.Info(fmt.Sprintf("Workflow %q has fully reached one of the desired states: %s", ksWorkflow, wantStatesStr))
 			return
 		}
 		select {
@@ -404,8 +414,8 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 				extraRequirements = fmt.Sprintf(" with the additional requirements of \"%v\"", fieldEqualityChecks)
 			}
 			require.FailNowf(t, "workflow state not reached",
-				"Workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
-				ksWorkflow, wantState, extraRequirements, workflowStateTimeout, output)
+				"Workflow %q did not fully reach any of the expected states of %q%s before the timeout of %s; last seen output: %s",
+				ksWorkflow, wantStatesStr, extraRequirements, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)
 		}
@@ -501,7 +511,10 @@ func getHTTPBody(t *testing.T, url string) []byte {
 
 func getQueryCount(t *testing.T, url string, query string) (int, []byte) {
 	body := getHTTPBody(t, url)
+	return queryCountFromStats(t, body, query), body
+}
 
+func queryCountFromStats(t *testing.T, body []byte, query string) int {
 	var queryStats []struct {
 		Query      string
 		QueryCount uint64
@@ -510,13 +523,25 @@ func getQueryCount(t *testing.T, url string, query string) (int, []byte) {
 	err := json.Unmarshal(body, &queryStats)
 	require.NoError(t, err)
 
+	var count int
 	for _, q := range queryStats {
 		if strings.Contains(q.Query, query) {
-			return int(q.QueryCount), body
+			count += int(q.QueryCount)
 		}
 	}
 
-	return 0, body
+	return count
+}
+
+func TestQueryCountFromStatsSumsMatchingQueries(t *testing.T) {
+	matchQuery := "insert into customer(cid, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)"
+	stats := fmt.Sprintf(`[
+		{"Query": %q, "QueryCount": 15},
+		{"Query": "select cid from customer", "QueryCount": 2},
+		{"Query": %q, "QueryCount": 1}
+	]`, matchQuery, matchQuery)
+
+	require.Equal(t, 16, queryCountFromStats(t, []byte(stats), matchQuery))
 }
 
 func validateDryRunResults(t *testing.T, output string, want []string) {

@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -578,6 +580,36 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	require.Equal(t, "Optimized", pd.Inputs[0].InputName)
 	require.Equal(t, "Route", pd.Inputs[0].OperatorType)
 	require.Equal(t, "EqualUnique", pd.Inputs[0].Variant)
+}
+
+func TestSpecializedPlanDefaultStreaming(t *testing.T) {
+	requireMySQLServerUseStreaming(t)
+
+	originalKeyspace := dbInfo.KeyspaceName
+	dbInfo.KeyspaceName = sks
+	defer func() {
+		dbInfo.KeyspaceName = originalKeyspace
+	}()
+
+	dbo := Connect(t, "interpolateParams=false")
+	defer dbo.Close()
+
+	stmt, err := dbo.Prepare(`SELECT e.id, e.name, s.age, ROW_NUMBER() OVER (PARTITION BY e.age ORDER BY s.name DESC) AS age_rank FROM t1 e, t1 s where e.id = ? and s.id = ?`)
+	require.NoError(t, err)
+	defer stmt.Close()
+
+	rows, err := stmt.Query(1, 1)
+	require.NoError(t, err)
+	require.NoError(t, rows.Close())
+}
+
+func requireMySQLServerUseStreaming(t *testing.T) {
+	t.Helper()
+
+	args := os.Getenv("VTTEST_VTGATE_EXTRA_ARGS")
+	if !strings.Contains(args, "--mysql-server-use-streaming") || strings.Contains(args, "--mysql-server-use-streaming=false") {
+		t.Skip("requires --mysql-server-use-streaming=true")
+	}
 }
 
 // randomExec to make many plans so that plan cache is populated.

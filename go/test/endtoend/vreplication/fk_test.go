@@ -42,11 +42,14 @@ const testWorkflowFlavor = workflowFlavorVtctld
 // i.e. with foreign_key_checks=0.
 func TestFKWorkflow(t *testing.T) {
 	setSidecarDBName("_vt")
+	origExtraVTTabletArgs := extraVTTabletArgs
+	t.Cleanup(func() {
+		extraVTTabletArgs = origExtraVTTabletArgs
+	})
 	extraVTTabletArgs = []string{
 		// Ensure that there are multiple copy phase cycles per table.
 		"--vstream-packet-size=256",
 	}
-	defer func() { extraVTTabletArgs = nil }()
 
 	cellName := "zone1"
 	vc = NewVitessCluster(t, nil)
@@ -112,6 +115,8 @@ func TestFKWorkflow(t *testing.T) {
 	}
 
 	sourceTab := vc.Cells[cellName].Keyspaces[sourceKeyspace].Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, 100)]
+	require.NotNil(t, targetTab)
+	catchup(t, targetTab, workflowName, "MoveTables")
 
 	// Stop the source database server to simulate an error during replication phase
 	// This should cause recoverable errors that atomic workflows should retry
@@ -122,8 +127,11 @@ func TestFKWorkflow(t *testing.T) {
 	// Give some time for the workflow to encounter errors and potentially retry
 	time.Sleep(2 * vttablet.GetDefaultVReplicationConfig().RetryDelay)
 
-	// Verify workflow is still running and hasn't terminated due to errors
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	// Verify workflow is retrying and hasn't terminated due to errors.
+	waitForWorkflowStates(t, vc, ksWorkflow, []string{
+		binlogdatapb.VReplicationWorkflowState_Running.String(),
+		binlogdatapb.VReplicationWorkflowState_Error.String(),
+	})
 
 	// Restart the source database to allow workflow to continue
 	err = sourceTab.DbServer.StartProvideInit(false)
@@ -131,6 +139,7 @@ func TestFKWorkflow(t *testing.T) {
 
 	err = vc.VtctldClient.ExecuteCommand("SetWritable", fmt.Sprintf("%s-%d", cellName, 100), "true")
 	require.NoError(t, err)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	// Restart the LoadSimulator.
 	if withLoad {
@@ -146,7 +155,6 @@ func TestFKWorkflow(t *testing.T) {
 		go ls.simulateLoad()
 	}
 
-	require.NotNil(t, targetTab)
 	catchup(t, targetTab, workflowName, "MoveTables")
 	vdiff(t, targetKeyspace, workflowName, cellName, nil)
 	if withLoad {

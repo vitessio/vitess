@@ -203,7 +203,7 @@ func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg stri
 // During SwitchTraffic, due to changes in the cluster, vdiff can return transient errors. isVDiffRetryable() is used to
 // ignore such errors and retry vdiff expecting the condition to be resolved.
 func isVDiffRetryable(str string) bool {
-	for _, s := range []string{"Error while dialing", "failed to connect"} {
+	for _, s := range []string{"Error while dialing", "failed to connect", "not all streams are running in workflow"} {
 		if strings.Contains(str, s) {
 			return true
 		}

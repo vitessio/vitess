@@ -53,6 +53,7 @@ type LogStats struct {
 	BindVariables        map[string]*querypb.BindVariable
 	rewrittenSqls        []string
 	RowsAffected         int
+	RowsReturned         int
 	NumberOfQueries      int
 	StartTime            time.Time
 	EndTime              time.Time
@@ -180,7 +181,11 @@ func (stats *LogStats) CallInfo() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
-	shouldEmit, emitReason := stats.Config.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(len(stats.Rows)), stats.TotalTime(), stats.Error != nil)
+	rowsReturned := len(stats.Rows)
+	if stats.RowsReturned != 0 || stats.Rows == nil {
+		rowsReturned = stats.RowsReturned
+	}
+	shouldEmit, emitReason := stats.Config.ShouldEmitLog(stats.OriginalSQL, uint64(stats.RowsAffected), uint64(rowsReturned), stats.TotalTime(), stats.Error != nil)
 	if !shouldEmit {
 		return nil
 	}

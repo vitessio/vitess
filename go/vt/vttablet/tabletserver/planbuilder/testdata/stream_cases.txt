@@ -37,15 +37,31 @@
 # show
 "show tables"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Show",
   "TableName": "",
   "FullQuery": "show tables"
+}
+
+# show tables #2
+"show tables where Tables_in_keyspace='apa'"
+{
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show tables where Tables_in_dbName = 'apa'"
+}
+
+# show create database
+"show create database anything"
+{
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show create database dbName"
 }
 
 # show table status
 "show table status"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "Show",
   "TableName": "",
   "FullQuery": "show table status"
 }
@@ -53,9 +69,45 @@
 # show binary log status
 "show binary log status"
 {
-  "PlanID": "SelectStream",
-  "TableName": "",
-  "FullQuery": "show binary log status"
+  "PlanID": "OtherRead",
+  "TableName": ""
+}
+
+# show vitess migrations
+"show vitess_migrations"
+{
+  "PlanID": "ShowMigrations",
+  "TableName": ""
+}
+
+# show vitess migration logs
+"show vitess_migration 'aaaaaaaa_bbbb_cccc_dddd_eeeeeeeeeeee' logs"
+{
+  "PlanID": "ShowMigrationLogs",
+  "TableName": ""
+}
+
+# show vitess throttled apps
+"show vitess_throttled_apps"
+{
+  "PlanID": "ShowThrottledApps",
+  "TableName": ""
+}
+
+# show vitess throttler status
+"show vitess_throttler status"
+{
+  "PlanID": "ShowThrottlerStatus",
+  "TableName": ""
+}
+
+# select next value
+"select next value from seq"
+{
+  "PlanID": "Nextval",
+  "TableName": "seq",
+  "Permissions":[{"TableName":"seq","Role":1}],
+  "NextCount": "1"
 }
 
 # other
@@ -66,9 +118,64 @@
   "FullQuery": "explain foo"
 }
 
-# dml
+# other admin
+"repair a"
+{
+  "PlanID": "OtherAdmin",
+  "TableName": ""
+}
+
+# insert
+"insert into a(eid, id) values (1, 2)"
+{
+  "PlanID": "Insert",
+  "TableName": "a",
+  "Permissions": [{"TableName":"a","Role":1}],
+  "FullQuery": "insert into a(eid, id) values (1, 2)"
+}
+
+# update
 "update a set b = 1"
-"UPDATE not allowed for streaming"
+{
+  "PlanID": "UpdateLimit",
+  "TableName": "a",
+  "Permissions": [{"TableName":"a","Role":1}],
+  "FullQuery": "update a set b = 1 limit :#maxLimit"
+}
+
+# delete
+"delete from a"
+{
+  "PlanID": "DeleteLimit",
+  "TableName": "a",
+  "Permissions": [{"TableName":"a","Role":1}],
+  "FullQuery": "delete from a limit :#maxLimit"
+}
+
+# ddl
+"create table a(a int, b varchar(8))"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [{"TableName":"a","Role":2}],
+  "FullQuery": "create table a (\n\ta int,\n\tb varchar(8)\n)"
+}
+
+# load data
+"load data infile 'x.txt' into table a"
+{
+  "PlanID": "Load",
+  "TableName": ""
+}
+
+# flush
+"flush tables a,b"
+{
+  "PlanID": "Flush",
+  "TableName": "",
+  "Permissions": [{"TableName":"a","Role":2},{"TableName":"b","Role":2}],
+  "FullQuery": "flush tables a, b"
+}
 
 # syntax error
 "syntax error"
@@ -77,7 +184,7 @@
 # named locks are unsafe with server-side connection pooling, plan is generated with NeedReservedConn set to true
 "select get_lock('foo', 10) from dual"
 {
-  "PlanID": "SelectStream",
+  "PlanID": "SelectLockFunc",
   "TableName": "",
   "FullQuery": "select get_lock('foo', 10) from dual",
   "NeedsReservedConn": true
@@ -85,7 +192,40 @@
 
 # set statement unsafe with pooling
 "set @udv = 10"
-"SET not allowed for streaming"
+{
+  "PlanID": "Set",
+  "TableName": "",
+  "FullQuery": "set @udv = 10",
+  "NeedsReservedConn": true
+}
+
+# savepoint
+"savepoint a"
+{
+  "PlanID": "Savepoint",
+  "TableName": ""
+}
+
+# rollback to savepoint
+"rollback work to savepoint a"
+{
+  "PlanID": "RollbackSavepoint",
+  "TableName": ""
+}
+
+# release savepoint
+"release savepoint a"
+{
+  "PlanID": "Release",
+  "TableName": ""
+}
+
+# unlock tables
+"unlock tables"
+{
+  "PlanID": "UnlockTables",
+  "TableName": ""
+}
 
 # analyze statement
 "analyze table a"
@@ -99,4 +239,12 @@
     }
   ],
   "FullQuery": "analyze table a"
+}
+
+# call proc
+"call getAllTheThings()"
+{
+  "PlanID": "CallProcedure",
+  "TableName": "",
+  "FullQuery": "call getAllTheThings()"
 }

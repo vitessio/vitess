@@ -98,3 +98,71 @@ func TestJoinValuesExecute(t *testing.T) {
 	)
 	expectResult(t, r, result)
 }
+
+func TestJoinValuesStreamExecute(t *testing.T) {
+	leftPrim := &fakePrimitive{
+		useNewPrintBindVars: true,
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col1|col2|col3",
+					"int64|varchar|varchar",
+				),
+				"1|a|aa",
+				"2|b|bb",
+				"3|c|cc",
+				"4|d|dd",
+			),
+		},
+	}
+	rightPrim := &fakePrimitive{
+		useNewPrintBindVars: true,
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col5|col6|id",
+					"varchar|varchar|int64",
+				),
+				"d|dd|0",
+				"e|ee|1",
+				"f|ff|2",
+				"g|gg|3",
+			),
+		},
+	}
+
+	bv := map[string]*querypb.BindVariable{
+		"a": sqltypes.Int64BindVariable(10),
+	}
+
+	vjn := &ValuesJoin{
+		Left:              leftPrim,
+		Right:             rightPrim,
+		Vars:              []int{0},
+		RowConstructorArg: "v",
+		Cols:              []int{-1, -2, -3, -1, 1, 2},
+		ColNames:          []string{"col1", "col2", "col3", "col4", "col5", "col6"},
+	}
+
+	var got sqltypes.Result
+	err := vjn.TryStreamExecute(t.Context(), &noopVCursor{}, bv, true, func(result *sqltypes.Result) error {
+		if len(result.Fields) > 0 {
+			got.Fields = result.Fields
+		}
+		got.Rows = append(got.Rows, result.Rows...)
+		return nil
+	})
+	require.NoError(t, err)
+
+	result := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|col2|col3|col4|col5|col6",
+			"int64|varchar|varchar|int64|varchar|varchar",
+		),
+		"1|a|aa|1|d|dd",
+		"2|b|bb|2|e|ee",
+		"3|c|cc|3|f|ff",
+		"4|d|dd|4|g|gg",
+	)
+	expectResult(t, &got, result)
+}

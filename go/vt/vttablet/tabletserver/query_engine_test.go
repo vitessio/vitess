@@ -391,6 +391,20 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 	return qe
 }
 
+func runStreamConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	qe := newTestQueryEngine(1*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	qe.streamConsolidator.Record(sql)
+
+	return qe
+}
+
 func TestConsolidationsUIRedaction(t *testing.T) {
 	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
 
@@ -411,6 +425,18 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 
 	require.NotContainsf(t, redactedResponse.Body.String(), "secret", "Response contains unredacted consolidated query: %v %v", sql, redactedResponse.Body.String())
 	require.Containsf(t, redactedResponse.Body.String(), redactedSQL, "Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
+}
+
+func TestConsolidationsUIIncludesStreamConsolidations(t *testing.T) {
+	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
+
+	sql := "select * from test_db_01 where id = 1"
+
+	response := httptest.NewRecorder()
+	qe := runStreamConsolidatedQuery(t, sql)
+
+	qe.handleHTTPConsolidations(response, request)
+	require.Containsf(t, response.Body.String(), sql, "Response is missing the stream consolidated query: %v %v", sql, response.Body.String())
 }
 
 func BenchmarkPlanCacheThroughput(b *testing.B) {
@@ -894,4 +920,16 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			require.EqualError(t, err, tcase.err)
 		})
 	}
+}
+
+func TestStreamPlanSelectLockFuncValidWithReservedConnection(t *testing.T) {
+	statement, err := sqlparser.NewTestParser().Parse("select get_lock('foo', 10) from dual")
+	require.NoError(t, err)
+
+	plan, err := planbuilder.BuildStreaming(vtenv.NewTestEnv(), statement, map[string]*schema.Table{}, "dbName")
+	require.NoError(t, err)
+	require.True(t, plan.NeedsReservedConn)
+	require.Equal(t, planbuilder.PlanSelectLockFunc, plan.PlanID)
+	require.NoError(t, isValid(plan.PlanID, true, false))
+	require.EqualError(t, isValid(plan.PlanID, false, false), "SelectLockFunc not allowed without reserved connection")
 }

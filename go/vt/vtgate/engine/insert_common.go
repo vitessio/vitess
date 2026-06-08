@@ -135,6 +135,10 @@ func (code InsertOpcode) MarshalJSON() ([]byte, error) {
 }
 
 func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, bindVars map[string]*querypb.BindVariable, query string, insertID uint64) (*sqltypes.Result, error) {
+	return ins.executeUnshardedTableQueryWithAutocommit(ctx, vcursor, loggingPrimitive, bindVars, query, insertID, true)
+}
+
+func (ins *InsertCommon) executeUnshardedTableQueryWithAutocommit(ctx context.Context, vcursor VCursor, loggingPrimitive Primitive, bindVars map[string]*querypb.BindVariable, query string, insertID uint64, canAutocommit bool) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(ctx, ins.Keyspace.Name, nil, []key.ShardDestination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, err
@@ -146,7 +150,7 @@ func (ins *InsertCommon) executeUnshardedTableQuery(ctx context.Context, vcursor
 	if err != nil {
 		return nil, err
 	}
-	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, !ins.PreventAutoCommit /* canAutocommit */, ins.FetchLastInsertID)
+	qr, err := execShard(ctx, loggingPrimitive, vcursor, query, bindVars, rss[0], true, canAutocommit && !ins.PreventAutoCommit, ins.FetchLastInsertID)
 	if err != nil {
 		return nil, err
 	}
