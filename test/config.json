@@ -800,9 +800,7 @@
       "Manual": false,
       "Shard": "tabletmanager_disk_health_monitor",
       "Tags": [],
-      "Needs": [
-        "fuse"
-      ]
+      "Needs": []
     },
     "tabletmanager_zk2": {
       "File": "unused.go",
