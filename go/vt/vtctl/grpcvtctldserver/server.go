@@ -2335,19 +2335,11 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 
 	if tabletMap != nil {
-		// Build a per-shard truePrimaryTimestamp by seeding with the max
-		// PrimaryTermStartTime across PRIMARY-typed tablets in the result
-		// set, then overwriting with the authoritative
-		// Shard.PrimaryTermStartTime when GetShard returns a non-zero value.
-		// The seed alone is unreliable when the real primary is absent from
-		// the request (issue #19898); a zero shard-record term — including
-		// the brief window after a promotion before the new term is written —
-		// keeps the seed so transient cases stay best-effort instead of
-		// silently demoting everything.
-		//
-		// Failure policy: req.Strict returns the aggregated error; !req.Strict
-		// logs and skips stale-primary adjustment for the affected shards
-		// only, so their tablets retain their on-disk type.
+		// Seed a per-shard true-primary time from the max PrimaryTermStartTime
+		// among PRIMARY tablets in the result set. The shard-filter path
+		// (--keyspace --shard) includes the real primary in its result, so the
+		// seed reflects it; the alias-filter path (--tablet-alias) may omit it
+		// (issue #19898) and overwrites the seed via GetShard below.
 		type ksShard struct{ keyspace, shard string }
 		uniqueShards := make(map[string]ksShard, len(tabletMap))
 		truePrimaryByShard := make(map[string]time.Time, len(tabletMap))
@@ -2363,42 +2355,49 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			}
 		}
 
+		// Only the alias-filter path needs the GetShard overlay. A zero shard-record
+		// term (e.g. briefly after a promotion) keeps the seed, so transient cases
+		// stay best-effort. Failure policy: req.Strict returns the error; otherwise
+		// it is logged and stale-primary adjustment is skipped for the affected
+		// shards only, leaving their tablets' on-disk type intact.
 		skipStaleCheck := make(map[string]struct{})
-		var (
-			mu  sync.Mutex
-			wg  sync.WaitGroup
-			rec concurrency.AllErrorRecorder
-		)
-		for key, ks := range uniqueShards {
-			wg.Add(1)
-			go func(key string, ks ksShard) {
-				defer wg.Done()
-				si, getErr := s.ts.GetShard(ctx, ks.keyspace, ks.shard)
-				mu.Lock()
-				defer mu.Unlock()
-				if getErr != nil {
-					skipStaleCheck[key] = struct{}{}
-					rec.RecordError(fmt.Errorf("GetShard(%s/%s) failed: %w", ks.keyspace, ks.shard, getErr))
-					return
-				}
-				if t := si.GetPrimaryTermStartTime(); !t.IsZero() {
-					truePrimaryByShard[key] = t
-				}
-			}(key, ks)
-		}
-		wg.Wait()
-		if rec.HasErrors() {
-			// errors.Join preserves Unwrap() []error so callers' topo.IsErrType
-			// classification still works via errors.Is across the joined error.
-			joinedErr := errors.Join(rec.Errors...)
-			if req.Strict {
-				return nil, joinedErr
-			}
-			log.Warn(
-				"GetTablets could not resolve shard primary terms for some shards; reporting on-disk types for tablets in those shards",
-				slog.Any("error", joinedErr),
-				slog.Int("affected_shards", len(skipStaleCheck)),
+		if len(req.TabletAliases) > 0 {
+			var (
+				mu  sync.Mutex
+				wg  sync.WaitGroup
+				rec concurrency.AllErrorRecorder
 			)
+			for key, ks := range uniqueShards {
+				wg.Add(1)
+				go func(key string, ks ksShard) {
+					defer wg.Done()
+					si, getErr := s.ts.GetShard(ctx, ks.keyspace, ks.shard)
+					mu.Lock()
+					defer mu.Unlock()
+					if getErr != nil {
+						skipStaleCheck[key] = struct{}{}
+						rec.RecordError(fmt.Errorf("GetShard(%s/%s) failed: %w", ks.keyspace, ks.shard, getErr))
+						return
+					}
+					if t := si.GetPrimaryTermStartTime(); !t.IsZero() {
+						truePrimaryByShard[key] = t
+					}
+				}(key, ks)
+			}
+			wg.Wait()
+			if rec.HasErrors() {
+				// errors.Join preserves Unwrap() []error so callers' topo.IsErrType
+				// classification still works via errors.Is across the joined error.
+				joinedErr := errors.Join(rec.Errors...)
+				if req.Strict {
+					return nil, joinedErr
+				}
+				log.Warn(
+					"GetTablets could not resolve shard primary terms for some shards; reporting on-disk types for tablets in those shards",
+					slog.Any("error", joinedErr),
+					slog.Int("affected_shards", len(skipStaleCheck)),
+				)
+			}
 		}
 
 		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
