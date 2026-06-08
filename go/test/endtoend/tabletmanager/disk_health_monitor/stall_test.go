@@ -32,7 +32,7 @@ import (
 // TestDiskHealthMonitor_StallAndRecover exercises the full integration path
 // of the stalled disk monitor: probe write -> timeout -> IsDiskStalled() ->
 // StateManager flips the tablet to NOT_SERVING. We stall the FUSE-backed
-// data directory by sending SIGUSR1 to the helper (see fuse_helper's signal
+// --disk-write-dir by sending SIGUSR1 to the helper (see fuse_helper's signal
 // protocol), then SIGHUP to clear and verify the tablet returns to SERVING.
 func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 	require.NotNil(t, primaryTablet, "primary tablet not initialized in TestMain")
