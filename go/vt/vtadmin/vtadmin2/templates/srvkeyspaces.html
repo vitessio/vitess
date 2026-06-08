@@ -1,0 +1,27 @@
+{{ define "srvkeyspaces.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>SrvKeyspaces</h1>
+  <input class="table-filter" data-table-filter="#srvkeyspaces-table" placeholder="Filter SrvKeyspaces" aria-label="Filter SrvKeyspaces">
+</div>
+<div class="card">
+  <table id="srvkeyspaces-table">
+    <thead>
+      <tr><th>Keyspace</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {{ range $keyspace, $response := .Data.GetSrvKeyspaces }}
+      <tr>
+        <td>{{ $keyspace }}</td>
+        <td><pre>{{ protoJSON $response }}</pre></td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="2">No SrvKeyspaces found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

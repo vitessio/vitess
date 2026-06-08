@@ -1,0 +1,51 @@
+{{ define "transactions.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>Transactions</h1>
+  <input class="table-filter" data-table-filter="#transactions-table" placeholder="Filter Transactions" aria-label="Filter Transactions">
+</div>
+<div class="card">
+  <form method="get" action="/transactions" class="form-grid">
+    <label>
+      Cluster
+      <select name="cluster_id" required>
+        {{ range .Data.Form.Clusters }}
+        <option value="{{ .GetId }}"{{ if eq .GetId $.Data.Form.SelectedCluster }} selected{{ end }}>{{ .GetName }} ({{ .GetId }})</option>
+        {{ end }}
+      </select>
+    </label>
+    <label>
+      Keyspace
+      <select name="keyspace" required>
+        {{ range .Data.Form.Keyspaces }}
+        {{ if eq (clusterID .GetCluster) $.Data.Form.SelectedCluster }}
+        <option value="{{ keyspaceName . }}"{{ if eq (keyspaceName .) $.Data.Form.SelectedKeyspace }} selected{{ end }}>{{ keyspaceName . }}</option>
+        {{ end }}
+        {{ end }}
+      </select>
+    </label>
+    <label>Abandon Age <input name="abandon_age" value="{{ .Data.AbandonAge }}"></label>
+    <button type="submit">Filter Transactions</button>
+  </form>
+</div>
+<div class="card">
+  <table id="transactions-table">
+    <thead>
+      <tr><th>DTID</th><th>Info</th></tr>
+    </thead>
+    <tbody>
+      {{ range .Data.Transactions }}
+      <tr>
+        <td>{{ .GetDtid }}</td>
+        <td><a href="/transaction/{{ pathEscape $.Data.ClusterID }}/{{ pathEscape .GetDtid }}/info">Info</a></td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="2">No unresolved transactions found.</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}

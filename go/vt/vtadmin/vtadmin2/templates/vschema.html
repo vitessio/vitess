@@ -1,0 +1,18 @@
+{{ define "vschema.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>{{ .Data.GetName }}</h1>
+</div>
+<div class="card">
+  <table>
+    <tbody>
+      <tr><th>Cluster</th><td>{{ clusterID .Data.GetCluster }}</td></tr>
+      <tr><th>Keyspace</th><td>{{ .Data.GetName }}</td></tr>
+      <tr><th>Details</th><td><pre>{{ protoJSON .Data.GetVSchema }}</pre></td></tr>
+    </tbody>
+  </table>
+</div>
+{{ end }}

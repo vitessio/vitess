@@ -1,0 +1,22 @@
+{{ define "workflow.html" }}
+{{ template "layout" . }}
+{{ end }}
+
+{{ define "content" }}
+<div class="toolbar">
+  <h1>{{ .Data.GetWorkflow.GetName }}</h1>
+</div>
+<div class="card">
+  <table>
+    <tbody>
+      <tr><th>Cluster</th><td>{{ clusterID .Data.GetCluster }}</td></tr>
+      <tr><th>Keyspace</th><td>{{ .Data.GetKeyspace }}</td></tr>
+      <tr><th>Workflow</th><td>{{ .Data.GetWorkflow.GetName }}</td></tr>
+      <tr><th>Type</th><td>{{ .Data.GetWorkflow.GetWorkflowType }}</td></tr>
+      <tr><th>Subtype</th><td>{{ .Data.GetWorkflow.GetWorkflowSubType }}</td></tr>
+      <tr><th>Status</th><td><a href="/workflow/{{ pathEscape (clusterID .Data.GetCluster) }}/{{ pathEscape .Data.GetKeyspace }}/{{ pathEscape .Data.GetWorkflow.GetName }}/status">Workflow Status</a></td></tr>
+      <tr><th>Details</th><td><pre>{{ protoJSON .Data.GetWorkflow }}</pre></td></tr>
+    </tbody>
+  </table>
+</div>
+{{ end }}
