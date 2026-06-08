@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTGate](#bug-fixes-vtgate)**
+        - [VStream `StopOnReshard` hang fix](#vstream-stoponreshard-hang-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,18 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vtgate"/>VTGate</a>
+
+#### <a id="vstream-stoponreshard-hang-fix"/>VStream `StopOnReshard` hang fix</a>
+
+VStream with the `StopOnReshard` flag now ends cleanly when reshard participants converge. Previously, the stream would hang indefinitely due to a synchronization issue between the send goroutine and per-shard stream goroutines:
+
+- On v24.0 and main: the stream stalled until the 10-minute liveness timeout, then failed with `UNAVAILABLE`
+- On v23.0: the stream hung permanently (goroutine leak)
+
+With this fix, when all shards involved in a reshard complete their streams, the VStream terminates with a clean `io.EOF`.
+
+See [#20262](https://github.com/vitessio/vitess/pull/20262) for details.
