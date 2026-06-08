@@ -103,8 +103,7 @@ func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinT
 
 	// for outer joins we have to be careful with the predicates we use
 	var op Operator
-	subq, _, _ := getSubQuery(join.Condition.On)
-	if subq != nil {
+	if found := getAllSubQueries(join.Condition.On); len(found) > 0 {
 		panic(vterrors.VT12001("subquery in outer join predicate"))
 	}
 	predicate := join.Condition.On
@@ -130,8 +129,7 @@ func addJoinPredicates(
 	sqlparser.RemoveKeyspaceInCol(joinPredicate)
 	exprs := sqlparser.SplitAndExpression(nil, joinPredicate)
 	for _, pred := range exprs {
-		subq := sqc.handleSubquery(ctx, pred, outerID)
-		if subq != nil {
+		if sqc.handleSubquery(ctx, pred, outerID) {
 			continue
 		}
 

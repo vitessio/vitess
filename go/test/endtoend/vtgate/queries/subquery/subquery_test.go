@@ -84,6 +84,35 @@ func TestSubqueriesExists(t *testing.T) {
 	mcmp.Exec("insert into t1(id1, id2) values (0,1),(1,2),(2,3),(3,4),(4,5),(5,6)")
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE EXISTS (SELECT id1 FROM t1 WHERE id1 > 0) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
 	mcmp.AssertMatches(`select * from (select 1) as tmp where exists(select 1 from t1 where id1 = 1)`, `[[INT32(1)]]`)
+
+	mcmp.AssertMatches(
+		`SELECT id2 FROM t1 WHERE id1 = 0 OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) ORDER BY id2`,
+		`[[INT64(1)]]`)
+	mcmp.AssertMatches(
+		`SELECT id2 FROM t1 WHERE id1 = 0 OR NOT EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) ORDER BY id2`,
+		`[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+
+	// Two uncorrelated EXISTS in the same OR predicate. Both inner subqueries
+	// match no rows, so the predicate reduces to id1 = 0, returning [1].
+	mcmp.AssertMatches(
+		`SELECT id2 FROM t1 WHERE id1 = 0 OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 200) ORDER BY id2`,
+		`[[INT64(1)]]`)
+	// One inner matches, the other does not — predicate is true for every row.
+	mcmp.AssertMatches(
+		`SELECT id2 FROM t1 WHERE id1 = 0 OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR EXISTS (SELECT 1 FROM t1 WHERE id1 = 1) ORDER BY id2`,
+		`[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+	// Mixed EXISTS / NOT EXISTS in the same OR.
+	mcmp.AssertMatches(
+		`SELECT id2 FROM t1 WHERE id1 = 0 OR EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR NOT EXISTS (SELECT 1 FROM t1 WHERE id1 = 1) ORDER BY id2`,
+		`[[INT64(1)]]`)
+
+	// EXISTS inside a CASE WHEN in the SELECT projection: the OR-true context
+	// around the EXISTS makes the WHEN condition trivially true, so the CASE
+	// returns 1 once per input row. The planner must not collapse the outer
+	// query to an empty result set.
+	mcmp.AssertMatches(
+		`SELECT CASE WHEN (EXISTS (SELECT 1 FROM t1 WHERE id1 > 100) OR true) THEN 1 ELSE 1 END FROM t1 ORDER BY id1`,
+		`[[INT64(1)] [INT64(1)] [INT64(1)] [INT64(1)] [INT64(1)] [INT64(1)]]`)
 }
 
 func TestQueryAndSubQWithLimit(t *testing.T) {
