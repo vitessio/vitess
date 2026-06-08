@@ -173,7 +173,6 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
 	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 	waitForAllTablets := subFlags.Bool("wait_for_all_tablets", false, "should ERS wait for all the tablets to respond. Useful when all the tablets are reachable")
-	allowSplitBrainPromotion := subFlags.Bool("allow_split_brain_promotion", false, "allow ERS to proceed when two leading candidates have incomparable Combined GTID positions (suspected split-brain); off by default — operator escape hatch")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -207,7 +206,6 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		WaitReplicasTimeout:       *waitReplicasTimeout,
 		IgnoreReplicas:            topoproto.ParseTabletSet(*ignoreReplicasList),
 		PreventCrossCellPromotion: *preventCrossCellPromotion,
-		AllowSplitBrainPromotion:  *allowSplitBrainPromotion,
 	})
 }
 

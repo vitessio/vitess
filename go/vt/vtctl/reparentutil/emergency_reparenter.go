@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"sync"
 	"time"
 
@@ -64,13 +63,6 @@ type EmergencyReparentOptions struct {
 	WaitReplicasTimeout       time.Duration
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
-	// AllowSplitBrainPromotion lets ERS proceed when two leading candidates have
-	// incomparable Combined GTID positions (suspected split-brain). Off by default —
-	// operator escape hatch. When set, the upfront uniformCombined check and the
-	// secondary AtLeast check in findMostAdvanced log a warning and continue instead
-	// of aborting with FAILED_PRECONDITION. The losing side's unique GTIDs will
-	// become errant on those tablets after promotion.
-	AllowSplitBrainPromotion bool
 
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
@@ -85,15 +77,11 @@ var (
 		[]string{"Keyspace", "Shard", "Result"},
 	)
 	ersFilteredCandidates = stats.NewCountersWithMultiLabels(
-		"EmergencyReparentFilteredCandidates", "Number of candidates filtered out during EmergencyReparentShard because their Combined position was not the most advanced. A single ERS run may increment this twice if errant-GTID detection forces a second wait pass over the surviving candidates.",
+		"EmergencyReparentFilteredCandidates", "Number of candidates filtered out during EmergencyReparentShard because their Combined position was not the most advanced.",
 		[]string{"Keyspace", "Shard"},
 	)
 	ersRelayLogApplyFailedCandidates = stats.NewCountersWithMultiLabels(
 		"EmergencyReparentRelayLogFailedCandidates", "Number of candidates that failed to apply relay logs during EmergencyReparentShard",
-		[]string{"Keyspace", "Shard"},
-	)
-	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
-		"EmergencyReparentSplitBrainOverrides", "Number of split-brain detections bypassed by AllowSplitBrainPromotion=true during EmergencyReparentShard. Counted per detection, not per ERS run — a single run may increment this twice if the errant-GTID re-wait pass also encounters incomparable Combined positions in the survivor set. The non-promoted side's unique GTIDs will become errant on those tablets after promotion.",
 		[]string{"Keyspace", "Shard"},
 	)
 )
@@ -334,17 +322,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// For GTID-based flavors, filter to tablets at the leading Combined position and wait
-	// only for that group — one success is sufficient. Abort upfront on incomparable maxima
-	// (suspected split-brain — see AGENTS.md / CLAUDE.md ERS section). For non-GTID flavors
-	// (FilePos, MariaDB) Combined is the executed position, so the filter is unsafe — keep
-	// pre-PR behavior of waiting for every candidate and failing on any error.
+	// only for that group — one success is sufficient. For non-GTID flavors (FilePos,
+	// MariaDB) Combined is the executed position, so the filter is unsafe — keep pre-PR
+	// behavior of waiting for every candidate and failing on any error.
 	relayLogWaitCandidates := validCandidates
 	requireAll := true
 	if isGTIDBased {
-		relayLogWaitCandidates, err = erp.filterAndCheckUniform(validCandidates, keyspace, shard, "candidates", opts.AllowSplitBrainPromotion)
-		if err != nil {
-			return err
-		}
+		relayLogWaitCandidates = erp.filterToLeadingGroup(validCandidates, keyspace, shard)
 		requireAll = false
 	}
 
@@ -355,56 +339,18 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// For GTID based replication, we will run errant GTID detection.
 	if isGTIDBased {
-		// Snapshot validCandidates before errant-GTID detection so we can restore the set
-		// if AllowSplitBrainPromotion is set and detection wipes every candidate. The
-		// canonical case is a mutually-errant two-tablet split-brain where each side has
-		// unique writes under its own server UUID — findErrantGTIDs flags both sides as
-		// errant relative to each other and removes both. maps.Clone defends against a
-		// future refactor that mutates the input map.
-		preErrantCandidates := maps.Clone(validCandidates)
 		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
 		if err != nil {
 			return err
 		}
-		// Detect whether any of the candidates we originally waited on (the leading group)
-		// survived errant-GTID detection. The split-brain failure mode we need to guard
-		// against is mutually-errant leaders being pruned while a lagging non-errant
-		// candidate remains — promoting the lagger would lose unique writes from both
-		// split-brain sides, which is strictly worse than the documented "pick one side;
-		// losing side becomes errant" semantics. Treating "no leading survivor" the same
-		// as "no survivor at all" prevents a lagger from being elected on the second-pass
-		// re-wait below.
-		leadingSurvived := false
-		for alias := range validCandidates {
-			if _, isLeading := relayLogWaitCandidates[alias]; isLeading {
-				leadingSurvived = true
-				break
-			}
-		}
-		if !leadingSurvived {
-			if !opts.AllowSplitBrainPromotion {
-				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all leading candidates have errant GTIDs")
-			}
-			// AllowSplitBrainPromotion already incremented the override metric upfront in
-			// filterAndCheckUniform — don't double-count here. Restore the pre-detection
-			// LEADING set (intersected with relayLogWaitCandidates so laggers can't be
-			// elected by findMostAdvanced) and let the sort pick a side. The non-promoted
-			// side's unique GTIDs will become errant after promotion.
-			erp.logger.Warningf("AllowSplitBrainPromotion=true: no leading candidates survived errant-GTID detection — restoring the pre-detection leading set so findMostAdvanced can pick a side without promoting a lagger")
-			restored := make(map[string]*RelayLogPositions, len(relayLogWaitCandidates))
-			for alias := range relayLogWaitCandidates {
-				if pos, ok := preErrantCandidates[alias]; ok {
-					restored[alias] = pos
-				}
-			}
-			validCandidates = restored
+		if len(validCandidates) == 0 {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
 		}
 
 		// If errant detection removed every originally-applied tablet, promotion candidates
 		// only include "unwaited survivors" (filter-excluded laggers, or peers cancelled mid-apply
 		// by our short-circuit) — promoting one risks received-but-unapplied transactions. Run a
-		// second filter/uniform/wait pass over the survivors. Uniformity is re-checked because
-		// the survivor set is a different shape than the original leading group.
+		// second filter/wait pass over the survivors.
 		//
 		// If at least one applied tablet survived no re-wait is needed: findMostAdvanced prefers
 		// it via the Executed tie-break, and pos.AtLeast() gates NewPrimaryAlias against the
@@ -418,10 +364,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 		if !appliedSurvived {
 			erp.logger.Warningf("all originally-applied candidates were removed by errant-GTID detection; running second relay-log-apply wait on surviving candidates before promotion")
-			rewaitCandidates, err := erp.filterAndCheckUniform(validCandidates, keyspace, shard, "surviving unwaited candidates", opts.AllowSplitBrainPromotion)
-			if err != nil {
-				return err
-			}
+			rewaitCandidates := erp.filterToLeadingGroup(validCandidates, keyspace, shard)
 			if _, err := erp.applyRelayLogsAndReconcile(ctx, rewaitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, false /* requireAll */, keyspace, shard); err != nil {
 				return err
 			}
@@ -437,7 +380,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts, keyspace, shard)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -563,37 +506,20 @@ type relayLogResult struct {
 	err   error
 }
 
-// filterAndCheckUniform applies filterToMostAdvancedCombined to validCandidates, increments
-// the filtered-count metric, and returns a FAILED_PRECONDITION error if the resulting set
-// has incomparable Combined positions (suspected split-brain). The descriptor parameter is
-// interpolated into the error message to identify which ERS pipeline stage detected the
-// split-brain (first wait vs. errant-GTID re-wait).
-//
-// If allowSplitBrain is true, an incomparable result logs a warning and returns the filtered
-// set without erroring — the operator-escape-hatch path that accepts errant GTIDs on the
-// losing side in exchange for forcing ERS through.
-func (erp *EmergencyReparenter) filterAndCheckUniform(
+// filterToLeadingGroup applies filterToMostAdvancedCombined to validCandidates and
+// increments the filtered-count metric. The returned set contains every candidate
+// whose Combined position is not strictly dominated by another — for a healthy shard
+// this is a single tablet; for partial orders (e.g. a true split-brain) it can be
+// multiple. The relay-log-apply pipeline only requires one of these to succeed.
+func (erp *EmergencyReparenter) filterToLeadingGroup(
 	validCandidates map[string]*RelayLogPositions,
-	keyspace, shard, descriptor string,
-	allowSplitBrain bool,
-) (map[string]*RelayLogPositions, error) {
+	keyspace, shard string,
+) map[string]*RelayLogPositions {
 	filtered := filterToMostAdvancedCombined(validCandidates, erp.logger)
-	if !uniformCombined(filtered) {
-		if !allowSplitBrain {
-			return nil, vterrors.Errorf(
-				vtrpc.Code_FAILED_PRECONDITION,
-				"emergency reparent aborted: %s have incomparable Combined GTID positions (suspected split-brain): %s",
-				descriptor,
-				describeCombinedPositions(filtered),
-			)
-		}
-		erp.logger.Warningf("AllowSplitBrainPromotion=true: %s have incomparable Combined GTID positions (suspected split-brain): %s — proceeding under operator override; losing side's unique GTIDs will become errant", descriptor, describeCombinedPositions(filtered))
-		ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
-	}
 	if excluded := int64(len(validCandidates) - len(filtered)); excluded > 0 {
 		ersFilteredCandidates.Add([]string{keyspace, shard}, excluded)
 	}
-	return filtered, nil
+	return filtered
 }
 
 // applyRelayLogsAndReconcile waits on waitCandidates, then mutates validCandidates:
@@ -626,11 +552,11 @@ func (erp *EmergencyReparenter) applyRelayLogsAndReconcile(
 	if waitErr != nil {
 		return successMap, waitErr
 	}
-	// Reconcile validCandidates with the wait results. Removing failed tablets is safe
-	// because the upfront uniformCombined check guarantees every wait candidate shared
-	// the same Combined position — failed tablets carry no unique GTIDs vs the applied
-	// tablet, so no split-brain signal is lost. Cancelled tablets (absent from successMap)
-	// are left untouched; the sort ranks them below applied peers at the same Combined.
+	// Reconcile validCandidates with the wait results. Failed tablets are removed (they
+	// cannot be promoted); applied tablets get Executed bumped to Combined so the sorter
+	// prefers them via the Combined→Executed tie-break. Cancelled tablets (absent from
+	// successMap) are left untouched; the sort ranks them below applied peers at the
+	// same Combined.
 	for alias, applied := range successMap {
 		if applied {
 			if pos, ok := validCandidates[alias]; ok {
@@ -788,7 +714,6 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
-	keyspace, shard string,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
 	if len(validCandidates) == 0 {
@@ -812,84 +737,13 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 	// The first tablet in the sorted list will be the most eligible candidate unless explicitly asked for some other tablet
 	winningPrimaryTablet := validTablets[0]
 	winningPosition := tabletPositions[0]
-	winningIdx := 0
-
-	// Safety nets for AllowSplitBrainPromotion. The sort comparator is not guaranteed
-	// to be a strict weak order when dominance and alias tiebreakers disagree (e.g.,
-	// triple {A, B, C} where A and B are incomparable, B strictly dominates C, and
-	// aliases produce A < B < C < A as a cycle). Go's sort can then put a strictly-
-	// dominated tablet at index 0. Both safety nets are gated on the flag because
-	// pre-PR behaviour was to abort the whole ERS via the secondary AtLeast check below
-	// for any non-uniform leading set, and we only want to silently correct under the
-	// explicit operator override.
-	if opts.AllowSplitBrainPromotion {
-		// Safety net #1: swap to a strict dominator if one exists. Dominance is a
-		// partial order so the loop terminates in at most len(validTablets)-1 swaps.
-		for {
-			dominatorIdx := -1
-			for i := range validTablets {
-				if i == winningIdx {
-					continue
-				}
-				if tabletPositions[i].AtLeast(winningPosition) && !winningPosition.AtLeast(tabletPositions[i]) {
-					dominatorIdx = i
-					break
-				}
-			}
-			if dominatorIdx == -1 {
-				break
-			}
-			erp.logger.Warningf("findMostAdvanced: sort winner %v is strictly dominated by %v — swapping (sort comparator is non-transitive under partial-order positions)",
-				topoproto.TabletAliasString(winningPrimaryTablet.Alias),
-				topoproto.TabletAliasString(validTablets[dominatorIdx].Alias))
-			winningIdx = dominatorIdx
-			winningPrimaryTablet = validTablets[dominatorIdx]
-			winningPosition = tabletPositions[dominatorIdx]
-		}
-
-		// Safety net #2: prefer an applied (Executed.Equal(Combined)) candidate over a
-		// cancelled-mid-apply winner when one exists at an incomparable Combined.
-		// applyRelayLogsAndReconcile bumps Executed=Combined exactly for applied +
-		// pre-satisfied PRIMARY-likes, leaving cancelled and lagging tablets with their
-		// pre-wait Executed — Executed.Equal(Combined) is the proxy for "safe to promote
-		// without losing received-but-unapplied transactions". The strictly-behind skip
-		// prevents preferring a lagger that would lose the winner's leading data.
-		//
-		// We must also reject applied candidates strictly dominated by *another* applied
-		// candidate. Under partial-order GTID shapes (e.g. winner A unapplied at {uuidA};
-		// B applied at {uuidB:1-10}; C applied at {uuidB:1-3}) both B and C are eligible
-		// vs. the winner, but C is dominated by B. Picking C would silently lose B's
-		// transactions. Two-pass: collect eligible applied candidates, then pick a
-		// maximal one (not strictly dominated by any other eligible candidate).
-		if !winningPosition.Executed.Equal(winningPosition.Combined) {
-			if i := pickNonDominatedAppliedSwap(winningIdx, winningPosition, tabletPositions); i >= 0 {
-				erp.logger.Warningf("findMostAdvanced: sort winner %v is unapplied (Executed != Combined) under split-brain non-total ordering — preferring applied candidate %v",
-					topoproto.TabletAliasString(winningPrimaryTablet.Alias),
-					topoproto.TabletAliasString(validTablets[i].Alias))
-				winningPrimaryTablet = validTablets[i]
-				winningPosition = tabletPositions[i]
-			}
-		}
-	}
 
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
-	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should cancel the ERS —
-	// unless AllowSplitBrainPromotion is set, in which case the operator has accepted that the losing side's unique GTIDs will become errant.
-	// The override counter is incremented here as well as in filterAndCheckUniform because the upfront check can miss the Combined-equal-but-
-	// Executed-incomparable shape that AtLeast catches here (Combined.Equal → falls through to Executed.AtLeast, which can be false in both
-	// directions if either tablet has executed unique errant GTIDs).
-	splitBrainBypassed := false
+	// superset of all the other valid positions - otherwise we have a split brain scenario and we cancel the ERS
 	for i, position := range tabletPositions {
 		if !winningPosition.AtLeast(position) {
-			if !opts.AllowSplitBrainPromotion {
-				return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
-			}
-			erp.logger.Warningf("AllowSplitBrainPromotion=true: split brain detected between %v and %v — proceeding under operator override; losing side's unique GTIDs will become errant", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
-			splitBrainBypassed = true
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", topoproto.TabletAliasString(winningPrimaryTablet.Alias), topoproto.TabletAliasString(validTablets[i].Alias))
 		}
-	}
-	if splitBrainBypassed {
-		ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
 	}
 
 	// If we were requested to elect a particular primary, verify it's a valid
@@ -900,108 +754,18 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		if !ok {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
 		}
-		// If the requested tablet is as advanced as the most advanced tablet, use it for promotion.
-		// Otherwise let it catch up to the most advanced tablet and don't change the intermediate source —
-		// unless the position is INCOMPARABLE with the winner (true split-brain shape, neither side
-		// dominates) AND AllowSplitBrainPromotion is set, in which case the operator's explicit choice
-		// overrides the AtLeast check. We deliberately do not override for strictly-lagging requested
-		// primaries: those still need the existing catch-up path to avoid losing transactions the
-		// winner has.
-		incomparable := !pos.AtLeast(winningPosition) && !winningPosition.AtLeast(pos)
-		if pos.AtLeast(winningPosition) || (opts.AllowSplitBrainPromotion && incomparable) {
+		// if the requested tablet is as advanced as the most advanced tablet, then we can just use it for promotion.
+		// otherwise, we should let it catchup to the most advanced tablet and not change the intermediate source
+		if pos.AtLeast(winningPosition) {
 			requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
 			if !isFound {
 				return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
-			}
-			if incomparable {
-				// The override forces past the AtLeast sort check, not past the relay-log-apply
-				// requirement. applyRelayLogsAndReconcile bumps Executed=Combined for applied
-				// tablets and pre-satisfied PRIMARY-likes, but leaves cancelled-mid-apply peers
-				// with their pre-wait Executed. Refusing the requested tablet here when those are
-				// not equal prevents promoting a tablet with received-but-unapplied transactions.
-				if !pos.Executed.Equal(pos.Combined) {
-					return nil, nil, vterrors.Errorf(
-						vtrpc.Code_FAILED_PRECONDITION,
-						"AllowSplitBrainPromotion=true: requested primary %v did not complete the relay-log apply wait (Executed=%v != Combined=%v) — re-run without --new-primary to let ERS pick an applied candidate, or specify one that finished applying",
-						requestedPrimaryAlias, pos.Executed, pos.Combined,
-					)
-				}
-				// "Incomparable with the sort winner" is not sufficient under partial-order
-				// GTID sets — the requested tablet can be strictly dominated by another valid
-				// candidate that happens to be incomparable with the (non-deterministic) sort
-				// winner. Reject if any other validCandidate strictly dominates the requested
-				// tablet, so we don't lose transactions present on that dominator.
-				for otherAlias, otherPos := range validCandidates {
-					if otherAlias == requestedPrimaryAlias {
-						continue
-					}
-					if otherPos.AtLeast(pos) && !pos.AtLeast(otherPos) {
-						return nil, nil, vterrors.Errorf(
-							vtrpc.Code_FAILED_PRECONDITION,
-							"AllowSplitBrainPromotion=true: requested primary %v is strictly dominated by candidate %v — re-run without --new-primary to let ERS pick the dominant candidate, or specify a non-dominated one",
-							requestedPrimaryAlias, otherAlias,
-						)
-					}
-				}
-				erp.logger.Warningf("AllowSplitBrainPromotion=true: requested primary %v has a position incomparable with the sort winner %v — honouring operator's explicit choice; non-promoted side's unique GTIDs will become errant", requestedPrimaryAlias, topoproto.TabletAliasString(winningPrimaryTablet.Alias))
 			}
 			winningPrimaryTablet = requestedPrimaryInfo.Tablet
 		}
 	}
 
 	return winningPrimaryTablet, validTablets, nil
-}
-
-// pickNonDominatedAppliedSwap returns an index in positions of an applied
-// candidate to swap to when the sort winner at winnerIdx is unapplied
-// (Executed != Combined), or -1 if no such candidate exists. The returned
-// candidate is guaranteed not to be strictly dominated by another eligible
-// applied candidate — otherwise, under partial-order GTID shapes, a
-// downstream promotion could silently lose transactions from the dominator
-// (e.g. winner A unapplied at {uuidA}; B applied at {uuidB:1-10};
-// C applied at {uuidB:1-3}: picking C would lose B's writes).
-//
-// A candidate at index i is eligible when:
-//   - i != winnerIdx
-//   - positions[i].Executed.Equal(positions[i].Combined) (applied)
-//   - positions[i].Combined is not strictly behind winnerPos.Combined
-//
-// Iteration is over the input slice in its given order. Callers that rely on
-// sort-comparator dominance (e.g. findMostAdvanced via sortTabletsForReparent)
-// already get B-before-C in practice, but the second pass here is defensive
-// against future refactors that bypass the sort or change its semantics.
-func pickNonDominatedAppliedSwap(winnerIdx int, winnerPos *RelayLogPositions, positions []*RelayLogPositions) int {
-	eligible := make([]int, 0, len(positions))
-	for i, p := range positions {
-		if i == winnerIdx {
-			continue
-		}
-		if !p.Executed.Equal(p.Combined) {
-			continue
-		}
-		// Skip strictly-behind candidates: winner.Combined dominates p.Combined.
-		if winnerPos.Combined.AtLeast(p.Combined) && !p.Combined.AtLeast(winnerPos.Combined) {
-			continue
-		}
-		eligible = append(eligible, i)
-	}
-
-	for _, i := range eligible {
-		dominated := false
-		for _, j := range eligible {
-			if i == j {
-				continue
-			}
-			if positions[j].Combined.AtLeast(positions[i].Combined) && !positions[i].Combined.AtLeast(positions[j].Combined) {
-				dominated = true
-				break
-			}
-		}
-		if !dominated {
-			return i
-		}
-	}
-	return -1
 }
 
 // promoteIntermediateSource reparents all the other tablets to start replicating from the intermediate source.

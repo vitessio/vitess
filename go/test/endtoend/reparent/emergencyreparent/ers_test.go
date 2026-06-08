@@ -686,66 +686,6 @@ func TestERSFiltersNonMostAdvancedCandidates(t *testing.T) {
 	require.NotEqual(t, newPrimary.Alias, tablets[3].Alias, "lagging tablet should not be the new primary")
 }
 
-// TestERSSplitBrainDetection verifies that ERS aborts upfront with a clear
-// "suspected split-brain" error when two leading candidates have incomparable
-// Combined GTID positions. We simulate a real split-brain by detaching two
-// replicas from the primary and writing to each independently — each INSERT
-// generates a GTID under that replica's own server UUID, so neither tablet's
-// Combined set is a superset of the other's. The pairwise dominance filter
-// keeps both tablets, the uniformCombined check fires, and ERS aborts before
-// risking promotion of either diverged side.
-func TestERSSplitBrainDetection(t *testing.T) {
-	// The upfront "suspected split-brain" abort was added in v25. Older vtctld either
-	// promotes one side silently or surfaces a different error message, so this test
-	// is only meaningful against v25+.
-	e2eutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
-
-	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-
-	ctx := t.Context()
-
-	// Baseline: confirm replication is healthy before we break it.
-	utils.ConfirmReplication(t, tablets[0], tablets[1:])
-
-	// Detach tablets[2] and tablets[3] from replication and make them writable.
-	// Each subsequent INSERT will generate a GTID under that tablet's own
-	// server UUID, producing two-sided GTID divergence (split-brain).
-	// super_read_only must be cleared explicitly: Vitess leaves demoted replicas
-	// at super_read_only=1, which blocks the direct INSERT below regardless of
-	// read_only.
-	detachAndMakeWritable := []string{
-		"STOP REPLICA",
-		"RESET REPLICA ALL",
-		"SET GLOBAL super_read_only = OFF",
-		"SET GLOBAL read_only = OFF",
-	}
-	utils.RunSQLs(ctx, t, detachAndMakeWritable, tablets[2])
-	utils.RunSQL(ctx, t,
-		"INSERT INTO vt_insert_test(id, msg) VALUES (90002, 'split-brain side A')",
-		tablets[2])
-
-	utils.RunSQLs(ctx, t, detachAndMakeWritable, tablets[3])
-	utils.RunSQL(ctx, t,
-		"INSERT INTO vt_insert_test(id, msg) VALUES (90003, 'split-brain side B')",
-		tablets[3])
-
-	// Kill the primary so ERS is needed.
-	utils.StopTablet(t, tablets[0], true)
-
-	// ERS must abort with the upfront split-brain error, not silently promote
-	// one of the diverged sides. The vtctldclient surfaces the RPC error message
-	// in stdout/stderr — assert against `out` rather than err (which is just
-	// "exit status 1" from the command process).
-	out, err := utils.Ers(clusterInstance, nil, "60s", "30s")
-	require.Error(t, err, out)
-	require.Contains(t, out, "suspected split-brain", "ERS output: %s", out)
-	// describeCombinedPositions names the offending tablets in the error.
-	require.Contains(t, out, tablets[2].Alias)
-	require.Contains(t, out, tablets[3].Alias)
-}
-
 // TestReplicationStopped checks that ERS ignores the tablets that have sql thread stopped.
 // If there are more than 1, we also fail.
 func TestReplicationStopped(t *testing.T) {

@@ -1304,7 +1304,6 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
 	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
 	span.Annotate("wait_for_all_tablets", req.WaitForAllTablets)
-	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
 
 	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
@@ -1326,7 +1325,6 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			WaitAllTablets:            req.WaitForAllTablets,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 			ExpectedPrimaryAlias:      req.ExpectedPrimary,
-			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
 		},
 	)
 

@@ -60445,9 +60445,6 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest expected_primary */
         expected_primary?: (topodata.ITabletAlias|null);
-
-        /** EmergencyReparentShardRequest allow_split_brain_promotion */
-        allow_split_brain_promotion?: (boolean|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -60482,9 +60479,6 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest expected_primary. */
         public expected_primary?: (topodata.ITabletAlias|null);
-
-        /** EmergencyReparentShardRequest allow_split_brain_promotion. */
-        public allow_split_brain_promotion: boolean;
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
