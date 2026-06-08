@@ -1705,8 +1705,13 @@ func testRestoreDoneHookOnFailure(t *testing.T) {
 
 	// 4. Start replica3 — it will attempt to restore from the corrupted backup.
 	//    The restore will fail and the process will exit with os.Exit(1).
+	//    We set ExplicitServingStatus so Setup() waits only for SERVING (not
+	//    NOT_SERVING). Since the tablet never reaches SERVING (the background
+	//    restore goroutine fails and calls os.Exit), the exit channel fires
+	//    and Setup() returns "exited prematurely".
 	replica3.VttabletProcess.ExtraArgs = commonTabletArg
 	replica3.VttabletProcess.ServingStatus = "SERVING"
+	replica3.VttabletProcess.ExplicitServingStatus = true
 	err = replica3.VttabletProcess.Setup()
 	require.Error(t, err, "expected vttablet to exit due to failed restore")
 	require.Contains(t, err.Error(), "exited prematurely")

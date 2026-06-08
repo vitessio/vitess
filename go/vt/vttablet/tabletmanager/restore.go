@@ -117,8 +117,8 @@ func (tm *TabletManager) RestoreBackup(
 		tm.invokeRestoreDoneHook(startTime, err, backupEngine)
 	}()
 
-	if err := tm.lock(ctx); err != nil {
-		return err
+	if lockErr := tm.lock(ctx); lockErr != nil {
+		return lockErr
 	}
 	defer tm.unlock()
 
@@ -290,6 +290,9 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	return backupEngine, nil
 }
 
+// restoreFromClone handles the clone-based restore path. It uses the same
+// defer-before-lock pattern as RestoreBackup but has no e2e test coverage;
+// the clone path is only exercised in production behind a feature gate.
 func (tm *TabletManager) restoreFromClone(ctx context.Context, logger logutil.Logger, deleteBeforeRestore bool) error {
 	var (
 		err       error
@@ -304,8 +307,8 @@ func (tm *TabletManager) restoreFromClone(ctx context.Context, logger logutil.Lo
 		tm.invokeRestoreDoneHook(startTime, err, "")
 	}()
 
-	if err := tm.lock(ctx); err != nil {
-		return err
+	if lockErr := tm.lock(ctx); lockErr != nil {
+		return lockErr
 	}
 	defer tm.unlock()
 
@@ -452,8 +455,10 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error, b
 	case hook.HOOK_SUCCESS:
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Info("No vttablet_restore_done hook.")
+	case hook.HOOK_TIMEOUT_ERROR:
+		log.Warn(fmt.Sprintf("vttablet_restore_done hook timed out (exit status %d), stderr: %s", hr.ExitStatus, hr.Stderr))
 	default:
-		log.Warn("vttablet_restore_done hook failed")
+		log.Warn(fmt.Sprintf("vttablet_restore_done hook failed with exit status %d, stderr: %s", hr.ExitStatus, hr.Stderr))
 	}
 }
 
