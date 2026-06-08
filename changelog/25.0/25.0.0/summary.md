@@ -14,8 +14,6 @@
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
-    - **[VTCtld](#minor-changes-vtctld)**
-        - [`GetTablets` stale primary reporting under `--tablet-alias` filter](#vtctld-gettablets-stale-primary-alias)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -81,17 +79,3 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
-
-### <a id="minor-changes-vtctld"/>VTCtld</a>
-
-#### <a id="vtctld-gettablets-stale-primary-alias"/>`GetTablets` stale primary reporting under `--tablet-alias` filter</a>
-
-If your monitoring or automation parses `vtctldclient GetTablets --tablet-alias=...` output, stale former primaries now report as `unknown` instead of `primary`. Previously, when the real current primary was not included in the request, the server could mark a stale former primary as `primary`. Querying multiple stale aliases from different shards together was particularly affected: the result depended on which stale record had the later `primary_term_start_time`, and only the older one would be demoted.
-
-The server now consults each shard's `Shard.PrimaryTermStartTime` via a parallel `GetShard` call (one per unique shard in the result) to determine the authoritative primary term, and reports demoted tablets with type `unknown`.
-
-The `--keyspace/--shard` path produces the same output as before because the real primary is always present in that result set, so the seed already matched the shard record.
-
-Transient cases where the shard record has no recorded primary yet (for example, the brief window after a promotion before the new term is written) fall back to the prior best-effort behavior, so tablets retain their on-disk type. If `GetShard` fails for a shard, the same fallback applies and a warning is logged; under `--strict`, the error is returned to the caller.
-
-See [#19898](https://github.com/vitessio/vitess/issues/19898) for details.
