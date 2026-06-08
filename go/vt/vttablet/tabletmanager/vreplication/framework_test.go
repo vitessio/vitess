@@ -229,6 +229,13 @@ func primaryPosition(t *testing.T) string {
 	return replication.EncodePosition(pos)
 }
 
+func primaryPositionParsed(t *testing.T) replication.Position {
+	t.Helper()
+	pos, err := env.Mysqld.PrimaryPosition(t.Context())
+	require.NoError(t, err)
+	return pos
+}
+
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
 	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
