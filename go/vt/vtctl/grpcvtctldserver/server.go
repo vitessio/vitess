@@ -2340,18 +2340,24 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		// (--keyspace --shard) includes the real primary in its result, so the
 		// seed reflects it; the alias-filter path (--tablet-alias) may omit it
 		// (issue #19898) and overwrites the seed via GetShard below.
+		//
+		// Only shards with a PRIMARY tablet in the result need tracking:
+		// stale-primary adjustment only demotes PRIMARY tablets, so the GetShard
+		// overlay is pointless for shards without one. Restricting uniqueShards
+		// to PRIMARY-bearing shards avoids those needless topo lookups.
 		type ksShard struct{ keyspace, shard string }
 		uniqueShards := make(map[string]ksShard, len(tabletMap))
 		truePrimaryByShard := make(map[string]time.Time, len(tabletMap))
 		for _, ti := range tabletMap {
+			if ti.Type != topodatapb.TabletType_PRIMARY {
+				continue
+			}
 			key := topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)
 			if _, ok := uniqueShards[key]; !ok {
 				uniqueShards[key] = ksShard{ti.Keyspace, ti.Shard}
 			}
-			if ti.Type == topodatapb.TabletType_PRIMARY {
-				if t := ti.GetPrimaryTermStartTime(); t.After(truePrimaryByShard[key]) {
-					truePrimaryByShard[key] = t
-				}
+			if t := ti.GetPrimaryTermStartTime(); t.After(truePrimaryByShard[key]) {
+				truePrimaryByShard[key] = t
 			}
 		}
 
@@ -2386,8 +2392,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			}
 			wg.Wait()
 			if rec.HasErrors() {
-				// errors.Join preserves Unwrap() []error so callers' topo.IsErrType
-				// classification still works via errors.Is across the joined error.
+				// errors.Join preserves Unwrap() []error so in-process callers and
+				// tests can still classify via topo.IsErrType/errors.Is before the
+				// gRPC layer translates this into a status (remote clients see the
+				// status, not the joined error).
 				joinedErr := errors.Join(rec.Errors...)
 				if req.Strict {
 					return nil, joinedErr
