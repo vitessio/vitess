@@ -27,6 +27,42 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+func TestIsPreserializedJSONSQL(t *testing.T) {
+	assert.True(t, IsPreserializedJSONSQL([]byte(` JSON_OBJECT(_utf8mb4'a', 1)`)))
+	assert.True(t, IsPreserializedJSONSQL([]byte(`JSON_ARRAY(1)`)))
+	assert.True(t, IsPreserializedJSONSQL([]byte(`CAST(date '2015-01-15' as JSON)`)))
+	assert.False(t, IsPreserializedJSONSQL([]byte(`{"a": 1}`)))
+	assert.False(t, IsPreserializedJSONSQL([]byte(`[1, 2]`)))
+	assert.False(t, IsPreserializedJSONSQL([]byte(`"scalar"`)))
+	assert.False(t, IsPreserializedJSONSQL([]byte(`  {"a": 1}`)))
+	assert.False(t, IsPreserializedJSONSQL(nil))
+	assert.False(t, IsPreserializedJSONSQL([]byte(`   `)))
+}
+
+func TestJSONSQLValue(t *testing.T) {
+	sqlExpr := []byte(`JSON_OBJECT(_utf8mb4'created', CAST(date '2024-01-15' as JSON))`)
+	got, err := JSONSQLValue(sqlExpr)
+	require.NoError(t, err)
+	require.Equal(t, string(sqlExpr), string(got.Raw()))
+
+	textJSON := []byte(`{"created": "2024-01-15"}`)
+	got, err = JSONSQLValue(textJSON)
+	require.NoError(t, err)
+	require.Contains(t, got.RawStr(), "JSON_OBJECT(")
+	require.Contains(t, got.RawStr(), "2024-01-15")
+	require.NotContains(t, got.RawStr(), "CAST(date")
+}
+
+func TestAppendJSONSQL(t *testing.T) {
+	buf := &bytes2.Buffer{}
+	require.NoError(t, AppendJSONSQL(buf, []byte(`CAST(date '2015-01-15' as JSON)`)))
+	require.Equal(t, `CAST(date '2015-01-15' as JSON)`, buf.String())
+
+	buf.Reset()
+	require.NoError(t, AppendJSONSQL(buf, []byte(`{"a":1}`)))
+	require.Equal(t, `JSON_OBJECT(_utf8mb4'a', 1)`, buf.String())
+}
+
 func TestMarshalSQLTo(t *testing.T) {
 	testcases := []struct {
 		input    string
