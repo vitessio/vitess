@@ -105,30 +105,15 @@ func run(m *testing.M) int {
 	}
 	defer stopFuseHelper()
 
-	originalVTDataRoot := os.Getenv("VTDATAROOT")
-	defer os.Setenv("VTDATAROOT", originalVTDataRoot)
-	if err := os.Setenv("VTDATAROOT", fuseHelperMount); err != nil {
-		errf("setenv VTDATAROOT: %v", err)
-		return 1
-	}
-
 	clusterInstance = cluster.NewCluster(cell, hostname)
 	defer clusterInstance.Teardown()
-	// Safety net for panic-during-stall: send SIGHUP (clear) to the helper
-	// before cluster teardown runs, so mysqld isn't wedged on FUSE I/O while
-	// we try to stop it. Registered after Teardown so it fires first (LIFO).
-	defer func() {
-		if fuseHelperCmd != nil && fuseHelperCmd.Process != nil {
-			_ = fuseHelperCmd.Process.Signal(syscall.SIGHUP)
-		}
-	}()
 
-	// disk-write-dir points inside the FUSE mount so the monitor's probe
-	// writes are stalled in lockstep with mysqld's I/O when the helper is
-	// stalled. Use CurrentVTDATAROOT (created by NewCluster) so the
-	// directory already exists when vttablet starts.
+	// Only --disk-write-dir lives on the gated FUSE mount, so the monitor's
+	// probe writes stall when the helper is stalled. mysqld's datadir and
+	// vttablet's logs stay on real disk — keeping cluster I/O (including
+	// failure-path log reads in the harness) outside the gate.
 	clusterInstance.VtTabletExtraArgs = []string{
-		"--disk-write-dir", clusterInstance.CurrentVTDATAROOT,
+		"--disk-write-dir", fuseHelperMount,
 		"--disk-write-interval", diskWriteInterval.String(),
 		"--disk-write-timeout", diskWriteTimeout.String(),
 	}
