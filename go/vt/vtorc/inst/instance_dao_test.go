@@ -1184,10 +1184,10 @@ func TestErrantGTIDCountGaugeIsResetWhenResolved(t *testing.T) {
 	// Second poll: the errant GTID has been reconciled (e.g., via the
 	// empty-transaction injection technique on the primary), so the primary's
 	// executed GTID set now also includes the replica UUID range.
-	replicaInstance.GtidErrant = ""
 	replicaInstance.primaryExecutedGtidSet = primaryUUID + ":1-100," + replicaUUID + ":1"
 	require.NoError(t, detectErrantGTIDs(replicaInstance, replicaTablet))
-	require.Empty(t, replicaInstance.GtidErrant)
+	require.Empty(t, replicaInstance.GtidErrant,
+		"GtidErrant should be cleared on the no-errant path so callers reusing the Instance don't see stale state")
 	require.EqualValues(t, 0, currentErrantGTIDCount.Counts()[replicaAlias],
 		"gauge should be reset to 0 after errant GTIDs are resolved")
 }

@@ -419,6 +419,7 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 	if topoproto.TabletAliasEqual(primaryAlias, instance.InstanceAlias) {
 		// A primary cannot have errant GTIDs relative to itself; clear any
 		// value left over from before this tablet was promoted.
+		instance.GtidErrant = ""
 		currentErrantGTIDCount.Reset(tabletAliasString)
 		return nil
 	}
@@ -478,8 +479,12 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 			}
 		}
 	}
-	// Always publish the count. Writing 0 here is what allows the gauge to
-	// recover after errant GTIDs are reconciled or a transient race clears.
+	// Always publish the result. Writing 0 / "" here is what allows the
+	// gauge and GtidErrant field to recover after errant GTIDs are
+	// reconciled or a transient race clears.
+	if errantGtidCount == 0 {
+		instance.GtidErrant = ""
+	}
 	currentErrantGTIDCount.Set(tabletAliasString, errantGtidCount)
 	return err
 }
