@@ -129,11 +129,26 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 	// retrieve the right hand side fields twice instead of once.
 	var fieldsSent atomic.Bool
 	fieldsSent.Store(!wantfields)
+	// The left side may stream its fields and rows in separate chunks, so we
+	// hold on to the most recently seen fields to use them while joining rows
+	// from a later, fields-less chunk.
+	var lfields []*querypb.Field
 	err := vcursor.StreamExecutePrimitive(ctx, jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+		if len(lresult.Fields) != 0 {
+			mu.Lock()
+			lfields = lresult.Fields
+			mu.Unlock()
+		}
 		joinVars := make(map[string]*querypb.BindVariable)
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
+			}
+			leftFields := lresult.Fields
+			if len(leftFields) == 0 {
+				mu.Lock()
+				leftFields = lfields
+				mu.Unlock()
 			}
 			var rowSent atomic.Bool
 			err := vcursor.StreamExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), !fieldsSent.Load(), func(rresult *sqltypes.Result) error {
@@ -147,7 +162,7 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				defer mu.Unlock()
 				result := &sqltypes.Result{}
 				if fieldsSent.CompareAndSwap(false, true) {
-					result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
+					result.Fields = joinFields(leftFields, rresult.Fields, jn.Cols)
 				}
 				for _, rrow := range rresult.Rows {
 					result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
@@ -173,31 +188,41 @@ func (jn *Join) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 				}
 			}
 		}
-		// This needs to be locking since it's not safe to just use
-		// fieldsSent. This is because we can't have a race between
-		// checking fieldsSent and then actually calling the callback
-		// and in parallel another goroutine doing the same. That
-		// can lead to out of order execution of the callback. So the callback
-		// itself and the check need to be covered by the same lock.
-		mu.Lock()
-		defer mu.Unlock()
-		if fieldsSent.CompareAndSwap(false, true) {
-			for k, v := range jn.Vars {
-				joinVars[k] = bindvarForType(lresult.Fields[v])
-			}
-			result := &sqltypes.Result{}
-			rresult, err := jn.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))
-			if err != nil {
-				return err
-			}
-			result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
-			if err := callback(result); err != nil {
-				return err
-			}
-		}
 		return nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	// If the left produced no rows, the fields were never sent from the row
+	// path above, so we derive and send them here. This needs to be locking
+	// since it's not safe to just use fieldsSent: we can't have a race between
+	// checking fieldsSent and then actually calling the callback and in
+	// parallel another goroutine doing the same. That can lead to out of order
+	// execution of the callback. So the callback itself and the check need to
+	// be covered by the same lock.
+	mu.Lock()
+	if !fieldsSent.CompareAndSwap(false, true) {
+		mu.Unlock()
+		return nil
+	}
+	leftFields := lfields
+	mu.Unlock()
+	if len(leftFields) == 0 {
+		lresult, err := jn.Left.GetFields(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		leftFields = lresult.Fields
+	}
+	joinVars := make(map[string]*querypb.BindVariable)
+	for k, v := range jn.Vars {
+		joinVars[k] = bindvarForType(leftFields[v])
+	}
+	rresult, err := jn.Right.GetFields(ctx, vcursor, combineVars(bindVars, joinVars))
+	if err != nil {
+		return err
+	}
+	return callback(&sqltypes.Result{Fields: joinFields(leftFields, rresult.Fields, jn.Cols)})
 }
 
 // GetFields fetches the field info.
