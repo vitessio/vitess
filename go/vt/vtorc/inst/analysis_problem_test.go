@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtorc/config"
 )
 
 func TestSortDetectionAnalysisMatchedProblems(t *testing.T) {
@@ -336,10 +335,6 @@ func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
 	now := time.Now()
 	primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
 
-	// Enable the feature for this test.
-	require.NoError(t, config.SetShardQuorumTestConfig(true))
-	t.Cleanup(func() { _ = config.SetShardQuorumTestConfig(false) })
-
 	resetShardPeerHealth()
 	RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, "ks", "0",
 		[]*replicationdatapb.ShardPeerHealth{{TabletAlias: primary, ConsecutivePingFailures: 5, LastAttemptedPing: protoutil.TimeToProto(now)}}, now)
@@ -355,7 +350,8 @@ func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
 	}
 	problem := GetDetectionAnalysisProblem(PrimaryTabletUnreachableByQuorum)
 	require.NotNil(t, problem)
-	assert.True(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
+	assert.False(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false), "feature is disabled by default")
+	assert.True(t, matchPrimaryTabletUnreachableByQuorum(a, now))
 
 	// When the matcher fires, it records the structured quorum detail for the audit.
 	require.NotNil(t, a.QuorumDetail, "matcher must record the quorum detail when it fires")
@@ -369,6 +365,6 @@ func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
 	// The non-firing path must not record a quorum detail. Use a fresh analysis because the
 	// earlier firing already set QuorumDetail on `a`.
 	notFired := &DetectionAnalysis{IsClusterPrimary: true, LastCheckValid: true, AnalyzedInstanceAlias: primary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
-	assert.False(t, problem.MatchFunc(notFired, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
+	assert.False(t, matchPrimaryTabletUnreachableByQuorum(notFired, now))
 	assert.Nil(t, notFired.QuorumDetail)
 }

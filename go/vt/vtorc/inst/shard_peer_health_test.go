@@ -243,6 +243,27 @@ func TestEvaluatePrimaryQuorum_NoPrimary(t *testing.T) {
 	assert.Empty(t, r.Observers)
 }
 
+func TestRecordShardPeerHealthIgnoresEmptyReports(t *testing.T) {
+	resetShardPeerHealth()
+	now := time.Now()
+	primary := alias(100)
+
+	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", nil, now)
+	RecordShardPeerHealth(alias(102), topodatapb.TabletType_REPLICA, "ks", "0", []*replicationdatapb.ShardPeerHealth{
+		nil,
+		{TabletAlias: nil, ConsecutivePingFailures: 3},
+	}, now)
+
+	assert.Empty(t, ObservedShards())
+
+	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now)
+	assert.Equal(t, []KeyspaceShard{{Keyspace: "ks", Shard: "0"}}, ObservedShards())
+
+	resetShardPeerHealth()
+	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now.Add(-2*time.Minute))
+	assert.Empty(t, ObservedShards())
+}
+
 func TestQuorumResultSummary(t *testing.T) {
 	r := QuorumResult{
 		PrimaryAlias: "zone1-0000000100", Keyspace: "ks", Shard: "0",

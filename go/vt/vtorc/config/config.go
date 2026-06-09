@@ -477,12 +477,6 @@ func ERSOnTabletUnreachableEnabled() bool {
 	return ersOnTabletUnreachable.Get()
 }
 
-// SetShardQuorumTestConfig toggles the quorum ERS feature for tests.
-func SetShardQuorumTestConfig(enabled bool) error {
-	ersOnTabletUnreachable.Set(enabled)
-	return nil
-}
-
 // GetShardTabletHealthFailureThreshold returns the consecutive-failure count after which an
 // observer considers a shard peer down.
 func GetShardTabletHealthFailureThreshold() int {

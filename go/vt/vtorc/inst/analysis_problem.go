@@ -203,24 +203,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			if !config.ERSOnTabletUnreachableEnabled() {
 				return false
 			}
-			if !a.IsClusterPrimary || a.LastCheckValid {
-				return false
-			}
-			result := EvaluatePrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, QuorumOptionsFromConfig(), time.Now())
-			// Log the decision, rate-limited per verdict so a change (not-down -> down) logs immediately.
-			logKey := fmt.Sprintf("%s/%s:%t", a.AnalyzedKeyspace, a.AnalyzedShard, result.Down)
-			if util.ClearToLog("shard_quorum", logKey) {
-				log.Info("shard quorum decision",
-					slog.String("keyspace", a.AnalyzedKeyspace),
-					slog.String("shard", a.AnalyzedShard),
-					slog.Bool("down", result.Down),
-					slog.String("detail", result.Summary()),
-				)
-			}
-			if result.Down {
-				a.QuorumDetail = &result
-			}
-			return result.Down
+			return matchPrimaryTabletUnreachableByQuorum(a, time.Now())
 		},
 	},
 
@@ -515,6 +498,28 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			return a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0
 		},
 	},
+}
+
+// matchPrimaryTabletUnreachableByQuorum evaluates the replica-observed tablet liveness quorum.
+func matchPrimaryTabletUnreachableByQuorum(a *DetectionAnalysis, now time.Time) bool {
+	if !a.IsClusterPrimary || a.LastCheckValid {
+		return false
+	}
+	result := EvaluatePrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, QuorumOptionsFromConfig(), now)
+	// Log the decision, rate-limited per verdict so a change (not-down -> down) logs immediately.
+	logKey := fmt.Sprintf("%s/%s:%t", a.AnalyzedKeyspace, a.AnalyzedShard, result.Down)
+	if util.ClearToLog("shard_quorum", logKey) {
+		log.Info("shard quorum decision",
+			slog.String("keyspace", a.AnalyzedKeyspace),
+			slog.String("shard", a.AnalyzedShard),
+			slog.Bool("down", result.Down),
+			slog.String("detail", result.Summary()),
+		)
+	}
+	if result.Down {
+		a.QuorumDetail = &result
+	}
+	return result.Down
 }
 
 // QuorumOptionsFromConfig builds QuorumOptions from the current VTOrc configuration.

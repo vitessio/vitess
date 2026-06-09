@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -109,6 +110,14 @@ func newShardHealthMonitor(
 // Start launches the ping and refresh loops. It performs one synchronous peer
 // refresh first so the first ping round has a peer list.
 func (m *shardHealthMonitor) Start(ctx context.Context) {
+	if m.interval <= 0 || m.pingTimeout <= 0 {
+		log.Warn("shard health monitor disabled because interval and ping timeout must be positive",
+			slog.Duration("interval", m.interval),
+			slog.Duration("ping_timeout", m.pingTimeout),
+		)
+		return
+	}
+
 	monitorCtx, cancel := context.WithCancel(ctx)
 	m.cancel = cancel
 
@@ -206,9 +215,7 @@ func (m *shardHealthMonitor) refreshPeers(ctx context.Context) error {
 func (m *shardHealthMonitor) runPingRound(ctx context.Context) {
 	m.mu.Lock()
 	peers := make(map[string]*topodatapb.Tablet, len(m.peers))
-	for alias, tablet := range m.peers {
-		peers[alias] = tablet
-	}
+	maps.Copy(peers, m.peers)
 	m.mu.Unlock()
 
 	for alias, tablet := range peers {

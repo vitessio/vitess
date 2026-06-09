@@ -106,7 +106,7 @@ func RecordShardPeerHealth(
 	entries []*replicationdatapb.ShardPeerHealth,
 	now time.Time,
 ) {
-	if observerAlias == nil {
+	if observerAlias == nil || len(entries) == 0 {
 		return
 	}
 	observer := topoproto.TabletAliasString(observerAlias)
@@ -123,6 +123,9 @@ func RecordShardPeerHealth(
 		}
 		peers[topoproto.TabletAliasString(e.TabletAlias)] = report
 	}
+	if len(peers) == 0 {
+		return
+	}
 
 	shardPeerHealthMu.Lock()
 	defer shardPeerHealthMu.Unlock()
@@ -133,7 +136,11 @@ func RecordShardPeerHealth(
 		recordedAt:   now,
 		peers:        peers,
 	}
-	// Opportunistically prune very old records (e.g. deleted tablets).
+	pruneStaleShardPeerRecordsLocked(now)
+}
+
+// pruneStaleShardPeerRecordsLocked bounds records for deleted tablets without a background task.
+func pruneStaleShardPeerRecordsLocked(now time.Time) {
 	for alias, rec := range shardPeerHealthByObserver {
 		if now.Sub(rec.recordedAt) > staleShardPeerRecordTTL {
 			delete(shardPeerHealthByObserver, alias)
@@ -160,6 +167,7 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 
 	shardPeerHealthMu.Lock()
 	defer shardPeerHealthMu.Unlock()
+	pruneStaleShardPeerRecordsLocked(now)
 
 	for observerAlias, rec := range shardPeerHealthByObserver {
 		if rec.keyspace != keyspace || rec.shard != shard {
@@ -219,7 +227,7 @@ func (r QuorumResult) Summary() string {
 	parts := make([]string, 0, len(r.Observers))
 	for _, o := range r.Observers {
 		if o.Vote == "stale" {
-			parts = append(parts, fmt.Sprintf("%s=stale", o.Alias))
+			parts = append(parts, o.Alias+"=stale")
 			continue
 		}
 		parts = append(parts, fmt.Sprintf("%s=%s(%d)", o.Alias, o.Vote, o.ConsecutiveFailures))
@@ -233,6 +241,7 @@ func (r QuorumResult) Summary() string {
 func ObservedShards() []KeyspaceShard {
 	shardPeerHealthMu.Lock()
 	defer shardPeerHealthMu.Unlock()
+	pruneStaleShardPeerRecordsLocked(time.Now())
 	seen := make(map[KeyspaceShard]bool)
 	for _, rec := range shardPeerHealthByObserver {
 		seen[KeyspaceShard{Keyspace: rec.keyspace, Shard: rec.shard}] = true

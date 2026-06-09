@@ -485,6 +485,12 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		)
 		tm.shardHealthMonitor.Start(tm.BatchCtx)
 	}
+	startSucceeded := false
+	defer func() {
+		if !startSucceeded {
+			tm.stopShardHealthMonitor()
+		}
+	}()
 
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
@@ -493,6 +499,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if restoring {
 		// If restore was triggered, it will take care
 		// of updating the tablet state and initializing replication.
+		startSucceeded = true
 		return nil
 	}
 	// We should be re-read the tablet from tabletManager and use the type specified there.
@@ -510,6 +517,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	}
 	tm.tmState.Open()
 
+	startSucceeded = true
 	return nil
 }
 
@@ -517,9 +525,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
 func (tm *TabletManager) Close() {
-	if tm.shardHealthMonitor != nil {
-		tm.shardHealthMonitor.Stop()
-	}
+	tm.stopShardHealthMonitor()
 
 	// Stop the shard sync loop and wait for it to exit. We do this in Close()
 	// rather than registering it as an OnTerm hook so the shard sync loop keeps
@@ -555,6 +561,8 @@ func (tm *TabletManager) Close() {
 // while taking lameduck into account. However, this may be useful for tests,
 // when you want to clean up a tm immediately.
 func (tm *TabletManager) Stop() {
+	tm.stopShardHealthMonitor()
+
 	// Stop the shard sync loop and wait for it to exit. This needs to be done
 	// here in addition to in Close() because tests do not call Close().
 	tm.stopShardSync()
@@ -578,6 +586,15 @@ func (tm *TabletManager) Stop() {
 
 	tm.MysqlDaemon.Close()
 	tm.tmState.Close()
+}
+
+// stopShardHealthMonitor drains shard-peer health work on failed startup and test cleanup paths.
+func (tm *TabletManager) stopShardHealthMonitor() {
+	if tm.shardHealthMonitor == nil {
+		return
+	}
+	tm.shardHealthMonitor.Stop()
+	tm.shardHealthMonitor = nil
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {

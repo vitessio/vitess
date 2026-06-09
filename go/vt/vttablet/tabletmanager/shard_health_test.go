@@ -86,7 +86,7 @@ func TestShardHealthMonitor_CountsFailuresAndResets(t *testing.T) {
 	require.NoError(t, m.refreshPeers(t.Context()))
 
 	// Three failing rounds -> consecutiveFailures == 3.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		m.runPingRound(t.Context())
 		assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
 	}
@@ -125,7 +125,7 @@ func TestShardHealthMonitor_BackPressureSingleFlight(t *testing.T) {
 	require.NoError(t, m.refreshPeers(t.Context()))
 
 	// Fire several rounds while the first ping is still blocked.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		m.runPingRound(t.Context())
 	}
 	// Exactly one ping is in flight despite five rounds (single-flight per peer).
@@ -201,6 +201,47 @@ func TestShardHealthMonitor_StartStopDrainsInflight(t *testing.T) {
 		assert.Fail(t, "Stop did not return promptly")
 	}
 	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+}
+
+func TestShardHealthMonitor_StartRejectsNonPositiveTiming(t *testing.T) {
+	tests := []struct {
+		name        string
+		interval    time.Duration
+		pingTimeout time.Duration
+	}{
+		{name: "zero interval", interval: 0, pingTimeout: time.Second},
+		{name: "negative interval", interval: -time.Second, pingTimeout: time.Second},
+		{name: "zero timeout", interval: time.Second, pingTimeout: 0},
+		{name: "negative timeout", interval: time.Second, pingTimeout: -time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var listCalls atomic.Int64
+			lister := func(context.Context) (map[string]*topo.TabletInfo, error) {
+				listCalls.Add(1)
+				return nil, nil
+			}
+			m := newShardHealthMonitor(&fakePinger{}, lister, "zone1-0000000100", tt.interval, tt.pingTimeout)
+
+			require.NotPanics(t, func() {
+				m.Start(t.Context())
+				m.Stop()
+			})
+			assert.Equal(t, int64(0), listCalls.Load())
+		})
+	}
+}
+
+func TestTabletManagerStopShardHealthMonitor(t *testing.T) {
+	self := peerTablet("zone1", 100)
+	m := newShardHealthMonitor(&fakePinger{}, staticLister(self), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	m.Start(t.Context())
+	tm := &TabletManager{shardHealthMonitor: m}
+
+	tm.stopShardHealthMonitor()
+
+	assert.Nil(t, tm.shardHealthMonitor)
 }
 
 func TestShardHealthMonitor_FixedClockTimestamps(t *testing.T) {

@@ -227,7 +227,9 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	{
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		instance.ServerID = uint(fs.ServerId)
-		RecordShardPeerHealth(tabletAlias, tablet.Type, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
+		if len(fs.ShardPeerHealth) > 0 {
+			RecordShardPeerHealth(tabletAlias, tablet.Type, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
+		}
 		instance.TabletType = fs.TabletType
 		instance.Version = fs.Version
 		instance.ReadOnly = fs.ReadOnly
