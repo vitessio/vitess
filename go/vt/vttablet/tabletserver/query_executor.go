@@ -358,6 +358,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	switch qre.plan.PlanID {
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
+		return qre.streamDML(callback)
 	case p.PlanSelectStream:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
@@ -430,6 +432,50 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 		return callback(result)
 	})
+}
+
+// streamDML executes a DML statement on the streaming path. A DML produces a
+// single rows-affected result with no rows to stream, so it runs through the
+// same transactional machinery as Execute (an implicit autocommit transaction
+// when none exists, or the active transaction when one does) and the result is
+// delivered through the streaming callback.
+func (qre *QueryExecutor) streamDML(callback StreamCallback) error {
+	var (
+		reply *sqltypes.Result
+		err   error
+	)
+	switch {
+	case qre.connID != 0:
+		// Run the DML on the existing transaction or reserved connection, just
+		// like Execute's connID != 0 branch (e.g. a DML following Begin via
+		// BeginStreamExecute).
+		var conn *StatefulConnection
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		if err != nil {
+			return err
+		}
+		defer conn.Unlock()
+		if qre.setting != nil {
+			applied, err := conn.ApplySetting(qre.ctx, qre.setting)
+			if err != nil {
+				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+			// If we have applied the settings on the connection, then we should record the query detail.
+			// This is required for redoing the transaction in case of a failure.
+			if applied {
+				conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
+			}
+		}
+		reply, err = qre.txConnExec(conn)
+	case qre.plan.PlanID == p.PlanUpdateLimit || qre.plan.PlanID == p.PlanDeleteLimit:
+		reply, err = qre.execAsTransaction(qre.txConnExec)
+	default:
+		reply, err = qre.execAutocommit(qre.txConnExec)
+	}
+	if err != nil {
+		return err
+	}
+	return callback(reply)
 }
 
 // MessageStream streams messages from a message table.

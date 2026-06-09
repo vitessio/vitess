@@ -267,11 +267,11 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 // BuildStreaming builds a streaming plan based on the schema.
 func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
 	plan := &Plan{
-		PlanID:      PlanSelectStream,
-		FullQuery:   GenerateFullQuery(statement),
-		Permissions: BuildPermissions(statement),
+		PlanID:    PlanSelectStream,
+		FullQuery: GenerateFullQuery(statement),
 	}
 
+	var err error
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
 		if hasLockFunc(stmt) {
@@ -281,10 +281,20 @@ func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Tab
 	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 	case *sqlparser.Analyze:
 		plan.PlanID = PlanOtherRead
+	case *sqlparser.Insert:
+		plan, err = analyzeInsert(stmt, tables)
+	case *sqlparser.Update:
+		plan, err = analyzeUpdate(stmt, tables)
+	case *sqlparser.Delete:
+		plan, err = analyzeDelete(stmt, tables)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s not allowed for streaming", sqlparser.ASTToStatementType(statement))
 	}
+	if err != nil {
+		return nil, err
+	}
 	plan.AllTables = lookupAllTables(statement, tables)
+	plan.Permissions = BuildPermissions(statement)
 	return plan, nil
 }
 
