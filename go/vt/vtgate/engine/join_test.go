@@ -17,8 +17,10 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -341,10 +343,6 @@ func TestJoinStreamExecute(t *testing.T) {
 	)
 	rightPrim := &fakePrimitive{
 		results: []*sqltypes.Result{
-			// First right query will always be a GetFields.
-			sqltypes.MakeTestResult(
-				rightFields,
-			),
 			sqltypes.MakeTestResult(
 				rightFields,
 				"4|d|dd",
@@ -377,9 +375,7 @@ func TestJoinStreamExecute(t *testing.T) {
 		`StreamExecute  true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`GetFields bv: `,
-		`Execute bv:  true`,
-		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
+		fmt.Sprintf(`StreamExecute %v true`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
 		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("b")})),
 		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("c")})),
 	})
@@ -404,9 +400,7 @@ func TestJoinStreamExecute(t *testing.T) {
 		`StreamExecute  true`,
 	})
 	rightPrim.ExpectLog(t, []string{
-		`GetFields bv: `,
-		`Execute bv:  true`,
-		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
+		fmt.Sprintf(`StreamExecute %v true`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("a")})),
 		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("b")})),
 		fmt.Sprintf(`StreamExecute %v false`, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable("c")})),
 	})
@@ -420,6 +414,83 @@ func TestJoinStreamExecute(t *testing.T) {
 		"3|c|5|e",
 		"3|c|6|f",
 		"3|c|7|g",
+	))
+}
+
+// TestJoinStreamExecuteEmptyLeft covers the post-stream field path when the
+// left streams its fields but no rows (an empty result set). The fields are
+// derived after the left stream completes, so the left is streamed once and
+// the right's fields come from a single GetFields.
+func TestJoinStreamExecuteEmptyLeft(t *testing.T) {
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar"),
+			),
+		},
+	}
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col4|col5|col6", "int64|varchar|varchar"),
+			),
+		},
+	}
+	jn := &Join{
+		Opcode: InnerJoin,
+		Left:   leftPrim,
+		Right:  rightPrim,
+		Cols:   []int{-1, -2, 1, 2},
+		Vars:   map[string]int{"bv": 1},
+	}
+
+	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	leftPrim.ExpectLog(t, []string{
+		`StreamExecute  true`,
+	})
+	rightPrim.ExpectLog(t, []string{
+		`GetFields bv: `,
+		`Execute bv:  true`,
+	})
+	expectResult(t, r, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
+	))
+}
+
+// TestJoinStreamExecuteEmptyLeftWithoutFieldsCallback covers the degenerate
+// case where the left stream returns without ever invoking the callback (no
+// fields, no rows). The join must still derive fields via GetFields on both
+// sides rather than panic.
+func TestJoinStreamExecuteEmptyLeftWithoutFieldsCallback(t *testing.T) {
+	leftPrim := &emptyLeftStreamPrimitive{}
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("col4|col5|col6", "int64|varchar|varchar"),
+			),
+		},
+	}
+	jn := &Join{
+		Opcode: InnerJoin,
+		Left:   leftPrim,
+		Right:  rightPrim,
+		Cols:   []int{-1, -2, 1, 2},
+		Vars:   map[string]int{"bv": 1},
+	}
+
+	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	require.NoError(t, err)
+	leftPrim.ExpectLog(t, []string{
+		`StreamExecute true`,
+		`GetFields`,
+	})
+	rightPrim.ExpectLog(t, []string{
+		`GetFields bv: `,
+		`Execute bv:  true`,
+	})
+	expectResult(t, r, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col4|col5", "int64|varchar|int64|varchar"),
 	))
 }
 
@@ -505,4 +576,45 @@ func TestGetFieldsErrors(t *testing.T) {
 	}
 	_, err = jn.GetFields(t.Context(), nil, map[string]*querypb.BindVariable{})
 	require.EqualError(t, err, "right err")
+}
+
+// emptyLeftStreamPrimitive is a left input whose stream returns without ever
+// invoking the callback, but whose GetFields still reports fields.
+type emptyLeftStreamPrimitive struct {
+	log []string
+}
+
+func (p *emptyLeftStreamPrimitive) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
+	return sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar"),
+	), nil
+}
+
+func (p *emptyLeftStreamPrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	p.log = append(p.log, fmt.Sprintf("StreamExecute %v", wantfields))
+	return nil
+}
+
+func (p *emptyLeftStreamPrimitive) GetFields(context.Context, VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	p.log = append(p.log, "GetFields")
+	return sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2|col3", "int64|varchar|varchar"),
+	), nil
+}
+
+func (p *emptyLeftStreamPrimitive) NeedsTransaction() bool {
+	return false
+}
+
+func (p *emptyLeftStreamPrimitive) Inputs() ([]Primitive, []map[string]any) {
+	return nil, nil
+}
+
+func (p *emptyLeftStreamPrimitive) description() PrimitiveDescription {
+	return PrimitiveDescription{OperatorType: "emptyLeftStream"}
+}
+
+func (p *emptyLeftStreamPrimitive) ExpectLog(t *testing.T, want []string) {
+	t.Helper()
+	require.Equal(t, strings.Join(want, "\n"), strings.Join(p.log, "\n"))
 }
