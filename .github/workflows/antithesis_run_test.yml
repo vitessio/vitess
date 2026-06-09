@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Run Antithesis Tests
-        uses: antithesishq/antithesis-trigger-action@f6221e2ba819fe0ac3e36bd67a281fa439a03fba # v0.10
+        uses: antithesishq/antithesis-trigger-action@72e1bc49d6a5f66c9b892e2b311844e00d342554 # v0.11
         with:
           notebook_name: vitess
           tenant: vitess
