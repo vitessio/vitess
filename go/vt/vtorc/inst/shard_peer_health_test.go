@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -197,4 +198,73 @@ func TestPrimaryDownByQuorum(t *testing.T) {
 			assert.Equal(t, tc.expected, got)
 		})
 	}
+}
+
+func TestEvaluatePrimaryQuorum(t *testing.T) {
+	now := time.Now()
+	primary := alias(100)
+	resetShardPeerHealth()
+	// 101 replica: fresh, 5 failures -> down
+	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now)
+	// 102 rdonly: fresh, 0 failures -> up
+	RecordShardPeerHealth(alias(102), topodatapb.TabletType_RDONLY, "ks", "0", reportFor(primary, 0, 0, now), now)
+	// 103 replica: stale (recorded a minute ago) -> stale, not counted
+	RecordShardPeerHealth(alias(103), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 9, 0, now), now.Add(-time.Minute))
+
+	opts := QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 0.5, MinObservers: 1}
+	r := EvaluatePrimaryQuorum(primary, "ks", "0", opts, now)
+
+	assert.Equal(t, "zone1-0000000100", r.PrimaryAlias)
+	assert.Equal(t, 2, r.TotalObservers) // 101 + 102 are fresh; 103 is stale
+	assert.Equal(t, 1, r.DownVotes)      // only 101
+	assert.True(t, r.Down)               // 1/2 >= 0.5
+	require.Len(t, r.Observers, 3)       // all three are reported, incl. the stale one
+	// sorted by alias: 101, 102, 103
+	assert.Equal(t, "zone1-0000000101", r.Observers[0].Alias)
+	assert.Equal(t, "down", r.Observers[0].Vote)
+	assert.True(t, r.Observers[0].Fresh)
+	assert.Equal(t, int64(5), r.Observers[0].ConsecutiveFailures)
+	assert.Equal(t, "up", r.Observers[1].Vote)
+	assert.Equal(t, "stale", r.Observers[2].Vote)
+	assert.False(t, r.Observers[2].Fresh)
+
+	// MinObservers gate: requiring more fresh observers than exist yields no down verdict, even
+	// though a fresh observer reports the primary down. Reuses the same store (2 fresh, 1 down).
+	gated := EvaluatePrimaryQuorum(primary, "ks", "0", QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 0.5, MinObservers: 3}, now)
+	assert.False(t, gated.Down)
+	assert.Equal(t, 2, gated.TotalObservers)
+	assert.Equal(t, 1, gated.DownVotes)
+}
+
+func TestEvaluatePrimaryQuorum_NoPrimary(t *testing.T) {
+	resetShardPeerHealth()
+	r := EvaluatePrimaryQuorum(nil, "ks", "0", QuorumOptions{FailureThreshold: 3, Freshness: time.Second, Fraction: 1, MinObservers: 1}, time.Now())
+	assert.False(t, r.Down)
+	assert.Empty(t, r.Observers)
+}
+
+func TestQuorumResultSummary(t *testing.T) {
+	r := QuorumResult{
+		PrimaryAlias: "zone1-0000000100", Keyspace: "ks", Shard: "0",
+		Down: true, DownVotes: 2, TotalObservers: 2, Fraction: 1.0, MinObservers: 1,
+		Observers: []ObserverVote{
+			{Alias: "zone1-0000000101", Vote: "down", ConsecutiveFailures: 5, Fresh: true},
+			{Alias: "zone1-0000000102", Vote: "stale", Fresh: false},
+		},
+	}
+	s := r.Summary()
+	assert.Contains(t, s, "ks/0 primary zone1-0000000100 DOWN")
+	assert.Contains(t, s, "2/2 fresh observers down")
+	assert.Contains(t, s, "zone1-0000000101=down(5)")
+	assert.Contains(t, s, "zone1-0000000102=stale")
+	assert.Contains(t, s, "fraction 1") // %g renders 1.0 as "1"
+}
+
+func TestObservedShards(t *testing.T) {
+	now := time.Now()
+	resetShardPeerHealth()
+	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(alias(100), 1, 0, now), now)
+	RecordShardPeerHealth(alias(201), topodatapb.TabletType_REPLICA, "ks", "80-", reportFor(alias(200), 1, 0, now), now)
+	got := ObservedShards()
+	assert.Equal(t, []KeyspaceShard{{Keyspace: "ks", Shard: "0"}, {Keyspace: "ks", Shard: "80-"}}, got)
 }

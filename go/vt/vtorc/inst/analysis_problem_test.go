@@ -357,7 +357,18 @@ func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
 	require.NotNil(t, problem)
 	assert.True(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
 
+	// When the matcher fires, it records the structured quorum detail for the audit.
+	require.NotNil(t, a.QuorumDetail, "matcher must record the quorum detail when it fires")
+	assert.True(t, a.QuorumDetail.Down)
+	assert.Equal(t, 2, a.QuorumDetail.DownVotes)
+
 	// If VTOrc can still reach the primary, no match.
 	a.LastCheckValid = true
 	assert.False(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
+
+	// The non-firing path must not record a quorum detail. Use a fresh analysis because the
+	// earlier firing already set QuorumDetail on `a`.
+	notFired := &DetectionAnalysis{IsClusterPrimary: true, LastCheckValid: true, AnalyzedInstanceAlias: primary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
+	assert.False(t, problem.MatchFunc(notFired, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
+	assert.Nil(t, notFired.QuorumDetail)
 }

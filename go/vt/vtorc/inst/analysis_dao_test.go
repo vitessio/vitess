@@ -1356,6 +1356,16 @@ func TestPostProcessAnalyses(t *testing.T) {
 		},
 	}
 
+	// Shared fixtures for the QuorumDetail cases below. The quorum matcher records QuorumDetail as a
+	// side effect while matching; postProcessAnalyses folds it into the winning quorum analysis and
+	// drops it from any other analysis that won instead.
+	quorumDescription := "Primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas"
+	quorumDetail := &QuorumResult{
+		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
+		Down: true, DownVotes: 1, TotalObservers: 1, Fraction: 1, MinObservers: 1,
+		Observers: []ObserverVote{{Alias: "zone1-0000000101", Vote: "down", ConsecutiveFailures: 5, Fresh: true}},
+	}
+
 	tests := []struct {
 		name     string
 		analyses []*DetectionAnalysis
@@ -1495,6 +1505,58 @@ func TestPostProcessAnalyses(t *testing.T) {
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_REPLICA,
+				},
+			},
+		},
+		{
+			name: "QuorumDetail dropped from a non-quorum analysis",
+			analyses: []*DetectionAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					Description:           "Primary cannot be reached by vtorc and none of its replicas is replicating",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail: &QuorumResult{
+						PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
+						Down: true, DownVotes: 2, TotalObservers: 2,
+					},
+				},
+			},
+			want: []*DetectionAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					Description:           "Primary cannot be reached by vtorc and none of its replicas is replicating",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+				},
+			},
+		},
+		{
+			name: "QuorumDetail summary folded into quorum analysis description",
+			analyses: []*DetectionAnalysis{
+				{
+					Analysis:              PrimaryTabletUnreachableByQuorum,
+					Description:           quorumDescription,
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail:          quorumDetail,
+				},
+			},
+			want: []*DetectionAnalysis{
+				{
+					Analysis:              PrimaryTabletUnreachableByQuorum,
+					Description:           quorumDescription + " [" + quorumDetail.Summary() + "]",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail:          quorumDetail,
 				},
 			},
 		},

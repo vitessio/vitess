@@ -17,6 +17,8 @@ limitations under the License.
 package tablethealth
 
 import (
+	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -82,6 +84,46 @@ func TestPrimaryVttabletProcessDeath(t *testing.T) {
 
 	// Make sure replication is healthy before we induce the failure.
 	utils.CheckReplication(t, clusterInfo, primary, nonPrimaryTablets, 10*time.Second)
+
+	// Observability: while the primary is healthy, /api/shard-quorum should report this shard with
+	// the primary present, no down verdict, and every fresh observer voting "up". This exercises the
+	// full live path: the monitor pinging peers -> shard_peer_health in FullStatus -> VTOrc ingest ->
+	// EvaluatePrimaryQuorum -> the endpoint. We poll because the monitor + VTOrc poll need a few
+	// seconds to populate after setup.
+	assert.Eventually(t, func() bool {
+		status, body, err := vtOrcProcess.MakeAPICall("api/shard-quorum")
+		if err != nil || status != http.StatusOK {
+			return false
+		}
+		var results []struct {
+			PrimaryAlias   string
+			Down           bool
+			TotalObservers int
+			Observers      []struct {
+				Alias string
+				Vote  string
+				Fresh bool
+			}
+		}
+		if err := json.Unmarshal([]byte(body), &results); err != nil {
+			return false
+		}
+		for _, r := range results {
+			if r.PrimaryAlias != primary.Alias {
+				continue
+			}
+			if r.Down || r.TotalObservers < 1 {
+				return false
+			}
+			for _, o := range r.Observers {
+				if o.Fresh && o.Vote != "up" {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}, 30*time.Second, 1*time.Second, "expected /api/shard-quorum to report the healthy primary with fresh observers voting up")
 
 	// SIGKILL ONLY the primary's vttablet process, matching the issue's `kill -9`. We must use
 	// Kill (SIGKILL), not TearDown (graceful SIGTERM): a graceful shutdown runs the tablet

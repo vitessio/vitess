@@ -151,6 +151,7 @@ type DetectionAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
 	IsDiskStalled                             bool
+	QuorumDetail                              *QuorumResult `json:",omitempty"`
 }
 
 // hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.

@@ -674,6 +674,19 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 			break
 		}
 	}
+	// The quorum matcher records QuorumDetail as a side effect while matching, before the winning
+	// problem is chosen. Fold its tally into the description when the quorum analysis won, and drop it
+	// otherwise so it does not surface on a higher-priority analysis (e.g. DeadPrimary) that also matched.
+	for _, analysis := range result {
+		if analysis.QuorumDetail == nil {
+			continue
+		}
+		if analysis.Analysis == PrimaryTabletUnreachableByQuorum {
+			analysis.Description = fmt.Sprintf("%s [%s]", analysis.Description, analysis.QuorumDetail.Summary())
+		} else {
+			analysis.QuorumDetail = nil
+		}
+	}
 	return result
 }
 

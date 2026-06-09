@@ -17,15 +17,19 @@ limitations under the License.
 package inst
 
 import (
+	"fmt"
+	"log/slog"
 	"math"
 	"slices"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
+	"vitess.io/vitess/go/vt/vtorc/util"
 )
 
 const (
@@ -202,7 +206,21 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			if !a.IsClusterPrimary || a.LastCheckValid {
 				return false
 			}
-			return PrimaryDownByQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, quorumOptionsFromConfig(), time.Now())
+			result := EvaluatePrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, QuorumOptionsFromConfig(), time.Now())
+			// Log the decision, rate-limited per verdict so a change (not-down -> down) logs immediately.
+			logKey := fmt.Sprintf("%s/%s:%t", a.AnalyzedKeyspace, a.AnalyzedShard, result.Down)
+			if util.ClearToLog("shard_quorum", logKey) {
+				log.Info("shard quorum decision",
+					slog.String("keyspace", a.AnalyzedKeyspace),
+					slog.String("shard", a.AnalyzedShard),
+					slog.Bool("down", result.Down),
+					slog.String("detail", result.Summary()),
+				)
+			}
+			if result.Down {
+				a.QuorumDetail = &result
+			}
+			return result.Down
 		},
 	},
 
@@ -499,8 +517,8 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 }
 
-// quorumOptionsFromConfig builds QuorumOptions from the current VTOrc configuration.
-func quorumOptionsFromConfig() QuorumOptions {
+// QuorumOptionsFromConfig builds QuorumOptions from the current VTOrc configuration.
+func QuorumOptionsFromConfig() QuorumOptions {
 	return QuorumOptions{
 		FailureThreshold: config.GetShardTabletHealthFailureThreshold(),
 		Freshness:        config.GetShardTabletHealthFreshness(),
