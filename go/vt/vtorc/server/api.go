@@ -209,9 +209,10 @@ func configAPIHandler(response http.ResponseWriter) {
 // the verdict, the per-observer votes, and the thresholds. Read-only; best-effort per shard.
 func shardQuorumAPIHandler(response http.ResponseWriter) {
 	opts := inst.QuorumOptionsFromConfig()
+	observedShards := inst.ObservedShards()
 	now := time.Now()
-	results := make([]inst.QuorumResult, 0)
-	for _, ks := range inst.ObservedShards() {
+	results := make([]inst.QuorumResult, 0, len(observedShards))
+	for _, ks := range observedShards {
 		// Best-effort: if we can't resolve the shard's primary, still emit the shard with an
 		// empty primary (EvaluatePrimaryQuorum returns no observer votes without a primary).
 		primaryAlias, _, err := inst.ReadShardPrimaryInformation(ks.Keyspace, ks.Shard)
