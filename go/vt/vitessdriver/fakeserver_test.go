@@ -118,7 +118,7 @@ func (f *fakeVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.
 }
 
 // StreamExecute is part of the VTGateService interface
-func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (f *fakeVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	execCase, ok := f.execMap[sql]
 	if !ok {
 		return session, fmt.Errorf("no match for: %s", sql)
@@ -207,7 +207,7 @@ func (f *fakeVTGateService) StreamExecuteMulti(ctx context.Context, mysqlCtx vtg
 	}
 	for idx, query := range queries {
 		firstPacket := true
-		session, err = f.StreamExecute(ctx, mysqlCtx, session, query, nil, func(result *sqltypes.Result) error {
+		session, err = f.StreamExecute(ctx, mysqlCtx, session, query, nil, false, func(result *sqltypes.Result) error {
 			err = callback(sqltypes.QueryResponse{QueryResult: result}, idx < len(queries)-1, firstPacket)
 			firstPacket = false
 			return err
