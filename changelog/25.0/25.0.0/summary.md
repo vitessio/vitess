@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTGate](#bug-fixes-vtgate)**
+        - [Prepared statements in OLAP mode now build specialized plans](#vtgate-olap-prepared-specialized-plan)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,17 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-olap-prepared-specialized-plan"/>Prepared statements in OLAP mode now build specialized plans</a>
+
+Prepared statements executed in OLAP (streaming) mode now correctly build specialized query plans, matching OLTP behavior. Previously, a prepared window-function query that worked in OLTP mode would fail in OLAP mode with `VT12001: unsupported: window functions are only supported for single-shard queries`.
+
+The root cause was `executor.StreamExecute` hard-coding `prepared=false`, which prevented specialized plans from being built even when the query would target a single shard once bind variable values were known. This affected any prepared query whose baseline plan fails but whose specialized single-shard plan succeeds.
+
+This fix is backported to release-23.0 and release-24.0.
+
+See [#20266](https://github.com/vitessio/vitess/pull/20266) for details.
