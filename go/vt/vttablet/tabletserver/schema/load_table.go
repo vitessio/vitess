@@ -76,8 +76,8 @@ func fetchColumns(ta *Table, conn *connpool.PooledConn, databaseName, sqlTableNa
 // enumSetColumnTypesQuery fetches the full type definition (column_type) of
 // every ENUM and SET column in a table; the parameters are the SQL-encoded
 // database name and table name. The isc alias keeps the query distinct from
-// the column names query (see mysql.GetColumnNamesQueryPatternForTable) when
-// mocking queries in tests.
+// the column names query (see GetColumnNamesQueryPatternForTable in
+// go/mysql/fakesqldb) when mocking queries in tests.
 const enumSetColumnTypesQuery = "select isc.column_name, isc.column_type from information_schema.columns as isc " +
 	"where isc.table_schema=%s and isc.table_name=%s and isc.data_type in ('enum', 'set')"
 

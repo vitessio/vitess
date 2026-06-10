@@ -34,12 +34,6 @@ const (
 		ORDER BY table_name, SEQ_IN_INDEX`
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
-
-	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
-	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
-
-	// EnumSetColumnTypesQueryPatternForTable is used for mocking queries in unit tests
-	EnumSetColumnTypesQueryPatternForTable = `select isc\.column_name, isc\.column_type from information_schema\.columns.*table_name='%s' and isc\.data_type in \('enum', 'set'\)`
 )
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.

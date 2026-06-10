@@ -1770,7 +1770,7 @@ func TestGetTableForPosLegacy(t *testing.T) {
 				mysql.ShowPrimaryRow(table.String(), column),
 			},
 		})
-		db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+		db.AddQueryPattern(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
 		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
@@ -1843,7 +1843,7 @@ func TestGetTableForPosLegacy(t *testing.T) {
 						mysql.ShowPrimaryRow(table.String(), "col2"),
 					},
 				})
-				db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+				db.AddQueryPattern(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, table.String()),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column, "col2"))
 				db.AddQuery(fmt.Sprintf("SELECT `%s`, `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1",
 					column, "col2", table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(fmt.Sprintf("%s|%s", column, "col2"), "varchar|varchar")))
@@ -1967,7 +1967,7 @@ func TestGetTableForPos(t *testing.T) {
 				mysql.ShowPrimaryRow(table.String(), column),
 			},
 		})
-		db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+		db.AddQueryPattern(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column))
 		db.AddQuery(fmt.Sprintf("SELECT `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1", column, table.String()),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(column, "varchar")))
@@ -2040,7 +2040,7 @@ func TestGetTableForPos(t *testing.T) {
 						mysql.ShowPrimaryRow(table.String(), "col2"),
 					},
 				})
-				db.AddQueryPattern(fmt.Sprintf(mysql.GetColumnNamesQueryPatternForTable, table.String()),
+				db.AddQueryPattern(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, table.String()),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), column, "col2"))
 				db.AddQuery(fmt.Sprintf("SELECT `%s`, `%s` FROM `fakesqldb`.`%v` WHERE 1 != 1",
 					column, "col2", table.String()), sqltypes.MakeTestResult(sqltypes.MakeTestFields(fmt.Sprintf("%s|%s", column, "col2"), "varchar|varchar")))
