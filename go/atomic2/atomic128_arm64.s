@@ -28,12 +28,12 @@ TEXT ·compareAndSwapUint128_(SB), NOSPLIT, $0-41
 	CMP R0, R6
 	CCMP EQ, R1, R7, $0
 	CSET EQ, R0
-	MOVB R0, ret+40(FP)
+	MOVB R0, swapped+40(FP)
 	RET
 
 TEXT ·loadUint128_(SB), NOSPLIT, $0-24
 	MOVD addr+0(FP), R3
 	LDAXP (R3), (R0, R1)
-	MOVD R0, val+8(FP)
-	MOVD R1, val+16(FP)
+	MOVD R0, pp+8(FP)
+	MOVD R1, uu+16(FP)
 	RET
