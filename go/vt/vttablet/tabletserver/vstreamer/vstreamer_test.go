@@ -2835,56 +2835,30 @@ func TestUVStreamerNoCopyWithGTID(t *testing.T) {
 	require.Empty(t, uvs.plans, "Should not build table plans when startPos is set")
 }
 
-// TestMarshalMinimalSchemaEnrichesEnumAndSet confirms that the schema captured
-// for version tracking includes the full ColumnType for ENUM and SET columns
-// (including binary-collation ones). That ColumnType is what lets a VStream
-// decode their historical rows after the column is dropped. See issue #20175.
-func TestMarshalMinimalSchemaEnrichesEnumAndSet(t *testing.T) {
+// TestMinimalSchemaEnumSetColumnTypeLifecycle follows the ENUM/SET column type
+// definitions captured for schema version tracking through their full
+// lifecycle (issue #20175): the marshalled schema is enriched with the full
+// type definition of every ENUM and SET column — including binary-collation
+// ones, which report as BINARY in field metadata and so must be matched by
+// name — and once the live schema diverges, getFields preserves the historical
+// definitions (whether the live column was modified or dropped) so that the
+// integer-to-string mappings for historical ROW events can still be built.
+func TestMinimalSchemaEnumSetColumnTypeLifecycle(t *testing.T) {
 	ctx := t.Context()
-	execStatements(t, []string{
-		"create table enum_set_tracking(id int, plan enum('free','standard','enterprise'), " +
-			"roles set('a','b','c'), bin_plan enum('x','y') collate utf8mb4_bin, n int, primary key(id))",
-	})
-	defer execStatements(t, []string{"drop table enum_set_tracking"})
-	require.NoError(t, env.SchemaEngine.Reload(ctx))
-
-	blob, err := env.SchemaEngine.MarshalMinimalSchema(ctx)
-	require.NoError(t, err)
-	ms := &binlogdatapb.MinimalSchema{}
-	require.NoError(t, ms.UnmarshalVT(blob))
-
-	var table *binlogdatapb.MinimalTable
-	for _, mt := range ms.Tables {
-		if mt.Name == "enum_set_tracking" {
-			table = mt
-			break
-		}
-	}
-	require.NotNil(t, table, "enum_set_tracking not found in marshalled schema")
-
-	columnTypes := make(map[string]string)
-	for _, f := range table.Fields {
-		columnTypes[f.Name] = f.ColumnType
-	}
-	assert.Equal(t, "enum('free','standard','enterprise')", columnTypes["plan"])
-	assert.Equal(t, "set('a','b','c')", columnTypes["roles"])
-	assert.Equal(t, "enum('x','y')", columnTypes["bin_plan"])
-	assert.Empty(t, columnTypes["n"], "non-enum/set column should not carry a ColumnType")
-}
-
-// TestGetFieldsPreservesHistoricalEnumAndSetColumnTypes confirms that a
-// historical schema keeps its original ENUM/SET value mapping even if the live
-// table still has the column with a changed definition.
-func TestGetFieldsPreservesHistoricalEnumAndSetColumnTypes(t *testing.T) {
-	ctx := t.Context()
-	const tableName = "enum_set_tracking_change"
+	const tableName = "enum_set_lifecycle"
 	execStatements(t, []string{
 		"create table " + tableName + "(id int, plan enum('free','standard') not null, " +
-			"roles set('admin','user') not null, primary key(id))",
+			"roles set('admin','user') not null, " +
+			"bin_plan enum('gold','silver') collate utf8mb4_bin not null, " +
+			"bin_roles set('a','b') collate utf8mb4_bin not null, " +
+			"n int, primary key(id))",
 	})
 	defer execStatements(t, []string{"drop table " + tableName})
 	require.NoError(t, env.SchemaEngine.Reload(ctx))
 
+	// Phase 1: the marshalled schema carries the type definition of every
+	// ENUM/SET column and of nothing else. The binary-collation columns
+	// report as BINARY in field metadata, yet are still enriched.
 	blob, err := env.SchemaEngine.MarshalMinimalSchema(ctx)
 	require.NoError(t, err)
 	ms := &binlogdatapb.MinimalSchema{}
@@ -2899,21 +2873,68 @@ func TestGetFieldsPreservesHistoricalEnumAndSetColumnTypes(t *testing.T) {
 	}
 	require.NotNil(t, table, "%s not found in marshalled schema", tableName)
 
+	fieldTypes := make(map[string]querypb.Type)
+	columnTypes := make(map[string]string)
+	for _, f := range table.Fields {
+		fieldTypes[f.Name] = f.Type
+		columnTypes[f.Name] = f.ColumnType
+	}
+	require.Equal(t, querypb.Type_BINARY, fieldTypes["bin_plan"], "binary-collation ENUM should report as BINARY in field metadata")
+	require.Equal(t, querypb.Type_BINARY, fieldTypes["bin_roles"], "binary-collation SET should report as BINARY in field metadata")
+	require.Equal(t, map[string]string{
+		"id":        "",
+		"plan":      "enum('free','standard')",
+		"roles":     "set('admin','user')",
+		"bin_plan":  "enum('gold','silver')",
+		"bin_roles": "set('a','b')",
+		"n":         "",
+	}, columnTypes)
+
+	// Phase 2: the live schema diverges — the regular columns' definitions
+	// change and the binary-collation columns are dropped. getFields must
+	// preserve the historical definitions in both cases: a still-existing
+	// column's live definition must not overwrite the tracked one, and a
+	// dropped column has no live definition to consult at all.
 	execStatements(t, []string{
 		"alter table " + tableName + " modify plan enum('free','basic','standard') not null, " +
-			"modify roles set('admin','ops','user') not null",
+			"modify roles set('admin','ops','user') not null, " +
+			"drop column bin_plan, drop column bin_roles",
 	})
 
 	cp := env.Dbcfgs.DbaWithDB()
 	fields, err := getFields(ctx, cp, env.SchemaEngine, tableName, cp.DBName(), table.Fields)
 	require.NoError(t, err)
 
-	columnTypes := make(map[string]string)
+	columnTypes = make(map[string]string)
 	for _, f := range fields {
 		columnTypes[f.Name] = f.ColumnType
 	}
-	assert.Equal(t, "enum('free','standard')", columnTypes["plan"])
-	assert.Equal(t, "set('admin','user')", columnTypes["roles"])
+	require.Equal(t, "enum('free','standard')", columnTypes["plan"])
+	require.Equal(t, "set('admin','user')", columnTypes["roles"])
+	require.Equal(t, "enum('gold','silver')", columnTypes["bin_plan"])
+	require.Equal(t, "set('a','b')", columnTypes["bin_roles"])
+
+	// Phase 3: the integer-to-string mappings for a historical ROW event can
+	// be built from the preserved definitions. For the binary-collation
+	// columns the binlog TableMap metadata carries the real column type in
+	// the high byte.
+	metadata := make([]uint16, len(fields))
+	colIdx := make(map[string]int)
+	for i, f := range fields {
+		colIdx[f.Name] = i
+		switch f.Name {
+		case "bin_plan":
+			metadata[i] = mysqlbinlog.TypeEnum<<8 | 1
+		case "bin_roles":
+			metadata[i] = mysqlbinlog.TypeSet<<8 | 1
+		}
+	}
+	plan := &Plan{}
+	require.NoError(t, addEnumAndSetMappingstoPlan(env.SchemaEngine.Environment(), plan, fields, metadata))
+	assert.Equal(t, map[int]string{1: "free", 2: "standard"}, plan.EnumSetValuesMap[colIdx["plan"]])
+	assert.Equal(t, map[int]string{1: "admin", 2: "user"}, plan.EnumSetValuesMap[colIdx["roles"]])
+	assert.Equal(t, map[int]string{1: "gold", 2: "silver"}, plan.EnumSetValuesMap[colIdx["bin_plan"]])
+	assert.Equal(t, map[int]string{1: "a", 2: "b"}, plan.EnumSetValuesMap[colIdx["bin_roles"]])
 }
 
 // TestAddEnumAndSetMappingsActionableError confirms that when an ENUM/SET column
@@ -2929,80 +2950,4 @@ func TestAddEnumAndSetMappingsActionableError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "enum or set column plan does not have valid string values")
 	assert.ErrorContains(t, err, "--track-schema-versions")
-}
-
-// TestHistoricalBinaryCollationEnumAndSetDecode confirms that a dropped ENUM or
-// SET column with a binary collation can still have its integer-to-string
-// mappings built for historical ROW events. Such columns report as BINARY in
-// the snapshot's field metadata rather than ENUM/SET, so this exercises the
-// full chain: enrichment matches the column by name via information_schema's
-// data_type, getFields preserves the enriched ColumnType once the column is
-// gone, and the plan builder detects the real column type from the high byte
-// of the binlog event metadata.
-func TestHistoricalBinaryCollationEnumAndSetDecode(t *testing.T) {
-	ctx := t.Context()
-	const tableName = "enum_set_bin_decode"
-	execStatements(t, []string{
-		"create table " + tableName + "(id int, plan enum('free','standard') collate utf8mb4_bin not null, " +
-			"roles set('admin','user') collate utf8mb4_bin not null, primary key(id))",
-	})
-	defer execStatements(t, []string{"drop table " + tableName})
-	require.NoError(t, env.SchemaEngine.Reload(ctx))
-
-	blob, err := env.SchemaEngine.MarshalMinimalSchema(ctx)
-	require.NoError(t, err)
-	ms := &binlogdatapb.MinimalSchema{}
-	require.NoError(t, ms.UnmarshalVT(blob))
-
-	var table *binlogdatapb.MinimalTable
-	for _, mt := range ms.Tables {
-		if mt.Name == tableName {
-			table = mt
-			break
-		}
-	}
-	require.NotNil(t, table, "%s not found in marshalled schema", tableName)
-
-	// Confirm the premise: the binary collation makes the snapshot's field
-	// metadata report these columns as BINARY, yet the enrichment must still
-	// have found them by name.
-	for _, f := range table.Fields {
-		switch f.Name {
-		case "plan":
-			require.Equal(t, querypb.Type_BINARY, f.Type, "binary-collation ENUM should report as BINARY in field metadata")
-			require.Equal(t, "enum('free','standard')", f.ColumnType)
-		case "roles":
-			require.Equal(t, querypb.Type_BINARY, f.Type, "binary-collation SET should report as BINARY in field metadata")
-			require.Equal(t, "set('admin','user')", f.ColumnType)
-		}
-	}
-
-	execStatements(t, []string{"alter table " + tableName + " drop column plan, drop column roles"})
-
-	cp := env.Dbcfgs.DbaWithDB()
-	fields, err := getFields(ctx, cp, env.SchemaEngine, tableName, cp.DBName(), table.Fields)
-	require.NoError(t, err)
-
-	// Build the plan mappings the way a vstreamer would for a historical ROW
-	// event: for binary-collation ENUM/SET columns the binlog TableMap metadata
-	// carries the real column type in the high byte.
-	metadata := make([]uint16, len(fields))
-	planIdx, rolesIdx := -1, -1
-	for i, f := range fields {
-		switch f.Name {
-		case "plan":
-			metadata[i] = mysqlbinlog.TypeEnum<<8 | 1
-			planIdx = i
-		case "roles":
-			metadata[i] = mysqlbinlog.TypeSet<<8 | 1
-			rolesIdx = i
-		}
-	}
-	require.NotEqual(t, -1, planIdx)
-	require.NotEqual(t, -1, rolesIdx)
-
-	plan := &Plan{}
-	require.NoError(t, addEnumAndSetMappingstoPlan(env.SchemaEngine.Environment(), plan, fields, metadata))
-	assert.Equal(t, map[int]string{1: "free", 2: "standard"}, plan.EnumSetValuesMap[planIdx])
-	assert.Equal(t, map[int]string{1: "admin", 2: "user"}, plan.EnumSetValuesMap[rolesIdx])
 }
