@@ -15,6 +15,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [Schema historian now persists ENUM/SET type definitions](#vreplication-historian-enum-set)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -85,6 +86,20 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-historian-enum-set"/>Schema historian now persists ENUM/SET type definitions</a>
+
+The [schema historian](https://vitess.io/docs/reference/vreplication/tracker/) now stores the full type definition (e.g., `enum('red','green','blue')`) for ENUM and SET columns in persisted schema snapshots. Previously, only the column name and base type were stored.
+
+This fix enables VStream to correctly decode historical ROW events for ENUM and SET columns even after those columns have been modified or dropped. Without the stored type definition, VStream could not map the integer values in the binlog back to their string representations, causing decode failures for older events.
+
+The fix also correctly handles binary-collation ENUM/SET columns, which report as BINARY rather than ENUM/SET in MySQL field metadata. The historian uses an `information_schema` lookup by column name to retrieve the true type definition regardless of collation.
+
+If the historian cannot retrieve the type definition (e.g., due to a concurrent schema change), the schema save fails and retries from the previous GTID rather than persisting an incomplete snapshot.
+
+**Impact**: Users with `--track-schema-versions` enabled will now be able to decode historical ROW events for ENUM/SET columns that were later modified or dropped. Previously, this scenario required replacing or recreating affected VReplication workflows.
+
+See [#20279](https://github.com/vitessio/vitess/pull/20279) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
