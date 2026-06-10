@@ -4048,7 +4048,7 @@ func TestEmergencyReparenterReparentReplicasLeavesRdonlyForVTOrc(t *testing.T) {
 		WaitReplicasTimeout: time.Second,
 		durability:          durability,
 		replicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 		},
 	}, false)
 	require.NoError(t, err)

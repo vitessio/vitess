@@ -379,8 +379,8 @@ func parseRdonlyReplicationSourcePolicy(value string) (topodatapb.ReplicationSou
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case "", "unspecified":
 		return topodatapb.ReplicationSourceConfig_UNSPECIFIED, nil
-	case "require-semi-sync-acker":
-		return topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER, nil
+	case "replica":
+		return topodatapb.ReplicationSourceConfig_REPLICA, nil
 	default:
 		return topodatapb.ReplicationSourceConfig_UNSPECIFIED, fmt.Errorf("invalid --rdonly-policy %q", value)
 	}
@@ -431,7 +431,7 @@ func init() {
 	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", policy.DurabilityNone, "Type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins.")
 	Root.AddCommand(SetKeyspaceDurabilityPolicy)
 
-	SetKeyspaceReplicationSourcePolicy.Flags().StringVar(&setKeyspaceReplicationSourcePolicyOptions.RdonlyPolicy, "rdonly-policy", "unspecified", "Replication source policy for rdonly tablets. Possible values: unspecified, require-semi-sync-acker.")
+	SetKeyspaceReplicationSourcePolicy.Flags().StringVar(&setKeyspaceReplicationSourcePolicyOptions.RdonlyPolicy, "rdonly-policy", "unspecified", "Replication source policy for rdonly tablets. Possible values: unspecified, replica.")
 	Root.AddCommand(SetKeyspaceReplicationSourcePolicy)
 
 	Root.AddCommand(ValidateVersionKeyspace)

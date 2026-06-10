@@ -607,7 +607,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			codeWanted:     ConnectedToWrongPrimary,
 		},
 		{
-			name: "RdonlyReplicationSourceMustBeSemiSyncAcker",
+			name: "RdonlyReplicationSourceMustBeReplica",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
@@ -619,7 +619,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlPort:     6708,
 				},
 				DurabilityPolicy:              policy.DurabilitySemiSync,
-				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 				LastCheckValid:                1,
 				CountReplicas:                 2,
 				CountValidReplicas:            2,
@@ -667,7 +667,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlPort:     6710,
 				},
 				DurabilityPolicy:              policy.DurabilitySemiSync,
-				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 				PrimaryTabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "primary",
@@ -692,10 +692,10 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
-			codeWanted:     RdonlyReplicationSourceMustBeSemiSyncAcker,
+			codeWanted:     RdonlyReplicationSourceMustBeReplica,
 		},
 		{
-			name: "RdonlyReplicationSourceAckerAllowed",
+			name: "RdonlyReplicationSourceReplicaAllowed",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
@@ -707,7 +707,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlPort:     6708,
 				},
 				DurabilityPolicy:              policy.DurabilitySemiSync,
-				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 				LastCheckValid:                1,
 				IsPrimary:                     1,
 				SemiSyncPrimaryEnabled:        1,
@@ -732,7 +732,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlPort:     6710,
 				},
 				DurabilityPolicy:              policy.DurabilitySemiSync,
-				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 				PrimaryTabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "replica",

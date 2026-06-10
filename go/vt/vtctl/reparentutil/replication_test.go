@@ -238,7 +238,7 @@ func TestFindPositionsOfAllCandidates_ErrorNotDuplicated(t *testing.T) {
 func TestDesiredReplicationSource(t *testing.T) {
 	t.Parallel()
 
-	durability, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
 
 	primary := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_PRIMARY)
@@ -263,7 +263,7 @@ func TestDesiredReplicationSource(t *testing.T) {
 		{
 			name:      "replica uses primary",
 			tablet:    replica,
-			config:    &topodatapb.ReplicationSourceConfig{RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER},
+			config:    &topodatapb.ReplicationSourceConfig{RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA},
 			tabletMap: tabletMap,
 			wantAlias: topoproto.TabletAliasString(primary.Alias),
 		},
@@ -275,21 +275,21 @@ func TestDesiredReplicationSource(t *testing.T) {
 			wantAlias: topoproto.TabletAliasString(primary.Alias),
 		},
 		{
-			name:      "rdonly with required semi sync acker uses same cell acker",
+			name:      "rdonly with replica policy uses same cell replica",
 			tablet:    rdonly,
-			config:    &topodatapb.ReplicationSourceConfig{RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER},
+			config:    &topodatapb.ReplicationSourceConfig{RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA},
 			tabletMap: tabletMap,
 			wantAlias: topoproto.TabletAliasString(replica.Alias),
 		},
 		{
-			name:   "rdonly with required semi sync acker fails without acker",
+			name:   "rdonly with replica policy fails without replica",
 			tablet: rdonly,
-			config: &topodatapb.ReplicationSourceConfig{RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER},
+			config: &topodatapb.ReplicationSourceConfig{RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA},
 			tabletMap: map[string]*topo.TabletInfo{
 				topoproto.TabletAliasString(primary.Alias): {Tablet: primary},
 				topoproto.TabletAliasString(rdonly.Alias):  {Tablet: rdonly},
 			},
-			wantErr: "no semi-sync acker available as replication source",
+			wantErr: "no replica available as replication source",
 		},
 	}
 
@@ -356,7 +356,7 @@ func TestDetachRdonlyReplicatingFromPromotionCandidate(t *testing.T) {
 		topoproto.TabletAliasString(replica.Alias):                {Tablet: replica},
 	}
 	config := &topodatapb.ReplicationSourceConfig{
-		RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+		RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 	}
 	tmc := &detachRdonlyReplicationTestTMClient{
 		stopReplicationAndGetStatusResults: map[string]*replicationdatapb.StopReplicationStatus{

@@ -376,10 +376,10 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			},
 			wantRecoveryFunction: fixReplicaFunc,
 		}, {
-			name:       "RdonlyReplicationSourceMustBeSemiSyncAcker",
+			name:       "RdonlyReplicationSourceMustBeReplica",
 			ersEnabled: false,
 			analysisEntry: &inst.DetectionAnalysis{
-				Analysis:         inst.RdonlyReplicationSourceMustBeSemiSyncAcker,
+				Analysis:         inst.RdonlyReplicationSourceMustBeReplica,
 				AnalyzedKeyspace: keyspace,
 				AnalyzedShard:    shard,
 			},
@@ -1102,7 +1102,7 @@ func TestFixReplicaRdonlyReplicationSourcePolicy(t *testing.T) {
 		Type:          topodatapb.TabletType_PRIMARY,
 		PortMap:       map[string]int32{"vt": 15100, "grpc": 15101},
 	}
-	ackerTablet := &topodatapb.Tablet{
+	sourceReplicaTablet := &topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 		Hostname:      "acker",
 		MysqlHostname: "acker",
@@ -1124,14 +1124,14 @@ func TestFixReplicaRdonlyReplicationSourcePolicy(t *testing.T) {
 	}
 
 	require.NoError(t, inst.SaveTablet(primaryTablet))
-	require.NoError(t, inst.SaveTablet(ackerTablet))
+	require.NoError(t, inst.SaveTablet(sourceReplicaTablet))
 	require.NoError(t, inst.SaveTablet(rdonlyTablet))
 
 	keyspaceInfo := &topo.KeyspaceInfo{
 		Keyspace: &topodatapb.Keyspace{
 			DurabilityPolicy: policy.DurabilitySemiSync,
 			ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-				RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 			},
 		},
 	}
@@ -1150,7 +1150,7 @@ func TestFixReplicaRdonlyReplicationSourcePolicy(t *testing.T) {
 	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, keyspaceInfo.Keyspace))
 	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
 	require.NoError(t, ts.CreateTablet(ctx, primaryTablet))
-	require.NoError(t, ts.CreateTablet(ctx, ackerTablet))
+	require.NoError(t, ts.CreateTablet(ctx, sourceReplicaTablet))
 	require.NoError(t, ts.CreateTablet(ctx, rdonlyTablet))
 
 	mockController := gomock.NewController(t)
@@ -1165,7 +1165,7 @@ func TestFixReplicaRdonlyReplicationSourcePolicy(t *testing.T) {
 		SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
 			require.Equal(t, rdonlyTablet.Alias, tablet.Alias)
-			require.Equal(t, ackerTablet.Alias, parent)
+			require.Equal(t, sourceReplicaTablet.Alias, parent)
 			require.True(t, forceStartReplication)
 			require.False(t, semiSync)
 			return nil
@@ -1174,7 +1174,7 @@ func TestFixReplicaRdonlyReplicationSourcePolicy(t *testing.T) {
 	tmc = mockTMC
 
 	attempted, _, err := fixReplica(ctx, &inst.DetectionAnalysis{
-		Analysis:              inst.RdonlyReplicationSourceMustBeSemiSyncAcker,
+		Analysis:              inst.RdonlyReplicationSourceMustBeReplica,
 		AnalyzedInstanceAlias: rdonlyTablet.Alias,
 		AnalyzedKeyspace:      keyspace,
 		AnalyzedShard:         shard,

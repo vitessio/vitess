@@ -11400,14 +11400,14 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			},
 		},
 		{
-			name: "cannot disable semi-sync with rdonly replication source policy",
+			name: "durability policy is orthogonal to rdonly replication source policy",
 			keyspaces: []*vtctldatapb.Keyspace{
 				{
 					Name: "ks1",
 					Keyspace: &topodatapb.Keyspace{
 						DurabilityPolicy: policy.DurabilitySemiSync,
 						ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-							RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+							RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 						},
 					},
 				},
@@ -11416,7 +11416,14 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 				Keyspace:         "ks1",
 				DurabilityPolicy: policy.DurabilityNone,
 			},
-			expectedErr: "durability policy <none> cannot be set while rdonly replication source policy <REQUIRE_SEMI_SYNC_ACKER> requires semi-sync ackers",
+			expected: &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
+				Keyspace: &topodatapb.Keyspace{
+					DurabilityPolicy: policy.DurabilityNone,
+					ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+						RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+					},
+				},
+			},
 		},
 		{
 			name: "keyspace not found",
@@ -11491,19 +11498,19 @@ func TestSetKeyspaceReplicationSourcePolicy(t *testing.T) {
 			},
 			req: &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
 				Keyspace:     "ks1",
-				RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 			},
 			expected: &vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse{
 				Keyspace: &topodatapb.Keyspace{
 					DurabilityPolicy: policy.DurabilitySemiSync,
 					ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-						RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+						RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 					},
 				},
 			},
 		},
 		{
-			name: "requires semi-sync durability policy",
+			name: "replica policy is orthogonal to durability policy",
 			keyspaces: []*vtctldatapb.Keyspace{
 				{
 					Name: "ks1",
@@ -11514,9 +11521,16 @@ func TestSetKeyspaceReplicationSourcePolicy(t *testing.T) {
 			},
 			req: &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
 				Keyspace:     "ks1",
-				RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 			},
-			expectedErr: "rdonly replication source policy <REQUIRE_SEMI_SYNC_ACKER> requires a semi-sync durability policy; keyspace durability policy is <none>",
+			expected: &vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse{
+				Keyspace: &topodatapb.Keyspace{
+					DurabilityPolicy: policy.DurabilityNone,
+					ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+						RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+					},
+				},
+			},
 		},
 		{
 			name: "unspecified clears config",
@@ -11525,7 +11539,7 @@ func TestSetKeyspaceReplicationSourcePolicy(t *testing.T) {
 					Name: "ks1",
 					Keyspace: &topodatapb.Keyspace{
 						ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-							RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+							RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 						},
 					},
 				},

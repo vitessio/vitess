@@ -4152,11 +4152,11 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 	}
 }
 
-func TestPlannedReparenterReparentTabletsReparentsRdonlyToSemiSyncAcker(t *testing.T) {
+func TestPlannedReparenterReparentTabletsReparentsRdonlyToReplica(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	durability, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
 
 	primary := &topodatapb.Tablet{
@@ -4165,7 +4165,7 @@ func TestPlannedReparenterReparentTabletsReparentsRdonlyToSemiSyncAcker(t *testi
 		Shard:    "0",
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
-	acker := &topodatapb.Tablet{
+	sourceReplica := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
 		Keyspace: "ks",
 		Shard:    "0",
@@ -4195,17 +4195,17 @@ func TestPlannedReparenterReparentTabletsReparentsRdonlyToSemiSyncAcker(t *testi
 				"zone1-0000000202": nil,
 			},
 			SetReplicationSourceSemiSync: map[string]bool{
-				"zone1-0000000200": true,
-				"zone1-0000000201": true,
+				"zone1-0000000200": false,
+				"zone1-0000000201": false,
 				"zone1-0000000202": false,
 			},
 		},
 	}
 	tabletMap := map[string]*topo.TabletInfo{
-		topoproto.TabletAliasString(primary.Alias): {Tablet: primary},
-		topoproto.TabletAliasString(acker.Alias):   {Tablet: acker},
-		topoproto.TabletAliasString(replica.Alias): {Tablet: replica},
-		topoproto.TabletAliasString(rdonly.Alias):  {Tablet: rdonly},
+		topoproto.TabletAliasString(primary.Alias):       {Tablet: primary},
+		topoproto.TabletAliasString(sourceReplica.Alias): {Tablet: sourceReplica},
+		topoproto.TabletAliasString(replica.Alias):       {Tablet: replica},
+		topoproto.TabletAliasString(rdonly.Alias):        {Tablet: rdonly},
 	}
 
 	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
@@ -4213,22 +4213,22 @@ func TestPlannedReparenterReparentTabletsReparentsRdonlyToSemiSyncAcker(t *testi
 		WaitReplicasTimeout: time.Second,
 		durability:          durability,
 		replicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 		},
 	})
 	require.NoError(t, err)
 
-	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(acker.Alias)))
+	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(sourceReplica.Alias)))
 	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(replica.Alias)))
 	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(rdonly.Alias)))
-	assert.Equal(t, topoproto.TabletAliasString(acker.Alias), tmc.setReplicationSourceParent(topoproto.TabletAliasString(rdonly.Alias)))
+	assert.Equal(t, topoproto.TabletAliasString(sourceReplica.Alias), tmc.setReplicationSourceParent(topoproto.TabletAliasString(rdonly.Alias)))
 }
 
 func TestPlannedReparenterReparentTabletsDoesNotFailForRdonlyReparentError(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	durability, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
 	require.NoError(t, err)
 
 	primary := &topodatapb.Tablet{
@@ -4237,7 +4237,7 @@ func TestPlannedReparenterReparentTabletsDoesNotFailForRdonlyReparentError(t *te
 		Shard:    "0",
 		Type:     topodatapb.TabletType_PRIMARY,
 	}
-	acker := &topodatapb.Tablet{
+	sourceReplica := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
 		Keyspace: "ks",
 		Shard:    "0",
@@ -4260,15 +4260,15 @@ func TestPlannedReparenterReparentTabletsDoesNotFailForRdonlyReparentError(t *te
 				"zone1-0000000202": assert.AnError,
 			},
 			SetReplicationSourceSemiSync: map[string]bool{
-				"zone1-0000000200": true,
+				"zone1-0000000200": false,
 				"zone1-0000000202": false,
 			},
 		},
 	}
 	tabletMap := map[string]*topo.TabletInfo{
-		topoproto.TabletAliasString(primary.Alias): {Tablet: primary},
-		topoproto.TabletAliasString(acker.Alias):   {Tablet: acker},
-		topoproto.TabletAliasString(rdonly.Alias):  {Tablet: rdonly},
+		topoproto.TabletAliasString(primary.Alias):       {Tablet: primary},
+		topoproto.TabletAliasString(sourceReplica.Alias): {Tablet: sourceReplica},
+		topoproto.TabletAliasString(rdonly.Alias):        {Tablet: rdonly},
 	}
 
 	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
@@ -4276,14 +4276,14 @@ func TestPlannedReparenterReparentTabletsDoesNotFailForRdonlyReparentError(t *te
 		WaitReplicasTimeout: time.Second,
 		durability:          durability,
 		replicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 		},
 	})
 	require.NoError(t, err)
 
-	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(acker.Alias)))
+	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(sourceReplica.Alias)))
 	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(rdonly.Alias)))
-	assert.Equal(t, topoproto.TabletAliasString(acker.Alias), tmc.setReplicationSourceParent(topoproto.TabletAliasString(rdonly.Alias)))
+	assert.Equal(t, topoproto.TabletAliasString(sourceReplica.Alias), tmc.setReplicationSourceParent(topoproto.TabletAliasString(rdonly.Alias)))
 }
 
 // (TODO:@ajm88) when unifying all the mock TMClient implementations (which will

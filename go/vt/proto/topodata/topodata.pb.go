@@ -194,19 +194,19 @@ type ReplicationSourceConfig_RdonlyReplicationSourcePolicy int32
 const (
 	// Use the existing behavior for rdonly tablets.
 	ReplicationSourceConfig_UNSPECIFIED ReplicationSourceConfig_RdonlyReplicationSourcePolicy = 0
-	// Rdonly tablets must replicate from a semi-sync acker.
-	ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER ReplicationSourceConfig_RdonlyReplicationSourcePolicy = 1
+	// Rdonly tablets must replicate from a replica.
+	ReplicationSourceConfig_REPLICA ReplicationSourceConfig_RdonlyReplicationSourcePolicy = 1
 )
 
 // Enum value maps for ReplicationSourceConfig_RdonlyReplicationSourcePolicy.
 var (
 	ReplicationSourceConfig_RdonlyReplicationSourcePolicy_name = map[int32]string{
 		0: "UNSPECIFIED",
-		1: "REQUIRE_SEMI_SYNC_ACKER",
+		1: "REPLICA",
 	}
 	ReplicationSourceConfig_RdonlyReplicationSourcePolicy_value = map[string]int32{
-		"UNSPECIFIED":             0,
-		"REQUIRE_SEMI_SYNC_ACKER": 1,
+		"UNSPECIFIED": 0,
+		"REPLICA":     1,
 	}
 )
 
@@ -1966,12 +1966,12 @@ const file_topodata_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a7\n" +
 	"\tTagsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xce\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x03\x10\x04J\x04\b\v\x10\fJ\x04\b\x0f\x10\x10\"\xbe\x01\n" +
 	"\x17ReplicationSourceConfig\x12d\n" +
-	"\rrdonly_policy\x18\x01 \x01(\x0e2?.topodata.ReplicationSourceConfig.RdonlyReplicationSourcePolicyR\frdonlyPolicy\"M\n" +
+	"\rrdonly_policy\x18\x01 \x01(\x0e2?.topodata.ReplicationSourceConfig.RdonlyReplicationSourcePolicyR\frdonlyPolicy\"=\n" +
 	"\x1dRdonlyReplicationSourcePolicy\x12\x0f\n" +
-	"\vUNSPECIFIED\x10\x00\x12\x1b\n" +
-	"\x17REQUIRE_SEMI_SYNC_ACKER\x10\x01\"\x90\x06\n" +
+	"\vUNSPECIFIED\x10\x00\x12\v\n" +
+	"\aREPLICA\x10\x01\"\x90\x06\n" +
 	"\x05Shard\x12:\n" +
 	"\rprimary_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\fprimaryAlias\x12C\n" +
 	"\x17primary_term_start_time\x18\b \x01(\v2\f.vttime.TimeR\x14primaryTermStartTime\x12/\n" +

@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -202,7 +201,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	}
 
 	var tabletMap map[string]*topo.TabletInfo
-	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER {
+	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA {
 		tabletMap, err = ts.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
@@ -238,8 +237,8 @@ func DesiredReplicationSource(
 	}
 
 	switch rdonlyPolicy {
-	case topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER:
-		return desiredRdonlySemiSyncAckerReplicationSource(primary, tablet, tabletMap, durability)
+	case topodatapb.ReplicationSourceConfig_REPLICA:
+		return desiredRdonlyReplicaReplicationSource(primary, tablet, tabletMap)
 	default:
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unsupported rdonly replication source policy %v", rdonlyPolicy)
 	}
@@ -366,7 +365,7 @@ func rdonlyTabletsToDefer(tabletMap map[string]*topo.TabletInfo, ignoredTablets 
 }
 
 func shouldDeferRdonlyReparent(replicationSourceConfig *topodatapb.ReplicationSourceConfig) bool {
-	return replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER
+	return replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA
 }
 
 func replicationStatusSourceMatchesTablet(status *replicationdatapb.Status, tablet *topodatapb.Tablet, ioThreadWasRunning bool) (bool, error) {
@@ -396,11 +395,7 @@ func replicationStatusSourceMatchesTablet(status *replicationdatapb.Status, tabl
 	return false, nil
 }
 
-func desiredRdonlySemiSyncAckerReplicationSource(primary *topodatapb.Tablet, tablet *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, durability policy.Durabler) (*topodatapb.Tablet, error) {
-	if durability == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "durability policy is required")
-	}
-
+func desiredRdonlyReplicaReplicationSource(primary *topodatapb.Tablet, tablet *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, error) {
 	type sourceCandidate struct {
 		alias  string
 		tablet *topodatapb.Tablet
@@ -421,7 +416,7 @@ func desiredRdonlySemiSyncAckerReplicationSource(primary *topodatapb.Tablet, tab
 		}
 
 		candidate := ti.Tablet
-		if !isEligibleRdonlyReplicationSource(primary, tablet, candidate, durability) {
+		if !isReplicaRdonlyReplicationSource(primary, tablet, candidate) {
 			continue
 		}
 
@@ -446,20 +441,17 @@ func desiredRdonlySemiSyncAckerReplicationSource(primary *topodatapb.Tablet, tab
 		return otherCellCandidates[0].tablet, nil
 	}
 
-	return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no semi-sync acker available as replication source for rdonly tablet %s", topoproto.TabletAliasString(tablet.Alias))
+	return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no replica available as replication source for rdonly tablet %s", topoproto.TabletAliasString(tablet.Alias))
 }
 
-func isEligibleRdonlyReplicationSource(primary *topodatapb.Tablet, tablet *topodatapb.Tablet, candidate *topodatapb.Tablet, durability policy.Durabler) bool {
+func isReplicaRdonlyReplicationSource(primary *topodatapb.Tablet, tablet *topodatapb.Tablet, candidate *topodatapb.Tablet) bool {
 	if topoproto.TabletAliasEqual(candidate.Alias, primary.Alias) || topoproto.TabletAliasEqual(candidate.Alias, tablet.Alias) {
 		return false
 	}
 	if candidate.Keyspace != tablet.Keyspace || candidate.Shard != tablet.Shard {
 		return false
 	}
-	if !policy.IsReplicaSemiSync(durability, primary, candidate) {
-		return false
-	}
-	return policy.PromotionRule(durability, candidate) != promotionrule.MustNot
+	return candidate.Type == topodatapb.TabletType_REPLICA
 }
 
 // replicationSnapshot stores the status maps and the tablets that were reachable

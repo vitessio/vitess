@@ -100,14 +100,14 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilitySemiSync,
 				ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 				},
 			},
 			keyspaceWanted: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilitySemiSync,
 				ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
-					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER,
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 				},
 				VtorcState: vtorcconfig.DefaultKeyspaceTopoConfig,
 			},

@@ -18662,7 +18662,7 @@ export namespace topodata {
         /** RdonlyReplicationSourcePolicy enum. */
         enum RdonlyReplicationSourcePolicy {
             UNSPECIFIED = 0,
-            REQUIRE_SEMI_SYNC_ACKER = 1
+            REPLICA = 1
         }
     }
 

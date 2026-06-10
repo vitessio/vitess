@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 const (
@@ -375,15 +374,15 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
-			Analysis:    RdonlyReplicationSourceMustBeSemiSyncAcker,
-			Description: "Rdonly replication source must be a semi-sync acker",
+			Analysis:    RdonlyReplicationSourceMustBeReplica,
+			Description: "Rdonly replication source must be a replica",
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return tablet.Type == topodatapb.TabletType_RDONLY &&
 				!a.IsPrimary &&
-				rdonlyReplicationSourcePolicyRequiresSemiSyncAcker(ca) &&
-				!rdonlyReplicationSourceIsEligibleAcker(ca, primary, tablet)
+				rdonlyReplicationSourcePolicyRequiresReplica(ca) &&
+				!rdonlyReplicationSourceIsReplica(ca, primary, tablet)
 		},
 	},
 	{
@@ -403,7 +402,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			if tablet.Type == topodatapb.TabletType_RDONLY && rdonlyReplicationSourceIsEligibleAcker(ca, primary, tablet) {
+			if tablet.Type == topodatapb.TabletType_RDONLY && rdonlyReplicationSourceIsReplica(ca, primary, tablet) {
 				return false
 			}
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)
@@ -498,11 +497,11 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 }
 
-func rdonlyReplicationSourcePolicyRequiresSemiSyncAcker(ca *clusterAnalysis) bool {
-	return ca != nil && ca.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER
+func rdonlyReplicationSourcePolicyRequiresReplica(ca *clusterAnalysis) bool {
+	return ca != nil && ca.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA
 }
 
-func rdonlyReplicationSourceIsEligibleAcker(ca *clusterAnalysis, source, tablet *topodatapb.Tablet) bool {
+func rdonlyReplicationSourceIsReplica(ca *clusterAnalysis, source, tablet *topodatapb.Tablet) bool {
 	if ca == nil || ca.shardPrimary == nil || ca.shardPrimary.Alias == nil || source == nil || source.Alias == nil || tablet == nil || tablet.Alias == nil {
 		return false
 	}
@@ -512,10 +511,7 @@ func rdonlyReplicationSourceIsEligibleAcker(ca *clusterAnalysis, source, tablet 
 	if source.Keyspace != tablet.Keyspace || source.Shard != tablet.Shard {
 		return false
 	}
-	if !policy.IsReplicaSemiSync(ca.durability, ca.shardPrimary, source) {
-		return false
-	}
-	return policy.PromotionRule(ca.durability, source) != promotionrule.MustNot
+	return source.Type == topodatapb.TabletType_REPLICA
 }
 
 func sortDetectionAnalysisMatchedProblems(allProblems []*DetectionAnalysisProblem) {
