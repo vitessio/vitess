@@ -346,24 +346,6 @@ func restartDetachedRdonlyReplication(ctx context.Context, tmc tmclient.TabletMa
 	return rec.Error()
 }
 
-func rdonlyTabletsToDefer(tabletMap map[string]*topo.TabletInfo, ignoredTablets sets.Set[string], replicationSourceConfig *topodatapb.ReplicationSourceConfig) sets.Set[string] {
-	deferred := sets.New[string]()
-	if !shouldDeferRdonlyReparent(replicationSourceConfig) {
-		return deferred
-	}
-
-	for alias, ti := range tabletMap {
-		if ignoredTablets.Has(alias) {
-			continue
-		}
-		if ti == nil || ti.Tablet == nil || ti.Type != topodatapb.TabletType_RDONLY {
-			continue
-		}
-		deferred.Insert(alias)
-	}
-	return deferred
-}
-
 func shouldDeferRdonlyReparent(replicationSourceConfig *topodatapb.ReplicationSourceConfig) bool {
 	return replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA
 }
