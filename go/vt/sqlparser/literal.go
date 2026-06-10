@@ -22,7 +22,6 @@ import (
 	"math"
 	"math/big"
 
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
@@ -55,7 +54,7 @@ func LiteralToValue(lit *Literal) (sqltypes.Value, error) {
 		if err != nil {
 			return sqltypes.Value{}, err
 		}
-		return sqltypes.NewDecimal(hack.String(dec.FormatMySQL(0))), nil
+		return sqltypes.NewDecimalFromBytes(dec.FormatMySQL(0)), nil
 	case StrVal:
 		return sqltypes.NewVarChar(lit.Val), nil
 	case HexNum:
@@ -85,21 +84,21 @@ func LiteralToValue(lit *Literal) (sqltypes.Value, error) {
 			return sqltypes.Value{}, fmt.Errorf("invalid time literal: %v", lit.Val)
 		}
 		buf := datetime.Date_YYYY_MM_DD.Format(datetime.DateTime{Date: d}, 0)
-		return sqltypes.NewDate(hack.String(buf)), nil
+		return sqltypes.NewDateFromBytes(buf), nil
 	case TimeVal:
 		t, l, state := datetime.ParseTime(lit.Val, -1)
 		if state != datetime.TimeOK {
 			return sqltypes.Value{}, fmt.Errorf("invalid time literal: %v", lit.Val)
 		}
 		buf := datetime.Time_hh_mm_ss.Format(datetime.DateTime{Time: t}, uint8(l))
-		return sqltypes.NewTime(hack.String(buf)), nil
+		return sqltypes.NewTimeFromBytes(buf), nil
 	case TimestampVal:
 		dt, l, ok := datetime.ParseDateTime(lit.Val, -1)
 		if !ok {
 			return sqltypes.Value{}, fmt.Errorf("invalid time literal: %v", lit.Val)
 		}
 		buf := datetime.DateTime_YYYY_MM_DD_hh_mm_ss.Format(dt, uint8(l))
-		return sqltypes.NewDatetime(hack.String(buf)), nil
+		return sqltypes.NewDatetimeFromBytes(buf), nil
 	default:
 		return sqltypes.Value{}, fmt.Errorf("unsupported literal type: %v", lit.Type)
 	}
@@ -110,7 +109,7 @@ func parseHexLiteral(val []byte) (sqltypes.Value, error) {
 	if err := hex.DecodeBytes(raw, val); err != nil {
 		return sqltypes.Value{}, err
 	}
-	return sqltypes.NewVarBinary(hack.String(raw)), nil
+	return sqltypes.NewVarBinaryFromBytes(raw), nil
 }
 
 func parseBitLiteral(val []byte) (sqltypes.Value, error) {
@@ -119,5 +118,5 @@ func parseBitLiteral(val []byte) (sqltypes.Value, error) {
 	if !ok {
 		return sqltypes.Value{}, fmt.Errorf("invalid bit literal: %v", val)
 	}
-	return sqltypes.NewVarBinary(hack.String(i.Bytes())), nil
+	return sqltypes.NewVarBinaryFromBytes(i.Bytes()), nil
 }

@@ -293,7 +293,7 @@ func stopReplicationAndBuildStatusMaps(
 		res        = &replicationSnapshot{
 			statusMap:          map[string]*replicationdatapb.StopReplicationStatus{},
 			primaryStatusMap:   map[string]*replicationdatapb.PrimaryStatus{},
-			reachableTablets:   []*topodatapb.Tablet{},
+			reachableTablets:   make([]*topodatapb.Tablet, 0, len(tabletMap)),
 			tabletsBackupState: map[string]bool{},
 			mysqlVersions:      map[string]mysqlctl.ServerVersion{},
 		}

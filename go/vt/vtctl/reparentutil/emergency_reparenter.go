@@ -667,6 +667,13 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
 		defer replWg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				err := vterrors.Errorf(vtrpc.Code_INTERNAL, "panic in replica handler for %v: %v", alias, r)
+				erp.logger.Errorf("%v", err)
+				rec.RecordError(err)
+			}
+		}()
 		erp.logger.Infof("setting new primary on replica %v", alias)
 
 		forceStart := false
@@ -732,9 +739,14 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	// On primary failure, replCancel() is called immediately below,
 	// which is safe because cancel functions are idempotent.
 	go func() {
+		defer allReplicasDoneCancel()
+		defer replCancel()
+		defer func() {
+			if r := recover(); r != nil {
+				erp.logger.Errorf("panic while waiting for replicas to finish: %v", r)
+			}
+		}()
 		replWg.Wait()
-		allReplicasDoneCancel()
-		replCancel()
 	}()
 
 	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
@@ -850,8 +862,8 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 // constraint failures and can make forward progress on being promoted. It will filter out candidates taking backups
 // if possible.
 func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb.Tablet, tabletsReachable []*topodatapb.Tablet, tabletsBackupState map[string]bool, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
-	var restrictedValidTablets []*topodatapb.Tablet
-	var notPreferredValidTablets []*topodatapb.Tablet
+	restrictedValidTablets := make([]*topodatapb.Tablet, 0, len(validTablets))
+	notPreferredValidTablets := make([]*topodatapb.Tablet, 0, len(validTablets))
 	for _, tablet := range validTablets {
 		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
 		// Remove tablets which have MustNot promote rule since they must never be promoted
