@@ -505,21 +505,27 @@ func matchPrimaryTabletUnreachableByQuorum(a *DetectionAnalysis, now time.Time) 
 	if !a.IsClusterPrimary || a.LastCheckValid {
 		return false
 	}
-	result := EvaluatePrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, QuorumOptionsFromConfig(), now)
-	// Log the decision, rate-limited per verdict so a change (not-down -> down) logs immediately.
-	logKey := fmt.Sprintf("%s/%s:%t", a.AnalyzedKeyspace, a.AnalyzedShard, result.Down)
-	if util.ClearToLog("shard_quorum", logKey) {
-		log.Info("shard quorum decision",
-			slog.String("keyspace", a.AnalyzedKeyspace),
-			slog.String("shard", a.AnalyzedShard),
-			slog.Bool("down", result.Down),
-			slog.String("detail", result.Summary()),
-		)
-	}
+	result := evaluateAndLogPrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, now)
 	if result.Down {
 		a.QuorumDetail = &result
 	}
 	return result.Down
+}
+
+// evaluateAndLogPrimaryQuorum evaluates the quorum for a primary and logs the decision,
+// rate-limited per verdict so a verdict change (not-down -> down) logs immediately.
+func evaluateAndLogPrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, now time.Time) QuorumResult {
+	result := EvaluatePrimaryQuorum(primaryAlias, keyspace, shard, QuorumOptionsFromConfig(), now)
+	logKey := fmt.Sprintf("%s/%s:%t", keyspace, shard, result.Down)
+	if util.ClearToLog("shard_quorum", logKey) {
+		log.Info("shard quorum decision",
+			slog.String("keyspace", keyspace),
+			slog.String("shard", shard),
+			slog.Bool("down", result.Down),
+			slog.String("detail", result.Summary()),
+		)
+	}
+	return result
 }
 
 // QuorumOptionsFromConfig builds QuorumOptions from the current VTOrc configuration. The values

@@ -674,6 +674,26 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 			break
 		}
 	}
+	// An invalid primary is one VTOrc has never been able to reach (e.g. VTOrc started after the
+	// primary's vttablet was already down), so its instance data is unreliable and the quorum
+	// matcher is skipped for it. The shard-peer reports of the reachable replicas are independent
+	// of that: when quorum-confirmed ERS is enabled and a fresh quorum confirms the primary's
+	// vttablet down, upgrade the analysis so the recovery can run. With absent or stale quorum
+	// data the analysis stays InvalidPrimary (fail closed, no recovery). This runs after the
+	// DeadPrimary upgrade above so that the established analysis wins when all replicas have
+	// also stopped replicating (i.e. the MySQL is gone too).
+	for _, analysis := range result {
+		if analysis.Analysis != InvalidPrimary || !config.ERSOnTabletUnreachableEnabled() {
+			continue
+		}
+		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, time.Now())
+		if !quorum.Down {
+			continue
+		}
+		analysis.Analysis = PrimaryTabletUnreachableByQuorum
+		analysis.Description = GetDetectionAnalysisProblem(PrimaryTabletUnreachableByQuorum).Meta.Description
+		analysis.QuorumDetail = &quorum
+	}
 	// The quorum matcher records QuorumDetail as a side effect while matching, before the winning
 	// problem is chosen. Fold its tally into the description when the quorum analysis won, and drop it
 	// otherwise so it does not surface on a higher-priority analysis (e.g. DeadPrimary) that also matched.

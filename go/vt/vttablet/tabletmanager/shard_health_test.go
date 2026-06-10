@@ -77,15 +77,19 @@ func staticLister(tablets ...*topodatapb.Tablet) func(context.Context) (map[stri
 	}
 }
 
-func TestShardHealthMonitor_CountsFailuresAndResets(t *testing.T) {
+func TestShardHealthMonitor_PingHealthAccounting(t *testing.T) {
 	self := peerTablet("zone1", 100)
 	peer := peerTablet("zone1", 101)
 	pinger := &fakePinger{fail: true}
 	m := newShardHealthMonitor(pinger, staticLister(self, peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
 
+	fixed := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	m.now = func() time.Time { return fixed }
+
 	require.NoError(t, m.refreshPeers(t.Context()))
 
-	// Three failing rounds -> consecutiveFailures == 3.
+	// Three failing rounds -> consecutiveFailures == 3, the attempt is stamped with this
+	// tablet's clock, and no success is recorded.
 	for range 3 {
 		m.runPingRound(t.Context())
 		assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
@@ -93,8 +97,11 @@ func TestShardHealthMonitor_CountsFailuresAndResets(t *testing.T) {
 	snap := m.snapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(3), snap[0].ConsecutivePingFailures)
+	require.NotNil(t, snap[0].LastAttemptedPing)
+	assert.Equal(t, fixed, protoutil.TimeFromProto(snap[0].LastAttemptedPing).UTC())
+	assert.Nil(t, snap[0].LastSuccessfulPing, "no successful ping yet")
 
-	// A success resets to zero.
+	// A success resets the counter to zero and stamps the success time.
 	pinger.mu.Lock()
 	pinger.fail = false
 	pinger.mu.Unlock()
@@ -103,18 +110,21 @@ func TestShardHealthMonitor_CountsFailuresAndResets(t *testing.T) {
 	snap = m.snapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(0), snap[0].ConsecutivePingFailures)
-	assert.NotNil(t, snap[0].LastSuccessfulPing)
-}
+	require.NotNil(t, snap[0].LastSuccessfulPing)
+	assert.Equal(t, fixed, protoutil.TimeFromProto(snap[0].LastSuccessfulPing).UTC())
 
-func TestShardHealthMonitor_SkipsSelf(t *testing.T) {
-	self := peerTablet("zone1", 100)
-	pinger := &fakePinger{}
-	m := newShardHealthMonitor(pinger, staticLister(self), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
-	require.NoError(t, m.refreshPeers(t.Context()))
-	m.runPingRound(t.Context())
-	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
-	assert.Equal(t, int64(0), pinger.calls.Load(), "monitor must not ping itself")
-	assert.Empty(t, m.snapshot())
+	// The reported ping age is measured with this tablet's clock at snapshot time, so
+	// consumers never have to compare our timestamps against their own clock.
+	m.now = func() time.Time { return fixed.Add(3 * time.Second) }
+	snap = m.snapshot()
+	require.Len(t, snap, 1)
+	age, ok, err := protoutil.DurationFromProto(snap[0].TimeSinceLastAttemptedPing)
+	require.NoError(t, err)
+	require.True(t, ok, "snapshot must report the ping age")
+	assert.Equal(t, 3*time.Second, age)
+
+	// Self is in the peer list but must never be pinged: 4 rounds x 1 actual peer = 4 calls.
+	assert.Equal(t, int64(4), pinger.calls.Load(), "monitor must not ping itself")
 }
 
 func TestShardHealthMonitor_BackPressureSingleFlight(t *testing.T) {
@@ -265,48 +275,4 @@ func TestTabletManagerStopShardHealthMonitor(t *testing.T) {
 
 	assert.NotNil(t, tm.shardHealthMonitor, "the monitor field is write-once; FullStatus may read it during lame-duck")
 	assert.Nil(t, tm.shardPeerHealthSnapshot(), "monitor never pinged anyone, so the snapshot stays empty")
-}
-
-func TestShardHealthMonitor_FixedClockTimestamps(t *testing.T) {
-	self := peerTablet("zone1", 100)
-	peer := peerTablet("zone1", 101)
-	pinger := &fakePinger{fail: true}
-	m := newShardHealthMonitor(pinger, staticLister(self, peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
-
-	fixed := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	m.now = func() time.Time { return fixed }
-
-	require.NoError(t, m.refreshPeers(t.Context()))
-
-	// One failing ping round: LastAttemptedPing set, LastSuccessfulPing absent.
-	m.runPingRound(t.Context())
-	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
-	snap := m.snapshot()
-	require.Len(t, snap, 1)
-	require.NotNil(t, snap[0].LastAttemptedPing)
-	assert.Equal(t, fixed, protoutil.TimeFromProto(snap[0].LastAttemptedPing).UTC())
-	assert.Nil(t, snap[0].LastSuccessfulPing, "no successful ping yet")
-
-	// One successful ping round: LastSuccessfulPing now matches fixed time.
-	pinger.mu.Lock()
-	pinger.fail = false
-	pinger.mu.Unlock()
-	m.runPingRound(t.Context())
-	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
-	snap = m.snapshot()
-	require.Len(t, snap, 1)
-	require.NotNil(t, snap[0].LastSuccessfulPing)
-	assert.Equal(t, fixed, protoutil.TimeFromProto(snap[0].LastSuccessfulPing).UTC())
-	require.NotNil(t, snap[0].LastAttemptedPing)
-	assert.Equal(t, fixed, protoutil.TimeFromProto(snap[0].LastAttemptedPing).UTC())
-
-	// The reported ping age is measured with this tablet's clock at snapshot time, so
-	// consumers never have to compare our timestamps against their own clock.
-	m.now = func() time.Time { return fixed.Add(3 * time.Second) }
-	snap = m.snapshot()
-	require.Len(t, snap, 1)
-	age, ok, err := protoutil.DurationFromProto(snap[0].TimeSinceLastAttemptedPing)
-	require.NoError(t, err)
-	require.True(t, ok, "snapshot must report the ping age")
-	assert.Equal(t, 3*time.Second, age)
 }

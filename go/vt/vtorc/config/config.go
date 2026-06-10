@@ -477,6 +477,11 @@ func ERSOnTabletUnreachableEnabled() bool {
 	return ersOnTabletUnreachable.Get()
 }
 
+// SetERSOnTabletUnreachable sets the value for the ersOnTabletUnreachable variable. This should only be used from tests.
+func SetERSOnTabletUnreachable(val bool) {
+	ersOnTabletUnreachable.Set(val)
+}
+
 // GetShardTabletHealthFailureThreshold returns the consecutive-failure count after which an
 // observer considers a shard peer down.
 func GetShardTabletHealthFailureThreshold() int {

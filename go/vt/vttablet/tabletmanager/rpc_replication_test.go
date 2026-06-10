@@ -728,12 +728,12 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 	})
 }
 
-func TestShardPeerHealthSnapshot_NilMonitor(t *testing.T) {
+func TestShardPeerHealthSnapshot(t *testing.T) {
+	// Without a monitor configured, FullStatus gets a nil snapshot and must not panic.
 	tm := &TabletManager{}
 	assert.Nil(t, tm.shardPeerHealthSnapshot(), "no monitor configured -> nil snapshot, no panic")
-}
 
-func TestShardPeerHealthSnapshot_WithMonitor(t *testing.T) {
+	// With a monitor, the latest per-peer signals are surfaced.
 	self := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
 	peer := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "ks", Shard: "0"}
 	pinger := &fakePinger{fail: true}
@@ -742,7 +742,7 @@ func TestShardPeerHealthSnapshot_WithMonitor(t *testing.T) {
 	m.runPingRound(t.Context())
 	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
 
-	tm := &TabletManager{shardHealthMonitor: m}
+	tm = &TabletManager{shardHealthMonitor: m}
 	snap := tm.shardPeerHealthSnapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
