@@ -2871,6 +2871,50 @@ func TestMarshalMinimalSchemaEnrichesEnumAndSet(t *testing.T) {
 	assert.Empty(t, columnTypes["n"], "non-enum/set column should not carry a ColumnType")
 }
 
+// TestGetFieldsPreservesHistoricalEnumAndSetColumnTypes confirms that a
+// historical schema keeps its original ENUM/SET value mapping even if the live
+// table still has the column with a changed definition.
+func TestGetFieldsPreservesHistoricalEnumAndSetColumnTypes(t *testing.T) {
+	ctx := t.Context()
+	const tableName = "enum_set_tracking_change"
+	execStatements(t, []string{
+		"create table " + tableName + "(id int, plan enum('free','standard') not null, " +
+			"roles set('admin','user') not null, primary key(id))",
+	})
+	defer execStatements(t, []string{"drop table " + tableName})
+	require.NoError(t, env.SchemaEngine.Reload(ctx))
+
+	blob, err := env.SchemaEngine.MarshalMinimalSchema(ctx)
+	require.NoError(t, err)
+	ms := &binlogdatapb.MinimalSchema{}
+	require.NoError(t, ms.UnmarshalVT(blob))
+
+	var table *binlogdatapb.MinimalTable
+	for _, mt := range ms.Tables {
+		if mt.Name == tableName {
+			table = mt
+			break
+		}
+	}
+	require.NotNil(t, table, "%s not found in marshalled schema", tableName)
+
+	execStatements(t, []string{
+		"alter table " + tableName + " modify plan enum('free','basic','standard') not null, " +
+			"modify roles set('admin','ops','user') not null",
+	})
+
+	cp := env.Dbcfgs.DbaWithDB()
+	fields, err := getFields(ctx, cp, env.SchemaEngine, tableName, cp.DBName(), table.Fields)
+	require.NoError(t, err)
+
+	columnTypes := make(map[string]string)
+	for _, f := range fields {
+		columnTypes[f.Name] = f.ColumnType
+	}
+	assert.Equal(t, "enum('free','standard')", columnTypes["plan"])
+	assert.Equal(t, "set('admin','user')", columnTypes["roles"])
+}
+
 // TestAddEnumAndSetMappingsActionableError confirms that when an ENUM/SET column
 // has no usable type definition (e.g. it was dropped and no tracked schema
 // version supplies it), the failure names the likely cause and the

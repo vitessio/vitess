@@ -1132,7 +1132,9 @@ func getFields(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, t
 	}
 	for _, field := range fieldsCopy {
 		if colInfo, ok := extColInfos[field.Name]; ok {
-			field.ColumnType = colInfo.columnType
+			if field.ColumnType == "" {
+				field.ColumnType = colInfo.columnType
+			}
 			field.Charset = uint32(colInfo.collationID)
 		}
 	}
