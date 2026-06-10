@@ -146,7 +146,13 @@ jobs:
 
     - name: Upload coverage reports
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
+<<<<<<< HEAD
       uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+||||||| parent of 21dcc89e68 (ci: bump codecov-action to v6.0.2 to fix GPG verification failure (#20278))
+      uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+=======
+      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+>>>>>>> 21dcc89e68 (ci: bump codecov-action to v6.0.2 to fix GPG verification failure (#20278))
       with:
         files: coverage.out
         fail_ci_if_error: true
