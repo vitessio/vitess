@@ -263,7 +263,7 @@ func detachRdonlyReplicatingFromPromotionCandidateWithIgnored(
 	ignoredTablets sets.Set[string],
 ) (sets.Set[string], error) {
 	detached := sets.New[string]()
-	if !shouldDeferRdonlyReparent(replicationSourceConfig) {
+	if replicationSourceConfig.GetRdonlyPolicy() != topodatapb.ReplicationSourceConfig_REPLICA {
 		return detached, nil
 	}
 	if promotionCandidate == nil || promotionCandidate.Alias == nil {
@@ -344,10 +344,6 @@ func restartDetachedRdonlyReplication(ctx context.Context, tmc tmclient.TabletMa
 	}
 
 	return rec.Error()
-}
-
-func shouldDeferRdonlyReparent(replicationSourceConfig *topodatapb.ReplicationSourceConfig) bool {
-	return replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA
 }
 
 func replicationStatusSourceMatchesTablet(status *replicationdatapb.Status, tablet *topodatapb.Tablet, ioThreadWasRunning bool) (bool, error) {

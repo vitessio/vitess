@@ -4224,7 +4224,7 @@ func TestPlannedReparenterReparentTabletsReparentsRdonlyToReplica(t *testing.T) 
 	assert.Equal(t, topoproto.TabletAliasString(sourceReplica.Alias), tmc.setReplicationSourceParent(topoproto.TabletAliasString(rdonly.Alias)))
 }
 
-func TestPlannedReparenterReparentTabletsDoesNotFailForRdonlyReparentError(t *testing.T) {
+func TestPlannedReparenterReparentTabletsFailsForReplicaSourcedRdonlyReparentError(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
@@ -4279,7 +4279,8 @@ func TestPlannedReparenterReparentTabletsDoesNotFailForRdonlyReparentError(t *te
 			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
 		},
 	})
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "tablet zone1-0000000202 failed to SetReplicationSource(zone1-0000000200)")
 
 	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(sourceReplica.Alias)))
 	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(rdonly.Alias)))
