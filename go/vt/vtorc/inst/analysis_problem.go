@@ -502,10 +502,13 @@ func rdonlyReplicationSourcePolicyRequiresReplica(ca *clusterAnalysis) bool {
 }
 
 func rdonlyReplicationSourceIsReplica(ca *clusterAnalysis, source, tablet *topodatapb.Tablet) bool {
-	if ca == nil || ca.shardPrimary == nil || ca.shardPrimary.Alias == nil || source == nil || source.Alias == nil || tablet == nil || tablet.Alias == nil {
+	if source == nil || source.Alias == nil || tablet == nil || tablet.Alias == nil {
 		return false
 	}
-	if topoproto.TabletAliasEqual(source.Alias, ca.shardPrimary.Alias) || topoproto.TabletAliasEqual(source.Alias, tablet.Alias) {
+	if ca != nil && ca.shardPrimary != nil && ca.shardPrimary.Alias != nil && topoproto.TabletAliasEqual(source.Alias, ca.shardPrimary.Alias) {
+		return false
+	}
+	if topoproto.TabletAliasEqual(source.Alias, tablet.Alias) {
 		return false
 	}
 	if source.Keyspace != tablet.Keyspace || source.Shard != tablet.Shard {

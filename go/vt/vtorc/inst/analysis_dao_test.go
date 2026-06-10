@@ -760,6 +760,53 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			codeWanted:     NoProblem,
 		},
 		{
+			name: "RdonlyReplicationSourceReplicaAllowedWithoutShardPrimary",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Hostname:      "primary",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "primary",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              policy.DurabilitySemiSync,
+				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+				LastCheckValid:                1,
+				IsPrimary:                     1,
+				SemiSyncPrimaryEnabled:        1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 112},
+					Hostname:      "rdonly",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_RDONLY,
+					MysqlHostname: "rdonly",
+					MysqlPort:     6710,
+				},
+				DurabilityPolicy:              policy.DurabilitySemiSync,
+				RdonlyReplicationSourcePolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+				PrimaryTabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "replica",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "replica",
+					MysqlPort:     6709,
+				},
+				LastCheckValid:    1,
+				ReadOnly:          1,
+				CurrentTabletType: int(topodatapb.TabletType_RDONLY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     NoProblem,
+		},
+		{
 			name: "ReplicationStopped",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
