@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -37,14 +39,16 @@ import (
 )
 
 // LoadTable creates a Table from the schema info in the database.
-func LoadTable(conn *connpool.PooledConn, databaseName, tableName, tableType string, comment string, collationEnv *collations.Environment) (*Table, error) {
+// includeEnumSetColumnTypes also records the ENUM/SET column type definitions
+// needed by schema version tracking (see fetchEnumSetColumnTypes).
+func LoadTable(conn *connpool.PooledConn, databaseName, tableName, tableType string, comment string, collationEnv *collations.Environment, includeEnumSetColumnTypes bool) (*Table, error) {
 	ta := NewTable(tableName, NoType)
 	if strings.Contains(tableType, tmutils.TableView) {
 		ta.Type = View
 		return ta, nil
 	}
 	sqlTableName := sqlparser.String(ta.Name)
-	if err := fetchColumns(ta, conn, databaseName, sqlTableName, collationEnv); err != nil {
+	if err := fetchColumns(ta, conn, databaseName, sqlTableName, includeEnumSetColumnTypes); err != nil {
 		return nil, err
 	}
 	switch {
@@ -60,7 +64,7 @@ func LoadTable(conn *connpool.PooledConn, databaseName, tableName, tableType str
 	return ta, nil
 }
 
-func fetchColumns(ta *Table, conn *connpool.PooledConn, databaseName, sqlTableName string, collationEnv *collations.Environment) error {
+func fetchColumns(ta *Table, conn *connpool.PooledConn, databaseName, sqlTableName string, includeEnumSetColumnTypes bool) error {
 	ctx := context.Background()
 	exec := func(query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
 		return conn.Conn.Exec(ctx, query, maxRows, wantFields)
@@ -70,65 +74,102 @@ func fetchColumns(ta *Table, conn *connpool.PooledConn, databaseName, sqlTableNa
 		return err
 	}
 	ta.Fields = fields
-	return fetchColumnAttributes(ctx, ta, conn, databaseName, collationEnv)
-}
-
-// columnAttributesQuery fetches the attributes of a table's columns that are
-// not reliably available in query result metadata: the column's actual
-// collation (result metadata carries the connection collation for text
-// columns) and the full type definition (column_type) of ENUM and SET
-// columns; the parameters are the SQL-encoded database name and table name.
-// The isc alias keeps the query distinct from the column names query (see
-// GetColumnNamesQueryPatternForTable in go/mysql/fakesqldb) when mocking
-// queries in tests.
-const columnAttributesQuery = "select isc.column_name, isc.data_type, isc.column_type, isc.collation_name " +
-	"from information_schema.columns as isc where isc.table_schema=%s and isc.table_name=%s"
-
-// fetchColumnAttributes records the table's per-column attributes that query
-// result metadata cannot provide: each column's actual collation, and the full
-// type definition of ENUM and SET columns. The binlog only stores the integer
-// index (ENUM) or bitmask (SET), so schema version tracking persists the
-// definitions in order to decode historical ROW events after a column is
-// dropped or modified (see newMinimalTable and snapshotMinimalSchema). The
-// attributes are fetched in the same pass as the table's fields so that they
-// can never reflect a newer schema than the field list does.
-func fetchColumnAttributes(ctx context.Context, ta *Table, conn *connpool.PooledConn, databaseName string, collationEnv *collations.Environment) error {
 	ta.EnumSetColumnTypes = nil
-	ta.ColumnCollations = nil
-	if len(ta.Fields) == 0 {
+	// The ENUM/SET type definitions are only consumed by schema version
+	// tracking (see snapshotMinimalSchema), so tablets that do not track
+	// schema versions should not pay for fetching them. The lookup is also
+	// skipped for tables whose fields cannot belong to an ENUM/SET column.
+	if !includeEnumSetColumnTypes || !slices.ContainsFunc(ta.Fields, couldBeEnumOrSet) {
 		return nil
 	}
+	return fetchEnumSetColumnTypes(ctx, ta, conn, databaseName, sqlTableName, exec)
+}
+
+// enumSetColumnTypesQuery fetches the full type definition (column_type) of
+// every ENUM and SET column in a table; the parameters are the SQL-encoded
+// database name and table name. The isc alias keeps the query distinct from
+// the column names query (see GetColumnNamesQueryPatternForTable in
+// go/mysql/fakesqldb) when mocking queries in tests.
+const enumSetColumnTypesQuery = "select isc.column_name, isc.column_type from information_schema.columns as isc " +
+	"where isc.table_schema=%s and isc.table_name=%s and isc.data_type in ('enum', 'set')"
+
+// couldBeEnumOrSet reports whether a field's type could belong to an ENUM or
+// SET column. Binary-collation ENUM/SET columns report as BINARY in query
+// result metadata, so BINARY must be included.
+func couldBeEnumOrSet(field *querypb.Field) bool {
+	switch field.Type {
+	case querypb.Type_ENUM, querypb.Type_SET, querypb.Type_BINARY:
+		return true
+	default:
+		return false
+	}
+}
+
+// enumSetColumnTypesFetchAttempts bounds how many times
+// fetchEnumSetColumnTypes re-reads the table's fields and type definitions
+// while waiting for two consecutive definition reads to match, i.e. for
+// concurrent DDL to quiesce.
+const enumSetColumnTypesFetchAttempts = 3
+
+// fetchEnumSetColumnTypes records the full type definition (e.g. enum('a','b'))
+// of the table's ENUM and SET columns. The binlog only stores the integer index
+// (ENUM) or bitmask (SET), so schema version tracking persists the definitions
+// in order to decode historical ROW events after a column is dropped or
+// modified (see snapshotMinimalSchema).
+//
+// The fields and the definitions necessarily come from two separate reads, so
+// to guarantee that they describe the same table definition, the field read is
+// bracketed between two definition reads: the combination is only accepted
+// when both definition reads match, as any concurrent DDL that changed the
+// definitions in the window around the field read would make them differ.
+// Otherwise the reads are retried, with bounded attempts.
+func fetchEnumSetColumnTypes(ctx context.Context, ta *Table, conn *connpool.PooledConn, databaseName, sqlTableName string,
+	exec func(string, int, bool) (*sqltypes.Result, error),
+) error {
+	before, err := readEnumSetColumnTypes(ctx, conn, databaseName, ta.Name.String())
+	if err != nil {
+		return err
+	}
+	for range enumSetColumnTypesFetchAttempts {
+		fields, _, err := mysqlctl.GetColumns(databaseName, sqlTableName, exec)
+		if err != nil {
+			return err
+		}
+		after, err := readEnumSetColumnTypes(ctx, conn, databaseName, ta.Name.String())
+		if err != nil {
+			return err
+		}
+		if maps.Equal(before, after) {
+			ta.Fields = fields
+			ta.EnumSetColumnTypes = after
+			return nil
+		}
+		before = after
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+		"the ENUM/SET column types of table %s keep changing due to concurrent schema changes", ta.Name.String())
+}
+
+// readEnumSetColumnTypes reads the full type definitions of a table's ENUM
+// and SET columns from information_schema, keyed by column name.
+func readEnumSetColumnTypes(ctx context.Context, conn *connpool.PooledConn, databaseName, tableName string) (map[string]string, error) {
 	encodedDBName := "database()"
 	if databaseName != "" {
 		encodedDBName = encodeString(databaseName)
 	}
-	query := sqlparser.BuildParsedQuery(columnAttributesQuery, encodedDBName, encodeString(ta.Name.String())).Query
+	query := sqlparser.BuildParsedQuery(enumSetColumnTypesQuery, encodedDBName, encodeString(tableName)).Query
 	qr, err := conn.Conn.Exec(ctx, query, mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to fetch column attributes for table %s", ta.Name.String())
+		return nil, vterrors.Wrapf(err, "failed to fetch ENUM/SET column types for table %s", tableName)
 	}
 	if len(qr.Rows) == 0 {
-		return nil
+		return nil, nil
 	}
-	ta.ColumnCollations = make(map[string]collations.ID, len(qr.Rows))
+	columnTypes := make(map[string]string, len(qr.Rows))
 	for _, row := range qr.Rows {
-		columnName := row[0].ToString()
-		switch strings.ToLower(row[1].ToString()) {
-		case "enum", "set":
-			if ta.EnumSetColumnTypes == nil {
-				ta.EnumSetColumnTypes = make(map[string]string)
-			}
-			ta.EnumSetColumnTypes[columnName] = row[2].ToString()
-		}
-		// Columns with no collation (e.g. numeric types, where collation_name
-		// is NULL) use the binary collation.
-		collation := collations.ID(collations.CollationBinaryID)
-		if collationName := row[3].ToString(); !row[3].IsNull() && collationName != "" {
-			collation = collationEnv.LookupByName(collationName)
-		}
-		ta.ColumnCollations[columnName] = collation
+		columnTypes[row[0].ToString()] = row[1].ToString()
 	}
-	return nil
+	return columnTypes, nil
 }
 
 func loadMessageInfo(ta *Table, comment string, collationEnv *collations.Environment) error {

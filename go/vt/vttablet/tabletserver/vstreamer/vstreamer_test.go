@@ -2845,6 +2845,10 @@ func TestUVStreamerNoCopyWithGTID(t *testing.T) {
 // integer-to-string mappings for historical ROW events can still be built.
 func TestMinimalSchemaEnumSetColumnTypeLifecycle(t *testing.T) {
 	ctx := t.Context()
+	// The column attributes that the marshalled schema carries are only
+	// fetched when schema version tracking is enabled.
+	env.TabletEnv.Config().TrackSchemaVersions = true
+	defer func() { env.TabletEnv.Config().TrackSchemaVersions = false }()
 	const tableName = "enum_set_lifecycle"
 	execStatements(t, []string{
 		"create table " + tableName + "(id int, plan enum('free','standard') not null, " +

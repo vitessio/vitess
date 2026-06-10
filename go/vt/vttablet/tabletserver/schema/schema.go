@@ -56,7 +56,7 @@ type Table struct {
 	// name. It is fetched together with Fields (see fetchEnumSetColumnTypes)
 	// and is persisted by schema version tracking so that historical ROW
 	// events for these columns can be decoded after the column is dropped or
-	// modified.
+	// modified. It is only populated when schema version tracking is enabled.
 	EnumSetColumnTypes map[string]string
 
 	// SequenceInfo contains info for sequence tables.

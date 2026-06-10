@@ -590,7 +590,8 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 		log.V(2).Info("Reading schema for table: " + tableName)
 		tableType := row[1].String()
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv())
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv(),
+			se.env.Config().TrackSchemaVersions)
 		if err != nil {
 			// Non recoverable error:
 			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
@@ -926,7 +927,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 		defer conn.Recycle()
 		cst := *st       // Make a copy
 		cst.Fields = nil // We're going to refresh the columns/fields
-		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr); err != nil {
+		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr, se.env.Config().TrackSchemaVersions); err != nil {
 			return nil, err
 		}
 		// Update the PK columns for the table as well as they may have changed.

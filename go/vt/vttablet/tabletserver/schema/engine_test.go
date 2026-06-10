@@ -2134,27 +2134,56 @@ func TestEngineReloadIndependentOfMaxTableCount(t *testing.T) {
 	assert.GreaterOrEqual(t, got, 5, "reload must load all rows regardless of MaxTableCount")
 }
 
+// registerEnumSetTestTable registers the queries for loading a table with
+// ENUM and SET columns into the test schema engine.
+func registerEnumSetTestTable(t *testing.T, db *fakesqldb.DB) {
+	t.Helper()
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("t_enum_set", false, ""),
+		},
+	})
+	db.MockQueriesForTable("t_enum_set", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|plan|roles", "int64|enum|set")))
+}
+
+// enumSetColumnTypesFields is the result layout of enumSetColumnTypesQuery.
+var enumSetColumnTypesFields = sqltypes.MakeTestFields("column_name|column_type", "varchar|varchar")
+
 // TestMarshalMinimalSchemaEnumSetColumnTypes covers the ENUM/SET column type
-// definitions recorded for schema version tracking: a failed
-// information_schema lookup fails the table load (and thus the reload); a
-// snapshot containing an ENUM/SET column with no recorded type definition
-// (which a concurrent DDL between the field and type lookups can cause) fails
-// the save rather than persisting a permanently lossy schema version; and
-// recorded definitions are persisted for exactly the ENUM/SET columns.
+// definitions recorded for schema version tracking: the definitions are only
+// fetched when schema version tracking is enabled; a failed information_schema
+// lookup fails the table load (and thus the reload); a snapshot containing an
+// ENUM/SET column with no recorded type definition fails the save rather than
+// persisting a permanently lossy schema version; and recorded definitions are
+// persisted for exactly the ENUM/SET columns.
 func TestMarshalMinimalSchemaEnumSetColumnTypes(t *testing.T) {
-	enumSetQuery := fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'", "'t_enum_set'")
+	typesQuery := fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'", "'t_enum_set'")
 
 	tests := []struct {
-		name            string
-		setup           func(db *fakesqldb.DB)
-		wantReloadErr   string
-		wantMarshalErr  string
-		wantColumnTypes map[string]string
+		name             string
+		trackingDisabled bool
+		setup            func(db *fakesqldb.DB)
+		wantReloadErr    string
+		wantNoTypes      bool
+		wantMarshalErr   string
+		wantColumnTypes  map[string]string
 	}{
 		{
-			name: "type lookup fails",
+			name:             "types not fetched when tracking is disabled",
+			trackingDisabled: true,
 			setup: func(db *fakesqldb.DB) {
-				db.AddRejectedQuery(enumSetQuery, errors.New("information_schema is unavailable"))
+				// Tablets that do not track schema versions must not issue the
+				// type definitions query at all: rejecting it proves that.
+				db.AddRejectedQuery(typesQuery, errors.New("information_schema is unavailable"))
+			},
+			wantNoTypes: true,
+		},
+		{
+			name: "types lookup fails",
+			setup: func(db *fakesqldb.DB) {
+				db.AddRejectedQuery(typesQuery, errors.New("information_schema is unavailable"))
 			},
 			wantReloadErr: "failed to fetch ENUM/SET column types for table t_enum_set",
 		},
@@ -2162,16 +2191,15 @@ func TestMarshalMinimalSchemaEnumSetColumnTypes(t *testing.T) {
 			name: "type definitions missing",
 			setup: func(db *fakesqldb.DB) {
 				// MockQueriesForTable registers an empty result for the type
-				// lookup by default, so no definitions get recorded for the
-				// ENUM and SET columns.
+				// definitions lookup by default, so no definitions get recorded
+				// for the ENUM and SET columns.
 			},
 			wantMarshalErr: "no type definition recorded for ENUM/SET column t_enum_set.plan",
 		},
 		{
 			name: "type definitions recorded",
 			setup: func(db *fakesqldb.DB) {
-				db.AddQuery(enumSetQuery, sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("column_name|column_type", "varchar|varchar"),
+				db.AddQuery(typesQuery, sqltypes.MakeTestResult(enumSetColumnTypesFields,
 					"plan|enum('free','standard')",
 					"roles|set('admin','user')",
 				))
@@ -2187,14 +2215,8 @@ func TestMarshalMinimalSchemaEnumSetColumnTypes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			se, db, cancel := getTestSchemaEngine(t, 0)
 			defer cancel()
-			db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-				Fields: mysql.BaseShowTablesFields,
-				Rows: [][]sqltypes.Value{
-					mysql.BaseShowTablesRow("t_enum_set", false, ""),
-				},
-			})
-			db.MockQueriesForTable("t_enum_set", sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("id|plan|roles", "int64|enum|set")))
+			se.env.Config().TrackSchemaVersions = !tc.trackingDisabled
+			registerEnumSetTestTable(t, db)
 			tc.setup(db)
 
 			err := se.Reload(t.Context())
@@ -2203,6 +2225,13 @@ func TestMarshalMinimalSchemaEnumSetColumnTypes(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+
+			if tc.wantNoTypes {
+				table := se.GetSchema()["t_enum_set"]
+				require.NotNil(t, table)
+				assert.Nil(t, table.EnumSetColumnTypes)
+				return
+			}
 
 			blob, err := se.MarshalMinimalSchema()
 			if tc.wantMarshalErr != "" {
@@ -2220,4 +2249,79 @@ func TestMarshalMinimalSchemaEnumSetColumnTypes(t *testing.T) {
 			assert.Equal(t, tc.wantColumnTypes, columnTypes)
 		})
 	}
+}
+
+// TestEnumSetColumnTypesFetchRetriesAfterConcurrentDDL proves that when a
+// table's ENUM/SET type definitions change between the reads that bracket the
+// field read (i.e. a concurrent DDL committed in the window), the load retries
+// and converges on the post-change definitions.
+func TestEnumSetColumnTypesFetchRetriesAfterConcurrentDDL(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+	se.env.Config().TrackSchemaVersions = true
+	registerEnumSetTestTable(t, db)
+
+	typesQuery := fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'", "'t_enum_set'")
+	db.AddQuery(typesQuery, sqltypes.MakeTestResult(enumSetColumnTypesFields,
+		"plan|enum('free','standard')",
+		"roles|set('admin','user')",
+	))
+
+	// Swap the ENUM definition during the bracketed field read, emulating a
+	// DDL that commits between the two definition reads. The first bracket
+	// then sees mismatched definitions and the retry must converge on the
+	// post-DDL definition.
+	namesResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), "id", "plan", "roles")
+	fieldReads := 0
+	db.AddQueryPatternWithCallback(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, "t_enum_set"), namesResult, func(string) {
+		fieldReads++
+		if fieldReads == 2 { // the field read inside the first bracket
+			db.AddQuery(typesQuery, sqltypes.MakeTestResult(enumSetColumnTypesFields,
+				"plan|enum('free','basic','standard')",
+				"roles|set('admin','user')",
+			))
+		}
+	})
+
+	require.NoError(t, se.Reload(t.Context()))
+	table := se.GetSchema()["t_enum_set"]
+	require.NotNil(t, table)
+	assert.Equal(t, map[string]string{
+		"plan":  "enum('free','basic','standard')",
+		"roles": "set('admin','user')",
+	}, table.EnumSetColumnTypes)
+}
+
+// TestEnumSetColumnTypesFetchFailsOnRepeatedConcurrentDDL proves that the
+// bracketed attribute reads give up with an error -- failing the table load,
+// which the reload machinery retries -- when the attributes change on every
+// attempt instead of looping forever.
+func TestEnumSetColumnTypesFetchFailsOnRepeatedConcurrentDDL(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+	se.env.Config().TrackSchemaVersions = true
+	registerEnumSetTestTable(t, db)
+
+	typesQuery := fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'", "'t_enum_set'")
+	db.AddQuery(typesQuery, sqltypes.MakeTestResult(enumSetColumnTypesFields,
+		"plan|enum('free','standard')",
+	))
+
+	// Alternate the definition results on every field read so that the
+	// bracketing definition reads never match.
+	namesResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("column_name", "varchar"), "id", "plan", "roles")
+	flip := false
+	db.AddQueryPatternWithCallback(fmt.Sprintf(fakesqldb.GetColumnNamesQueryPatternForTable, "t_enum_set"), namesResult, func(string) {
+		flip = !flip
+		columnType := "enum('free','standard')"
+		if flip {
+			columnType = "enum('free','basic','standard')"
+		}
+		db.AddQuery(typesQuery, sqltypes.MakeTestResult(enumSetColumnTypesFields,
+			"plan|"+columnType,
+		))
+	})
+
+	err := se.Reload(t.Context())
+	require.ErrorContains(t, err, "keep changing due to concurrent schema changes")
 }
