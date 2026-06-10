@@ -683,7 +683,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	rec := concurrency.AllErrorRecorder{}
 
 	if promoteReplicaRequired && opts.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA {
-		if err := detachRdonlyReplicatingFromPromotionCandidate(ctx, pr.tmc, tabletMap, ev.NewPrimary); err != nil {
+		if err := stopRdonlyReplicatingFromTablet(ctx, pr.tmc, tabletMap, ev.NewPrimary); err != nil {
 			return err
 		}
 	}

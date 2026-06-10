@@ -309,7 +309,7 @@ func TestDesiredReplicationSource(t *testing.T) {
 	}
 }
 
-type detachRdonlyReplicationTestTMClient struct {
+type stopRdonlyReplicationTestTMClient struct {
 	tmclient.TabletManagerClient
 
 	replicationStatusResults map[string]*replicationdatapb.Status
@@ -319,7 +319,7 @@ type detachRdonlyReplicationTestTMClient struct {
 	stopped    []string
 }
 
-func (fake *detachRdonlyReplicationTestTMClient) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
+func (fake *stopRdonlyReplicationTestTMClient) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
 	alias := topoproto.TabletAliasString(tablet.Alias)
 	fake.statusRead = append(fake.statusRead, alias)
 
@@ -330,53 +330,51 @@ func (fake *detachRdonlyReplicationTestTMClient) ReplicationStatus(ctx context.C
 	return status, nil
 }
 
-func (fake *detachRdonlyReplicationTestTMClient) StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
+func (fake *stopRdonlyReplicationTestTMClient) StopReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	alias := topoproto.TabletAliasString(tablet.Alias)
 	fake.stopped = append(fake.stopped, alias)
 
 	return fake.stopReplicationResults[alias]
 }
 
-func TestDetachRdonlyReplicatingFromPromotionCandidate(t *testing.T) {
+func TestStopRdonlyReplicatingFromTablet(t *testing.T) {
 	t.Parallel()
 
-	primaryElect := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_REPLICA)
-	rdonlyFromPrimaryElect := replicationSourceTestTablet("zone1", 200, topodatapb.TabletType_RDONLY)
+	sourceTablet := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	rdonlyFromSourceTablet := replicationSourceTestTablet("zone1", 200, topodatapb.TabletType_RDONLY)
 	rdonlyFromAcker := replicationSourceTestTablet("zone1", 201, topodatapb.TabletType_RDONLY)
 	replica := replicationSourceTestTablet("zone1", 101, topodatapb.TabletType_REPLICA)
 
 	tabletMap := map[string]*topo.TabletInfo{
-		topoproto.TabletAliasString(primaryElect.Alias):           {Tablet: primaryElect},
-		topoproto.TabletAliasString(rdonlyFromPrimaryElect.Alias): {Tablet: rdonlyFromPrimaryElect},
+		topoproto.TabletAliasString(sourceTablet.Alias):           {Tablet: sourceTablet},
+		topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias): {Tablet: rdonlyFromSourceTablet},
 		topoproto.TabletAliasString(rdonlyFromAcker.Alias):        {Tablet: rdonlyFromAcker},
 		topoproto.TabletAliasString(replica.Alias):                {Tablet: replica},
 	}
-	tmc := &detachRdonlyReplicationTestTMClient{
+	tmc := &stopRdonlyReplicationTestTMClient{
 		replicationStatusResults: map[string]*replicationdatapb.Status{
-			topoproto.TabletAliasString(rdonlyFromPrimaryElect.Alias): {
-				SourceHost: primaryElect.MysqlHostname,
-				SourcePort: primaryElect.MysqlPort,
-				IoState:    int32(replication.ReplicationStateRunning),
+			topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias): {
+				SourceHost: sourceTablet.MysqlHostname,
+				SourcePort: sourceTablet.MysqlPort,
 			},
 			topoproto.TabletAliasString(rdonlyFromAcker.Alias): {
 				SourceHost: replica.MysqlHostname,
 				SourcePort: replica.MysqlPort,
-				IoState:    int32(replication.ReplicationStateRunning),
 			},
 		},
 		stopReplicationResults: map[string]error{
-			topoproto.TabletAliasString(rdonlyFromPrimaryElect.Alias): nil,
+			topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias): nil,
 		},
 	}
 
-	err := detachRdonlyReplicatingFromPromotionCandidate(t.Context(), tmc, tabletMap, primaryElect)
+	err := stopRdonlyReplicatingFromTablet(t.Context(), tmc, tabletMap, sourceTablet)
 
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{
-		topoproto.TabletAliasString(rdonlyFromPrimaryElect.Alias),
+		topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias),
 		topoproto.TabletAliasString(rdonlyFromAcker.Alias),
 	}, tmc.statusRead)
-	assert.Equal(t, []string{topoproto.TabletAliasString(rdonlyFromPrimaryElect.Alias)}, tmc.stopped)
+	assert.Equal(t, []string{topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias)}, tmc.stopped)
 }
 
 func replicationSourceTestTablet(cell string, uid uint32, tabletType topodatapb.TabletType) *topodatapb.Tablet {
