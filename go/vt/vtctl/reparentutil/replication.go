@@ -84,6 +84,27 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
+// uniformCombined returns true when every candidate shares the same Combined position.
+// Applied to the output of filterToMostAdvancedCombined, a false result means the leading
+// group has incomparable maxima (suspected split-brain shape): a one-success short-circuit
+// in the relay-log-apply wait would silently drop a failed incomparable leader, bypassing
+// the split-brain check in findMostAdvanced.
+func uniformCombined(candidates map[string]*RelayLogPositions) bool {
+	var ref replication.Position
+	set := false
+	for _, pos := range candidates {
+		if !set {
+			ref = pos.Combined
+			set = true
+			continue
+		}
+		if !pos.Combined.Equal(ref) {
+			return false
+		}
+	}
+	return true
+}
+
 // filterToMostAdvancedCombined keeps only candidates whose Combined position is not
 // strictly dominated by another (X dominated by Y iff Y.AtLeast(X) and X != Y). Pairwise
 // comparison is required to correctly handle partially-ordered GTID sets: when two
@@ -243,19 +264,13 @@ type replicationSnapshot struct {
 }
 
 // replicasWithStoppedIO returns the reachable replicas whose IO threads ERS
-// stopped and should restart during cleanup. Only includes replicas where the
-// SQL thread was also healthy pre-ERS — the cleanup calls StartReplication
-// which starts both threads, so restarting a replica whose SQL_THREAD was
-// deliberately stopped pre-ERS would silently undo the operator's intent
-// (e.g. delayed-replication setups, manual conflict resolution). The
-// returned skippedSQLStopped slice lets the caller log those skipped
-// replicas so the operator can decide whether to restart IO manually.
-func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.TabletInfo) (replicas, skippedSQLStopped []*topodatapb.Tablet) {
-	replicas = make([]*topodatapb.Tablet, 0, len(rs.statusMap))
+// stopped and should restart during cleanup.
+func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.TabletInfo) []*topodatapb.Tablet {
+	replicas := make([]*topodatapb.Tablet, 0, len(rs.statusMap))
 
 	for alias, stopStatus := range rs.statusMap {
-		ioHealthy, sqlHealthy, err := replicaThreadStatesWereHealthy(stopStatus)
-		if err != nil || !ioHealthy {
+		ioThreadWasRunning, err := replicaIOThreadWasRunning(stopStatus)
+		if err != nil || !ioThreadWasRunning {
 			continue
 		}
 
@@ -264,27 +279,22 @@ func (rs *replicationSnapshot) replicasWithStoppedIO(tabletMap map[string]*topo.
 			continue
 		}
 
-		if !sqlHealthy {
-			skippedSQLStopped = append(skippedSQLStopped, tabletInfo.Tablet)
-			continue
-		}
-
 		replicas = append(replicas, tabletInfo.Tablet)
 	}
 
-	return replicas, skippedSQLStopped
+	return replicas
 }
 
-// replicaThreadStatesWereHealthy returns whether the IO and SQL threads were
-// healthy in the Before state of a StopReplicationStatus.
-func replicaThreadStatesWereHealthy(stopStatus *replicationdatapb.StopReplicationStatus) (ioHealthy, sqlHealthy bool, err error) {
+// replicaIOThreadWasRunning returns true if a StopReplicationStatus indicates
+// that ERS stopped a healthy IO thread that should restart during cleanup.
+func replicaIOThreadWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
 	if stopStatus == nil || stopStatus.Before == nil {
-		return false, false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
 	replStatus := replication.ProtoToReplicationStatus(stopStatus.Before)
 
-	return replStatus.IOHealthy(), replStatus.SQLHealthy(), nil
+	return replStatus.IOHealthy(), nil
 }
 
 // tabletAliasError wraps an error with the tablet alias that produced it.
