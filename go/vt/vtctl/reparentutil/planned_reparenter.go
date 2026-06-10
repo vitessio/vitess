@@ -682,8 +682,8 @@ func (pr *PlannedReparenter) reparentTablets(
 	replicasWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
-	if promoteReplicaRequired {
-		if _, err := detachRdonlyReplicatingFromPromotionCandidate(ctx, pr.tmc, tabletMap, ev.NewPrimary, opts.replicationSourceConfig); err != nil {
+	if promoteReplicaRequired && opts.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA {
+		if err := detachRdonlyReplicatingFromPromotionCandidate(ctx, pr.tmc, tabletMap, ev.NewPrimary); err != nil {
 			return err
 		}
 	}

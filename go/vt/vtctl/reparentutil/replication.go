@@ -249,25 +249,9 @@ func detachRdonlyReplicatingFromPromotionCandidate(
 	tmc tmclient.TabletManagerClient,
 	tabletMap map[string]*topo.TabletInfo,
 	promotionCandidate *topodatapb.Tablet,
-	replicationSourceConfig *topodatapb.ReplicationSourceConfig,
-) (sets.Set[string], error) {
-	return detachRdonlyReplicatingFromPromotionCandidateWithIgnored(ctx, tmc, tabletMap, promotionCandidate, replicationSourceConfig, nil)
-}
-
-func detachRdonlyReplicatingFromPromotionCandidateWithIgnored(
-	ctx context.Context,
-	tmc tmclient.TabletManagerClient,
-	tabletMap map[string]*topo.TabletInfo,
-	promotionCandidate *topodatapb.Tablet,
-	replicationSourceConfig *topodatapb.ReplicationSourceConfig,
-	ignoredTablets sets.Set[string],
-) (sets.Set[string], error) {
-	detached := sets.New[string]()
-	if replicationSourceConfig.GetRdonlyPolicy() != topodatapb.ReplicationSourceConfig_REPLICA {
-		return detached, nil
-	}
+) error {
 	if promotionCandidate == nil || promotionCandidate.Alias == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "promotion candidate tablet must have an alias")
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "promotion candidate tablet must have an alias")
 	}
 
 	aliases := make([]string, 0, len(tabletMap))
@@ -277,73 +261,31 @@ func detachRdonlyReplicatingFromPromotionCandidateWithIgnored(
 	sort.Strings(aliases)
 
 	for _, alias := range aliases {
-		if ignoredTablets.Has(alias) {
-			continue
-		}
-
 		ti := tabletMap[alias]
 		if ti == nil || ti.Tablet == nil || ti.Alias == nil || ti.Type != topodatapb.TabletType_RDONLY {
 			continue
 		}
 
 		tablet := ti.Tablet
-		stopStatus, err := tmc.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		status, err := tmc.ReplicationStatus(ctx, tablet)
 		if err != nil {
-			if cleanupErr := restartDetachedRdonlyReplication(ctx, tmc, tabletMap, detached); cleanupErr != nil {
-				return detached, vterrors.Wrapf(err, "failed to restore already-detached rdonly tablets: %v", cleanupErr)
-			}
-			return detached, vterrors.Wrapf(err, "failed to stop rdonly replication IO thread on %s", alias)
+			return vterrors.Wrapf(err, "failed to read rdonly replication status on %s", alias)
 		}
 
-		ioThreadWasRunning, err := replicaIOThreadWasRunning(stopStatus)
+		replStatus := replication.ProtoToReplicationStatus(status)
+		replicatingFromCandidate, err := replicationStatusSourceMatchesTablet(status, promotionCandidate, replStatus.IOHealthy())
 		if err != nil {
-			if cleanupErr := tmc.StartReplication(ctx, tablet, false); cleanupErr != nil {
-				return detached, vterrors.Wrapf(err, "failed to restart rdonly replication on %s after failing to inspect source: %v", alias, cleanupErr)
-			}
-			return detached, vterrors.Wrapf(err, "failed to inspect rdonly replication source on %s", alias)
+			return vterrors.Wrapf(err, "failed to inspect rdonly replication source on %s", alias)
 		}
-
-		replicatingFromCandidate, err := replicationStatusSourceMatchesTablet(stopStatus.Before, promotionCandidate, ioThreadWasRunning)
-		if err != nil {
-			if ioThreadWasRunning {
-				if cleanupErr := tmc.StartReplication(ctx, tablet, false); cleanupErr != nil {
-					return detached, vterrors.Wrapf(err, "failed to restart rdonly replication on %s after failing to inspect source: %v", alias, cleanupErr)
-				}
-			}
-			return detached, vterrors.Wrapf(err, "failed to inspect rdonly replication source on %s", alias)
-		}
-		if replicatingFromCandidate {
-			detached.Insert(alias)
+		if !replicatingFromCandidate {
 			continue
 		}
-		if ioThreadWasRunning {
-			if err := tmc.StartReplication(ctx, tablet, false); err != nil {
-				if cleanupErr := restartDetachedRdonlyReplication(ctx, tmc, tabletMap, detached); cleanupErr != nil {
-					return detached, vterrors.Wrapf(err, "failed to restart rdonly replication on %s after source inspection: %v", alias, cleanupErr)
-				}
-				return detached, vterrors.Wrapf(err, "failed to restart rdonly replication on %s after source inspection", alias)
-			}
+		if err := tmc.StopReplication(ctx, tablet); err != nil {
+			return vterrors.Wrapf(err, "failed to stop rdonly replication on %s", alias)
 		}
 	}
 
-	return detached, nil
-}
-
-func restartDetachedRdonlyReplication(ctx context.Context, tmc tmclient.TabletManagerClient, tabletMap map[string]*topo.TabletInfo, detached sets.Set[string]) error {
-	rec := concurrency.AllErrorRecorder{}
-
-	for alias := range detached {
-		ti := tabletMap[alias]
-		if ti == nil || ti.Tablet == nil {
-			continue
-		}
-
-		if err := tmc.StartReplication(ctx, ti.Tablet, false); err != nil {
-			rec.RecordError(vterrors.Wrapf(err, "failed to restart rdonly replication on %s", alias))
-		}
-	}
-
-	return rec.Error()
+	return nil
 }
 
 func replicationStatusSourceMatchesTablet(status *replicationdatapb.Status, tablet *topodatapb.Tablet, ioThreadWasRunning bool) (bool, error) {
