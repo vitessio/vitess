@@ -2422,6 +2422,25 @@ func TestFullyThrottledTimeout(t *testing.T) {
 	}
 }
 
+func TestVStreamerThrottledCounts(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+
+	const wfName = "test_vstreamer_throttled_counts"
+	filter := &binlogdatapb.Filter{
+		WorkflowName: wfName,
+		Rules:        []*binlogdatapb.Rule{{Match: "/.*/"}},
+	}
+	startingMetric := engine.throttledCounts.Counts()[wfName]
+
+	wg, _ := startFullyThrottledStream(ctx, t, filter, "", nil)
+	defer wg.Wait()
+	defer cancel()
+
+	assert.Eventually(t, func() bool {
+		return engine.throttledCounts.Counts()[wfName] > startingMetric
+	}, 30*time.Second, 50*time.Millisecond, "VStreamerThrottledCounts should increment while vstream is throttled")
+}
+
 func TestNoFutureGTID(t *testing.T) {
 	// Execute something to make sure we have ranges in GTIDs.
 	execStatements(t, []string{
