@@ -264,7 +264,7 @@ func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error
 }
 
 func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, timestamp int64) error {
-	blob, err := tr.engine.MarshalMinimalSchema()
+	blob, err := tr.engine.MarshalMinimalSchema(ctx)
 	if err != nil {
 		return err
 	}

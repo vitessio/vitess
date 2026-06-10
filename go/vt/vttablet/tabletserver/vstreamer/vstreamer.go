@@ -1394,8 +1394,11 @@ func addEnumAndSetMappingstoPlan(env *vtenv.Environment, plan *Plan, cols []*que
 			begin := strings.Index(col.ColumnType, "(")
 			end := strings.LastIndex(col.ColumnType, ")")
 			if begin == -1 || end == -1 {
-				return fmt.Errorf("enum or set column %s does not have valid string values: %s",
-					col.Name, col.ColumnType)
+				return fmt.Errorf("enum or set column %s does not have valid string values: %q; "+
+					"the column's type definition is unavailable -- this usually means the column "+
+					"was dropped, and decoding historical rows for a dropped ENUM/SET column "+
+					"requires --track-schema-versions with a schema version retained from while "+
+					"the column still existed", col.Name, col.ColumnType)
 			}
 			var err error
 			plan.EnumSetValuesMap[i], err = vtschema.ParseEnumOrSetTokensMap(env, col.ColumnType[begin+1:end])

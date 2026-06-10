@@ -2833,3 +2833,55 @@ func TestUVStreamerNoCopyWithGTID(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, uvs.plans, "Should not build table plans when startPos is set")
 }
+
+// TestMarshalMinimalSchemaEnrichesEnumAndSet confirms that the schema captured
+// for version tracking includes the full ColumnType for ENUM and SET columns
+// (including binary-collation ones). That ColumnType is what lets a VStream
+// decode their historical rows after the column is dropped. See issue #20175.
+func TestMarshalMinimalSchemaEnrichesEnumAndSet(t *testing.T) {
+	ctx := t.Context()
+	execStatements(t, []string{
+		"create table enum_set_tracking(id int, plan enum('free','standard','enterprise'), " +
+			"roles set('a','b','c'), bin_plan enum('x','y') collate utf8mb4_bin, n int, primary key(id))",
+	})
+	defer execStatements(t, []string{"drop table enum_set_tracking"})
+	require.NoError(t, env.SchemaEngine.Reload(ctx))
+
+	blob, err := env.SchemaEngine.MarshalMinimalSchema(ctx)
+	require.NoError(t, err)
+	ms := &binlogdatapb.MinimalSchema{}
+	require.NoError(t, ms.UnmarshalVT(blob))
+
+	var table *binlogdatapb.MinimalTable
+	for _, mt := range ms.Tables {
+		if mt.Name == "enum_set_tracking" {
+			table = mt
+			break
+		}
+	}
+	require.NotNil(t, table, "enum_set_tracking not found in marshalled schema")
+
+	columnTypes := make(map[string]string)
+	for _, f := range table.Fields {
+		columnTypes[f.Name] = f.ColumnType
+	}
+	assert.Equal(t, "enum('free','standard','enterprise')", columnTypes["plan"])
+	assert.Equal(t, "set('a','b','c')", columnTypes["roles"])
+	assert.Equal(t, "enum('x','y')", columnTypes["bin_plan"])
+	assert.Empty(t, columnTypes["n"], "non-enum/set column should not carry a ColumnType")
+}
+
+// TestAddEnumAndSetMappingsActionableError confirms that when an ENUM/SET column
+// has no usable type definition (e.g. it was dropped and no tracked schema
+// version supplies it), the failure names the likely cause and the
+// --track-schema-versions requirement instead of an opaque empty value.
+func TestAddEnumAndSetMappingsActionableError(t *testing.T) {
+	cols := []*querypb.Field{
+		{Name: "plan", Type: querypb.Type_ENUM, ColumnType: ""},
+	}
+	metadata := []uint16{0}
+	err := addEnumAndSetMappingstoPlan(env.SchemaEngine.Environment(), &Plan{}, cols, metadata)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "enum or set column plan does not have valid string values")
+	assert.ErrorContains(t, err, "--track-schema-versions")
+}

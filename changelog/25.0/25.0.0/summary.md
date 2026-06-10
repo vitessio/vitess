@@ -15,6 +15,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [VStream decodes dropped ENUM/SET columns with schema tracking](#vreplication-vstream-dropped-enum-set)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -85,6 +86,17 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-vstream-dropped-enum-set"/>VStream decodes dropped ENUM/SET columns with schema tracking</a>
+
+With `--track-schema-versions` enabled, a `VStream` resuming from a position before an `ENUM` or `SET` column was dropped can now decode the older row events for that column, instead of failing with `enum or set column ... does not have valid string values`. The schema historian now records each `ENUM`/`SET` column's type definition.
+
+**Limitations:**
+
+- Only schema versions recorded *after* upgrading carry these definitions; versions already stored in `_vt.schema_version` are not retroactively enriched.
+- The decode still fails (now with a clearer, actionable error) when `--track-schema-versions` is off, or when the resume position predates the oldest retained schema version.
+
+See [#20175](https://github.com/vitessio/vitess/issues/20175) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 

@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	maps0 "maps"
 	"net/http"
 	"strings"
@@ -53,6 +54,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -1051,17 +1053,96 @@ func (se *Engine) GetSchema() map[string]*Table {
 	return tables
 }
 
-// MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema
-func (se *Engine) MarshalMinimalSchema() ([]byte, error) {
+// MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema.
+//
+// ENUM and SET columns are enriched with their full type definition (the
+// ColumnType, e.g. enum('a','b')) via an information_schema lookup. This lets
+// schema version tracking decode historical ROW events for these columns even
+// after they are dropped: the binlog only stores the integer index (ENUM) or
+// bitmask (SET), so the string values are otherwise unrecoverable once the live
+// column is gone. The lookup runs outside se.mu (see enrichEnumAndSetColumnTypes).
+func (se *Engine) MarshalMinimalSchema(ctx context.Context) ([]byte, error) {
+	dbSchema := se.snapshotMinimalSchema()
+	if err := se.enrichEnumAndSetColumnTypes(ctx, dbSchema); err != nil {
+		// Degrade gracefully: without the ENUM/SET ColumnType we are simply no
+		// better off than before this enrichment existed for any column later
+		// dropped. Log it and store the un-enriched schema; the caller's own
+		// write path decides whether the save itself fails.
+		log.Warn("failed to enrich ENUM/SET column types for schema version tracking",
+			slog.String("database", se.cp.DBName()),
+			slog.Any("error", err))
+	}
+	return dbSchema.MarshalVT()
+}
+
+// snapshotMinimalSchema builds a MinimalSchema from the in-memory schema under
+// se.mu, deep-copying each field so that enrichEnumAndSetColumnTypes can set
+// ColumnType after the lock is released without mutating or racing the live
+// se.tables fields (newMinimalTable otherwise shares the *querypb.Field pointers).
+func (se *Engine) snapshotMinimalSchema() *binlogdatapb.MinimalSchema {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	dbSchema := &binlogdatapb.MinimalSchema{
 		Tables: make([]*binlogdatapb.MinimalTable, 0, len(se.tables)),
 	}
 	for _, table := range se.tables {
-		dbSchema.Tables = append(dbSchema.Tables, newMinimalTable(table))
+		mt := newMinimalTable(table)
+		clonedFields := make([]*querypb.Field, len(mt.Fields))
+		for i, field := range mt.Fields {
+			clonedFields[i] = field.CloneVT()
+		}
+		mt.Fields = clonedFields
+		dbSchema.Tables = append(dbSchema.Tables, mt)
 	}
-	return dbSchema.MarshalVT()
+	return dbSchema
+}
+
+// enrichEnumAndSetColumnTypes sets ColumnType on the ENUM and SET fields of the
+// given schema using a single information_schema lookup. It does not hold se.mu.
+// Filtering on data_type IN ('enum','set') is authoritative, so it correctly
+// covers binary-collation columns that report as BINARY in result metadata.
+func (se *Engine) enrichEnumAndSetColumnTypes(ctx context.Context, dbSchema *binlogdatapb.MinimalSchema) error {
+	if se.conns == nil {
+		// Test engines (NewEngineForTests()) have no connection pool; skip
+		// enrichment and fall back to the un-enriched schema.
+		return nil
+	}
+	conn, err := se.conns.Get(ctx, nil)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get a connection to enrich ENUM/SET column types")
+	}
+	defer conn.Recycle()
+	query := fmt.Sprintf("select table_name, column_name, column_type "+
+		"from information_schema.columns where table_schema=%s and data_type in ('enum', 'set')",
+		encodeString(se.cp.DBName()))
+	qr, err := conn.Conn.Exec(ctx, query, mysql.FETCH_ALL_ROWS, false)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to query information_schema for ENUM/SET column types")
+	}
+	if len(qr.Rows) == 0 {
+		return nil
+	}
+	// (table -> column -> column_type)
+	columnTypes := make(map[string]map[string]string)
+	for _, row := range qr.Rows {
+		table := row[0].ToString()
+		if columnTypes[table] == nil {
+			columnTypes[table] = make(map[string]string)
+		}
+		columnTypes[table][row[1].ToString()] = row[2].ToString()
+	}
+	for _, mt := range dbSchema.Tables {
+		cols := columnTypes[mt.Name]
+		if cols == nil {
+			continue
+		}
+		for _, field := range mt.Fields {
+			if columnType, ok := cols[field.Name]; ok {
+				field.ColumnType = columnType
+			}
+		}
+	}
+	return nil
 }
 
 func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
