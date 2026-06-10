@@ -367,14 +367,86 @@ func TestStopRdonlyReplicatingFromTablet(t *testing.T) {
 		},
 	}
 
-	err := stopRdonlyReplicatingFromTablet(t.Context(), tmc, tabletMap, sourceTablet)
+	stopped, err := stopRdonlyReplicatingFromTablet(t.Context(), tmc, tabletMap, sourceTablet)
 
 	require.NoError(t, err)
+	assert.True(t, stopped.Has(topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias)))
 	assert.ElementsMatch(t, []string{
 		topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias),
 		topoproto.TabletAliasString(rdonlyFromAcker.Alias),
 	}, tmc.statusRead)
 	assert.Equal(t, []string{topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias)}, tmc.stopped)
+}
+
+func TestStopRdonlyReplicatingFromTabletErrors(t *testing.T) {
+	t.Parallel()
+
+	sourceTablet := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	rdonly := replicationSourceTestTablet("zone1", 200, topodatapb.TabletType_RDONLY)
+	rdonlyAlias := topoproto.TabletAliasString(rdonly.Alias)
+	tabletMap := map[string]*topo.TabletInfo{
+		rdonlyAlias: {Tablet: rdonly},
+	}
+
+	tests := []struct {
+		name      string
+		tmc       *stopRdonlyReplicationTestTMClient
+		tabletMap map[string]*topo.TabletInfo
+		tablet    *topodatapb.Tablet
+		wantErr   string
+	}{
+		{
+			name:      "invalid tablet",
+			tmc:       &stopRdonlyReplicationTestTMClient{},
+			tabletMap: tabletMap,
+			wantErr:   "tablet must have an alias",
+		},
+		{
+			name:      "replication status error",
+			tmc:       &stopRdonlyReplicationTestTMClient{},
+			tabletMap: tabletMap,
+			tablet:    sourceTablet,
+			wantErr:   "failed to read rdonly replication status",
+		},
+		{
+			name: "invalid replication status",
+			tmc: &stopRdonlyReplicationTestTMClient{
+				replicationStatusResults: map[string]*replicationdatapb.Status{
+					rdonlyAlias: {SourceHost: sourceTablet.MysqlHostname},
+				},
+			},
+			tabletMap: tabletMap,
+			tablet:    sourceTablet,
+			wantErr:   "failed to inspect rdonly replication source",
+		},
+		{
+			name: "stop replication error",
+			tmc: &stopRdonlyReplicationTestTMClient{
+				replicationStatusResults: map[string]*replicationdatapb.Status{
+					rdonlyAlias: {
+						SourceHost: sourceTablet.MysqlHostname,
+						SourcePort: sourceTablet.MysqlPort,
+					},
+				},
+				stopReplicationResults: map[string]error{
+					rdonlyAlias: assert.AnError,
+				},
+			},
+			tabletMap: tabletMap,
+			tablet:    sourceTablet,
+			wantErr:   "failed to stop rdonly replication",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			stopped, err := stopRdonlyReplicatingFromTablet(t.Context(), tt.tmc, tt.tabletMap, tt.tablet)
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Nil(t, stopped)
+		})
+	}
 }
 
 func replicationSourceTestTablet(cell string, uid uint32, tabletType topodatapb.TabletType) *topodatapb.Tablet {

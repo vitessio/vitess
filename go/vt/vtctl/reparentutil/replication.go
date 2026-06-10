@@ -249,10 +249,11 @@ func stopRdonlyReplicatingFromTablet(
 	tmc tmclient.TabletManagerClient,
 	tabletMap map[string]*topo.TabletInfo,
 	tablet *topodatapb.Tablet,
-) error {
+) (sets.Set[string], error) {
 	if tablet == nil || tablet.Alias == nil {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet must have an alias")
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet must have an alias")
 	}
+	stopped := sets.New[string]()
 
 	aliases := make([]string, 0, len(tabletMap))
 	for alias := range tabletMap {
@@ -269,22 +270,23 @@ func stopRdonlyReplicatingFromTablet(
 		rdonly := ti.Tablet
 		status, err := tmc.ReplicationStatus(ctx, rdonly)
 		if err != nil {
-			return vterrors.Wrapf(err, "failed to read rdonly replication status on %s", alias)
+			return nil, vterrors.Wrapf(err, "failed to read rdonly replication status on %s", alias)
 		}
 
 		replicatingFromTablet, err := replicationStatusSourceMatchesTablet(status, tablet)
 		if err != nil {
-			return vterrors.Wrapf(err, "failed to inspect rdonly replication source on %s", alias)
+			return nil, vterrors.Wrapf(err, "failed to inspect rdonly replication source on %s", alias)
 		}
 		if !replicatingFromTablet {
 			continue
 		}
 		if err := tmc.StopReplication(ctx, rdonly); err != nil {
-			return vterrors.Wrapf(err, "failed to stop rdonly replication on %s", alias)
+			return nil, vterrors.Wrapf(err, "failed to stop rdonly replication on %s", alias)
 		}
+		stopped.Insert(alias)
 	}
 
-	return nil
+	return stopped, nil
 }
 
 func replicationStatusSourceMatchesTablet(status *replicationdatapb.Status, tablet *topodatapb.Tablet) (bool, error) {

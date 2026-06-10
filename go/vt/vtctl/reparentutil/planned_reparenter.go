@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -682,8 +683,11 @@ func (pr *PlannedReparenter) reparentTablets(
 	replicasWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
+	stoppedRdonly := sets.New[string]()
 	if promoteReplicaRequired && opts.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA {
-		if err := stopRdonlyReplicatingFromTablet(ctx, pr.tmc, tabletMap, ev.NewPrimary); err != nil {
+		var err error
+		stoppedRdonly, err = stopRdonlyReplicatingFromTablet(ctx, pr.tmc, tabletMap, ev.NewPrimary)
+		if err != nil {
 			return err
 		}
 	}
@@ -715,7 +719,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// primary was. Instead, we rely on the former primary to remember
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
-			forceStartReplication := false
+			forceStartReplication := stoppedRdonly.Has(alias)
 			source, err := DesiredReplicationSource(ev.NewPrimary, tablet, tabletMap, opts.durability, opts.replicationSourceConfig)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to select replication source: %v", alias, err))
