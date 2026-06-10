@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strconv"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
@@ -396,12 +398,16 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 			pks = td.PrimaryKeyColumns
 		} else {
 			// Use a PK equivalent if one exists.
-			executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-				// This sets wantfields to true.
-				return vr.dbClient.ExecuteFetch(query, maxrows)
-			}
-			if pks, _, err = mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, vr.dbClient.DBName(), td.Name); err != nil {
-				return nil, err
+			if td.Schema != "" {
+				senv := schemadiff.NewEnvWithDefaults(vr.vre.env)
+				createTableEntity, err := schemadiff.NewCreateTableEntityFromSQL(senv, td.Schema)
+				if err != nil {
+					return nil, err
+				}
+				pks, _ = schemadiff.GetPrimaryKeyEquivalent(createTableEntity)
+			} else {
+				log.Warn("No CREATE TABLE schema available to determine a primary key equivalent",
+					slog.String("table", td.Name))
 			}
 			// Fall back to using every column in the table if there's no PK or PKE.
 			if len(pks) == 0 {

@@ -192,30 +192,8 @@ func PrioritizedUniqueKeys(createTableEntity *CreateTableEntity) *IndexDefinitio
 			// Prefix comes last
 			return false
 		}
-		iFirstColEntity := uniqueKeys[i].ColumnList.Entities[0]
-		jFirstColEntity := uniqueKeys[j].ColumnList.Entities[0]
-		if iFirstColEntity.IsIntegralType() && !jFirstColEntity.IsIntegralType() {
-			// Prioritize integers
-			return true
-		}
-		if !iFirstColEntity.IsIntegralType() && jFirstColEntity.IsIntegralType() {
-			// Prioritize integers
-			return false
-		}
-		if !iFirstColEntity.HasBlobTypeStorage() && jFirstColEntity.HasBlobTypeStorage() {
-			return true
-		}
-		if iFirstColEntity.HasBlobTypeStorage() && !jFirstColEntity.HasBlobTypeStorage() {
-			return false
-		}
-		if !iFirstColEntity.IsTextual() && jFirstColEntity.IsTextual() {
-			return true
-		}
-		if iFirstColEntity.IsTextual() && !jFirstColEntity.IsTextual() {
-			return false
-		}
-		if storageDiff := IntegralTypeStorage(iFirstColEntity.Type()) - IntegralTypeStorage(jFirstColEntity.Type()); storageDiff != 0 {
-			return storageDiff < 0
+		if costDiff := uniqueKeys[i].TypeCost() - uniqueKeys[j].TypeCost(); costDiff != 0 {
+			return costDiff < 0
 		}
 		if lenDiff := len(uniqueKeys[i].ColumnList.Entities) - len(uniqueKeys[j].ColumnList.Entities); lenDiff != 0 {
 			return lenDiff < 0
@@ -223,6 +201,55 @@ func PrioritizedUniqueKeys(createTableEntity *CreateTableEntity) *IndexDefinitio
 		return false
 	})
 	return NewIndexDefinitionEntityList(uniqueKeys)
+}
+
+// IsValidPKEquivalent returns true if the key is a valid Primary Key Equivalent:
+// a unique, non-nullable key. Unlike IsValidIterationKey, this does not exclude
+// floating point types or prefix keys.
+func IsValidPKEquivalent(key *IndexDefinitionEntity) bool {
+	if key == nil {
+		return false
+	}
+	if !key.IsUnique() {
+		return false
+	}
+	if key.HasNullable() {
+		return false
+	}
+	return true
+}
+
+// GetPrimaryKeyEquivalent returns the lowest-cost valid PKE in a CREATE TABLE statement.
+func GetPrimaryKeyEquivalent(createTableEntity *CreateTableEntity) (columns []string, indexName string) {
+	var bestKey *IndexDefinitionEntity
+	for _, key := range createTableEntity.IndexDefinitionEntities() {
+		if key.HasExpression() {
+			continue
+		}
+		if !IsValidPKEquivalent(key) {
+			continue
+		}
+		if bestKey == nil {
+			bestKey = key
+			continue
+		}
+		if costDiff := key.TypeCost() - bestKey.TypeCost(); costDiff != 0 {
+			if costDiff < 0 {
+				bestKey = key
+			}
+			continue
+		}
+		if lenDiff := len(key.ColumnList.Entities) - len(bestKey.ColumnList.Entities); lenDiff != 0 {
+			if lenDiff < 0 {
+				bestKey = key
+			}
+			continue
+		}
+	}
+	if bestKey != nil {
+		return bestKey.ColumnNames(), bestKey.Name()
+	}
+	return nil, ""
 }
 
 // RemovedForeignKeyNames returns the names of removed foreign keys, ignoring mere name changes

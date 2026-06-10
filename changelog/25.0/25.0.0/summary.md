@@ -15,6 +15,7 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [Unified Primary Key Equivalent (PKE) selection](#vreplication-unified-pke-selection)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -70,6 +71,8 @@ The flag will be removed entirely in v26. This deprecation is tracked in https:/
 
 ## <a id="minor-changes"/>Minor Changes</a>
 
+### <a id="minor-changes-vreplication"/>VReplication</a>
+
 #### <a id="vreplication-reverse-workflow-data-protection"/>Default data protection for `_reverse` workflow cancel/complete</a>
 
 When calling `cancel` or `complete` on an auto-generated `_reverse` workflow without explicitly providing `--keep-data=false`, the system now defaults to keeping data and returns a warning. This prevents accidental deletion of production tables on the original source side, where the `_reverse` workflow's target is actually your production keyspace.
@@ -85,6 +88,14 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
+
+#### <a id="vreplication-unified-pke-selection"/>Unified Primary Key Equivalent (PKE) selection</a>
+
+VReplication workflows (MoveTables, Reshard, Materialize, VDiff) and Online DDL now share a single implementation for selecting a Primary Key Equivalent (PKE) — the unique, non-NULLable key used to iterate and identify rows in tables that have no defined PRIMARY KEY. The PKE is now determined by parsing the table's `CREATE TABLE` statement (via the `schemadiff` package) instead of querying `information_schema`, and both code paths rank candidate keys using the same data-type cost model.
+
+**Behavior change:** Online DDL's unique key prioritization now ranks candidate keys by the total storage cost of all columns in the key, rather than by properties of the key's first column only. For some tables this changes which unique key an Online DDL migration iterates over. The selected key is still a valid unique, non-NULLable key in all cases; only the preference order among multiple candidates has changed. VReplication's PKE selection behavior is unchanged.
+
+See [#10259](https://github.com/vitessio/vitess/issues/10259) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 

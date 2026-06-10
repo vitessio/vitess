@@ -16,6 +16,8 @@ limitations under the License.
 
 package schemadiff
 
+import "strings"
+
 var engineCasing = map[string]string{
 	"INNODB": "InnoDB",
 	"MYISAM": "MyISAM",
@@ -115,4 +117,42 @@ var expandedDataTypes = map[string]bool{
 func IsExpandingDataType(sourceType string, targetType string) bool {
 	_, ok := expandedDataTypes[sourceType+":"+targetType]
 	return ok
+}
+
+const defaultTypeCost = 1000
+
+// typeCost maps MySQL data types to a relative cost for use in ranking
+// Primary Key Equivalent (PKE) indexes. Lower cost types are preferred.
+// This matches the ranking used in mysqlctl.GetPrimaryKeyEquivalentColumns.
+var typeCost = map[string]int{
+	"enum":      0,
+	"tinyint":   1,
+	"year":      2,
+	"smallint":  3,
+	"date":      4,
+	"mediumint": 5,
+	"time":      6,
+	"int":       7,
+	"set":       8,
+	"timestamp": 9,
+	"bigint":    10,
+	"float":     11,
+	"double":    12,
+	"decimal":   13,
+	"datetime":  14,
+	"binary":    30,
+	"char":      31,
+	"varbinary": 60,
+	"varchar":   61,
+	"tinyblob":  80,
+	"tinytext":  81,
+}
+
+// TypeCost returns the relative cost for the given column type.
+// Unknown types return defaultTypeCost.
+func TypeCost(columnType string) int {
+	if cost, ok := typeCost[strings.ToLower(columnType)]; ok {
+		return cost
+	}
+	return defaultTypeCost
 }
