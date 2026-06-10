@@ -53,7 +53,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
-		if rdonlyPolicy := topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy(row.GetInt32("rdonly_replication_source_policy")); rdonlyPolicy != topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED {
+		if rdonlyPolicy := topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy(row.GetInt32("rdonly_replication_source_policy")); rdonlyPolicy != topodatapb.ReplicationSourceConfig_UNSPECIFIED {
 			keyspace.ReplicationSourceConfig = &topodatapb.ReplicationSourceConfig{
 				RdonlyPolicy: rdonlyPolicy,
 			}

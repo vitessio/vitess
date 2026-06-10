@@ -499,7 +499,7 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 }
 
 func rdonlyReplicationSourcePolicyRequiresSemiSyncAcker(ca *clusterAnalysis) bool {
-	return ca != nil && ca.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER
+	return ca != nil && ca.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER
 }
 
 func rdonlyReplicationSourceIsEligibleAcker(ca *clusterAnalysis, source, tablet *topodatapb.Tablet) bool {

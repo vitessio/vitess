@@ -18661,8 +18661,8 @@ export namespace topodata {
 
         /** RdonlyReplicationSourcePolicy enum. */
         enum RdonlyReplicationSourcePolicy {
-            RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED = 0,
-            RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER = 1
+            UNSPECIFIED = 0,
+            REQUIRE_SEMI_SYNC_ACKER = 1
         }
     }
 

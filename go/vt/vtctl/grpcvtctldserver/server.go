@@ -3715,7 +3715,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}
 
 	var tabletMap map[string]*topo.TabletInfo
-	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER {
+	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER {
 		tabletMap, err = s.ts.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return nil, err
@@ -3918,7 +3918,7 @@ func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtc
 		return nil, err
 	}
 
-	if ki.GetReplicationSourceConfig().GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER && !policy.HasSemiSync(durabilityPolicy) {
+	if ki.GetReplicationSourceConfig().GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER && !policy.HasSemiSync(durabilityPolicy) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "durability policy <%s> cannot be set while rdonly replication source policy <%s> requires semi-sync ackers", req.DurabilityPolicy, ki.GetReplicationSourceConfig().GetRdonlyPolicy())
 	}
 
@@ -3961,7 +3961,7 @@ func (s *VtctldServer) SetKeyspaceReplicationSourcePolicy(ctx context.Context, r
 		return nil, err
 	}
 
-	if req.RdonlyPolicy == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER {
+	if req.RdonlyPolicy == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER {
 		durabilityPolicy, err := policy.GetDurabilityPolicy(ki.GetDurabilityPolicy())
 		if err != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "rdonly replication source policy <%s> requires a valid semi-sync durability policy; keyspace durability policy <%s> is invalid: %v", req.RdonlyPolicy, ki.GetDurabilityPolicy(), err)
@@ -3971,7 +3971,7 @@ func (s *VtctldServer) SetKeyspaceReplicationSourcePolicy(ctx context.Context, r
 		}
 	}
 
-	if req.RdonlyPolicy == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED {
+	if req.RdonlyPolicy == topodatapb.ReplicationSourceConfig_UNSPECIFIED {
 		ki.ReplicationSourceConfig = nil
 	} else {
 		ki.ReplicationSourceConfig = &topodatapb.ReplicationSourceConfig{
@@ -3991,8 +3991,8 @@ func (s *VtctldServer) SetKeyspaceReplicationSourcePolicy(ctx context.Context, r
 
 func validateRdonlyReplicationSourcePolicy(rdonlyPolicy topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy) error {
 	switch rdonlyPolicy {
-	case topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED,
-		topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER:
+	case topodatapb.ReplicationSourceConfig_UNSPECIFIED,
+		topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER:
 		return nil
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "rdonly replication source policy <%s> is not a valid policy", rdonlyPolicy.String())

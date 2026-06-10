@@ -183,9 +183,9 @@ message Tablet {
 message ReplicationSourceConfig {
   enum RdonlyReplicationSourcePolicy {
     // Use the existing behavior for rdonly tablets.
-    RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED = 0;
+    UNSPECIFIED = 0;
     // Rdonly tablets must replicate from a semi-sync acker.
-    RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER = 1;
+    REQUIRE_SEMI_SYNC_ACKER = 1;
   }
 
   RdonlyReplicationSourcePolicy rdonly_policy = 1;

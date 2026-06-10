@@ -1363,7 +1363,7 @@ func desiredReplicationSourceForFixReplica(
 	replicationSourceConfig *topodatapb.ReplicationSourceConfig,
 ) (*topodatapb.Tablet, error) {
 	if analyzedTablet.Type != topodatapb.TabletType_RDONLY ||
-		replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED {
+		replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_UNSPECIFIED {
 		return primaryTablet, nil
 	}
 

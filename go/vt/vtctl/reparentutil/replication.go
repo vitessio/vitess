@@ -202,7 +202,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	}
 
 	var tabletMap map[string]*topo.TabletInfo
-	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER {
+	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER {
 		tabletMap, err = ts.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
@@ -233,12 +233,12 @@ func DesiredReplicationSource(
 	}
 
 	rdonlyPolicy := replicationSourceConfig.GetRdonlyPolicy()
-	if tablet.Type != topodatapb.TabletType_RDONLY || rdonlyPolicy == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED {
+	if tablet.Type != topodatapb.TabletType_RDONLY || rdonlyPolicy == topodatapb.ReplicationSourceConfig_UNSPECIFIED {
 		return primary, nil
 	}
 
 	switch rdonlyPolicy {
-	case topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER:
+	case topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER:
 		return desiredRdonlySemiSyncAckerReplicationSource(primary, tablet, tabletMap, durability)
 	default:
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unsupported rdonly replication source policy %v", rdonlyPolicy)
@@ -366,7 +366,7 @@ func rdonlyTabletsToDefer(tabletMap map[string]*topo.TabletInfo, ignoredTablets 
 }
 
 func shouldDeferRdonlyReparent(replicationSourceConfig *topodatapb.ReplicationSourceConfig) bool {
-	return replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER
+	return replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER
 }
 
 func replicationStatusSourceMatchesTablet(status *replicationdatapb.Status, tablet *topodatapb.Tablet, ioThreadWasRunning bool) (bool, error) {

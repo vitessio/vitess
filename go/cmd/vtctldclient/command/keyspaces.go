@@ -378,11 +378,11 @@ func commandSetKeyspaceReplicationSourcePolicy(cmd *cobra.Command, args []string
 func parseRdonlyReplicationSourcePolicy(value string) (topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy, error) {
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case "", "unspecified":
-		return topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED, nil
+		return topodatapb.ReplicationSourceConfig_UNSPECIFIED, nil
 	case "require-semi-sync-acker":
-		return topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER, nil
+		return topodatapb.ReplicationSourceConfig_REQUIRE_SEMI_SYNC_ACKER, nil
 	default:
-		return topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED, fmt.Errorf("invalid --rdonly-policy %q", value)
+		return topodatapb.ReplicationSourceConfig_UNSPECIFIED, fmt.Errorf("invalid --rdonly-policy %q", value)
 	}
 }
 
