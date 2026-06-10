@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -46,7 +47,26 @@ const (
 	getGlobalStatusQuery = "SELECT variable_name, variable_value FROM performance_schema.global_status"
 )
 
-type ResetSuperReadOnlyFunc func() error
+type (
+	ResetSuperReadOnlyFunc func() error
+
+	// SetSuperReadOnlyOption configures how SetSuperReadOnly runs.
+	SetSuperReadOnlyOption func(*setSuperReadOnlyOptions)
+
+	setSuperReadOnlyOptions struct {
+		lockWaitTimeout time.Duration
+	}
+)
+
+// WithLockWaitTimeout sets the session lock_wait_timeout (in whole seconds) for
+// the SET GLOBAL super_read_only statement, bounding how long it waits for
+// metadata locks held by in-flight queries. By default the server's value is
+// left untouched.
+func WithLockWaitTimeout(timeout time.Duration) SetSuperReadOnlyOption {
+	return func(options *setSuperReadOnlyOptions) {
+		options.lockWaitTimeout = timeout
+	}
+}
 
 // WaitForReplicationStart waits until the deadline for replication to start.
 // This validates the current primary is correct and can be connected to.
@@ -313,7 +333,12 @@ func (mysqld *Mysqld) SetReadOnly(ctx context.Context, on bool) error {
 
 // SetSuperReadOnly set/unset the super_read_only flag.
 // Returns a function which is called to set super_read_only back to its original value.
-func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuperReadOnlyFunc, error) {
+func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...SetSuperReadOnlyOption) (ResetSuperReadOnlyFunc, error) {
+	var options setSuperReadOnlyOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	//  return function for switching `OFF` super_read_only
 	var resetFunc ResetSuperReadOnlyFunc
 	disableFunc := func() error {
@@ -352,8 +377,37 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool) (ResetSuper
 	} else {
 		query += "'OFF'"
 	}
-	if err := mysqld.ExecuteSuperQuery(ctx, query); err != nil {
+
+	if options.lockWaitTimeout <= 0 {
+		if err := mysqld.ExecuteSuperQuery(ctx, query); err != nil {
+			return nil, err
+		}
+		return resetFunc, nil
+	}
+
+	// Pin a single connection so the session lock_wait_timeout applies to the
+	// SET GLOBAL statement, and restore it before the connection goes back to
+	// the pool.
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
 		return nil, err
+	}
+	defer conn.Recycle()
+
+	setTimeoutQuery := fmt.Sprintf("SET SESSION lock_wait_timeout = %d", int64(options.lockWaitTimeout/time.Second))
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{setTimeoutQuery}); err != nil {
+		return nil, err
+	}
+	execErr := mysqld.executeSuperQueryListConn(ctx, conn, []string{query})
+	// Restore the session lock_wait_timeout even if the SET GLOBAL failed.
+	// For a session variable, DEFAULT is the corresponding global value.
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{"SET SESSION lock_wait_timeout = DEFAULT"}); err != nil {
+		// Close the connection so a modified session never returns to the pool.
+		log.Warn("failed to restore session lock_wait_timeout, discarding connection", slog.Any("error", err))
+		conn.Close()
+	}
+	if execErr != nil {
+		return nil, execErr
 	}
 
 	return resetFunc, nil

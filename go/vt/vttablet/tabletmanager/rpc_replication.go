@@ -534,6 +534,11 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
+// demotePrimaryLockWaitTimeout bounds how long enabling super_read_only during a
+// demotion waits for metadata locks held by in-flight queries, so the demotion
+// fails fast instead of stalling.
+const demotePrimaryLockWaitTimeout = 1 * time.Second
+
 // DemotePrimary prepares a PRIMARY tablet to give up leadership to another tablet.
 //
 // It attempts to idempotently ensure the following guarantees upon returning
@@ -712,7 +717,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	log.Info("enabling super_read_only")
-	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true, mysqlctl.WithLockWaitTimeout(demotePrimaryLockWaitTimeout)); err != nil {
 		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
 			log.Warn("server does not know about super_read_only, continuing anyway...")
 		} else {
