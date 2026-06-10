@@ -18,6 +18,7 @@ package servenv
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -75,7 +76,7 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 		username := md["username"][0]
 		password := md["password"][0]
 		for _, authEntry := range sa.entries {
-			if username == authEntry.Username && password == authEntry.Password {
+			if username == authEntry.Username && subtle.ConstantTimeCompare([]byte(password), []byte(authEntry.Password)) == 1 {
 				return newStaticAuthContext(ctx, username), nil
 			}
 		}
