@@ -395,13 +395,9 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
-	wfName := ""
-	if vs.filter != nil {
-		wfName = vs.filter.WorkflowName
-	}
 	wfNameLog := ""
-	if wfName != "" {
-		wfNameLog = " in workflow " + wfName
+	if vs.filter != nil && vs.filter.WorkflowName != "" {
+		wfNameLog = " in workflow " + vs.filter.WorkflowName
 	}
 	throttlerErrs := make(chan error, 1) // How we share the error when we've been fully throttled too long
 	defer close(throttlerErrs)
@@ -417,7 +413,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				default:
 					// Do nothing special.
 				}
-				vs.vse.throttledCounts.Add(wfName, 1)
+				vs.vse.throttledCounts.Add(1)
 				curtime := time.Now().Unix()
 				if !throttledTime.CompareAndSwap(0, curtime) {
 					if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {

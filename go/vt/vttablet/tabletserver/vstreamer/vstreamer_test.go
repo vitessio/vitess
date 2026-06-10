@@ -2425,19 +2425,14 @@ func TestFullyThrottledTimeout(t *testing.T) {
 func TestVStreamerThrottledCounts(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 
-	const wfName = "test_vstreamer_throttled_counts"
-	filter := &binlogdatapb.Filter{
-		WorkflowName: wfName,
-		Rules:        []*binlogdatapb.Rule{{Match: "/.*/"}},
-	}
-	startingMetric := engine.throttledCounts.Counts()[wfName]
+	startingMetric := engine.throttledCounts.Get()
 
-	wg, _ := startFullyThrottledStream(ctx, t, filter, "", nil)
+	wg, _ := startFullyThrottledStream(ctx, t, nil, "", nil)
 	defer wg.Wait()
 	defer cancel()
 
 	assert.Eventually(t, func() bool {
-		return engine.throttledCounts.Counts()[wfName] > startingMetric
+		return engine.throttledCounts.Get() > startingMetric
 	}, 30*time.Second, 50*time.Millisecond, "VStreamerThrottledCounts should increment while vstream is throttled")
 }
 
