@@ -413,6 +413,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				default:
 					// Do nothing special.
 				}
+				vs.vse.throttledCounts.Add(1)
 				curtime := time.Now().Unix()
 				if !throttledTime.CompareAndSwap(0, curtime) {
 					if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
