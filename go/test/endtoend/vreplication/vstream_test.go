@@ -345,6 +345,11 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 						if rowChange.After == nil {
 							continue
 						}
+						// MakeRowTrusted indexes fields by position without bounds checks, so
+						// confirm the FIELD event arrived first and matches the row's shape.
+						require.NotNilf(t, loadtestFields, "received a ROW event for the loadtest table before its FIELD event")
+						require.Lenf(t, rowChange.After.Lengths, len(loadtestFields),
+							"loadtest ROW event value count does not match the preceding FIELD event's field count")
 						for _, val := range sqltypes.MakeRowTrusted(loadtestFields, rowChange.After) {
 							decodedValues = append(decodedValues, val.ToString())
 						}
