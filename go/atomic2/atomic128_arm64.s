@@ -24,7 +24,15 @@ TEXT ·compareAndSwapUint128_(SB), NOSPLIT, $0-41
 	MOVD newu+32(FP), R3
 	MOVD R0, R6
 	MOVD R1, R7
-	CASPD (R0, R1), (R5), (R2, R3)
+	// CASPAL X0, X1, X2, X3, [X5]
+	//
+	// The acquire/release variant of CASP. The plain CASP has relaxed
+	// memory ordering: its store can become visible to other CPUs before
+	// earlier stores by this CPU (e.g. a node's fields written before the
+	// node is published via this CAS), which breaks the lock-free
+	// data structures built on top of this primitive. Go's assembler only
+	// knows the relaxed CASPD/CASPW mnemonics, so encode CASPAL directly.
+	WORD $0x4860fca2
 	CMP R0, R6
 	CCMP EQ, R1, R7, $0
 	CSET EQ, R0
