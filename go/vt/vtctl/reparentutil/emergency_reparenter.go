@@ -682,18 +682,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		source := newPrimaryTablet
-		if !intermediateReparent {
-			var err error
-			source, err = DesiredReplicationSource(newPrimaryTablet, ti.Tablet, tabletMap, opts.durability, opts.replicationSourceConfig)
-			if err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to select replication source: %v", alias, err))
-
-				return
-			}
-		}
-
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, source.Alias, 0, "", forceStart, policy.IsReplicaSemiSync(opts.durability, source, ti.Tablet), 0)
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet), 0)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed", alias)
 			rec.RecordError(err)
