@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -166,6 +167,56 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
 	isReadOnly, _ = mysqld.IsReadOnly(t.Context())
 	assert.True(t, isReadOnly, "read_only should be set to True")
+}
+
+// TestSetSuperReadOnlyLockWaitTimeoutMySQL checks that enabling super_read_only
+// with a lock_wait_timeout of 1 second fails fast when another session holds a
+// lock that blocks it, instead of waiting for the lock to be released.
+func TestSetSuperReadOnlyLockWaitTimeoutMySQL(t *testing.T) {
+	require.NotNil(t, mysqld)
+
+	// Make sure the server is writable so the locking connection below can lock.
+	err := mysqld.SetReadOnly(t.Context(), false)
+	require.NoError(t, err)
+
+	// Hold an explicit table lock on a separate connection: enabling
+	// super_read_only blocks until explicit table locks are released.
+	conn, err := mysql.Connect(t.Context(), &mysqlParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	Exec(t, conn, "lock tables t1 write")
+
+	// Bound the call so a regression fails the test instead of hanging it.
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	_, err = mysqld.SetSuperReadOnly(ctx, true, mysqlctl.WithLockWaitTimeout(time.Second))
+	elapsed := time.Since(start)
+
+	var sqlErr *sqlerror.SQLError
+	require.ErrorAs(t, err, &sqlErr, "enabling super_read_only while blocked should fail, took %v", elapsed)
+	assert.Equal(t, sqlerror.ERLockWaitTimeout, sqlErr.Number(), "expected a lock wait timeout error, got: %v", err)
+	// The nominal wait is 1 second. Allow generous headroom for loaded CI hosts
+	// while still proving we did not wait for the lock to be released.
+	assert.Less(t, elapsed, 10*time.Second)
+
+	isSuperReadOnly, err := mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.False(t, isSuperReadOnly, "super_read_only should still be set to False")
+
+	// Once the lock is released, the same call succeeds.
+	Exec(t, conn, "unlock tables")
+	retFunc, err := mysqld.SetSuperReadOnly(t.Context(), true, mysqlctl.WithLockWaitTimeout(time.Second))
+	require.NoError(t, err)
+	require.NotNil(t, retFunc, "SetSuperReadOnly is supposed to return a defer function")
+
+	isSuperReadOnly, err = mysqld.IsSuperReadOnly(t.Context())
+	require.NoError(t, err)
+	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
+
+	// Restore the original value for the tests that follow.
+	err = retFunc()
+	require.NoError(t, err)
 }
 
 func TestGetMysqlPort(t *testing.T) {
