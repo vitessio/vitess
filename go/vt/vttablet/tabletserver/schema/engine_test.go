@@ -2133,3 +2133,14 @@ func TestEngineReloadIndependentOfMaxTableCount(t *testing.T) {
 	got := se.TableCount()
 	assert.GreaterOrEqual(t, got, 5, "reload must load all rows regardless of MaxTableCount")
 }
+
+func TestMarshalMinimalSchemaFailsWhenEnumSetEnrichmentFails(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	db.AddRejectedQuery(fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'"),
+		errors.New("information_schema is unavailable"))
+
+	_, err := se.MarshalMinimalSchema(t.Context())
+	require.ErrorContains(t, err, "failed to query information_schema for ENUM/SET column types")
+}

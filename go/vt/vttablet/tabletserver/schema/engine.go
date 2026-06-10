@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	maps0 "maps"
 	"net/http"
 	"strings"
@@ -1064,13 +1063,11 @@ func (se *Engine) GetSchema() map[string]*Table {
 func (se *Engine) MarshalMinimalSchema(ctx context.Context) ([]byte, error) {
 	dbSchema := se.snapshotMinimalSchema()
 	if err := se.enrichEnumAndSetColumnTypes(ctx, dbSchema); err != nil {
-		// Degrade gracefully: without the ENUM/SET ColumnType we are simply no
-		// better off than before this enrichment existed for any column later
-		// dropped. Log it and store the un-enriched schema; the caller's own
-		// write path decides whether the save itself fails.
-		log.Warn("failed to enrich ENUM/SET column types for schema version tracking",
-			slog.String("database", se.cp.DBName()),
-			slog.Any("error", err))
+		// Fail rather than persist a schema version without the ENUM/SET string
+		// values: such a row is permanently lossy (nothing can backfill it once
+		// the live column changes), while a failed save is retried by the schema
+		// tracker from the previous GTID.
+		return nil, err
 	}
 	return dbSchema.MarshalVT()
 }
@@ -1097,6 +1094,11 @@ func (se *Engine) snapshotMinimalSchema() *binlogdatapb.MinimalSchema {
 	return dbSchema
 }
 
+// enumSetColumnTypesQuery fetches the full type definition (column_type) of
+// every ENUM and SET column in a database; %s is the SQL-encoded database name.
+const enumSetColumnTypesQuery = "select table_name, column_name, column_type " +
+	"from information_schema.columns where table_schema=%s and data_type in ('enum', 'set')"
+
 // enrichEnumAndSetColumnTypes sets ColumnType on the ENUM and SET fields of the
 // given schema using a single information_schema lookup. It does not hold se.mu.
 // Filtering on data_type IN ('enum','set') is authoritative, so it correctly
@@ -1112,9 +1114,7 @@ func (se *Engine) enrichEnumAndSetColumnTypes(ctx context.Context, dbSchema *bin
 		return vterrors.Wrapf(err, "failed to get a connection to enrich ENUM/SET column types")
 	}
 	defer conn.Recycle()
-	query := fmt.Sprintf("select table_name, column_name, column_type "+
-		"from information_schema.columns where table_schema=%s and data_type in ('enum', 'set')",
-		encodeString(se.cp.DBName()))
+	query := sqlparser.BuildParsedQuery(enumSetColumnTypesQuery, encodeString(se.cp.DBName())).Query
 	qr, err := conn.Conn.Exec(ctx, query, mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to query information_schema for ENUM/SET column types")

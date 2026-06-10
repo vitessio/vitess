@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -174,6 +175,76 @@ func TestTrackerRetriesAfterFailedSchemaSave(t *testing.T) {
 	require.Equal(t, startupGTID, startPositions[1])
 	assert.Equal(t, 1, gtid1Saves)
 	assert.Zero(t, gtid2Saves)
+}
+
+// TestTrackerRetriesAfterFailedEnumSetEnrichment proves that a failure to
+// enrich ENUM/SET column types fails the schema-version save (instead of
+// persisting a permanently lossy schema), and that the tracker then retries
+// from the previous GTID until the save succeeds with the enriched schema.
+func TestTrackerRetriesAfterFailedEnumSetEnrichment(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	const (
+		startupGTID = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3"
+		gtid1       = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10"
+		ddl1        = "create table tracker_enrichment_retry (id int)"
+	)
+	enrichmentQuery := fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'")
+
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{})
+	db.AddQuery("select id from _vt.schema_version limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"",
+		"varchar"),
+		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
+	))
+
+	var gtid1Saves int
+	db.AddQueryPatternWithCallback("insert into _vt.schema_version.*1-10.*", &sqltypes.Result{}, func(query string) {
+		gtid1Saves++
+	})
+
+	events := [][]*binlogdatapb.VEvent{{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: gtid1},
+		{Type: binlogdatapb.VEventType_DDL, Statement: ddl1},
+	}}
+	vs := &fakeVstreamer{
+		done: make(chan struct{}),
+		streamCalls: []fakeVstreamCall{
+			{
+				// The initial schema has been saved by now; enrichment starts failing.
+				before: func() {
+					db.AddRejectedQuery(enrichmentQuery, errors.New("information_schema is unavailable"))
+				},
+				events: events,
+			},
+			{
+				// Enrichment recovers before the retry.
+				before: func() {
+					db.DeleteRejectedQuery(enrichmentQuery)
+				},
+				events: events,
+			},
+		},
+	}
+
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerEnrichmentRetryTest")
+	tracker := NewTracker(env, vs, se)
+	tracker.wait = func(ctx context.Context, d time.Duration) bool { return waitWithContext(ctx, 0) }
+
+	tracker.Open()
+	<-vs.done
+	tracker.Close()
+
+	startPositions := vs.getStartPositions()
+	require.Greater(t, len(startPositions), 1)
+	require.Equal(t, startupGTID, startPositions[0])
+	require.Equal(t, startupGTID, startPositions[1])
+	assert.Equal(t, 1, gtid1Saves)
 }
 
 func TestTrackerRetriesFromStartupGTIDWhenFirstStreamFailsBeforeGTID(t *testing.T) {
