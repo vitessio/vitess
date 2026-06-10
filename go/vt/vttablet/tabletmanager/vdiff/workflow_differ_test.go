@@ -935,17 +935,21 @@ func TestBuildPlanSuccess(t *testing.T) {
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 			if len(tcase.tablePlan.table.PrimaryKeyColumns) == 0 {
-				result := noResults
-				if tcase.table == "nopkwithpke" { // This has a PKE column: c3
-					result = sqltypes.MakeTestResult(
-						sqltypes.MakeTestFields(
-							"column_name|index_name",
-							"varchar|varchar",
-						),
-						"c3|c3",
-					)
+				var createTableSQL string
+				switch tcase.table {
+				case "nopkwithpke":
+					createTableSQL = "CREATE TABLE `nopkwithpke` (`c1` int DEFAULT NULL, `c2` int DEFAULT NULL, `c3` int NOT NULL, UNIQUE KEY `c3` (`c3`)) ENGINE=InnoDB"
+				case "nopk":
+					createTableSQL = "CREATE TABLE `nopk` (`c1` int DEFAULT NULL, `c2` int DEFAULT NULL, `c3` int DEFAULT NULL) ENGINE=InnoDB"
 				}
-				dbc.ExpectRequestRE("SELECT index_cols.COLUMN_NAME AS column_name, index_cols.INDEX_NAME as index_name FROM information_schema.STATISTICS", result, nil)
+				result := sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"Table|Create Table",
+						"varchar|varchar",
+					),
+					fmt.Sprintf("%s|%s", tcase.table, createTableSQL),
+				)
+				dbc.ExpectRequestRE("SHOW CREATE TABLE", result, nil)
 			}
 			if len(tcase.tablePlan.comparePKs) > 0 {
 				columnList := make([]string, len(tcase.tablePlan.comparePKs))
