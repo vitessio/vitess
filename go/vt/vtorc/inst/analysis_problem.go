@@ -522,14 +522,34 @@ func matchPrimaryTabletUnreachableByQuorum(a *DetectionAnalysis, now time.Time) 
 	return result.Down
 }
 
-// QuorumOptionsFromConfig builds QuorumOptions from the current VTOrc configuration.
+// QuorumOptionsFromConfig builds QuorumOptions from the current VTOrc configuration. The values
+// are dynamic, so they cannot all be rejected at startup; configurations that silently disable
+// quorum detection (fail closed) are warned about here, rate-limited.
 func QuorumOptionsFromConfig() QuorumOptions {
-	return QuorumOptions{
+	opts := QuorumOptions{
 		FailureThreshold: config.GetShardTabletHealthFailureThreshold(),
 		Freshness:        config.GetShardTabletHealthFreshness(),
 		Fraction:         config.GetShardQuorumFraction(),
 		MinObservers:     config.GetShardQuorumMinObservers(),
 	}
+	if !opts.valid() {
+		if util.ClearToLog("shard_quorum_config", "invalid") {
+			log.Warn("invalid shard quorum configuration; quorum detection is disabled (failing closed)",
+				slog.Int("failure_threshold", opts.FailureThreshold),
+				slog.Duration("freshness", opts.Freshness),
+				slog.Float64("fraction", opts.Fraction),
+				slog.Int("min_observers", opts.MinObservers),
+			)
+		}
+	} else if pollTime := config.GetInstancePollTime(); opts.Freshness <= pollTime {
+		if util.ClearToLog("shard_quorum_config", "freshness") {
+			log.Warn("--shard-tablet-health-freshness does not exceed --instance-poll-time; observer reports go stale between polls and quorum detection may never fire",
+				slog.Duration("freshness", opts.Freshness),
+				slog.Duration("instance_poll_time", pollTime),
+			)
+		}
+	}
+	return opts
 }
 
 func sortDetectionAnalysisMatchedProblems(allProblems []*DetectionAnalysisProblem) {

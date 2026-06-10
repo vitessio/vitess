@@ -130,6 +130,7 @@ func (m *ShardPeerHealth) CloneVT() *ShardPeerHealth {
 	r.ConsecutivePingFailures = m.ConsecutivePingFailures
 	r.LastSuccessfulPing = m.LastSuccessfulPing.CloneVT()
 	r.LastAttemptedPing = m.LastAttemptedPing.CloneVT()
+	r.TimeSinceLastAttemptedPing = m.TimeSinceLastAttemptedPing.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -636,6 +637,16 @@ func (m *ShardPeerHealth) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.TimeSinceLastAttemptedPing != nil {
+		size, err := m.TimeSinceLastAttemptedPing.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
+		i--
+		dAtA[i] = 0x2a
+	}
 	if m.LastAttemptedPing != nil {
 		size, err := m.LastAttemptedPing.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -1121,6 +1132,10 @@ func (m *ShardPeerHealth) SizeVT() (n int) {
 	}
 	if m.LastAttemptedPing != nil {
 		l = m.LastAttemptedPing.SizeVT()
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.TimeSinceLastAttemptedPing != nil {
+		l = m.TimeSinceLastAttemptedPing.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -2436,6 +2451,42 @@ func (m *ShardPeerHealth) UnmarshalVT(dAtA []byte) error {
 				m.LastAttemptedPing = &vttime.Time{}
 			}
 			if err := m.LastAttemptedPing.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 5:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TimeSinceLastAttemptedPing", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TimeSinceLastAttemptedPing == nil {
+				m.TimeSinceLastAttemptedPing = &vttime.Duration{}
+			}
+			if err := m.TimeSinceLastAttemptedPing.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

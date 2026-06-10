@@ -81,7 +81,11 @@ type KeyspaceShard struct {
 
 type peerReport struct {
 	consecutiveFailures int64
-	lastAttemptedPing   time.Time
+	// pingAge is how old the observer's last ping attempt against the peer was when the report
+	// was ingested. It is preferably the tablet-measured time_since_last_attempted_ping (no
+	// cross-host clock comparison); see RecordShardPeerHealth for the fallback.
+	pingAge    time.Duration
+	hasPingAge bool
 }
 
 type observerRecord struct {
@@ -116,10 +120,20 @@ func RecordShardPeerHealth(
 		if e == nil || e.TabletAlias == nil {
 			continue
 		}
-		report := peerReport{
-			consecutiveFailures: e.ConsecutivePingFailures,
-			// protoutil.TimeFromProto handles nil safely, returning time.Time{}.
-			lastAttemptedPing: protoutil.TimeFromProto(e.LastAttemptedPing),
+		report := peerReport{consecutiveFailures: e.ConsecutivePingFailures}
+		if age, ok, err := protoutil.DurationFromProto(e.TimeSinceLastAttemptedPing); ok && err == nil {
+			// Preferred: the reporting tablet measured this age with its own clock, so no
+			// cross-host clock comparison is involved.
+			report.pingAge = age
+			report.hasPingAge = true
+		} else if t := protoutil.TimeFromProto(e.LastAttemptedPing); !t.IsZero() {
+			// Fallback for reports from tablets that predate time_since_last_attempted_ping:
+			// derive the age once at ingest from the tablet-stamped absolute time. This crosses
+			// host clocks, so it is only as accurate as the clock sync between the tablet and
+			// VTOrc, but deriving it once at ingest (when the report is freshest) beats
+			// re-deriving it at every evaluation.
+			report.pingAge = now.Sub(t)
+			report.hasPingAge = true
 		}
 		peers[topoproto.TabletAliasString(e.TabletAlias)] = report
 	}
@@ -180,10 +194,13 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 		if !ok {
 			continue // this observer has not pinged the primary
 		}
-		recordFresh := now.Sub(rec.recordedAt) <= opts.Freshness
-		// Ping freshness: discount observers whose last ping attempt against the primary is missing,
-		// in the future, or older than the freshness window — their report is not current evidence.
-		pingFresh := !report.lastAttemptedPing.IsZero() && !report.lastAttemptedPing.After(now) && now.Sub(report.lastAttemptedPing) <= opts.Freshness
+		recordAge := now.Sub(rec.recordedAt)
+		recordFresh := recordAge <= opts.Freshness
+		// Ping freshness: the age of the observer's last ping attempt against the primary is the
+		// age it reported (measured with its own clock) plus how long ago we ingested the report.
+		// Observers with no ping, a negative age (clock anomaly), or an age beyond the freshness
+		// window are discounted — their report is not current evidence.
+		pingFresh := report.hasPingAge && report.pingAge >= 0 && report.pingAge+recordAge <= opts.Freshness
 		fresh := recordFresh && pingFresh
 		vote := "stale"
 		if fresh {

@@ -34,9 +34,10 @@ func alias(uid uint32) *topodatapb.TabletAlias {
 
 func reportFor(primary *topodatapb.TabletAlias, failures int64, attemptedAgo time.Duration, now time.Time) []*replicationdatapb.ShardPeerHealth {
 	return []*replicationdatapb.ShardPeerHealth{{
-		TabletAlias:             primary,
-		ConsecutivePingFailures: failures,
-		LastAttemptedPing:       protoutil.TimeToProto(now.Add(-attemptedAgo)),
+		TabletAlias:                primary,
+		ConsecutivePingFailures:    failures,
+		LastAttemptedPing:          protoutil.TimeToProto(now.Add(-attemptedAgo)),
+		TimeSinceLastAttemptedPing: protoutil.DurationToProto(attemptedAgo),
 	}}
 }
 
@@ -120,6 +121,70 @@ func TestPrimaryDownByQuorum(t *testing.T) {
 					TabletAlias:             primary,
 					ConsecutivePingFailures: 3,
 				}}, now)
+			},
+			opts:     defaultOpts(),
+			expected: false,
+		},
+		{
+			name: "ping age fallback from absolute timestamp (older tablet)",
+			seed: func() {
+				resetShardPeerHealth()
+				// No time_since_last_attempted_ping: the age is derived once at ingest from the
+				// absolute timestamp, so a recent ping still counts.
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", []*replicationdatapb.ShardPeerHealth{{
+					TabletAlias:             primary,
+					ConsecutivePingFailures: 3,
+					LastAttemptedPing:       protoutil.TimeToProto(now),
+				}}, now)
+			},
+			opts:     defaultOpts(),
+			expected: true,
+		},
+		{
+			name: "future absolute ping timestamp fails closed via fallback",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", []*replicationdatapb.ShardPeerHealth{{
+					TabletAlias:             primary,
+					ConsecutivePingFailures: 3,
+					LastAttemptedPing:       protoutil.TimeToProto(now.Add(time.Minute)),
+				}}, now)
+			},
+			opts:     defaultOpts(),
+			expected: false,
+		},
+		{
+			name: "negative reported ping age fails closed",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", []*replicationdatapb.ShardPeerHealth{{
+					TabletAlias:                primary,
+					ConsecutivePingFailures:    3,
+					TimeSinceLastAttemptedPing: protoutil.DurationToProto(-10 * time.Second),
+				}}, now)
+			},
+			opts:     defaultOpts(),
+			expected: false,
+		},
+		{
+			name: "ping age within freshness after record aging",
+			seed: func() {
+				resetShardPeerHealth()
+				// Ping was 2s old when the report was ingested 2s ago: effective age 4s <= 5s freshness.
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0",
+					reportFor(primary, 3, 2*time.Second, now.Add(-2*time.Second)), now.Add(-2*time.Second))
+			},
+			opts:     defaultOpts(),
+			expected: true,
+		},
+		{
+			name: "ping age accumulates past freshness with record age",
+			seed: func() {
+				resetShardPeerHealth()
+				// Ping was 2s old when the report was ingested 4s ago: effective age 6s > 5s freshness,
+				// even though the record itself (4s) is still fresh.
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0",
+					reportFor(primary, 3, 2*time.Second, now.Add(-4*time.Second)), now.Add(-4*time.Second))
 			},
 			opts:     defaultOpts(),
 			expected: false,

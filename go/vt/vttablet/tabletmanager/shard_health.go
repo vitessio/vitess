@@ -289,6 +289,7 @@ func (m *shardHealthMonitor) snapshot() []*replicationdatapb.ShardPeerHealth {
 	if len(m.health) == 0 {
 		return nil
 	}
+	now := m.now()
 	out := make([]*replicationdatapb.ShardPeerHealth, 0, len(m.health))
 	for _, h := range m.health {
 		entry := &replicationdatapb.ShardPeerHealth{
@@ -300,6 +301,9 @@ func (m *shardHealthMonitor) snapshot() []*replicationdatapb.ShardPeerHealth {
 		}
 		if !h.lastAttemptedPing.IsZero() {
 			entry.LastAttemptedPing = protoutil.TimeToProto(h.lastAttemptedPing)
+			// The age is measured with this tablet's clock so consumers can judge ping
+			// staleness without comparing our timestamp against their own clock.
+			entry.TimeSinceLastAttemptedPing = protoutil.DurationToProto(now.Sub(h.lastAttemptedPing))
 		}
 		out = append(out, entry)
 	}

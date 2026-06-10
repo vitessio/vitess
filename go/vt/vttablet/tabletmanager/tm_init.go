@@ -588,13 +588,14 @@ func (tm *TabletManager) Stop() {
 	tm.tmState.Close()
 }
 
-// stopShardHealthMonitor drains shard-peer health work on failed startup and test cleanup paths.
+// stopShardHealthMonitor drains shard-peer health work on failed startup, shutdown, and test
+// cleanup paths. It intentionally leaves tm.shardHealthMonitor set: FullStatus reads the field
+// without synchronization and can run concurrently during lame-duck, so the field must be
+// write-once. Calling snapshot() on a stopped monitor is safe; Stop() is idempotent.
 func (tm *TabletManager) stopShardHealthMonitor() {
-	if tm.shardHealthMonitor == nil {
-		return
+	if tm.shardHealthMonitor != nil {
+		tm.shardHealthMonitor.Stop()
 	}
-	tm.shardHealthMonitor.Stop()
-	tm.shardHealthMonitor = nil
 }
 
 func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardInfo, error) {

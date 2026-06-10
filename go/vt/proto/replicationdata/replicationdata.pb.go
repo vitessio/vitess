@@ -521,8 +521,12 @@ type ShardPeerHealth struct {
 	ConsecutivePingFailures int64                  `protobuf:"varint,2,opt,name=consecutive_ping_failures,json=consecutivePingFailures,proto3" json:"consecutive_ping_failures,omitempty"`
 	LastSuccessfulPing      *vttime.Time           `protobuf:"bytes,3,opt,name=last_successful_ping,json=lastSuccessfulPing,proto3" json:"last_successful_ping,omitempty"`
 	LastAttemptedPing       *vttime.Time           `protobuf:"bytes,4,opt,name=last_attempted_ping,json=lastAttemptedPing,proto3" json:"last_attempted_ping,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// time_since_last_attempted_ping is the age of last_attempted_ping, measured with the
+	// reporting tablet's own clock when the report was produced. Consumers should prefer it
+	// over comparing last_attempted_ping against their own clock, which is skew-sensitive.
+	TimeSinceLastAttemptedPing *vttime.Duration `protobuf:"bytes,5,opt,name=time_since_last_attempted_ping,json=timeSinceLastAttemptedPing,proto3" json:"time_since_last_attempted_ping,omitempty"`
+	unknownFields              protoimpl.UnknownFields
+	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *ShardPeerHealth) Reset() {
@@ -579,6 +583,13 @@ func (x *ShardPeerHealth) GetLastSuccessfulPing() *vttime.Time {
 func (x *ShardPeerHealth) GetLastAttemptedPing() *vttime.Time {
 	if x != nil {
 		return x.LastAttemptedPing
+	}
+	return nil
+}
+
+func (x *ShardPeerHealth) GetTimeSinceLastAttemptedPing() *vttime.Duration {
+	if x != nil {
+		return x.TimeSinceLastAttemptedPing
 	}
 	return nil
 }
@@ -878,12 +889,13 @@ const file_replicationdata_proto_rawDesc = "" +
 	"\bposition\x18\x01 \x01(\tR\bposition\x12#\n" +
 	"\rfile_position\x18\x02 \x01(\tR\ffilePosition\x12\x1f\n" +
 	"\vserver_uuid\x18\x03 \x01(\tR\n" +
-	"serverUuid\"\x85\x02\n" +
+	"serverUuid\"\xdb\x02\n" +
 	"\x0fShardPeerHealth\x128\n" +
 	"\ftablet_alias\x18\x01 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x12:\n" +
 	"\x19consecutive_ping_failures\x18\x02 \x01(\x03R\x17consecutivePingFailures\x12>\n" +
 	"\x14last_successful_ping\x18\x03 \x01(\v2\f.vttime.TimeR\x12lastSuccessfulPing\x12<\n" +
-	"\x13last_attempted_ping\x18\x04 \x01(\v2\f.vttime.TimeR\x11lastAttemptedPing\"\x9c\n" +
+	"\x13last_attempted_ping\x18\x04 \x01(\v2\f.vttime.TimeR\x11lastAttemptedPing\x12T\n" +
+	"\x1etime_since_last_attempted_ping\x18\x05 \x01(\v2\x10.vttime.DurationR\x1atimeSinceLastAttemptedPing\"\x9c\n" +
 	"\n" +
 	"\n" +
 	"FullStatus\x12\x1b\n" +
@@ -945,7 +957,8 @@ var file_replicationdata_proto_goTypes = []any{
 	(*FullStatus)(nil),            // 6: replicationdata.FullStatus
 	(*topodata.TabletAlias)(nil),  // 7: topodata.TabletAlias
 	(*vttime.Time)(nil),           // 8: vttime.Time
-	(topodata.TabletType)(0),      // 9: topodata.TabletType
+	(*vttime.Duration)(nil),       // 9: vttime.Duration
+	(topodata.TabletType)(0),      // 10: topodata.TabletType
 }
 var file_replicationdata_proto_depIdxs = []int32{
 	1,  // 0: replicationdata.StopReplicationStatus.before:type_name -> replicationdata.Status
@@ -953,16 +966,17 @@ var file_replicationdata_proto_depIdxs = []int32{
 	7,  // 2: replicationdata.ShardPeerHealth.tablet_alias:type_name -> topodata.TabletAlias
 	8,  // 3: replicationdata.ShardPeerHealth.last_successful_ping:type_name -> vttime.Time
 	8,  // 4: replicationdata.ShardPeerHealth.last_attempted_ping:type_name -> vttime.Time
-	1,  // 5: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
-	4,  // 6: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
-	2,  // 7: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
-	9,  // 8: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
-	5,  // 9: replicationdata.FullStatus.shard_peer_health:type_name -> replicationdata.ShardPeerHealth
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	9,  // 5: replicationdata.ShardPeerHealth.time_since_last_attempted_ping:type_name -> vttime.Duration
+	1,  // 6: replicationdata.FullStatus.replication_status:type_name -> replicationdata.Status
+	4,  // 7: replicationdata.FullStatus.primary_status:type_name -> replicationdata.PrimaryStatus
+	2,  // 8: replicationdata.FullStatus.replication_configuration:type_name -> replicationdata.Configuration
+	10, // 9: replicationdata.FullStatus.tablet_type:type_name -> topodata.TabletType
+	5,  // 10: replicationdata.FullStatus.shard_peer_health:type_name -> replicationdata.ShardPeerHealth
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_replicationdata_proto_init() }

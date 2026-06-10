@@ -239,9 +239,32 @@ func TestTabletManagerStopShardHealthMonitor(t *testing.T) {
 	m.Start(t.Context())
 	tm := &TabletManager{shardHealthMonitor: m}
 
-	tm.stopShardHealthMonitor()
+	// FullStatus reads tm.shardHealthMonitor without synchronization and can run concurrently
+	// with Close()/Stop() during lame-duck, so stopping must not mutate the field (write-once).
+	// This goroutine races with the stop below under -race if the field is ever rewritten.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	stopReading := make(chan struct{})
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stopReading:
+				return
+			default:
+				_ = tm.shardPeerHealthSnapshot()
+			}
+		}
+	}()
 
-	assert.Nil(t, tm.shardHealthMonitor)
+	tm.stopShardHealthMonitor()
+	tm.stopShardHealthMonitor() // idempotent: both Close() and Stop() call it
+
+	close(stopReading)
+	wg.Wait()
+
+	assert.NotNil(t, tm.shardHealthMonitor, "the monitor field is write-once; FullStatus may read it during lame-duck")
+	assert.Nil(t, tm.shardPeerHealthSnapshot(), "monitor never pinged anyone, so the snapshot stays empty")
 }
 
 func TestShardHealthMonitor_FixedClockTimestamps(t *testing.T) {
@@ -276,4 +299,14 @@ func TestShardHealthMonitor_FixedClockTimestamps(t *testing.T) {
 	assert.Equal(t, fixed, protoutil.TimeFromProto(snap[0].LastSuccessfulPing).UTC())
 	require.NotNil(t, snap[0].LastAttemptedPing)
 	assert.Equal(t, fixed, protoutil.TimeFromProto(snap[0].LastAttemptedPing).UTC())
+
+	// The reported ping age is measured with this tablet's clock at snapshot time, so
+	// consumers never have to compare our timestamps against their own clock.
+	m.now = func() time.Time { return fixed.Add(3 * time.Second) }
+	snap = m.snapshot()
+	require.Len(t, snap, 1)
+	age, ok, err := protoutil.DurationFromProto(snap[0].TimeSinceLastAttemptedPing)
+	require.NoError(t, err)
+	require.True(t, ok, "snapshot must report the ping age")
+	assert.Equal(t, 3*time.Second, age)
 }

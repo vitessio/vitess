@@ -53,6 +53,7 @@ type DialPoolGroup int
 const (
 	dialPoolGroupThrottler DialPoolGroup = iota
 	dialPoolGroupVTOrc
+	dialPoolGroupPing
 )
 
 type invalidatorFunc func()
@@ -349,15 +350,35 @@ func (client *grpcClient) Close() {
 
 // Ping is part of the tmclient.TabletManagerClient interface.
 func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return err
+	var c tabletmanagerservicepb.TabletManagerClient
+	var invalidator invalidatorFunc
+	var err error
+	// Ping is used as a high-frequency liveness probe (e.g. the shard-peer health monitor pings
+	// every shard peer each interval), so use a dedicated connection pool instead of paying for
+	// a fresh connection per probe.
+	if poolDialer, ok := client.dialer.(poolDialer); ok {
+		c, invalidator, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, tablet)
+		if err != nil {
+			return err
+		}
 	}
-	defer closer.Close()
+
+	if c == nil {
+		var closer io.Closer
+		c, closer, err = client.dialer.dial(ctx, tablet)
+		if err != nil {
+			return err
+		}
+		defer closer.Close()
+	}
+
 	result, err := c.Ping(ctx, &tabletmanagerdatapb.PingRequest{
 		Payload: "payload",
 	})
 	if err != nil {
+		if invalidator != nil {
+			invalidator()
+		}
 		return vterrors.FromGRPC(err)
 	}
 	if result.Payload != "payload" {

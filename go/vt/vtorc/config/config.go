@@ -245,7 +245,7 @@ var (
 		"shard-tablet-health-freshness",
 		viperutil.Options[time.Duration]{
 			FlagName: "shard-tablet-health-freshness",
-			Default:  5 * time.Second,
+			Default:  15 * time.Second,
 			Dynamic:  true,
 		},
 	)
@@ -297,7 +297,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("enable-primary-disk-stalled-recovery", enablePrimaryDiskStalledRecovery.Default(), "Whether VTOrc should detect a stalled disk on the primary and failover")
 	fs.Bool("emergency-reparent-on-tablet-unreachable", ersOnTabletUnreachable.Default(), "Whether VTOrc should run an emergency reparent when the primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas")
 	fs.Int("shard-tablet-health-failure-threshold", shardTabletHealthFailureThreshold.Default(), "Consecutive shard-peer ping failures before an observer considers a peer down")
-	fs.Duration("shard-tablet-health-freshness", shardTabletHealthFreshness.Default(), "Maximum age of an observer's shard-peer report for it to count toward quorum")
+	fs.Duration("shard-tablet-health-freshness", shardTabletHealthFreshness.Default(), "Maximum age of an observer's shard-peer report for it to count toward quorum. Must exceed --instance-poll-time (ideally 2-3x), since reports only refresh when VTOrc polls each observer")
 	fs.Float64("shard-quorum-fraction", shardQuorumFraction.Default(), "Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous)")
 	fs.Int("shard-quorum-min-observers", shardQuorumMinObservers.Default(), "Minimum number of eligible observers required before a quorum-based emergency reparent may run")
 

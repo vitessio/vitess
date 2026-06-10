@@ -77,7 +77,7 @@ Flags:
       --shard-quorum-fraction float                                 Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous) (default 1)
       --shard-quorum-min-observers int                              Minimum number of eligible observers required before a quorum-based emergency reparent may run (default 1)
       --shard-tablet-health-failure-threshold int                   Consecutive shard-peer ping failures before an observer considers a peer down (default 3)
-      --shard-tablet-health-freshness duration                      Maximum age of an observer's shard-peer report for it to count toward quorum (default 5s)
+      --shard-tablet-health-freshness duration                      Maximum age of an observer's shard-peer report for it to count toward quorum. Must exceed --instance-poll-time (ideally 2-3x), since reports only refresh when VTOrc polls each observer (default 15s)
       --shutdown-wait-time duration                                 Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
       --sqlite-data-file string                                     SQLite Datafile to use as VTOrc's database (default "file::memory:?mode=memory&cache=shared")
       --stats-backend string                                        The name of the registered push-based monitoring/stats backend to use

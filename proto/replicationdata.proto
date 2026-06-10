@@ -96,6 +96,10 @@ message ShardPeerHealth {
   int64 consecutive_ping_failures = 2;
   vttime.Time last_successful_ping = 3;
   vttime.Time last_attempted_ping = 4;
+  // time_since_last_attempted_ping is the age of last_attempted_ping, measured with the
+  // reporting tablet's own clock when the report was produced. Consumers should prefer it
+  // over comparing last_attempted_ping against their own clock, which is skew-sensitive.
+  vttime.Duration time_since_last_attempted_ping = 5;
 }
 
 // FullStatus contains the full status of MySQL including the replication information, semi-sync information, GTID information among others

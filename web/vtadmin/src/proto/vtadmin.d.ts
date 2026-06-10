@@ -51064,6 +51064,9 @@ export namespace replicationdata {
 
         /** ShardPeerHealth last_attempted_ping */
         last_attempted_ping?: (vttime.ITime|null);
+
+        /** ShardPeerHealth time_since_last_attempted_ping */
+        time_since_last_attempted_ping?: (vttime.IDuration|null);
     }
 
     /** Represents a ShardPeerHealth. */
@@ -51086,6 +51089,9 @@ export namespace replicationdata {
 
         /** ShardPeerHealth last_attempted_ping. */
         public last_attempted_ping?: (vttime.ITime|null);
+
+        /** ShardPeerHealth time_since_last_attempted_ping. */
+        public time_since_last_attempted_ping?: (vttime.IDuration|null);
 
         /**
          * Creates a new ShardPeerHealth instance using the specified properties.
