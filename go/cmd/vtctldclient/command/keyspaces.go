@@ -109,6 +109,14 @@ SetKeyspaceDurabilityPolicy --durability-policy='semi_sync' customer`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandSetKeyspaceDurabilityPolicy,
 	}
+	// SetKeyspaceReplicationSourcePolicy makes a SetKeyspaceReplicationSourcePolicy gRPC call to a vtctld.
+	SetKeyspaceReplicationSourcePolicy = &cobra.Command{
+		Use:                   "SetKeyspaceReplicationSourcePolicy [--rdonly-policy=policy_name] <keyspace name>",
+		Short:                 "Sets the replication source policy used by the specified keyspace.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandSetKeyspaceReplicationSourcePolicy,
+	}
 	// ValidateVersionKeyspace makes a ValidateVersionKeyspace gRPC call to a vtctld.
 	ValidateVersionKeyspace = &cobra.Command{
 		Use:                   "ValidateVersionKeyspace <keyspace>",
@@ -317,6 +325,10 @@ var setKeyspaceDurabilityPolicyOptions = struct {
 	DurabilityPolicy string
 }{}
 
+var setKeyspaceReplicationSourcePolicyOptions = struct {
+	RdonlyPolicy string
+}{}
+
 func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error {
 	keyspace := cmd.Flags().Arg(0)
 	cli.FinishedParsing(cmd)
@@ -336,6 +348,42 @@ func commandSetKeyspaceDurabilityPolicy(cmd *cobra.Command, args []string) error
 
 	fmt.Printf("%s\n", data)
 	return nil
+}
+
+func commandSetKeyspaceReplicationSourcePolicy(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	rdonlyPolicy, err := parseRdonlyReplicationSourcePolicy(setKeyspaceReplicationSourcePolicyOptions.RdonlyPolicy)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetKeyspaceReplicationSourcePolicy(commandCtx, &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+		Keyspace:     keyspace,
+		RdonlyPolicy: rdonlyPolicy,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+func parseRdonlyReplicationSourcePolicy(value string) (topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy, error) {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "", "unspecified":
+		return topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED, nil
+	case "require-semi-sync-acker":
+		return topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER, nil
+	default:
+		return topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED, fmt.Errorf("invalid --rdonly-policy %q", value)
+	}
 }
 
 func commandValidateVersionKeyspace(cmd *cobra.Command, args []string) error {
@@ -382,6 +430,9 @@ func init() {
 
 	SetKeyspaceDurabilityPolicy.Flags().StringVar(&setKeyspaceDurabilityPolicyOptions.DurabilityPolicy, "durability-policy", policy.DurabilityNone, "Type of durability to enforce for this keyspace. Default is none. Other values include 'semi_sync' and others as dictated by registered plugins.")
 	Root.AddCommand(SetKeyspaceDurabilityPolicy)
+
+	SetKeyspaceReplicationSourcePolicy.Flags().StringVar(&setKeyspaceReplicationSourcePolicyOptions.RdonlyPolicy, "rdonly-policy", "unspecified", "Replication source policy for rdonly tablets. Possible values: unspecified, require-semi-sync-acker.")
+	Root.AddCommand(SetKeyspaceReplicationSourcePolicy)
 
 	Root.AddCommand(ValidateVersionKeyspace)
 }

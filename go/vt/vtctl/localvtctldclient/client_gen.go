@@ -632,6 +632,11 @@ func (client *localVtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context
 	return client.s.SetKeyspaceDurabilityPolicy(ctx, in)
 }
 
+// SetKeyspaceReplicationSourcePolicy is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetKeyspaceReplicationSourcePolicy(ctx context.Context, in *vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse, error) {
+	return client.s.SetKeyspaceReplicationSourcePolicy(ctx, in)
+}
+
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldatapb.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
 	return client.s.SetShardIsPrimaryServing(ctx, in)

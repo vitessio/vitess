@@ -139,6 +139,14 @@ func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (s
 	return "none", nil
 }
 
+func (ts *Server) GetKeyspaceReplicationSourceConfig(ctx context.Context, keyspace string) (*topodatapb.ReplicationSourceConfig, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return keyspaceInfo.GetReplicationSourceConfig(), nil
+}
+
 func (ts *Server) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
 	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
 	if err != nil {

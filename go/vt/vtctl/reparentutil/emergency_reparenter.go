@@ -65,8 +65,9 @@ type EmergencyReparentOptions struct {
 
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
-	lockAction string
-	durability policy.Durabler
+	lockAction              string
+	durability              policy.Durabler
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig
 }
 
 // counters for Emergency Reparent Shard
@@ -216,6 +217,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	erp.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
 	opts.durability, err = policy.GetDurabilityPolicy(keyspaceDurability)
+	if err != nil {
+		return err
+	}
+
+	opts.replicationSourceConfig, err = erp.ts.GetKeyspaceReplicationSourceConfig(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -627,6 +633,11 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	replWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
+	deferredRdonly := sets.New[string]()
+	if !intermediateReparent {
+		deferredRdonly = rdonlyTabletsToDefer(tabletMap, opts.IgnoreReplicas, opts.replicationSourceConfig)
+	}
+
 	handlePrimary := func(alias string, tablet *topodatapb.Tablet) error {
 		if !intermediateReparent {
 			var position string
@@ -676,7 +687,18 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart, policy.IsReplicaSemiSync(opts.durability, newPrimaryTablet, ti.Tablet), 0)
+		source := newPrimaryTablet
+		if !intermediateReparent {
+			var err error
+			source, err = DesiredReplicationSource(newPrimaryTablet, ti.Tablet, tabletMap, opts.durability, opts.replicationSourceConfig)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to select replication source: %v", alias, err))
+
+				return
+			}
+		}
+
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, source.Alias, 0, "", forceStart, policy.IsReplicaSemiSync(opts.durability, source, ti.Tablet), 0)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed", alias)
 			rec.RecordError(err)
@@ -700,6 +722,8 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	for alias, ti := range tabletMap {
 		switch {
 		case alias == topoproto.TabletAliasString(newPrimaryTablet.Alias):
+			continue
+		case deferredRdonly.Has(alias):
 			continue
 		case !opts.IgnoreReplicas.Has(alias):
 			replWg.Add(1)
@@ -748,6 +772,9 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	case <-replSuccessCtx.Done():
 		// At least one replica was able to SetReplicationSource successfully
 		// Here we do not need to return the replicas which started replicating
+		if !intermediateReparent && len(deferredRdonly) > 0 {
+			erp.logger.Infof("leaving %d rdonly tablet(s) for VTOrc to repair replication after ERS promotion", len(deferredRdonly))
+		}
 		return nil, nil
 	case <-allReplicasDoneCtx.Done():
 		// There are certain timing issues between replSuccessCtx.Done firing
@@ -771,6 +798,9 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			}
 			return nil, vterrors.Wrapf(rec.Error(), "%d replica(s) failed", numReplicas)
 		default:
+			if !intermediateReparent && len(deferredRdonly) > 0 {
+				erp.logger.Infof("leaving %d rdonly tablet(s) for VTOrc to repair replication after ERS promotion", len(deferredRdonly))
+			}
 			return replicasStartedReplication, nil
 		}
 	}

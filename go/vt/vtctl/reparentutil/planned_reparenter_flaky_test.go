@@ -19,11 +19,14 @@ package reparentutil
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/test/utils"
@@ -34,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -43,6 +47,28 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
+
+type recordingTabletManagerClient struct {
+	*testutil.TabletManagerClient
+
+	mu                          sync.Mutex
+	setReplicationSourceAliases []string
+}
+
+func (r *recordingTabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
+	alias := topoproto.TabletAliasString(tablet.Alias)
+	r.mu.Lock()
+	r.setReplicationSourceAliases = append(r.setReplicationSourceAliases, alias)
+	r.mu.Unlock()
+
+	return r.TabletManagerClient.SetReplicationSource(ctx, tablet, parent, timeCreatedNS, waitPosition, forceStartReplication, semiSync, heartbeatInterval)
+}
+
+func (r *recordingTabletManagerClient) setReplicationSourceCalled(alias string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Contains(r.setReplicationSourceAliases, alias)
+}
 
 func TestNewPlannedReparenter(t *testing.T) {
 	t.Parallel()
@@ -4101,7 +4127,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			durability, err := policy.GetDurabilityPolicy(durabilityPolicy)
 			require.NoError(t, err)
 			tt.opts.durability = durability
-			err = pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.promoteReplicaRequired, tt.tabletMap, tt.opts)
+			err = pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.promoteReplicaRequired, tt.tabletMap, sets.New[string](), tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				if tt.wantErr != "" {
@@ -4113,6 +4139,77 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
+}
+
+func TestPlannedReparenterReparentTabletsLeavesDetachedRdonlyForVTOrc(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilitySemiSync)
+	require.NoError(t, err)
+
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	acker := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+	replica := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 201},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+	rdonly := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_RDONLY,
+	}
+
+	tmc := &recordingTabletManagerClient{
+		TabletManagerClient: &testutil.TabletManagerClient{
+			PopulateReparentJournalResults: map[string]error{
+				"zone1-0000000100": nil,
+			},
+			SetReplicationSourceResults: map[string]error{
+				"zone1-0000000200": nil,
+				"zone1-0000000201": nil,
+				"zone1-0000000202": nil,
+			},
+			SetReplicationSourceSemiSync: map[string]bool{
+				"zone1-0000000200": true,
+				"zone1-0000000201": true,
+				"zone1-0000000202": false,
+			},
+		},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		topoproto.TabletAliasString(primary.Alias): {Tablet: primary},
+		topoproto.TabletAliasString(acker.Alias):   {Tablet: acker},
+		topoproto.TabletAliasString(replica.Alias): {Tablet: replica},
+		topoproto.TabletAliasString(rdonly.Alias):  {Tablet: rdonly},
+	}
+
+	pr := NewPlannedReparenter(nil, tmc, logutil.NewMemoryLogger())
+	err = pr.reparentTablets(ctx, &events.Reparent{NewPrimary: primary}, "pos", false, tabletMap, sets.New(topoproto.TabletAliasString(rdonly.Alias)), PlannedReparentOptions{
+		WaitReplicasTimeout: time.Second,
+		durability:          durability,
+		replicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+			RdonlyPolicy: topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER,
+		},
+	})
+	require.NoError(t, err)
+
+	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(acker.Alias)))
+	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(replica.Alias)))
+	assert.False(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(rdonly.Alias)))
 }
 
 // (TODO:@ajm88) when unifying all the mock TMClient implementations (which will

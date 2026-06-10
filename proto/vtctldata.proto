@@ -1747,6 +1747,16 @@ message SetKeyspaceDurabilityPolicyResponse {
   topodata.Keyspace keyspace = 1;
 }
 
+message SetKeyspaceReplicationSourcePolicyRequest {
+  string keyspace = 1;
+  topodata.ReplicationSourceConfig.RdonlyReplicationSourcePolicy rdonly_policy = 2;
+}
+
+message SetKeyspaceReplicationSourcePolicyResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
 message SetKeyspaceShardingInfoRequest {
   string keyspace = 1;
   // OBSOLETE string column_name = 2;

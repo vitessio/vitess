@@ -38,6 +38,7 @@ type InfoForRecoveryAnalysis struct {
 	ShardPrimaryTermTimestamp                 string
 	KeyspaceType                              int
 	DurabilityPolicy                          string
+	RdonlyReplicationSourcePolicy             topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy
 	IsInvalid                                 int
 	IsPrimary                                 int
 	IsCoPrimary                               int
@@ -68,6 +69,7 @@ type InfoForRecoveryAnalysis struct {
 	SemiSyncPrimaryWaitForReplicaCount        uint
 	SemiSyncPrimaryClients                    uint
 	SemiSyncReplicaEnabled                    int
+	ShardPrimaryTabletInfo                    *topodatapb.Tablet
 	CurrentTabletType                         int
 	CountSemiSyncReplicasEnabled              uint
 	CountLoggingReplicas                      uint
@@ -111,6 +113,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["downtime_end_timestamp"] = sqlutils.CellData{String: info.DowntimeEndTimestamp, Valid: true}
 	rowMap["downtime_remaining_seconds"] = sqlutils.CellData{String: strconv.Itoa(info.DowntimeRemainingSeconds), Valid: true}
 	rowMap["durability_policy"] = sqlutils.CellData{String: info.DurabilityPolicy, Valid: true}
+	rowMap["rdonly_replication_source_policy"] = sqlutils.CellData{String: strconv.Itoa(int(info.RdonlyReplicationSourcePolicy)), Valid: true}
 	rowMap["gtid_errant"] = sqlutils.CellData{String: info.ErrantGTID, Valid: true}
 	rowMap["gtid_mode"] = sqlutils.CellData{String: info.GTIDMode, Valid: true}
 	rowMap["hostname"] = sqlutils.CellData{String: info.Hostname, Valid: true}
@@ -124,6 +127,12 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["keyspace"] = sqlutils.CellData{String: info.Keyspace, Valid: true}
 	rowMap["shard"] = sqlutils.CellData{String: info.Shard, Valid: true}
 	rowMap["shard_primary_term_timestamp"] = sqlutils.CellData{String: info.ShardPrimaryTermTimestamp, Valid: true}
+	if info.ShardPrimaryTabletInfo == nil {
+		rowMap["shard_primary_tablet_info"] = sqlutils.CellData{Valid: false}
+	} else {
+		res, _ := prototext.Marshal(info.ShardPrimaryTabletInfo)
+		rowMap["shard_primary_tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
+	}
 	rowMap["last_check_partial_success"] = sqlutils.CellData{String: strconv.Itoa(info.LastCheckPartialSuccess), Valid: true}
 	rowMap["replica_net_timeout"] = sqlutils.CellData{String: strconv.Itoa(int(info.ReplicaNetTimeout)), Valid: true}
 	rowMap["heartbeat_interval"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.HeartbeatInterval), Valid: true}

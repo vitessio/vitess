@@ -376,6 +376,15 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			},
 			wantRecoveryFunction: fixReplicaFunc,
 		}, {
+			name:       "RdonlyReplicationSourceMustBeSemiSyncAcker",
+			ersEnabled: false,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.RdonlyReplicationSourceMustBeSemiSyncAcker,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: fixReplicaFunc,
+		}, {
 			name:       "PrimarySemiSyncMustBeSet",
 			ersEnabled: false,
 			analysisEntry: &inst.DetectionAnalysis{
@@ -1062,6 +1071,118 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFixReplicaRdonlyReplicationSourcePolicy(t *testing.T) {
+	orcDB, cached, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !cached {
+		t.Cleanup(func() {
+			require.NoError(t, orcDB.Close())
+		})
+	}
+
+	for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace", "database_instance"} {
+		_, err = orcDB.Exec("delete from " + table)
+		require.NoError(t, err)
+	}
+
+	const (
+		keyspace = "ks"
+		shard    = "0"
+	)
+
+	primaryTablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Hostname:      "primary",
+		MysqlHostname: "primary",
+		MysqlPort:     3306,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_PRIMARY,
+		PortMap:       map[string]int32{"vt": 15100, "grpc": 15101},
+	}
+	ackerTablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Hostname:      "acker",
+		MysqlHostname: "acker",
+		MysqlPort:     3306,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+		PortMap:       map[string]int32{"vt": 15200, "grpc": 15201},
+	}
+	rdonlyTablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 112},
+		Hostname:      "rdonly",
+		MysqlHostname: "rdonly",
+		MysqlPort:     3306,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_RDONLY,
+		PortMap:       map[string]int32{"vt": 15300, "grpc": 15301},
+	}
+
+	require.NoError(t, inst.SaveTablet(primaryTablet))
+	require.NoError(t, inst.SaveTablet(ackerTablet))
+	require.NoError(t, inst.SaveTablet(rdonlyTablet))
+
+	keyspaceInfo := &topo.KeyspaceInfo{
+		Keyspace: &topodatapb.Keyspace{
+			DurabilityPolicy: policy.DurabilitySemiSync,
+			ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER,
+			},
+		},
+	}
+	keyspaceInfo.SetKeyspaceName(keyspace)
+	require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+	ctx := t.Context()
+	oldTS := ts
+	oldTMC := tmc
+	defer func() {
+		ts = oldTS
+		tmc = oldTMC
+	}()
+
+	ts = memorytopo.NewServer(ctx, "zone1")
+	require.NoError(t, ts.CreateKeyspace(ctx, keyspace, keyspaceInfo.Keyspace))
+	require.NoError(t, ts.CreateShard(ctx, keyspace, shard))
+	require.NoError(t, ts.CreateTablet(ctx, primaryTablet))
+	require.NoError(t, ts.CreateTablet(ctx, ackerTablet))
+	require.NoError(t, ts.CreateTablet(ctx, rdonlyTablet))
+
+	mockController := gomock.NewController(t)
+	t.Cleanup(mockController.Finish)
+
+	mockTMC := tmcmock.NewMockTabletManagerClient(mockController)
+	mockTMC.EXPECT().
+		SetReadOnly(gomock.Any(), gomock.Any()).
+		Return(nil).
+		Times(1)
+	mockTMC.EXPECT().
+		SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
+			require.Equal(t, rdonlyTablet.Alias, tablet.Alias)
+			require.Equal(t, ackerTablet.Alias, parent)
+			require.True(t, forceStartReplication)
+			require.False(t, semiSync)
+			return nil
+		}).
+		Times(1)
+	tmc = mockTMC
+
+	attempted, _, err := fixReplica(ctx, &inst.DetectionAnalysis{
+		Analysis:              inst.RdonlyReplicationSourceMustBeSemiSyncAcker,
+		AnalyzedInstanceAlias: rdonlyTablet.Alias,
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
+		ReplicaNetTimeout:     30,
+	}, log.NewPrefixedLogger("test-rdonly-source-policy"))
+
+	require.True(t, attempted)
+	require.NoError(t, err)
 }
 
 // TestReconcileStaleTopoPrimary verifies that reconcileStaleTopoPrimary updates the topology record of a

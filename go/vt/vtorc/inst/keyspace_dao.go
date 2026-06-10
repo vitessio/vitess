@@ -37,11 +37,12 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	}
 
 	query := `select
-			keyspace_type,
-			durability_policy,
-			disable_emergency_reparent
-		from
-			vitess_keyspace
+		keyspace_type,
+		durability_policy,
+		rdonly_replication_source_policy,
+		disable_emergency_reparent
+	from
+		vitess_keyspace
 		where
 			keyspace = ?`
 	args := sqlutils.Args(keyspaceName)
@@ -52,6 +53,11 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
 		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
+		if rdonlyPolicy := topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy(row.GetInt32("rdonly_replication_source_policy")); rdonlyPolicy != topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED {
+			keyspace.ReplicationSourceConfig = &topodatapb.ReplicationSourceConfig{
+				RdonlyPolicy: rdonlyPolicy,
+			}
+		}
 		keyspace.VtorcState = &vtorcdatapb.Keyspace{
 			DisableEmergencyReparent: row.GetBool("disable_emergency_reparent"),
 		}
@@ -75,13 +81,14 @@ func SaveKeyspace(keyspace *topo.KeyspaceInfo) error {
 	}
 	_, err := db.ExecVTOrc(`
 		replace	into vitess_keyspace (
-			keyspace, keyspace_type, durability_policy, disable_emergency_reparent
+			keyspace, keyspace_type, durability_policy, rdonly_replication_source_policy, disable_emergency_reparent
 		) values (
-			?, ?, ?, ?
+			?, ?, ?, ?, ?
 		)`,
 		keyspace.KeyspaceName(),
 		int(keyspace.KeyspaceType),
 		keyspace.GetDurabilityPolicy(),
+		int(keyspace.GetReplicationSourceConfig().GetRdonlyPolicy()),
 		disableEmergencyReparent,
 	)
 	return err
@@ -94,4 +101,13 @@ func GetDurabilityPolicy(keyspace string) (policy.Durabler, error) {
 		return nil, err
 	}
 	return policy.GetDurabilityPolicy(ki.DurabilityPolicy)
+}
+
+// GetReplicationSourceConfig gets the replication source config for the given keyspace.
+func GetReplicationSourceConfig(keyspace string) (*topodatapb.ReplicationSourceConfig, error) {
+	ki, err := ReadKeyspace(keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return ki.GetReplicationSourceConfig(), nil
 }

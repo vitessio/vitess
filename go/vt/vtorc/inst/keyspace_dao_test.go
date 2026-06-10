@@ -94,8 +94,27 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			},
 			semiSyncAckersWanted: 0,
 		}, {
+			name:         "Success with replication source config",
+			keyspaceName: "ks5",
+			keyspace: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilitySemiSync,
+				ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER,
+				},
+			},
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilitySemiSync,
+				ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER,
+				},
+				VtorcState: vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			semiSyncAckersWanted: 1,
+		}, {
 			name:         "Success with ERS disabled in Vtorc",
-			keyspaceName: "ks4",
+			keyspaceName: "ks6",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
@@ -113,7 +132,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			semiSyncAckersWanted: 0,
 		}, {
 			name:           "No keyspace found",
-			keyspaceName:   "ks5",
+			keyspaceName:   "ks7",
 			keyspace:       nil,
 			keyspaceWanted: nil,
 			err:            ErrKeyspaceNotFound.Error(),

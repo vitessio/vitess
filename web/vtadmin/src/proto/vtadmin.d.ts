@@ -18560,6 +18560,112 @@ export namespace topodata {
         public static getTypeUrl(typeUrlPrefix?: string): string;
     }
 
+    /** Properties of a ReplicationSourceConfig. */
+    interface IReplicationSourceConfig {
+
+        /** ReplicationSourceConfig rdonly_policy */
+        rdonly_policy?: (topodata.ReplicationSourceConfig.RdonlyReplicationSourcePolicy|null);
+    }
+
+    /** Represents a ReplicationSourceConfig. */
+    class ReplicationSourceConfig implements IReplicationSourceConfig {
+
+        /**
+         * Constructs a new ReplicationSourceConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IReplicationSourceConfig);
+
+        /** ReplicationSourceConfig rdonly_policy. */
+        public rdonly_policy: topodata.ReplicationSourceConfig.RdonlyReplicationSourcePolicy;
+
+        /**
+         * Creates a new ReplicationSourceConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReplicationSourceConfig instance
+         */
+        public static create(properties?: topodata.IReplicationSourceConfig): topodata.ReplicationSourceConfig;
+
+        /**
+         * Encodes the specified ReplicationSourceConfig message. Does not implicitly {@link topodata.ReplicationSourceConfig.verify|verify} messages.
+         * @param message ReplicationSourceConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IReplicationSourceConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReplicationSourceConfig message, length delimited. Does not implicitly {@link topodata.ReplicationSourceConfig.verify|verify} messages.
+         * @param message ReplicationSourceConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IReplicationSourceConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReplicationSourceConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReplicationSourceConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ReplicationSourceConfig;
+
+        /**
+         * Decodes a ReplicationSourceConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReplicationSourceConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ReplicationSourceConfig;
+
+        /**
+         * Verifies a ReplicationSourceConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReplicationSourceConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReplicationSourceConfig
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ReplicationSourceConfig;
+
+        /**
+         * Creates a plain object from a ReplicationSourceConfig message. Also converts values to other types if specified.
+         * @param message ReplicationSourceConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ReplicationSourceConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReplicationSourceConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for ReplicationSourceConfig
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace ReplicationSourceConfig {
+
+        /** RdonlyReplicationSourcePolicy enum. */
+        enum RdonlyReplicationSourcePolicy {
+            RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED = 0,
+            RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER = 1
+        }
+    }
+
     /** Properties of a Shard. */
     interface IShard {
 
@@ -18964,6 +19070,9 @@ export namespace topodata {
 
         /** Keyspace query_throttler_config */
         query_throttler_config?: (querythrottler.IConfig|null);
+
+        /** Keyspace replication_source_config */
+        replication_source_config?: (topodata.IReplicationSourceConfig|null);
     }
 
     /** Represents a Keyspace. */
@@ -18998,6 +19107,9 @@ export namespace topodata {
 
         /** Keyspace query_throttler_config. */
         public query_throttler_config?: (querythrottler.IConfig|null);
+
+        /** Keyspace replication_source_config. */
+        public replication_source_config?: (topodata.IReplicationSourceConfig|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -75533,6 +75645,206 @@ export namespace vtctldata {
 
         /**
          * Gets the default type url for SetKeyspaceDurabilityPolicyResponse
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a SetKeyspaceReplicationSourcePolicyRequest. */
+    interface ISetKeyspaceReplicationSourcePolicyRequest {
+
+        /** SetKeyspaceReplicationSourcePolicyRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SetKeyspaceReplicationSourcePolicyRequest rdonly_policy */
+        rdonly_policy?: (topodata.ReplicationSourceConfig.RdonlyReplicationSourcePolicy|null);
+    }
+
+    /** Represents a SetKeyspaceReplicationSourcePolicyRequest. */
+    class SetKeyspaceReplicationSourcePolicyRequest implements ISetKeyspaceReplicationSourcePolicyRequest {
+
+        /**
+         * Constructs a new SetKeyspaceReplicationSourcePolicyRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetKeyspaceReplicationSourcePolicyRequest);
+
+        /** SetKeyspaceReplicationSourcePolicyRequest keyspace. */
+        public keyspace: string;
+
+        /** SetKeyspaceReplicationSourcePolicyRequest rdonly_policy. */
+        public rdonly_policy: topodata.ReplicationSourceConfig.RdonlyReplicationSourcePolicy;
+
+        /**
+         * Creates a new SetKeyspaceReplicationSourcePolicyRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetKeyspaceReplicationSourcePolicyRequest instance
+         */
+        public static create(properties?: vtctldata.ISetKeyspaceReplicationSourcePolicyRequest): vtctldata.SetKeyspaceReplicationSourcePolicyRequest;
+
+        /**
+         * Encodes the specified SetKeyspaceReplicationSourcePolicyRequest message. Does not implicitly {@link vtctldata.SetKeyspaceReplicationSourcePolicyRequest.verify|verify} messages.
+         * @param message SetKeyspaceReplicationSourcePolicyRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetKeyspaceReplicationSourcePolicyRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetKeyspaceReplicationSourcePolicyRequest message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceReplicationSourcePolicyRequest.verify|verify} messages.
+         * @param message SetKeyspaceReplicationSourcePolicyRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetKeyspaceReplicationSourcePolicyRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetKeyspaceReplicationSourcePolicyRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetKeyspaceReplicationSourcePolicyRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceReplicationSourcePolicyRequest;
+
+        /**
+         * Decodes a SetKeyspaceReplicationSourcePolicyRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetKeyspaceReplicationSourcePolicyRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceReplicationSourcePolicyRequest;
+
+        /**
+         * Verifies a SetKeyspaceReplicationSourcePolicyRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetKeyspaceReplicationSourcePolicyRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetKeyspaceReplicationSourcePolicyRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceReplicationSourcePolicyRequest;
+
+        /**
+         * Creates a plain object from a SetKeyspaceReplicationSourcePolicyRequest message. Also converts values to other types if specified.
+         * @param message SetKeyspaceReplicationSourcePolicyRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetKeyspaceReplicationSourcePolicyRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetKeyspaceReplicationSourcePolicyRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetKeyspaceReplicationSourcePolicyRequest
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    /** Properties of a SetKeyspaceReplicationSourcePolicyResponse. */
+    interface ISetKeyspaceReplicationSourcePolicyResponse {
+
+        /** SetKeyspaceReplicationSourcePolicyResponse keyspace */
+        keyspace?: (topodata.IKeyspace|null);
+    }
+
+    /** Represents a SetKeyspaceReplicationSourcePolicyResponse. */
+    class SetKeyspaceReplicationSourcePolicyResponse implements ISetKeyspaceReplicationSourcePolicyResponse {
+
+        /**
+         * Constructs a new SetKeyspaceReplicationSourcePolicyResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetKeyspaceReplicationSourcePolicyResponse);
+
+        /** SetKeyspaceReplicationSourcePolicyResponse keyspace. */
+        public keyspace?: (topodata.IKeyspace|null);
+
+        /**
+         * Creates a new SetKeyspaceReplicationSourcePolicyResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetKeyspaceReplicationSourcePolicyResponse instance
+         */
+        public static create(properties?: vtctldata.ISetKeyspaceReplicationSourcePolicyResponse): vtctldata.SetKeyspaceReplicationSourcePolicyResponse;
+
+        /**
+         * Encodes the specified SetKeyspaceReplicationSourcePolicyResponse message. Does not implicitly {@link vtctldata.SetKeyspaceReplicationSourcePolicyResponse.verify|verify} messages.
+         * @param message SetKeyspaceReplicationSourcePolicyResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetKeyspaceReplicationSourcePolicyResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetKeyspaceReplicationSourcePolicyResponse message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceReplicationSourcePolicyResponse.verify|verify} messages.
+         * @param message SetKeyspaceReplicationSourcePolicyResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetKeyspaceReplicationSourcePolicyResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetKeyspaceReplicationSourcePolicyResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetKeyspaceReplicationSourcePolicyResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceReplicationSourcePolicyResponse;
+
+        /**
+         * Decodes a SetKeyspaceReplicationSourcePolicyResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetKeyspaceReplicationSourcePolicyResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceReplicationSourcePolicyResponse;
+
+        /**
+         * Verifies a SetKeyspaceReplicationSourcePolicyResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetKeyspaceReplicationSourcePolicyResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetKeyspaceReplicationSourcePolicyResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceReplicationSourcePolicyResponse;
+
+        /**
+         * Creates a plain object from a SetKeyspaceReplicationSourcePolicyResponse message. Also converts values to other types if specified.
+         * @param message SetKeyspaceReplicationSourcePolicyResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetKeyspaceReplicationSourcePolicyResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetKeyspaceReplicationSourcePolicyResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for SetKeyspaceReplicationSourcePolicyResponse
          * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
          * @returns The default type url
          */

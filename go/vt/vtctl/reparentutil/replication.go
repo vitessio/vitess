@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -170,9 +172,9 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 }
 
 // SetReplicationSource is used to set the replication source on the specified
-// tablet to the current shard primary (if available). It also figures out if
-// the tablet should be sending semi-sync ACKs or not and passes that to the
-// tabletmanager RPC.
+// tablet to the desired source for its keyspace and tablet type. It also
+// figures out if the tablet should be sending semi-sync ACKs or not and passes
+// that to the tabletmanager RPC.
 //
 // It does not start the replication forcefully.
 // If we are unable to find the shard primary of the tablet from the topo server
@@ -194,8 +196,270 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return err
 	}
 
-	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
-	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync, 0)
+	replicationSourceConfig, err := ts.GetKeyspaceReplicationSourceConfig(ctx, tablet.Keyspace)
+	if err != nil {
+		return err
+	}
+
+	var tabletMap map[string]*topo.TabletInfo
+	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER {
+		tabletMap, err = ts.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
+		if err != nil {
+			return err
+		}
+	}
+
+	source, err := DesiredReplicationSource(shardPrimary.Tablet, tablet, tabletMap, durability, replicationSourceConfig)
+	if err != nil {
+		return err
+	}
+
+	isSemiSync := policy.IsReplicaSemiSync(durability, source, tablet)
+	return tmc.SetReplicationSource(ctx, tablet, source.Alias, 0, "", false, isSemiSync, 0)
+}
+
+func DesiredReplicationSource(
+	primary *topodatapb.Tablet,
+	tablet *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+	durability policy.Durabler,
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig,
+) (*topodatapb.Tablet, error) {
+	if primary == nil || primary.Alias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "primary tablet must have an alias")
+	}
+	if tablet == nil || tablet.Alias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet must have an alias")
+	}
+
+	rdonlyPolicy := replicationSourceConfig.GetRdonlyPolicy()
+	if tablet.Type != topodatapb.TabletType_RDONLY || rdonlyPolicy == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_UNSPECIFIED {
+		return primary, nil
+	}
+
+	switch rdonlyPolicy {
+	case topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER:
+		return desiredRdonlySemiSyncAckerReplicationSource(primary, tablet, tabletMap, durability)
+	default:
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unsupported rdonly replication source policy %v", rdonlyPolicy)
+	}
+}
+
+func detachRdonlyReplicatingFromPromotionCandidate(
+	ctx context.Context,
+	tmc tmclient.TabletManagerClient,
+	tabletMap map[string]*topo.TabletInfo,
+	promotionCandidate *topodatapb.Tablet,
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig,
+) (sets.Set[string], error) {
+	return detachRdonlyReplicatingFromPromotionCandidateWithIgnored(ctx, tmc, tabletMap, promotionCandidate, replicationSourceConfig, nil)
+}
+
+func detachRdonlyReplicatingFromPromotionCandidateWithIgnored(
+	ctx context.Context,
+	tmc tmclient.TabletManagerClient,
+	tabletMap map[string]*topo.TabletInfo,
+	promotionCandidate *topodatapb.Tablet,
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig,
+	ignoredTablets sets.Set[string],
+) (sets.Set[string], error) {
+	detached := sets.New[string]()
+	if !shouldDeferRdonlyReparent(replicationSourceConfig) {
+		return detached, nil
+	}
+	if promotionCandidate == nil || promotionCandidate.Alias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "promotion candidate tablet must have an alias")
+	}
+
+	aliases := make([]string, 0, len(tabletMap))
+	for alias := range tabletMap {
+		aliases = append(aliases, alias)
+	}
+	sort.Strings(aliases)
+
+	for _, alias := range aliases {
+		if ignoredTablets.Has(alias) {
+			continue
+		}
+
+		ti := tabletMap[alias]
+		if ti == nil || ti.Tablet == nil || ti.Alias == nil || ti.Type != topodatapb.TabletType_RDONLY {
+			continue
+		}
+
+		tablet := ti.Tablet
+		stopStatus, err := tmc.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+		if err != nil {
+			if cleanupErr := restartDetachedRdonlyReplication(ctx, tmc, tabletMap, detached); cleanupErr != nil {
+				return detached, vterrors.Wrapf(err, "failed to restore already-detached rdonly tablets: %v", cleanupErr)
+			}
+			return detached, vterrors.Wrapf(err, "failed to stop rdonly replication IO thread on %s", alias)
+		}
+
+		ioThreadWasRunning, err := replicaIOThreadWasRunning(stopStatus)
+		if err != nil {
+			if cleanupErr := tmc.StartReplication(ctx, tablet, false); cleanupErr != nil {
+				return detached, vterrors.Wrapf(err, "failed to restart rdonly replication on %s after failing to inspect source: %v", alias, cleanupErr)
+			}
+			return detached, vterrors.Wrapf(err, "failed to inspect rdonly replication source on %s", alias)
+		}
+
+		replicatingFromCandidate, err := replicationStatusSourceMatchesTablet(stopStatus.Before, promotionCandidate, ioThreadWasRunning)
+		if err != nil {
+			if ioThreadWasRunning {
+				if cleanupErr := tmc.StartReplication(ctx, tablet, false); cleanupErr != nil {
+					return detached, vterrors.Wrapf(err, "failed to restart rdonly replication on %s after failing to inspect source: %v", alias, cleanupErr)
+				}
+			}
+			return detached, vterrors.Wrapf(err, "failed to inspect rdonly replication source on %s", alias)
+		}
+		if replicatingFromCandidate {
+			detached.Insert(alias)
+			continue
+		}
+		if ioThreadWasRunning {
+			if err := tmc.StartReplication(ctx, tablet, false); err != nil {
+				if cleanupErr := restartDetachedRdonlyReplication(ctx, tmc, tabletMap, detached); cleanupErr != nil {
+					return detached, vterrors.Wrapf(err, "failed to restart rdonly replication on %s after source inspection: %v", alias, cleanupErr)
+				}
+				return detached, vterrors.Wrapf(err, "failed to restart rdonly replication on %s after source inspection", alias)
+			}
+		}
+	}
+
+	return detached, nil
+}
+
+func restartDetachedRdonlyReplication(ctx context.Context, tmc tmclient.TabletManagerClient, tabletMap map[string]*topo.TabletInfo, detached sets.Set[string]) error {
+	rec := concurrency.AllErrorRecorder{}
+
+	for alias := range detached {
+		ti := tabletMap[alias]
+		if ti == nil || ti.Tablet == nil {
+			continue
+		}
+
+		if err := tmc.StartReplication(ctx, ti.Tablet, false); err != nil {
+			rec.RecordError(vterrors.Wrapf(err, "failed to restart rdonly replication on %s", alias))
+		}
+	}
+
+	return rec.Error()
+}
+
+func rdonlyTabletsToDefer(tabletMap map[string]*topo.TabletInfo, ignoredTablets sets.Set[string], replicationSourceConfig *topodatapb.ReplicationSourceConfig) sets.Set[string] {
+	deferred := sets.New[string]()
+	if !shouldDeferRdonlyReparent(replicationSourceConfig) {
+		return deferred
+	}
+
+	for alias, ti := range tabletMap {
+		if ignoredTablets.Has(alias) {
+			continue
+		}
+		if ti == nil || ti.Tablet == nil || ti.Type != topodatapb.TabletType_RDONLY {
+			continue
+		}
+		deferred.Insert(alias)
+	}
+	return deferred
+}
+
+func shouldDeferRdonlyReparent(replicationSourceConfig *topodatapb.ReplicationSourceConfig) bool {
+	return replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_RDONLY_REPLICATION_SOURCE_POLICY_REQUIRE_SEMI_SYNC_ACKER
+}
+
+func replicationStatusSourceMatchesTablet(status *replicationdatapb.Status, tablet *topodatapb.Tablet, ioThreadWasRunning bool) (bool, error) {
+	if status == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "replication status is nil")
+	}
+	if tablet == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet is nil")
+	}
+
+	if status.SourceHost == "" && status.SourcePort == 0 && !ioThreadWasRunning {
+		return false, nil
+	}
+	if status.SourceHost == "" || status.SourcePort == 0 {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "replication source is incomplete: host %q port %d", status.SourceHost, status.SourcePort)
+	}
+	if status.SourcePort != tablet.MysqlPort {
+		return false, nil
+	}
+
+	if tablet.MysqlHostname != "" && status.SourceHost == tablet.MysqlHostname {
+		return true, nil
+	}
+	if tablet.Hostname != "" && status.SourceHost == tablet.Hostname {
+		return true, nil
+	}
+	return false, nil
+}
+
+func desiredRdonlySemiSyncAckerReplicationSource(primary *topodatapb.Tablet, tablet *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, durability policy.Durabler) (*topodatapb.Tablet, error) {
+	if durability == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "durability policy is required")
+	}
+
+	type sourceCandidate struct {
+		alias  string
+		tablet *topodatapb.Tablet
+	}
+
+	sortSourceCandidates := func(candidates []sourceCandidate) {
+		sort.Slice(candidates, func(i, j int) bool {
+			return candidates[i].alias < candidates[j].alias
+		})
+	}
+
+	sameCellCandidates := make([]sourceCandidate, 0, len(tabletMap))
+	otherCellCandidates := make([]sourceCandidate, 0, len(tabletMap))
+
+	for _, ti := range tabletMap {
+		if ti == nil || ti.Tablet == nil || ti.Alias == nil {
+			continue
+		}
+
+		candidate := ti.Tablet
+		if !isEligibleRdonlyReplicationSource(primary, tablet, candidate, durability) {
+			continue
+		}
+
+		candidateEntry := sourceCandidate{
+			alias:  topoproto.TabletAliasString(candidate.Alias),
+			tablet: candidate,
+		}
+		if candidate.Alias.Cell == tablet.Alias.Cell {
+			sameCellCandidates = append(sameCellCandidates, candidateEntry)
+			continue
+		}
+		otherCellCandidates = append(otherCellCandidates, candidateEntry)
+	}
+
+	sortSourceCandidates(sameCellCandidates)
+	if len(sameCellCandidates) > 0 {
+		return sameCellCandidates[0].tablet, nil
+	}
+
+	sortSourceCandidates(otherCellCandidates)
+	if len(otherCellCandidates) > 0 {
+		return otherCellCandidates[0].tablet, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no semi-sync acker available as replication source for rdonly tablet %s", topoproto.TabletAliasString(tablet.Alias))
+}
+
+func isEligibleRdonlyReplicationSource(primary *topodatapb.Tablet, tablet *topodatapb.Tablet, candidate *topodatapb.Tablet, durability policy.Durabler) bool {
+	if topoproto.TabletAliasEqual(candidate.Alias, primary.Alias) || topoproto.TabletAliasEqual(candidate.Alias, tablet.Alias) {
+		return false
+	}
+	if candidate.Keyspace != tablet.Keyspace || candidate.Shard != tablet.Shard {
+		return false
+	}
+	if !policy.IsReplicaSemiSync(durability, primary, candidate) {
+		return false
+	}
+	return policy.PromotionRule(durability, candidate) != promotionrule.MustNot
 }
 
 // replicationSnapshot stores the status maps and the tablets that were reachable

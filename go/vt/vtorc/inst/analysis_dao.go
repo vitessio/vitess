@@ -78,6 +78,10 @@ type clusterAnalysis struct {
 
 	// durability is the shard's current durability policy.
 	durability policy.Durabler
+
+	shardPrimary *topodatapb.Tablet
+
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig
 }
 
 // GetDetectionAnalysis will check for detected problems (dead primary; unreachable primary; etc)
@@ -100,6 +104,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
+		vitess_keyspace.rdonly_replication_source_policy AS rdonly_replication_source_policy,
 		vitess_keyspace.disable_emergency_reparent AS keyspace_disable_emergency_reparent,
 		vitess_shard.primary_timestamp AS shard_primary_term_timestamp,
 		vitess_shard.disable_emergency_reparent AS shard_disable_emergency_reparent,
@@ -111,6 +116,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		MIN(primary_instance.replica_net_timeout) AS replica_net_timeout,
 		MIN(primary_instance.heartbeat_interval) AS heartbeat_interval,
 		MIN(primary_tablet.info) AS primary_tablet_info,
+		MIN(shard_primary_tablet.info) AS shard_primary_tablet_info,
 		MIN(
 			IFNULL(
 				primary_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
@@ -293,6 +299,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			primary_tablet.hostname = primary_instance.source_host
 			AND primary_tablet.port = primary_instance.source_port
 		)
+		LEFT JOIN vitess_tablet shard_primary_tablet ON (
+			vitess_shard.primary_alias = shard_primary_tablet.alias
+		)
 		LEFT JOIN database_instance replica_instance ON (
 			primary_instance.hostname = replica_instance.source_host
 			AND primary_instance.port = replica_instance.source_port
@@ -331,6 +340,15 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		primaryTablet := &topodatapb.Tablet{}
 		if str := m.GetString("primary_tablet_info"); str != "" {
 			if err := opts.Unmarshal([]byte(str), primaryTablet); err != nil {
+				log.Error(fmt.Sprintf("could not read tablet %v: %v", str, err))
+				return nil
+			}
+		}
+
+		var shardPrimaryTablet *topodatapb.Tablet
+		if str := m.GetString("shard_primary_tablet_info"); str != "" {
+			shardPrimaryTablet = &topodatapb.Tablet{}
+			if err := opts.Unmarshal([]byte(str), shardPrimaryTablet); err != nil {
 				log.Error(fmt.Sprintf("could not read tablet %v: %v", str, err))
 				return nil
 			}
@@ -429,6 +447,10 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				return nil
 			}
 			clusters[keyspaceShard].durability = durability
+			clusters[keyspaceShard].shardPrimary = shardPrimaryTablet
+			clusters[keyspaceShard].replicationSourceConfig = &topodatapb.ReplicationSourceConfig{
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy(m.GetInt32("rdonly_replication_source_policy")),
+			}
 		}
 		// ca has clusterwide info
 		ca := clusters[keyspaceShard]

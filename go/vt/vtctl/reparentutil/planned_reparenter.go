@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -71,8 +72,9 @@ type PlannedReparentOptions struct {
 	// set these options inside a PlannedReparent without leaking these details
 	// back out to the caller.
 
-	lockAction string
-	durability policy.Durabler
+	lockAction              string
+	durability              policy.Durabler
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig
 }
 
 // NewPlannedReparenter returns a new PlannedReparenter object, ready to perform
@@ -531,6 +533,11 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
+	opts.replicationSourceConfig, err = pr.ts.GetKeyspaceReplicationSourceConfig(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
 	ev.ShardInfo = *shardInfo
 
 	event.DispatchUpdate(ev, "reading tablet map")
@@ -573,6 +580,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	// in the sense that all the components will retry initialization anyways after some
 	// time, so even without a call to RefreshState, they all converge correctly.
 	needsRefresh := false
+	detachedRdonly := sets.New[string]()
 
 	// Depending on whether we can find a current primary, and what the caller
 	// specified as the candidate primary, we will do one of four kinds of
@@ -607,6 +615,10 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime == nil:
 		// Case (1): no primary has been elected ever. Initialize
 		// the primary-elect tablet
+		detachedRdonly, err = detachRdonlyReplicatingFromPromotionCandidate(ctx, pr.tmc, tabletMap, ev.NewPrimary, opts.replicationSourceConfig)
+		if err != nil {
+			return err
+		}
 		reparentJournalPos, err = pr.performInitialPromotion(ctx, ev.NewPrimary, opts)
 		needsRefresh = true
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
@@ -635,7 +647,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
-	if err := pr.reparentTablets(ctx, ev, reparentJournalPos, promoteReplicaRequired, tabletMap, opts); err != nil {
+	if err := pr.reparentTablets(ctx, ev, reparentJournalPos, promoteReplicaRequired, tabletMap, detachedRdonly, opts); err != nil {
 		return err
 	}
 
@@ -656,6 +668,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	reparentJournalPosition string,
 	promoteReplicaRequired bool,
 	tabletMap map[string]*topo.TabletInfo,
+	detachedRdonly sets.Set[string],
 	opts PlannedReparentOptions,
 ) error {
 	// Create a cancellable context for the entire set of reparent operations.
@@ -676,6 +689,16 @@ func (pr *PlannedReparenter) reparentTablets(
 	replicasWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
+	if promoteReplicaRequired {
+		detached, err := detachRdonlyReplicatingFromPromotionCandidate(ctx, pr.tmc, tabletMap, ev.NewPrimary, opts.replicationSourceConfig)
+		if err != nil {
+			return err
+		}
+		for alias := range detached {
+			detachedRdonly.Insert(alias)
+		}
+	}
+
 	// Point all replicas at the new primary and check that they receive the
 	// reparent journal entry, proving that they are replicating from the new
 	// primary. We do this concurrently with adding the journal entry (after
@@ -684,6 +707,9 @@ func (pr *PlannedReparenter) reparentTablets(
 	// the new primary.
 	for alias, tabletInfo := range tabletMap {
 		if alias == primaryElectAliasStr {
+			continue
+		}
+		if shouldDeferRdonlyReparent(opts.replicationSourceConfig) && tabletInfo.Type == topodatapb.TabletType_RDONLY {
 			continue
 		}
 
@@ -704,8 +730,15 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, policy.IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet), 0); err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
+			source, err := DesiredReplicationSource(ev.NewPrimary, tablet, tabletMap, opts.durability, opts.replicationSourceConfig)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to select replication source: %v", alias, err))
+				return
+			}
+
+			sourceAliasStr := topoproto.TabletAliasString(source.Alias)
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, source.Alias, reparentJournalTimestamp, "", forceStartReplication, policy.IsReplicaSemiSync(opts.durability, source, tablet), 0); err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, sourceAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
 	}
@@ -747,6 +780,10 @@ func (pr *PlannedReparenter) reparentTablets(
 		msg := "some replicas failed to reparent; retry PlannedReparentShard with the same new primary alias (%v) to retry failed replicas"
 		pr.logger.Errorf2(err, msg, primaryElectAliasStr)
 		return vterrors.Wrapf(err, msg, primaryElectAliasStr)
+	}
+
+	if len(detachedRdonly) > 0 {
+		pr.logger.Infof("leaving %d detached rdonly tablet(s) for VTOrc to repair replication", len(detachedRdonly))
 	}
 
 	return nil

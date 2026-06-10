@@ -161,7 +161,8 @@ useful after a MoveTables has finished to remove serving restrictions.`,
 	// ShardReplicationPositions makes a ShardReplicationPositions gRPC request
 	// to a vtctld.
 	ShardReplicationPositions = &cobra.Command{
-		Use: "ShardReplicationPositions <keyspace/shard>",
+		Use:   "ShardReplicationPositions <keyspace/shard>",
+		Short: "Shows the replication status of each tablet in a shard.",
 		Long: `Shows the replication status of each tablet in the shard graph.
 Output is sorted by tablet type, then replication position.
 Use ctrl-C to interrupt the command and see partial results if needed.`,
