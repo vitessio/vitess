@@ -58,10 +58,10 @@ type (
 	}
 )
 
-// WithLockWaitTimeout sets the session lock_wait_timeout (in whole seconds) for
-// the SET GLOBAL super_read_only statement, bounding how long it waits for
-// metadata locks held by in-flight queries. By default the server's value is
-// left untouched.
+// WithLockWaitTimeout sets the session lock_wait_timeout (rounded up to whole
+// seconds) for the SET GLOBAL super_read_only statement, bounding how long it
+// waits for metadata locks held by in-flight queries. By default the server's
+// value is left untouched.
 func WithLockWaitTimeout(timeout time.Duration) SetSuperReadOnlyOption {
 	return func(options *setSuperReadOnlyOptions) {
 		options.lockWaitTimeout = timeout
@@ -394,7 +394,10 @@ func (mysqld *Mysqld) SetSuperReadOnly(ctx context.Context, on bool, opts ...Set
 	}
 	defer conn.Recycle()
 
-	setTimeoutQuery := fmt.Sprintf("SET SESSION lock_wait_timeout = %d", int64(options.lockWaitTimeout/time.Second))
+	// lock_wait_timeout only supports whole seconds, so round up to keep
+	// sub-second timeouts from truncating to 0.
+	lockWaitTimeoutSeconds := int64((options.lockWaitTimeout + time.Second - 1) / time.Second)
+	setTimeoutQuery := fmt.Sprintf("SET SESSION lock_wait_timeout = %d", lockWaitTimeoutSeconds)
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{setTimeoutQuery}); err != nil {
 		return nil, err
 	}

@@ -809,6 +809,19 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		assert.Less(t, enableIdx, restoreIdx, "lock_wait_timeout must be restored after enabling super_read_only")
 	})
 
+	t.Run("rounds the timeout up to whole seconds", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddQuery("SET SESSION lock_wait_timeout = 2", &sqltypes.Result{})
+
+		_, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(500*time.Millisecond))
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"))
+
+		_, err = testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(1500*time.Millisecond))
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 2"))
+	})
+
 	t.Run("default leaves lock_wait_timeout untouched", func(t *testing.T) {
 		db, testMysqld := newTestMysqld(t)
 
