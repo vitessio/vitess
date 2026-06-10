@@ -105,7 +105,7 @@ var (
 // stopReason is used in "stopsByReason" as "Reason" label.
 type stopReason string
 
-var stopReasons = []stopReason{stopShardMissing, stopFailoverEndDetected, stopMaxFailoverDurationExceeded, stopShutdown}
+var stopReasons = []stopReason{stopShardMissing, stopFailoverEndDetected, stopMaxFailoverDurationExceeded, stopShutdown, stopMoveTablesSwitchingTraffic, stopMarkFailed}
 
 const (
 	stopShardMissing                stopReason = "ReshardingComplete"
@@ -113,6 +113,11 @@ const (
 	stopMaxFailoverDurationExceeded stopReason = "MaxDurationExceeded"
 	stopShutdown                    stopReason = "Shutdown"
 	stopMoveTablesSwitchingTraffic  stopReason = "MoveTablesSwitchedTraffic"
+	// stopMarkFailed means a buffering cycle was rolled back right after it
+	// started because the shard could not be marked as not serving in the
+	// keyspace event watcher (e.g. the keyspace was deleted or the watcher
+	// has not seen the shard yet).
+	stopMarkFailed stopReason = "MarkNotServingFailed"
 
 	stopMoveTablesSwitchingTrafficMessage = "MoveTables has switched writes"
 	stopFailoverEndDetectedMessage        = "a primary promotion has been detected"

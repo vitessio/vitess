@@ -200,7 +200,13 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 		requestsSkipped.Add([]string{keyspace, shard, skippedDisabled}, 1)
 		return nil, nil
 	}
-	return sb.waitForFailoverEnd(ctx, keyspace, shard, kev, err)
+	// Explicit nil guard: assigning a nil *KeyspaceEventWatcher to the
+	// interface directly would yield a non-nil interface value.
+	var marker shardMarker
+	if kev != nil {
+		marker = kev
+	}
+	return sb.waitForFailoverEnd(ctx, keyspace, shard, marker, err)
 }
 
 func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {
