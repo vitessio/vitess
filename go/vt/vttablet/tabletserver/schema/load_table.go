@@ -19,16 +19,19 @@ package schema
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
@@ -67,6 +70,58 @@ func fetchColumns(ta *Table, conn *connpool.PooledConn, databaseName, sqlTableNa
 		return err
 	}
 	ta.Fields = fields
+	return fetchEnumSetColumnTypes(ctx, ta, conn, databaseName)
+}
+
+// enumSetColumnTypesQuery fetches the full type definition (column_type) of
+// every ENUM and SET column in a table; the parameters are the SQL-encoded
+// database name and table name. The isc alias keeps the query distinct from
+// the column names query (see mysql.GetColumnNamesQueryPatternForTable) when
+// mocking queries in tests.
+const enumSetColumnTypesQuery = "select isc.column_name, isc.column_type from information_schema.columns as isc " +
+	"where isc.table_schema=%s and isc.table_name=%s and isc.data_type in ('enum', 'set')"
+
+// couldBeEnumOrSet reports whether a field's type could belong to an ENUM or
+// SET column. Binary-collation ENUM/SET columns report as BINARY in query
+// result metadata, so BINARY must be included.
+func couldBeEnumOrSet(field *querypb.Field) bool {
+	switch field.Type {
+	case querypb.Type_ENUM, querypb.Type_SET, querypb.Type_BINARY:
+		return true
+	default:
+		return false
+	}
+}
+
+// fetchEnumSetColumnTypes records the full type definition (e.g. enum('a','b'))
+// of the table's ENUM and SET columns. The binlog only stores the integer index
+// (ENUM) or bitmask (SET), so schema version tracking persists these
+// definitions in order to decode historical ROW events after a column is
+// dropped or modified (see snapshotMinimalSchema). They are fetched in the same
+// pass as the table's fields so that they can never reflect a newer schema than
+// the field list does. The lookup is skipped for tables whose fields cannot
+// belong to an ENUM/SET column.
+func fetchEnumSetColumnTypes(ctx context.Context, ta *Table, conn *connpool.PooledConn, databaseName string) error {
+	ta.EnumSetColumnTypes = nil
+	if !slices.ContainsFunc(ta.Fields, couldBeEnumOrSet) {
+		return nil
+	}
+	encodedDBName := "database()"
+	if databaseName != "" {
+		encodedDBName = encodeString(databaseName)
+	}
+	query := fmt.Sprintf(enumSetColumnTypesQuery, encodedDBName, encodeString(ta.Name.String()))
+	qr, err := conn.Conn.Exec(ctx, query, mysql.FETCH_ALL_ROWS, false)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to fetch ENUM/SET column types for table %s", ta.Name.String())
+	}
+	if len(qr.Rows) == 0 {
+		return nil
+	}
+	ta.EnumSetColumnTypes = make(map[string]string, len(qr.Rows))
+	for _, row := range qr.Rows {
+		ta.EnumSetColumnTypes[row[0].ToString()] = row[1].ToString()
+	}
 	return nil
 }
 

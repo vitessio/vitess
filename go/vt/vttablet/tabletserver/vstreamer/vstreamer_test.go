@@ -2858,8 +2858,8 @@ func TestMinimalSchemaEnumSetColumnTypeLifecycle(t *testing.T) {
 
 	// Phase 1: the marshalled schema carries the type definition of every
 	// ENUM/SET column and of nothing else. The binary-collation columns
-	// report as BINARY in field metadata, yet are still enriched.
-	blob, err := env.SchemaEngine.MarshalMinimalSchema(ctx)
+	// report as BINARY in field metadata, yet are still recorded.
+	blob, err := env.SchemaEngine.MarshalMinimalSchema()
 	require.NoError(t, err)
 	ms := &binlogdatapb.MinimalSchema{}
 	require.NoError(t, ms.UnmarshalVT(blob))

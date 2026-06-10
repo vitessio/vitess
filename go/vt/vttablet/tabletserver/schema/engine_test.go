@@ -2134,59 +2134,46 @@ func TestEngineReloadIndependentOfMaxTableCount(t *testing.T) {
 	assert.GreaterOrEqual(t, got, 5, "reload must load all rows regardless of MaxTableCount")
 }
 
-// loadEnumSetTestTable loads a table with ENUM and SET columns into the test
-// schema engine so that MarshalMinimalSchema has ENUM/SET fields to enrich.
-func loadEnumSetTestTable(t *testing.T, se *Engine, db *fakesqldb.DB) {
-	t.Helper()
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("t_enum_set", false, ""),
-		},
-	})
-	db.MockQueriesForTable("t_enum_set", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|plan|roles", "int64|enum|set")))
-	require.NoError(t, se.Reload(t.Context()))
-}
-
-// TestMarshalMinimalSchemaEnumSetEnrichment covers MarshalMinimalSchema's
-// enrichment of ENUM/SET column types from information_schema: a failed lookup
-// fails the save; a lookup that is missing an ENUM/SET column present in the
-// snapshot (e.g. dropped by a concurrent DDL between the in-memory snapshot
-// and the information_schema read) fails the save rather than persisting a
-// permanently lossy schema version; and a complete lookup persists the type
-// definitions for exactly the ENUM/SET columns.
-func TestMarshalMinimalSchemaEnumSetEnrichment(t *testing.T) {
-	enrichmentQuery := fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'")
+// TestMarshalMinimalSchemaEnumSetColumnTypes covers the ENUM/SET column type
+// definitions recorded for schema version tracking: a failed
+// information_schema lookup fails the table load (and thus the reload); a
+// snapshot containing an ENUM/SET column with no recorded type definition
+// (which a concurrent DDL between the field and type lookups can cause) fails
+// the save rather than persisting a permanently lossy schema version; and
+// recorded definitions are persisted for exactly the ENUM/SET columns.
+func TestMarshalMinimalSchemaEnumSetColumnTypes(t *testing.T) {
+	enumSetQuery := fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'", "'t_enum_set'")
 
 	tests := []struct {
 		name            string
-		enrichmentSetup func(db *fakesqldb.DB)
-		wantErr         string
+		setup           func(db *fakesqldb.DB)
+		wantReloadErr   string
+		wantMarshalErr  string
 		wantColumnTypes map[string]string
 	}{
 		{
-			name: "lookup fails",
-			enrichmentSetup: func(db *fakesqldb.DB) {
-				db.AddRejectedQuery(enrichmentQuery, errors.New("information_schema is unavailable"))
+			name: "type lookup fails",
+			setup: func(db *fakesqldb.DB) {
+				db.AddRejectedQuery(enumSetQuery, errors.New("information_schema is unavailable"))
 			},
-			wantErr: "failed to query information_schema for ENUM/SET column types",
+			wantReloadErr: "failed to fetch ENUM/SET column types for table t_enum_set",
 		},
 		{
-			name: "lookup is missing the ENUM/SET columns",
-			enrichmentSetup: func(db *fakesqldb.DB) {
-				// getTestSchemaEngine registers an empty enrichment result, so
-				// both the ENUM and the SET column are missing from it.
+			name: "type definitions missing",
+			setup: func(db *fakesqldb.DB) {
+				// MockQueriesForTable registers an empty result for the type
+				// lookup by default, so no definitions get recorded for the
+				// ENUM and SET columns.
 			},
-			wantErr: "no type definition found in information_schema for ENUM/SET column t_enum_set.plan",
+			wantMarshalErr: "no type definition recorded for ENUM/SET column t_enum_set.plan",
 		},
 		{
-			name: "lookup is complete",
-			enrichmentSetup: func(db *fakesqldb.DB) {
-				db.AddQuery(enrichmentQuery, sqltypes.MakeTestResult(
-					sqltypes.MakeTestFields("table_name|column_name|column_type", "varchar|varchar|varchar"),
-					"t_enum_set|plan|enum('free','standard')",
-					"t_enum_set|roles|set('admin','user')",
+			name: "type definitions recorded",
+			setup: func(db *fakesqldb.DB) {
+				db.AddQuery(enumSetQuery, sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("column_name|column_type", "varchar|varchar"),
+					"plan|enum('free','standard')",
+					"roles|set('admin','user')",
 				))
 			},
 			wantColumnTypes: map[string]string{
@@ -2200,12 +2187,26 @@ func TestMarshalMinimalSchemaEnumSetEnrichment(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			se, db, cancel := getTestSchemaEngine(t, 0)
 			defer cancel()
-			loadEnumSetTestTable(t, se, db)
-			tc.enrichmentSetup(db)
+			db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+				Fields: mysql.BaseShowTablesFields,
+				Rows: [][]sqltypes.Value{
+					mysql.BaseShowTablesRow("t_enum_set", false, ""),
+				},
+			})
+			db.MockQueriesForTable("t_enum_set", sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("id|plan|roles", "int64|enum|set")))
+			tc.setup(db)
 
-			blob, err := se.MarshalMinimalSchema(t.Context())
-			if tc.wantErr != "" {
-				require.ErrorContains(t, err, tc.wantErr)
+			err := se.Reload(t.Context())
+			if tc.wantReloadErr != "" {
+				require.ErrorContains(t, err, tc.wantReloadErr)
+				return
+			}
+			require.NoError(t, err)
+
+			blob, err := se.MarshalMinimalSchema()
+			if tc.wantMarshalErr != "" {
+				require.ErrorContains(t, err, tc.wantMarshalErr)
 				return
 			}
 			require.NoError(t, err)

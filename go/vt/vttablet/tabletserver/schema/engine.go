@@ -1054,29 +1054,36 @@ func (se *Engine) GetSchema() map[string]*Table {
 
 // MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema.
 //
-// ENUM and SET columns are enriched with their full type definition (the
-// ColumnType, e.g. enum('a','b')) via an information_schema lookup. This lets
-// schema version tracking decode historical ROW events for these columns even
-// after they are dropped: the binlog only stores the integer index (ENUM) or
-// bitmask (SET), so the string values are otherwise unrecoverable once the live
-// column is gone. The lookup runs outside se.mu (see enrichEnumAndSetColumnTypes).
-func (se *Engine) MarshalMinimalSchema(ctx context.Context) ([]byte, error) {
-	dbSchema := se.snapshotMinimalSchema()
-	if err := se.enrichEnumAndSetColumnTypes(ctx, dbSchema); err != nil {
-		// Fail rather than persist a schema version without the ENUM/SET string
-		// values: such a row is permanently lossy (nothing can backfill it once
-		// the live column changes), while a failed save is retried by the schema
-		// tracker from the previous GTID.
+// ENUM and SET fields carry their full type definition (the ColumnType, e.g.
+// enum('a','b')), recorded when the table was loaded (see
+// fetchEnumSetColumnTypes). This lets schema version tracking decode
+// historical ROW events for these columns even after they are dropped or
+// modified: the binlog only stores the integer index (ENUM) or bitmask (SET),
+// so the string values are otherwise unrecoverable once the live column
+// changes.
+func (se *Engine) MarshalMinimalSchema() ([]byte, error) {
+	dbSchema, err := se.snapshotMinimalSchema()
+	if err != nil {
 		return nil, err
 	}
 	return dbSchema.MarshalVT()
 }
 
 // snapshotMinimalSchema builds a MinimalSchema from the in-memory schema under
-// se.mu, deep-copying each field so that enrichEnumAndSetColumnTypes can set
-// ColumnType after the lock is released without mutating or racing the live
-// se.tables fields (newMinimalTable otherwise shares the *querypb.Field pointers).
-func (se *Engine) snapshotMinimalSchema() *binlogdatapb.MinimalSchema {
+// se.mu. Each field is deep-copied so that the ENUM/SET type definitions can be
+// attached without mutating the live se.tables fields (newMinimalTable
+// otherwise shares the *querypb.Field pointers), which must keep an empty
+// ColumnType: live tables get fresh definitions at decode time instead.
+//
+// A field that reports as ENUM/SET but has no recorded type definition fails
+// the snapshot: persisting it would be permanently lossy (nothing can backfill
+// the string values once the live column changes), while a failed save is
+// retried by the schema tracker from the previous GTID. This can only happen
+// if a concurrent DDL hits the narrow window between the two
+// information_schema reads in fetchColumns; the next reload of the table
+// resolves it. Binary-collation ENUM/SET columns report as BINARY and so
+// cannot be verified this way.
+func (se *Engine) snapshotMinimalSchema() (*binlogdatapb.MinimalSchema, error) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	dbSchema := &binlogdatapb.MinimalSchema{
@@ -1086,74 +1093,20 @@ func (se *Engine) snapshotMinimalSchema() *binlogdatapb.MinimalSchema {
 		mt := newMinimalTable(table)
 		clonedFields := make([]*querypb.Field, len(mt.Fields))
 		for i, field := range mt.Fields {
-			clonedFields[i] = field.CloneVT()
+			cloned := field.CloneVT()
+			if columnType, ok := table.EnumSetColumnTypes[field.Name]; ok {
+				cloned.ColumnType = columnType
+			} else if field.Type == querypb.Type_ENUM || field.Type == querypb.Type_SET {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+					"no type definition recorded for ENUM/SET column %s.%s; "+
+						"the column may have been changed by a concurrent schema change", mt.Name, field.Name)
+			}
+			clonedFields[i] = cloned
 		}
 		mt.Fields = clonedFields
 		dbSchema.Tables = append(dbSchema.Tables, mt)
 	}
-	return dbSchema
-}
-
-// enumSetColumnTypesQuery fetches the full type definition (column_type) of
-// every ENUM and SET column in a database; %s is the SQL-encoded database name.
-const enumSetColumnTypesQuery = "select table_name, column_name, column_type " +
-	"from information_schema.columns where table_schema=%s and data_type in ('enum', 'set')"
-
-// enrichEnumAndSetColumnTypes sets ColumnType on the ENUM and SET fields of the
-// given schema using a single information_schema lookup. It does not hold se.mu.
-// Filtering on data_type IN ('enum','set') is authoritative, so it correctly
-// covers binary-collation columns that report as BINARY in result metadata.
-//
-// The in-memory snapshot and the information_schema read are not atomic: a
-// concurrent DDL can land in between, in which case the lookup reflects a
-// newer schema than the snapshot. If that DDL dropped (or renamed) an ENUM/SET
-// column, the lookup result no longer covers it, so we fail the save rather
-// than silently persist a snapshot without the column's string values; the
-// tracker retries from the previous GTID and the next save reflects a
-// consistent schema. This check cannot cover binary-collation ENUM/SET columns
-// (they report as BINARY in result metadata), so for those the same race
-// degrades to the pre-enrichment behavior: a decode-time error for rows from
-// the affected GTID range.
-func (se *Engine) enrichEnumAndSetColumnTypes(ctx context.Context, dbSchema *binlogdatapb.MinimalSchema) error {
-	if se.conns == nil {
-		// Test engines (NewEngineForTests()) have no connection pool; skip
-		// enrichment and fall back to the un-enriched schema.
-		return nil
-	}
-	conn, err := se.conns.Get(ctx, nil)
-	if err != nil {
-		return vterrors.Wrap(err, "failed to get a connection to enrich ENUM/SET column types")
-	}
-	defer conn.Recycle()
-	query := sqlparser.BuildParsedQuery(enumSetColumnTypesQuery, encodeString(se.cp.DBName())).Query
-	qr, err := conn.Conn.Exec(ctx, query, mysql.FETCH_ALL_ROWS, false)
-	if err != nil {
-		return vterrors.Wrap(err, "failed to query information_schema for ENUM/SET column types")
-	}
-	// (table -> column -> column_type)
-	columnTypes := make(map[string]map[string]string)
-	for _, row := range qr.Rows {
-		table := row[0].ToString()
-		if columnTypes[table] == nil {
-			columnTypes[table] = make(map[string]string)
-		}
-		columnTypes[table][row[1].ToString()] = row[2].ToString()
-	}
-	for _, mt := range dbSchema.Tables {
-		cols := columnTypes[mt.Name]
-		for _, field := range mt.Fields {
-			if columnType, ok := cols[field.Name]; ok {
-				field.ColumnType = columnType
-				continue
-			}
-			if field.Type == querypb.Type_ENUM || field.Type == querypb.Type_SET {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-					"no type definition found in information_schema for ENUM/SET column %s.%s; "+
-						"the column may have been dropped by a concurrent schema change", mt.Name, field.Name)
-			}
-		}
-	}
-	return nil
+	return dbSchema, nil
 }
 
 func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {

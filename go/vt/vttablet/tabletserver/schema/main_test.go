@@ -17,7 +17,6 @@ limitations under the License.
 package schema
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -38,7 +37,6 @@ func getTestSchemaEngine(t *testing.T, schemaMaxAgeSeconds int64) (*Engine, *fak
 	db.AddQueryPattern(baseInnoDBTableSizesPattern, &sqltypes.Result{})
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{})
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'"), &sqltypes.Result{})
 	AddFakeInnoDBReadRowsResult(db, 1)
 	se := newEngine(10*time.Second, 10*time.Second, schemaMaxAgeSeconds, db, nil)
 	require.NoError(t, se.Open())

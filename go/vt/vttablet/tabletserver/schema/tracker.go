@@ -273,7 +273,7 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 	ctx, cancel := context.WithTimeout(ctx, schemaVersionSaveTimeout)
 	defer cancel()
 
-	blob, err := tr.engine.MarshalMinimalSchema(ctx)
+	blob, err := tr.engine.MarshalMinimalSchema()
 	if err != nil {
 		return err
 	}

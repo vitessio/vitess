@@ -855,6 +855,10 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 		),
 		cols...,
 	))
+
+	// mock the query that fetches the table's ENUM/SET column type definitions,
+	// returning no rows by default
+	db.AddQueryPattern(fmt.Sprintf(mysql.EnumSetColumnTypesQueryPatternForTable, table), &sqltypes.Result{})
 }
 
 // GetRejectedQueryResult checks if we should reject the query.
