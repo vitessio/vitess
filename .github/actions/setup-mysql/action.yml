@@ -22,40 +22,51 @@ runs:
         sudo rm -rf /var/lib/mysql
         sudo rm -rf /etc/mysql
 
-        # We have to install this old version of libaio1. See also:
-        # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
-        wget http://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb && \
-          sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb && \
-          rm libaio1_0.3.112-13build1_amd64.deb
-
-        # Get key to latest MySQL repo
-        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
-
-        if [[ "${{ inputs.flavor }}" == "mysql-5.7" ]]; then
-          # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
-          # packages for Jammy.
-          echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
-          echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
-          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-          sudo apt-get update
-          # libtinfo5 is also needed for older MySQL 5.7 builds.
-          curl -L -O http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
-          sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
-          sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
-        elif [[ "${{ inputs.flavor }}" == "mysql-8.0" ]]; then
-          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
-        elif [[ "${{ inputs.flavor }}" == "mysql-8.4" ]]; then
-          echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
-          sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-          sudo apt-get update
+        if [[ "$(dpkg --print-architecture)" == "arm64" ]]; then
+          # Oracle's apt repo only publishes amd64 packages for Ubuntu, so on
+          # arm64 we install MySQL from the Ubuntu archive instead, which only
+          # ships MySQL 8.0.
+          if [[ "${{ inputs.flavor }}" != "mysql-8.0" ]]; then
+            echo "Unsupported MySQL flavor on arm64: ${{ inputs.flavor }}"
+            exit 1
+          fi
           sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         else
-          echo "Unsupported MySQL flavor: ${{ inputs.flavor }}"
-          exit 1
+          # We have to install this old version of libaio1. See also:
+          # https://bugs.launchpad.net/ubuntu/+source/libaio/+bug/2067501
+          wget http://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb && \
+            sudo dpkg -i libaio1_0.3.112-13build1_amd64.deb && \
+            rm libaio1_0.3.112-13build1_amd64.deb
+
+          # Get key to latest MySQL repo
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A8D3785C
+          wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.35-1_all.deb
+
+          if [[ "${{ inputs.flavor }}" == "mysql-5.7" ]]; then
+            # Bionic packages are still compatible for Jammy since there's no MySQL 5.7
+            # packages for Jammy.
+            echo mysql-apt-config mysql-apt-config/repo-codename select bionic | sudo debconf-set-selections
+            echo mysql-apt-config mysql-apt-config/select-server select mysql-5.7 | sudo debconf-set-selections
+            sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+            sudo apt-get update
+            # libtinfo5 is also needed for older MySQL 5.7 builds.
+            curl -L -O http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+            sudo dpkg -i libtinfo5_6.3-2ubuntu0.1_amd64.deb
+            sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-client=5.7* mysql-community-server=5.7* mysql-server=5.7* libncurses6
+          elif [[ "${{ inputs.flavor }}" == "mysql-8.0" ]]; then
+            echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+            sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+            sudo apt-get update
+            sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+          elif [[ "${{ inputs.flavor }}" == "mysql-8.4" ]]; then
+            echo mysql-apt-config mysql-apt-config/select-server select mysql-8.4-lts | sudo debconf-set-selections
+            sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+            sudo apt-get update
+            sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
+          else
+            echo "Unsupported MySQL flavor: ${{ inputs.flavor }}"
+            exit 1
+          fi
         fi
 
         sudo service mysql stop
