@@ -23,3 +23,9 @@ func NewEnv(env *vtenv.Environment, defaultColl collations.ID) *Environment {
 		DefaultColl: defaultColl,
 	}
 }
+
+// NewEnvWithDefaults creates a new Environment using the default connection
+// charset from the given vtenv.Environment.
+func NewEnvWithDefaults(env *vtenv.Environment) *Environment {
+	return NewEnv(env, env.CollationEnv().DefaultConnectionCharset())
+}
