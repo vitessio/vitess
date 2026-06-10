@@ -1132,9 +1132,17 @@ func getFields(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, t
 	}
 	for _, field := range fieldsCopy {
 		if colInfo, ok := extColInfos[field.Name]; ok {
+			// A ColumnType that is already set comes from a tracked schema
+			// version and reflects the column's historical ENUM/SET definition;
+			// the live one may have diverged, so we must not overwrite it.
 			if field.ColumnType == "" {
 				field.ColumnType = colInfo.columnType
 			}
+			// The charset, however, is always taken from the live column: the
+			// historical collation is not persisted (the snapshot's field
+			// metadata carries the connection collation, not the column's), so
+			// the live collation is the best available approximation. It does
+			// not affect ENUM/SET value decoding, which only uses ColumnType.
 			field.Charset = uint32(colInfo.collationID)
 		}
 	}

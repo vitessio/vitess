@@ -1103,6 +1103,17 @@ const enumSetColumnTypesQuery = "select table_name, column_name, column_type " +
 // given schema using a single information_schema lookup. It does not hold se.mu.
 // Filtering on data_type IN ('enum','set') is authoritative, so it correctly
 // covers binary-collation columns that report as BINARY in result metadata.
+//
+// The in-memory snapshot and the information_schema read are not atomic: a
+// concurrent DDL can land in between, in which case the lookup reflects a
+// newer schema than the snapshot. If that DDL dropped (or renamed) an ENUM/SET
+// column, the lookup result no longer covers it, so we fail the save rather
+// than silently persist a snapshot without the column's string values; the
+// tracker retries from the previous GTID and the next save reflects a
+// consistent schema. This check cannot cover binary-collation ENUM/SET columns
+// (they report as BINARY in result metadata), so for those the same race
+// degrades to the pre-enrichment behavior: a decode-time error for rows from
+// the affected GTID range.
 func (se *Engine) enrichEnumAndSetColumnTypes(ctx context.Context, dbSchema *binlogdatapb.MinimalSchema) error {
 	if se.conns == nil {
 		// Test engines (NewEngineForTests()) have no connection pool; skip
@@ -1111,16 +1122,13 @@ func (se *Engine) enrichEnumAndSetColumnTypes(ctx context.Context, dbSchema *bin
 	}
 	conn, err := se.conns.Get(ctx, nil)
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to get a connection to enrich ENUM/SET column types")
+		return vterrors.Wrap(err, "failed to get a connection to enrich ENUM/SET column types")
 	}
 	defer conn.Recycle()
 	query := sqlparser.BuildParsedQuery(enumSetColumnTypesQuery, encodeString(se.cp.DBName())).Query
 	qr, err := conn.Conn.Exec(ctx, query, mysql.FETCH_ALL_ROWS, false)
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to query information_schema for ENUM/SET column types")
-	}
-	if len(qr.Rows) == 0 {
-		return nil
+		return vterrors.Wrap(err, "failed to query information_schema for ENUM/SET column types")
 	}
 	// (table -> column -> column_type)
 	columnTypes := make(map[string]map[string]string)
@@ -1133,12 +1141,15 @@ func (se *Engine) enrichEnumAndSetColumnTypes(ctx context.Context, dbSchema *bin
 	}
 	for _, mt := range dbSchema.Tables {
 		cols := columnTypes[mt.Name]
-		if cols == nil {
-			continue
-		}
 		for _, field := range mt.Fields {
 			if columnType, ok := cols[field.Name]; ok {
 				field.ColumnType = columnType
+				continue
+			}
+			if field.Type == querypb.Type_ENUM || field.Type == querypb.Type_SET {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+					"no type definition found in information_schema for ENUM/SET column %s.%s; "+
+						"the column may have been dropped by a concurrent schema change", mt.Name, field.Name)
 			}
 		}
 	}

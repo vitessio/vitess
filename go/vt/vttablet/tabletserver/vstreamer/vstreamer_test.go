@@ -35,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
+	mysqlbinlog "vitess.io/vitess/go/mysql/binlog"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
@@ -2928,4 +2929,80 @@ func TestAddEnumAndSetMappingsActionableError(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "enum or set column plan does not have valid string values")
 	assert.ErrorContains(t, err, "--track-schema-versions")
+}
+
+// TestHistoricalBinaryCollationEnumAndSetDecode confirms that a dropped ENUM or
+// SET column with a binary collation can still have its integer-to-string
+// mappings built for historical ROW events. Such columns report as BINARY in
+// the snapshot's field metadata rather than ENUM/SET, so this exercises the
+// full chain: enrichment matches the column by name via information_schema's
+// data_type, getFields preserves the enriched ColumnType once the column is
+// gone, and the plan builder detects the real column type from the high byte
+// of the binlog event metadata.
+func TestHistoricalBinaryCollationEnumAndSetDecode(t *testing.T) {
+	ctx := t.Context()
+	const tableName = "enum_set_bin_decode"
+	execStatements(t, []string{
+		"create table " + tableName + "(id int, plan enum('free','standard') collate utf8mb4_bin not null, " +
+			"roles set('admin','user') collate utf8mb4_bin not null, primary key(id))",
+	})
+	defer execStatements(t, []string{"drop table " + tableName})
+	require.NoError(t, env.SchemaEngine.Reload(ctx))
+
+	blob, err := env.SchemaEngine.MarshalMinimalSchema(ctx)
+	require.NoError(t, err)
+	ms := &binlogdatapb.MinimalSchema{}
+	require.NoError(t, ms.UnmarshalVT(blob))
+
+	var table *binlogdatapb.MinimalTable
+	for _, mt := range ms.Tables {
+		if mt.Name == tableName {
+			table = mt
+			break
+		}
+	}
+	require.NotNil(t, table, "%s not found in marshalled schema", tableName)
+
+	// Confirm the premise: the binary collation makes the snapshot's field
+	// metadata report these columns as BINARY, yet the enrichment must still
+	// have found them by name.
+	for _, f := range table.Fields {
+		switch f.Name {
+		case "plan":
+			require.Equal(t, querypb.Type_BINARY, f.Type, "binary-collation ENUM should report as BINARY in field metadata")
+			require.Equal(t, "enum('free','standard')", f.ColumnType)
+		case "roles":
+			require.Equal(t, querypb.Type_BINARY, f.Type, "binary-collation SET should report as BINARY in field metadata")
+			require.Equal(t, "set('admin','user')", f.ColumnType)
+		}
+	}
+
+	execStatements(t, []string{"alter table " + tableName + " drop column plan, drop column roles"})
+
+	cp := env.Dbcfgs.DbaWithDB()
+	fields, err := getFields(ctx, cp, env.SchemaEngine, tableName, cp.DBName(), table.Fields)
+	require.NoError(t, err)
+
+	// Build the plan mappings the way a vstreamer would for a historical ROW
+	// event: for binary-collation ENUM/SET columns the binlog TableMap metadata
+	// carries the real column type in the high byte.
+	metadata := make([]uint16, len(fields))
+	planIdx, rolesIdx := -1, -1
+	for i, f := range fields {
+		switch f.Name {
+		case "plan":
+			metadata[i] = mysqlbinlog.TypeEnum<<8 | 1
+			planIdx = i
+		case "roles":
+			metadata[i] = mysqlbinlog.TypeSet<<8 | 1
+			rolesIdx = i
+		}
+	}
+	require.NotEqual(t, -1, planIdx)
+	require.NotEqual(t, -1, rolesIdx)
+
+	plan := &Plan{}
+	require.NoError(t, addEnumAndSetMappingstoPlan(env.SchemaEngine.Environment(), plan, fields, metadata))
+	assert.Equal(t, map[int]string{1: "free", 2: "standard"}, plan.EnumSetValuesMap[planIdx])
+	assert.Equal(t, map[int]string{1: "admin", 2: "user"}, plan.EnumSetValuesMap[rolesIdx])
 }

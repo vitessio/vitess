@@ -239,7 +239,8 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 // TestVStreamLaggingDDLRowEvents confirms that when the schema historian is enabled via the --track-schema-versions flag, we don't
 // fail to handle older ROW events in the VStream that were created prior to a DDL which modified the table structure and thus
 // impacted the binlog event field number to table column mapping. This includes recovering the value mappings for an ENUM or SET
-// column that was added and then dropped, which requires the historian to have recorded the column's type definition (issue #20175).
+// column that was added and then dropped — also when the column has a binary collation and thus reports as BINARY rather than
+// ENUM/SET in field metadata — which requires the historian to have recorded the column's type definition (issue #20175).
 func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	oldArgs := slices.Clone(extraVTTabletArgs)
 	extraVTTabletArgs = append(extraVTTabletArgs,
@@ -306,12 +307,15 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	require.NoError(t, err)
 	_, err = vtgateConn.ExecuteFetch("alter table loadtest add column age int default 1 after id, "+
 		"add column plan enum('free','standard','enterprise') not null default 'free' after age, "+
-		"add column roles set('admin','user') not null default 'user' after plan", 1000, false)
+		"add column roles set('admin','user') not null default 'user' after plan, "+
+		// A binary collation makes the column report as BINARY rather than ENUM in
+		// field metadata, exercising the historian's name-based type enrichment.
+		"add column tier enum('gold','silver') collate utf8mb4_bin not null default 'gold' after roles", 1000, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("insert into loadtest (id, name, plan, roles) values "+
-		"(2001, 'cust1', 'standard', 'admin,user'), (2002, 'cust2', 'enterprise', 'user'), (2003, 'cust3', 'free', 'admin')", 1000, false)
+	_, err = vtgateConn.ExecuteFetch("insert into loadtest (id, name, plan, roles, tier) values "+
+		"(2001, 'cust1', 'standard', 'admin,user', 'silver'), (2002, 'cust2', 'enterprise', 'user', 'gold'), (2003, 'cust3', 'free', 'admin', 'silver')", 1000, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("alter table loadtest drop column age, drop column plan, drop column roles", 1000, false)
+	_, err = vtgateConn.ExecuteFetch("alter table loadtest drop column age, drop column plan, drop column roles, drop column tier", 1000, false)
 	require.NoError(t, err)
 
 	streamCtx, streamCancel := context.WithTimeout(t.Context(), 5*time.Minute)
@@ -358,10 +362,10 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 			}
 		}
 	}
-	// The resumed stream replays the inserts that reference the since-dropped ENUM (plan)
+	// The resumed stream replays the inserts that reference the since-dropped ENUM (plan, tier)
 	// and SET (roles) columns. With --track-schema-versions the historian supplies their
 	// type definitions, so the values must decode to the exact strings inserted (issue #20175).
-	for _, want := range []string{"free", "standard", "enterprise", "admin,user", "user", "admin"} {
+	for _, want := range []string{"free", "standard", "enterprise", "admin,user", "user", "admin", "gold", "silver"} {
 		assert.Containsf(t, decodedValues, want, "expected decoded ENUM/SET value %q in resumed loadtest rows; got %v", want, decodedValues)
 	}
 }

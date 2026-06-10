@@ -2144,3 +2144,65 @@ func TestMarshalMinimalSchemaFailsWhenEnumSetEnrichmentFails(t *testing.T) {
 	_, err := se.MarshalMinimalSchema(t.Context())
 	require.ErrorContains(t, err, "failed to query information_schema for ENUM/SET column types")
 }
+
+// loadEnumSetTestTable loads a table with ENUM and SET columns into the test
+// schema engine so that MarshalMinimalSchema has ENUM/SET fields to enrich.
+func loadEnumSetTestTable(t *testing.T, se *Engine, db *fakesqldb.DB) {
+	t.Helper()
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("t_enum_set", false, ""),
+		},
+	})
+	db.MockQueriesForTable("t_enum_set", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|plan|roles", "int64|enum|set")))
+	require.NoError(t, se.Reload(t.Context()))
+}
+
+// TestMarshalMinimalSchemaFailsWhenEnumSetEnrichmentIsIncomplete proves that a
+// schema snapshot containing an ENUM or SET column whose type definition is
+// missing from the information_schema result (e.g. the column was dropped by a
+// concurrent DDL between the in-memory snapshot and the information_schema
+// read) fails the save instead of silently persisting a permanently lossy
+// schema version.
+func TestMarshalMinimalSchemaFailsWhenEnumSetEnrichmentIsIncomplete(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+	loadEnumSetTestTable(t, se, db)
+
+	// getTestSchemaEngine registers an empty enrichment result, so both the
+	// ENUM and the SET column are missing their type definitions.
+	_, err := se.MarshalMinimalSchema(t.Context())
+	require.ErrorContains(t, err, "no type definition found in information_schema")
+	require.ErrorContains(t, err, "t_enum_set")
+}
+
+// TestMarshalMinimalSchemaSucceedsWhenEnumSetEnrichmentIsComplete guards the
+// completeness check against false positives: when the information_schema
+// result covers every ENUM/SET column in the snapshot, the save must succeed
+// and the marshalled schema must carry the column type definitions.
+func TestMarshalMinimalSchemaSucceedsWhenEnumSetEnrichmentIsComplete(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+	loadEnumSetTestTable(t, se, db)
+
+	db.AddQuery(fmt.Sprintf(enumSetColumnTypesQuery, "'fakesqldb'"), sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("table_name|column_name|column_type", "varchar|varchar|varchar"),
+		"t_enum_set|plan|enum('free','standard')",
+		"t_enum_set|roles|set('admin','user')",
+	))
+
+	blob, err := se.MarshalMinimalSchema(t.Context())
+	require.NoError(t, err)
+	ms := &binlogdatapb.MinimalSchema{}
+	require.NoError(t, ms.UnmarshalVT(blob))
+	require.Len(t, ms.Tables, 1)
+	columnTypes := make(map[string]string)
+	for _, f := range ms.Tables[0].Fields {
+		columnTypes[f.Name] = f.ColumnType
+	}
+	assert.Equal(t, "enum('free','standard')", columnTypes["plan"])
+	assert.Equal(t, "set('admin','user')", columnTypes["roles"])
+	assert.Empty(t, columnTypes["id"], "non-ENUM/SET column should not carry a ColumnType")
+}
