@@ -561,13 +561,16 @@ func (mysqlFlavor) baseShowIndexCardinalities() string {
 	return ShowIndexCardinalities
 }
 
-func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int) string {
+func (mysqlFlavor) setReplicationSourceCommand(params *ConnParams, host string, port int32, heartbeatInterval float64, connectRetry int, retryCount int) string {
 	args := []string{
 		fmt.Sprintf("SOURCE_HOST = '%s'", host),
 		fmt.Sprintf("SOURCE_PORT = %d", port),
 		fmt.Sprintf("SOURCE_USER = '%s'", params.Uname),
 		fmt.Sprintf("SOURCE_PASSWORD = '%s'", params.Pass),
 		fmt.Sprintf("SOURCE_CONNECT_RETRY = %d", connectRetry),
+	}
+	if retryCount >= 0 {
+		args = append(args, fmt.Sprintf("SOURCE_RETRY_COUNT = %d", retryCount))
 	}
 	if params.SslEnabled() {
 		args = append(args, "SOURCE_SSL = 1")

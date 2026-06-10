@@ -255,6 +255,11 @@ func TestGetFlavor(t *testing.T) {
 			expectedType: "mariadbFlavor102",
 			description:  "MariaDB 10.5 with suffix should use mariadbFlavor102",
 		},
+		{
+			version:      "10.11.12-MariaDB-log",
+			expectedType: "mariadbFlavor102",
+			description:  "MariaDB 10.11 with suffix should use mariadbFlavor102",
+		},
 		// Default/unknown versions should get mysqlFlavor57
 		{
 			version:      "5.6.45",

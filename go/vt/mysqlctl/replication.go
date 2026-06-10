@@ -508,7 +508,14 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	if stopReplicationBefore {
 		cmds = append(cmds, conn.Conn.StopReplicationCommand())
 	}
-	smc := conn.Conn.SetReplicationSourceCommand(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()))
+	retryCount := -1
+	if replicationRetryCountFlag != nil && replicationRetryCountFlag.Changed {
+		if replicationRetryCount < 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--replication-retry-count must be >= 0, got %d", replicationRetryCount)
+		}
+		retryCount = replicationRetryCount
+	}
+	smc := conn.Conn.SetReplicationSourceCommandWithRetry(params, host, port, heartbeatInterval, int(replicationConnectRetry.Seconds()), retryCount)
 	cmds = append(cmds, smc)
 	if startReplicationAfter {
 		cmds = append(cmds, conn.Conn.StartReplicationCommand())
