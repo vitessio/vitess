@@ -145,7 +145,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		tableStreamerNumTables:                 env.Exporter().NewCounter("TableStreamerNumTables", "Number of tables streamed by the table streamer"),
 		vstreamersEndedWithErrors:              env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:                            env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
-		throttledCounts:                        env.Exporter().NewCountersWithSingleLabel("VStreamerThrottledCounts", "Number of times vstreamer was throttled by the tablet throttler, labeled by workflow name", "workflow"),
+		throttledCounts:                        env.Exporter().NewCountersWithSingleLabel("VStreamerThrottledCounts", "Number of times vstreamer was throttled by the tablet throttler", "workflow"),
 		vstreamerFlushedBinlogs:                env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
 	}
 	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxInnoDBTrxHistLen })
