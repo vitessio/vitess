@@ -484,14 +484,16 @@ func TestInsertTest(t *testing.T) {
 	assert.Equal(t, int64(1), ra)
 }
 
+type specializedPlanQuery struct {
+	query string
+	args  []any
+}
+
 // specializedPlanQueries are prepared queries whose baseline plan is a scatter
 // (or fails outright, in the window-function case) but whose specialized plan
 // targets a single shard once the equality predicates are known to point at the
 // same shard.
-var specializedPlanQueries = []struct {
-	query string
-	args  []any
-}{{
+var specializedPlanQueries = []specializedPlanQuery{{
 	query: `select 1 from t1 tbl1, t1 tbl2 where tbl1.id = ? and tbl2.id = ?`,
 	args:  []any{1, 1},
 }, {
@@ -505,13 +507,34 @@ var specializedPlanQueries = []struct {
 	args:  []any{1, 1},
 }}
 
+// streamingSpecializedPlanQueries mirror specializedPlanQueries with distinct
+// table aliases. The plan cache is keyed by query text and does not include the
+// workload, so reusing the OLTP query strings would let the plans cached by
+// TestSpecializedPlan satisfy the OLAP lookups here — masking whether the
+// streaming path builds the specialized plan itself. Distinct aliases yield the
+// same plan shapes under different cache keys, so the streaming path is forced
+// to build them.
+var streamingSpecializedPlanQueries = []specializedPlanQuery{{
+	query: `select 1 from t1 stbl1, t1 stbl2 where stbl1.id = ? and stbl2.id = ?`,
+	args:  []any{1, 1},
+}, {
+	query: `select 1 from t1 stbl1, t1 stbl2, t1 stbl3 where stbl1.id = ? and stbl2.id = ? and stbl3.id = ?`,
+	args:  []any{1, 1, 1},
+}, {
+	query: `select 1 from t1 stbl1, t1 stbl2, t1 stbl3, t1 stbl4 where stbl1.id = ? and stbl2.id = ? and stbl3.id = ? and stbl4.id = ?`,
+	args:  []any{1, 1, 1, 1},
+}, {
+	query: `SELECT se.id, se.name, ss.age, ROW_NUMBER() OVER (PARTITION BY se.age ORDER BY ss.name DESC) AS age_rank FROM t1 se, t1 ss where se.id = ? and ss.id = ?`,
+	args:  []any{1, 1},
+}}
+
 // TestSpecializedPlan tests the specialized plan generation for the query.
 func TestSpecializedPlan(t *testing.T) {
 	dbInfo.KeyspaceName = sks
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()
 
-	runAndValidateSpecializedPlans(t, dbo, dbo.Prepare)
+	runAndValidateSpecializedPlans(t, dbo, dbo.Prepare, specializedPlanQueries)
 }
 
 // TestSpecializedPlanStreaming is the OLAP/streaming counterpart of
@@ -535,13 +558,13 @@ func TestSpecializedPlanStreaming(t *testing.T) {
 
 	runAndValidateSpecializedPlans(t, dbo, func(query string) (*sql.Stmt, error) {
 		return conn.PrepareContext(t.Context(), query)
-	})
+	}, streamingSpecializedPlanQueries)
 }
 
-// runAndValidateSpecializedPlans prepares and executes specializedPlanQueries
+// runAndValidateSpecializedPlans prepares and executes the supplied queries
 // using the supplied prepare function, asserts that the optimized branch was
 // taken for every execution, and validates the cached specialized plans.
-func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(query string) (*sql.Stmt, error)) {
+func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(query string) (*sql.Stmt, error), queries []specializedPlanQuery) {
 	t.Helper()
 
 	oMap := getVarValue[map[string]any](t, "OptimizedQueryExecutions", clusterInstance.VtgateProcess.GetVars)
@@ -549,7 +572,7 @@ func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(quer
 		return oMap
 	})
 
-	for _, q := range specializedPlanQueries {
+	for _, q := range queries {
 		stmt, err := prepare(q.query)
 		require.NoError(t, err)
 
@@ -569,12 +592,12 @@ func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(quer
 	randomExec(t, dbo)
 
 	// Validate Join Query specialized plan.
-	p := getPlanWhenReady(t, specializedPlanQueries[0].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
+	p := getPlanWhenReady(t, queries[0].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
 	require.NotNil(t, p, "plan not found")
 	validateJoinSpecializedPlan(t, p)
 
 	// Validate Window Function Query specialized plan with failing baseline plan.
-	p = getPlanWhenReady(t, specializedPlanQueries[3].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
+	p = getPlanWhenReady(t, queries[3].query, 100*time.Millisecond, clusterInstance.VtgateProcess.ReadQueryPlans)
 	require.NotNil(t, p, "plan not found")
 	validateBaselineErrSpecializedPlan(t, p)
 }
