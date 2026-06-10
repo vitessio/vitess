@@ -235,10 +235,6 @@ return user.NeedsMigration() && migrate(user) || user
 - Changelog summaries are for key changes all users should know about — internal implementation details don't belong there
 - Keep PRs clean of unrelated diffs (e.g., stray `package-lock.json` changes, `go.sum` without `go mod tidy`)
 
-### EmergencyReparentShard (ERS)
-- ERS must prioritize **certainty** that we picked the most-advanced candidate
-- Changes should prioritize reducing points of failure - avoid new RPCs or work that may delay or make ERS more brittle
-
 ## :mag: Debugging & Troubleshooting
 
 When things don't work as expected, we debug systematically:

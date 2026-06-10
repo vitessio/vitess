@@ -21,6 +21,8 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[VTCtld](#minor-changes-vtctld)**
+        - [EmergencyReparentShard tolerates partial relay-log-apply failures](#vtctld-ers-partial-relay-log)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +138,16 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-vtctld"/>VTCtld</a>
+
+#### <a id="vtctld-ers-partial-relay-log"/>EmergencyReparentShard tolerates partial relay-log-apply failures</a>
+
+`EmergencyReparentShard` (ERS) on GTID-based shards no longer fails when only some replicas can apply their relay logs. As long as at least one tablet at the leading `Combined` GTID position applies successfully, ERS proceeds; lagging or stuck-SQL-thread replicas are no longer blockers. Pre-existing pre-PR behavior is preserved for non-GTID flavors (FilePos, MariaDB), where ERS still requires every candidate to apply.
+
+Two new stats are exported for observability:
+
+- `EmergencyReparentFilteredCandidates` — counts replicas excluded from the relay-log wait because their `Combined` position is strictly behind the leading group.
+- `EmergencyReparentRelayLogFailedCandidates` — counts replicas that genuinely failed to apply relay logs (cancellations after a peer succeeded are not counted).
+
+See [#18707](https://github.com/vitessio/vitess/pull/18707) for details.

@@ -129,8 +129,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		shards     []*vtctldatapb.Shard
 		tablets    []*topodatapb.Tablet
 		// results
-		shouldErr        bool
-		errShouldContain string
+		shouldErr           bool
+		errShouldContain    string
+		errShouldNotContain string
 	}{
 		{
 			name:                 "success",
@@ -820,9 +821,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "no valid candidates for emergency reparent",
 		},
 		{
-			name:       "error waiting for relay logs to apply",
+			name:       "partial relay log failures - ERS continues with surviving candidates",
 			durability: policy.DurabilityNone,
-			// one replica is going to take a minute to apply relay logs
+			// one replica is slow, one fails - but zone1-0000000100 succeeds
 			emergencyReparentOps: EmergencyReparentOptions{
 				WaitReplicasTimeout: time.Millisecond * 50,
 			},
@@ -908,11 +909,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Hostname: "fails to apply relay logs",
 				},
 			},
-			shouldErr:        true,
-			keyspace:         "testkeyspace",
-			shard:            "-",
-			cells:            []string{"zone1"},
-			errShouldContain: "could not apply all relay logs within the provided waitReplicasTimeout",
+			shouldErr:           true,
+			keyspace:            "testkeyspace",
+			shard:               "-",
+			cells:               []string{"zone1"},
+			errShouldContain:    "failed to promote", // ERS reaches promotion (not fully mocked) because zone1-0000000100 succeeded the relay-log wait.
+			errShouldNotContain: "could not apply all relay logs",
 		},
 		{
 			name:       "requested primary-elect is not in tablet map",
@@ -1943,6 +1945,81 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr:        true,
 			errShouldContain: "no valid candidates for emergency reparent",
 		},
+		{
+			// Regression test for the Codex P1 finding: when the leading group has
+			// incomparable Combined GTID positions and one of the leaders fails to apply
+			// relay logs, the one-success short-circuit (requireAll=false) would silently
+			// remove the failed leader from validCandidates and let findMostAdvanced
+			// promote the survivor — losing transactions unique to the failed leader.
+			// uniformCombined detects the split-brain shape and forces requireAll=true so
+			// ERS aborts on the wait failure instead.
+			name:                 "incomparable leaders force requireAll on relay-log wait",
+			durability:           policy.DurabilityNone,
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				ReadReparentJournalInfoResults: map[string]int32{
+					"zone1-0000000100": 3,
+					"zone1-0000000101": 3,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-31", "1-50"),
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+							After: &replicationdatapb.Status{
+								SourceUuid:       "00000000-0000-0000-0000-000000000001",
+								RelayLogPosition: getRelayLogPosition("1-100", "1-30", "1-51"),
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						getRelayLogPosition("1-100", "1-31", "1-50"): nil,
+					},
+					"zone1-0000000101": {
+						getRelayLogPosition("1-100", "1-30", "1-51"): assert.AnError,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{Keyspace: "testkeyspace", Name: "-"},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			cells:            []string{"zone1"},
+			shouldErr:        true,
+			errShouldContain: "could not apply all relay logs",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1983,6 +2060,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tt.errShouldContain)
+				if tt.errShouldNotContain != "" {
+					assert.NotContains(t, err.Error(), tt.errShouldNotContain)
+				}
 				return
 			}
 
@@ -2072,7 +2152,8 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnStopReplicationFailure(t *
 		},
 	})
 
-	testutil.AddTablets(ctx, t, ts, nil,
+	testutil.AddTablets(
+		ctx, t, ts, nil,
 		&topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
 				Cell: "zone1",
@@ -2174,11 +2255,11 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), replicationdatapb.StopReplicationMode_IOTHREADONLY).
 			Return(alreadyStoppedIOStatus, nil)
 
-		// Now simulate a replica that takes too long while applying relay logs.
+		// Simulate both replicas timing out during relay log application so that
+		// all candidates fail and ERS aborts, triggering the IO thread restart cleanup.
 		tmc.EXPECT().
 			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), relayLogPosition).
 			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
-				// Block until the context expires so ERS aborts before it starts repointing replicas.
 				<-ctx.Done()
 				return ctx.Err()
 			}).
@@ -2186,7 +2267,10 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 
 		tmc.EXPECT().
 			WaitForPosition(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), relayLogPosition).
-			Return(nil).
+			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
+				<-ctx.Done()
+				return ctx.Err()
+			}).
 			Times(1)
 
 		// We expect the replica whose IO thread was stopped as part of the ERS (and only that replica,
@@ -2211,7 +2295,8 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			},
 		})
 
-		testutil.AddTablets(ctx, t, ts, nil,
+		testutil.AddTablets(
+			ctx, t, ts, nil,
 			&topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -2248,7 +2333,534 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 			WaitReplicasTimeout: 50 * time.Millisecond,
 		})
 
-		require.ErrorContains(t, err, "could not apply all relay logs within the provided waitReplicasTimeout")
+		require.ErrorContains(t, err, "all candidates failed to apply relay logs within the provided waitReplicasTimeout")
+	})
+}
+
+// TestEmergencyReparenterSkipsCleanupOnPromoteReplicaError verifies that once
+// ERS has issued the PromoteReplica RPC, the deferred cleanup is skipped even
+// if the RPC returns an error. PromoteReplica has server-side side effects
+// (read_only off, reset replica, semi-sync, tablet type) that can land before
+// an error is returned, so the target tablet may already be writable as a
+// PRIMARY. Running StartReplication on the remaining tablets at that point
+// would either reconnect them to the dead/old primary (their configured
+// source is still prevPrimary) or hit a tablet that's now writable —
+// disabling semi-sync and masking the real ERS error.
+func TestEmergencyReparenterSkipsCleanupOnPromoteReplicaError(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			stoppedIOAlias1  = "zone1-0000000101"
+			stoppedIOAlias2  = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+		// Primary is dead, both replicas have their IO threads stopped by ERS.
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		// Both replicas successfully apply their relay logs.
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), relayLogPosition).
+			Return(nil).
+			Times(1)
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), relayLogPosition).
+			Return(nil).
+			Times(1)
+
+		// Errant-GTID detection reads each candidate's reparent journal length.
+		// Same length on both keeps both in the leading set with no lagged
+		// handling.
+		tmc.EXPECT().
+			ReadReparentJournalInfo(gomock.Any(), gomock.Any()).
+			Return(int32(1), nil).
+			AnyTimes()
+
+		// PromoteReplica fails on the new primary. From ERS's perspective the
+		// target tablet may already be PRIMARY server-side (the error could be
+		// post-side-effect), so the deferred cleanup must skip the IO-stopped
+		// replicas entirely.
+		tmc.EXPECT().
+			PromoteReplica(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return("", assert.AnError).
+			Times(1)
+
+		// handleReplica goroutines race in reparentReplicas. Allow any number
+		// of SetReplicationSource calls; the test asserts only on cleanup.
+		tmc.EXPECT().
+			SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		// No StartReplication expectation is registered: the deferred cleanup
+		// must NOT call it on either replica once promotion has been attempted.
+		// gomock will fail the test if any such call slips through.
+
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+		})
+
+		testutil.AddTablets(
+			ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: time.Second,
+		})
+
+		require.Error(t, err)
+	})
+}
+
+// TestEmergencyReparenterRestartsStoppedIOThreadsOnPrePromotionAbort verifies
+// the cleanup-runs path: when ERS aborts BEFORE InitPrimary/PromoteReplica is
+// attempted (here via every WaitForPosition failing so applyRelayLogsAndReconcile
+// returns "all candidates failed"), the deferred cleanup must restart
+// replication on the replicas whose IO threads ERS stopped. This preserves the
+// regression coverage previously provided by the post-relay-log-apply test —
+// now that PromoteReplica errors are treated as potentially-side-effected and
+// skip cleanup, we need a separate test for the still-safe pre-promotion path.
+func TestEmergencyReparenterRestartsStoppedIOThreadsOnPrePromotionAbort(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			stoppedIOAlias1  = "zone1-0000000101"
+			stoppedIOAlias2  = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+		// Dead primary; both replicas have IO stopped by ERS.
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		// Both candidates fail to apply relay logs — applyRelayLogsAndReconcile
+		// returns "all candidates failed" and ERS aborts before PromoteReplica
+		// is ever called.
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), relayLogPosition).
+			Return(assert.AnError).
+			AnyTimes()
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), relayLogPosition).
+			Return(assert.AnError).
+			AnyTimes()
+
+		// No PromoteReplica / PopulateReparentJournal / SetReplicationSource
+		// expectations: ERS must abort before reaching the final reparentReplicas.
+		// gomock will fail if any of those slip through.
+
+		// Both replicas whose IO ERS stopped must have replication restarted by
+		// the deferred cleanup — replicationMutated is false at this point.
+		tmc.EXPECT().
+			StartReplication(gomock.Any(), tabletAliasMatcher(stoppedIOAlias1), false).
+			Return(nil).
+			Times(1)
+
+		tmc.EXPECT().
+			StartReplication(gomock.Any(), tabletAliasMatcher(stoppedIOAlias2), false).
+			Return(nil).
+			Times(1)
+
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+		})
+
+		testutil.AddTablets(
+			ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: time.Second,
+		})
+
+		require.Error(t, err)
+	})
+}
+
+// TestEmergencyReparenterSkipsCleanupAfterPromotionSucceeds verifies that when
+// PromoteReplica succeeds but a downstream step fails (e.g. all replicas fail
+// SetReplicationSource), the deferred cleanup does NOT call StartReplication
+// on any tablet. The remaining replicas still have prevPrimary configured as
+// their replication source, so StartReplication would reconnect them to the
+// old/dead primary while a new one is already writable. Operators must
+// repoint manually or run a follow-up reparent.
+func TestEmergencyReparenterSkipsCleanupAfterPromotionSucceeds(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			promotedAlias    = "zone1-0000000101"
+			survivorAlias    = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+		// Primary is dead; both replicas have their IO threads stopped by ERS.
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(promotedAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(survivorAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		// Both replicas successfully apply their relay logs.
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(promotedAlias), relayLogPosition).
+			Return(nil).
+			AnyTimes()
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(survivorAlias), relayLogPosition).
+			Return(nil).
+			AnyTimes()
+
+		// Errant-GTID detection: equal journal length keeps both candidates.
+		tmc.EXPECT().
+			ReadReparentJournalInfo(gomock.Any(), gomock.Any()).
+			Return(int32(1), nil).
+			AnyTimes()
+
+		// PromoteReplica SUCCEEDS on the chosen new primary — this is the
+		// crux of the regression: tablet type is now PRIMARY.
+		tmc.EXPECT().
+			PromoteReplica(gomock.Any(), tabletAliasMatcher(promotedAlias), gomock.Any()).
+			Return(relayLogPosition, nil).
+			Times(1)
+
+		// PopulateReparentJournal succeeds.
+		tmc.EXPECT().
+			PopulateReparentJournal(gomock.Any(), tabletAliasMatcher(promotedAlias), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		// SetReplicationSource fails on every non-promoted tablet (dead primary
+		// + survivor), forcing reparentReplicas to return an error AFTER
+		// PromoteReplica has already succeeded.
+		tmc.EXPECT().
+			SetReplicationSource(gomock.Any(), tabletAliasMatcher(primaryAlias), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(assert.AnError).
+			AnyTimes()
+
+		tmc.EXPECT().
+			SetReplicationSource(gomock.Any(), tabletAliasMatcher(survivorAlias), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(assert.AnError).
+			AnyTimes()
+
+		// No StartReplication expectation is registered for any tablet: the
+		// deferred cleanup must skip the entire restart step once promotion
+		// has succeeded. gomock will fail the test if StartReplication is
+		// called on any tablet.
+
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+		})
+
+		testutil.AddTablets(
+			ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: time.Second,
+			NewPrimaryAlias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		})
+
+		require.Error(t, err)
+	})
+}
+
+// TestEmergencyReparenterSkipsCleanupAfterPopulateReparentJournalFails covers
+// the post-promotion abort path mattlord called out: PromoteReplica succeeds,
+// PopulateReparentJournal fails. The deferred cleanup must not run
+// StartReplication on any tablet, because the survivors' replication source
+// is still prevPrimary and resuming it would reconnect them to the old
+// primary while a new one is already writable.
+func TestEmergencyReparenterSkipsCleanupAfterPopulateReparentJournalFails(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		const (
+			keyspace         = "testkeyspace"
+			shard            = "-"
+			primaryAlias     = "zone1-0000000100"
+			promotedAlias    = "zone1-0000000101"
+			survivorAlias    = "zone1-0000000102"
+			relayLogPosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21"
+			sourceUUID       = "3E11FA47-71CA-11E1-9E33-C80AA9429562"
+		)
+
+		stoppedIOStatus := &replicationdatapb.StopReplicationStatus{
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+			After: &replicationdatapb.Status{
+				SourceUuid:       sourceUUID,
+				RelayLogPosition: relayLogPosition,
+			},
+		}
+
+		mockController := gomock.NewController(t)
+		tmc := tmcmock.NewMockTabletManagerClient(mockController)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(primaryAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(nil, assert.AnError)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(promotedAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			StopReplicationAndGetStatus(gomock.Any(), tabletAliasMatcher(survivorAlias), replicationdatapb.StopReplicationMode_IOTHREADONLY).
+			Return(stoppedIOStatus, nil)
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(promotedAlias), relayLogPosition).
+			Return(nil).
+			AnyTimes()
+
+		tmc.EXPECT().
+			WaitForPosition(gomock.Any(), tabletAliasMatcher(survivorAlias), relayLogPosition).
+			Return(nil).
+			AnyTimes()
+
+		tmc.EXPECT().
+			ReadReparentJournalInfo(gomock.Any(), gomock.Any()).
+			Return(int32(1), nil).
+			AnyTimes()
+
+		// PromoteReplica succeeds — replicationMutated flips to true.
+		tmc.EXPECT().
+			PromoteReplica(gomock.Any(), tabletAliasMatcher(promotedAlias), gomock.Any()).
+			Return(relayLogPosition, nil).
+			Times(1)
+
+		// PopulateReparentJournal fails — this is the abort point.
+		tmc.EXPECT().
+			PopulateReparentJournal(gomock.Any(), tabletAliasMatcher(promotedAlias), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(assert.AnError).
+			Times(1)
+
+		// SetReplicationSource may race with PromoteReplica's failure — allow any
+		// outcome. The test asserts on cleanup, not the fanout.
+		tmc.EXPECT().
+			SetReplicationSource(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(nil).
+			AnyTimes()
+
+		// No StartReplication expectation: any call from cleanup fails the test.
+
+		ts := memorytopo.NewServer(ctx, "zone1")
+		defer ts.Close()
+
+		testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
+			Keyspace: keyspace,
+			Name:     shard,
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+		})
+
+		testutil.AddTablets(
+			ctx, t, ts, nil,
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+			&topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: keyspace,
+				Shard:    shard,
+			},
+		)
+
+		reparenttestutil.SetKeyspaceDurability(ctx, t, ts, keyspace, policy.DurabilityNone)
+
+		erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+
+		_, err := erp.ReparentShard(ctx, keyspace, shard, EmergencyReparentOptions{
+			WaitReplicasTimeout: time.Second,
+			NewPrimaryAlias:     &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		})
+
+		require.Error(t, err)
 	})
 }
 
@@ -2726,7 +3338,7 @@ func TestEmergencyReparenter_promotionOfNewPrimary(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false, nil)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -2801,7 +3413,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "one tablet fails",
+			name: "one tablet fails, one succeeds",
 			tmc: &testutil.TabletManagerClient{
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
@@ -2842,14 +3454,14 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					After: &replicationdatapb.Status{
-						RelayLogPosition: "position2", // cannot wait for the desired "position1", so we fail
+						RelayLogPosition: "position2", // cannot wait for the desired "position1", so this tablet fails
 					},
 				},
 			},
-			shouldErr: true,
+			shouldErr: false, // zone1-0000000100 succeeds, so ERS continues
 		},
 		{
-			name: "multiple tablets fail",
+			name: "some tablets fail but at least one succeeds",
 			tmc: &testutil.TabletManagerClient{
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
@@ -2902,19 +3514,111 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 				},
 				"zone1-0000000101": {
 					After: &replicationdatapb.Status{
-						RelayLogPosition: "position1",
+						RelayLogPosition: "position1", // TMC only knows "position2" for this tablet, so it fails
 					},
 				},
 				"zone1-0000000102": {
 					After: &replicationdatapb.Status{
-						RelayLogPosition: "position1",
+						RelayLogPosition: "position1", // TMC only knows "position3" for this tablet, so it fails
+					},
+				},
+			},
+			shouldErr: false, // zone1-0000000100 succeeds, so ERS continues
+		},
+		{
+			name: "all tablets fail",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"position2": nil,
+					},
+					"zone1-0000000101": {
+						"position3": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000100": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1", // TMC only knows "position2", so it fails
+					},
+				},
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1", // TMC only knows "position3", so it fails
 					},
 				},
 			},
 			shouldErr: true,
 		},
 		{
-			name: "one slow tablet",
+			// A candidate that is absent from statusMap (current/stuck PRIMARY) has no
+			// relay logs to apply and is already at its position. It must satisfy the
+			// partial-wait rule even when every replica waiter fails, so ERS can fall
+			// back to promoting the leading PRIMARY-like candidate.
+			name: "leading PRIMARY-like candidate skipped rescues partial-wait when all waiters fail",
+			tmc: &testutil.TabletManagerClient{
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"position2": nil,
+					},
+				},
+			},
+			candidates: map[string]*RelayLogPositions{
+				"zone1-0000000100": {}, // absent from statusMap — treated as pre-satisfied
+				"zone1-0000000101": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"zone1-0000000101": {
+					After: &replicationdatapb.Status{
+						RelayLogPosition: "position1", // TMC only knows "position2", so it fails
+					},
+				},
+			},
+			shouldErr: false, // 100 is pre-satisfied, 101 fails — ERS still proceeds
+		},
+		{
+			name: "one slow tablet times out, other succeeds",
 			tmc: &testutil.TabletManagerClient{
 				WaitForPositionDelays: map[string]time.Duration{
 					"zone1-0000000101": time.Minute,
@@ -2962,7 +3666,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 					},
 				},
 			},
-			shouldErr: true,
+			shouldErr: false, // zone1-0000000100 succeeds, slow tablet is removed from candidates
 		},
 	}
 
@@ -2971,15 +3675,320 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			t.Parallel()
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout)
+			// Deep-clone so the post-call equality check actually catches mutations
+			// to the underlying RelayLogPositions structs, not just key/pointer changes.
+			candidatesBefore := make(map[string]*RelayLogPositions, len(tt.candidates))
+			for alias, pos := range tt.candidates {
+				clone := *pos
+				candidatesBefore[alias] = &clone
+			}
+			successMap, err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout, false /* requireAll */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
 			}
-
 			assert.NoError(t, err)
+
+			// The wait function must not mutate validCandidates — it only inspects the
+			// map and returns a success map for the caller to act on. This keeps the
+			// function's contract narrow and the caller's intent explicit.
+			assert.Equal(t, candidatesBefore, tt.candidates, "waitForAllRelayLogsToApply must not mutate validCandidates")
+			for alias, applied := range successMap {
+				if !applied {
+					continue
+				}
+				_, ok := tt.candidates[alias]
+				assert.True(t, ok, "applied alias %s should still be in candidates", alias)
+			}
 		})
 	}
+}
+
+// TestEmergencyReparenter_applyRelayLogsAndReconcile_PreSatisfiedBeatsCancelledOnSort
+// is the end-to-end safety regression test for the Codex P1 finding. The pre-satisfied
+// PRIMARY-like candidate (no statusMap entry) must get its Executed bumped to Combined,
+// so a cancelled-mid-apply peer at the same Combined position cannot sort ahead of it
+// via the Combined→Executed tie-break in findMostAdvanced. This test exercises the full
+// applyRelayLogsAndReconcile path (not just waitForAllRelayLogsToApply) to guard against
+// future refactors that decouple "marked applied in successMap" from "Executed bumped
+// in reconcile".
+func TestEmergencyReparenter_applyRelayLogsAndReconcile_PreSatisfiedBeatsCancelledOnSort(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 50 * time.Millisecond
+
+	// Build GTID positions: leading (PRIMARY's executed = replica's received) and
+	// a strictly-behind executed position for the cancelled replica.
+	leadingGTID, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-10")
+	require.NoError(t, err)
+	behindGTID, err := replication.ParseMysql56GTIDSet("3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	leadingPos := replication.Position{GTIDSet: leadingGTID}
+	behindPos := replication.Position{GTIDSet: behindGTID}
+
+	primaryAlias := "zone1-0000000100"
+	replicaAlias := "zone1-0000000101"
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionDelays: map[string]time.Duration{
+			replicaAlias: time.Minute, // ensure cancellation, not application
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			replicaAlias: {"position1": nil},
+		},
+	}
+
+	// PRIMARY: Combined=leading (its executed position from primaryStatusMap),
+	// Executed=zero (set by FindPositionsOfAllCandidates for primaryStatusMap entries).
+	// Replica: Combined=leading (received), Executed=behind (pre-wait applied position).
+	validCandidates := map[string]*RelayLogPositions{
+		primaryAlias: {Combined: leadingPos},
+		replicaAlias: {Combined: leadingPos, Executed: behindPos},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		primaryAlias: {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		replicaAlias: {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		replicaAlias: {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+	}
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	_, err = erp.applyRelayLogsAndReconcile(ctx, validCandidates, validCandidates, tabletMap, statusMap, waitReplicasTimeout, false /* requireAll */, "ks", "0")
+	require.NoError(t, err)
+
+	// Safety property #1: pre-satisfied PRIMARY's Executed was bumped to Combined,
+	// so it sorts ahead of (or tied with) any peer at the same Combined position.
+	primaryPos, ok := validCandidates[primaryAlias]
+	require.True(t, ok, "PRIMARY-like candidate must remain in validCandidates")
+	assert.True(t, primaryPos.Executed.Equal(primaryPos.Combined),
+		"pre-satisfied PRIMARY's Executed must be bumped to Combined to beat cancelled peers in the sort; got Executed=%v Combined=%v",
+		primaryPos.Executed, primaryPos.Combined)
+
+	// Safety property #2: cancelled replica is still in validCandidates (cancellation
+	// is not a failure), and its Executed was NOT bumped — its pre-wait Executed is
+	// preserved, which is strictly behind the PRIMARY.
+	replicaPos, ok := validCandidates[replicaAlias]
+	require.True(t, ok, "cancelled replica must remain in validCandidates (cancellation is not failure)")
+	assert.True(t, replicaPos.Executed.Equal(behindPos),
+		"cancelled replica's Executed must not be bumped (it never finished applying); got %v want %v",
+		replicaPos.Executed, behindPos)
+
+	// Safety property #3: the AtLeast comparison used by reparent_sorter favors PRIMARY.
+	// findMostAdvanced relies on this to pick PRIMARY over a cancelled replica at the
+	// same Combined position. Without the Executed bump, replica.AtLeast(PRIMARY) would
+	// be true (Combined equal, replica.Executed > PRIMARY.Executed=zero), and the
+	// cancelled replica with received-but-unapplied transactions could be promoted.
+	assert.True(t, primaryPos.AtLeast(replicaPos), "PRIMARY must be at least as advanced as cancelled replica")
+	assert.False(t, replicaPos.AtLeast(primaryPos), "cancelled replica must NOT be at least as advanced as pre-satisfied PRIMARY")
+}
+
+// TestEmergencyReparenter_applyRelayLogsAndReconcile_DoesNotMutateOnError guards the
+// invariant that the upstream split-brain check in findMostAdvanced relies on: when
+// waitForAllRelayLogsToApply returns an error (requireAll=true with at least one
+// failure), applyRelayLogsAndReconcile must leave validCandidates untouched. If a
+// future refactor moved the reconcile loop ahead of the error return, failed
+// incomparable leaders would be deleted from validCandidates and the split-brain
+// "AtLeast" check in findMostAdvanced would be silently bypassed.
+func TestEmergencyReparenter_applyRelayLogsAndReconcile_DoesNotMutateOnError(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 50 * time.Millisecond
+
+	gtidA, err := replication.ParseMysql56GTIDSet("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1-10")
+	require.NoError(t, err)
+	gtidB, err := replication.ParseMysql56GTIDSet("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb:1-10")
+	require.NoError(t, err)
+	posA := replication.Position{GTIDSet: gtidA}
+	posB := replication.Position{GTIDSet: gtidB}
+
+	aliasA := "zone1-0000000100"
+	aliasB := "zone1-0000000101"
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionResults: map[string]map[string]error{
+			aliasA: {"position-a": assert.AnError},
+			aliasB: {"position-b": assert.AnError},
+		},
+	}
+
+	validCandidates := map[string]*RelayLogPositions{
+		aliasA: {Combined: posA},
+		aliasB: {Combined: posB},
+	}
+	// Deep snapshot — assert.Equal on the outer map would still pass even if the
+	// pointed-to RelayLogPositions structs were mutated, because both maps share
+	// the same pointers.
+	snapshot := map[string]RelayLogPositions{
+		aliasA: *validCandidates[aliasA],
+		aliasB: *validCandidates[aliasB],
+	}
+
+	tabletMap := map[string]*topo.TabletInfo{
+		aliasA: {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		aliasB: {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		aliasA: {After: &replicationdatapb.Status{RelayLogPosition: "position-a"}},
+		aliasB: {After: &replicationdatapb.Status{RelayLogPosition: "position-b"}},
+	}
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	_, err = erp.applyRelayLogsAndReconcile(ctx, validCandidates, validCandidates, tabletMap, statusMap, waitReplicasTimeout, true /* requireAll */, "ks", "0")
+	require.Error(t, err, "requireAll=true with a failure must return an error")
+
+	require.Len(t, validCandidates, 2, "validCandidates must not have failed tablets deleted when waitErr is returned")
+	require.Equal(t, snapshot[aliasA], *validCandidates[aliasA], "validCandidates[A] Combined/Executed must not be mutated on error path")
+	require.Equal(t, snapshot[aliasB], *validCandidates[aliasB], "validCandidates[B] Combined/Executed must not be mutated on error path")
+}
+
+// TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationNotRecordedAsFailure
+// verifies that when the parent context is cancelled while waiters are in-flight, the
+// resulting cancellation errors are classified as expected noise and not recorded as
+// per-tablet failures in successMap. Without this, the EmergencyReparentRelayLogFailedCandidates
+// metric would over-report on operator abort, misleading operators who debug ERS failures.
+func TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationNotRecordedAsFailure(t *testing.T) {
+	t.Parallel()
+
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 5 * time.Second // generous — outer-ctx cancel should fire first
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionDelays: map[string]time.Duration{
+			"zone1-0000000100": time.Minute,
+			"zone1-0000000101": time.Minute,
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000100": {"position1": nil},
+			"zone1-0000000101": {"position1": nil},
+		},
+	}
+	candidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {},
+		"zone1-0000000101": {},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000100": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // pre-cancel: all waiters will see a cancelled context immediately
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	successMap, err := erp.waitForAllRelayLogsToApply(ctx, candidates, tabletMap, statusMap, waitReplicasTimeout, false /* requireAll */)
+
+	// We expect an error (no successes), but the per-tablet successMap must NOT contain
+	// any alias=false entries — those would inflate the failed-candidates metric in
+	// applyRelayLogsAndReconcile and delete the tablet from validCandidates downstream.
+	require.Error(t, err)
+	// The error must come from the new ctx-error branch, not the misleading
+	// "all candidates failed" path. This verifies operators get a precise abort reason.
+	require.ErrorContains(t, err, "aborted while waiting for relay logs to apply")
+	for alias, applied := range successMap {
+		assert.True(t, applied, "alias %s should not be recorded as a failure when parent context was cancelled (would inflate the relay-log-failed metric)", alias)
+	}
+}
+
+// TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationAbortsEvenWithPreSatisfied
+// closes a behavior asymmetry: when the parent context is cancelled, the wait function
+// must surface the cancellation regardless of how many candidates were pre-satisfied
+// (current/stuck PRIMARY-like). Pre-PR errgroup.Wait surfaced any ctx-cancellation
+// error; the partial-wait optimization with preSatisfied>0 was incorrectly returning
+// nil because the failed-result branches only check successes==0. Downstream code does
+// eventually catch the cancelled ctx, but a faster, accurate abort here keeps behavior
+// symmetric across preSatisfied=0 and preSatisfied>0 paths.
+func TestEmergencyReparenter_waitForAllRelayLogsToApply_OuterCtxCancellationAbortsEvenWithPreSatisfied(t *testing.T) {
+	t.Parallel()
+
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 5 * time.Second
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionDelays: map[string]time.Duration{
+			"zone1-0000000101": time.Minute,
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000101": {"position1": nil},
+		},
+	}
+	candidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {}, // PRIMARY-like — preSatisfied
+		"zone1-0000000101": {}, // slow replica — will be cancelled
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {After: &replicationdatapb.Status{RelayLogPosition: "position1"}},
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	_, err := erp.waitForAllRelayLogsToApply(ctx, candidates, tabletMap, statusMap, waitReplicasTimeout, false /* requireAll */)
+	require.Error(t, err, "outer ctx cancellation must propagate even when preSatisfied>0")
+	require.ErrorContains(t, err, "aborted while waiting for relay logs to apply")
+}
+
+// TestEmergencyReparenter_waitForAllRelayLogsToApply_PreSatisfiedMarkedApplied is a
+// safety regression test for the bug Codex flagged in code review of the partial-wait
+// optimization. When a no-statusMap candidate (current/stuck PRIMARY) causes peer
+// waiters to be cancelled mid-apply, the cancelled peers' Executed positions are still
+// their pre-wait values, which can be HIGHER than the PRIMARY-like candidate's default
+// Executed=zero. If the PRIMARY-like candidate is not recorded as applied in successMap,
+// applyRelayLogsAndReconcile won't bump its Executed=Combined, and findMostAdvanced
+// can sort a cancelled (unwaited) replica ahead of the PRIMARY-like — risking promotion
+// of a tablet with received-but-unapplied transactions. The fix is to record the
+// pre-satisfied alias as true in successMap so the reconcile loop bumps its Executed.
+func TestEmergencyReparenter_waitForAllRelayLogsToApply_PreSatisfiedMarkedApplied(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
+	waitReplicasTimeout := 50 * time.Millisecond
+
+	tmc := &testutil.TabletManagerClient{
+		WaitForPositionDelays: map[string]time.Duration{
+			"zone1-0000000101": time.Minute, // ensure 101 is cancelled, not applied
+		},
+		WaitForPositionResults: map[string]map[string]error{
+			"zone1-0000000101": {
+				"position1": nil,
+			},
+		},
+	}
+	candidates := map[string]*RelayLogPositions{
+		"zone1-0000000100": {}, // PRIMARY-like — absent from statusMap, must be marked applied
+		"zone1-0000000101": {}, // slow replica — will be cancelled
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		"zone1-0000000101": {
+			After: &replicationdatapb.Status{RelayLogPosition: "position1"},
+		},
+	}
+
+	erp := NewEmergencyReparenter(nil, tmc, logger)
+	successMap, err := erp.waitForAllRelayLogsToApply(ctx, candidates, tabletMap, statusMap, waitReplicasTimeout, false /* requireAll */)
+	require.NoError(t, err)
+
+	applied, ok := successMap["zone1-0000000100"]
+	require.True(t, ok, "pre-satisfied PRIMARY-like candidate must be present in successMap so applyRelayLogsAndReconcile bumps Executed=Combined")
+	assert.True(t, applied, "pre-satisfied PRIMARY-like candidate must be marked applied so the reconcile loop bumps Executed=Combined")
 }
 
 func TestEmergencyReparenterStats(t *testing.T) {
@@ -3184,6 +4193,16 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
 	}
+
+	// positionIncompUnfinished simulates a cancelled-mid-apply candidate: its Combined
+	// (received) is GTID2, but Executed (applied) is still empty — the relay-log apply
+	// wait never finished. Pairs with positionIntermediate1 (Combined={GTID1}) for an
+	// incomparable-Combined scenario where the requested primary did NOT apply.
+	positionIncompUnfinished := &RelayLogPositions{
+		Combined: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+		Executed: replication.Position{GTIDSet: replication.Mysql56GTIDSet{}},
+	}
+	positionIncompUnfinished.Combined.GTIDSet = positionIncompUnfinished.Combined.GTIDSet.AddGTID(mysqlGTID2)
 
 	tests := []struct {
 		name                 string
@@ -3962,7 +4981,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tt.emergencyReparentOps.durability = durability
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* intermediateReparent */, nil /* replicationMutated */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -4832,7 +5851,7 @@ func TestParentContextCancelled(t *testing.T) {
 		time.Sleep(time.Second)
 		cancel()
 	}()
-	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, true)
+	_, err = erp.reparentReplicas(ctx, ev, tabletMap[newPrimaryTabletAlias].Tablet, tabletMap, statusMap, emergencyReparentOps, true, nil)
 	require.NoError(t, err)
 }
 

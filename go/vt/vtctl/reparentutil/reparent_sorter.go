@@ -75,17 +75,24 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	jPositions := rs.positions[j]
 	iPositions := rs.positions[i]
 
-	if !iPositions.AtLeast(jPositions) {
-		// [i] does not have all GTIDs that [j] does
-		return false
-	}
-	if !jPositions.AtLeast(iPositions) {
-		// [j] does not have all GTIDs that [i] does
+	iAtLeastJ := iPositions.AtLeast(jPositions)
+	jAtLeastI := jPositions.AtLeast(iPositions)
+
+	if iAtLeastJ && !jAtLeastI {
+		// [i] strictly dominates [j]
 		return true
 	}
+	if jAtLeastI && !iAtLeastJ {
+		// [j] strictly dominates [i]
+		return false
+	}
 
-	// at this point, both have the same GTIDs
-	// so we check their promotion rules
+	// At this point positions are either equal (both AtLeast) or incomparable
+	// (neither AtLeast — possible under partial-order GTID sets with disjoint UUIDs).
+	// Fall through to deterministic tiebreakers so the sort is a total order even
+	// in the incomparable case — otherwise Go's sort is undefined and may put a
+	// strictly-dominated tablet at index 0 via non-transitive comparisons across
+	// triples like {A, B, C} where A~B (incomparable), A~C (incomparable), B>C.
 	jPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[j])
 	iPromotionRule := policy.PromotionRule(rs.durability, rs.tablets[i])
 

@@ -1314,7 +1314,8 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		logstream = append(logstream, e)
 	})
 
-	ev, err := reparentutil.NewEmergencyReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+	ev, err := reparentutil.NewEmergencyReparenter(s.ts, s.tmc, logger).ReparentShard(
+		ctx,
 		req.Keyspace,
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
@@ -3315,7 +3316,8 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		logstream = append(logstream, e)
 	})
 
-	ev, err := reparentutil.NewPlannedReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+	ev, err := reparentutil.NewPlannedReparenter(s.ts, s.tmc, logger).ReparentShard(
+		ctx,
 		req.Keyspace,
 		req.Shard,
 		reparentutil.PlannedReparentOptions{
@@ -5496,7 +5498,8 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 			r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
 			primarySchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, si.PrimaryAlias, r)
 			if err != nil {
-				errorMessage := fmt.Sprintf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
+				errorMessage := fmt.Sprintf(
+					"GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
 					excludeTables, includeViews, keyspace, shard, err,
 				)
 				shardResult.Results = append(shardResult.Results, errorMessage)

@@ -84,6 +84,62 @@ func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
 }
 
+// uniformCombined returns true when every candidate shares the same Combined position.
+// Applied to the output of filterToMostAdvancedCombined, a false result means the leading
+// group has incomparable maxima (suspected split-brain shape): a one-success short-circuit
+// in the relay-log-apply wait would silently drop a failed incomparable leader, bypassing
+// the split-brain check in findMostAdvanced.
+func uniformCombined(candidates map[string]*RelayLogPositions) bool {
+	var ref replication.Position
+	set := false
+	for _, pos := range candidates {
+		if !set {
+			ref = pos.Combined
+			set = true
+			continue
+		}
+		if !pos.Combined.Equal(ref) {
+			return false
+		}
+	}
+	return true
+}
+
+// filterToMostAdvancedCombined keeps only candidates whose Combined position is not
+// strictly dominated by another (X dominated by Y iff Y.AtLeast(X) and X != Y). Pairwise
+// comparison is required to correctly handle partially-ordered GTID sets: when two
+// candidates have disjoint UUIDs neither dominates the other, so both must be kept;
+// comparing against a single chosen max would silently drop one incomparable maximum.
+func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
+	if len(candidates) == 0 {
+		return candidates
+	}
+
+	result := make(map[string]*RelayLogPositions, len(candidates))
+	for alias, pos := range candidates {
+		dominated := false
+		for otherAlias, otherPos := range candidates {
+			if otherAlias == alias {
+				continue
+			}
+			if otherPos.Combined.AtLeast(pos.Combined) && !pos.Combined.Equal(otherPos.Combined) {
+				dominated = true
+				break
+			}
+		}
+		if !dominated {
+			result[alias] = pos
+		}
+	}
+
+	excluded := len(candidates) - len(result)
+	if excluded > 0 {
+		logger.Infof("filterToMostAdvancedCombined: filtered %d candidate(s), keeping %d at the leading Combined position(s)", excluded, len(result))
+	}
+
+	return result
+}
+
 // FindPositionsOfAllCandidates will find candidates for an emergency
 // reparent, and, if successful, return a mapping of those tablet aliases (as
 // raw strings) to their replication positions for later comparison.
