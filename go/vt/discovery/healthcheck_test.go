@@ -50,7 +50,7 @@ import (
 )
 
 var (
-	connMap   map[string]queryservice.QueryService
+	connMap   map[string]*fakeConn
 	connMapMu sync.Mutex
 )
 
@@ -62,7 +62,7 @@ func testChecksum(t *testing.T, want, got int64) {
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
 	tabletconntest.SetProtocol("go.vt.discovery.healthcheck_test", "fake_gateway")
-	connMap = make(map[string]queryservice.QueryService)
+	connMap = make(map[string]*fakeConn)
 	refreshInterval = time.Minute
 }
 
@@ -903,18 +903,13 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 		oldTablet := createTestTablet(0, "cell", "a")
 		oldTablet.Type = topodatapb.TabletType_REPLICA
 		oldInput := make(chan *querypb.StreamHealthResponse)
-		oldConn := &staleStreamConn{
-			fakeConn: createFakeConn(oldTablet, oldInput),
-			release:  make(chan struct{}),
-		}
-		connMapMu.Lock()
-		connMap[TabletToMapKey(oldTablet)] = oldConn
-		connMapMu.Unlock()
+		oldConn := createFakeConn(oldTablet, oldInput)
+		oldConn.releaseOnCancel = make(chan struct{})
 		// Always release the parked goroutine, even when an assertion fails
 		// before the inline release: the deferred hc.Close() waits for it, and
 		// a goroutine parked forever would turn the test failure into a
 		// synctest bubble-deadlock panic.
-		releaseOldConn := sync.OnceFunc(func() { close(oldConn.release) })
+		releaseOldConn := sync.OnceFunc(func() { close(oldConn.releaseOnCancel) })
 		defer releaseOldConn()
 
 		// The same tablet after the restart: same alias, new ports.
@@ -966,30 +961,6 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 			"tablet is serving and streaming health but missing from the healthy list: stale update from the canceled checkConn poisoned the healthy list")
 		assert.True(t, healthy[0].Serving)
 	})
-}
-
-// staleStreamConn wraps fakeConn so that a canceled stream parks until
-// release is closed and then fails like a canceled gRPC stream, modeling the
-// window between a checkConn goroutine's cancellation and its final
-// updateHealth.
-type staleStreamConn struct {
-	*fakeConn
-	release chan struct{}
-}
-
-// StreamHealth implements queryservice.QueryService.
-func (c *staleStreamConn) StreamHealth(ctx context.Context, callback func(shr *querypb.StreamHealthResponse) error) error {
-	for {
-		select {
-		case shr := <-c.hcChan:
-			if err := callback(shr); err != nil {
-				return err
-			}
-		case <-ctx.Done():
-			<-c.release
-			return ctx.Err()
-		}
-	}
 }
 
 // When an external primary failover is performed,
@@ -1805,6 +1776,10 @@ type fakeConn struct {
 	errCh chan error
 	// cbErrCh is a channel which receives errors returned from the supplied callback.
 	cbErrCh chan error
+	// releaseOnCancel, if non-nil, parks a canceled stream until the channel
+	// is closed and then makes it return ctx.Err() like a real gRPC stream,
+	// instead of returning nil right away.
+	releaseOnCancel chan struct{}
 
 	mu       sync.Mutex
 	canceled bool
@@ -1848,6 +1823,10 @@ func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb
 			fc.mu.Lock()
 			fc.canceled = true
 			fc.mu.Unlock()
+			if fc.releaseOnCancel != nil {
+				<-fc.releaseOnCancel
+				return ctx.Err()
+			}
 			return nil
 		}
 	}
