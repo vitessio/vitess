@@ -1,0 +1,69 @@
+{
+  "Orphans": [
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestMoveTablesMirrorTraffic",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestMoveTablesMirrorTraffic_AllowReads",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestMultiVStreamsKeyspaceStopOnReshard",
+      "Reason": "Coverage being restored by https://github.com/vitessio/vitess/pull/20262; remove this row when it merges."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestReferenceTableMaterializationAndRouting",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestReplicationStress",
+      "Reason": "Performance/stress test, likely too expensive for CI; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestSwitchReadsWritesInAnyOrder",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestVReplicationDDLHandling",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestVStreamCopyMultiKeyspaceReshard",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestVStreamHeartbeats",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestVStreamLaggingDDLRowEvents",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestVStreamPushdownFilters",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestVStreamWithTablesToSkipCopyFlag",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    },
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
+      "Test": "TestVreplicationCopyThrottling",
+      "Reason": "Orphaned by config drift; pending triage, see https://github.com/vitessio/vitess/issues/20261."
+    }
+  ]
+}
