@@ -910,6 +910,12 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 		connMapMu.Lock()
 		connMap[TabletToMapKey(oldTablet)] = oldConn
 		connMapMu.Unlock()
+		// Always release the parked goroutine, even when an assertion fails
+		// before the inline release: the deferred hc.Close() waits for it, and
+		// a goroutine parked forever would turn the test failure into a
+		// synctest bubble-deadlock panic.
+		releaseOldConn := sync.OnceFunc(func() { close(oldConn.release) })
+		defer releaseOldConn()
 
 		// The same tablet after the restart: same alias, new ports.
 		newTablet := createTestTablet(0, "cell", "a")
@@ -945,7 +951,7 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 		// the checkConn error path issues the final stale
 		// updateHealth(Serving: false) — after the replacement connection has
 		// already reported healthy.
-		close(oldConn.release)
+		releaseOldConn()
 		synctest.Wait()
 
 		// The tablet keeps reporting good health on the new connection: a
