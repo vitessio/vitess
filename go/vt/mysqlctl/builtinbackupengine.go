@@ -69,11 +69,16 @@ const (
 	// How many times we will retry file operations. Note that a file operation that
 	// returns a vtrpc.Code_FAILED_PRECONDITION error is considered fatal and we will
 	// not retry.
-	maxRetriesPerFile   = 1
-	maxFileCloseRetries = 20 // At this point we should consider it permanent
+	maxRetriesPerFile = 1
 )
 
 var (
+	// How many times we will retry file close operations. Note that a file operation that
+	// returns a vtrpc.Code_FAILED_PRECONDITION error is considered fatal and we will
+	// not retry.
+	maxFileCloseRetries = 20
+	openFile            = os.OpenFile
+
 	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
@@ -1420,7 +1425,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		for _, cd := range chunkedDests {
 			if err := closeWithRetry(cleanupCtx, params.Logger, cd.dest, cd.fe.Name); err != nil {
 				params.Logger.Errorf("Failed to close chunked destination file %s: %v", cd.fe.Name, err)
-				finalErr = errors.Join(finalErr, vterrors.Wrapf(err, "failed to close chunked destination file %s", cd.fe.Name))
+				finalErr = errors.Join(finalErr, fmt.Errorf("%w: %w", errRestoreFatal, vterrors.Wrapf(err, "failed to close chunked destination file %s", cd.fe.Name)))
 			}
 		}
 	}()
@@ -1443,7 +1448,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 				setupErr = vterrors.Wrapf(pathErr, "can't get path for chunked file %v", fe.Name)
 				break
 			}
-			dest, openErr := os.OpenFile(fullPath, os.O_WRONLY, 0o644)
+			dest, openErr := openFile(fullPath, os.O_WRONLY, 0o644)
 			if openErr != nil {
 				setupErr = vterrors.Wrapf(openErr, "can't open destination for chunked file %v", fe.Name)
 				break

@@ -460,6 +460,70 @@ func TestRestoreFileEntriesSetupErrIsFatal(t *testing.T) {
 	assert.ErrorIs(t, err, errRestoreFatal)
 }
 
+func TestRestoreCloseErrorIsFatal(t *testing.T) {
+	tmpDir := t.TempDir()
+	cnf := &Mycnf{DataDir: tmpDir}
+
+	chunk0Data := []byte("AAAAAAAAAA")
+	chunk1Data := []byte("BBBBBBBBBB")
+
+	fes := []FileEntry{
+		{
+			Base: backupData,
+			Name: "testfile.ibd",
+			Chunks: []FileChunk{
+				{StorageName: "0-0", Offset: 0, Size: 10, Hash: crc32Hash(chunk0Data)},
+				{StorageName: "0-1", Offset: 10, Size: 10, Hash: crc32Hash(chunk1Data)},
+			},
+		},
+	}
+
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(_ context.Context, filename string) (io.ReadCloser, error) {
+			if filename == "0-1" {
+				return nil, errors.New("simulated read failure")
+			}
+			files := map[string][]byte{
+				"0-0": chunk0Data,
+				"0-1": chunk1Data,
+			}
+			return io.NopCloser(bytes.NewReader(files[filename])), nil
+		},
+	}
+
+	oldMaxRetries := maxFileCloseRetries
+	oldOpenFile := openFile
+	t.Cleanup(func() {
+		maxFileCloseRetries = oldMaxRetries
+		openFile = oldOpenFile
+	})
+
+	maxFileCloseRetries = 0
+	openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		f, err := os.OpenFile(name, flag, perm)
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+		return f, nil
+	}
+
+	bm := builtinBackupManifest{SkipCompress: true}
+	params := RestoreParams{
+		Cnf:         cnf,
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+
+	be := &BuiltinBackupEngine{}
+	require.NoError(t, createChunkedDestinations(fes, cnf, ""))
+
+	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errRestoreFatal)
+}
+
 func TestBackupWorkItemsEndBackupErrIsFatal(t *testing.T) {
 	bh := &FakeBackupHandle{
 		EndBackupReturn: errors.New("simulated EndBackup failure"),
