@@ -1899,14 +1899,14 @@
         "binlog-compression"
       ]
     },
-    "vreplication_vtctldclient_materialize": {
+    "vreplication_reference_table_materialization": {
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vreplication"
       ],
       "Args": [
         "-run",
-        "TestMaterializeVtctldClient"
+        "TestReferenceTableMaterializationAndRouting"
       ],
       "Command": [],
       "Manual": false,
@@ -2070,6 +2070,44 @@
         "binlog-compression"
       ]
     },
+    "vreplication_movetables_mirror_traffic": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestMoveTablesMirrorTraffic"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_cellalias",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
+    "vreplication_ddl_handling": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVReplicationDDLHandling"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_cellalias",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
     "sidecardb": {
       "File": "unused.go",
       "Packages": [
@@ -2118,6 +2156,25 @@
         "TestVreplicationCopyParallel",
         "-timeout",
         "20m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_copy_parallel",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
+    "vreplication_copy_throttling": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVreplicationCopyThrottling"
       ],
       "Command": [],
       "Manual": false,
@@ -2256,6 +2313,83 @@
       "Args": [
         "-run",
         "VStreamWithKeyspacesToWatch"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_copy_multi_keyspace_reshard": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamCopyMultiKeyspaceReshard",
+        "-timeout",
+        "15m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_heartbeats": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamHeartbeats"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_lagging_ddl_row_events": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamLaggingDDLRowEvents"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_pushdown_filters": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamPushdownFilters"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vstream",
+      "Tags": [],
+      "Needs": []
+    },
+    "vstream_with_tables_to_skip_copy_flag": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVStreamWithTablesToSkipCopyFlag"
       ],
       "Command": [],
       "Manual": false,
@@ -2552,7 +2686,7 @@
       ],
       "Args": [
         "-run",
-        "TestLookupIndex"
+        "TestLookupVindex"
       ],
       "Command": [],
       "Manual": false,

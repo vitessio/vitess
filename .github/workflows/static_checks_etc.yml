@@ -113,6 +113,8 @@ jobs:
               - '.github/workflows/static_checks_etc.yml'
             ci_config:
               - 'test/config.json'
+              - 'test/config_partial_keyspace.json'
+              - 'test/ci_orphaned_tests.json'
               - '.github/workflows/static_checks_etc.yml'
             release_notes:
               - 'changelog/**'
@@ -254,10 +256,10 @@ jobs:
         run: |
           tools/check_make_proto.sh || exit 1
 
-      - name: Check test/config.json
+      - name: Check CI test configuration
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.ci_config == 'true')
         run: |
-          go run ./go/tools/ci-config/main.go || exit 1
+          go run ./go/tools/ci-config || exit 1
 
       - name: Check changelog
         if: steps.changes.outputs.release_notes == 'true'

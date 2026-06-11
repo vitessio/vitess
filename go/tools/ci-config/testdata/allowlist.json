@@ -1,0 +1,9 @@
+{
+  "Orphans": [
+    {
+      "Package": "vitess.io/vitess/go/test/endtoend/pkga",
+      "Test": "TestBar",
+      "Reason": "fixture reason"
+    }
+  ]
+}
