@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
-	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // AddCellInfo is part of the vtctlservicepb.VtctldClient interface.
@@ -93,7 +92,7 @@ func (client *gRPCVtctldClient) ApplyVSchema(ctx context.Context, in *vtctldatap
 }
 
 // Backup is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupClient, error) {
+func (client *gRPCVtctldClient) Backup(ctx context.Context, in *vtctldatapb.BackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[vtctldatapb.BackupResponse], error) {
 	if client.c == nil {
 		return nil, status.Error(codes.Unavailable, connClosedMsg)
 	}
@@ -102,7 +101,7 @@ func (client *gRPCVtctldClient) Backup(ctx context.Context, in *vtctldatapb.Back
 }
 
 // BackupShard is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_BackupShardClient, error) {
+func (client *gRPCVtctldClient) BackupShard(ctx context.Context, in *vtctldatapb.BackupShardRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[vtctldatapb.BackupResponse], error) {
 	if client.c == nil {
 		return nil, status.Error(codes.Unavailable, connClosedMsg)
 	}
@@ -831,7 +830,7 @@ func (client *gRPCVtctldClient) ReshardCreate(ctx context.Context, in *vtctldata
 }
 
 // RestoreFromBackup is part of the vtctlservicepb.VtctldClient interface.
-func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (vtctlservicepb.Vtctld_RestoreFromBackupClient, error) {
+func (client *gRPCVtctldClient) RestoreFromBackup(ctx context.Context, in *vtctldatapb.RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[vtctldatapb.RestoreFromBackupResponse], error) {
 	if client.c == nil {
 		return nil, status.Error(codes.Unavailable, connClosedMsg)
 	}
