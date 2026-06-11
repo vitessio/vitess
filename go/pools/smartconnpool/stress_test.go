@@ -29,6 +29,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"vitess.io/vitess/go/list"
 )
 
 type StressConn struct {
@@ -1213,6 +1215,210 @@ func runStressCloseDuringTrafficCycle(t *testing.T, cycle int) {
 	}
 	require.Equalf(t, 0, leaked, "cycle %d: leaked %d connections out of %d ever opened; connectsAfterClose=%d",
 		cycle, leaked, len(allConns), connectsAfterClose.Load())
+}
+
+// TestStressExpiredWaiterBacklog reproduces a production stall: a backlog of
+// waiters whose contexts have expired but which haven't removed themselves
+// from the waitlist yet (in production: thousands of timed-out requests
+// queued on the contended waitlist mutex). Returned connections must not be
+// handed to them — each such handoff parks the connection on a dead request
+// and, at scale, drains the pool to zero useful throughput.
+//
+// The expired cohort is modeled with synthetic waitlist entries that have no
+// goroutine behind them: they can never remove themselves, and any connection
+// handed to one is silently swallowed by its buffered channel. The test
+// verifies that live waiters queued *behind* the expired backlog keep being
+// served. Each cycle is a fresh pool; the loop runs several cycles to surface
+// scheduling-dependent races.
+func TestStressExpiredWaiterBacklog(t *testing.T) {
+	const Cycles = 25
+
+	for cycle := range Cycles {
+		if !t.Run(fmt.Sprintf("cycle-%03d", cycle), func(t *testing.T) {
+			runStressExpiredWaiterBacklogCycle(t, cycle)
+		}) {
+			return
+		}
+	}
+}
+
+func runStressExpiredWaiterBacklogCycle(t *testing.T, cycle int) {
+	t.Helper()
+
+	const (
+		Capacity      = 4
+		NumPinned     = 64
+		NumLive       = 8
+		MinSuccessful = NumLive * 4
+		GetTimeout    = 5 * time.Second
+		ProgressWait  = 30 * time.Second
+		CloseTimeout  = 30 * time.Second
+		Watchdog      = 30 * time.Second
+	)
+
+	var (
+		connsMu        sync.Mutex
+		allConns       []*StressConn
+		liveWorkers    atomic.Int64
+		successfulGets atomic.Int64
+		workerErrors   atomic.Int64
+	)
+
+	connect := func(_ context.Context) (*StressConn, error) {
+		c := &StressConn{}
+		connsMu.Lock()
+		allConns = append(allConns, c)
+		connsMu.Unlock()
+		return c, nil
+	}
+	connCount := func() int {
+		connsMu.Lock()
+		defer connsMu.Unlock()
+		return len(allConns)
+	}
+
+	pool := NewPool[*StressConn](&Config[*StressConn]{
+		Capacity: Capacity,
+	}).Open(connect, nil)
+
+	// Hold every conn so all subsequent Gets queue on the waitlist.
+	var held []*Pooled[*StressConn]
+	for range Capacity {
+		conn, err := pool.Get(t.Context(), nil)
+		require.NoError(t, err)
+		held = append(held, conn)
+	}
+
+	// Pin an expired cohort at the front of the waitlist.
+	expiredCtx, cancelExpired := context.WithCancel(t.Context())
+	cancelExpired()
+
+	pinned := make([]*list.Element[waiter[*StressConn]], 0, NumPinned)
+	pool.wait.mu.Lock()
+	for range NumPinned {
+		elem := &list.Element[waiter[*StressConn]]{
+			Value: waiter[*StressConn]{
+				ctx:  expiredCtx,
+				conn: make(chan *Pooled[*StressConn], 1),
+			},
+		}
+		pool.wait.list.PushBackValue(elem)
+		pinned = append(pinned, elem)
+	}
+	pool.wait.mu.Unlock()
+
+	// drainPinned recovers conns swallowed by pinned entries so the pool can
+	// settle and close — needed when the progress assertion fails.
+	drainPinned := func() {
+		for _, elem := range pinned {
+			select {
+			case conn := <-elem.Value.conn:
+				conn.Recycle()
+			default:
+			}
+		}
+	}
+
+	var (
+		wg   errgroup.Group
+		stop atomic.Bool
+	)
+
+	for i := range NumLive {
+		tid := int32(i + 1)
+		wg.Go(func() error {
+			liveWorkers.Add(1)
+			defer liveWorkers.Add(-1)
+
+			for !stop.Load() {
+				ctx, cancel := context.WithTimeout(t.Context(), GetTimeout)
+				conn, err := pool.Get(ctx, nil)
+				cancel()
+				if err != nil {
+					workerErrors.Add(1)
+					runtime.Gosched()
+					continue
+				}
+
+				previousOwner := conn.Conn.owner.Swap(tid)
+				if previousOwner != 0 {
+					return fmt.Errorf("cycle %d: conn handed out concurrently: %d still owned it when %d acquired", cycle, previousOwner, tid)
+				}
+				runtime.Gosched()
+				previousOwner = conn.Conn.owner.Swap(0)
+				if previousOwner != tid {
+					return fmt.Errorf("cycle %d: conn owner overwritten under us: expected %d, got %d", cycle, tid, previousOwner)
+				}
+				successfulGets.Add(1)
+				conn.Recycle()
+			}
+			return nil
+		})
+	}
+
+	status := func() string {
+		return fmt.Sprintf("capacity=%d active=%d borrowed=%d open=%d isOpen=%v waiting=%d liveWorkers=%d successfulGets=%d workerErrors=%d",
+			pool.Capacity(), pool.Active(), pool.InUse(), connCount(), pool.IsOpen(), pool.wait.waiting(), liveWorkers.Load(), successfulGets.Load(), workerErrors.Load())
+	}
+
+	abort := func() {
+		stop.Store(true)
+		drainPinned()
+		for _, conn := range held {
+			conn.Recycle()
+		}
+		waitForStressTraffic(t, cycle, &wg, Watchdog, status)
+		closeCtx, cancel := context.WithTimeout(t.Context(), CloseTimeout)
+		_ = pool.CloseWithContext(closeCtx)
+		cancel()
+	}
+
+	queued := assert.Eventuallyf(t, func() bool {
+		return pool.wait.waiting() == NumPinned+NumLive
+	}, Watchdog, time.Millisecond, "cycle %d: live waiters did not queue behind the expired backlog: %s", cycle, status())
+	if !queued {
+		abort()
+		require.FailNowf(t, "live waiters did not queue behind the expired backlog", "cycle %d: %s", cycle, status())
+	}
+
+	// Release the held conns into the teeth of the expired backlog.
+	for _, conn := range held {
+		conn.Recycle()
+	}
+	held = nil
+
+	progressed := assert.Eventuallyf(t, func() bool {
+		return successfulGets.Load() >= MinSuccessful
+	}, ProgressWait, time.Millisecond, "cycle %d: live waiters starved behind the expired backlog: %s", cycle, status())
+	if !progressed {
+		abort()
+		require.FailNowf(t, "live waiters starved behind the expired backlog", "cycle %d: %s", cycle, status())
+	}
+
+	stop.Store(true)
+	waitForStressTraffic(t, cycle, &wg, Watchdog, status)
+	drainPinned()
+
+	closeCtx, cancelClose := context.WithTimeout(t.Context(), CloseTimeout)
+	closeErr := pool.CloseWithContext(closeCtx)
+	cancelClose()
+	require.NoErrorf(t, closeErr, "cycle %d: CloseWithContext failed: %s", cycle, status())
+
+	require.EqualValuesf(t, 0, pool.Active(), "cycle %d: active should be 0 after Close", cycle)
+	require.EqualValuesf(t, 0, pool.InUse(), "cycle %d: borrowed should be 0 after Close", cycle)
+
+	finalStatus := status()
+	connsMu.Lock()
+	defer connsMu.Unlock()
+
+	var leaked int
+	for _, c := range allConns {
+		if !c.IsClosed() {
+			leaked++
+		}
+	}
+	require.Equalf(t, 0, leaked, "cycle %d: leaked %d connections out of %d ever opened; %s",
+		cycle, leaked, len(allConns), finalStatus)
 }
 
 func waitForStressTraffic(t *testing.T, cycle int, wg *errgroup.Group, timeout time.Duration, status func() string) {

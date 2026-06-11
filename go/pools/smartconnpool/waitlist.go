@@ -31,6 +31,10 @@ type waiter[C Connection] struct {
 	setting *Setting
 	// conn is a channel that will receive the connection when it's ready
 	conn chan *Pooled[C]
+	// ctx is the request context of the waiting client; returners sample it
+	// under the waitlist mutex to skip waiters that can no longer use a
+	// connection
+	ctx context.Context
 	// age is the amount of cycles this client has been on the waitlist
 	age uint32
 }
@@ -52,9 +56,15 @@ type waitlist[C Connection] struct {
 // forced an expiration of all waiters in the waitlist.
 func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
-	defer wl.nodes.Put(elem)
+	defer func() {
+		// Drop the references to the request-scoped ctx and setting before
+		// recycling the node, so they aren't pinned in the pool. The element
+		// is off the list by now, so no returner can observe this write.
+		elem.Value = waiter[C]{conn: elem.Value.conn}
+		wl.nodes.Put(elem)
+	}()
 
-	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting}
+	elem.Value = waiter[C]{conn: elem.Value.conn, setting: setting, ctx: ctx}
 
 	if wl.aboveWaiterCap(maxWaiters) {
 		if wl.onWaiterCapReached != nil {
@@ -154,7 +164,9 @@ func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
 	return
 }
 
-// tryReturnConn tries handing over a connection to one of the waiters in the pool.
+// tryReturnConn tries handing over a connection to one of the waiters in the
+// pool. Waiters whose context has already expired are skipped; if every
+// waiter has expired, the connection is not handed over at all.
 func (wl *waitlist[D]) tryReturnConn(conn *Pooled[D]) bool {
 	// fast path: if there's nobody waiting there's nothing to do
 	if wl.list.Len() == 0 {
@@ -172,11 +184,21 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	)
 
 	wl.mu.Lock()
-	target = wl.list.Front()
 	// iterate through the waitlist looking for either waiters that have been
 	// here too long, or a waiter that is looking exactly for the same Setting
 	// as the one we have in our connection.
-	for e := target; e != nil; e = e.Next() {
+	for e := wl.list.Front(); e != nil; e = e.Next() {
+		// Skip waiters whose context has already expired: they cannot use the
+		// connection and will remove themselves from the waitlist. They must
+		// remain in the list — absence from the list is how a waiter knows a
+		// returner is committed to handing it a connection.
+		if e.Value.ctx.Err() != nil {
+			continue
+		}
+		if target == nil {
+			// the front-most live waiter is the fallback handover target
+			target = e
+		}
 		if e.Value.age > maxAge || e.Value.setting == connSetting {
 			target = e
 			break
@@ -194,7 +216,8 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	wl.mu.Unlock()
 
 	// maybe there isn't anybody to hand over the connection to, because we've
-	// raced with another client returning another connection
+	// raced with another client returning another connection, or because all
+	// the waiters in the list have an expired context
 	if target == nil {
 		return false
 	}
