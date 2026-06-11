@@ -63,6 +63,17 @@ func (f *fakePinger) Ping(ctx context.Context, tablet *topodatapb.Tablet) error 
 	return nil
 }
 
+// fakePooledPinger is a fakePinger that also offers a pooled ping, like grpctmclient.Client.
+type fakePooledPinger struct {
+	fakePinger
+	pooledCalls atomic.Int64
+}
+
+func (f *fakePooledPinger) PingPooled(ctx context.Context, tablet *topodatapb.Tablet) error {
+	f.pooledCalls.Add(1)
+	return nil
+}
+
 func peerTablet(cell string, uid uint32) *topodatapb.Tablet {
 	return &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: cell, Uid: uid}, Keyspace: "ks", Shard: "0"}
 }
@@ -241,6 +252,23 @@ func TestShardHealthMonitor_StartRejectsNonPositiveTiming(t *testing.T) {
 			assert.Equal(t, int64(0), listCalls.Load())
 		})
 	}
+}
+
+func TestMonitorPinger(t *testing.T) {
+	ctx := t.Context()
+	peer := peerTablet("zone1", 101)
+
+	// A tmclient that offers a pooled ping is preferred, so the monitor's per-interval
+	// probes do not dial a fresh connection each time.
+	pooled := &fakePooledPinger{}
+	require.NoError(t, monitorPinger(pooled).Ping(ctx, peer))
+	assert.Equal(t, int64(1), pooled.pooledCalls.Load(), "must route through PingPooled")
+	assert.Equal(t, int64(0), pooled.calls.Load(), "must not use the dial-per-call Ping")
+
+	// A tmclient without a pooled ping is used as-is.
+	plain := &fakePinger{}
+	require.NoError(t, monitorPinger(plain).Ping(ctx, peer))
+	assert.Equal(t, int64(1), plain.calls.Load())
 }
 
 func TestTabletManagerStopShardHealthMonitor(t *testing.T) {

@@ -477,7 +477,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 			return tm.TopoServer.GetTabletMapForShard(ctx, keyspace, shard)
 		}
 		tm.shardHealthMonitor = newShardHealthMonitor(
-			tm.tmc,
+			monitorPinger(tm.tmc),
 			listPeers,
 			topoproto.TabletAliasString(tablet.Alias),
 			shardTabletHealthInterval,

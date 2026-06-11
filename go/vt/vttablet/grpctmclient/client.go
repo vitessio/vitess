@@ -348,14 +348,26 @@ func (client *grpcClient) Close() {
 // Various read-only methods
 //
 
-// Ping is part of the tmclient.TabletManagerClient interface.
+// Ping is part of the tmclient.TabletManagerClient interface. It dials a fresh connection
+// per call; high-frequency callers should prefer PingPooled.
 func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	return client.ping(ctx, c, nil)
+}
+
+// PingPooled is like Ping but reuses a dedicated connection pool, so high-frequency liveness
+// probes (e.g. the vttablet shard-peer health monitor pinging every shard peer each interval)
+// do not pay for a fresh TCP/TLS handshake per probe. Pooled connections are held open until
+// Close, so one-shot callers should use Ping instead; a failed ping invalidates the pooled
+// connection so the next probe redials. Not part of the tmclient.TabletManagerClient interface.
+func (client *Client) PingPooled(ctx context.Context, tablet *topodatapb.Tablet) error {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var invalidator invalidatorFunc
 	var err error
-	// Ping is used as a high-frequency liveness probe (e.g. the shard-peer health monitor pings
-	// every shard peer each interval), so use a dedicated connection pool instead of paying for
-	// a fresh connection per probe.
 	if poolDialer, ok := client.dialer.(poolDialer); ok {
 		c, invalidator, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, tablet)
 		if err != nil {
@@ -372,6 +384,12 @@ func (client *Client) Ping(ctx context.Context, tablet *topodatapb.Tablet) error
 		defer closer.Close()
 	}
 
+	return client.ping(ctx, c, invalidator)
+}
+
+// ping runs the Ping RPC on an already-dialed connection, invalidating the pooled connection
+// (when an invalidator is provided) on failure.
+func (client *Client) ping(ctx context.Context, c tabletmanagerservicepb.TabletManagerClient, invalidator invalidatorFunc) error {
 	result, err := c.Ping(ctx, &tabletmanagerdatapb.PingRequest{
 		Payload: "payload",
 	})

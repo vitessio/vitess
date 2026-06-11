@@ -61,6 +61,30 @@ type tabletPinger interface {
 	Ping(ctx context.Context, tablet *topodatapb.Tablet) error
 }
 
+// pooledPinger is implemented by tmclients that can ping over a pooled connection
+// (e.g. grpctmclient.Client.PingPooled).
+type pooledPinger interface {
+	PingPooled(ctx context.Context, tablet *topodatapb.Tablet) error
+}
+
+// pingerFunc adapts a function to the tabletPinger interface.
+type pingerFunc func(ctx context.Context, tablet *topodatapb.Tablet) error
+
+// Ping implements tabletPinger.
+func (f pingerFunc) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
+	return f(ctx, tablet)
+}
+
+// monitorPinger prefers a pooled ping when the tmclient offers one: the monitor pings every
+// shard peer each interval, and dialing a fresh connection per probe would be needless
+// TCP/TLS churn. Plain Ping keeps its dial-per-call semantics for all other callers.
+func monitorPinger(tmc tabletPinger) tabletPinger {
+	if pooled, ok := tmc.(pooledPinger); ok {
+		return pingerFunc(pooled.PingPooled)
+	}
+	return tmc
+}
+
 type peerPingHealth struct {
 	alias               *topodatapb.TabletAlias
 	consecutiveFailures int64
