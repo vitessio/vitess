@@ -13,52 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Required version of golangci-lint, sourced from build.env (single source of truth)
-REQUIRED_VERSION=$(grep "^export GOLANGCI_LINT_VER=" "$(git rev-parse --show-toplevel)/build.env" | cut -d= -f2)
-if [ -z "$REQUIRED_VERSION" ]; then
-  echo "Could not determine required golangci-lint version from build.env"
-  exit 1
-fi
-
-# Function to compare versions in pure Bash
-version_greater_or_equal() {
-  local IFS=.
-  local i
-  local ver1=($1)
-  local ver2=($2)
-
-  # Fill empty fields in ver1 with zeros
-  for ((i = ${#ver1[@]}; i < ${#ver2[@]}; i++)); do
-    ver1[i]=0
-  done
-  # Fill empty fields in ver2 with zeros
-  for ((i = ${#ver2[@]}; i < ${#ver1[@]}; i++)); do
-    ver2[i]=0
-  done
-
-  for ((i = 0; i < ${#ver1[@]}; i++)); do
-    if ((10#${ver1[i]} > 10#${ver2[i]})); then
-      return 0
-    elif ((10#${ver1[i]} < 10#${ver2[i]})); then
-      return 1
-    fi
-  done
-  return 0
-}
-
-# Check if golangci-lint is installed and capture the version
-if ! command -v golangci-lint >/dev/null 2>&1; then
-  echo "golangci-lint not found. Installing version $REQUIRED_VERSION..."
-  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$REQUIRED_VERSION
-else
-  VERSION_OUTPUT=$(golangci-lint --version)
-  INSTALLED_VERSION=$(echo "$VERSION_OUTPUT" | sed -E -n 's/^golangci-lint has version v?([0-9.]+) .*/\1/p')
-  if ! version_greater_or_equal "$INSTALLED_VERSION" "${REQUIRED_VERSION#v}"; then
-    echo "golangci-lint version $INSTALLED_VERSION found, but $REQUIRED_VERSION or newer is required."
-    echo "Installing version $REQUIRED_VERSION..."
-    go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$REQUIRED_VERSION
-  fi
-fi
+# golangci-lint is version-pinned in its own module; `go tool` builds and
+# caches the pinned version on demand.
+GOLANGCI_LINT_MODFILE="$(git rev-parse --show-toplevel)/tools/golangci-lint/go.mod"
 
 # Lint only changed packages.
 changed_pkgs=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' \
@@ -72,4 +29,4 @@ if [ -z "$changed_pkgs" ]; then
 fi
 
 echo "Linting staged changes..."
-golangci-lint run --new-from-rev=HEAD $changed_pkgs
+go tool -modfile="$GOLANGCI_LINT_MODFILE" golangci-lint run --new-from-rev=HEAD $changed_pkgs
