@@ -19,6 +19,8 @@
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [`CurrentErrantGTIDCount` gauge now resets when errant GTIDs are resolved](#vtorc-errant-gtid-gauge-fix)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
 
@@ -121,6 +123,18 @@ A new `--consolidator-reject-on-cap` flag (default `false`) has been added to VT
 **Important:** The cap is enforced against the consolidator's global `totalWaiterCount` across all queries, not a per-query waiter count. This means a duplicate for query B can be rejected because query A has already consumed most of the global waiter budget. This provides backpressure when the consolidator as a whole is saturated, rather than when any single query has too many waiters.
 
 See [#19836](https://github.com/vitessio/vitess/pull/19836) for details.
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-errant-gtid-gauge-fix"/>`CurrentErrantGTIDCount` gauge now resets when errant GTIDs are resolved</a>
+
+VTOrc's `CurrentErrantGTIDCount` gauge (Prometheus: `vtorc_current_errant_gtid_count`) previously never returned to `0` after errant GTIDs were reconciled. It behaved like a sticky counter rather than a gauge.
+
+The fix ensures the gauge is always published after each detection cycle, including when the errant GTID count is zero. This allows the metric to correctly recover after errant GTIDs are resolved.
+
+**Behavior change:** After the fix, the gauge carries an explicit `0` entry for every non-primary tablet that has been polled successfully, where previously the label only existed for tablets that had ever been positive. This is a small cardinality increase bounded by the number of non-primary tablets. Operators with alerts on `vtorc_current_errant_gtid_count > 0` will now receive correct transient clear events instead of permanently sticky `1` values.
+
+See [#20259](https://github.com/vitessio/vitess/pull/20259) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
