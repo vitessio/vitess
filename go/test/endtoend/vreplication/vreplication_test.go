@@ -120,7 +120,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 
 	insertInitialData(t)
 
-	_, err = vtgateConn.ExecuteFetch("use "+defaultSourceKs, 1, false)
+	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use `%s`", defaultSourceKs), 1, false)
 	require.NoError(t, err)
 
 	addColDDL := fmt.Sprintf("alter table %s add column %s varchar(64)", table, newColumn)
@@ -187,7 +187,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm that the worfklow stopped because of the DDL
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), "Message==Stopped at DDL "+addColDDL)
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), "message==Stopped at DDL "+addColDDL)
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, defaultTargetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm that we updated the stats on the target tablet as expected.
@@ -2013,8 +2013,8 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 func generateInnoDBRowHistory(t *testing.T, defaultSourceKs string, neededTrxHistory int64) *mysql.Conn {
 	dbConn1 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	dbConn2 := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	execQuery(t, dbConn1, "use "+defaultSourceKs)
-	execQuery(t, dbConn2, "use "+defaultSourceKs)
+	execQuery(t, dbConn1, fmt.Sprintf("use `%s`", defaultSourceKs))
+	execQuery(t, dbConn2, fmt.Sprintf("use `%s`", defaultSourceKs))
 	offset := int64(1000)
 	limit := int64(neededTrxHistory * 100)
 	insertStmt := strings.Builder{}
