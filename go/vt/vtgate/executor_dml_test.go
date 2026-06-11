@@ -2772,7 +2772,7 @@ func TestStreamingDML(t *testing.T) {
 	for _, tcase := range tcases {
 		sbc.Queries = nil
 		sbc.SetResults([]*sqltypes.Result{tcase.result})
-		err := executor.StreamExecute(ctx, nil, method, session, tcase.query, nil, func(result *sqltypes.Result) error {
+		err := executor.StreamExecute(ctx, nil, method, session, tcase.query, nil, false, func(result *sqltypes.Result) error {
 			qr = result
 			return nil
 		})
