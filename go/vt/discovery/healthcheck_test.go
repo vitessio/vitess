@@ -1359,16 +1359,8 @@ func TestLoadTabletsTrigger(t *testing.T) {
 		Shard:    shard,
 	}
 
-	// We want to run updateHealth with arguments that always
-	// make it trigger load Tablets.
-	th := &TabletHealth{
-		Tablet: tablet1,
-		Target: &querypb.Target{
-			Keyspace:   ks,
-			Shard:      shard,
-			TabletType: topodatapb.TabletType_REPLICA,
-		},
-	}
+	// We want to run updateHealth with a previous target that always
+	// makes it trigger load Tablets.
 	prevTarget := &querypb.Target{
 		Keyspace:   ks,
 		Shard:      shard,
@@ -1387,7 +1379,7 @@ func TestLoadTabletsTrigger(t *testing.T) {
 		// primary tablets for the given keyspace shard, we will see the healtcheck
 		// send on the loadTablets trigger. We just want to verify the information
 		// there is correct.
-		hc.updateHealth(thc, th, prevTarget, false, false)
+		hc.updateHealth(thc, prevTarget, false, false)
 	}
 
 	ch := hc.GetLoadTabletsTrigger()
