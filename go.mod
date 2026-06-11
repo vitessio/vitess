@@ -3,21 +3,9 @@ module vitess.io/vitess
 go 1.26.3
 
 tool (
-<<<<<<< HEAD
-	github.com/vitessio/goyacc
-	gotest.tools/gotestsum
-	mvdan.cc/gofumpt
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	github.com/antithesishq/antithesis-sdk-go/tools/antithesis-go-instrumentor
-	github.com/vitessio/goyacc
-	gotest.tools/gotestsum
-	mvdan.cc/gofumpt
-=======
-	github.com/antithesishq/antithesis-sdk-go/tools/antithesis-go-instrumentor
 	github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc
 	google.golang.org/protobuf/cmd/protoc-gen-go
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 )
 
 require (
@@ -87,24 +75,10 @@ require (
 	golang.org/x/term v0.42.0
 	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0
-<<<<<<< HEAD
 	golang.org/x/tools v0.44.0
 	google.golang.org/api v0.276.0
 	google.golang.org/genproto v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/grpc v1.80.0
-	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.1
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	golang.org/x/tools v0.45.0
-	google.golang.org/api v0.280.0
-	google.golang.org/genproto v0.0.0-20260427160629-7cedc36a6bc4 // indirect
-	google.golang.org/grpc v1.81.1
-	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.2
-=======
-	golang.org/x/tools v0.45.0
-	google.golang.org/api v0.280.0
-	google.golang.org/genproto v0.0.0-20260427160629-7cedc36a6bc4 // indirect
-	google.golang.org/grpc v1.81.1
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 	google.golang.org/grpc/examples v0.0.0-20250407062114-b368379ef8f6
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/DataDog/dd-trace-go.v1 v1.74.8
@@ -146,7 +120,6 @@ require (
 )
 
 require (
-<<<<<<< HEAD
 	filippo.io/edwards25519 v1.1.1 // indirect
 	github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.77.3 // indirect
 	github.com/DataDog/datadog-agent/pkg/opentelemetry-mapping-go/otlp/attributes v0.77.3 // indirect
@@ -164,36 +137,15 @@ require (
 	github.com/DataDog/go-libddwaf/v4 v4.9.0 // indirect
 	github.com/DataDog/go-runtime-metrics-internal v0.0.4-0.20260217080614-b0f4edc38a6d // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.9 // indirect
-	github.com/bitfield/gotestdox v0.2.2 // indirect
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/antithesishq/antithesis-sdk-go v0.7.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
-	github.com/bitfield/gotestdox v0.2.2 // indirect
-=======
-	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/antithesishq/antithesis-sdk-go v0.7.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/cilium/ebpf v0.21.0 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-<<<<<<< HEAD
 	github.com/containerd/stargz-snapshotter/estargz v0.18.2 // indirect
-	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/docker/cli v29.4.0+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.5 // indirect
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	github.com/dnephin/pflag v1.0.7 // indirect
-	github.com/docker/cli v29.4.3+incompatible // indirect
-	github.com/docker/docker-credential-helpers v0.9.6 // indirect
-=======
-	github.com/docker/cli v29.4.3+incompatible // indirect
-	github.com/docker/docker-credential-helpers v0.9.6 // indirect
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
@@ -216,23 +168,16 @@ require (
 	github.com/petermattis/goid v0.0.0-20260330135022-df67b199bc81 // indirect
 	github.com/puzpuzpuz/xsync/v3 v3.5.1 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
-<<<<<<< HEAD
 	github.com/trailofbits/go-mutexasserts v0.0.0-20250514102930-c1f3d2e37561 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
-	github.com/vitessio/goyacc v0.0.0-20260327210057-9f3cb834a13f // indirect
 	go.opentelemetry.io/collector/component v1.56.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.56.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.56.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.150.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	github.com/vitessio/goyacc v0.0.0-20260327210057-9f3cb834a13f // indirect
-=======
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.2.0 // indirect
-	gotest.tools/v3 v3.5.2 // indirect
 )
 
 require (

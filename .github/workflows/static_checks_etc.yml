@@ -192,32 +192,6 @@ jobs:
             .github/ISSUE_TEMPLATE/*.yml \
             .github/workflows/*.yml
 
-<<<<<<< HEAD
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-      - name: Get golangci-lint version
-        if: steps.changes.outputs.go_files == 'true'
-        id: golangci_lint_version
-        run: |
-          version=$(grep "^export GOLANGCI_LINT_VER=" build.env | cut -d= -f2)
-          if [ -z "$version" ]; then
-            echo "Could not determine GOLANGCI_LINT_VER from build.env"
-            exit 1
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-
-=======
-      - name: Get golangci-lint version
-        if: steps.changes.outputs.go_files == 'true'
-        id: golangci_lint_version
-        run: |
-          version=$(cd tools/golangci-lint && go list -m -f '{{.Version}}' github.com/golangci/golangci-lint/v2)
-          if [ -z "$version" ]; then
-            echo "Could not determine golangci-lint version from tools/golangci-lint/go.mod"
-            exit 1
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
       - name: Run golangci-lint
         if: steps.changes.outputs.go_files == 'true'
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.0.0

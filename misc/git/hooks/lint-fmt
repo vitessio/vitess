@@ -13,21 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-<<<<<<< HEAD
-# Required version of golangci-lint
-REQUIRED_VERSION="v2.9.0" # https://github.com/golangci/golangci-lint/releases/tag/v2.9.0
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-# Required version of golangci-lint, sourced from build.env (single source of truth)
-REQUIRED_VERSION=$(grep "^export GOLANGCI_LINT_VER=" "$(git rev-parse --show-toplevel)/build.env" | cut -d= -f2)
-if [ -z "$REQUIRED_VERSION" ]; then
-  echo "Could not determine required golangci-lint version from build.env"
-  exit 1
-fi
-=======
 # golangci-lint is version-pinned in its own module; `go tool` builds and
 # caches the pinned version on demand.
 GOLANGCI_LINT_MODFILE="$(git rev-parse --show-toplevel)/tools/golangci-lint/go.mod"
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 
 # Lint only changed packages. Packages in nested Go modules (e.g.
 # test/antithesis) are skipped: golangci-lint can only typecheck
