@@ -52,6 +52,8 @@ jobs:
               - '*.go'
               - 'go.sum'
               - 'go.mod'
+              - 'tools/**/go.mod'
+              - 'tools/**/go.sum'
               - '.github/workflows/static_checks_etc.yml'
             parser_changes:
               - 'go/vt/sqlparser/**'
@@ -126,6 +128,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+          cache-dependency-path: |
+            go.sum
+            tools/**/go.sum
 
       - name: Tune the OS
         if: steps.changes.outputs.go_files == 'true'
@@ -143,10 +148,6 @@ jobs:
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
         run: |
           make minimaltools
-
-      - name: Install goimports
-        run: |
-          go install golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 # v0.39.0
 
       - name: Install yamllint
         if: steps.changes.outputs.github == 'true'
@@ -206,14 +207,18 @@ jobs:
         run: |
           set -e
           go mod tidy
+          for mod in tools/*/go.mod; do
+            (cd "$(dirname "$mod")" && go mod tidy)
+          done
           output=$(git status -s)
           if [ -z "${output}" ]; then
             exit 0
           fi
-          echo 'We wish to maintain a tidy state for go mod. Please run `go mod tidy` on your branch, commit and push again.'
+          echo 'We wish to maintain a tidy state for go mod. Please run `go mod tidy` in the affected module on your branch, commit and push again.'
           echo 'Running `go mod tidy` on this CI test yields with the following changes:'
           echo "$output"
           exit 1
+
 
       - name: Setup Node
         if: steps.changes.outputs.proto_changes == 'true'
