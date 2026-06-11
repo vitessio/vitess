@@ -485,15 +485,6 @@ func (c *Conn) startFlushTimer() {
 	}
 }
 
-// Buffered returns the number of bytes that can be read from the buffered reader
-// without blocking on the underlying connection.
-func (c *Conn) Buffered() int {
-	if c.bufferedReader != nil {
-		return c.bufferedReader.Buffered()
-	}
-	return 0
-}
-
 // getReader returns reader for connection. It can be *bufio.Reader or net.Conn
 // depending on which buffer size was passed to newServerConn.
 func (c *Conn) getReader() io.Reader {
@@ -531,6 +522,15 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	c.sequence++
 
 	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
+}
+
+// Buffered returns the number of bytes available in the buffered reader
+// without blocking. Returns 0 if there is no buffered reader.
+func (c *Conn) Buffered() int {
+	if c.bufferedReader != nil {
+		return c.bufferedReader.Buffered()
+	}
+	return 0
 }
 
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
