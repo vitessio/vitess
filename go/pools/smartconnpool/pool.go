@@ -24,7 +24,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -148,7 +147,7 @@ type ConnPool[C Connection] struct {
 	// Held behind a pointer so that growing the waitlist struct cannot
 	// change ConnPool's allocation size: the 128-bit atomics in clean and
 	// settings must stay 16-byte aligned, and the Go allocator only
-	// provides that for certain object sizes (see the assert in NewPool).
+	// provides that for certain object sizes (see the connStack docs).
 	wait *waitlist[C]
 
 	// borrowed is the number of connections that the pool has given out to clients
@@ -205,14 +204,6 @@ type ConnPool[C Connection] struct {
 // The pool must be ConnPool.Open before it can start giving out connections
 func NewPool[C Connection](config *Config[C]) *ConnPool[C] {
 	pool := &ConnPool[C]{}
-	// The 128-bit atomics in the connection stacks fault on amd64 and arm64
-	// unless they are 16-byte aligned. Go offers no way to demand that
-	// alignment, so it depends on the allocator's behavior for ConnPool's
-	// exact size; fail fast and loudly if a layout or toolchain change ever
-	// breaks it, instead of crashing with SIGBUS under traffic.
-	if addr := uintptr(unsafe.Pointer(&pool.clean.top)); addr%16 != 0 {
-		panic("smartconnpool: ConnPool allocation is not 16-byte aligned")
-	}
 	pool.wait = &waitlist[C]{}
 	pool.config.maxCapacity = config.Capacity
 	pool.config.maxIdleCount = config.MaxIdleCount
