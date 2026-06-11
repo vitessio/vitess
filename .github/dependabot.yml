@@ -6,15 +6,31 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 14
-    ignore:
-      # The gRPC compiler is pinned deliberately (see the tool directive in
-      # go.mod); newer versions change the generated API. Bump it consciously,
-      # together with regenerating the protos.
-      - dependency-name: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
     groups:
       go:
         patterns:
           - "*"
+        exclude-patterns:
+          - "google.golang.org/protobuf"
+          - "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+          - "github.com/planetscale/vtprotobuf"
+          - "github.com/dave/jennifer"
+          - "golang.org/x/tools"
+      # These modules can influence the content of committed generated files:
+      # the protoc plugins (protoc-gen-go, protoc-gen-go-grpc,
+      # protoc-gen-go-vtproto) stamp their versions into the proto stubs, and
+      # jennifer/x/tools drive the AST code generators (sizegen, asthelpergen,
+      # astfmtgen, vtctldclient). Bumping them fails the CI staleness checks
+      # (check_make_proto, check_make_sizegen, ...) until a human regenerates
+      # (`make proto` / `make codegen`) and pushes the result, so keep them in
+      # their own group to not block the main go group.
+      codegen:
+        patterns:
+          - "google.golang.org/protobuf"
+          - "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+          - "github.com/planetscale/vtprotobuf"
+          - "github.com/dave/jennifer"
+          - "golang.org/x/tools"
 
   - package-ecosystem: "gomod"
     directories:
