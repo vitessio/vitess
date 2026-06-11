@@ -93,6 +93,7 @@ require (
 	github.com/gammazero/deque v1.2.1
 	github.com/google/go-containerregistry v0.21.6
 	github.com/google/safehtml v0.1.0
+	github.com/hanwen/go-fuse/v2 v2.10.1
 	github.com/hashicorp/go-version v1.9.0
 	github.com/kr/pretty v0.3.1
 	github.com/kr/text v0.2.0
