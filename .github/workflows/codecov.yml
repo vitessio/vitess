@@ -57,6 +57,9 @@ jobs:
       with:
         go-version-file: go.mod
         cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+        cache-dependency-path: |
+          go.sum
+          tools/**/go.sum
 
     - name: Detect changed Go packages
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
@@ -121,8 +124,7 @@ jobs:
         mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
-        go install golang.org/x/tools/cmd/goimports@latest
-        
+
     - name: Run make tools
       if: steps.mode.outputs.is_full_run == 'true' || (steps.changes.outputs.changed_files == 'true' && steps.packages.outputs.packages != '')
       run: |

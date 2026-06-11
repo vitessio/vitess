@@ -1,0 +1,97 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    ignore:
+      # The gRPC compiler is pinned deliberately (see the tool directive in
+      # go.mod); newer versions change the generated API. Bump it consciously,
+      # together with regenerating the protos.
+      - dependency-name: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+    groups:
+      go:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "gomod"
+    directories:
+      - "/tools/goimports"
+      - "/tools/gotestsum"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    groups:
+      go-tools:
+        patterns:
+          - "*"
+
+  # golangci-lint bumps can change lint findings; keep them in their own PR.
+  - package-ecosystem: "gomod"
+    directory: "/tools/golangci-lint"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "maven"
+    directory: "/java"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    groups:
+      java:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/vtadmin"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 30
+    groups:
+      vtadmin-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/"
+      - "/docker/binaries/*"
+      - "/docker/bootstrap"
+      - "/docker/lite"
+      - "/docker/mini"
+      - "/docker/vttestserver"
+      - "/examples/compose/external_db/mysql"
+      - "/go/mysql/collations/tools/colldump"
+      - "/test/antithesis/compose"
+      - "/test/antithesis/compose/antithesis-client"
+      - "/test/antithesis/compose/source_db/mysql"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    ignore:
+      - dependency-name: "mysql"
+        versions:
+          - ">= 8.5"
+    groups:
+      docker:
+        patterns:
+          - "*"

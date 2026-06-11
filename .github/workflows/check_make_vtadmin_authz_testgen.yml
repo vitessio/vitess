@@ -53,6 +53,9 @@ jobs:
       with:
         go-version-file: go.mod
         cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+        cache-dependency-path: |
+          go.sum
+          tools/**/go.sum
 
     - name: Get dependencies
       if: steps.changes.outputs.vtadmin_changes == 'true'
@@ -61,7 +64,6 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         sudo service etcd stop
         go mod download
-        go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make minimaltools
       if: steps.changes.outputs.vtadmin_changes == 'true'

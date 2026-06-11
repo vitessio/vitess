@@ -112,6 +112,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+          cache-dependency-path: |
+            go.sum
+            tools/**/go.sum
 
       - name: Set up python
         if: steps.changes.outputs.unit_tests == 'true'
@@ -138,7 +141,6 @@ jobs:
           mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
 
           go mod download
-          go install golang.org/x/tools/cmd/goimports@v0.39.0
 
       - name: Run make tools
         if: steps.changes.outputs.unit_tests == 'true'
@@ -191,5 +193,5 @@ jobs:
         run: |
           echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          go tool gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+          go tool -modfile=tools/gotestsum/go.mod gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
