@@ -390,7 +390,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 						// being shared
 
 						if replaceKeyspace != "" {
-							result.ReplaceKeyspace(replaceKeyspace)
+							result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 						}
 						return callback(result)
 					})
@@ -427,7 +427,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		defer returnStreamResult(result)
 
 		if replaceKeyspace != "" {
-			result.ReplaceKeyspace(replaceKeyspace)
+			result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 		}
 		return callback(result)
 	})

@@ -979,13 +979,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
 				switch qre.plan.PlanID {
 				case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
-					dbName := tsv.config.DB.DBName
-					ksName := tsv.sm.target.Keyspace
-					for _, f := range result.Fields {
-						if f.Database == dbName {
-							f.Database = ksName
-						}
-					}
+					result.ReplaceKeyspace(tsv.config.DB.DBName, tsv.sm.target.Keyspace)
 				}
 			}
 			return nil
