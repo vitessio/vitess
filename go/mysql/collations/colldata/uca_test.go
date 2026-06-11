@@ -203,7 +203,7 @@ func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected [
 		b := byte(w)
 		t.Logf("%q -> %d, %d | %d, %d", string(curcp), a, b, expected[0], expected[1])
 		if a != expected[0] || b != expected[1] {
-			t.Errorf("mismatch on %q", string(curcp))
+			assert.Failf(t, "mismatch", "mismatch on %q", string(curcp))
 		}
 		expected = expected[2:]
 	}
@@ -766,7 +766,7 @@ func TestUCAWeightStrings(t *testing.T) {
 				buf := make([]byte, 0, len(tc.expected))
 				result := collation.WeightString(buf, []byte(tc.input), PadToMax)
 				if !bytes.Equal(tc.expected[:maxlen], result[:maxlen]) {
-					t.Errorf("mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v",
+					assert.Failf(t, "mismatch", "mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v",
 						maxlen, []byte(tc.input), tc.expected[:maxlen], result[:maxlen])
 					break
 				}
@@ -850,15 +850,15 @@ func TestTinyWeightStrings(t *testing.T) {
 				switch {
 				case cmp == 0:
 					if aw != bw {
-						t.Errorf("[%s] %q vs %q: should be equal, got %08x / %08x", coll.Name(), a, b, aw, bw)
+						assert.Failf(t, "tiny weights not equal", "[%s] %q vs %q: should be equal, got %08x / %08x", coll.Name(), a, b, aw, bw)
 					}
 				case cmp < 0:
 					if aw > bw {
-						t.Errorf("[%s] %q vs %q: should be <=, got %08x / %08x", coll.Name(), a, b, aw, bw)
+						assert.Failf(t, "tiny weights not <=", "[%s] %q vs %q: should be <=, got %08x / %08x", coll.Name(), a, b, aw, bw)
 					}
 				case cmp > 0:
 					if aw < bw {
-						t.Errorf("[%s] %q vs %q: should be >= got %08x / %08x", coll.Name(), a, b, aw, bw)
+						assert.Failf(t, "tiny weights not >=", "[%s] %q vs %q: should be >= got %08x / %08x", coll.Name(), a, b, aw, bw)
 					}
 				}
 			}
@@ -913,7 +913,7 @@ func TestUniqueHashes(t *testing.T) {
 				collation.Hash(&hasher, trans, 0)
 				h := hasher.Sum64()
 				if dupname, dup := hashes[h]; dup {
-					t.Fatalf("%s hashes to %d in %s and %s", teststr.Name, h, collation.Name(), dupname)
+					require.Failf(t, "duplicate hash", "%s hashes to %d in %s and %s", teststr.Name, h, collation.Name(), dupname)
 				}
 				hashes[h] = collation.Name()
 			}
@@ -936,7 +936,7 @@ func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
 	w1 := c.WeightString(nil, left, 0)
 	w2 := c.WeightString(nil, right, 0)
 	if bytes.Equal(w1, w2) != equal {
-		c.t.Errorf("ConsistentCollation(%s): expected WeightString %q / %v == %q / %v to be %v", c.Name(), left, w1, right, w2, equal)
+		assert.Failf(c.t, "WeightString equality mismatch", "ConsistentCollation(%s): expected WeightString %q / %v == %q / %v to be %v", c.Name(), left, w1, right, w2, equal)
 	}
 
 	hasher := vthash.New()
@@ -948,7 +948,7 @@ func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
 	h2 := hasher.Sum64()
 
 	if (h1 == h2) != equal {
-		c.t.Errorf("ConsistentCollation(%s): expected Hash %q / %v == %q / %v to be %v", c.Name(), left, h1, right, h2, equal)
+		assert.Failf(c.t, "Hash equality mismatch", "ConsistentCollation(%s): expected Hash %q / %v == %q / %v to be %v", c.Name(), left, h1, right, h2, equal)
 	}
 
 	return cmp

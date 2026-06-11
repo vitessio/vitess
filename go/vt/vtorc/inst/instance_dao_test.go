@@ -558,8 +558,8 @@ func TestReadOutdatedInstances(t *testing.T) {
 		},
 	}
 
-	// wait for the forgetAliases cache to be initialized to prevent data race.
-	waitForCacheInitialization()
+	// Ensure the forgetAliases cache is initialized before overriding it.
+	InitializeForgetAliasesCache()
 
 	// We are setting InstancePollSeconds to 59 minutes, just for the test.
 	oldVal := config.GetInstancePollTime()
@@ -747,8 +747,8 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 		},
 	}
 
-	// wait for the forgetAliases cache to be initialized to prevent data race.
-	waitForCacheInitialization()
+	// Ensure the forgetAliases cache is initialized before overriding it.
+	InitializeForgetAliasesCache()
 
 	oldCache := forgetAliases
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
@@ -782,42 +782,6 @@ func TestForgetInstanceAndInstanceIsForgotten(t *testing.T) {
 			}
 			require.EqualValues(t, tt.tabletsExpected, tabletAliases)
 		})
-	}
-}
-
-func TestSnapshotTopologies(t *testing.T) {
-	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
-	defer func() {
-		db.ClearVTOrcDatabase()
-	}()
-
-	for _, query := range initialSQL {
-		_, err := db.ExecVTOrc(query)
-		require.NoError(t, err)
-	}
-
-	err := SnapshotTopologies()
-	require.NoError(t, err)
-
-	query := "select alias from database_instance_topology_history"
-	var tabletAliases []string
-	err = db.QueryVTOrc(query, nil, func(rowMap sqlutils.RowMap) error {
-		tabletAliases = append(tabletAliases, rowMap.GetString("alias"))
-		return nil
-	})
-	require.NoError(t, err)
-
-	require.Equal(t, []string{"zone1-0000000100", "zone1-0000000101", "zone1-0000000112", "zone2-0000000200"}, tabletAliases)
-}
-
-// waitForCacheInitialization waits for the cache to be initialized to prevent data race in tests
-// that alter the cache or depend on its behaviour.
-func waitForCacheInitialization() {
-	for {
-		if cacheInitializationCompleted.Load() {
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 
@@ -1166,4 +1130,64 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	err = detectErrantGTIDs(instance, tablet)
 	require.NoError(t, err)
 	require.EqualValues(t, "", instance.GtidErrant)
+}
+
+// TestErrantGTIDCountGaugeIsResetWhenResolved verifies that the per-tablet
+// CurrentErrantGTIDCount gauge is reset to 0 when errant GTIDs are reconciled
+// on a subsequent poll. Previously, the gauge was only ever written when
+// errant GTIDs were detected, so it stuck at the last positive value forever
+// (https://github.com/vitessio/vitess/issues/20258).
+func TestErrantGTIDCountGaugeIsResetWhenResolved(t *testing.T) {
+	defer func() {
+		db.ClearVTOrcDatabase()
+		currentErrantGTIDCount.ResetAll()
+	}()
+	db.ClearVTOrcDatabase()
+	currentErrantGTIDCount.ResetAll()
+
+	keyspaceName := "ks"
+	shardName := "0"
+	primaryUUID := "230ea8ea-81e3-11e4-972a-e25ec4bd140a"
+	replicaUUID := "316d193c-70e5-11e5-adb2-ecf4bb2262ff"
+
+	primaryTablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone-1", Uid: 101},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	replicaTablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone-1", Uid: 100},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	replicaAlias := topoproto.TabletAliasString(replicaTablet.Alias)
+
+	require.NoError(t, SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+		PrimaryAlias: primaryTablet.Alias,
+	}, nil)))
+
+	// First poll: the replica has an errant GTID under its own UUID.
+	replicaInstance := &Instance{
+		InstanceAlias:          replicaTablet.Alias,
+		ServerUUID:             replicaUUID,
+		SourceUUID:             primaryUUID,
+		AncestryUUID:           replicaUUID + "," + primaryUUID,
+		ExecutedGtidSet:        primaryUUID + ":1-100," + replicaUUID + ":1",
+		primaryExecutedGtidSet: primaryUUID + ":1-100",
+	}
+	require.NoError(t, detectErrantGTIDs(replicaInstance, replicaTablet))
+	require.Equal(t, replicaUUID+":1", replicaInstance.GtidErrant)
+	require.EqualValues(t, 1, currentErrantGTIDCount.Counts()[replicaAlias],
+		"gauge should be 1 after a single errant GTID is detected")
+
+	// Second poll: the errant GTID has been reconciled (e.g., via the
+	// empty-transaction injection technique on the primary), so the primary's
+	// executed GTID set now also includes the replica UUID range.
+	replicaInstance.primaryExecutedGtidSet = primaryUUID + ":1-100," + replicaUUID + ":1"
+	require.NoError(t, detectErrantGTIDs(replicaInstance, replicaTablet))
+	require.Empty(t, replicaInstance.GtidErrant,
+		"GtidErrant should be cleared on the no-errant path so callers reusing the Instance don't see stale state")
+	require.EqualValues(t, 0, currentErrantGTIDCount.Counts()[replicaAlias],
+		"gauge should be reset to 0 after errant GTIDs are resolved")
 }

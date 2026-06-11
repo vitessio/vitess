@@ -40,7 +40,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 
@@ -135,7 +134,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 		}
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -841,7 +840,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 
 	// Initialize Cluster
@@ -915,7 +914,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 		clusterInfo.ClusterInstance.VtTabletExtraArgs = oldVttabletArgs
 	}()
 	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 
 	// Initialize Cluster
@@ -1015,6 +1014,20 @@ func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 		time.Sleep(time.Second)
 	}
 	return false
+}
+
+// GetSuccessfulRecoveryCount returns the current successful recovery count for
+// the given recovery name, keyspace, and shard. Returns 0 if the metric is not
+// yet available.
+func GetSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string) int {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
+	return GetIntFromValue(successfulRecoveriesMap[mapKey])
 }
 
 // WaitForSuccessfulRecoveryCount waits until the given recovery name's count of successful runs matches the count expected

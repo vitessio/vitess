@@ -1,4 +1,4 @@
-FROM golang:1.26 AS builder
+FROM golang:1.26.4@sha256:68cb6d68bed024785b69195b89af7ac7a444f27791435f98647edff595aa0479 AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -12,10 +12,10 @@ RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-entr
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-healthcheck ./cmd/healthcheck
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-sleep ./cmd/sleep
 
-FROM docker.io/library/debian:bookworm-slim
+FROM docker.io/library/debian:bookworm-slim@sha256:0104b334637a5f19aa9c983a91b54c89887c0984081f2068983107a6f6c21eeb
 
 RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
-RUN pip3 install --no-cache-dir --break-system-packages mysql-connector-python antithesis
+RUN pip3 install --no-cache-dir --break-system-packages mysql-connector-python==9.6.0 antithesis==0.2.0
 
 COPY --from=builder /out/antithesis-entrypoint /antithesis-entrypoint
 COPY --from=builder /out/antithesis-healthcheck /opt/antithesis/test/v1/main/eventually_vitess_health
@@ -23,7 +23,9 @@ COPY --from=builder /out/antithesis-sleep /opt/antithesis/test/v1/main/serial_dr
 
 COPY ./helper.py /opt/antithesis/resources/helper.py
 COPY crud/ /opt/antithesis/test/v1/crud
-COPY bank-test/ /opt/antithesis/test/v1/bank-test
+COPY --from=builder /out/antithesis-healthcheck /opt/antithesis/test/v1/crud/eventually_vitess_health
+# Temporarily remove the bank test from the client image
+# COPY bank-test/ /opt/antithesis/test/v1/bank-test
 
 RUN mkdir -p /opt/antithesis/catalog \
     && ln -s /opt/antithesis/test /opt/antithesis/catalog/test \

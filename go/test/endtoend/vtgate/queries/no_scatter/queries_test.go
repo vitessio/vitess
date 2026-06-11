@@ -17,7 +17,6 @@ limitations under the License.
 package aggregation
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,7 +26,7 @@ import (
 )
 
 func start(t *testing.T) (*mysql.Conn, func()) {
-	vtConn, err := mysql.Connect(context.Background(), &vtParams)
+	vtConn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	deleteAll := func() {

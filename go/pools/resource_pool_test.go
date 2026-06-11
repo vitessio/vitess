@@ -71,7 +71,7 @@ func SlowFailFactory(context.Context) (Resource, error) {
 }
 
 func TestOpen(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	waitStarts = waitStarts[:0]
@@ -98,15 +98,17 @@ func TestOpen(t *testing.T) {
 	// Test that Get waits
 	ch := make(chan bool)
 	go func() {
+		defer func() { ch <- true }()
 		for i := range 5 {
 			r, err = p.Get(ctx)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			resources[i] = r
 		}
 		for i := range 5 {
 			p.Put(resources[i])
 		}
-		ch <- true
 	}()
 	for i := range 5 {
 		// Sleep to ensure the goroutine waits
@@ -172,7 +174,7 @@ func TestOpen(t *testing.T) {
 }
 
 func TestShrinking(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	waitStarts = waitStarts[:0]
@@ -196,10 +198,8 @@ func TestShrinking(t *testing.T) {
 	for i := range 10 {
 		time.Sleep(10 * time.Millisecond)
 		stats := p.StatsJSON()
-		if stats != expected {
-			if i == 9 {
-				t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-			}
+		if stats != expected && i == 9 {
+			assert.Failf(t, "stats mismatch", `expecting '%s', received '%s'`, expected, stats)
 		}
 	}
 	// There are already 2 resources available in the pool.
@@ -226,10 +226,12 @@ func TestShrinking(t *testing.T) {
 	}
 	// This will wait because pool is empty
 	go func() {
+		defer func() { done <- true }()
 		r, err := p.Get(ctx)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		p.Put(r)
-		done <- true
 	}()
 
 	// This will also wait
@@ -261,10 +263,12 @@ func TestShrinking(t *testing.T) {
 	}
 	// This will wait because pool is empty
 	go func() {
+		defer func() { done <- true }()
 		r, err := p.Get(ctx)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		p.Put(r)
-		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
 
@@ -281,20 +285,16 @@ func TestShrinking(t *testing.T) {
 	<-done
 
 	err = p.SetCapacity(-1)
-	if err == nil {
-		t.Errorf("Expecting error")
-	}
+	assert.Error(t, err, "Expecting error")
 	err = p.SetCapacity(255555)
-	if err == nil {
-		t.Errorf("Expecting error")
-	}
+	assert.Error(t, err, "Expecting error")
 
 	assert.EqualValues(t, 4, p.Capacity())
 	assert.EqualValues(t, 4, p.Available())
 }
 
 func TestClosing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
@@ -334,7 +334,7 @@ func TestClosing(t *testing.T) {
 }
 
 func TestReopen(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	refreshCheck := func() (bool, error) {
@@ -368,7 +368,7 @@ func TestReopen(t *testing.T) {
 }
 
 func TestIdleTimeout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait, nil, 0)
@@ -430,7 +430,7 @@ func TestIdleTimeout(t *testing.T) {
 }
 
 func TestIdleTimeoutCreateFail(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0, logWait, nil, 0)
@@ -447,7 +447,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 	for p.Active() != 0 {
 		select {
 		case <-timeout:
-			t.Errorf("Timed out waiting for resource to be closed by idle timeout")
+			assert.Fail(t, "Timed out waiting for resource to be closed by idle timeout")
 		default:
 		}
 	}
@@ -457,7 +457,7 @@ func TestIdleTimeoutCreateFail(t *testing.T) {
 
 func TestMaxLifetime(t *testing.T) {
 	// maxLifetime 0
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 
@@ -477,7 +477,7 @@ func TestMaxLifetime(t *testing.T) {
 	assert.EqualValues(t, 0, p.MaxLifetimeClosed())
 
 	// maxLifetime > 0
-	ctx = context.Background()
+	ctx = t.Context()
 	lastID.Store(0)
 	count.Store(0)
 
@@ -526,7 +526,7 @@ func TestExtendedLifetimeTimeout(t *testing.T) {
 }
 
 func TestCreateFail(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	p := NewResourcePool(FailFactory, 5, 5, time.Second, 0, logWait, nil, 0)
@@ -541,7 +541,7 @@ func TestCreateFail(t *testing.T) {
 }
 
 func TestCreateFailOnPut(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0, logWait, nil, 0)
@@ -557,7 +557,7 @@ func TestCreateFailOnPut(t *testing.T) {
 }
 
 func TestSlowCreateFail(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, 0, logWait, nil, 0)
@@ -578,7 +578,7 @@ func TestSlowCreateFail(t *testing.T) {
 }
 
 func TestTimeout(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lastID.Store(0)
 	count.Store(0)
 	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0, logWait, nil, 0)
@@ -605,7 +605,7 @@ func TestExpired(t *testing.T) {
 	defer p.Close()
 
 	// expired context
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-1*time.Second))
 	_, err := p.Get(ctx)
 	cancel()
 	require.EqualError(t, err, "resource pool context already expired")

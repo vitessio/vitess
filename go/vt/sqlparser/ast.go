@@ -523,6 +523,7 @@ type (
 	AlterMigration struct {
 		Type      AlterMigrationType
 		UUID      string
+		Context   string
 		Expire    string
 		Ratio     *Literal
 		Threshold string

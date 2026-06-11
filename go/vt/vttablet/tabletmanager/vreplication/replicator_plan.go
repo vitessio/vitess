@@ -255,23 +255,238 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	sqlbuffer.Reset()
-	sqlbuffer.WriteString(tp.BulkInsertFront.Query)
-	sqlbuffer.WriteString(" values ")
+func (tp *TablePlan) checkJSONFieldSizes(limit int64, addJSONFieldSizes func(add func(field *querypb.Field, size int64))) error {
+	if limit <= 0 {
+		return nil
+	}
 
-	for i, row := range rows {
-		if i > 0 {
+	var total int64
+	var largestName string
+	var largestSize int64
+	addJSONFieldSizes(func(field *querypb.Field, size int64) {
+		if field == nil || size < 0 {
+			return
+		}
+		total += size
+		if size > largestSize {
+			largestSize = size
+			largestName = field.Name
+		}
+	})
+
+	if total > limit {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vreplication: row JSON payload %d bytes exceeds vreplication-max-row-json-bytes=%d (table=%s, largest_json_column=%s @ %d bytes)",
+			total, limit, tp.TargetName, largestName, largestSize)
+	}
+	return nil
+}
+
+// checkJSONRowSize sums the byte lengths of all JSON-typed columns in row and
+// returns an error if the sum exceeds limit. When limit <= 0 the check is a
+// no-op. It reads column sizes directly from row.Lengths so it can run in
+// hot loops without materializing []sqltypes.Value. Indices beyond
+// len(row.Lengths) are silently skipped. NULL columns (Lengths[i] < 0) are
+// treated as zero-size.
+func (tp *TablePlan) checkJSONRowSize(row *querypb.Row, limit int64) error {
+	if row == nil {
+		return nil
+	}
+
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		for i, field := range tp.Fields {
+			if i >= len(row.Lengths) {
+				break
+			}
+			if field.Type != querypb.Type_JSON {
+				continue
+			}
+			add(field, row.Lengths[i])
+		}
+	})
+}
+
+func jsonRowChangeSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, fieldIndex, jsonIndex int) int64 {
+	if fieldIndex >= len(afterRow.Lengths) {
+		return 0
+	}
+	afterLen := afterRow.Lengths[fieldIndex]
+	if afterLen < 0 {
+		return 0
+	}
+	if partialJSONColumns == nil || beforeRow == nil || !isBitSet(partialJSONColumns.Cols, jsonIndex) {
+		return afterLen
+	}
+	if afterLen == 0 {
+		if fieldIndex >= len(beforeRow.Lengths) || beforeRow.Lengths[fieldIndex] < 0 {
+			return 0
+		}
+		return beforeRow.Lengths[fieldIndex]
+	}
+	beforeLen := int64(0)
+	if fieldIndex < len(beforeRow.Lengths) && beforeRow.Lengths[fieldIndex] > 0 {
+		beforeLen = beforeRow.Lengths[fieldIndex]
+	}
+	return beforeLen + afterLen
+}
+
+func (tp *TablePlan) checkInsertJSONRowSize(afterRow, beforeRow *querypb.Row, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
+	if afterRow == nil {
+		return nil
+	}
+
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		if tp.BulkInsertValues != nil && len(tp.BulkInsertValues.BindLocations()) > 0 {
+			fieldsIndex := 0
+			jsonIndex := 0
+			for range tp.BulkInsertValues.BindLocations() {
+				for fieldsIndex < len(tp.Fields) {
+					field := tp.Fields[fieldsIndex]
+					fieldIndex := fieldsIndex
+					fieldJSONIndex := jsonIndex
+					fieldsIndex++
+					if field.Type == querypb.Type_JSON {
+						jsonIndex++
+					}
+					if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+						continue
+					}
+					if field.Type == querypb.Type_JSON {
+						add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, fieldIndex, fieldJSONIndex))
+					}
+					break
+				}
+			}
+			return
+		}
+
+		jsonIndex := 0
+		for i, field := range tp.Fields {
+			if i >= len(afterRow.Lengths) {
+				break
+			}
+			fieldJSONIndex := jsonIndex
+			if field.Type == querypb.Type_JSON {
+				jsonIndex++
+			}
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
+			if field.Type == querypb.Type_JSON {
+				add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, i, fieldJSONIndex))
+			}
+		}
+	})
+}
+
+func (tp *TablePlan) checkUpdateJSONRowSize(afterRow, beforeRow *querypb.Row, dataColumns, partialJSONColumns *binlogdatapb.RowChange_Bitmap, limit int64) error {
+	if afterRow == nil {
+		return nil
+	}
+
+	return tp.checkJSONFieldSizes(limit, func(add func(field *querypb.Field, size int64)) {
+		jsonIndex := 0
+		for i, field := range tp.Fields {
+			if i >= len(afterRow.Lengths) {
+				break
+			}
+			if field.Type != querypb.Type_JSON {
+				continue
+			}
+			fieldJSONIndex := jsonIndex
+			jsonIndex++
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
+			if dataColumns != nil && dataColumns.Count > 0 && !isBitSet(dataColumns.Cols, i) {
+				continue
+			}
+			add(field, jsonRowChangeSize(afterRow, beforeRow, partialJSONColumns, i, fieldJSONIndex))
+		}
+	})
+}
+
+func (tp *TablePlan) maxRowJSONBytes() int64 {
+	if tp.WorkflowConfig == nil {
+		return 0
+	}
+	return tp.WorkflowConfig.MaxRowJSONBytes
+}
+
+func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows []*querypb.Row, executor func(string) (*sqltypes.Result, error), maxQuerySize int64) (*sqltypes.Result, error) {
+	insertPrefix := tp.BulkInsertFront.Query + " values "
+	insertSuffixLen := 0
+	if tp.BulkInsertOnDup != nil {
+		insertSuffixLen = len(tp.BulkInsertOnDup.Query)
+	}
+
+	flush := func(final bool) (*sqltypes.Result, error) {
+		if tp.BulkInsertOnDup != nil {
+			sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
+		}
+		if final {
+			// Last flush: safe to use StringUnsafe since we won't reuse the buffer.
+			return executor(sqlbuffer.StringUnsafe())
+		}
+		// Mid-batch flush: must copy because we'll reuse the buffer for the next batch.
+		return executor(sqlbuffer.String())
+	}
+
+	sqlbuffer.Reset()
+	sqlbuffer.WriteString(insertPrefix)
+
+	var lastResult *sqltypes.Result
+	limit := tp.maxRowJSONBytes()
+	rowCount := 0
+	for _, row := range rows {
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(row, nil, nil, limit); err != nil {
+				return nil, err
+			}
+		}
+		beforeLen := sqlbuffer.Len()
+		if rowCount > 0 {
 			sqlbuffer.WriteString(", ")
 		}
 		if err := tp.appendFromRow(sqlbuffer, row); err != nil {
 			return nil, err
 		}
+		rowCount++
+
+		// If the buffer exceeds maxQuerySize and we have more than one
+		// row, flush everything before this row and start a new statement.
+		if maxQuerySize > 0 && int64(sqlbuffer.Len()+insertSuffixLen) > maxQuerySize && rowCount > 1 {
+			// Roll back to before this row was appended.
+			sqlbuffer.Truncate(beforeLen)
+			result, err := flush(false)
+			if err != nil {
+				return nil, err
+			}
+			if lastResult == nil {
+				lastResult = result
+			} else {
+				lastResult.RowsAffected += result.RowsAffected
+			}
+
+			// Start a new INSERT with this row.
+			sqlbuffer.Reset()
+			sqlbuffer.WriteString(insertPrefix)
+			if err := tp.appendFromRow(sqlbuffer, row); err != nil {
+				return nil, err
+			}
+			rowCount = 1
+		}
 	}
-	if tp.BulkInsertOnDup != nil {
-		sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
+
+	result, err := flush(true)
+	if err != nil {
+		return nil, err
 	}
-	return executor(sqlbuffer.StringUnsafe())
+	if lastResult != nil {
+		lastResult.RowsAffected += result.RowsAffected
+		return lastResult, nil
+	}
+	return result, nil
 }
 
 // During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process
@@ -364,6 +579,89 @@ func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*q
 	return sqltypes.ValueBindVariable(*val), nil
 }
 
+func (tp *TablePlan) clearEmptyPartialJSONDataColumns(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value) {
+	if rowChange.JsonPartialValues == nil || rowChange.DataColumns == nil {
+		return
+	}
+
+	jsonIndex := 0
+	for i, field := range tp.Fields {
+		if field.Type != querypb.Type_JSON {
+			continue
+		}
+		if i >= len(afterVals) {
+			break
+		}
+		if !afterVals[i].IsNull() &&
+			isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
+			!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes) &&
+			len(afterVals[i].Raw()) == 0 {
+			// If the JSON column was NOT updated then the JSON column is marked as
+			// partial and the diff is empty as a way to exclude it from the AFTER image.
+			// It still has the data bit set, however, even though it's not really
+			// present. So we have to account for this by unsetting the data bit so
+			// that the column's current JSON value is not lost.
+			setBit(rowChange.DataColumns.Cols, i, false)
+		}
+		jsonIndex++
+	}
+}
+
+func (tp *TablePlan) bindAfterJSONFieldVals(rowChange *binlogdatapb.RowChange, afterVals []sqltypes.Value, bindvars map[string]*querypb.BindVariable) error {
+	jsonIndex := 0
+	for i, field := range tp.Fields {
+		if field.Type != querypb.Type_JSON {
+			continue
+		}
+		if i >= len(afterVals) {
+			break
+		}
+		// FieldsToSkip columns (e.g. target-side generated columns) are never
+		// referenced by the generated SQL, so there is no bindvar to populate.
+		// jsonIndex must still advance: JsonPartialValues bits are indexed by
+		// the source's JSON-column ordering, so a skipped JSON column still
+		// consumes a bit position.
+		if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+			jsonIndex++
+			continue
+		}
+
+		var (
+			bindVar *querypb.BindVariable
+			newVal  *sqltypes.Value
+			err     error
+		)
+		switch {
+		case afterVals[i].IsNull(): // An SQL NULL and not an actual JSON value
+			newVal = &sqltypes.NULL
+		case rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
+			!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes):
+			// An SQL expression that can be converted to a JSON value such as JSON_INSERT().
+			// This occurs when using partial JSON values as a result of mysqld using
+			// binlog-row-value-options=PARTIAL_JSON.
+			if len(afterVals[i].Raw()) == 0 {
+				tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
+				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
+			} else {
+				newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
+					fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
+			}
+		default: // A JSON value (which may be a JSON null literal value)
+			newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
+			if err != nil {
+				return err
+			}
+		}
+		bindVar, err = tp.bindFieldVal(field, newVal)
+		if err != nil {
+			return err
+		}
+		bindvars["a_"+field.Name] = bindVar
+		jsonIndex++
+	}
+	return nil
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var (
@@ -383,58 +681,31 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		}
 	}
 	if rowChange.After != nil {
-		jsonIndex := 0
 		after = true
 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			var (
-				bindVar *querypb.BindVariable
-				newVal  *sqltypes.Value
-				err     error
-			)
-			if field.Type == querypb.Type_JSON {
-				switch {
-				case afterVals[i].IsNull(): // An SQL NULL and not an actual JSON value
-					newVal = &sqltypes.NULL
-				case rowChange.JsonPartialValues != nil && isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex) &&
-					!slices.Equal(afterVals[i].Raw(), sqltypes.NullBytes):
-					// An SQL expression that can be converted to a JSON value such as JSON_INSERT().
-					// This occurs when using partial JSON values as a result of mysqld using
-					// binlog-row-value-options=PARTIAL_JSON.
-					if len(afterVals[i].Raw()) == 0 {
-						// If the JSON column was NOT updated then the JSON column is marked as
-						// partial and the diff is empty as a way to exclude it from the AFTER image.
-						// It still has the data bit set, however, even though it's not really
-						// present. So we have to account for this by unsetting the data bit so
-						// that the column's current JSON value is not lost.
-						setBit(rowChange.DataColumns.Cols, i, false)
-						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION, nil))
-					} else {
-						newVal = new(sqltypes.MakeTrusted(querypb.Type_EXPRESSION,
-							fmt.Appendf(nil, afterVals[i].RawStr(), sqlescape.EscapeID(field.Name))))
-					}
-				default: // A JSON value (which may be a JSON null literal value)
-					newVal, err = vjson.MarshalSQLValue(afterVals[i].Raw())
-					if err != nil {
-						return nil, err
-					}
-				}
-				bindVar, err = tp.bindFieldVal(field, newVal)
-				jsonIndex++
-			} else {
-				bindVar, err = tp.bindFieldVal(field, &afterVals[i])
-			}
+			bindVar, err := tp.bindFieldVal(field, &afterVals[i])
 			if err != nil {
 				return nil, err
 			}
 			bindvars["a_"+field.Name] = bindVar
 		}
+		tp.clearEmptyPartialJSONDataColumns(rowChange, afterVals)
 	}
+	limit := tp.maxRowJSONBytes()
 	switch {
 	case !before && after:
 		// Only apply inserts for rows whose primary keys are within the range of rows already copied.
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
+		}
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowChange.After, nil, nil, limit); err != nil {
+				return nil, err
+			}
+		}
+		if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
+			return nil, err
 		}
 		if tp.isPartial(rowChange) {
 			ins, err := tp.getPartialInsertQuery(rowChange.DataColumns)
@@ -453,6 +724,14 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
+			if limit > 0 {
+				if err := tp.checkUpdateJSONRowSize(rowChange.After, rowChange.Before, rowChange.DataColumns, rowChange.JsonPartialValues, limit); err != nil {
+					return nil, err
+				}
+			}
+			if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
+				return nil, err
+			}
 			if tp.isPartial(rowChange) {
 				upd, err := tp.getPartialUpdateQuery(rowChange.DataColumns)
 				if err != nil {
@@ -464,12 +743,23 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				return execParsedQuery(tp.Update, bindvars, executor)
 			}
 		}
+		skipInsert := tp.isOutsidePKRange(bindvars, before, after, "insert")
+		if !skipInsert && limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowChange.After, rowChange.Before, rowChange.JsonPartialValues, limit); err != nil {
+				return nil, err
+			}
+		}
+		if !skipInsert {
+			if err := tp.bindAfterJSONFieldVals(rowChange, afterVals, bindvars); err != nil {
+				return nil, err
+			}
+		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
 				return nil, err
 			}
 		}
-		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
+		if skipInsert {
 			return nil, nil
 		}
 		if tp.isPartial(rowChange) {
@@ -478,6 +768,14 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			jsonIndex := 0
 			for i, field := range tp.Fields {
 				if field.Type == querypb.Type_JSON && rowChange.JsonPartialValues != nil {
+					// Skipped JSON columns (e.g. target-side generated columns)
+					// are not referenced by the INSERT, so there is no bindvar
+					// to rewrite. jsonIndex must still advance so subsequent
+					// JSON columns read the correct JsonPartialValues bit.
+					if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+						jsonIndex++
+						continue
+					}
 					switch {
 					case !isBitSet(rowChange.JsonPartialValues.Cols, jsonIndex):
 						// We use the full AFTER value which we already have.
@@ -609,6 +907,9 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 	prefix.WriteString(tp.BulkInsertFront.Query)
 	prefix.WriteString(" values ")
 	insertPrefix := prefix.String()
+	if tp.BulkInsertOnDup != nil {
+		maxQuerySize -= int64(len(tp.BulkInsertOnDup.Query))
+	}
 	maxQuerySize -= int64(len(insertPrefix))
 	values := &strings.Builder{}
 
@@ -620,8 +921,14 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		return executor(insertPrefix + vals.String())
 	}
 
+	limit := tp.maxRowJSONBytes()
 	newStmt := true
 	for _, rowInsert := range rowInserts {
+		if limit > 0 {
+			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
+				return nil, err
+			}
+		}
 		var (
 			err     error
 			bindVar *querypb.BindVariable
@@ -630,6 +937,9 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowInsert.After)
 		for n, field := range tp.Fields {
+			if tp.FieldsToSkip[strings.ToLower(field.Name)] {
+				continue
+			}
 			if field.Type == querypb.Type_JSON {
 				var jsVal *sqltypes.Value
 				if vals[n].IsNull() { // An SQL NULL and not an actual JSON value
@@ -652,7 +962,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 		if err := tp.BulkInsertValues.Append(rowValues, bindvars, nil); err != nil {
 			return nil, err
 		}
-		if int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
+		if !newStmt && int64(values.Len()+2+rowValues.Len()) > maxQuerySize { // Plus 2 for the comma and space
 			if _, err := execQuery(values); err != nil {
 				return nil, err
 			}
@@ -754,13 +1064,11 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 		case querypb.Type_JSON:
 			if length < 0 { // An SQL NULL and not an actual JSON value
 				buf.WriteString(sqltypes.NullStr)
-			} else { // A JSON value (which may be a JSON null literal value)
-				buf2 := row.Values[offset : offset+length]
-				vv, err := vjson.MarshalSQLValue(buf2)
-				if err != nil {
+			} else {
+				raw := row.Values[offset : offset+length]
+				if err := vjson.AppendMarshalSQL(buf, raw); err != nil {
 					return err
 				}
-				buf.WriteString(vv.RawStr())
 			}
 		default:
 			if length < 0 {

@@ -54,7 +54,7 @@ func commandDelete(cmd *cobra.Command, args []string) error {
 	req := &vtctldatapb.WorkflowDeleteRequest{
 		Keyspace:             baseOptions.Keyspace,
 		Workflow:             baseOptions.Workflow,
-		KeepData:             deleteOptions.KeepData,
+		KeepData:             common.OptionalBoolFromFlag(cmd, "keep-data", deleteOptions.KeepData),
 		KeepRoutingRules:     deleteOptions.KeepRoutingRules,
 		Shards:               baseOptions.Shards,
 		DeleteBatchSize:      deleteOptions.DeleteBatchSize,

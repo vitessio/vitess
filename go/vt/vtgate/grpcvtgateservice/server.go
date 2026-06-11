@@ -327,6 +327,17 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 	return vterrors.ToGRPC(vtgErr)
 }
 
+// BinlogDumpGTID is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) BinlogDumpGTID(request *vtgatepb.BinlogDumpGTIDRequest, stream vtgateservicepb.Vitess_BinlogDumpGTIDServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	vtgErr := vtg.server.BinlogDumpGTID(ctx, request,
+		func(response *vtgatepb.BinlogDumpResponse) error {
+			return stream.Send(response)
+		})
+	return vterrors.ToGRPC(vtgErr)
+}
+
 func init() {
 	vtgate.RegisterVTGates = append(vtgate.RegisterVTGates, func(vtGate vtgateservice.VTGateService) {
 		if servenv.GRPCCheckServiceMap("vtgateservice") {

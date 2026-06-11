@@ -38,7 +38,7 @@ const (
 
 func TestPickPrimary(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 
 	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
@@ -66,7 +66,7 @@ func TestPickPrimary(t *testing.T) {
 // there is no primary setup for the shard we correctly return an error.
 func TestPickNoPrimary(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	te := newPickerTestEnv(t, ctx, []string{"cell", "otherCell"})
@@ -818,11 +818,11 @@ func deleteTablet(t *testing.T, te *pickerTestEnv, tablet *topodatapb.Tablet) {
 		return
 	}
 	{ // log error
-		err := te.topoServ.DeleteTablet(context.Background(), tablet.Alias)
+		err := te.topoServ.DeleteTablet(t.Context(), tablet.Alias)
 		require.NoError(t, err, "failed to DeleteTablet with alias: %v", err)
 	}
 	{ // This is not automatically removed from shard replication, which results in log spam and log error
-		err := topo.DeleteTabletReplicationData(context.Background(), te.topoServ, tablet)
+		err := topo.DeleteTabletReplicationData(t.Context(), te.topoServ, tablet)
 		require.NoError(t, err, "failed to automatically remove from shard replication: %v", err)
 	}
 }

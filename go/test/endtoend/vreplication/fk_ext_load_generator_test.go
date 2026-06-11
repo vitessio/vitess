@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -146,7 +147,7 @@ func (lg *SimpleLoadGenerator) WaitForAdditionalRows(count int) error {
 	for {
 		select {
 		case <-shortCtx.Done():
-			t.Fatalf("Timed out waiting for additional rows in %q table", "parent")
+			require.Failf(t, "timeout", "Timed out waiting for additional rows in %q table", "parent")
 		default:
 			numRows := lg.getNumRows(vtgateConn, "parent")
 			if numRows >= numRowsStart+count {
@@ -278,6 +279,7 @@ func (lg *SimpleLoadGenerator) Start() error {
 			lg.state = LoadGeneratorStateStopped
 			log.Info("Load generator stopped")
 		}()
+		defer func() { lg.ch <- true }()
 		lg.runCtx, lg.runCtxCancel = context.WithCancel(lg.ctx)
 		defer func() {
 			lg.runCtx = nil
@@ -294,11 +296,9 @@ func (lg *SimpleLoadGenerator) Start() error {
 			select {
 			case <-lg.ctx.Done():
 				log.Info("Load generator context done")
-				lg.ch <- true
 				return
 			case <-lg.runCtx.Done():
 				log.Info("Load generator run context done")
-				lg.ch <- true
 				return
 			default:
 			}
@@ -311,7 +311,9 @@ func (lg *SimpleLoadGenerator) Start() error {
 			default: // 20% chance to delete
 				lg.delete()
 			}
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			time.Sleep(1 * time.Millisecond)
 		}
 	}()

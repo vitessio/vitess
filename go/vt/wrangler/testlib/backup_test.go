@@ -86,7 +86,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -557,7 +557,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
 
 	// Initialize our environment
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	db := fakesqldb.New(t)
 	defer db.Close()

@@ -64,6 +64,7 @@ func Append(buf *strings.Builder, node SQLNode) {
 		Builder: buf,
 		fast:    true,
 	}
+	tbuf.literal = tbuf.WriteString
 	node.FormatFast(tbuf)
 }
 

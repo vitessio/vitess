@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var (
@@ -107,13 +106,13 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, []string{utils.GetFlagVariantForTests("--health-check-interval"), "1s"}...)
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, []string{"--health-check-interval", "1s"}...)
 		err = clusterInstance.StartKeyspace(*keyspace, shards, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{utils.GetFlagVariantForTests("--tablet-refresh-interval"), tabletRefreshInterval.String()}...)
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{"--tablet-refresh-interval", tabletRefreshInterval.String()}...)
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

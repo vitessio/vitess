@@ -24,6 +24,40 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+// TestVisitSkipsNilQTableInTable verifies that Visit over a tree containing a
+// virtual dual Table (nil QTable) does not panic. This is a regression test for
+// the nil guard added in createDMLWithInput's Visit closure, which searches for
+// a target table by ID and must skip virtual dual Tables.
+func TestVisitSkipsNilQTableInTable(t *testing.T) {
+	targetID := semantics.SingleTableSet(1)
+
+	// Virtual dual table — nil QTable, as created by createDualRoute()
+	dualTable := &Table{}
+
+	// Real table with a QTable
+	realTable := &Table{
+		QTable: &QueryTable{ID: targetID},
+	}
+
+	// Build a tree: fakeOp with both tables as children
+	root := &fakeOp{
+		inputs: []Operator{dualTable, realTable},
+	}
+
+	// Visit the tree looking for the target table by QTable.ID,
+	// using the same pattern as createDMLWithInput in phases.go.
+	var found *Table
+	err := Visit(root, func(op Operator) error {
+		if tbl, ok := op.(*Table); ok && tbl.QTable != nil && tbl.QTable.ID == targetID {
+			found = tbl
+		}
+		return nil
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, realTable, found, "should find the real table, skipping the virtual dual")
+}
+
 // TestTopDown_RevisitsReplacedOperators verifies that when an operator is replaced
 // during TopDown traversal, the new operator gets re-visited.
 //

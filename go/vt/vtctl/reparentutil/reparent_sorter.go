@@ -99,7 +99,16 @@ func (rs *reparentSorter) Less(i, j int) bool {
 		}
 	}
 
-	return !jPromotionRule.BetterThan(iPromotionRule)
+	if jPromotionRule != iPromotionRule {
+		return !jPromotionRule.BetterThan(iPromotionRule)
+	}
+
+	// All else equal, use the full tablet alias as a stable tiebreaker so
+	// that sort order is deterministic across runs, including across cells.
+	if rs.tablets[i].Alias.Cell != rs.tablets[j].Alias.Cell {
+		return rs.tablets[i].Alias.Cell < rs.tablets[j].Alias.Cell
+	}
+	return rs.tablets[i].Alias.Uid < rs.tablets[j].Alias.Uid
 }
 
 // sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.

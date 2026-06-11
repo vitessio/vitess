@@ -33,10 +33,12 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestBinlogDumpGTID_Streaming tests that binlog events are actually streamed from vttablet to the client.
@@ -399,12 +401,10 @@ func TestBinlogDumpGTID_FromSpecificPosition(t *testing.T) {
 	for receivedPackets < 3 {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout waiting for packets, received %d", receivedPackets)
+			require.Failf(t, "timeout waiting for packets", "Timeout waiting for packets, received %d", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
-			if err != nil {
-				t.Fatalf("Error reading packet: %v", err)
-			}
+			require.NoErrorf(t, err, "Error reading packet: %v", err)
 			if len(data) > 0 && data[0] == mysql.OKPacket {
 				receivedPackets++
 				t.Logf("Received packet %d: size=%d bytes", receivedPackets, len(data))
@@ -578,7 +578,7 @@ readLoop:
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout waiting for EOF packet - nonBlock flag may not be implemented. Received %d packets.", receivedPackets)
+			require.Failf(t, "timeout waiting for EOF packet", "Timeout waiting for EOF packet - nonBlock flag may not be implemented. Received %d packets.", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
@@ -666,7 +666,7 @@ readLoop:
 	for {
 		select {
 		case <-timeout:
-			t.Fatalf("Timeout - received %d packets but no EOF. NonBlock may not be implemented.", receivedPackets)
+			require.Failf(t, "timeout waiting for EOF", "Timeout - received %d packets but no EOF. NonBlock may not be implemented.", receivedPackets)
 		default:
 			data, err := binlogConn.ReadPacket()
 			if err != nil {
@@ -685,7 +685,7 @@ readLoop:
 				break readLoop
 			case mysql.ErrPacket:
 				sqlErr := mysql.ParseErrorPacket(data)
-				t.Fatalf("Unexpected error packet: %v", sqlErr)
+				require.Failf(t, "unexpected error packet", "Unexpected error packet: %v", sqlErr)
 			case mysql.OKPacket:
 				receivedPackets++
 				if receivedPackets <= 10 {
@@ -791,9 +791,7 @@ readLoop:
 			}
 			if len(data) > 0 {
 				receivedPackets++
-				if data[0] == mysql.EOFPacket {
-					t.Fatal("Received unexpected EOF in blocking mode")
-				}
+				require.NotEqual(t, mysql.EOFPacket, data[0], "Received unexpected EOF in blocking mode")
 				t.Logf("Received packet %d: first byte=0x%02x, size=%d", receivedPackets, data[0], len(data))
 				// After receiving some packets, we can stop
 				if receivedPackets >= 3 {
@@ -802,13 +800,13 @@ readLoop:
 				}
 			}
 		case err := <-errCh:
-			t.Fatalf("Error reading packet: %v", err)
+			require.Failf(t, "error reading packet", "Error reading packet: %v", err)
 		case <-timeout:
 			if receivedPackets > 0 {
 				t.Logf("Timeout after receiving %d packets - blocking mode works", receivedPackets)
 				break readLoop
 			}
-			t.Fatal("Timeout waiting for packets in blocking mode")
+			require.Fail(t, "Timeout waiting for packets in blocking mode")
 		}
 	}
 
@@ -949,7 +947,7 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 		for {
 			select {
 			case <-timeout:
-				t.Fatalf("[%s] Timeout waiting for EOF, received %d packets", label, count)
+				require.Failf(t, "timeout waiting for EOF", "[%s] Timeout waiting for EOF, received %d packets", label, count)
 			default:
 			}
 
@@ -968,7 +966,7 @@ func TestBinlogDumpGTID_EmptyGTIDStartsFromBeginning(t *testing.T) {
 				return count
 			case mysql.ErrPacket:
 				sqlErr := mysql.ParseErrorPacket(data)
-				t.Fatalf("[%s] Unexpected error packet: %v", label, sqlErr)
+				require.Failf(t, "unexpected error packet", "[%s] Unexpected error packet: %v", label, sqlErr)
 			case mysql.OKPacket:
 				count++
 			}
@@ -1083,4 +1081,128 @@ packetLoop:
 	wg.Wait()
 
 	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received at least one binlog packet with shard-level targeting")
+}
+
+// vtgateGrpcAddr returns the vtgate gRPC address for the cluster.
+func vtgateGrpcAddr() string {
+	return fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort)
+}
+
+// TestBinlogDumpGTID_VTGateGRPC_Streaming tests binlog streaming through vtgate's gRPC endpoint.
+func TestBinlogDumpGTID_VTGateGRPC_Streaming(t *testing.T) {
+	ctx := t.Context()
+
+	// Get current GTID position
+	pos, _ := cluster.GetPrimaryPosition(t, *clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet(), hostname)
+	gtidSet := pos
+	if _, after, found := strings.Cut(pos, "/"); found {
+		gtidSet = after
+	}
+
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	grpcCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	reader, err := conn.BinlogDumpGTID(grpcCtx, keyspaceName, "0", topodatapb.TabletType_PRIMARY, nil, "", 4, gtidSet, 0)
+	require.NoError(t, err)
+
+	// Insert data to generate binlog events
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		// Small delay so the stream is established first
+		time.Sleep(200 * time.Millisecond)
+		dataConn, err := mysql.Connect(ctx, &vtParams)
+		if err != nil {
+			t.Logf("Failed to connect for writes: %v", err)
+			return
+		}
+		defer dataConn.Close()
+		for i := range 3 {
+			_, err := dataConn.ExecuteFetch(
+				fmt.Sprintf("INSERT INTO binlog_test (msg) VALUES ('vtgate_grpc_test_%d')", i), 1, false)
+			if err != nil {
+				t.Logf("Insert failed: %v", err)
+				return
+			}
+		}
+	})
+
+	var receivedPackets int
+	for {
+		resp, err := reader.Recv()
+		if err != nil {
+			t.Logf("Stream ended: %v", err)
+			break
+		}
+		receivedPackets++
+		t.Logf("Received packet %d via vtgate gRPC: %d bytes", receivedPackets, len(resp.Raw))
+		if receivedPackets >= 3 {
+			break
+		}
+	}
+
+	cancel()
+	wg.Wait()
+
+	assert.GreaterOrEqual(t, receivedPackets, 1, "Should have received binlog packets via vtgate gRPC")
+}
+
+// TestBinlogDumpGTID_VTGateGRPC_RejectsFilename tests that vtgate's gRPC endpoint rejects
+// requests with a binlog filename.
+func TestBinlogDumpGTID_VTGateGRPC_RejectsFilename(t *testing.T) {
+	ctx := t.Context()
+
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	reader, err := conn.BinlogDumpGTID(ctx, keyspaceName, "0", topodatapb.TabletType_PRIMARY, nil, "binlog.000001", 4, "", 0)
+	if err != nil {
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+		return
+	}
+	_, err = reader.Recv()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "binlog filename is not supported")
+}
+
+// TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition tests that vtgate's gRPC endpoint
+// rejects requests with a binlog position other than 4.
+func TestBinlogDumpGTID_VTGateGRPC_RejectsNonDefaultPosition(t *testing.T) {
+	ctx := t.Context()
+
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	reader, err := conn.BinlogDumpGTID(ctx, keyspaceName, "0", topodatapb.TabletType_PRIMARY, nil, "", 1234, "", 0)
+	if err != nil {
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+		return
+	}
+	_, err = reader.Recv()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+}
+
+// TestBinlogDumpGTID_VTGateGRPC_RejectsPositionBelowMinimum tests that vtgate's gRPC endpoint
+// rejects requests with a binlog position below 4.
+func TestBinlogDumpGTID_VTGateGRPC_RejectsPositionBelowMinimum(t *testing.T) {
+	ctx := t.Context()
+
+	conn, err := vtgateconn.Dial(ctx, vtgateGrpcAddr())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	reader, err := conn.BinlogDumpGTID(ctx, keyspaceName, "0", topodatapb.TabletType_PRIMARY, nil, "", 0, "", 0)
+	if err != nil {
+		assert.Contains(t, err.Error(), "position < 4")
+		return
+	}
+	_, err = reader.Recv()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "position < 4")
 }

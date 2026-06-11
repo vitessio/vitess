@@ -17,7 +17,6 @@ limitations under the License.
 package fakediscovery
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,7 +40,7 @@ func TestDiscoverVTGates(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	fake.AddTaggedGates(nil, gates...)
 	fake.AddTaggedGates([]string{"tag1:val1"}, gates[0], gates[1])

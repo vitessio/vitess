@@ -305,7 +305,7 @@ type columns struct {
 
 func (c *columns) ToString() string {
 	buf := bytes.Buffer{}
-	buf.WriteString(fmt.Sprintf("|%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s|",
+	fmt.Fprintf(&buf, "|%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s|",
 		c.columnName,
 		c.dataType,
 		c.fullDataType,
@@ -316,7 +316,7 @@ func (c *columns) ToString() string {
 		getStringToString(c.columnDefault),
 		c.isNullable,
 		c.extra,
-		c.tableName))
+		c.tableName)
 	return buf.String()
 }
 
@@ -568,14 +568,7 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	require.EqualValues(t, "PlanSwitcher", pm["OperatorType"])
 	baselineErr := pm["BaselineErr"].(string)
 
-	// v24+ uses new error message format
-	// v23 and earlier uses old format
-	expectedErr := "VT12001: unsupported: window functions are only supported for single-shard queries"
-	if clusterInstance.VtGateMajorVersion < 24 {
-		expectedErr = "VT12001: unsupported: OVER CLAUSE with sharded keyspace"
-	}
-
-	require.EqualValues(t, expectedErr, baselineErr)
+	require.EqualValues(t, "VT12001: unsupported: window functions are only supported for single-shard queries", baselineErr)
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)
@@ -641,8 +634,6 @@ func getVarValue[T any](t *testing.T, key string, varFunc func() map[string]any)
 		return *new(T)
 	}
 	castValue, ok := value.(T)
-	if !ok {
-		t.Errorf("unexpected type, want: %T, got %T", new(T), value)
-	}
+	assert.True(t, ok, "unexpected type, want: %T, got %T", new(T), value)
 	return castValue
 }

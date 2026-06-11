@@ -225,3 +225,12 @@ List of changes between bootstrap image versions.
 ### Changes
 - Update build to golang 1.26.1
 - Use default-jre-headless instead of default-jdk-headless. A full Java Development Kit is not needed.
+
+
+## [55] - 2026-04-09
+### Changes
+- Update build to golang 1.26.2
+
+## [56] - 2026-05-08
+### Changes
+- Update build to golang 1.26.3

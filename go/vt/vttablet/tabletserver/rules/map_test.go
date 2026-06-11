@@ -17,9 +17,11 @@ limitations under the License.
 package rules
 
 import (
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
@@ -62,9 +64,7 @@ func TestMapRegisterARegisteredSource(t *testing.T) {
 	qri.RegisterSource(denyListQueryRules)
 	defer func() {
 		err := recover()
-		if err == nil {
-			t.Fatalf("should get an error for registering a registered query rule source ")
-		}
+		require.NotNil(t, err, "should get an error for registering a registered query rule source")
 	}()
 	qri.RegisterSource(denyListQueryRules)
 }
@@ -75,26 +75,16 @@ func TestMapSetRulesWithNil(t *testing.T) {
 
 	qri.RegisterSource(denyListQueryRules)
 	err := qri.SetRules(denyListQueryRules, denyRules)
-	if err != nil {
-		t.Errorf("Failed to set denyListQueryRules Rules : %s", err)
-	}
+	assert.NoError(t, err)
 	qrs, err := qri.Get(denyListQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
-	}
-	if !reflect.DeepEqual(qrs, denyRules) {
-		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyListQueryRules)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qri.SetRules(denyListQueryRules, nil)
 
 	qrs, err = qri.Get(denyListQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
-	}
-	if !reflect.DeepEqual(qrs, New()) {
-		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyListQueryRules)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, New(), qrs, "denyListQueryRules")
 }
 
 func TestMapGetSetQueryRules(t *testing.T) {
@@ -106,60 +96,34 @@ func TestMapGetSetQueryRules(t *testing.T) {
 
 	// Test if we can get a Rules without a predefined rule set name
 	qrs, err := qri.Get("Foo")
-	if err == nil {
-		t.Errorf("GetRules shouldn't succeed with 'Foo' as the rule set name")
-	}
-	if qrs == nil {
-		t.Errorf("GetRules should always return empty Rules and never nil")
-	}
-	if !reflect.DeepEqual(qrs, New()) {
-		t.Errorf("Map contains only empty Rules at the beginning")
-	}
+	assert.Error(t, err, "GetRules shouldn't succeed with 'Foo' as the rule set name")
+	assert.NotNil(t, qrs, "GetRules should always return empty Rules and never nil")
+	assert.Equal(t, New(), qrs, "Map contains only empty Rules at the beginning")
 
 	// Test if we can set a Rules without a predefined rule set name
 	err = qri.SetRules("Foo", New())
-	if err == nil {
-		t.Errorf("SetRules shouldn't succeed with 'Foo' as the rule set name")
-	}
+	assert.Error(t, err, "SetRules shouldn't succeed with 'Foo' as the rule set name")
 
 	// Test if we can successfully set Rules previously mocked into Map
 	err = qri.SetRules(denyListQueryRules, denyRules)
-	if err != nil {
-		t.Errorf("Failed to set denylist Rules : %s", err)
-	}
+	assert.NoError(t, err)
 	err = qri.SetRules(denyListQueryRules, denyRules)
-	if err != nil {
-		t.Errorf("Failed to set denylist Rules: %s", err)
-	}
+	assert.NoError(t, err)
 	err = qri.SetRules(customQueryRules, otherRules)
-	if err != nil {
-		t.Errorf("Failed to set custom Rules: %s", err)
-	}
+	assert.NoError(t, err)
 
 	// Test if we can successfully retrieve rules which been set
 	qrs, err = qri.Get(denyListQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
-	}
-	if !reflect.DeepEqual(qrs, denyRules) {
-		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyRules)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qrs, err = qri.Get(denyListQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve denyListQueryRules that has been set: %s", err)
-	}
-	if !reflect.DeepEqual(qrs, denyRules) {
-		t.Errorf("denyListQueryRules retrieved is %v, but the expected value should be %v", qrs, denyRules)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, denyRules, qrs, "denyListQueryRules")
 
 	qrs, err = qri.Get(customQueryRules)
-	if err != nil {
-		t.Errorf("GetRules failed to retrieve customQueryRules that has been set: %s", err)
-	}
-	if !reflect.DeepEqual(qrs, otherRules) {
-		t.Errorf("customQueryRules retrieved is %v, but the expected value should be %v", qrs, customQueryRules)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, otherRules, qrs, "customQueryRules")
 }
 
 func TestMapFilterByPlan(t *testing.T) {
@@ -175,21 +139,13 @@ func TestMapFilterByPlan(t *testing.T) {
 
 	// Test filter by denylist rule
 	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
-	if l := len(qrs.rules); l != 1 {
-		t.Errorf("Select from bannedtable matches %d rules, but we expect %d", l, 1)
-	}
-	if !strings.HasPrefix(qrs.rules[0].Name, "denied_table") {
-		t.Errorf("Select from bannedtable query matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "denied_table")
-	}
+	assert.Len(t, qrs.rules, 1, "Select from bannedtable")
+	assert.Truef(t, strings.HasPrefix(qrs.rules[0].Name, "denied_table"), "Select from bannedtable query matches rule '%s', but we expect rule with prefix 'denied_table'", qrs.rules[0].Name)
 
 	// Test filter by custom rule
 	qrs = qri.FilterByPlan("select cid from t_customer limit 10", planbuilder.PlanSelect, "t_customer")
-	if l := len(qrs.rules); l != 1 {
-		t.Errorf("Select from t_customer matches %d rules, but we expect %d", l, 1)
-	}
-	if !strings.HasPrefix(qrs.rules[0].Name, "customrule_ban_bindvar") {
-		t.Errorf("Select from t_customer matches rule '%s', but we expect rule with prefix '%s'", qrs.rules[0].Name, "customrule_ban_bindvar")
-	}
+	assert.Len(t, qrs.rules, 1, "Select from t_customer")
+	assert.Truef(t, strings.HasPrefix(qrs.rules[0].Name, "customrule_ban_bindvar"), "Select from t_customer matches rule '%s', but we expect rule with prefix 'customrule_ban_bindvar'", qrs.rules[0].Name)
 
 	// Test match two rules: both denylist rule and custom rule will be matched
 	otherRules = New()
@@ -198,9 +154,7 @@ func TestMapFilterByPlan(t *testing.T) {
 	otherRules.Add(qr)
 	qri.SetRules(customQueryRules, otherRules)
 	qrs = qri.FilterByPlan("select * from bannedtable2", planbuilder.PlanSelect, "bannedtable2")
-	if l := len(qrs.rules); l != 2 {
-		t.Errorf("Insert into bannedtable2 matches %d rules: %v, but we expect %d rules to be matched", l, qrs.rules, 2)
-	}
+	assert.Lenf(t, qrs.rules, 2, "Insert into bannedtable2 matches rules: %v", qrs.rules)
 }
 
 func TestMapJSON(t *testing.T) {
@@ -226,7 +180,5 @@ func TestMapJSON(t *testing.T) {
 			"Action":"FAIL_RETRY"
 		}]
 	}`)
-	if got != want {
-		t.Errorf("MapJSON:\n%v, want\n%v", got, want)
-	}
+	assert.Equal(t, want, got, "MapJSON")
 }

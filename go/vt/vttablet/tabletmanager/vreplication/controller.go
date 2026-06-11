@@ -63,10 +63,11 @@ type controller struct {
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
-	id       int32
-	workflow string
-	source   *binlogdatapb.BinlogSource
-	stopPos  string
+	id           int32
+	workflow     string
+	workflowType int32
+	source       *binlogdatapb.BinlogSource
+	stopPos      string
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -88,6 +89,12 @@ type controller struct {
 	tpCells          []string
 	tpTabletTypesStr string
 	tpOptions        discovery.TabletPickerOptions
+}
+
+// workflowTypeName returns the human-readable name for the workflow type
+// (e.g. "OnlineDDL", "Reshard", "MoveTables").
+func (ct *controller) workflowTypeName() string {
+	return binlogdatapb.VReplicationWorkflowType(ct.workflowType).String()
 }
 
 func processWorkflowOptions(params map[string]string) (*vttablet.VReplicationConfig, error) {
@@ -135,6 +142,8 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
+	wfType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)
+	ct.workflowType = int32(wfType)
 	log.Info(fmt.Sprintf("%s creating controller, cell: %v, tabletTypes: %v", ct.logPrefix(), cell, tabletTypesStr))
 
 	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), workflowConfig.MaxTimeToRetryError)

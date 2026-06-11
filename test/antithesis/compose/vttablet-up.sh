@@ -123,10 +123,6 @@ fi
 
 sleep "$sleeptime"
 
-# Create the cell
-# https://vitess.io/blog/2020-04-27-life-of-a-cluster/
-$VTROOT/bin/vtctldclient --server "vtctld:$GRPC_PORT" AddCellInfo --root "/vitess/$CELL" --server-address etcd:2379 "$CELL" || true
-
 # Populate source db conditional args
 source_db_args=()
 if [ "$tablet_role" = "sourceprimary" ]; then

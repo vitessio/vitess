@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -98,9 +99,7 @@ func TestNewBinlogPlayerKeyRange(t *testing.T) {
 	dbClient.Wait()
 	expectFBCRequest(t, fbc, wantTablet, testPos, nil, &topodatapb.KeyRange{End: []byte{0x80}})
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 func TestNewBinlogPlayerTables(t *testing.T) {
@@ -131,9 +130,7 @@ func TestNewBinlogPlayerTables(t *testing.T) {
 	dbClient.Wait()
 	expectFBCRequest(t, fbc, wantTablet, testPos, wantTables, nil)
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestApplyEventsFail ensures the error is recorded in the vreplication table if there's a failure.
@@ -154,9 +151,8 @@ func TestApplyEventsFail(t *testing.T) {
 	dbClient.Wait()
 
 	want := "error in processing binlog event failed query BEGIN, err: err"
-	if err := errfunc(); err == nil || err.Error() != want {
-		t.Errorf("ApplyBinlogEvents err: %v, want %v", err, want)
-	}
+	err := errfunc()
+	require.EqualErrorf(t, err, want, "ApplyBinlogEvents err: %v, want %v", err, want)
 }
 
 var settingsFields []*querypb.Field = []*querypb.Field{
@@ -205,9 +201,7 @@ func TestStopPosEqual(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestStopPosLess ensures player stops if stopPos<pos.
@@ -244,9 +238,7 @@ func TestStopPosLess(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestStopPosGreater ensures player stops if stopPos>pos.
@@ -287,9 +279,7 @@ func TestStopPosGreater(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // TestContextCancel ensures player does not record error or stop if context is canceled.
@@ -333,9 +323,7 @@ func TestContextCancel(t *testing.T) {
 	// Wait for Apply to return,
 	// and call dbClient.Wait to ensure
 	// no new statements were issued.
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 
 	dbClient.Wait()
 }
@@ -361,9 +349,7 @@ func TestRetryOnDeadlock(t *testing.T) {
 
 	dbClient.Wait()
 
-	if err := errfunc(); err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, errfunc())
 }
 
 // applyEvents starts a goroutine to apply events, and returns an error function.
@@ -404,9 +390,7 @@ func TestCreateVReplicationKeyRange(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if got != want {
-		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
-	}
+	assert.Equalf(t, want, got, "CreateVReplication() =\n%v, want\n%v", got, want)
 }
 
 func TestCreateVReplicationTables(t *testing.T) {
@@ -426,9 +410,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 	}
 
 	got := CreateVReplication("Resharding", &bls, "MariaDB/0-1-1083", throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, 481823, "db", 0, 0, false)
-	if got != want {
-		t.Errorf("CreateVReplication() =\n%v, want\n%v", got, want)
-	}
+	assert.Equalf(t, want, got, "CreateVReplication() =\n%v, want\n%v", got, want)
 }
 
 func TestUpdateVReplicationPos(t *testing.T) {
@@ -438,9 +420,7 @@ func TestUpdateVReplicationPos(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0, 0, false)
-	if got != want {
-		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "updateVReplicationPos() = %#v, want %#v", got, want)
 }
 
 func TestUpdateVReplicationTimestamp(t *testing.T) {
@@ -450,25 +430,19 @@ func TestUpdateVReplicationTimestamp(t *testing.T) {
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, replication.Position{GTIDSet: gtid.GTIDSet()}, 88822, 481828, 0, false)
-	if got != want {
-		t.Errorf("updateVReplicationPos() = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "updateVReplicationPos() = %#v, want %#v", got, want)
 }
 
 func TestReadVReplicationPos(t *testing.T) {
 	want := "select pos from _vt.vreplication where id=482821"
 	got := ReadVReplicationPos(482821)
-	if got != want {
-		t.Errorf("ReadVReplicationPos(482821) = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "ReadVReplicationPos(482821) = %#v, want %#v", got, want)
 }
 
 func TestReadVReplicationStatus(t *testing.T) {
 	want := "select pos, state, message from _vt.vreplication where id=482821"
 	got := ReadVReplicationStatus(482821)
-	if got != want {
-		t.Errorf("ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
-	}
+	assert.Equalf(t, want, got, "ReadVReplicationStatus(482821) = %#v, want %#v", got, want)
 }
 
 func TestEncodeString(t *testing.T) {

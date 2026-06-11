@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
-	vtutils "vitess.io/vitess/go/vt/utils"
 )
 
 func TestCloneBackup(t *testing.T) {
@@ -131,7 +130,7 @@ func vtbackupWithClone(t *testing.T) error {
 		"--allow-first-backup",
 		"--db-credentials-file", dbCredentialFile,
 		"--mysql-clone-enabled",
-		vtutils.GetFlagVariantForTests("--mysql-socket"), mysqlSocket.Name(),
+		"--mysql-socket", mysqlSocket.Name(),
 		// Clone from primary instead of restoring from backup.
 		"--restore-with-clone",
 		"--clone-from-primary",

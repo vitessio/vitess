@@ -18,7 +18,6 @@ package utils
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"os"
 	"strings"
 	"time"
@@ -26,27 +25,11 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/flagutil"
-	// "vitess.io/vitess/go/vt/log"
 )
 
 /*
 Contains utility functions for working with flags during the flags refactor project.
 */
-
-// flagVariants returns two variants of the flag name:
-// one with dashes replaced by underscores and one with underscores replaced by dashes.
-func flagVariants(name string) (underscored, dashed string) {
-	prefix := "--"
-	if after, ok := strings.CutPrefix(name, prefix); ok {
-		nameWithoutPrefix := after
-		underscored = prefix + strings.ReplaceAll(nameWithoutPrefix, "-", "_")
-		dashed = prefix + strings.ReplaceAll(nameWithoutPrefix, "_", "-")
-	} else {
-		underscored = strings.ReplaceAll(name, "-", "_")
-		dashed = strings.ReplaceAll(name, "_", "-")
-	}
-	return
-}
 
 // setFlagVar is a generic helper for registering flags.
 // setFunc should be a function with signature func(fs *pflag.FlagSet, p *T, name string, def T, usage string)
@@ -104,44 +87,12 @@ func SetFlagFloat64Var(fs *pflag.FlagSet, p *float64, name string, def float64, 
 	setFlagVar(fs, p, name, def, usage, (*pflag.FlagSet).Float64Var)
 }
 
-// SetFlagVar registers a flag (that implements the pflag.Value interface)
-// using both the dashed and underscored versions of the flag name.
-// The underscored version is hidden and marked as deprecated.
+// SetFlagVar registers a flag (that implements the pflag.Value interface).
 func SetFlagVar(fs *pflag.FlagSet, value pflag.Value, name, usage string) {
 	if strings.Contains(name, "_") {
 		fmt.Printf("[WARNING] Please use flag names with dashes instead of underscores, preparing for deprecation of underscores in flag names")
 	}
 	fs.Var(value, name, usage)
-}
-
-// SetFlagVariantsForTests randomly assigns either the underscored or dashed version of the flag name to the map.
-// This is designed to help catch cases where code does not properly handle both formats during testing.
-func SetFlagVariantsForTests(m map[string]string, key, value string) {
-	underscored, dashed := flagVariants(key)
-	if rand.Int()%2 == 0 {
-		m[underscored] = value
-	} else {
-		m[dashed] = value
-	}
-}
-
-// GetFlagVariantForTests randomly returns either the underscored or dashed version of the flag name.
-func GetFlagVariantForTests(flagName string) string {
-	underscored, dashed := flagVariants(flagName)
-	if rand.Int()%2 == 0 {
-		// fmt.Print("Using flag variant: ", underscored, "\n")
-		return underscored
-	}
-	// fmt.Print("Using flag variant: ", dashed, "\n")
-	return dashed
-}
-
-func GetFlagVariantForTestsByVersion(flagName string, majorVersion int) string {
-	underscored, dashed := flagVariants(flagName)
-	if majorVersion > 22 {
-		return dashed
-	}
-	return underscored
 }
 
 var deprecationWarningsEmitted = make(map[string]bool)

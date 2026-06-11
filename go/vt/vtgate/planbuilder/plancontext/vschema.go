@@ -39,6 +39,12 @@ type VSchema interface {
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
+	// IsSystemVariableDenied reports whether the given system variable name is
+	// in the VTGate-configured denylist. Names are compared case-insensitively.
+	IsSystemVariableDenied(name string) bool
+	// HasDeniedSystemVariables reports whether the VTGate-configured denylist
+	// contains any system variables.
+	HasDeniedSystemVariables() bool
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
@@ -62,6 +68,10 @@ type VSchema interface {
 
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode(keyspace string) (vschemapb.Keyspace_ForeignKeyMode, error)
+
+	// AllowCrossKeyspaceReads returns true if cross-keyspace reads are allowed for the given keyspace.
+	// Returns false if denied by the vtgate flag or the keyspace-level vschema setting.
+	AllowCrossKeyspaceReads(keyspace string) (bool, error)
 
 	// KeyspaceError returns any error in the keyspace vschema.
 	KeyspaceError(keyspace string) error

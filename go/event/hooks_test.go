@@ -18,6 +18,8 @@ package event
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestHooks checks that hooks get triggered.
@@ -31,7 +33,5 @@ func TestHooks(t *testing.T) {
 
 	hooks.Fire()
 
-	if !triggered1 || !triggered2 {
-		t.Errorf("registered hook functions failed to trigger on Fire()")
-	}
+	assert.Truef(t, triggered1 && triggered2, "registered hook functions failed to trigger on Fire()")
 }

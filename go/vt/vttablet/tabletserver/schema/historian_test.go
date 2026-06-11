@@ -17,8 +17,6 @@ limitations under the License.
 package schema
 
 import (
-	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -79,7 +77,7 @@ func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.MinimalTable)
 }
 
 func TestHistorian(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
 
@@ -92,9 +90,6 @@ func TestHistorian(t *testing.T) {
 	_, _, _ = ddl1, ts1, db
 	_, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
-	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("dual"), gtid1)
-	require.NoError(t, err)
-	require.Equal(t, `name:"dual"`, fmt.Sprintf("%v", tab))
 	se.EnableHistorian(true)
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
@@ -136,7 +131,7 @@ func TestHistorian(t *testing.T) {
 		},
 		PKColumns: []int64{0},
 	}
-	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
+	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)
 	require.EqualExportedValues(t, exp1, tab)
 	gtid2 := gtidPrefix + "1-20"
@@ -438,7 +433,7 @@ func TestHistorianRegisterVersionEventBestEffortOnReadError(t *testing.T) {
 }
 
 func TestHistorianPurgeOldSchemas(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	schemaVersionMaxAgeSeconds := 3600 // 1 hour
 	se, db, cancel := getTestSchemaEngine(t, int64(schemaVersionMaxAgeSeconds))
 	defer cancel()

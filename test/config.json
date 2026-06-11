@@ -790,6 +790,18 @@
       ],
       "Needs": []
     },
+    "tabletmanager_disk_health_monitor": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "tabletmanager_disk_health_monitor",
+      "Tags": [],
+      "Needs": []
+    },
     "tabletmanager_zk2": {
       "File": "unused.go",
       "Packages": [
@@ -1307,6 +1319,18 @@
       "File": "unused.go",
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_schema_tracker",
+      "Tags": [],
+      "Needs": []
+    },
+    "vtgate_schematracker_multi_ks_routing": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks_routing"
       ],
       "Args": [],
       "Command": [],

@@ -54,7 +54,7 @@ func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicatio
 	}
 	mtwf := &VReplicationWorkflow{
 		workflowType: MoveTablesWorkflow,
-		ctx:          context.Background(),
+		ctx:          t.Context(),
 		wr:           nil,
 		params:       p,
 		ts:           nil,
@@ -129,7 +129,7 @@ func expectCanSwitchQueries(t *testing.T, tme *testMigraterEnv, keyspace, state 
 // TestCanSwitch validates the logic to determine if traffic can be switched or not
 func TestCanSwitch(t *testing.T) {
 	var wf *VReplicationWorkflow
-	ctx := context.Background()
+	ctx := t.Context()
 	workflowName := "test"
 	p := &VReplicationWorkflowParams{
 		Workflow:       workflowName,
@@ -195,7 +195,7 @@ func TestCanSwitch(t *testing.T) {
 func TestCopyProgress(t *testing.T) {
 	var err error
 	var wf *VReplicationWorkflow
-	ctx := context.Background()
+	ctx := t.Context()
 	workflowName := "test"
 	p := &VReplicationWorkflowParams{
 		Workflow:       workflowName,
@@ -272,7 +272,7 @@ func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
 const defaultMaxAllowedTransactionLagSeconds = 30
 
 func TestMoveTablesV2(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		SourceKeyspace:                  "ks1",
@@ -306,7 +306,7 @@ func TestMoveTablesV2(t *testing.T) {
 // as expected. This test moves tables from one sharded keyspace (ks1)
 // to another sharded keyspace (ks2), but only for the -80 shard.
 func TestPartialMoveTables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	shards := []string{"-80", "80-"}
 	shardsToMove := shards[0:1]
 	p := &VReplicationWorkflowParams{
@@ -393,7 +393,7 @@ func TestPartialMoveTables(t *testing.T) {
 
 // TestPartialMoveTablesShardSubset is a version of TestPartialMoveTables which uses the --shards option.
 func TestPartialMoveTablesShardSubset(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	shards := []string{"-40", "40-80", "80-c0", "c0-"}
 	shardsToMove := shards[0:2]
 	otherShards := shards[2:]
@@ -498,7 +498,7 @@ func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Serv
 }
 
 func TestMoveTablesV2Complete(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		SourceKeyspace:                  "ks1",
@@ -547,7 +547,7 @@ func testReverse(t *testing.T, wf *VReplicationWorkflow) error {
 }
 
 func TestMoveTablesV2SwitchTraffic(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		SourceKeyspace:                  "ks1",
@@ -604,7 +604,7 @@ func TestMoveTablesV2SwitchTraffic(t *testing.T) {
 }
 
 func TestMoveTablesV2Cancel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	p := &VReplicationWorkflowParams{
 		Workflow:                        "test",
 		SourceKeyspace:                  "ks1",
@@ -651,7 +651,7 @@ func TestMoveTablesV2Cancel(t *testing.T) {
 }
 
 func TestReshardV2(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceShards := []string{"-40", "40-"}
 	targetShards := []string{"-80", "80-"}
 	p := &VReplicationWorkflowParams{
@@ -687,7 +687,7 @@ func TestReshardV2(t *testing.T) {
 }
 
 func TestVRWSchemaValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceShards := []string{"-80", "80-"}
 	targetShards := []string{"-40", "40-80", "80-c0", "c0-"}
 	p := &VReplicationWorkflowParams{
@@ -724,7 +724,7 @@ func TestVRWSchemaValidation(t *testing.T) {
 }
 
 func TestReshardV2Cancel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	sourceShards := []string{"-40", "40-"}
 	targetShards := []string{"-80", "80-"}
 	p := &VReplicationWorkflowParams{
