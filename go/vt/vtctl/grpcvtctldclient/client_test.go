@@ -137,3 +137,38 @@ func TestGetKeyspaces(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func TestSetKeyspaceReplicationSourcePolicy(t *testing.T) {
+	ctx := t.Context()
+
+	ts := memorytopo.NewServer(ctx, "cell1")
+	defer ts.Close()
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	testutil.WithTestServer(ctx, t, vtctld, func(t *testing.T, client vtctldclient.VtctldClient) {
+		expected := &vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse{
+			Keyspace: &topodatapb.Keyspace{
+				ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+				},
+			},
+		}
+		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+			Name:     "testkeyspace",
+			Keyspace: &topodatapb.Keyspace{},
+		})
+
+		resp, err := client.SetKeyspaceReplicationSourcePolicy(ctx, &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+			Keyspace:     "testkeyspace",
+			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+		})
+		assert.NoError(t, err)
+		utils.MustMatch(t, expected, resp)
+
+		client.Close()
+		_, err = client.SetKeyspaceReplicationSourcePolicy(ctx, &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{})
+		assert.Error(t, err)
+	})
+}

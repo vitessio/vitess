@@ -1185,6 +1185,24 @@ func TestFixReplicaRdonlyReplicationSourcePolicy(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDesiredReplicationSourceForFixReplicaUsesPrimaryForReplica(t *testing.T) {
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	primary := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:  topodatapb.TabletType_PRIMARY,
+	}
+	replica := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Type:  topodatapb.TabletType_REPLICA,
+	}
+
+	got, err := desiredReplicationSourceForFixReplica(t.Context(), replica, primary, durability, nil)
+	require.NoError(t, err)
+	assert.Equal(t, topoproto.TabletAliasString(primary.Alias), topoproto.TabletAliasString(got.Alias))
+}
+
 // TestReconcileStaleTopoPrimary verifies that reconcileStaleTopoPrimary updates the topology record of a
 // stale primary tablet to REPLICA, regardless of whether the best-effort demotion RPC to the tablet succeeds.
 func TestReconcileStaleTopoPrimary(t *testing.T) {

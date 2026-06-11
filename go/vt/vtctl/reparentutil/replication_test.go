@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -235,6 +236,38 @@ func TestFindPositionsOfAllCandidates_ErrorNotDuplicated(t *testing.T) {
 		"cause message must appear exactly once in the wrapped error")
 }
 
+func TestSetReplicationSourceWithReplicaSourcedRdonly(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+
+	primary := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_PRIMARY)
+	replica := replicationSourceTestTablet("zone1", 101, topodatapb.TabletType_REPLICA)
+	rdonly := replicationSourceTestTablet("zone1", 200, topodatapb.TabletType_RDONLY)
+
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{
+		ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+		},
+	}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+	for _, tablet := range []*topodatapb.Tablet{primary, replica, rdonly} {
+		require.NoError(t, ts.CreateTablet(ctx, tablet))
+	}
+	_, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = primary.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	tmc := &setReplicationSourceTestTMClient{}
+	require.NoError(t, SetReplicationSource(ctx, ts, tmc, rdonly))
+	assert.Equal(t, topoproto.TabletAliasString(rdonly.Alias), tmc.tabletAlias)
+	assert.Equal(t, topoproto.TabletAliasString(replica.Alias), tmc.parentAlias)
+}
+
 func TestDesiredReplicationSource(t *testing.T) {
 	t.Parallel()
 
@@ -244,6 +277,8 @@ func TestDesiredReplicationSource(t *testing.T) {
 	primary := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_PRIMARY)
 	replica := replicationSourceTestTablet("zone1", 101, topodatapb.TabletType_REPLICA)
 	otherReplica := replicationSourceTestTablet("zone2", 102, topodatapb.TabletType_REPLICA)
+	wrongShardReplica := replicationSourceTestTablet("zone1", 103, topodatapb.TabletType_REPLICA)
+	wrongShardReplica.Shard = "-80"
 	rdonly := replicationSourceTestTablet("zone1", 200, topodatapb.TabletType_RDONLY)
 	tabletMap := map[string]*topo.TabletInfo{
 		topoproto.TabletAliasString(primary.Alias):      {Tablet: primary},
@@ -282,6 +317,21 @@ func TestDesiredReplicationSource(t *testing.T) {
 			wantAlias: topoproto.TabletAliasString(replica.Alias),
 		},
 		{
+			name:   "rdonly with replica policy falls back to other cell replica",
+			tablet: rdonly,
+			config: &topodatapb.ReplicationSourceConfig{RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA},
+			tabletMap: map[string]*topo.TabletInfo{
+				"nil": nil,
+				topoproto.TabletAliasString(primary.Alias):      {Tablet: primary},
+				topoproto.TabletAliasString(otherReplica.Alias): {Tablet: otherReplica},
+				topoproto.TabletAliasString(wrongShardReplica.Alias): {
+					Tablet: wrongShardReplica,
+				},
+				topoproto.TabletAliasString(rdonly.Alias): {Tablet: rdonly},
+			},
+			wantAlias: topoproto.TabletAliasString(otherReplica.Alias),
+		},
+		{
 			name:   "rdonly with replica policy fails without replica",
 			tablet: rdonly,
 			config: &topodatapb.ReplicationSourceConfig{RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA},
@@ -309,6 +359,56 @@ func TestDesiredReplicationSource(t *testing.T) {
 	}
 }
 
+func TestDesiredReplicationSourceErrors(t *testing.T) {
+	t.Parallel()
+
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	primary := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_PRIMARY)
+	rdonly := replicationSourceTestTablet("zone1", 200, topodatapb.TabletType_RDONLY)
+
+	tests := []struct {
+		name    string
+		primary *topodatapb.Tablet
+		tablet  *topodatapb.Tablet
+		config  *topodatapb.ReplicationSourceConfig
+		wantErr string
+	}{
+		{
+			name:    "primary missing alias",
+			primary: &topodatapb.Tablet{},
+			tablet:  rdonly,
+			wantErr: "primary tablet must have an alias",
+		},
+		{
+			name:    "tablet missing alias",
+			primary: primary,
+			tablet:  &topodatapb.Tablet{},
+			wantErr: "tablet must have an alias",
+		},
+		{
+			name:    "unsupported rdonly policy",
+			primary: primary,
+			tablet:  rdonly,
+			config: &topodatapb.ReplicationSourceConfig{
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy(42),
+			},
+			wantErr: "unsupported rdonly replication source policy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := DesiredReplicationSource(tt.primary, tt.tablet, nil, durability, tt.config)
+			require.ErrorContains(t, err, tt.wantErr)
+			assert.Nil(t, got)
+		})
+	}
+}
+
 type stopRdonlyReplicationTestTMClient struct {
 	tmclient.TabletManagerClient
 
@@ -317,6 +417,19 @@ type stopRdonlyReplicationTestTMClient struct {
 
 	statusRead []string
 	stopped    []string
+}
+
+type setReplicationSourceTestTMClient struct {
+	tmclient.TabletManagerClient
+
+	tabletAlias string
+	parentAlias string
+}
+
+func (fake *setReplicationSourceTestTMClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
+	fake.tabletAlias = topoproto.TabletAliasString(tablet.Alias)
+	fake.parentAlias = topoproto.TabletAliasString(parent)
+	return nil
 }
 
 func (fake *stopRdonlyReplicationTestTMClient) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
@@ -445,6 +558,79 @@ func TestStopRdonlyReplicatingFromTabletErrors(t *testing.T) {
 			stopped, err := stopRdonlyReplicatingFromTablet(t.Context(), tt.tmc, tt.tabletMap, tt.tablet)
 			require.ErrorContains(t, err, tt.wantErr)
 			assert.Nil(t, stopped)
+		})
+	}
+}
+
+func TestReplicationStatusSourceMatchesTablet(t *testing.T) {
+	t.Parallel()
+
+	tablet := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	tabletWithDifferentMysqlHost := replicationSourceTestTablet("zone1", 100, topodatapb.TabletType_REPLICA)
+	tabletWithDifferentMysqlHost.MysqlHostname = "mysql-host"
+
+	tests := []struct {
+		name    string
+		status  *replicationdatapb.Status
+		tablet  *topodatapb.Tablet
+		want    bool
+		wantErr string
+	}{
+		{
+			name:    "nil status",
+			tablet:  tablet,
+			wantErr: "replication status is nil",
+		},
+		{
+			name:    "nil tablet",
+			status:  &replicationdatapb.Status{},
+			wantErr: "tablet is nil",
+		},
+		{
+			name:   "no source",
+			status: &replicationdatapb.Status{},
+			tablet: tablet,
+		},
+		{
+			name: "matches hostname",
+			status: &replicationdatapb.Status{
+				SourceHost: tablet.Hostname,
+				SourcePort: tablet.MysqlPort,
+			},
+			tablet: tablet,
+			want:   true,
+		},
+		{
+			name: "matches tablet hostname",
+			status: &replicationdatapb.Status{
+				SourceHost: tablet.Hostname,
+				SourcePort: tablet.MysqlPort,
+			},
+			tablet: tabletWithDifferentMysqlHost,
+			want:   true,
+		},
+		{
+			name: "host does not match",
+			status: &replicationdatapb.Status{
+				SourceHost: "other-host",
+				SourcePort: tablet.MysqlPort,
+			},
+			tablet: tablet,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := replicationStatusSourceMatchesTablet(tt.status, tt.tablet)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

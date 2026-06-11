@@ -193,6 +193,29 @@ func TestRequiresOrderedExecution(t *testing.T) {
 	}
 }
 
+func TestRdonlyReplicationSourceIsReplica(t *testing.T) {
+	tablet := func(uid uint32, tabletType topodatapb.TabletType) *topodatapb.Tablet {
+		return &topodatapb.Tablet{
+			Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			Keyspace: "ks",
+			Shard:    "0",
+			Type:     tabletType,
+		}
+	}
+
+	shardPrimary := tablet(100, topodatapb.TabletType_PRIMARY)
+	replica := tablet(101, topodatapb.TabletType_REPLICA)
+	rdonly := tablet(200, topodatapb.TabletType_RDONLY)
+	ca := &clusterAnalysis{shardPrimary: shardPrimary}
+
+	assert.True(t, rdonlyReplicationSourceIsReplica(ca, replica, rdonly))
+	assert.False(t, rdonlyReplicationSourceIsReplica(ca, rdonly, rdonly))
+
+	wrongShardReplica := tablet(102, topodatapb.TabletType_REPLICA)
+	wrongShardReplica.Shard = "-80"
+	assert.False(t, rdonlyReplicationSourceIsReplica(ca, wrongShardReplica, rdonly))
+}
+
 func TestGetDetectionAnalysisProblem(t *testing.T) {
 	problem := GetDetectionAnalysisProblem(DeadPrimary)
 	require.NotNil(t, problem)

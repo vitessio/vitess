@@ -170,3 +170,25 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 		})
 	}
 }
+
+func TestGetReplicationSourceConfig(t *testing.T) {
+	defer db.ClearVTOrcDatabase()
+
+	want := &topodatapb.ReplicationSourceConfig{
+		RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+	}
+	keyspaceInfo := &topo.KeyspaceInfo{
+		Keyspace: &topodatapb.Keyspace{
+			ReplicationSourceConfig: want,
+		},
+	}
+	keyspaceInfo.SetKeyspaceName("ks")
+	require.NoError(t, SaveKeyspace(keyspaceInfo))
+
+	got, err := GetReplicationSourceConfig("ks")
+	require.NoError(t, err)
+	require.Equal(t, want.RdonlyPolicy, got.RdonlyPolicy)
+
+	_, err = GetReplicationSourceConfig("missing")
+	require.EqualError(t, err, ErrKeyspaceNotFound.Error())
+}
