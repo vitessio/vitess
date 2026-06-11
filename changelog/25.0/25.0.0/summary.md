@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[Query Serving](#bug-fixes-query-serving)**
+        - [OLAP mode field metadata for system schemas](#olap-field-metadata-system-schemas)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,17 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-query-serving"/>Query Serving</a>
+
+#### <a id="olap-field-metadata-system-schemas"/>OLAP mode field metadata for system schemas</a>
+
+In OLAP (streaming) mode, queries against `information_schema`, `mysql`, and `performance_schema` returned incorrect field metadata. The `Database` property of result fields was rewritten to the keyspace name instead of preserving the actual schema name. For example, `SELECT * FROM information_schema.tables` would return fields with `Database` set to the keyspace name instead of `information_schema`.
+
+This affected schema-introspection tools and ORMs that rely on field metadata to identify which schema a column belongs to. The OLTP (non-streaming) path already handled this correctly.
+
+The fix aligns the streaming path with the OLTP path: field metadata is only rewritten for fields that belong to the physical MySQL database backing the keyspace, leaving system schema fields intact.
+
+See [#20265](https://github.com/vitessio/vitess/pull/20265) for details.
