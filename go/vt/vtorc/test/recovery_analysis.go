@@ -130,8 +130,12 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	if info.ShardPrimaryTabletInfo == nil {
 		rowMap["shard_primary_tablet_info"] = sqlutils.CellData{Valid: false}
 	} else {
-		res, _ := prototext.Marshal(info.ShardPrimaryTabletInfo)
-		rowMap["shard_primary_tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
+		res, err := prototext.Marshal(info.ShardPrimaryTabletInfo)
+		if err != nil {
+			rowMap["shard_primary_tablet_info"] = sqlutils.CellData{Valid: false}
+		} else {
+			rowMap["shard_primary_tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
+		}
 	}
 	rowMap["last_check_partial_success"] = sqlutils.CellData{String: strconv.Itoa(info.LastCheckPartialSuccess), Valid: true}
 	rowMap["replica_net_timeout"] = sqlutils.CellData{String: strconv.Itoa(int(info.ReplicaNetTimeout)), Valid: true}
