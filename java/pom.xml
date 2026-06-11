@@ -241,7 +241,7 @@
       <!-- Add "dependency:analyze" to "verify" goal. -->
       <plugin>
         <artifactId>maven-dependency-plugin</artifactId>
-        <version>3.10.0</version>
+        <version>3.11.0</version>
         <executions>
           <execution>
             <id>analyze</id>
