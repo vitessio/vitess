@@ -218,6 +218,12 @@ jobs:
           working-directory: go
           version: ${{ steps.golangci_lint_version.outputs.version }}
 
+      - name: Check license headers
+        if: steps.changes.outputs.go_files == 'true'
+        timeout-minutes: 5
+        run: |
+          tools/check_license_headers.sh
+
       - name: Run go mod tidy
         if: steps.changes.outputs.go_files == 'true'
         run: |
