@@ -27,6 +27,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/safehtml/template"
@@ -49,7 +50,7 @@ import (
 )
 
 var (
-	connMap   map[string]*fakeConn
+	connMap   map[string]queryservice.QueryService
 	connMapMu sync.Mutex
 )
 
@@ -61,7 +62,7 @@ func testChecksum(t *testing.T, want, got int64) {
 func init() {
 	tabletconn.RegisterDialer("fake_gateway", tabletDialer)
 	tabletconntest.SetProtocol("go.vt.discovery.healthcheck_test", "fake_gateway")
-	connMap = make(map[string]*fakeConn)
+	connMap = make(map[string]queryservice.QueryService)
 	refreshInterval = time.Minute
 }
 
@@ -855,6 +856,136 @@ func TestRemoveTablet(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
+// TestStaleUpdateFromCanceledCheckConn is a regression test for a race
+// between ReplaceTablet and the replaced tablet's checkConn goroutine.
+//
+// When the topology watcher observes that a tablet's address changed (same
+// alias, new host or port map), it calls ReplaceTablet, which cancels the
+// old tabletHealthCheck and registers a new one under the same alias. The
+// old checkConn goroutine reacts to the cancellation from inside stream()
+// and issues one final updateHealth(Serving: false) from its error path
+// without re-checking its own context. Because updateHealth only verifies
+// that the alias still exists in healthByAlias — not that the update came
+// from the currently registered tabletHealthCheck — that stale update can be
+// applied after the replacement connection has already reported
+// Serving: true:
+//
+//  1. ReplaceTablet cancels the old checkConn and registers a new
+//     tabletHealthCheck for the same alias.
+//  2. The new connection receives Serving: true; the tablet is added to the
+//     healthy list.
+//  3. The old goroutine's final updateHealth(Serving: false) lands, removing
+//     the tablet from the healthy list and poisoning healthData.
+//  4. Every subsequent response on the new connection is a trivialUpdate
+//     (the new tabletHealthCheck's own Serving field is still true), so
+//     recomputeHealthy never runs again: healthData shows a healthy, serving
+//     tablet with a live stream while the healthy (routing) list permanently
+//     omits it. The tablet receives zero traffic until an unrelated
+//     non-trivial event in the same keyspace/shard/type triggers a
+//     recompute.
+//
+// Step 3's timing is scheduler-dependent (the dying goroutine can be delayed
+// between its stream returning and acquiring hc.mu), so the old connection's
+// stream is gated: the canceled checkConn goroutine stays parked inside
+// stream() until the test releases it, and synctest.Wait() guarantees each
+// step is fully applied before the next.
+func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, "cell")
+		defer ts.Close()
+		hc := createTestHc(ctx, ts)
+		defer hc.Close()
+
+		target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+
+		// The tablet before the restart, with its stream gated on cancellation.
+		oldTablet := createTestTablet(0, "cell", "a")
+		oldTablet.Type = topodatapb.TabletType_REPLICA
+		oldInput := make(chan *querypb.StreamHealthResponse)
+		oldConn := &staleStreamConn{
+			fakeConn: createFakeConn(oldTablet, oldInput),
+			release:  make(chan struct{}),
+		}
+		connMapMu.Lock()
+		connMap[TabletToMapKey(oldTablet)] = oldConn
+		connMapMu.Unlock()
+
+		// The same tablet after the restart: same alias, new ports.
+		newTablet := createTestTablet(0, "cell", "a")
+		newTablet.Type = topodatapb.TabletType_REPLICA
+		newTablet.PortMap["vt"] = 5
+		newTablet.PortMap["grpc"] = 6
+		newInput := make(chan *querypb.StreamHealthResponse)
+		createFakeConn(newTablet, newInput)
+
+		shr := &querypb.StreamHealthResponse{
+			TabletAlias:   oldTablet.Alias,
+			Target:        target,
+			Serving:       true,
+			RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		}
+
+		hc.AddTablet(oldTablet)
+		oldInput <- shr
+		synctest.Wait()
+		require.Len(t, hc.GetHealthyTabletStats(target), 1, "tablet should be healthy before the restart")
+
+		// The topology watcher notices the restarted tablet and replaces it.
+		// The old checkConn goroutine is canceled but stays parked inside its
+		// stream, before it runs its error path.
+		hc.ReplaceTablet(oldTablet, newTablet)
+
+		// The new connection reports Serving: true; the tablet becomes healthy.
+		newInput <- shr
+		synctest.Wait()
+		require.Len(t, hc.GetHealthyTabletStats(target), 1, "tablet should be healthy again after the replace")
+
+		// Release the canceled goroutine. Its stream now returns an error and
+		// the checkConn error path issues the final stale
+		// updateHealth(Serving: false) — after the replacement connection has
+		// already reported healthy.
+		close(oldConn.release)
+		synctest.Wait()
+
+		// The tablet keeps reporting good health on the new connection: a
+		// trivialUpdate, like the steady-state updates of a healthy replica.
+		newInput <- shr
+		synctest.Wait()
+
+		// The healthcheck cache (healthData) shows a serving tablet with a
+		// live stream, so the healthy (routing) list must include it as well.
+		healthy := hc.GetHealthyTabletStats(target)
+		require.Len(t, healthy, 1,
+			"tablet is serving and streaming health but missing from the healthy list: stale update from the canceled checkConn poisoned the healthy list")
+		assert.True(t, healthy[0].Serving)
+	})
+}
+
+// staleStreamConn wraps fakeConn so that a canceled stream parks until
+// release is closed and then fails like a canceled gRPC stream, modeling the
+// window between a checkConn goroutine's cancellation and its final
+// updateHealth.
+type staleStreamConn struct {
+	*fakeConn
+	release chan struct{}
+}
+
+// StreamHealth implements queryservice.QueryService.
+func (c *staleStreamConn) StreamHealth(ctx context.Context, callback func(shr *querypb.StreamHealthResponse) error) error {
+	for {
+		select {
+		case shr := <-c.hcChan:
+			if err := callback(shr); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			<-c.release
+			return ctx.Err()
+		}
+	}
+}
+
 // When an external primary failover is performed,
 // the demoted primary will advertise itself as a `PRIMARY`
 // tablet until it recognizes that it was demoted,
@@ -1268,13 +1399,18 @@ func TestLoadTabletsTrigger(t *testing.T) {
 	}
 	hc.AddTablet(tablet1)
 
+	hc.mu.Lock()
+	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(tablet1.Alias))]
+	hc.mu.Unlock()
+	require.NotNil(t, thc)
+
 	numTriggers := 10
 	for range numTriggers {
 		// Since the previous target was a primary, and there are no other
 		// primary tablets for the given keyspace shard, we will see the healtcheck
 		// send on the loadTablets trigger. We just want to verify the information
 		// there is correct.
-		hc.updateHealth(th, prevTarget, false, false)
+		hc.updateHealth(thc, th, prevTarget, false, false)
 	}
 
 	ch := hc.GetLoadTabletsTrigger()

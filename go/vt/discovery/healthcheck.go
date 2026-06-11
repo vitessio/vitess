@@ -523,7 +523,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	delete(hc.healthByAlias, tabletAlias)
 }
 
-func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, up bool) {
+func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, up bool) {
 	// hc.healthByAlias is authoritative, it should be updated
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -531,9 +531,12 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(th.Tablet.Alias))
 	// let's be sure that this tablet hasn't been deleted from the authoritative map
 	// so that we're not racing to update it and in effect re-adding a copy of the
-	// tablet record that was deleted
-	if _, ok := hc.healthByAlias[tabletAlias]; !ok {
-		hc.logger().Infof("Tablet %v has been deleted, skipping health update", th.Tablet)
+	// tablet record that was deleted. Also verify that the update was issued by the
+	// tabletHealthCheck currently registered for this alias. After a ReplaceTablet,
+	// the canceled checkConn goroutine of the replaced tablet can still deliver one
+	// final update, which must not overwrite the state reported by its replacement.
+	if registered, ok := hc.healthByAlias[tabletAlias]; !ok || registered != thc {
+		hc.logger().Infof("Tablet %v has been deleted or replaced, skipping health update", th.Tablet)
 		return
 	}
 
