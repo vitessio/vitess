@@ -19,7 +19,13 @@ if ! cd go/vt/sqlparser/ ; then
 fi
 
 mv $CUR $TMP
+<<<<<<< HEAD
 output=$(go run ./goyacc -fo $CUR sql.y)
+||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
+output=$(go run github.com/vitessio/goyacc -o $CUR sql.y)
+=======
+output=$(go tool -modfile=../../../tools/goyacc/go.mod goyacc -o $CUR sql.y)
+>>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 expectedOutput=$'\nconflicts: 5 shift/reduce'
 
 if [[ "$output" != "$expectedOutput" ]]; then
@@ -28,7 +34,15 @@ if [[ "$output" != "$expectedOutput" ]]; then
     exit 1
 fi
 
+<<<<<<< HEAD
 gofmt -w $CUR
+||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
+go run golang.org/x/tools/cmd/goimports@034e59c473362f8f2be47694d98fd3f12a1ad497 -local "vitess.io/vitess" -w $CUR
+go tool gofumpt -w $CUR
+=======
+go tool -modfile=../../../tools/goimports/go.mod goimports -local "vitess.io/vitess" -w $CUR
+go tool -modfile=../../../tools/gofumpt/go.mod gofumpt -w $CUR
+>>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 
 if ! diff -q $CUR $TMP > /dev/null ; then
         echo "ERROR: Regenerated parser $TMP does not match current version $(pwd)/sql.go:"

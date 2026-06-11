@@ -22,4 +22,10 @@ if [[ -n "$JUNIT_OUTPUT" ]]; then
 	GOTESTSUM_ARGS+=("--junitfile" "$JUNIT_OUTPUT")
 fi
 
+<<<<<<< HEAD
 go tool gotestsum "${GOTESTSUM_ARGS[@]}" --packages "$PACKAGES" -- -v -count=1 "$@" -args -alsologtostderr
+||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
+go tool gotestsum "${GOTESTSUM_ARGS[@]}" --packages "$PACKAGES" -- -v -count=1 "$@"
+=======
+go tool -modfile=tools/gotestsum/go.mod gotestsum "${GOTESTSUM_ARGS[@]}" --packages "$PACKAGES" -- -v -count=1 "$@"
+>>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))

@@ -246,11 +246,6 @@ java_test:
 	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
-install_protoc-gen-go:
-	GOBIN=$(VTROOTBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -m -f '{{ .Version }}' google.golang.org/protobuf)
-	GOBIN=$(VTROOTBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0 # the GRPC compiler its own pinned version
-	GOBIN=$(VTROOTBIN) go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@$(shell go list -m -f '{{ .Version }}' github.com/planetscale/vtprotobuf)
-
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
@@ -261,11 +256,11 @@ ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
 
-$(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
+$(PROTO_GO_OUTS): minimaltools proto/*.proto
 	$(VTROOT)/bin/protoc \
-		--go_out=. --plugin protoc-gen-go="${VTROOTBIN}/protoc-gen-go" \
-		--go-grpc_out=. --plugin protoc-gen-go-grpc="${VTROOTBIN}/protoc-gen-go-grpc" \
-		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${VTROOTBIN}/protoc-gen-go-vtproto" \
+		--go_out=. --plugin protoc-gen-go="$(shell go tool -n protoc-gen-go)" \
+		--go-grpc_out=. --plugin protoc-gen-go-grpc="$(shell go tool -n protoc-gen-go-grpc)" \
+		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="$(shell go tool -n protoc-gen-go-vtproto)" \
 		--go-vtproto_opt=features=marshal+unmarshal+size+pool+clone \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
@@ -368,6 +363,26 @@ minimaltools:
 dependency_check:
 	./tools/dependency_check.sh
 
+<<<<<<< HEAD
+||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
+# Checks for formatting and linting errors.
+lint:
+	golangci-lint run ./go/...
+
+# Applies autofixes for formatting and linting errors if supported.
+lint-fix:
+	golangci-lint run --fix ./go/...
+
+=======
+# Checks for formatting and linting errors.
+lint:
+	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run ./go/...
+
+# Applies autofixes for formatting and linting errors if supported.
+lint-fix:
+	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run --fix ./go/...
+
+>>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 vtadmin_web_install:
 	cd web/vtadmin && npm install
 
@@ -379,7 +394,13 @@ vtadmin_web_proto_types: vtadmin_web_install
 
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
+<<<<<<< HEAD
 	go fmt ./go/vt/vtadmin/
+||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
+	go tool gofumpt -w ./go/vt/vtadmin/
+=======
+	go tool -modfile=tools/gofumpt/go.mod gofumpt -w ./go/vt/vtadmin/
+>>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh
