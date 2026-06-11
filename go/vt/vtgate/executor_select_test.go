@@ -662,6 +662,7 @@ func TestStreamBuffering(t *testing.T) {
 		econtext.NewSafeSession(session),
 		"select id from music_user_map where id = 1",
 		nil,
+		false,
 		func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
@@ -739,6 +740,7 @@ func TestStreamLimitOffset(t *testing.T) {
 		econtext.NewSafeSession(session),
 		"select id, textcol from user order by id limit 2 offset 2",
 		nil,
+		false,
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil

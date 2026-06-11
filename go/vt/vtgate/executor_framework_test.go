@@ -345,6 +345,7 @@ func executorStream(ctx context.Context, executor *Executor, sql string) (qr *sq
 		econtext.NewSafeSession(nil),
 		sql,
 		nil,
+		false,
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil
