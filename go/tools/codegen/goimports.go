@@ -49,9 +49,9 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 }
 
 // moduleRoot returns the root directory of the enclosing vitess module.
-// goimports and gofumpt live in their own modules under tools/, so their
-// modfiles must be addressed relative to the repository root, regardless of
-// the caller's working directory.
+// goimports lives in its own module under tools/, so its modfile must be
+// addressed relative to the repository root, regardless of the caller's
+// working directory.
 var moduleRoot = sync.OnceValues(func() (string, error) {
 	out, err := exec.Command("go", "env", "GOMOD").Output()
 	if err != nil {
@@ -65,33 +65,21 @@ var moduleRoot = sync.OnceValues(func() (string, error) {
 })
 
 func GoImports(fullPath string) error {
-<<<<<<< HEAD
 	// we need to run both gofmt and goimports because goimports does not support the
 	// simplification flag (-s) that our static linter checks require.
 
 	cmd := exec.Command("gofmt", "-s", "-w", fullPath)
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
-=======
-	root, err := moduleRoot()
-	if err != nil {
-		return err
-	}
-
-	cmd := exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "goimports", "go.mod"), "goimports", "-local", "vitess.io/vitess", "-w", fullPath)
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-<<<<<<< HEAD
-	cmd = exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	cmd = exec.Command("go", "tool", "gofumpt", "-w", fullPath)
-=======
-	cmd = exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "gofumpt", "go.mod"), "gofumpt", "-w", fullPath)
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
+	root, err := moduleRoot()
+	if err != nil {
+		return err
+	}
+
+	cmd = exec.Command("go", "tool", "-modfile="+filepath.Join(root, "tools", "goimports", "go.mod"), "goimports", "-local", "vitess.io/vitess", "-w", fullPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return err

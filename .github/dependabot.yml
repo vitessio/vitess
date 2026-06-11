@@ -18,10 +18,8 @@ updates:
 
   - package-ecosystem: "gomod"
     directories:
-      - "/tools/gofumpt"
       - "/tools/goimports"
       - "/tools/gotestsum"
-      - "/tools/goyacc"
     schedule:
       interval: "weekly"
     cooldown:

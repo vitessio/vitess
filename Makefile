@@ -363,26 +363,6 @@ minimaltools:
 dependency_check:
 	./tools/dependency_check.sh
 
-<<<<<<< HEAD
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-# Checks for formatting and linting errors.
-lint:
-	golangci-lint run ./go/...
-
-# Applies autofixes for formatting and linting errors if supported.
-lint-fix:
-	golangci-lint run --fix ./go/...
-
-=======
-# Checks for formatting and linting errors.
-lint:
-	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run ./go/...
-
-# Applies autofixes for formatting and linting errors if supported.
-lint-fix:
-	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run --fix ./go/...
-
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 vtadmin_web_install:
 	cd web/vtadmin && npm install
 
@@ -394,13 +374,7 @@ vtadmin_web_proto_types: vtadmin_web_install
 
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
-<<<<<<< HEAD
 	go fmt ./go/vt/vtadmin/
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	go tool gofumpt -w ./go/vt/vtadmin/
-=======
-	go tool -modfile=tools/gofumpt/go.mod gofumpt -w ./go/vt/vtadmin/
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh

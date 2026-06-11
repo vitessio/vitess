@@ -18,20 +18,8 @@ all: grpcvtctldclient localvtctldclient
 
 grpcvtctldclient:
 	go generate ../$@/...
-<<<<<<< HEAD
 	gofmt -w ../$@/client_gen.go
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	go tool gofumpt -w ../$@/client_gen.go
-=======
-	go tool -modfile=../../../../tools/gofumpt/go.mod gofumpt -w ../$@/client_gen.go
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
 
 localvtctldclient:
 	go generate ../$@/...
-<<<<<<< HEAD
 	gofmt -w ../$@/client_gen.go
-||||||| parent of dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
-	go tool gofumpt -w ../$@/client_gen.go
-=======
-	go tool -modfile=../../../../tools/gofumpt/go.mod gofumpt -w ../$@/client_gen.go
->>>>>>> dc9b73d86d (build: move dev tools into per-tool Go modules (#20293))
