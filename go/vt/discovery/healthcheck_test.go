@@ -1368,9 +1368,7 @@ func TestLoadTabletsTrigger(t *testing.T) {
 	}
 	hc.AddTablet(tablet1)
 
-	hc.mu.Lock()
-	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(tablet1.Alias))]
-	hc.mu.Unlock()
+	thc := hc.registeredHealthCheck(tablet1.Alias)
 	require.NotNil(t, thc)
 
 	numTriggers := 10

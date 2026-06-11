@@ -903,11 +903,17 @@ func (hc *HealthCheckImpl) GetTabletHealth(kst KeyspaceShardTabletType, alias *t
 	return nil, fmt.Errorf("could not find tablet: %s", alias.String())
 }
 
+// registeredHealthCheck returns the tabletHealthCheck currently registered
+// for the given alias, or nil if there is none.
+func (hc *HealthCheckImpl) registeredHealthCheck(alias *topodata.TabletAlias) *tabletHealthCheck {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	return hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
+}
+
 // TabletConnection returns the Connection to a given tablet.
 func (hc *HealthCheckImpl) TabletConnection(ctx context.Context, alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error) {
-	hc.mu.Lock()
-	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
-	hc.mu.Unlock()
+	thc := hc.registeredHealthCheck(alias)
 	if thc == nil || thc.Conn == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}

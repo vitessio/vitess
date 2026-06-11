@@ -33,7 +33,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func checkOpCounts(t *testing.T, prevCounts, deltas map[string]int64) map[string]int64 {
@@ -830,9 +829,7 @@ func TestDeadlockBetweenTopologyWatcherAndHealthCheck(t *testing.T) {
 		// Refetch the registered tabletHealthCheck each iteration: the topology
 		// watcher concurrently replaces it, and during the remove-to-add gap of
 		// ReplaceTablet there is none registered at all.
-		hc.mu.Lock()
-		thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(tablet1.Alias))]
-		hc.mu.Unlock()
+		thc := hc.registeredHealthCheck(tablet1.Alias)
 		if thc == nil {
 			continue
 		}
