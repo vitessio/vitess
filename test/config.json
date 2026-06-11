@@ -762,6 +762,20 @@
         "consul"
       ]
     },
+    "tabletmanager_query_throttler": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/tabletmanager/query_throttler"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "tabletmanager_query_throttler",
+      "Tags": [
+        "site_test"
+      ],
+      "Needs": []
+    },
     "tabletmanager_throttler_topo": {
       "File": "unused.go",
       "Packages": [

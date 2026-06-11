@@ -712,6 +712,11 @@ func (client *localVtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctl
 	return client.s.UpdateCellsAlias(ctx, in)
 }
 
+// UpdateQueryThrottlerConfig is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) UpdateQueryThrottlerConfig(ctx context.Context, in *vtctldatapb.UpdateQueryThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldatapb.UpdateQueryThrottlerConfigResponse, error) {
+	return client.s.UpdateQueryThrottlerConfig(ctx, in)
+}
+
 // UpdateThrottlerConfig is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) UpdateThrottlerConfig(ctx context.Context, in *vtctldatapb.UpdateThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldatapb.UpdateThrottlerConfigResponse, error) {
 	return client.s.UpdateThrottlerConfig(ctx, in)

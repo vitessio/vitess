@@ -221,12 +221,12 @@ func (tqsc *Controller) TopoServer() *topo.Server {
 }
 
 // CheckThrottler is part of the tabletserver.Controller interface
-func (tqsc *Controller) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
+func (tqsc *Controller) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags, throttlerType tabletmanagerdata.ThrottlerType) *throttle.CheckResult {
 	return nil
 }
 
 // GetThrottlerStatus is part of the tabletserver.Controller interface
-func (tqsc *Controller) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
+func (tqsc *Controller) GetThrottlerStatus(ctx context.Context, throttlerType tabletmanagerdata.ThrottlerType) *throttle.ThrottlerStatus {
 	return nil
 }
 
