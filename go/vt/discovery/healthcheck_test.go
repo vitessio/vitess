@@ -866,29 +866,19 @@ func TestRemoveTablet(t *testing.T) {
 // and issues one final updateHealth(Serving: false) from its error path
 // without re-checking its own context. Because updateHealth only verifies
 // that the alias still exists in healthByAlias — not that the update came
-// from the currently registered tabletHealthCheck — that stale update can be
-// applied after the replacement connection has already reported
-// Serving: true:
+// from the currently registered tabletHealthCheck — that stale update can
+// land after the replacement connection has already reported Serving: true,
+// removing the tablet from the healthy (routing) list and poisoning
+// healthData. Every subsequent response on the new connection is then a
+// trivialUpdate (the new tabletHealthCheck's own Serving field is still
+// true), so recomputeHealthy never runs again: the tablet receives zero
+// traffic until an unrelated non-trivial event in the same
+// keyspace/shard/type triggers a recompute.
 //
-//  1. ReplaceTablet cancels the old checkConn and registers a new
-//     tabletHealthCheck for the same alias.
-//  2. The new connection receives Serving: true; the tablet is added to the
-//     healthy list.
-//  3. The old goroutine's final updateHealth(Serving: false) lands, removing
-//     the tablet from the healthy list and poisoning healthData.
-//  4. Every subsequent response on the new connection is a trivialUpdate
-//     (the new tabletHealthCheck's own Serving field is still true), so
-//     recomputeHealthy never runs again: healthData shows a healthy, serving
-//     tablet with a live stream while the healthy (routing) list permanently
-//     omits it. The tablet receives zero traffic until an unrelated
-//     non-trivial event in the same keyspace/shard/type triggers a
-//     recompute.
-//
-// Step 3's timing is scheduler-dependent (the dying goroutine can be delayed
-// between its stream returning and acquiring hc.mu), so the old connection's
-// stream is gated: the canceled checkConn goroutine stays parked inside
-// stream() until the test releases it, and synctest.Wait() guarantees each
-// step is fully applied before the next.
+// The stale update's timing is scheduler-dependent (the dying goroutine can
+// be delayed between its stream returning and acquiring hc.mu), so the old
+// connection's stream is gated on cancellation, and synctest.Wait()
+// guarantees each step is fully applied before the next.
 func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := t.Context()
