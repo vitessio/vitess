@@ -479,6 +479,8 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 			return
 		case evs, ok := <-vs.eventCh:
 			if !ok {
+				// The channel is closed once all shard streams have ended, so
+				// there are no more events to send.
 				return
 			}
 			if err := send(evs); err != nil {
