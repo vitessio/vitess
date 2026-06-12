@@ -404,6 +404,10 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 	// Check if the current tablet is the primary. If it is, then we don't need to
 	// run errant GTID detection on it.
 	if primaryAlias == instance.InstanceAlias {
+		// A primary cannot have errant GTIDs relative to itself; clear any
+		// value left over from before this tablet was promoted.
+		instance.GtidErrant = ""
+		currentErrantGTIDCount.Reset(instance.InstanceAlias)
 		return nil
 	}
 
@@ -427,6 +431,7 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 		}
 	}
 
+	var errantGtidCount int64
 	if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
 		// Compare primary & replica GTID sets, but ignore the sets that present the primary's UUID.
 		// This is because vtorc may pool primary and replica at an inconvenient timing,
@@ -457,10 +462,17 @@ func detectErrantGTIDs(instance *Instance, tablet *topodatapb.Tablet) (err error
 			errantGtidSet := redactedExecutedGtidSet.Difference(redactedPrimaryExecutedGtidSet)
 			if !errantGtidSet.Empty() {
 				instance.GtidErrant = errantGtidSet.String()
-				currentErrantGTIDCount.Set(instance.InstanceAlias, errantGtidSet.Count())
+				errantGtidCount = errantGtidSet.Count()
 			}
 		}
 	}
+	// Always publish the result. Writing 0 / "" here is what allows the
+	// gauge and GtidErrant field to recover after errant GTIDs are
+	// reconciled or a transient race clears.
+	if errantGtidCount == 0 {
+		instance.GtidErrant = ""
+	}
+	currentErrantGTIDCount.Set(instance.InstanceAlias, errantGtidCount)
 	return err
 }
 
