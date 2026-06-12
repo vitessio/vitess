@@ -21,6 +21,8 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[VTCtld](#minor-changes-vtctld)**
+        - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +138,21 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-vtctld"/>VTCtld</a>
+
+#### <a id="vtctld-version-aware-reparent"/>MySQL version-aware reparent candidate election</a>
+
+`PlannedReparentShard` (PRS) and `EmergencyReparentShard` (ERS) now consider the MySQL server version (major.minor) when electing a new primary. During rolling MySQL upgrades, this prevents promoting a newer-version tablet that would break replication for replicas still on the older version.
+
+**Sort order:**
+- PRS: promotion rules > MySQL release > replication position > buffer pool > alias
+- ERS: replication position > promotion rules > MySQL release > buffer pool > alias
+
+**Behavior change:** PRS during a rolling MySQL upgrade will now prefer lower-version candidates even when they are slightly behind in replication position. The elected tablet will catch up to the old primary's demotion position before completing the reparent, which may increase reparent latency. Operators should ensure `--wait-replicas-timeout` is generous enough to accommodate this catch-up time.
+
+**Cross-cell limitation:** PRS will still promote a higher-version tablet if no lower-version candidate exists in the same cell as the current primary. The cell boundary is enforced before version comparison. Operators who want version preference to override cell locality can use `--allow-cross-cell-promotion`.
+
+Tablets that do not report a version (e.g. running an older Vitess build) are treated as "unknown version" and sorted last, preserving existing behavior.
+
+See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.

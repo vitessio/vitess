@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
 	"vitess.io/vitess/go/mysql"
@@ -814,6 +815,254 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
+			name: "lower MySQL version preferred when positions are equal",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
+			name: "same MySQL version falls through to position",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			errContains: nil,
+		},
+		{
+			name: "unknown MySQL version sorts last",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
+			name: "lower MySQL release wins even when slightly behind in position",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						ServerVersion:    "Ver 8.4.0",
+					},
+					"zone1-0000000102": {
+						Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-3",
+						ServerVersion:    "Ver 8.0.35",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
 			// Buffer-pool tiebreaking must be skipped unless every VALID tablet has
 			// a value. A missing entry (e.g. a MariaDB replica that doesn't expose
 			// Innodb_buffer_pool_pages_data) used to be treated as a legitimate 0,
@@ -1317,6 +1566,7 @@ func TestFindPositionForTablet(t *testing.T) {
 		expectedErr            string
 		expectedTakingBackup   bool
 		expectedUnknownReplLag bool
+		expectedServerVersion  string
 	}{
 		{
 			name: "executed gtid set",
@@ -1458,12 +1708,38 @@ func TestFindPositionForTablet(t *testing.T) {
 			expectedLag:            0,
 			expectedPosition:       "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 			expectedUnknownReplLag: true,
+		}, {
+			name: "server version returned",
+			tmc: &testutil.TabletManagerClient{
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: &replicationdatapb.Status{
+							Position:              "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							RelayLogPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+							ReplicationLagSeconds: 10,
+							ServerVersion:         "Ver 8.0.35",
+						},
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectedLag:           10 * time.Second,
+			expectedPosition:      "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
+			expectedServerVersion: "Ver 8.0.35",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			pos, lag, takingBackup, replUnknown, err := findTabletPositionLagBackupStatus(ctx, test.tablet, logger, test.tmc, 10*time.Second)
+			pos, lag, takingBackup, replUnknown, serverVersion, err := findTabletPositionLagBackupStatus(ctx, test.tablet, logger, test.tmc, 10*time.Second)
 			if test.expectedErr != "" {
 				require.EqualError(t, err, test.expectedErr)
 				return
@@ -1474,6 +1750,7 @@ func TestFindPositionForTablet(t *testing.T) {
 			require.Equal(t, test.expectedLag, lag)
 			require.Equal(t, test.expectedTakingBackup, takingBackup)
 			require.Equal(t, test.expectedUnknownReplLag, replUnknown)
+			require.Equal(t, test.expectedServerVersion, serverVersion)
 		})
 	}
 }
@@ -2009,6 +2286,7 @@ func Test_findCandidate(t *testing.T) {
 		name               string
 		intermediateSource *topodatapb.Tablet
 		possibleCandidates []*topodatapb.Tablet
+		versionMap         map[string]mysqlctl.ServerVersion
 		candidate          *topodatapb.Tablet
 	}{
 		{
@@ -2078,11 +2356,103 @@ func Test_findCandidate(t *testing.T) {
 					Uid:  101,
 				},
 			},
+		}, {
+			name: "lower version candidate preferred over intermediate source",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 4, Patch: 0},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			name: "same version prefers intermediate source",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000100": {Major: 8, Minor: 0, Patch: 35},
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "unknown version intermediate source defers to known version candidate",
+			intermediateSource: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			possibleCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			versionMap: map[string]mysqlctl.ServerVersion{
+				"zone1-0000000101": {Major: 8, Minor: 0, Patch: 35},
+			},
+			candidate: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := findCandidate(tt.intermediateSource, tt.possibleCandidates)
+			res := findCandidate(tt.intermediateSource, tt.possibleCandidates, tt.versionMap)
 			if tt.candidate == nil {
 				require.Nil(t, res)
 			} else {
