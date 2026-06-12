@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +84,67 @@ func (rlp *RelayLogPositions) Equal(pos *RelayLogPositions) bool {
 // IsZero returns true if the RelayLogPositions is zero.
 func (rlp *RelayLogPositions) IsZero() bool {
 	return rlp.Combined.IsZero()
+}
+
+// describeCombinedPositions returns a sorted "alias=position" listing, used to make
+// split-brain abort errors actionable by naming exactly which tablets diverged.
+func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+	parts := make([]string, 0, len(candidates))
+	for alias, pos := range candidates {
+		parts = append(parts, alias+"="+pos.Combined.String())
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
+}
+
+// uniformCombined returns true when every candidate in the map shares the same Combined
+// position. Applied to the output of leadingCandidatesByCombined, a false result means
+// the leading set has incomparable maxima — a suspected split-brain that ERS must not
+// silently resolve by short-circuiting on one side.
+func uniformCombined(candidates map[string]*RelayLogPositions) bool {
+	var ref replication.Position
+	set := false
+	for _, pos := range candidates {
+		if !set {
+			ref = pos.Combined
+			set = true
+			continue
+		}
+		if !pos.Combined.Equal(ref) {
+			return false
+		}
+	}
+	return true
+}
+
+// leadingCandidatesByCombined keeps only candidates whose Combined position is not
+// strictly dominated by another (X dominated by Y iff Y.AtLeast(X) and X != Y). Pairwise
+// comparison is required to correctly handle partially-ordered GTID sets: when two
+// candidates have disjoint UUIDs neither dominates the other, so both must be kept;
+// comparing against a single chosen max would silently drop one incomparable maximum.
+func leadingCandidatesByCombined(candidates map[string]*RelayLogPositions) map[string]*RelayLogPositions {
+	if len(candidates) == 0 {
+		return candidates
+	}
+
+	result := make(map[string]*RelayLogPositions, len(candidates))
+	for alias, pos := range candidates {
+		dominated := false
+		for otherAlias, otherPos := range candidates {
+			if otherAlias == alias {
+				continue
+			}
+			if otherPos.Combined.AtLeast(pos.Combined) && !pos.Combined.Equal(otherPos.Combined) {
+				dominated = true
+				break
+			}
+		}
+		if !dominated {
+			result[alias] = pos
+		}
+	}
+
+	return result
 }
 
 // FindPositionsOfAllCandidates will find candidates for an emergency

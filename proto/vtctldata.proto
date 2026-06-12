@@ -756,6 +756,11 @@ message EmergencyReparentShardRequest {
   // ExpectedPrimary is the optional alias we expect to be the current primary in order for
   // the reparent operation to succeed.
   topodata.TabletAlias expected_primary = 8;
+  // AllowSplitBrainPromotion lets ERS proceed when two leading candidates have incomparable
+  // Combined GTID positions (suspected split-brain). By default ERS aborts with FAILED_PRECONDITION
+  // in that case; setting this true logs a WARN and continues, accepting that the losing side's
+  // unique GTIDs will become errant on those tablets. Intended as a deliberate operator override.
+  bool allow_split_brain_promotion = 9;
 }
 
 message EmergencyReparentShardResponse {

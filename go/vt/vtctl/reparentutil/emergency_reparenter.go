@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -62,6 +63,12 @@ type EmergencyReparentOptions struct {
 	WaitReplicasTimeout       time.Duration
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
+	// AllowSplitBrainPromotion lets ERS proceed when two leading candidates have
+	// incomparable Combined GTID positions (suspected split-brain). Off by default —
+	// operator escape hatch. When set, the split-brain check logs a warning and
+	// continues instead of aborting with FAILED_PRECONDITION. The losing side's
+	// unique GTIDs will become errant on those tablets after promotion.
+	AllowSplitBrainPromotion bool
 
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
@@ -70,9 +77,15 @@ type EmergencyReparentOptions struct {
 }
 
 // counters for Emergency Reparent Shard
-var ersCounter = stats.NewCountersWithMultiLabels(
-	"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
-	[]string{"Keyspace", "Shard", "Result"},
+var (
+	ersCounter = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentCounts", "Number of times Emergency Reparent Shard has been run",
+		[]string{"Keyspace", "Shard", "Result"},
+	)
+	ersSplitBrainOverrides = stats.NewCountersWithMultiLabels(
+		"EmergencyReparentSplitBrainOverrides", "Number of split-brain detections bypassed by AllowSplitBrainPromotion=true during EmergencyReparentShard. The non-promoted side's unique GTIDs will become errant on those tablets after promotion.",
+		[]string{"Keyspace", "Shard"},
+	)
 )
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
@@ -272,6 +285,25 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
+	// Upfront split-brain detection for GTID-based shards: if two leading candidates
+	// have incomparable Combined positions ERS must not silently pick one — the loser's
+	// unique writes would become errant after promotion. Non-GTID flavors (FilePos,
+	// MariaDB) skip this because Combined is the executed position, so true incomparable
+	// maxima cannot arise from received-but-unapplied transactions.
+	var preErrantLeaders map[string]*RelayLogPositions
+	if isGTIDBased {
+		preErrantLeaders = leadingCandidatesByCombined(validCandidates)
+		if !uniformCombined(preErrantLeaders) {
+			if !opts.AllowSplitBrainPromotion {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+					"suspected split-brain: leading candidates have incomparable Combined GTID positions: %s — re-run with AllowSplitBrainPromotion to override (the non-promoted side's unique GTIDs will become errant)",
+					describeCombinedPositions(preErrantLeaders))
+			}
+			erp.logger.Warningf("AllowSplitBrainPromotion=true: proceeding despite incomparable Combined positions on leading candidates: %s", describeCombinedPositions(preErrantLeaders))
+			ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
+		}
+	}
+
 	// Wait for all candidates to apply relay logs
 	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
 		return err
@@ -279,9 +311,39 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// For GTID based replication, we will run errant GTID detection.
 	if isGTIDBased {
+		// Snapshot validCandidates so the safeguard below can restore the leading
+		// set if every leader is pruned by errant-GTID detection. maps.Clone defends
+		// against a future refactor that mutates the input.
+		preErrantCandidates := maps.Clone(validCandidates)
 		validCandidates, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout)
 		if err != nil {
 			return err
+		}
+		// Detect whether any of the pre-detection leading candidates survived errant-GTID
+		// detection. The failure mode we need to guard against is mutually-errant leaders
+		// being pruned while a lagging non-errant candidate remains — promoting the lagger
+		// would lose unique writes from both split-brain sides, which is strictly worse
+		// than the documented "pick one side; losing side becomes errant" semantics.
+		leadingSurvived := false
+		for alias := range validCandidates {
+			if _, isLeading := preErrantLeaders[alias]; isLeading {
+				leadingSurvived = true
+				break
+			}
+		}
+		if !leadingSurvived {
+			if !opts.AllowSplitBrainPromotion {
+				return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all leading candidates have errant GTIDs")
+			}
+			erp.logger.Warningf("AllowSplitBrainPromotion=true: no leading candidates survived errant-GTID detection — restoring the pre-detection leading set so findMostAdvanced can pick a side without promoting a lagger")
+			ersSplitBrainOverrides.Add([]string{keyspace, shard}, 1)
+			restored := make(map[string]*RelayLogPositions, len(preErrantLeaders))
+			for alias := range preErrantLeaders {
+				if pos, ok := preErrantCandidates[alias]; ok {
+					restored[alias] = pos
+				}
+			}
+			validCandidates = restored
 		}
 		if len(validCandidates) == 0 {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
