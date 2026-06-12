@@ -174,6 +174,28 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 	require.Equal(t, qr2, qr3)
 }
 
+func TestSystemSchemaFieldDatabaseInOLAP(t *testing.T) {
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("partial keyspace detected, skipping test")
+	}
+	mcmp, closer := start(t)
+	defer closer()
+
+	query := fmt.Sprintf("select * from information_schema.tables where table_schema = '%s' limit 1", keyspaceName)
+
+	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+	oltp := utils.Exec(t, mcmp.VtConn, query)
+
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	olap := utils.Exec(t, mcmp.VtConn, query)
+
+	require.Equal(t, len(oltp.Fields), len(olap.Fields))
+	for i := range oltp.Fields {
+		assert.Equal(t, oltp.Fields[i].Database, olap.Fields[i].Database,
+			"field %q Database differs between OLTP and OLAP", oltp.Fields[i].Name)
+	}
+}
+
 func TestMultipleSchemaPredicates(t *testing.T) {
 	if clusterInstance.HasPartialKeyspaces {
 		t.Skip("test can randomly select one of the shards, and the shards are in different keyspaces")
