@@ -118,7 +118,8 @@ func TestPlanKey(t *testing.T) {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
-			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}}},
+			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
+		},
 		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
 	}}
 	cfg := econtext.VCursorConfig{
@@ -569,7 +570,6 @@ func TestExecutorShowColumns(t *testing.T) {
 			sbclookup.BatchQueries = nil
 		})
 	}
-
 }
 
 func sortString(w string) string {
@@ -1807,7 +1807,6 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestGetPlanPriority(t *testing.T) {
-
 	testCases := []struct {
 		name             string
 		sql              string
@@ -1839,7 +1838,6 @@ func TestGetPlanPriority(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestPassthroughDDL(t *testing.T) {
@@ -2059,13 +2057,7 @@ func TestOlapSelectDatabase(t *testing.T) {
 		cbInvoked = true
 		return nil
 	}
-<<<<<<< HEAD
-	err := executor.StreamExecute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, cb)
-||||||| parent of 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
-	err := executor.StreamExecute(t.Context(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, cb)
-=======
-	err := executor.StreamExecute(t.Context(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, false, cb)
->>>>>>> 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
+	err := executor.StreamExecute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, false, cb)
 	assert.NoError(t, err)
 	assert.True(t, cbInvoked)
 }
@@ -2552,7 +2544,8 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 		{Sql: "savepoint a", BindVariables: emptyBV},
 		{Sql: "savepoint b", BindVariables: emptyBV},
 		{Sql: "release savepoint a", BindVariables: emptyBV},
-		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV}}
+		{Sql: "select /*+ SET_VAR(sql_mode = ' ') */ id from `user` where id = 3", BindVariables: emptyBV},
+	}
 
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
 	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
@@ -2785,7 +2778,6 @@ func TestExecutorStartTxnStmt(t *testing.T) {
 
 			_, err = executorExecSession(ctx, executor, session, "rollback", nil)
 			require.NoError(t, err)
-
 		})
 	}
 }
@@ -3033,13 +3025,7 @@ func TestExecutorKillStmt(t *testing.T) {
 		})
 		t.Run("stream:"+tc.query+tc.errStr, func(t *testing.T) {
 			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
-<<<<<<< HEAD
-			err := executor.StreamExecute(context.Background(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, func(result *sqltypes.Result) error {
-||||||| parent of 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
-			err := executor.StreamExecute(t.Context(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, func(result *sqltypes.Result) error {
-=======
-			err := executor.StreamExecute(t.Context(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, false, func(result *sqltypes.Result) error {
->>>>>>> 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
+			err := executor.StreamExecute(context.Background(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, false, func(result *sqltypes.Result) error {
 				return nil
 			})
 			if tc.errStr != "" {
@@ -3103,7 +3089,8 @@ func TestExecutorShowShards(t *testing.T) {
 				Fields: buildVarCharFields("Shards"),
 				Rows:   nil,
 			},
-		}, {
+		},
+		{
 			name: "No filtering",
 			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
 				SrvKeyspaceNamesOutput: map[string][]string{
@@ -3195,7 +3182,8 @@ func TestExecutorShowShards(t *testing.T) {
 					buildVarCharRow("ks1/80-"),
 				},
 			},
-		}, {
+		},
+		{
 			name: "Shard filtering",
 			srvTopoServer: &fakesrvtopo.FakeSrvTopo{
 				SrvKeyspaceNamesOutput: map[string][]string{

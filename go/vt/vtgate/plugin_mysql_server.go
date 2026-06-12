@@ -185,7 +185,8 @@ var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*)\*/`)
 // this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
 func startSpanTestable(ctx context.Context, query, label string,
 	newSpan func(context.Context, string) (trace.Span, context.Context),
-	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context, error) {
+	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error),
+) (trace.Span, context.Context, error) {
 	_, comments := sqlparser.SplitMarginComments(query)
 	match := r.FindStringSubmatch(comments.Leading)
 	span, ctx := getSpan(ctx, match, newSpan, label, newSpanFromString)
@@ -258,15 +259,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-<<<<<<< HEAD
-		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), callback)
-||||||| parent of 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
-		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
-		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), streamCallback)
-=======
-		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
-		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, streamCallback)
->>>>>>> 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
+		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), false, callback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
@@ -327,25 +320,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 			session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
 		} else {
 			firstPacket := true
-<<<<<<< HEAD
-			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
-||||||| parent of 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
-			var deferredResult *sqltypes.Result
-			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
-				if firstPacket && len(result.Fields) == 0 {
-					deferredResult = result
-					firstPacket = false
-					return nil
-				}
-=======
-			var deferredResult *sqltypes.Result
-			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
-				if firstPacket && len(result.Fields) == 0 {
-					deferredResult = result
-					firstPacket = false
-					return nil
-				}
->>>>>>> 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
+			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()
@@ -383,116 +358,6 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	return nil
 }
 
-<<<<<<< HEAD
-||||||| parent of 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
-func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.Conn, mysqlCtx *vtgateMySQLConnection, session *vtgatepb.Session, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
-	queries, err := vh.vtg.executor.Environment().Parser().SplitStatementToPieces(sql)
-	if err != nil {
-		return session, err
-	}
-	if len(queries) == 0 {
-		return session, sqlparser.ErrEmpty
-	}
-	for idx, query := range queries {
-		firstPacket := true
-		more := idx < len(queries)-1
-		var deferredResult *sqltypes.Result
-		func() {
-			queryCtx := ctx
-			var cancel context.CancelFunc
-			if mysqlQueryTimeout != 0 {
-				queryCtx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
-				defer cancel()
-			}
-			session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
-				if firstPacket && len(result.Fields) == 0 {
-					deferredResult = result
-					firstPacket = false
-					return nil
-				}
-				if firstPacket {
-					applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
-				}
-				defer func() {
-					firstPacket = false
-				}()
-				return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
-			})
-		}()
-		if err != nil {
-			if firstPacket {
-				applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
-				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
-			}
-			return session, err
-		}
-		if deferredResult != nil {
-			previousStatusFlags := c.StatusFlags
-			fillInTxStatusFlags(c, session)
-			applyMultiQueryStatusFlagsWithPrevious(c, mysqlCtx.slowQueryStates, idx, previousStatusFlags)
-			if err := callback(sqltypes.QueryResponse{QueryResult: deferredResult}, more, true); err != nil {
-				return session, err
-			}
-		}
-	}
-	return session, nil
-}
-
-=======
-func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.Conn, mysqlCtx *vtgateMySQLConnection, session *vtgatepb.Session, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
-	queries, err := vh.vtg.executor.Environment().Parser().SplitStatementToPieces(sql)
-	if err != nil {
-		return session, err
-	}
-	if len(queries) == 0 {
-		return session, sqlparser.ErrEmpty
-	}
-	for idx, query := range queries {
-		firstPacket := true
-		more := idx < len(queries)-1
-		var deferredResult *sqltypes.Result
-		func() {
-			queryCtx := ctx
-			var cancel context.CancelFunc
-			if mysqlQueryTimeout != 0 {
-				queryCtx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
-				defer cancel()
-			}
-			session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
-				if firstPacket && len(result.Fields) == 0 {
-					deferredResult = result
-					firstPacket = false
-					return nil
-				}
-				if firstPacket {
-					applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
-				}
-				defer func() {
-					firstPacket = false
-				}()
-				return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
-			})
-		}()
-		if err != nil {
-			if firstPacket {
-				applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
-				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
-			}
-			return session, err
-		}
-		if deferredResult != nil {
-			previousStatusFlags := c.StatusFlags
-			fillInTxStatusFlags(c, session)
-			applyMultiQueryStatusFlagsWithPrevious(c, mysqlCtx.slowQueryStates, idx, previousStatusFlags)
-			if err := callback(sqltypes.QueryResponse{QueryResult: deferredResult}, more, true); err != nil {
-				return session, err
-			}
-		}
-	}
-	return session, nil
-}
-
->>>>>>> 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
 func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 	if session.InTransaction {
 		c.StatusFlags |= mysql.ServerStatusInTrans
@@ -583,15 +448,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-<<<<<<< HEAD
-		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, callback)
-||||||| parent of 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
-		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
-		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, streamCallback)
-=======
-		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
-		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true, streamCallback)
->>>>>>> 9a887d2e01 (vtgate: build specialized plans for prepared statements in OLAP/streaming mode (#20266))
+		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, true, callback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
