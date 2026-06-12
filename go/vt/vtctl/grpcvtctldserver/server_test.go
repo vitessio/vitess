@@ -8792,6 +8792,8 @@ func TestPlannedReparentShard(t *testing.T) {
 		expected            *vtctldatapb.PlannedReparentShardResponse
 		expectEventsToOccur bool
 		expectedErr         string
+		setup               func(context.Context, *testing.T, vtctlservicepb.VtctldServer)
+		assertion           func(*testing.T, tmclient.TabletManagerClient)
 	}{
 		{
 			name: "successful reparent",
@@ -8913,6 +8915,166 @@ func TestPlannedReparentShard(t *testing.T) {
 			expectEventsToOccur: true,
 		},
 		{
+			name: "replica sourced rdonly reparents to demoted primary",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     17101,
+					Keyspace:      "testkeyspace",
+					Shard:         "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:          topodatapb.TabletType_REPLICA,
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     17100,
+					Keyspace:      "testkeyspace",
+					Shard:         "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type:          topodatapb.TabletType_RDONLY,
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     17102,
+					Keyspace:      "testkeyspace",
+					Shard:         "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "primary-demotion position",
+						},
+					},
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000101": {
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000102": {
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000101": {
+						Position: "doesn't matter",
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Result: "promotion position",
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000102": {
+						Position: &replicationdatapb.Status{
+							SourceHost: "localhost",
+							SourcePort: 17100,
+						},
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"primary-demotion position": nil,
+					},
+				},
+			},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
+			},
+			expected: &vtctldatapb.PlannedReparentShardResponse{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				PromotedPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectEventsToOccur: true,
+			setup: func(ctx context.Context, t *testing.T, vtctld vtctlservicepb.VtctldServer) {
+				_, err := vtctld.SetKeyspaceReplicationSourcePolicy(ctx, &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+					Keyspace:     "testkeyspace",
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+				})
+				require.NoError(t, err)
+			},
+			assertion: func(t *testing.T, tmc tmclient.TabletManagerClient) {
+				fakeTMC, ok := tmc.(*testutil.TabletManagerClient)
+				require.True(t, ok)
+
+				var rdonlyCall *testutil.SetReplicationSourceCall
+				for i := range fakeTMC.SetReplicationSourceCalls {
+					call := &fakeTMC.SetReplicationSourceCalls[i]
+					if call.TabletAlias == "zone1-0000000102" {
+						rdonlyCall = call
+					}
+				}
+				require.NotNil(t, rdonlyCall)
+				assert.Equal(t, "zone1-0000000101", rdonlyCall.ParentAlias)
+				assert.True(t, rdonlyCall.ForceStartReplication)
+			},
+		},
+		{
 			// Note: this is testing the error-handling done in
 			// (*VtctldServer).PlannedReparentShard, not the logic of an PRS.
 			// That logic is tested in reparentutil, and not here. Therefore,
@@ -9024,6 +9186,9 @@ func TestPlannedReparentShard(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
+			if tt.setup != nil {
+				tt.setup(ctx, t, vtctld)
+			}
 			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
 
 			// We defer this because we want to check in both error and non-
@@ -9047,6 +9212,9 @@ func TestPlannedReparentShard(t *testing.T) {
 
 			assert.NoError(t, err)
 			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+			if tt.assertion != nil {
+				tt.assertion(t, tt.tmc)
+			}
 		})
 	}
 }

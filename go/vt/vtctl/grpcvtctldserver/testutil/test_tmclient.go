@@ -175,6 +175,7 @@ func init() {
 // with mock delays and response values, for use in unit tests.
 type TabletManagerClient struct {
 	tmclient.TabletManagerClient
+	setReplicationSourceCallsMu sync.Mutex
 
 	// If true, the call will return an error.
 	CallError bool
@@ -337,6 +338,7 @@ type TabletManagerClient struct {
 	SetReplicationSourceDelays map[string]time.Duration
 	// keyed by tablet alias.
 	SetReplicationSourceResults map[string]error
+	SetReplicationSourceCalls   []SetReplicationSourceCall
 	// keyed by tablet alias.
 	SetReplicationSourceSemiSync map[string]bool
 	// keyed by tablet alias
@@ -393,6 +395,16 @@ type TabletManagerClient struct {
 	CheckThrottlerDelays map[string]time.Duration
 	// keyed by tablet alias
 	CheckThrottlerResults map[string]*tabletmanagerdatapb.CheckThrottlerResponse
+}
+
+type SetReplicationSourceCall struct {
+	TabletAlias           string
+	ParentAlias           string
+	TimeCreatedNS         int64
+	WaitPosition          string
+	ForceStartReplication bool
+	SemiSync              bool
+	HeartbeatInterval     float64
 }
 
 type backupStreamAdapter struct {
@@ -1253,6 +1265,17 @@ func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, table
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
+	fake.setReplicationSourceCallsMu.Lock()
+	fake.SetReplicationSourceCalls = append(fake.SetReplicationSourceCalls, SetReplicationSourceCall{
+		TabletAlias:           key,
+		ParentAlias:           topoproto.TabletAliasString(parent),
+		TimeCreatedNS:         timeCreatedNS,
+		WaitPosition:          waitPosition,
+		ForceStartReplication: forceStartReplication,
+		SemiSync:              semiSync,
+		HeartbeatInterval:     heartbeatInterval,
+	})
+	fake.setReplicationSourceCallsMu.Unlock()
 
 	if fake.SetReplicationSourceDelays != nil {
 		if delay, ok := fake.SetReplicationSourceDelays[key]; ok {

@@ -402,7 +402,9 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
-			if tablet.Type == topodatapb.TabletType_RDONLY && rdonlyReplicationSourceIsReplica(ca, primary, tablet) {
+			if tablet.Type == topodatapb.TabletType_RDONLY &&
+				rdonlyReplicationSourcePolicyRequiresReplica(ca) &&
+				rdonlyReplicationSourceIsReplica(ca, primary, tablet) {
 				return false
 			}
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)

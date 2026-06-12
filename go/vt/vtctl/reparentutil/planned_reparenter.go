@@ -642,6 +642,10 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
+	if promoteReplicaRequired {
+		markPlannedPromotionInTabletMap(tabletMap, ev.NewPrimary.Alias)
+	}
+
 	if err := pr.reparentTablets(ctx, ev, reparentJournalPos, promoteReplicaRequired, tabletMap, opts); err != nil {
 		return err
 	}
@@ -655,6 +659,21 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		}
 	}
 	return nil
+}
+
+func markPlannedPromotionInTabletMap(tabletMap map[string]*topo.TabletInfo, newPrimaryAlias *topodatapb.TabletAlias) {
+	for _, tabletInfo := range tabletMap {
+		if tabletInfo == nil || tabletInfo.Tablet == nil || tabletInfo.Alias == nil {
+			continue
+		}
+		if topoproto.TabletAliasEqual(tabletInfo.Alias, newPrimaryAlias) {
+			tabletInfo.Type = topodatapb.TabletType_PRIMARY
+			continue
+		}
+		if tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+			tabletInfo.Type = topodatapb.TabletType_REPLICA
+		}
+	}
 }
 
 func (pr *PlannedReparenter) reparentTablets(
