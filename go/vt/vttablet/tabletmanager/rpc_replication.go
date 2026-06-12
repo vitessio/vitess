@@ -1146,6 +1146,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	rs.RelayLogSourceBinlogEquivalentPosition = rsAfter.RelayLogSourceBinlogEquivalentPosition
 
 	before.ServerVersion = tm.getMySQLVersion(ctx)
+	after.ServerVersion = before.ServerVersion
 
 	return StopReplicationAndGetStatusResponse{
 		Status: &replicationdatapb.StopReplicationStatus{

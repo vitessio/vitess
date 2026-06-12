@@ -876,6 +876,9 @@ func TestStopReplicationAndGetStatus_ServerVersion(t *testing.T) {
 
 			require.NotNil(t, resp.Status)
 			require.Equal(t, "Ver 8.0.35", resp.Status.Before.ServerVersion)
+			if resp.Status.After != nil {
+				require.Equal(t, "Ver 8.0.35", resp.Status.After.ServerVersion)
+			}
 		})
 	}
 }
