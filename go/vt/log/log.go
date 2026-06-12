@@ -54,10 +54,15 @@ var (
 // that enables structured logging. This should be removed once structured logging is
 // the only option.
 func init() {
-	// We create a JSON logger here. Alternatively, we can identify if we're running in tests
-	// and set a more human-readable format such as [slog.TextHandler] or others.
 	logger.Store(newLogger(slog.LevelInfo))
 	structured.Store(true)
+}
+
+// SwapLogger atomically replaces the structured logger with a new one
+// and returns the previous logger. This is safe for concurrent use and is
+// intended for tests that need to intercept log output.
+func SwapLogger(newLogger *slog.Logger) *slog.Logger {
+	return logger.Swap(newLogger)
 }
 
 // log is a helper that logs with glog or slog depending on the configured flags.

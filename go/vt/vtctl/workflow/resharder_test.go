@@ -42,7 +42,7 @@ import (
 const eol = "$"
 
 func TestReshardCreate(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 
 	workflowName := "wf1"
@@ -217,7 +217,7 @@ func TestReshardCreate(t *testing.T) {
 }
 
 func TestReadRefStreams(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sourceKeyspace := &testKeyspace{
 		KeyspaceName: "sourceKeyspace",

@@ -327,6 +327,9 @@ func (ts *TestSpec) Init() {
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
+	if ts.schema == nil {
+		return
+	}
 	dropStatement := "drop table if exists " + strings.Join(ts.schema.TableNames(), ", ")
 	execStatement(ts.t, dropStatement)
 }
@@ -439,9 +442,7 @@ func (ts *TestSpec) Run() {
 				case *sqlparser.Set:
 				default:
 					_, ok := stmt.(sqlparser.DDLStatement)
-					if !ok {
-						require.FailNowf(ts.t, "unsupported statement type", "stmt: %s", stmt)
-					}
+					require.True(ts.t, ok, "stmt: %s", stmt)
 					output = append(output, "gtid")
 					output = append(output, ts.getDDLEvent(tq.query))
 				}

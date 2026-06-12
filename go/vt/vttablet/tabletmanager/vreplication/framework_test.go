@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,6 +29,7 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
@@ -74,6 +74,7 @@ var (
 	vrepldb                  = "vrepl"
 	globalDBQueries          = make(chan string, 1000)
 	lastMultiExecQuery       = ""
+	lastMultiExecQueryMu     sync.Mutex
 	testForeignKeyQueries    = false
 	testSetForeignKeyQueries = false
 	doNotLogDBQueries        = false
@@ -246,18 +247,23 @@ func resetBinlogClient() {
 
 func primaryPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.PrimaryPosition(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	pos, err := env.Mysqld.PrimaryPosition(t.Context())
+	require.NoError(t, err)
 	return replication.EncodePosition(pos)
+}
+
+func primaryPositionParsed(t *testing.T) replication.Position {
+	t.Helper()
+	pos, err := env.Mysqld.PrimaryPosition(t.Context())
+	require.NoError(t, err)
+	return pos
 }
 
 func execStatements(t *testing.T, queries []string) {
 	t.Helper()
-	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+	if err := env.Mysqld.ExecuteSuperQueryList(t.Context(), queries); err != nil {
 		log.Error("Error executing query: " + err.Error())
-		t.Error(err)
+		assert.NoError(t, err)
 	}
 	for _, query := range queries {
 		updateMockSchemaForQuery(query)
@@ -267,9 +273,8 @@ func execStatements(t *testing.T, queries []string) {
 func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []string) {
 	t.Helper()
 	for _, query := range queries {
-		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
-			t.Fatalf("ExecuteFetch(%v) failed: %v", query, err)
-		}
+		_, err := conn.ExecuteFetch(query, 10000, false)
+		require.NoErrorf(t, err, "ExecuteFetch(%v) failed: %v", query, err)
 	}
 }
 
@@ -277,9 +282,13 @@ func execConnStatements(t *testing.T, conn *dbconnpool.DBConnection, queries []s
 // Topos and tablets
 
 func addTablet(id int) *topodatapb.Tablet {
+	return addTabletWithCell(id, env.Cells[0])
+}
+
+func addTabletWithCell(id int, cell string) *topodatapb.Tablet {
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: env.Cells[0],
+			Cell: cell,
 			Uid:  uint32(id),
 		},
 		Keyspace: env.KeyspaceName,
@@ -346,6 +355,9 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 // vstreamHook allows you to do work just before calling VStream.
 var vstreamHook func(ctx context.Context)
 
+// vstreamErrorsByTablet allows injecting errors per tablet UID.
+var vstreamErrorsByTablet map[uint32]error
+
 // VStream directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	if request.Target.Keyspace != "vttest" {
@@ -354,6 +366,11 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	}
 	if vstreamHook != nil {
 		vstreamHook(ctx)
+	}
+	if vstreamErrorsByTablet != nil {
+		if err, ok := vstreamErrorsByTablet[ftc.tablet.Alias.Uid]; ok {
+			return err
+		}
 	}
 	return streamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, throttlerapp.VStreamerName, send, nil)
 }
@@ -401,8 +418,22 @@ type fakeBinlogClient struct {
 	lastCharset  *binlogdatapb.Charset
 }
 
+// fakeBinlogClientErrorsByTablet allows injecting a fixed error per tablet UID.
+// This error is returned forever until the map is cleared. If not set, then tablet will not return any errors.
+var fakeBinlogClientErrorsByTablet map[uint32]error
+
+// fakeBinlogClientErrorQueuesByTablet allows injecting a queue of errors per tablet UID.
+// Each call dequeues and returns the next error. When empty, it falls back to fakeBinlogClientErrorsByTablet.
+var fakeBinlogClientErrorQueuesByTablet map[uint32][]error
+
+// fakeBinlogClientCallback is called when a tablet is dialed.
+var fakeBinlogClientCallback func(tablet *topodatapb.Tablet)
+
 func (fbc *fakeBinlogClient) Dial(ctx context.Context, tablet *topodatapb.Tablet) error {
 	fbc.lastTablet = tablet
+	if fakeBinlogClientCallback != nil {
+		fakeBinlogClientCallback(tablet)
+	}
 	return nil
 }
 
@@ -413,6 +444,21 @@ func (fbc *fakeBinlogClient) StreamTables(ctx context.Context, position string, 
 	fbc.lastPos = position
 	fbc.lastTables = tables
 	fbc.lastCharset = charset
+	if fakeBinlogClientErrorQueuesByTablet != nil {
+		if errs, ok := fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid]; ok && len(errs) > 0 {
+			err := errs[0]
+			fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid] = errs[1:]
+			if err != nil {
+				return nil, err
+			}
+			return &btStream{ctx: ctx}, nil
+		}
+	}
+	if fakeBinlogClientErrorsByTablet != nil {
+		if err, ok := fakeBinlogClientErrorsByTablet[fbc.lastTablet.Alias.Uid]; ok {
+			return nil, err
+		}
+	}
 	return &btStream{ctx: ctx}, nil
 }
 
@@ -420,6 +466,21 @@ func (fbc *fakeBinlogClient) StreamKeyRange(ctx context.Context, position string
 	fbc.lastPos = position
 	fbc.lastKeyRange = keyRange
 	fbc.lastCharset = charset
+	if fakeBinlogClientErrorQueuesByTablet != nil {
+		if errs, ok := fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid]; ok && len(errs) > 0 {
+			err := errs[0]
+			fakeBinlogClientErrorQueuesByTablet[fbc.lastTablet.Alias.Uid] = errs[1:]
+			if err != nil {
+				return nil, err
+			}
+			return &btStream{ctx: ctx}, nil
+		}
+	}
+	if fakeBinlogClientErrorsByTablet != nil {
+		if err, ok := fakeBinlogClientErrorsByTablet[fbc.lastTablet.Alias.Uid]; ok {
+			return nil, err
+		}
+	}
 	return &btStream{ctx: ctx}, nil
 }
 
@@ -451,18 +512,10 @@ func (bts *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 
 func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {
 	t.Helper()
-	if !proto.Equal(tablet, globalFBC.lastTablet) {
-		t.Errorf("Request tablet: %v, want %v", globalFBC.lastTablet, tablet)
-	}
-	if pos != globalFBC.lastPos {
-		t.Errorf("Request pos: %v, want %v", globalFBC.lastPos, pos)
-	}
-	if !reflect.DeepEqual(tables, globalFBC.lastTables) {
-		t.Errorf("Request tables: %v, want %v", globalFBC.lastTables, tables)
-	}
-	if !proto.Equal(kr, globalFBC.lastKeyRange) {
-		t.Errorf("Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
-	}
+	assert.True(t, proto.Equal(tablet, globalFBC.lastTablet), "Request tablet: %v, want %v", globalFBC.lastTablet, tablet)
+	assert.Equalf(t, pos, globalFBC.lastPos, "Request pos: %v, want %v", globalFBC.lastPos, pos)
+	assert.Equalf(t, tables, globalFBC.lastTables, "Request tables: %v, want %v", globalFBC.lastTables, tables)
+	assert.True(t, proto.Equal(kr, globalFBC.lastKeyRange), "Request KeyRange: %v, want %v", globalFBC.lastKeyRange, kr)
 }
 
 // --------------------------------------
@@ -552,8 +605,16 @@ func (dbc *realDBClient) ExecuteFetchMulti(query string, maxrows int) ([]*sqltyp
 		}
 		results = append(results, qr)
 	}
+	lastMultiExecQueryMu.Lock()
 	lastMultiExecQuery = query
+	lastMultiExecQueryMu.Unlock()
 	return results, nil
+}
+
+func getLastMultiExecQuery() string {
+	lastMultiExecQueryMu.Lock()
+	defer lastMultiExecQueryMu.Unlock()
+	return lastMultiExecQuery
 }
 
 func (dbc *realDBClient) SupportsCapability(capability capabilities.FlavorCapability) (bool, error) {
@@ -1148,7 +1209,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 	failed := false
 	for i, log := range logs {
 		if failed {
-			t.Errorf("no logs received")
+			assert.Fail(t, "no logs received")
 			continue
 		}
 		select {
@@ -1167,11 +1228,9 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *V
 				}
 			}
 
-			if !match {
-				t.Errorf("log:\n%v, does not match log %d:\n%q", got, i, log)
-			}
+			assert.True(t, match, "log:\n%v, does not match log %d:\n%q", got, i, log)
 		case <-time.After(5 * time.Second):
-			t.Errorf("no logs received, expecting %s", log)
+			assert.Failf(t, "no logs received", "no logs received, expecting %s", log)
 			failed = true
 		}
 	}
@@ -1215,7 +1274,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 
 	for len(validator.Pending()) > 0 {
 		if failed {
-			t.Errorf("no query received")
+			assert.Fail(t, "no query received")
 			continue
 		}
 		var got string
@@ -1256,7 +1315,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 			if shouldIgnoreQuery(got) {
 				continue
 			}
-			t.Errorf("unexpected query: %s", got)
+			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
 			require.Len(t, validator.Pending(), 0)
@@ -1278,7 +1337,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 
 	for len(validator.Pending()) > 0 {
 		if failed {
-			t.Errorf("no query received")
+			assert.Fail(t, "no query received")
 			continue
 		}
 		var got string
@@ -1309,7 +1368,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 			if shouldIgnoreQuery(got) {
 				continue
 			}
-			t.Errorf("unexpected query: %s", got)
+			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
 			require.Len(t, validator.Pending(), 0)

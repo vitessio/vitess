@@ -17,15 +17,19 @@ limitations under the License.
 package vtgate
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
+	"net"
 	"os"
 	"path"
 	"strings"
 	"syscall"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,10 +41,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/trace"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 )
 
 type testHandler struct {
@@ -96,7 +104,7 @@ func (th *testHandler) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos ui
 	return nil
 }
 
-func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (th *testHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return nil
 }
 
@@ -116,15 +124,11 @@ func TestConnectionUnixSocket(t *testing.T) {
 	// Use tmp file to reserve a path, remove it immediately, we only care about
 	// name in this context
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Fatalf("NewUnixSocket failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -134,10 +138,8 @@ func TestConnectionUnixSocket(t *testing.T) {
 		Pass:       "password1",
 	}
 
-	c, err := mysql.Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	c, err := mysql.Connect(t.Context(), params)
+	assert.NoError(t, err)
 	c.Close()
 }
 
@@ -149,14 +151,10 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 	// First let's create a file. In this way, we simulate
 	// having a stale socket on disk that needs to be cleaned up.
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Fatalf("NewListener failed: %v", err)
-	}
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 
@@ -166,10 +164,8 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 		Pass:       "password1",
 	}
 
-	c, err := mysql.Connect(context.Background(), params)
-	if err != nil {
-		t.Errorf("Should be able to connect to server but found error: %v", err)
-	}
+	c, err := mysql.Connect(t.Context(), params)
+	assert.NoError(t, err)
 	c.Close()
 }
 
@@ -179,22 +175,31 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	authServer := newTestAuthServerStatic()
 
 	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
-	if err != nil {
-		t.Fatalf("Failed to create temp file")
-	}
+	require.NoError(t, err, "Failed to create temp file")
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	if err != nil {
-		t.Errorf("NewListener failed: %v", err)
-	}
+	assert.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 	_, err = newMysqlUnixSocket(unixSocket.Name(), authServer, th)
 	want := "listen unix"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Error: %v, want prefix %s", err, want)
+	require.Error(t, err)
+	assert.Truef(t, strings.HasPrefix(err.Error(), want), "Error: %v, want prefix %s", err, want)
+}
+
+func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
+	vh := &vtgateHandler{
+		connections: make(map[uint32]*mysql.Conn),
 	}
+
+	c := &mysql.Conn{}
+	assert.Zero(t, c.StatusFlags, "StatusFlags should be zero before NewConnection")
+
+	vh.NewConnection(c)
+
+	assert.True(t, c.StatusFlags&mysql.ServerStatusAutocommit != 0,
+		"NewConnection should set ServerStatusAutocommit flag to match VTGate's default session state")
 }
 
 var newSpanOK = func(ctx context.Context, label string) (trace.Span, context.Context) {
@@ -207,63 +212,140 @@ var newFromStringOK = func(ctx context.Context, spanContext, label string) (trac
 
 func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		t.Fatalf("we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
-		return trace.NoopSpan{}, context.Background(), nil
+		require.Failf(t, "unexpected call", "we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
+		return trace.NoopSpan{}, t.Context(), nil
 	}
 }
 
 func newFromStringError(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
-		return trace.NoopSpan{}, context.Background(), errors.New("")
+		return trace.NoopSpan{}, t.Context(), errors.New("")
 	}
 }
 
 func newFromStringExpect(t *testing.T, expected string) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
 		assert.Equal(t, expected, parentSpan)
-		return trace.NoopSpan{}, context.Background(), nil
+		return trace.NoopSpan{}, t.Context(), nil
 	}
 }
 
 func newSpanFail(t *testing.T) func(ctx context.Context, label string) (trace.Span, context.Context) {
 	return func(ctx context.Context, label string) (trace.Span, context.Context) {
-		t.Fatalf("we provided a span context but newFromString was not used as expected")
-		return trace.NoopSpan{}, context.Background()
+		require.Fail(t, "we provided a span context but newFromString was not used as expected")
+		return trace.NoopSpan{}, t.Context()
 	}
 }
 
 func TestNoSpanContextPassed(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanTestable(t.Context(), "sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextNoPassedInButExistsInString(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanTestable(t.Context(), "SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextPassedIn(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
 	assert.NoError(t, err)
 }
 
 func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
 		newSpanFail(t),
 		newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
 }
 
+func TestSpanContextWithMultipleLeadingComments(t *testing.T) {
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*//*vt+ SCATTER_ERRORS_AS_WARNINGS */ SELECT col1 FROM TABLE", "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "123"))
+	assert.NoError(t, err)
+}
+
 func TestSpanContextNotParsable(t *testing.T) {
 	hasRun := false
-	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
+	_, _, err := startSpanTestable(t.Context(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel",
 		func(c context.Context, s string) (trace.Span, context.Context) {
 			hasRun = true
-			return trace.NoopSpan{}, context.Background()
+			return trace.NoopSpan{}, t.Context()
 		},
 		newFromStringError(t))
 	assert.NoError(t, err)
 	assert.True(t, hasRun, "Should have continued execution despite failure to parse VT_SPAN_CONTEXT")
+}
+
+func TestStartSpanFromPrepare_NoSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "SELECT 1"}
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Empty(t, *prepare.SpanContext)
+}
+
+func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "123"))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Equal(t, "123", *prepare.SpanContext)
+}
+
+func TestStartSpanFromPrepare_CachesSpanContext(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=456*/SELECT 1"}
+	// First call extracts and caches the span context.
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "456"))
+	assert.NoError(t, err)
+	require.NotNil(t, prepare.SpanContext)
+	assert.Equal(t, "456", *prepare.SpanContext)
+
+	// Second call reuses the cached span context (PrepareStmt is not re-parsed).
+	prepare.PrepareStmt = "modified query that would not match"
+	_, _, err = startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
+		newSpanFail(t), newFromStringExpect(t, "456"))
+	assert.NoError(t, err)
+}
+
+func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
+	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
+	newFromStringCalls := 0
+	newSpanCalls := 0
+	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
+		func(c context.Context, s string) (trace.Span, context.Context) {
+			newSpanCalls++
+			return trace.NoopSpan{}, t.Context()
+		},
+		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+			newFromStringCalls++
+			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
+		})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, newFromStringCalls, "newFromString should be called on first execution")
+	assert.Equal(t, 1, newSpanCalls, "newSpan should be called as fallback")
+	// After the first failure, the cached SpanContext should be cleared so
+	// subsequent executions skip the parse attempt entirely.
+	require.NotNil(t, prepare.SpanContext)
+	assert.Empty(t, *prepare.SpanContext)
+
+	// Second execution should not call newFromString again.
+	newFromStringCalls = 0
+	newSpanCalls = 0
+	_, _, err = startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
+		func(c context.Context, s string) (trace.Span, context.Context) {
+			newSpanCalls++
+			return trace.NoopSpan{}, t.Context()
+		},
+		func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+			newFromStringCalls++
+			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
+		})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, newFromStringCalls, "newFromString should not be called after cached failure")
+	assert.Equal(t, 1, newSpanCalls, "newSpan should be called directly")
 }
 
 func newTestAuthServerStatic() *mysql.AuthServerStatic {
@@ -275,18 +357,14 @@ func TestDefaultWorkloadEmpty(t *testing.T) {
 	vh := &vtgateHandler{}
 	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLTP)
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_OLTP {
-		t.Fatalf("Expected default workload OLTP")
-	}
+	require.Equal(t, querypb.ExecuteOptions_OLTP, sess.Options.Workload, "Expected default workload OLTP")
 }
 
 func TestDefaultWorkloadOLAP(t *testing.T) {
 	vh := &vtgateHandler{}
 	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_OLAP {
-		t.Fatalf("Expected default workload OLAP")
-	}
+	require.Equal(t, querypb.ExecuteOptions_OLAP, sess.Options.Workload, "Expected default workload OLAP")
 }
 
 func TestInitTLSConfigWithoutServerCA(t *testing.T) {
@@ -314,22 +392,18 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 
 		srv := &mysqlServer{tcpListener: &mysql.Listener{}}
 		if err := initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
-			t.Fatalf("init tls config failure due to: +%v", err)
+			require.NoError(t, err)
 		}
 
 		serverConfig := srv.tcpListener.TLSConfig.Load()
-		if serverConfig == nil {
-			t.Fatalf("init tls config shouldn't create nil server config")
-		}
+		require.NotNil(t, serverConfig, "init tls config shouldn't create nil server config")
 
 		srv.sigChan <- syscall.SIGHUP
 
 		// wait for signal handler
 		synctest.Wait()
 
-		if srv.tcpListener.TLSConfig.Load() == serverConfig {
-			t.Fatalf("init tls config should have been recreated after SIGHUP")
-		}
+		require.NotEqual(t, serverConfig, srv.tcpListener.TLSConfig.Load(), "init tls config should have been recreated after SIGHUP")
 	})
 }
 
@@ -342,7 +416,7 @@ func TestKillMethods(t *testing.T) {
 	err := vh.KillQuery(12345)
 	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
-	err = vh.KillConnection(context.Background(), 12345)
+	err = vh.KillConnection(t.Context(), 12345)
 	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
 	// add a connection
@@ -353,7 +427,7 @@ func TestKillMethods(t *testing.T) {
 	// connection exists
 
 	// updating context.
-	cancelCtx, cancelFunc := context.WithCancel(context.Background())
+	cancelCtx, cancelFunc := context.WithCancel(t.Context())
 	mysqlConn.UpdateCancelCtx(cancelFunc)
 
 	// kill query
@@ -362,11 +436,11 @@ func TestKillMethods(t *testing.T) {
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 
 	// updating context.
-	cancelCtx, cancelFunc = context.WithCancel(context.Background())
+	cancelCtx, cancelFunc = context.WithCancel(t.Context())
 	mysqlConn.UpdateCancelCtx(cancelFunc)
 
 	// kill connection
-	err = vh.KillConnection(context.Background(), 1)
+	err = vh.KillConnection(t.Context(), 1)
 	assert.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 	require.True(t, mysqlConn.IsMarkedForClose())
@@ -871,6 +945,447 @@ func TestComQueryMulti(t *testing.T) {
 	}
 }
 
+func TestSlowQueryStatusFlagsComQuery(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	err = vh.ComQuery(mysqlConn, "select id from user where id = 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.NotZero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+
+	sbc1.ExecDelayResponse = 0
+	err = vh.ComQuery(mysqlConn, "select id from user where id = 1", func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPWire(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	oldDefaultWorkload := mysqlDefaultWorkload
+	slowQueryThreshold = 5 * time.Millisecond
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		mysqlDefaultWorkload = oldDefaultWorkload
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("update user set name = 'foo' where id = 1", 100, true)
+	require.NoError(t, err)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsComQueryMultiOKOnlyOLAPFallbackWire(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	oldDefaultWorkload := mysqlDefaultWorkload
+	slowQueryThreshold = 5 * time.Millisecond
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		mysqlDefaultWorkload = oldDefaultWorkload
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, err := conn.ExecuteFetch("update user set name = 'foo' where id = 1", 100, true)
+	require.NoError(t, err)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestComQueryMultiOLAPDeferredOKRefreshesTransactionStatusWire(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	oldDefaultWorkload := mysqlDefaultWorkload
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		mysqlDefaultWorkload = oldDefaultWorkload
+	})
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select 1; begin", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotEmpty(t, result.Fields)
+	assert.Zero(t, result.StatusFlags&mysql.ServerStatusInTrans)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerStatusInTrans)
+}
+
+func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+
+	prepare := &mysql.PrepareData{
+		PrepareStmt: "select id from user where id = 1",
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+	err = vh.ComStmtExecute(mysqlConn, prepare, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.NotZero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+
+	sbc1.ExecDelayResponse = 0
+	err = vh.ComStmtExecute(mysqlConn, prepare, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id", "int64")
+	input := []*sqltypes.Result{
+		{Fields: fields},
+		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}},
+		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}},
+	}
+	var results []*sqltypes.Result
+	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+		results = append(results, result)
+		return nil
+	})
+
+	for _, result := range input {
+		require.NoError(t, callback(result))
+	}
+
+	require.Nil(t, deferredResult())
+	assertOLAPRowChunksAfterFields(t, fields, results)
+}
+
+func TestDeferFirstOKOnlyResultDefersOnlyFirstOKResult(t *testing.T) {
+	okResult := &sqltypes.Result{RowsAffected: 1}
+	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+		require.Failf(t, "callback called for deferred OK-only result", "%v", result)
+		return nil
+	})
+
+	err := callback(okResult)
+	require.NoError(t, err)
+	assert.Same(t, okResult, deferredResult())
+}
+
+func assertOLAPRowChunksAfterFields(t *testing.T, fields []*querypb.Field, results []*sqltypes.Result) {
+	t.Helper()
+
+	require.Len(t, results, 3)
+	assert.Equal(t, fields, results[0].Fields)
+	assert.Empty(t, results[0].Rows)
+	assert.Empty(t, results[1].Fields)
+	assert.Equal(t, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, results[1].Rows)
+	assert.Empty(t, results[2].Fields)
+	assert.Equal(t, [][]sqltypes.Value{{sqltypes.NewInt64(2)}}, results[2].Rows)
+}
+
+func TestSlowQueryStatusFlagsComQueryMulti(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select id from user where id = 1; select 1", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	assert.Zero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+}
+
+func TestSlowQueryStatusFlagsStreamExecuteMultiOLAP(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	slowQueryThreshold = 5 * time.Millisecond
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), &testHandler{}, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: mysqlConn}
+	session := &vtgatepb.Session{
+		Autocommit:           true,
+		EnableSystemSettings: true,
+		TargetString:         "TestExecutor",
+		Options: &querypb.ExecuteOptions{
+			Workload: querypb.ExecuteOptions_OLAP,
+		},
+	}
+
+	seenOKOnly := false
+	session, err = vh.streamExecuteMultiQuery(t.Context(), mysqlConn, mysqlCtx, session, "select id from user where id = 1; set autocommit = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if firstPacket && len(qr.QueryResult.Fields) == 0 {
+			seenOKOnly = true
+			assert.False(t, more)
+			assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, session)
+	assert.True(t, seenOKOnly)
+	assert.Equal(t, []bool{true, false}, mysqlCtx.slowQueryStates)
+}
+
+func TestSlowQueryStatusFlagsComQueryMultiOLAPErrorAfterSlowRowsWire(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldThreshold := slowQueryThreshold
+	oldDefaultWorkload := mysqlDefaultWorkload
+	slowQueryThreshold = 5 * time.Millisecond
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		slowQueryThreshold = oldThreshold
+		mysqlDefaultWorkload = oldDefaultWorkload
+		sbc1.ExecDelayResponse = 0
+	})
+
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	sbc1.ExecDelayResponse = 20 * time.Millisecond
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	result, more, err := conn.ExecuteFetchMulti("select id from user where id = 1; select from", 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.Error(t, err)
+	assert.False(t, more)
+	assert.Nil(t, result)
+}
+
+func TestStreamExecuteMultiOLAPTimeoutUsesParentContextPerStatement(t *testing.T) {
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	oldTimeout := mysqlQueryTimeout
+	mysqlQueryTimeout = time.Second
+	sbc1.ExecDelayResponse = time.Millisecond
+	t.Cleanup(func() {
+		mysqlQueryTimeout = oldTimeout
+		sbc1.ExecDelayResponse = 0
+	})
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	mysqlConn := mysql.GetTestServerConn(&mysql.Listener{})
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: mysqlConn}
+	session := &vtgatepb.Session{
+		Autocommit:           true,
+		EnableSystemSettings: true,
+		TargetString:         "TestExecutor",
+		Options: &querypb.ExecuteOptions{
+			Workload: querypb.ExecuteOptions_OLAP,
+		},
+	}
+
+	var moreFlags []bool
+	session, err := vh.streamExecuteMultiQuery(t.Context(), mysqlConn, mysqlCtx, session, "select id from user where id = 1; select id from user where id = 1", func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error {
+		if qr.QueryError != nil {
+			return qr.QueryError
+		}
+		if firstPacket {
+			moreFlags = append(moreFlags, more)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, session)
+	assert.Equal(t, []bool{true, false}, moreFlags)
+}
+
 func TestGracefulShutdown(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 
@@ -907,6 +1422,407 @@ func TestGracefulShutdown(t *testing.T) {
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
 
 	require.True(t, mysqlConn.IsMarkedForClose())
+}
+
+func TestComBinlogDumpGTID(t *testing.T) {
+	// Save and restore original flag values
+	originalBinlogDumpEnabled := enableBinlogDump.Get()
+	defer enableBinlogDump.Set(originalBinlogDumpEnabled)
+
+	// Enable binlog dump and authorize all users for this test
+	enableBinlogDump.Set(true)
+	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+	defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
+	// Create executor environment with sandbox connections
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	// Create VTGate with the gateway
+	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
+
+	// Get the tablet alias from the sandbox connection
+	tabletAlias := sbc1.Tablet().Alias
+
+	// Create the vtgate handler
+	vh := newVtgateHandler(vtg)
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// Create a connection
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.User = "testuser"
+	mysqlConn.UserData = &mysql.StaticUserData{Username: "testuser"}
+	vh.connections[1] = mysqlConn
+
+	binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+	defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
+	t.Run("unauthorized user", func(t *testing.T) {
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("cdcUser"))
+		defer binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+
+		mysqlConn.User = "regularUser"
+		mysqlConn.UserData = &mysql.StaticUserData{Username: "regularUser"}
+		defer func() {
+			mysqlConn.User = "testuser"
+			mysqlConn.UserData = &mysql.StaticUserData{Username: "testuser"}
+		}()
+
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not authorized to perform binlog dump operations")
+	})
+
+	t.Run("no target specified", func(t *testing.T) {
+		// Clear any previous target
+		vh.session(mysqlConn).TargetString = ""
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no target specified")
+	})
+
+	t.Run("target from session TargetString", func(t *testing.T) {
+		// Set up empty responses
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		// Set the session target (normally set by USE statement or parsed from username)
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+		mysqlConn.User = "testuser"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("target without tablet alias routes via gateway", func(t *testing.T) {
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("binlog dump with error from tablet", func(t *testing.T) {
+		// Set up an error response
+		sbc1.BinlogDumpError = errors.New("test binlog error")
+		defer func() { sbc1.BinlogDumpError = nil }()
+
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "test binlog error")
+	})
+
+	t.Run("binlog dump with empty response succeeds", func(t *testing.T) {
+		// Reset error and set up empty responses (no events to write)
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("binlog dump with GTID set and empty response", func(t *testing.T) {
+		// Reset error
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		gtidSet, err := replication.ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100")
+		require.NoError(t, err)
+
+		err = vh.ComBinlogDumpGTID(mysqlConn, "", 4, gtidSet, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("invalid tablet alias in target", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary|invalid-alias"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		// The error could be about parsing the alias or not finding the tablet
+		assert.True(t, strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "not found"),
+			"Expected error about invalid alias or tablet not found, got: %v", err)
+	})
+
+	t.Run("nonexistent tablet alias", func(t *testing.T) {
+		// Use a valid format but non-existent alias
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary|aa-9999999"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+	})
+
+	t.Run("filename is rejected", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("filename is rejected even with tablet alias", func(t *testing.T) {
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "binlog.000003", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog filename is not supported")
+	})
+
+	t.Run("position below minimum is rejected", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 3, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "Client requested source to start replication from position < 4")
+	})
+
+	t.Run("non-default position is rejected", func(t *testing.T) {
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 1234, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+	})
+
+	t.Run("non-default position is rejected even with tablet alias", func(t *testing.T) {
+		targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+		vh.session(mysqlConn).TargetString = targetString
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 5, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only binlog position 4 is supported")
+	})
+
+	t.Run("default position is allowed", func(t *testing.T) {
+		sbc1.BinlogDumpError = nil
+		sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+		vh.session(mysqlConn).TargetString = "TestExecutor:-20@primary"
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+}
+
+func TestBinlogDumpACL(t *testing.T) {
+	// Save and restore original flag values
+	originalBinlogDumpEnabled := enableBinlogDump.Get()
+	defer enableBinlogDump.Set(originalBinlogDumpEnabled)
+
+	originalAuthorizedUsers := binlogacl.AuthorizedBinlogUsers.Get()
+	defer binlogacl.AuthorizedBinlogUsers.Set(originalAuthorizedUsers)
+
+	// Create executor environment with sandbox connections
+	executor, sbc1, _, _, _ := createExecutorEnv(t)
+
+	// Create VTGate with the gateway
+	vtg := newVTGate(executor, executor.resolver, nil, nil, executor.scatterConn.gateway)
+
+	// Get the tablet alias from the sandbox connection
+	tabletAlias := sbc1.Tablet().Alias
+
+	// Create the vtgate handler
+	vh := newVtgateHandler(vtg)
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	// Create a connection with a specific user
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{Username: "cdcuser"}
+	mysqlConn.User = "cdcuser"
+	vh.connections[1] = mysqlConn
+
+	// Set up a valid target
+	targetString := "TestExecutor:-20@primary|" + topoproto.TabletAliasString(tabletAlias)
+	vh.session(mysqlConn).TargetString = targetString
+
+	// Set up empty responses for successful cases
+	sbc1.BinlogDumpError = nil
+	sbc1.BinlogDumpResponses = []*binlogdatapb.BinlogDumpResponse{}
+
+	t.Run("binlog dump disabled globally", func(t *testing.T) {
+		enableBinlogDump.Set(false)
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "binlog dump is disabled")
+	})
+
+	t.Run("binlog dump enabled but user not authorized", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		// Don't set any authorized users (empty = no one authorized)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers(""))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not authorized to perform binlog dump")
+		assert.Contains(t, err.Error(), "cdcuser")
+	})
+
+	t.Run("binlog dump enabled and user authorized via explicit list", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("cdcuser,otheruser"))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("binlog dump enabled and all users authorized via wildcard", func(t *testing.T) {
+		enableBinlogDump.Set(true)
+		binlogacl.AuthorizedBinlogUsers.Set(binlogacl.NewAuthorizedBinlogUsers("%"))
+
+		err := vh.ComBinlogDumpGTID(mysqlConn, "", 4, nil, 0)
+		require.NoError(t, err)
+	})
+
+	t.Run("ComBinlogDump returns unimplemented error", func(t *testing.T) {
+		err := vh.ComBinlogDump(mysqlConn, "binlog.000001", 4)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "COM_BINLOG_DUMP is not supported")
+	})
+}
+
+func TestBinlogStreamCallback_SpanningPacketClosesOnError(t *testing.T) {
+	// When a MySQL packet spans multiple gRPC responses and the stream
+	// errors mid-packet, streamBinlogDumpResponse must close the connection
+	// without writing an ERR packet. Writing an ERR packet mid-packet would
+	// corrupt the client stream since the client is still expecting the
+	// remaining payload bytes.
+
+	// Create a writable mysql.Conn backed by a pipe, capturing all bytes
+	// written so we can verify no ERR packet was sent.
+	clientPipe, serverPipe := net.Pipe()
+	defer serverPipe.Close()
+
+	var written bytes.Buffer
+	copyDone := make(chan struct{})
+	go func() {
+		io.Copy(&written, serverPipe)
+		close(copyDone)
+	}()
+
+	c := mysql.NewConnForTest(clientPipe)
+
+	vh := &vtgateHandler{}
+	var state binlogStreamState
+	callback := vh.binlogStreamCallback(c, &state)
+
+	// Build a gRPC response where a MySQL packet spans the response boundary.
+	// The packet header declares a 1000-byte payload, but only 500 bytes
+	// are present in this response.
+	pktPayloadLen := 1000
+	availablePayload := 500
+
+	raw := make([]byte, mysql.PacketHeaderSize+availablePayload)
+	// MySQL packet header: 3-byte little-endian length + 1-byte sequence
+	raw[0] = byte(pktPayloadLen & 0xFF)
+	raw[1] = byte((pktPayloadLen >> 8) & 0xFF)
+	raw[2] = byte((pktPayloadLen >> 16) & 0xFF)
+	raw[3] = 0 // sequence number
+
+	// Simulate: callback processes the spanning response, then the stream errors.
+	streamErr := errors.New("stream broken")
+	err := vh.streamBinlogDumpResponse(c, "test", &state, func() error {
+		if err := callback(&binlogdatapb.BinlogDumpResponse{Raw: raw}); err != nil {
+			return err
+		}
+		return streamErr
+	})
+	require.NoError(t, err) // streamBinlogDumpResponse returns nil after handling the error
+
+	// Close the write end so the capture goroutine finishes.
+	clientPipe.Close()
+	<-copyDone
+
+	assert.True(t, c.IsMarkedForClose(), "connection should be marked for close")
+
+	// The only bytes written should be the partial MySQL packet:
+	// 4-byte header + 500 bytes payload = 504 bytes.
+	// If an ERR packet was incorrectly written, there would be additional bytes.
+	expectedBytes := mysql.PacketHeaderSize + availablePayload
+	assert.Equal(t, expectedBytes, written.Len(),
+		"only the partial packet should be written; extra bytes indicate a spurious ERR packet")
+}
+
+func TestBinlogStreamCallback_CompletePacketWritesErrOnError(t *testing.T) {
+	// When a complete MySQL packet has been written and the stream errors
+	// at a clean message boundary, streamBinlogDumpResponse should write
+	// an ERR packet so the client knows what happened.
+
+	clientPipe, serverPipe := net.Pipe()
+	defer serverPipe.Close()
+
+	var written bytes.Buffer
+	copyDone := make(chan struct{})
+	go func() {
+		io.Copy(&written, serverPipe)
+		close(copyDone)
+	}()
+
+	c := mysql.NewConnForTest(clientPipe)
+
+	vh := &vtgateHandler{}
+	var state binlogStreamState
+	callback := vh.binlogStreamCallback(c, &state)
+
+	// Build a gRPC response containing a complete, small MySQL packet.
+	payload := []byte{0x00, 0xAA, 0xBB, 0xCC}
+	raw := make([]byte, mysql.PacketHeaderSize+len(payload))
+	raw[0] = byte(len(payload))
+	raw[1] = 0
+	raw[2] = 0
+	raw[3] = 0 // sequence number
+	copy(raw[mysql.PacketHeaderSize:], payload)
+
+	// Simulate: callback processes the complete packet, then the stream errors.
+	streamErr := errors.New("stream broken")
+	err := vh.streamBinlogDumpResponse(c, "test", &state, func() error {
+		if err := callback(&binlogdatapb.BinlogDumpResponse{Raw: raw}); err != nil {
+			return err
+		}
+		return streamErr
+	})
+	require.NoError(t, err)
+
+	clientPipe.Close()
+	<-copyDone
+
+	assert.True(t, c.IsMarkedForClose(), "connection should be marked for close")
+
+	// The written bytes should contain the original packet PLUS an ERR packet.
+	originalPacketSize := mysql.PacketHeaderSize + len(payload)
+	assert.Greater(t, written.Len(), originalPacketSize,
+		"an ERR packet should be written after the complete packet")
+
+	// Verify the extra bytes start with a MySQL packet header whose payload
+	// begins with the ERR marker (0xFF).
+	errPacketStart := written.Bytes()[originalPacketSize:]
+	require.GreaterOrEqual(t, len(errPacketStart), mysql.PacketHeaderSize+1,
+		"ERR packet too short")
+	assert.Equal(t, byte(mysql.ErrPacket), errPacketStart[mysql.PacketHeaderSize],
+		"first payload byte of the error response should be the ERR packet marker")
 }
 
 func TestGracefulShutdownWithTransaction(t *testing.T) {

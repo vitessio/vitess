@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 	"sync"
@@ -28,7 +30,6 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -70,6 +71,19 @@ const tabletPickerContextTimeout = 90 * time.Second
 // stopOnReshardDelay is how long we wait, at a minimum, after sending a reshard journal event before
 // ending the stream from the tablet.
 const stopOnReshardDelay = 500 * time.Millisecond
+
+// streamAgeJitterRatio is the jitter (+/-) added to max stream age as a fraction,
+// to spread out reconnections.
+const streamAgeJitterRatio = 0.1
+
+// StreamAgeJitterRange returns the jitter range for a given max age duration.
+// Jitter is +/- streamAgeJitterRatio of the max age.
+func StreamAgeJitterRange(maxAge time.Duration) time.Duration {
+	if maxAge <= 0 {
+		return 0
+	}
+	return time.Duration(float64(maxAge) * streamAgeJitterRatio)
+}
 
 // livenessTimeout is the point at which we return an error to the client if the stream has received
 // no events, including heartbeats, from any of the shards.
@@ -177,27 +191,33 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 		vstreamsCreated: exporter.NewCountersWithMultiLabels(
 			"VStreamsCreated",
 			"Number of vstreams created",
-			labels),
+			labels,
+		),
 		vstreamsLag: exporter.NewGaugesWithMultiLabels(
 			"VStreamsLag",
 			"Difference between event current time and the binlog event timestamp",
-			labels),
+			labels,
+		),
 		vstreamsCount: exporter.NewCountersWithMultiLabels(
 			"VStreamsCount",
 			"Number of active vstreams",
-			labels),
+			labels,
+		),
 		vstreamsEventsStreamed: exporter.NewCountersWithMultiLabels(
 			"VStreamsEventsStreamed",
 			"Number of events sent across all vstreams",
-			labels),
+			labels,
+		),
 		vstreamsEndedWithErrors: exporter.NewCountersWithMultiLabels(
 			"VStreamsEndedWithErrors",
 			"Number of vstreams that ended with errors",
-			labels),
+			labels,
+		),
 		vstreamsTransactionsChunked: exporter.NewCountersWithMultiLabels(
 			"VStreamsTransactionsChunked",
 			"Number of transactions that exceeded TransactionChunkSize threshold and required locking for contiguous, chunked delivery",
-			labels),
+			labels,
+		),
 	}
 }
 
@@ -208,8 +228,21 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
-	log.Info(fmt.Sprintf("VStream flags: minimize_skew=%v, heartbeat_interval=%v, stop_on_reshard=%v, cells=%v, cell_preference=%v, tablet_order=%v, stream_keyspace_heartbeats=%v, include_reshard_journal_events=%v, tables_to_copy=%v, exclude_keyspace_from_table_name=%v, transaction_chunk_size=%v", flags.GetMinimizeSkew(), flags.GetHeartbeatInterval(), flags.GetStopOnReshard(), flags.Cells, flags.CellPreference, flags.TabletOrder,
-		flags.GetStreamKeyspaceHeartbeats(), flags.GetIncludeReshardJournalEvents(), flags.TablesToCopy, flags.GetExcludeKeyspaceFromTableName(), flags.TransactionChunkSize))
+	log.Info(
+		"VStream flags",
+		slog.Bool("minimize_skew", flags.GetMinimizeSkew()),
+		slog.Uint64("heartbeat_interval", uint64(flags.GetHeartbeatInterval())),
+		slog.Bool("stop_on_reshard", flags.GetStopOnReshard()),
+		slog.String("cells", flags.Cells),
+		slog.String("cell_preference", flags.CellPreference),
+		slog.String("tablet_order", flags.TabletOrder),
+		slog.Bool("stream_keyspace_heartbeats", flags.GetStreamKeyspaceHeartbeats()),
+		slog.Bool("include_reshard_journal_events", flags.GetIncludeReshardJournalEvents()),
+		slog.Any("tables_to_copy", flags.TablesToCopy),
+		slog.Bool("exclude_keyspace_from_table_name", flags.GetExcludeKeyspaceFromTableName()),
+		slog.Int64("transaction_chunk_size", flags.TransactionChunkSize),
+		slog.Uint64("max_stream_age_seconds", uint64(flags.GetMaxStreamAgeSeconds())),
+	)
 	ts, err := vsm.toposerv.GetTopoServer()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to get topology server")
@@ -360,7 +393,34 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.streamLivenessTimer.Stop()
 	}
 
-	vs.wg.Go(func() {
+	if vs.flags.GetMaxStreamAgeSeconds() > 0 {
+		maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
+		jitterHalfRange := int64(StreamAgeJitterRange(maxAge))
+		jitter := time.Duration(rand.Int64N(2*jitterHalfRange) - jitterHalfRange)
+
+		go func() {
+			ageTimer := time.NewTimer(maxAge + jitter)
+			defer ageTimer.Stop()
+
+			select {
+			case <-ageTimer.C:
+				log.Info(
+					"vstream exceeded maximum age",
+					slog.Duration("max_age", maxAge),
+					slog.Duration("jitter", jitter),
+				)
+				msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, jitter)
+				vs.once.Do(func() {
+					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
+				})
+				vs.cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
+
+	var sendWg sync.WaitGroup
+	sendWg.Go(func() {
 		// sendEvents returns either if the given context has been canceled or if
 		// an error is returned from the callback. If the callback returns an error,
 		// we need to cancel the context to stop the other stream goroutines
@@ -376,6 +436,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 		vs.startOneStream(ctx, sgtid)
 	}
 	vs.wg.Wait()
+	close(vs.eventCh)
+	sendWg.Wait()
 
 	return vs.getError()
 }
@@ -415,7 +477,12 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				vs.setError(ctx.Err(), "context ended while sending events")
 			})
 			return
-		case evs := <-vs.eventCh:
+		case evs, ok := <-vs.eventCh:
+			if !ok {
+				// The channel is closed once all shard streams have ended, so
+				// there are no more events to send.
+				return
+			}
 			if err := send(evs); err != nil {
 				log.Info(fmt.Sprintf("Error in vstream send events to client: %v", err))
 				vs.once.Do(func() {
@@ -699,6 +766,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				TablesToCopy: vs.flags.GetTablesToCopy(),
 			}
 		}
+		// Don't add query timeouts to the VStream queries used during a table copy/sync as it can unnecessarily
+		// cause copy resume cycles and in doing so adding additional operational complexity, chance for failure
+		// (not all clients support copy resume well if at all), and extended copy/sync execution time.
+		options.NoTimeouts = true
 
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
 		req := &binlogdatapb.VStreamRequest{
@@ -786,7 +857,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, sendErr))
 						return vterrors.Wrap(sendErr, sendingEventsErr)
 					}
-					eventss = nil
+					eventss = nil //nolint:prealloc
 					sendevents = nil
 				case binlogdatapb.VEventType_COPY_COMPLETED:
 					sendevents = append(sendevents, event)
@@ -981,48 +1052,17 @@ func extractRowTableName(ev *binlogdatapb.VEvent) *string {
 // A tablet should be ignored upon retry if it's likely another tablet will not
 // produce the same error.
 func (vs *vstream) shouldRetry(err error) (retry bool, ignoreTablet bool) {
-	errCode := vterrors.Code(err)
-	// In this context, where we will run the tablet picker again on retry, these
-	// codes indicate that it's worth a retry as the error is likely a transient
-	// one with a tablet or within the shard.
-	if errCode == vtrpcpb.Code_FAILED_PRECONDITION || errCode == vtrpcpb.Code_UNAVAILABLE {
+	action := discovery.ShouldRetryTabletError(err)
+	switch action {
+	case discovery.TabletErrorActionRetry:
+		return true, false
+	case discovery.TabletErrorActionIgnoreTablet:
+		return true, true
+	case discovery.TabletErrorActionFail:
+		return false, false
+	default:
 		return true, false
 	}
-	// This typically indicates that the user provided invalid arguments for the
-	// VStream so we should not retry.
-	if errCode == vtrpcpb.Code_INVALID_ARGUMENT {
-		// But if there is a GTIDSet Mismatch on the tablet, omit that tablet from
-		// the candidate list in the TabletPicker and retry. The argument was invalid
-		// *for that specific *tablet* but it's not generally invalid.
-		if strings.Contains(err.Error(), "GTIDSet Mismatch") {
-			return true, true
-		}
-		return false, false
-	}
-	// Internal errors such as not having all journaling partipants require a new
-	// VStream.
-	if errCode == vtrpcpb.Code_INTERNAL {
-		return false, false
-	}
-	// Handle binary log purging errors by retrying with a different tablet.
-	// This occurs when a tablet doesn't have the requested GTID because the
-	// source purged the required binary logs. Another tablet might still have
-	// the logs, so we ignore this tablet and retry.
-	if errCode == vtrpcpb.Code_UNKNOWN {
-		sqlErr := sqlerror.NewSQLErrorFromError(err)
-		if sqlError, ok := sqlErr.(*sqlerror.SQLError); ok {
-			switch sqlError.Number() {
-			case sqlerror.ERMasterFatalReadingBinlog, // 1236
-				sqlerror.ERSourceHasPurgedRequiredGtids: // 1789
-				return true, true
-			}
-		}
-	}
-
-	// For anything else, if this is an ephemeral SQL error -- such as a
-	// MAX_EXECUTION_TIME SQL error during the copy phase -- or any other
-	// type of non-SQL error, then retry.
-	return sqlerror.IsEphemeralError(err), false
 }
 
 // sendAll sends a group of events together while holding the lock.

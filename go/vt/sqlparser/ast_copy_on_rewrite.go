@@ -480,14 +480,30 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfShow(n, parent)
 	case *ShowBasic:
 		return c.copyOnRewriteRefOfShowBasic(n, parent)
+	case *ShowBinaryLogs:
+		return c.copyOnRewriteRefOfShowBinaryLogs(n, parent)
+	case *ShowBinlogEvents:
+		return c.copyOnRewriteRefOfShowBinlogEvents(n, parent)
 	case *ShowCreate:
 		return c.copyOnRewriteRefOfShowCreate(n, parent)
+	case *ShowCreateUser:
+		return c.copyOnRewriteRefOfShowCreateUser(n, parent)
+	case *ShowEngine:
+		return c.copyOnRewriteRefOfShowEngine(n, parent)
 	case *ShowFilter:
 		return c.copyOnRewriteRefOfShowFilter(n, parent)
+	case *ShowGrants:
+		return c.copyOnRewriteRefOfShowGrants(n, parent)
 	case *ShowMigrationLogs:
 		return c.copyOnRewriteRefOfShowMigrationLogs(n, parent)
-	case *ShowOther:
-		return c.copyOnRewriteRefOfShowOther(n, parent)
+	case *ShowProfile:
+		return c.copyOnRewriteRefOfShowProfile(n, parent)
+	case *ShowReplicas:
+		return c.copyOnRewriteRefOfShowReplicas(n, parent)
+	case *ShowReplicationSourceStatus:
+		return c.copyOnRewriteRefOfShowReplicationSourceStatus(n, parent)
+	case *ShowReplicationStatus:
+		return c.copyOnRewriteRefOfShowReplicationStatus(n, parent)
 	case *ShowThrottledApps:
 		return c.copyOnRewriteRefOfShowThrottledApps(n, parent)
 	case *ShowThrottlerStatus:
@@ -6200,11 +6216,51 @@ func (c *cow) copyOnRewriteRefOfShowBasic(n *ShowBasic, parent SQLNode) (out SQL
 		_Tbl, changedTbl := c.copyOnRewriteTableName(n.Tbl, n)
 		_DbName, changedDbName := c.copyOnRewriteIdentifierCS(n.DbName, n)
 		_Filter, changedFilter := c.copyOnRewriteRefOfShowFilter(n.Filter, n)
-		if changedTbl || changedDbName || changedFilter {
+		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
+		if changedTbl || changedDbName || changedFilter || changedLimit {
 			res := *n
 			res.Tbl, _ = _Tbl.(TableName)
 			res.DbName, _ = _DbName.(IdentifierCS)
 			res.Filter, _ = _Filter.(*ShowFilter)
+			res.Limit, _ = _Limit.(*Limit)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfShowBinaryLogs(n *ShowBinaryLogs, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfShowBinlogEvents(n *ShowBinlogEvents, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Position, changedPosition := c.copyOnRewriteExpr(n.Position, n)
+		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
+		if changedPosition || changedLimit {
+			res := *n
+			res.Position, _ = _Position.(Expr)
+			res.Limit, _ = _Limit.(*Limit)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -6241,6 +6297,32 @@ func (c *cow) copyOnRewriteRefOfShowCreate(n *ShowCreate, parent SQLNode) (out S
 	return
 }
 
+func (c *cow) copyOnRewriteRefOfShowCreateUser(n *ShowCreateUser, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfShowEngine(n *ShowEngine, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
 func (c *cow) copyOnRewriteRefOfShowFilter(n *ShowFilter, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6257,6 +6339,19 @@ func (c *cow) copyOnRewriteRefOfShowFilter(n *ShowFilter, parent SQLNode) (out S
 			}
 			changed = true
 		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfShowGrants(n *ShowGrants, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
 	}
 	if c.post != nil {
 		out, changed = c.postVisit(out, parent, changed)
@@ -6287,7 +6382,58 @@ func (c *cow) copyOnRewriteRefOfShowMigrationLogs(n *ShowMigrationLogs, parent S
 	return
 }
 
-func (c *cow) copyOnRewriteRefOfShowOther(n *ShowOther, parent SQLNode) (out SQLNode, changed bool) {
+func (c *cow) copyOnRewriteRefOfShowProfile(n *ShowProfile, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_ForQuery, changedForQuery := c.copyOnRewriteRefOfLiteral(n.ForQuery, n)
+		_Limit, changedLimit := c.copyOnRewriteRefOfLimit(n.Limit, n)
+		if changedForQuery || changedLimit {
+			res := *n
+			res.ForQuery, _ = _ForQuery.(*Literal)
+			res.Limit, _ = _Limit.(*Limit)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfShowReplicas(n *ShowReplicas, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfShowReplicationSourceStatus(n *ShowReplicationSourceStatus, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfShowReplicationStatus(n *ShowReplicationStatus, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
 	}
@@ -8470,10 +8616,26 @@ func (c *cow) copyOnRewriteShowInternal(n ShowInternal, parent SQLNode) (out SQL
 	switch n := n.(type) {
 	case *ShowBasic:
 		return c.copyOnRewriteRefOfShowBasic(n, parent)
+	case *ShowBinaryLogs:
+		return c.copyOnRewriteRefOfShowBinaryLogs(n, parent)
+	case *ShowBinlogEvents:
+		return c.copyOnRewriteRefOfShowBinlogEvents(n, parent)
 	case *ShowCreate:
 		return c.copyOnRewriteRefOfShowCreate(n, parent)
-	case *ShowOther:
-		return c.copyOnRewriteRefOfShowOther(n, parent)
+	case *ShowCreateUser:
+		return c.copyOnRewriteRefOfShowCreateUser(n, parent)
+	case *ShowEngine:
+		return c.copyOnRewriteRefOfShowEngine(n, parent)
+	case *ShowGrants:
+		return c.copyOnRewriteRefOfShowGrants(n, parent)
+	case *ShowProfile:
+		return c.copyOnRewriteRefOfShowProfile(n, parent)
+	case *ShowReplicas:
+		return c.copyOnRewriteRefOfShowReplicas(n, parent)
+	case *ShowReplicationSourceStatus:
+		return c.copyOnRewriteRefOfShowReplicationSourceStatus(n, parent)
+	case *ShowReplicationStatus:
+		return c.copyOnRewriteRefOfShowReplicationStatus(n, parent)
 	case *ShowTransactionStatus:
 		return c.copyOnRewriteRefOfShowTransactionStatus(n, parent)
 	case Visitable:

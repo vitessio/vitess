@@ -18,10 +18,10 @@ package stats
 
 import (
 	"expvar"
-	"math/rand/v2"
-	"reflect"
-	"sort"
+	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,33 +36,22 @@ func TestCounters(t *testing.T) {
 	c.Add("c2", 1)
 	want1 := `{"c1": 1, "c2": 2}`
 	want2 := `{"c2": 2, "c1": 1}`
-	if s := c.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := c.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 	counts := c.Counts()
-	if counts["c1"] != 1 {
-		t.Errorf("want 1, got %d", counts["c1"])
-	}
-	if counts["c2"] != 2 {
-		t.Errorf("want 2, got %d", counts["c2"])
-	}
+	assert.Equalf(t, int64(1), counts["c1"], "counts[c1]")
+	assert.Equalf(t, int64(2), counts["c2"], "counts[c2]")
 }
 
 func TestCountersTags(t *testing.T) {
 	clearStats()
 	c := NewCountersWithSingleLabel("counterTag1", "help", "label")
 	want := map[string]int64{}
-	got := c.Counts()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("want %v, got %v", want, got)
-	}
+	assert.Equal(t, want, c.Counts())
 
 	c = NewCountersWithSingleLabel("counterTag2", "help", "label", "tag1", "tag2")
 	want = map[string]int64{"tag1": 0, "tag2": 0}
-	got = c.Counts()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("want %v, got %v", want, got)
-	}
+	assert.Equal(t, want, c.Counts())
 }
 
 func TestMultiCounters(t *testing.T) {
@@ -73,25 +62,19 @@ func TestMultiCounters(t *testing.T) {
 	c.Add([]string{"c2a", "c2b"}, 1)
 	want1 := `{"c1a.c1b": 1, "c2a.c2b": 2}`
 	want2 := `{"c2a.c2b": 2, "c1a.c1b": 1}`
-	if s := c.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := c.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 	counts := c.Counts()
-	if counts["c1a.c1b"] != 1 {
-		t.Errorf("want 1, got %d", counts["c1a.c1b"])
-	}
-	if counts["c2a.c2b"] != 2 {
-		t.Errorf("want 2, got %d", counts["c2a.c2b"])
-	}
+	assert.Equalf(t, int64(1), counts["c1a.c1b"], "counts[c1a.c1b]")
+	assert.Equalf(t, int64(2), counts["c2a.c2b"], "counts[c2a.c2b]")
 	f := NewCountersFuncWithMultiLabels("", "help", []string{"aaa", "bbb"}, func() map[string]int64 {
 		return map[string]int64{
 			"c1a.c1b": 1,
 			"c2a.c2b": 2,
 		}
 	})
-	if s := f.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s = f.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 }
 
 func TestMultiCountersDot(t *testing.T) {
@@ -106,16 +89,11 @@ func TestMultiCountersDot(t *testing.T) {
 	c2bJSON := strings.ReplaceAll(c2b, "\\", "\\\\")
 	want1 := `{"` + c1aJSON + `.c1b": 1, "c2a.` + c2bJSON + `": 2}`
 	want2 := `{"c2a.` + c2bJSON + `": 2, "` + c1aJSON + `.c1b": 1}`
-	if s := c.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := c.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 	counts := c.Counts()
-	if counts[c1a+".c1b"] != 1 {
-		t.Errorf("want 1, got %d", counts[c1a+".c1b"])
-	}
-	if counts["c2a."+c2b] != 2 {
-		t.Errorf("want 2, got %d", counts["c2a."+c2b])
-	}
+	assert.Equalf(t, int64(1), counts[c1a+".c1b"], "counts[c1a.c1b]")
+	assert.Equalf(t, int64(2), counts["c2a."+c2b], "counts[c2a.c2b]")
 }
 
 func TestCountersHook(t *testing.T) {
@@ -128,12 +106,8 @@ func TestCountersHook(t *testing.T) {
 	})
 
 	v := NewCountersWithSingleLabel("counter2", "help", "label")
-	if gotname != "counter2" {
-		t.Errorf("want counter2, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "counter2", gotname)
+	assert.Same(t, v, gotv)
 }
 
 var benchCounter = NewCountersWithSingleLabel("bench", "help", "label")
@@ -165,44 +139,79 @@ func BenchmarkMultiCounters(b *testing.B) {
 	})
 }
 
-func BenchmarkCountersTailLatency(b *testing.B) {
-	// For this one, ignore the time reported by 'go test'.
-	// The 99th Percentile log line is all that matters.
-	// (Cmd: go test -bench=BenchmarkCountersTailLatency -benchtime=30s -cpu=10)
-	clearStats()
-	benchCounter.Add("c1", 1)
-	c := make(chan time.Duration, 100)
-	done := make(chan struct{})
-	go func() {
-		all := make([]int, b.N)
-		i := 0
-		for dur := range c {
-			all[i] = int(dur)
-			i++
-		}
-		sort.Ints(all)
-		p99 := time.Duration(all[b.N*99/100])
-		b.Logf("99th Percentile (for N=%v): %v", b.N, p99)
-		close(done)
-	}()
+// benchmarkContention measures Add() latency under heavy contention.
+// Each goroutine collects latencies locally to avoid measurement skew
+// from shared channels or locks. Percentiles are computed after the
+// benchmark completes.
+//
+// Run with high -cpu to increase goroutine count:
+//
+//	go test -bench=BenchmarkContention -benchtime=5s -cpu=10 -run='^$'
+func benchmarkContention(b *testing.B, addFunc func(i int)) {
+	b.Helper()
+
+	b.SetParallelism(100) // 100 * GOMAXPROCS goroutines
+
+	var mu sync.Mutex
+	var allLatencies []time.Duration
 
 	b.ResetTimer()
-	b.SetParallelism(100) // The actual number of goroutines is 100*GOMAXPROCS
 	b.RunParallel(func(pb *testing.PB) {
-		var start time.Time
-
+		local := make([]time.Duration, 0, 1024)
+		i := 0
 		for pb.Next() {
-			// sleep between 0~200ms to simulate 10 QPS per goroutine.
-			time.Sleep(time.Duration(rand.Int64N(200)) * time.Millisecond)
-			start = time.Now()
-			benchCounter.Add("c1", 1)
-			c <- time.Since(start)
+			start := time.Now()
+			addFunc(i)
+			local = append(local, time.Since(start))
+			i++
 		}
+		mu.Lock()
+		allLatencies = append(allLatencies, local...)
+		mu.Unlock()
 	})
 	b.StopTimer()
 
-	close(c)
-	<-done
+	slices.Sort(allLatencies)
+	n := len(allLatencies)
+	if n > 0 {
+		b.Logf("p50: %v  p99: %v  p999: %v  max: %v  (n=%d)",
+			allLatencies[n*50/100],
+			allLatencies[n*99/100],
+			allLatencies[n*999/1000],
+			allLatencies[n-1],
+			n,
+		)
+	}
+}
+
+func BenchmarkCountersWithSingleLabelContention(b *testing.B) {
+	clearStats()
+	c := NewCountersWithSingleLabel("", "help", "key")
+	c.Add("c1", 0) // pre-create
+
+	benchmarkContention(b, func(_ int) {
+		c.Add("c1", 1)
+	})
+}
+
+func BenchmarkCountersWithMultiLabelsContention(b *testing.B) {
+	clearStats()
+	c := NewCountersWithMultiLabels("", "help", []string{"call", "keyspace", "dbtype"})
+
+	// Pre-create 50 distinct key combos to simulate realistic workload.
+	keys := make([][]string, 50)
+	for i := range keys {
+		keys[i] = []string{
+			fmt.Sprintf("method-%d", i),
+			fmt.Sprintf("ks-%d", i%5),
+			fmt.Sprintf("type-%d", i%3),
+		}
+		c.Add(keys[i], 0)
+	}
+
+	benchmarkContention(b, func(i int) {
+		c.Add(keys[i%len(keys)], 1)
+	})
 }
 
 func TestCountersFuncWithMultiLabels(t *testing.T) {
@@ -216,9 +225,8 @@ func TestCountersFuncWithMultiLabels(t *testing.T) {
 
 	want1 := `{"c1": 1, "c2": 2}`
 	want2 := `{"c2": 2, "c1": 1}`
-	if s := f.String(); s != want1 && s != want2 {
-		t.Errorf("want %s or %s, got %s", want1, want2, s)
-	}
+	s := f.String()
+	assert.Truef(t, s == want1 || s == want2, "want %s or %s, got %s", want1, want2, s)
 }
 
 func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
@@ -233,12 +241,8 @@ func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
 	v := NewCountersFuncWithMultiLabels("TestCountersFuncWithMultiLabels_Hook", "help", []string{"label1"}, func() map[string]int64 {
 		return map[string]int64{}
 	})
-	if gotname != "TestCountersFuncWithMultiLabels_Hook" {
-		t.Errorf("want TestCountersFuncWithMultiLabels_Hook, got %s", gotname)
-	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
-	}
+	assert.Equal(t, "TestCountersFuncWithMultiLabels_Hook", gotname)
+	assert.Same(t, v, gotv)
 }
 
 func TestCountersCombineDimension(t *testing.T) {

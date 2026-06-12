@@ -23,6 +23,8 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )
@@ -30,12 +32,12 @@ import (
 var auditOperationCounter = stats.NewCounter("AuditWrite", "Number of audit operations performed")
 
 // AuditOperation creates and writes a new audit entry by given params
-func AuditOperation(auditType string, tabletAlias string, message string) error {
-	keyspace := ""
-	shard := ""
-	if tabletAlias != "" {
+func AuditOperation(auditType string, tabletAlias *topodatapb.TabletAlias, message string) error {
+	var keyspace, shard string
+	if tabletAlias != nil {
 		keyspace, shard, _ = GetKeyspaceShardName(tabletAlias)
 	}
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
 
 	auditWrittenToFile := false
 	if config.GetAuditFileLocation() != "" {
@@ -48,7 +50,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 			}
 
 			defer f.Close()
-			text := fmt.Sprintf("%s\t%s\t%s\t[%s:%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, tabletAlias, keyspace, shard, message)
+			text := fmt.Sprintf("%s\t%s\t%s\t[%s:%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, tabletAliasString, keyspace, shard, message)
 			if _, err = f.WriteString(text); err != nil {
 				log.Error(err.Error())
 			}
@@ -72,7 +74,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 				?
 			)`,
 			auditType,
-			tabletAlias,
+			tabletAliasString,
 			keyspace,
 			shard,
 			message,
@@ -82,7 +84,7 @@ func AuditOperation(auditType string, tabletAlias string, message string) error 
 			return err
 		}
 	}
-	logMessage := fmt.Sprintf("auditType:%s alias:%s keyspace:%s shard:%s message:%s", auditType, tabletAlias, keyspace, shard, message)
+	logMessage := fmt.Sprintf("auditType:%s alias:%s keyspace:%s shard:%s message:%s", auditType, tabletAliasString, keyspace, shard, message)
 	if syslogMessage(logMessage) {
 		auditWrittenToFile = true
 	}

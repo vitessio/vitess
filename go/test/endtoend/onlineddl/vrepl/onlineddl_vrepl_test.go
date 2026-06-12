@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -180,12 +179,11 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			utils.GetFlagVariantForTests("--heartbeat-interval"), "250ms",
-			utils.GetFlagVariantForTests("--migration-check-interval"), "5s",
-			utils.GetFlagVariantForTests("--watch-replication-stream"),
+			"--heartbeat-interval", "250ms",
+			"--migration-check-interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
-			utils.GetFlagVariantForTests("--ddl-strategy"), "online",
+			"--ddl-strategy", "online",
 		}
 
 		if err := clusterInstance.StartTopo(); err != nil {
@@ -855,6 +853,35 @@ func TestVreplSchemaChanges(t *testing.T) {
 				default:
 					require.NoError(t, fmt.Errorf("unexpected shard name: %s", shard))
 				}
+			}
+		})
+	})
+	t.Run("Revert a migration completed on both shards", func(t *testing.T) {
+		var uuid string
+		t.Run("run migration, expect completion on both shards", func(t *testing.T) {
+			uuid = testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", false)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		})
+		var revertUUID string
+		t.Run("issue revert migration", func(t *testing.T) {
+			revertQuery := fmt.Sprintf("revert vitess_migration '%s'", uuid)
+			output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.ApplySchemaParams{DDLStrategy: "vitess"})
+			require.NoError(t, err)
+			revertUUID = strings.TrimSpace(output)
+			assert.NotEmpty(t, revertUUID)
+		})
+		t.Run("revert completes on both shards", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("validate both shards show complete in SHOW VITESS_MIGRATIONS", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, revertUUID)
+			require.NotNil(t, rs)
+			require.Equal(t, 2, len(rs.Rows))
+			for _, row := range rs.Named().Rows {
+				status := row["migration_status"].ToString()
+				assert.Equal(t, string(schema.OnlineDDLStatusComplete), status, "shard %s", row["shard"].ToString())
 			}
 		})
 	})

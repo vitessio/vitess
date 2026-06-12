@@ -19,7 +19,7 @@ if ! cd go/vt/sqlparser/; then
 fi
 
 mv $CUR $TMP
-output=$(go run ./goyacc -fo $CUR sql.y)
+output=$(go tool -modfile=../../../tools/goyacc/go.mod goyacc -o $CUR sql.y)
 expectedOutput=$'\nconflicts: 5 shift/reduce'
 
 if [[ "$output" != "$expectedOutput" ]]; then
@@ -28,7 +28,8 @@ if [[ "$output" != "$expectedOutput" ]]; then
 	exit 1
 fi
 
-go tool gofumpt -w $CUR
+go tool -modfile=../../../tools/goimports/go.mod goimports -local "vitess.io/vitess" -w $CUR
+go tool -modfile=../../../tools/gofumpt/go.mod gofumpt -w $CUR
 
 if ! diff -q $CUR $TMP >/dev/null; then
 	echo "ERROR: Regenerated parser $TMP does not match current version $(pwd)/sql.go:"

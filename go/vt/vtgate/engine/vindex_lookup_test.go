@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -64,7 +63,7 @@ func TestVindexLookup(t *testing.T) {
 
 	vc := &loggingVCursor{results: []*sqltypes.Result{defaultSelectResult}}
 
-	result, err := vdxLookup.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := vdxLookup.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	fp.ExpectLog(t, []string{fmt.Sprintf(`Execute from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}}})})
 	vc.ExpectLog(t, []string{
@@ -115,7 +114,7 @@ func TestVindexLookupTruncate(t *testing.T) {
 
 	wantRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields("name", "varchar"),
 		"foo", "bar", "baz")
-	result, err := vdxLookup.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
+	result, err := vdxLookup.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 	fp.ExpectLog(t, []string{fmt.Sprintf(`Execute from: %v false`, &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{{Type: querypb.Type_INT64, Value: []byte("1")}}})})
 	vc.ExpectLog(t, []string{

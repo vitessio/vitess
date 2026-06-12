@@ -44,7 +44,7 @@ func (g *glogger) Warning(args ...any) {
 }
 
 func (g *glogger) Warningln(args ...any) {
-	log.WarnDepth(2, fmt.Sprintln(args...))
+	log.WarnDepth(2, fmt.Sprint(args...))
 }
 
 func (g *glogger) Warningf(format string, args ...any) {
@@ -56,7 +56,7 @@ func (g *glogger) Error(args ...any) {
 }
 
 func (g *glogger) Errorln(args ...any) {
-	log.ErrorDepth(2, fmt.Sprintln(args...))
+	log.ErrorDepth(2, fmt.Sprint(args...))
 }
 
 func (g *glogger) Errorf(format string, args ...any) {
@@ -69,7 +69,7 @@ func (g *glogger) Fatal(args ...any) {
 }
 
 func (g *glogger) Fatalln(args ...any) {
-	log.ErrorDepth(2, fmt.Sprintln(args...))
+	log.ErrorDepth(2, fmt.Sprint(args...))
 	os.Exit(1)
 }
 

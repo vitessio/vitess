@@ -100,7 +100,7 @@ func TestErrorGroup(t *testing.T) {
 	}
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			groupContext, groupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			groupContext, groupCancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer groupCancel()
 			errCh := make(chan Error)
 			defer close(errCh)

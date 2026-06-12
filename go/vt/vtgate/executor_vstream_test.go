@@ -29,6 +29,7 @@ import (
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -77,11 +78,13 @@ func TestVStreamSQLUnsharded(t *testing.T) {
 
 	results := make(chan *sqltypes.Result, 20)
 	go func() {
-		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, func(qr *sqltypes.Result) error {
+		err := executor.StreamExecute(ctx, nil, "TestExecuteStream", econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), sql, nil, false, func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil
 		})
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 	timer := time.NewTimer(5 * time.Second)
 	done := false

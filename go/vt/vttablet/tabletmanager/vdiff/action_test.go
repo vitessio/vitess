@@ -19,11 +19,11 @@ package vdiff
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -35,7 +35,7 @@ import (
 )
 
 func TestPerformVDiffAction(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	vdiffenv := newTestVDiffEnv(t)
 	defer vdiffenv.close()
@@ -84,7 +84,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
 				},
 				{
 					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{"picker_options":{"source_cell":"cell1,zone100_test","target_cell":"cell1,zone100_test"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
@@ -108,7 +108,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
 				},
 				{
 					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'stopped', '{"picker_options":{"source_cell":"cell1","target_cell":"cell1"},"core_options":{"auto_start":false}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
@@ -139,7 +139,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
 				},
 				{
 					query: fmt.Sprintf(`insert into _vt.vdiff(keyspace, workflow, state, options, shard, db_name, vdiff_uuid) values('', '', 'pending', '{"picker_options":{"source_cell":"all","target_cell":"all"}}', '0', 'vt_vttest', %s)`, encodeString(uuid)),
@@ -162,7 +162,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
 					result: sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id",
@@ -173,23 +173,23 @@ func TestPerformVDiffAction(t *testing.T) {
 				},
 				{
 					query: fmt.Sprintf(`update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
-					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
-					and vdt.state in ('completed', 'stopped')`, encodeString(uuid)),
+					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.db_name = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
+					and vdt.state in ('completed', 'stopped')`, encodeString(uuid), encodeString(vdiffDBName)),
 					result: &sqltypes.Result{
 						RowsAffected: 0, // No _vt.vdiff_table records
 					},
 				},
 				{
-					query: fmt.Sprintf(`update _vt.vdiff as vd set vd.state = 'pending' where vd.vdiff_uuid = %s and vd.state = 'stopped' and
+					query: fmt.Sprintf(`update _vt.vdiff as vd set vd.state = 'pending' where vd.vdiff_uuid = %s and vd.db_name = %s and vd.state = 'stopped' and
 					vd.started_at is NULL and vd.completed_at is NULL and
 					(select count(*) as cnt from _vt.vdiff_table as vdt where vd.id = vdt.vdiff_id) = 0`,
-						encodeString(uuid)),
+						encodeString(uuid), encodeString(vdiffDBName)),
 					result: &sqltypes.Result{
 						RowsAffected: 1,
 					},
 				},
 				{
-					query: "select * from _vt.vdiff where id = 1",
+					query: "select * from _vt.vdiff where id = 1 and db_name = " + encodeString(vdiffDBName),
 				},
 			},
 		},
@@ -203,7 +203,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
 					result: sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id",
@@ -214,14 +214,14 @@ func TestPerformVDiffAction(t *testing.T) {
 				},
 				{
 					query: fmt.Sprintf(`update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
-					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
-					and vdt.state in ('completed', 'stopped')`, encodeString(uuid)),
+					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.db_name = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
+					and vdt.state in ('completed', 'stopped')`, encodeString(uuid), encodeString(vdiffDBName)),
 					result: &sqltypes.Result{
 						RowsAffected: 1,
 					},
 				},
 				{
-					query: "select * from _vt.vdiff where id = 1",
+					query: "select * from _vt.vdiff where id = 1 and db_name = " + encodeString(vdiffDBName),
 				},
 			},
 		},
@@ -233,7 +233,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid),
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
 					result: sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id",
@@ -243,7 +243,7 @@ func TestPerformVDiffAction(t *testing.T) {
 					),
 				},
 				{
-					query: "delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)\n\t\t\t\t\t\t\twhere vd.vdiff_uuid = " + encodeString(uuid),
+					query: "delete from vd, vdt using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)\n\t\t\t\t\t\t\twhere vd.vdiff_uuid = " + encodeString(uuid) + " and vd.db_name = " + encodeString(vdiffDBName),
 				},
 			},
 		},
@@ -257,7 +257,7 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select id as id from _vt.vdiff where keyspace = %s and workflow = %s", encodeString(keyspace), encodeString(workflow)),
+					query: fmt.Sprintf("select id as id from _vt.vdiff where keyspace = %s and workflow = %s and db_name = %s", encodeString(keyspace), encodeString(workflow), encodeString(vdiffDBName)),
 					result: sqltypes.MakeTestResult(
 						sqltypes.MakeTestFields(
 							"id",
@@ -270,7 +270,7 @@ func TestPerformVDiffAction(t *testing.T) {
 				{
 					query: fmt.Sprintf(`delete from vd, vdt, vdl using _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 										left join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
-										where vd.keyspace = %s and vd.workflow = %s`, encodeString(keyspace), encodeString(workflow)),
+										where vd.keyspace = %s and vd.workflow = %s and vd.db_name = %s`, encodeString(keyspace), encodeString(workflow), encodeString(vdiffDBName)),
 				},
 			},
 		},
@@ -284,8 +284,8 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit %d",
-						encodeString(keyspace), encodeString(workflow), 1),
+					query: fmt.Sprintf("select * from _vt.vdiff where keyspace = %s and workflow = %s and db_name = %s order by id desc limit %d",
+						encodeString(keyspace), encodeString(workflow), encodeString(vdiffDBName), 1),
 					result: noResults,
 				},
 			},
@@ -300,8 +300,8 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: fmt.Sprintf("select * from _vt.vdiff where keyspace = %s and workflow = %s order by id desc limit %d",
-						encodeString(keyspace), encodeString(workflow), maxVDiffsToReport),
+					query: fmt.Sprintf("select * from _vt.vdiff where keyspace = %s and workflow = %s and db_name = %s order by id desc limit %d",
+						encodeString(keyspace), encodeString(workflow), encodeString(vdiffDBName), maxVDiffsToReport),
 					result: noResults,
 				},
 			},
@@ -330,11 +330,11 @@ func TestPerformVDiffAction(t *testing.T) {
 			}
 			vdiffenv.dbClient.Wait()
 			if tt.wantErr != nil && !vterrors.Equals(err, tt.wantErr) {
-				t.Errorf("Engine.PerformVDiffAction() error = %v, wantErr %v", err, tt.wantErr)
+				assert.Failf(t, "PerformVDiffAction error mismatch", "Engine.PerformVDiffAction() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Engine.PerformVDiffAction() = %v, want %v", got, tt.want)
+			if tt.want != nil {
+				assert.Equalf(t, tt.want, got, "Engine.PerformVDiffAction() = %v, want %v", got, tt.want)
 			}
 			if tt.postFunc != nil {
 				err := tt.postFunc()

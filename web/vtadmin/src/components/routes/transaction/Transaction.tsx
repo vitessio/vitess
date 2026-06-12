@@ -28,13 +28,11 @@ import { formatDateTime, formatRelativeTimeInSeconds } from '../../../util/time'
 import { ReadOnlyGate } from '../../ReadOnlyGate';
 import TransactionActions from '../transactions/TransactionActions';
 import { isReadOnlyMode } from '../../../util/env';
-import { useParams } from 'react-router';
 import style from '../keyspace/Keyspace.module.scss';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { READ_ONLY_COLUMNS } from '../Transactions';
 import { COLUMNS } from '../Transactions';
-import * as React from 'react';
 import { TransactionLink } from '../../links/TransactionLink';
 
 interface RouteParams {
@@ -97,6 +95,7 @@ export const Transaction = () => {
                             const shard = `${participant.keyspace}/${participant.shard}`;
                             return (
                                 <ShardLink
+                                    key={shard}
                                     clusterID={clusterID}
                                     keyspace={participant.keyspace}
                                     shard={participant.shard}

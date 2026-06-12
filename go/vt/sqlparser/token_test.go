@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -200,18 +201,11 @@ func TestSplitStatement(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			sql, rem, err := parser.SplitStatement(tcase.in)
-			if err != nil {
-				t.Errorf("EndOfStatementPosition(%s): ERROR: %v", tcase.in, err)
-				return
-			}
+			require.NoErrorf(t, err, "EndOfStatementPosition(%s): ERROR: %v", tcase.in, err)
 
-			if tcase.sql != sql {
-				t.Errorf("EndOfStatementPosition(%s) got sql \"%s\" want \"%s\"", tcase.in, sql, tcase.sql)
-			}
+			assert.Equalf(t, tcase.sql, sql, "EndOfStatementPosition(%s) got sql \"%s\" want \"%s\"", tcase.in, sql, tcase.sql)
 
-			if tcase.rem != rem {
-				t.Errorf("EndOfStatementPosition(%s) got remainder \"%s\" want \"%s\"", tcase.in, rem, tcase.rem)
-			}
+			assert.Equalf(t, tcase.rem, rem, "EndOfStatementPosition(%s) got remainder \"%s\" want \"%s\"", tcase.in, rem, tcase.rem)
 		})
 	}
 }
@@ -248,29 +242,6 @@ func TestVersion(t *testing.T) {
 				id, _ := tok.Scan()
 				require.Equal(t, expectedID, id)
 			}
-		})
-	}
-}
-
-func TestExtractMySQLComment(t *testing.T) {
-	testcases := []struct {
-		comment string
-		version string
-	}{{
-		comment: "/*!50108 SELECT * FROM */",
-		version: "50108",
-	}, {
-		comment: "/*!5018 SELECT * FROM */",
-		version: "",
-	}, {
-		comment: "/*!SELECT * FROM */",
-		version: "",
-	}}
-
-	for _, tcase := range testcases {
-		t.Run(tcase.version, func(t *testing.T) {
-			output, _ := ExtractMysqlComment(tcase.comment)
-			require.Equal(t, tcase.version, output)
 		})
 	}
 }

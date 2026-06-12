@@ -119,7 +119,7 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 	var qr *sqltypes.Result
 	var err error
 
-	query, err := sqlparser.ParseAndBind(sqlVDiffSummary, sqltypes.Int64BindVariable(vdiffID))
+	query, err := sqlparser.ParseAndBind(sqlVDiffSummary, sqltypes.Int64BindVariable(vdiffID), sqltypes.StringBindVariable(vde.dbName))
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	var qr *sqltypes.Result
 	options := req.GetOptions()
 
-	query, err := sqlparser.ParseAndBind(sqlGetVDiffID, sqltypes.StringBindVariable(req.VdiffUuid))
+	query, err := sqlparser.ParseAndBind(sqlGetVDiffID, sqltypes.StringBindVariable(req.VdiffUuid), sqltypes.StringBindVariable(vde.dbName))
 	if err != nil {
 		return err
 	}
@@ -235,6 +235,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		execResume := func(query string) (rowsAffected uint64, err error) {
 			query, err = sqlparser.ParseAndBind(query,
 				sqltypes.StringBindVariable(req.VdiffUuid),
+				sqltypes.StringBindVariable(vde.dbName),
 			)
 			if err != nil {
 				return 0, err
@@ -296,6 +297,7 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiffByKeyspaceWorkflow,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.StringBindVariable(vde.dbName),
 			sqltypes.Int64BindVariable(1),
 		)
 		if err != nil {
@@ -319,6 +321,7 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
 			sqltypes.StringBindVariable(vdiffUUID),
+			sqltypes.StringBindVariable(vde.dbName),
 		)
 		if err != nil {
 			return err
@@ -348,6 +351,7 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 		query, err := sqlparser.ParseAndBind(sqlGetMostRecentVDiffByKeyspaceWorkflow,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.StringBindVariable(vde.dbName),
 			sqltypes.Int64BindVariable(maxVDiffsToReport),
 		)
 		if err != nil {
@@ -404,6 +408,7 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		query, err := sqlparser.ParseAndBind(sqlGetVDiffIDsByKeyspaceWorkflow,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.StringBindVariable(vde.dbName),
 		)
 		if err != nil {
 			return err
@@ -418,6 +423,7 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		deleteQuery, err = sqlparser.ParseAndBind(sqlDeleteVDiffs,
 			sqltypes.StringBindVariable(req.Keyspace),
 			sqltypes.StringBindVariable(req.Workflow),
+			sqltypes.StringBindVariable(vde.dbName),
 		)
 		if err != nil {
 			return err
@@ -431,6 +437,7 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		// it's still running, before we delete the vdiff record.
 		query, err := sqlparser.ParseAndBind(sqlGetVDiffID,
 			sqltypes.StringBindVariable(uuid.String()),
+			sqltypes.StringBindVariable(vde.dbName),
 		)
 		if err != nil {
 			return err
@@ -447,6 +454,7 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 		cleanupController(vde.controllers[row.AsInt64("id", -1)])
 		deleteQuery, err = sqlparser.ParseAndBind(sqlDeleteVDiffByUUID,
 			sqltypes.StringBindVariable(uuid.String()),
+			sqltypes.StringBindVariable(vde.dbName),
 		)
 		if err != nil {
 			return err

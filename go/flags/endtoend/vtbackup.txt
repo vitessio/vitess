@@ -136,6 +136,7 @@ Flags:
       --external-compressor string                                  command with arguments to use when compressing a backup.
       --external-compressor-extension string                        extension to use when using an external compressor.
       --external-decompressor string                                command with arguments to use when decompressing a backup.
+      --external-decompressor-use-manifest                          allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.
       --file-backup-storage-root string                             Root directory for the file backup storage.
       --gcs-backup-storage-bucket string                            Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                              Root prefix for all backup-related object names.
@@ -152,9 +153,9 @@ Flags:
   -h, --help                                                        help for vtbackup
       --incremental-from-pos string                                 Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.
       --init-backup-sql-fail-on-error                               Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)
-      --init-backup-sql-queries strings                             Queries to execute before initializing the backup
+      --init-backup-sql-queries strings                             Queries to execute after catch-up replication, before initializing the backup
       --init-backup-sql-timeout duration                            At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup
-      --init-backup-tablet-types strings                            Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed before initializing the backup
+      --init-backup-tablet-types strings                            Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup
       --init-db-name-override string                                (init parameter) override the name of the db used by vttablet
       --init-db-sql-file string                                     path to .sql file to run after mysql_install_db
       --init-keyspace string                                        (init parameter) keyspace to use for this tablet
@@ -165,6 +166,7 @@ Flags:
       --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --lock-timeout duration                                       Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
       --log-err-stacks                                              log stack traces for errors
+      --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log-structured                                              enable structured JSON logging (default true)

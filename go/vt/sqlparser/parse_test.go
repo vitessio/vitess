@@ -2301,8 +2301,20 @@ var validSQL = []struct {
 }, {
 	input: "show binary logs",
 }, {
-	input:  "show binlog events",
-	output: "show binlog",
+	input: "show binlog events",
+}, {
+	input: "show binlog events in 'mysql-bin.000001'",
+}, {
+	input: "show binlog events from 4",
+}, {
+	input: "show binlog events in 'mysql-bin.000001' from 4",
+}, {
+	input: "show binlog events in 'mysql-bin.000001' from 4 limit 10",
+}, {
+	input: "show binlog events limit 10",
+}, {
+	input:  "show binlog events limit 5, 10",
+	output: "show binlog events limit 5, 10",
 }, {
 	input: "purge binary logs to 'x'",
 }, {
@@ -2345,7 +2357,13 @@ var validSQL = []struct {
 	input: "show create trigger t",
 }, {
 	input:  "show create user u",
-	output: "show create user",
+	output: "show create user 'u'",
+}, {
+	input:  "show create user 'root'@'localhost'",
+	output: "show create user 'root'@'localhost'",
+}, {
+	input:  "show create user current_user",
+	output: "show create user current_user",
 }, {
 	input: "show create view v",
 }, {
@@ -2361,24 +2379,63 @@ var validSQL = []struct {
 	input:  "show schemas like '%'",
 	output: "show databases like '%'",
 }, {
-	input:  "show engine INNODB",
-	output: "show engine",
+	input:  "show engine INNODB status",
+	output: "show engine innodb status",
+}, {
+	input:  "show engine INNODB mutex",
+	output: "show engine innodb mutex",
 }, {
 	input: "show engines",
 }, {
 	input:  "show storage engines",
-	output: "show storage",
+	output: "show engines",
 }, {
 	input: "show errors",
 }, {
+	input:  "show errors limit 10",
+	output: "show errors limit 10",
+}, {
+	input:  "show errors limit 5, 10",
+	output: "show errors limit 5, 10",
+}, {
 	input: "show events",
+}, {
+	input:  "show events from db_name",
+	output: "show events from db_name",
+}, {
+	input:  "show events like '%pattern%'",
+	output: "show events like '%pattern%'",
 }, {
 	input: "show function code func",
 }, {
 	input: "show function status",
 }, {
 	input:  "show grants for 'root@localhost'",
+	output: "show grants for 'root@localhost'",
+}, {
+	input: "show grants",
+}, {
+	input:  "show grants for 'root'@'localhost'",
+	output: "show grants for 'root'@'localhost'",
+}, {
+	input:  "show grants for current_user",
 	output: "show grants",
+}, {
+	input:  "show grants for current_user()",
+	output: "show grants",
+}, {
+	input: "show grants for 'u' using 'r1', current_user, 'r2'",
+}, {
+	input: "show grants for 'u' using current_user",
+}, {
+	input: "show grants for current_user using 'r1', 'r2'",
+}, {
+	input:  "show grants for current_user() using 'r1'",
+	output: "show grants for current_user using 'r1'",
+}, {
+	input: "show grants for 'u' using ''@''",
+}, {
+	input: "show grants for 'u' using 'r1'@''",
 }, {
 	input:  "show index from t",
 	output: "show indexes from t",
@@ -2388,8 +2445,7 @@ var validSQL = []struct {
 	input:  "show keys from t",
 	output: "show indexes from t",
 }, {
-	input:  "show master status",
-	output: "show master",
+	input: "show master status",
 }, {
 	input: "show open tables",
 }, {
@@ -2407,22 +2463,51 @@ var validSQL = []struct {
 	output: "show processlist",
 }, {
 	input:  "show full processlist",
-	output: "show processlist",
+	output: "show full processlist",
+}, {
+	input: "show profile",
+}, {
+	input:  "show profile cpu",
+	output: "show profile cpu",
+}, {
+	input:  "show profile cpu, memory",
+	output: "show profile cpu, memory",
+}, {
+	input:  "show profile all for query 1",
+	output: "show profile all for query 1",
 }, {
 	input:  "show profile cpu for query 1",
-	output: "show profile",
+	output: "show profile cpu for query 1",
+}, {
+	input:  "show profile cpu for query 1 limit 10",
+	output: "show profile cpu for query 1 limit 10",
 }, {
 	input:  "show profiles",
 	output: "show profiles",
 }, {
-	input:  "show relaylog events",
-	output: "show relaylog",
+	input: "show relaylog events",
 }, {
-	input:  "show slave hosts",
-	output: "show slave",
+	input: "show relaylog events in 'relay-bin.000001'",
 }, {
-	input:  "show slave status",
-	output: "show slave",
+	input: "show relaylog events from 4",
+}, {
+	input: "show relaylog events for channel 'channel_1'",
+}, {
+	input: "show relaylog events in 'relay-bin.000001' from 4 limit 10 for channel 'channel_1'",
+}, {
+	input: "show slave hosts",
+}, {
+	input: "show slave status",
+}, {
+	input: "show slave status for channel 'channel_1'",
+}, {
+	input: "show binary log status",
+}, {
+	input: "show replica status",
+}, {
+	input: "show replica status for channel 'channel_1'",
+}, {
+	input: "show replicas",
 }, {
 	input:  "show status",
 	output: "show status",
@@ -2526,8 +2611,6 @@ var validSQL = []struct {
 }, {
 	input: "show vitess_tablets where hostname = 'some-tablet'",
 }, {
-	input: "show vitess_targets",
-}, {
 	input: "show vschema tables",
 }, {
 	input: "show vschema keyspaces",
@@ -2576,6 +2659,8 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration cleanup all",
 }, {
+	input: "alter vitess_migration cleanup context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40'",
@@ -2583,6 +2668,8 @@ var validSQL = []struct {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40,40-80'",
 }, {
 	input: "alter vitess_migration launch all",
+}, {
+	input: "alter vitess_migration launch context 'some-context'",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
 }, {
@@ -2592,13 +2679,19 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration complete all",
 }, {
+	input: "alter vitess_migration complete context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' postpone complete",
 }, {
 	input: "alter vitess_migration postpone complete all",
 }, {
+	input: "alter vitess_migration postpone complete context 'some-context'",
+}, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 }, {
 	input: "alter vitess_migration force_cutover all",
+}, {
+	input: "alter vitess_migration force_cutover context 'some-context'",
 }, {
 	input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
 }, {
@@ -2606,6 +2699,8 @@ var validSQL = []struct {
 }, {
 	input:  "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' FORCE_CUTOVER",
 	output: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' force_cutover",
+}, {
+	input: "alter vitess_migration cancel context 'some-context'",
 }, {
 	input: "alter vitess_migration cancel all",
 }, {
@@ -2621,7 +2716,17 @@ var validSQL = []struct {
 }, {
 	input: "alter vitess_migration throttle all",
 }, {
+	input: "alter vitess_migration throttle context 'some-context'",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' expire '1h'",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' ratio 0.7",
+}, {
+	input: "alter vitess_migration throttle context 'some-context' expire '1h' ratio 0.7",
+}, {
 	input: "alter vitess_migration unthrottle all",
+}, {
+	input: "alter vitess_migration unthrottle context 'some-context'",
 }, {
 	input: "alter vitess_migration throttle all expire '1h'",
 }, {
@@ -2635,14 +2740,11 @@ var validSQL = []struct {
 }, {
 	input: "show warnings",
 }, {
+	input:  "show warnings limit 10",
+	output: "show warnings limit 10",
+}, {
 	input:  "select warnings from t",
 	output: "select `warnings` from t",
-}, {
-	input:  "show foobar",
-	output: "show foobar",
-}, {
-	input:  "show foobar like select * from table where syntax is 'ignored'",
-	output: "show foobar",
 }, {
 	// Making sure "force_cutover" is not a keyword
 	input:  "select force_cutover from t",
@@ -4121,13 +4223,11 @@ func TestParallelValid(t *testing.T) {
 				}
 				tree, err := parser.Parse(tcase.input)
 				if err != nil {
-					t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
+					assert.Failf(t, "parse failed", "Parse(%q) err: %v, want nil", tcase.input, err)
 					continue
 				}
 				out := String(tree)
-				if out != tcase.output {
-					t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
-				}
+				assert.Equalf(t, tcase.output, out, "Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
 			}
 		}()
 	}
@@ -4175,6 +4275,9 @@ func TestInvalid(t *testing.T) {
 		}, {
 			input: "select next 2 values from seq, seq",
 			err:   "syntax error at position 31",
+		}, {
+			input: "select next 2 values from dual",
+			err:   "syntax error at position 31 near 'dual'",
 		}, {
 			input: "select 1, next value from seq",
 			err:   "syntax error",
@@ -4574,13 +4677,11 @@ func TestCaseSensitivity(t *testing.T) {
 		}
 		tree, err := parser.Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "out: %s, want %s", out, tcase.output)
 	}
 }
 
@@ -4674,13 +4775,11 @@ func TestKeywords(t *testing.T) {
 		}
 		tree, err := parser.Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "out: %s, want %s", out, tcase.output)
 	}
 }
 
@@ -4752,13 +4851,11 @@ func TestConvert(t *testing.T) {
 		}
 		tree, err := parser.Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "out: %s, want %s", out, tcase.output)
 	}
 
 	invalidSQL := []struct {
@@ -4795,9 +4892,7 @@ func TestConvert(t *testing.T) {
 
 	for _, tcase := range invalidSQL {
 		_, err := parser.Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		assert.EqualErrorf(t, err, tcase.output, "%s: %v, want %s", tcase.input, err, tcase.output)
 	}
 }
 
@@ -4862,9 +4957,7 @@ func TestSelectInto(t *testing.T) {
 
 	for _, tcase := range invalidSQL {
 		_, err := parser.Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		assert.EqualErrorf(t, err, tcase.output, "%s: %v, want %s", tcase.input, err, tcase.output)
 	}
 }
 
@@ -4904,9 +4997,9 @@ func TestPositionedErr(t *testing.T) {
 		_, err := parse(tkn)
 
 		if posErr, ok := err.(PositionedErr); !ok {
-			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
+			assert.Failf(t, "expected PositionedErr", "%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
 		} else if posErr.Pos != tcase.output.Pos || posErr.Near != tcase.output.Near || err.Error() != tcase.output.Error() {
-			t.Errorf("%s: %v, want: %v", tcase.input, err, tcase.output)
+			assert.Failf(t, "PositionedErr mismatch", "%s: %v, want: %v", tcase.input, err, tcase.output)
 		}
 	}
 }
@@ -4955,13 +5048,11 @@ func TestSubStr(t *testing.T) {
 		}
 		tree, err := parser.Parse(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, out, "out: %s, want %s", out, tcase.output)
 	}
 }
 
@@ -6267,13 +6358,12 @@ func TestCreateTableLike(t *testing.T) {
 	for _, tcase := range testCases {
 		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		assert.True(t, tree.(*CreateTable).FullyParsed)
-		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
-			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
-		}
+		got, want := String(tree.(*CreateTable)), tcase.output
+		assert.Equalf(t, want, got, "Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 	}
 }
 
@@ -6377,14 +6467,13 @@ partition by range (id)
 	for _, tcase := range testCases {
 		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
 		assert.True(t, tree.(*CreateTable).FullyParsed)
 		assert.NotNil(t, tree.(*CreateTable).Select, "Select field should not be nil")
-		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
-			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
-		}
+		got, want := String(tree.(*CreateTable)), tcase.output
+		assert.Equalf(t, want, got, "Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 	}
 }
 
@@ -6409,12 +6498,11 @@ func TestCreateTableEscaped(t *testing.T) {
 	for _, tcase := range testCases {
 		tree, err := parser.ParseStrictDDL(tcase.input)
 		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
+			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		if got, want := String(tree.(*CreateTable)), tcase.output; got != want {
-			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
-		}
+		got, want := String(tree.(*CreateTable)), tcase.output
+		assert.Equalf(t, want, got, "Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 	}
 }
 
@@ -6422,6 +6510,33 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	input:  "alter vitess_migration cancel context ''",
+	output: "migration context cannot be empty at position 41",
+}, {
+	input:  "alter vitess_migration cleanup context ''",
+	output: "migration context cannot be empty at position 42",
+}, {
+	input:  "alter vitess_migration launch context ''",
+	output: "migration context cannot be empty at position 41",
+}, {
+	input:  "alter vitess_migration complete context ''",
+	output: "migration context cannot be empty at position 43",
+}, {
+	input:  "alter vitess_migration postpone complete context ''",
+	output: "migration context cannot be empty at position 52",
+}, {
+	input:  "alter vitess_migration force_cutover context ''",
+	output: "migration context cannot be empty at position 48",
+}, {
+	input:  "alter vitess_migration throttle context ''",
+	output: "migration context cannot be empty at position 43",
+}, {
+	input:  "alter vitess_migration throttle context '' expire '1h' ratio 0.7",
+	output: "migration context cannot be empty at position 65 near '0.7'",
+}, {
+	input:  "alter vitess_migration unthrottle context ''",
+	output: "migration context cannot be empty at position 45",
+}, {
 	input:  "select : from t",
 	output: "syntax error at position 9 near ':'",
 }, {
@@ -6566,6 +6681,12 @@ var invalidSQL = []struct {
 }, {
 	input:  "insert into t1 (a1) values row('a'), ('b')",
 	output: "syntax error at position 39",
+}, {
+	input:  "select a, * from t",
+	output: "syntax error at position 12",
+}, {
+	input:  "select *, * from t",
+	output: "syntax error at position 12",
 }}
 
 func TestErrors(t *testing.T) {
@@ -6608,9 +6729,7 @@ func TestSkipToEnd(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		_, err := parser.Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		assert.EqualErrorf(t, err, tcase.output, "%s: %v, want %s", tcase.input, err, tcase.output)
 	}
 }
 
@@ -6622,9 +6741,7 @@ func loadQueries(t testing.TB, filename string) (queries []string) {
 	var read io.Reader
 	if strings.HasSuffix(filename, ".gz") {
 		gzread, err := gzip.NewReader(file)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		defer gzread.Close()
 		read = gzread
 	} else {
@@ -6642,9 +6759,7 @@ func TestParseDjangoQueries(t *testing.T) {
 	parser := NewTestParser()
 	for _, query := range loadQueries(t, "django_queries.txt") {
 		_, err := parser.Parse(query)
-		if err != nil {
-			t.Errorf("failed to parse %q: %v", query, err)
-		}
+		assert.NoErrorf(t, err, "failed to parse %q: %v", query, err)
 	}
 }
 
@@ -6652,9 +6767,7 @@ func TestParseLobstersQueries(t *testing.T) {
 	parser := NewTestParser()
 	for _, query := range loadQueries(t, "lobsters.sql.gz") {
 		_, err := parser.Parse(query)
-		if err != nil {
-			t.Errorf("failed to parse %q: %v", query, err)
-		}
+		assert.NoErrorf(t, err, "failed to parse %q: %v", query, err)
 	}
 }
 
@@ -6946,32 +7059,32 @@ func testFile(t *testing.T, filename, tempDir string) {
 				if tcase.output == "" && tcase.errStr == "" {
 					tcase.output = tcase.input
 				}
-				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
+				fmt.Fprintf(&expected, "%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input))
 				tree, err := parser.Parse(tcase.input)
 				if tcase.errStr != "" {
 					errPresent := ""
 					if err != nil {
 						errPresent = err.Error()
-						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
+						fmt.Fprintf(&expected, "ERROR\n%s\nEND\n", escapeNewLines(errPresent))
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						fmt.Fprintf(&expected, "OUTPUT\n%s\nEND\n", escapeNewLines(out))
 					}
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
-						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)
+						assert.Failf(t, "error mismatch", "File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)
 					}
 				} else {
 					if err != nil {
-						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
+						fmt.Fprintf(&expected, "ERROR\n%s\nEND\n", escapeNewLines(err.Error()))
 						fail = true
-						t.Errorf("File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
+						assert.Failf(t, "unexpected parse error", "File: %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						fmt.Fprintf(&expected, "OUTPUT\n%s\nEND\n", escapeNewLines(out))
 						if tcase.output != out {
 							fail = true
-							t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
+							assert.Failf(t, "parsing failed", "Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
 						}
 					}
 				}

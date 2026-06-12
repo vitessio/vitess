@@ -103,11 +103,6 @@ type LocalProcessCluster struct {
 	VtgateGrpcPort  int
 	VtctldHTTPPort  int
 
-	// major version numbers
-	VtTabletMajorVersion int
-	VtctlMajorVersion    int
-	VtGateMajorVersion   int
-
 	// standalone executable
 	VtctldClientProcess VtctldClientProcess
 	VtadminProcess      VtAdminProcess
@@ -294,7 +289,7 @@ func (cluster *LocalProcessCluster) StartVTOrc(cell, keyspace string) error {
 		return err
 	}
 	if keyspace != "" {
-		vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, fmt.Sprintf(`--clusters_to_watch="%s"`, keyspace))
+		vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, fmt.Sprintf(`--clusters-to-watch="%s"`, keyspace))
 	}
 	cluster.VTOrcProcesses = append(cluster.VTOrcProcesses, vtorcProcess)
 	return nil
@@ -481,6 +476,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		case "replica":
 			mysqlctlProcess.Binary += os.Getenv("REPLICA_TABLET_BINARY_SUFFIX")
 		}
+
 		tablet.MysqlctlProcess = *mysqlctlProcess
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		if err != nil {
@@ -828,28 +824,7 @@ func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 
 // NewCluster instantiates a new cluster
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
-	cluster := NewBareCluster(cell, hostname)
-
-	err := cluster.populateVersionInfo()
-	if err != nil {
-		log.Error(fmt.Sprintf("Error populating version information - %v", err))
-	}
-	return cluster
-}
-
-// populateVersionInfo is used to populate the version information for the binaries used to setup the cluster.
-func (cluster *LocalProcessCluster) populateVersionInfo() error {
-	var err error
-	cluster.VtTabletMajorVersion, err = GetMajorVersion("vttablet")
-	if err != nil {
-		return err
-	}
-	cluster.VtctlMajorVersion, err = GetMajorVersion("vtctl")
-	if err != nil {
-		return err
-	}
-	cluster.VtGateMajorVersion, err = GetMajorVersion("vtgate")
-	return err
+	return NewBareCluster(cell, hostname)
 }
 
 var versionRegex = regexp.MustCompile(`Version: ([0-9]+)\.([0-9]+)\.([0-9]+)`)
@@ -1031,6 +1006,7 @@ func (cluster *LocalProcessCluster) StreamTabletHealthUntil(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	defer conn.Close(ctx)
 
 	var conditionSuccess atomic.Bool
 	var timeoutExceeded atomic.Bool
@@ -1324,20 +1300,13 @@ func (cluster *LocalProcessCluster) NewVTOrcProcess(config VTOrcConfiguration, c
 // VtctldClientProcessInstance returns a VtctldProcess handle for a
 // vtctldclient process configured with the given Config.
 func (cluster *LocalProcessCluster) NewVtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctldClientProcess {
-	version, err := GetMajorVersion("vtctldclient")
-	if err != nil {
-		log.Warn(fmt.Sprintf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %v", err))
-	}
-
 	base := VtProcessInstance("vtctldclient", "vtctldclient", cluster.TopoProcess.Port, cluster.Hostname)
 
-	vtctldclient := &VtctldClientProcess{
-		VtProcess:                base,
-		Server:                   fmt.Sprintf("%s:%d", hostname, grpcPort),
-		TempDirectory:            tmpDirectory,
-		VtctldClientMajorVersion: version,
+	return &VtctldClientProcess{
+		VtProcess:     base,
+		Server:        fmt.Sprintf("%s:%d", hostname, grpcPort),
+		TempDirectory: tmpDirectory,
 	}
-	return vtctldclient
 }
 
 // NewVTAdminProcess creates a new VTAdminProcess object

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useExperimentalTabletDebugVars, useTablet } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { isReadOnlyMode } from '../../../util/env';
@@ -43,8 +43,6 @@ interface RouteParams {
 
 export const Tablet = () => {
     const { clusterID, alias } = useParams<RouteParams>();
-    const { path, url } = useRouteMatch();
-
     useDocumentTitle(alias);
 
     const { data: tablet, ...tq } = useTablet({ alias, clusterID });
@@ -106,48 +104,53 @@ export const Tablet = () => {
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="QPS" to={`${url}/qps`} />
-                    <Tab text="Full Status" to={`${url}/full-status`} />
-                    <Tab text="JSON" to={`${url}/json`} />
-                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
+                    <Tab text="QPS" to="qps" />
+                    <Tab text="Full Status" to="full-status" />
+                    <Tab text="JSON" to="json" />
+                    <Tab text="JSON Tree" to="json_tree" />
                     <ReadOnlyGate>
-                        <Tab text="Advanced" to={`${url}/advanced`} />
+                        <Tab text="Advanced" to="advanced" />
                     </ReadOnlyGate>
                 </TabContainer>
 
-                <Switch>
-                    <Route path={`${path}/qps`}>
-                        <TabletCharts alias={alias} clusterID={clusterID} />
-                    </Route>
+                <Routes>
+                    <Route path="qps" element={<TabletCharts alias={alias} clusterID={clusterID} />} />
 
-                    <Route path={`${path}/json`}>
-                        <div>
-                            <Code code={JSON.stringify(tablet, null, 2)} />
+                    <Route
+                        path="json"
+                        element={
+                            <div>
+                                <Code code={JSON.stringify(tablet, null, 2)} />
 
-                            {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
-                                <Code code={JSON.stringify(debugVars, null, 2)} />
-                            )}
-                        </div>
-                    </Route>
+                                {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
+                                    <Code code={JSON.stringify(debugVars, null, 2)} />
+                                )}
+                            </div>
+                        }
+                    />
 
-                    <Route path={`${path}/json_tree`}>
-                        <div>
-                            <JSONViewTree data={tablet} />
+                    <Route
+                        path="json_tree"
+                        element={
+                            <div>
+                                <JSONViewTree data={tablet} />
 
-                            {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && <JSONViewTree data={debugVars} />}
-                        </div>
-                    </Route>
+                                {env().VITE_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && <JSONViewTree data={debugVars} />}
+                            </div>
+                        }
+                    />
 
-                    <Route path={`${url}/full-status`}>{tablet && <FullStatus tablet={tablet} />}</Route>
+                    <Route path="full-status" element={tablet ? <FullStatus tablet={tablet} /> : null} />
 
                     {!isReadOnlyMode() && (
-                        <Route path={`${path}/advanced`}>
-                            <Advanced alias={alias} clusterID={clusterID} tablet={tablet} />
-                        </Route>
+                        <Route
+                            path="advanced"
+                            element={<Advanced alias={alias} clusterID={clusterID} tablet={tablet} />}
+                        />
                     )}
 
-                    <Redirect to={`${path}/qps`} />
-                </Switch>
+                    <Route index element={<Navigate to="qps" replace />} />
+                </Routes>
             </ContentContainer>
 
             {/* TODO skeleton placeholder */}

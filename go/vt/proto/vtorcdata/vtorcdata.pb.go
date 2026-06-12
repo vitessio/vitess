@@ -135,6 +135,110 @@ func (x *Shard) GetDisableEmergencyReparent() bool {
 	return false
 }
 
+type PrimaryHealthEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AtUnixNanos   int64                  `protobuf:"varint,1,opt,name=at_unix_nanos,json=atUnixNanos,proto3" json:"at_unix_nanos,omitempty"`
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrimaryHealthEvent) Reset() {
+	*x = PrimaryHealthEvent{}
+	mi := &file_vtorcdata_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrimaryHealthEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrimaryHealthEvent) ProtoMessage() {}
+
+func (x *PrimaryHealthEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_vtorcdata_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrimaryHealthEvent.ProtoReflect.Descriptor instead.
+func (*PrimaryHealthEvent) Descriptor() ([]byte, []int) {
+	return file_vtorcdata_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PrimaryHealthEvent) GetAtUnixNanos() int64 {
+	if x != nil {
+		return x.AtUnixNanos
+	}
+	return 0
+}
+
+func (x *PrimaryHealthEvent) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type PrimaryHealthState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*PrimaryHealthEvent  `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	Unhealthy     bool                   `protobuf:"varint,2,opt,name=unhealthy,proto3" json:"unhealthy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrimaryHealthState) Reset() {
+	*x = PrimaryHealthState{}
+	mi := &file_vtorcdata_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrimaryHealthState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrimaryHealthState) ProtoMessage() {}
+
+func (x *PrimaryHealthState) ProtoReflect() protoreflect.Message {
+	mi := &file_vtorcdata_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrimaryHealthState.ProtoReflect.Descriptor instead.
+func (*PrimaryHealthState) Descriptor() ([]byte, []int) {
+	return file_vtorcdata_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *PrimaryHealthState) GetEvents() []*PrimaryHealthEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *PrimaryHealthState) GetUnhealthy() bool {
+	if x != nil {
+		return x.Unhealthy
+	}
+	return false
+}
+
 var File_vtorcdata_proto protoreflect.FileDescriptor
 
 const file_vtorcdata_proto_rawDesc = "" +
@@ -143,7 +247,13 @@ const file_vtorcdata_proto_rawDesc = "" +
 	"\bKeyspace\x12<\n" +
 	"\x1adisable_emergency_reparent\x18\x01 \x01(\bR\x18disableEmergencyReparent\"E\n" +
 	"\x05Shard\x12<\n" +
-	"\x1adisable_emergency_reparent\x18\x01 \x01(\bR\x18disableEmergencyReparentB9\n" +
+	"\x1adisable_emergency_reparent\x18\x01 \x01(\bR\x18disableEmergencyReparent\"R\n" +
+	"\x12PrimaryHealthEvent\x12\"\n" +
+	"\rat_unix_nanos\x18\x01 \x01(\x03R\vatUnixNanos\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\"i\n" +
+	"\x12PrimaryHealthState\x125\n" +
+	"\x06events\x18\x01 \x03(\v2\x1d.vtorcdata.PrimaryHealthEventR\x06events\x12\x1c\n" +
+	"\tunhealthy\x18\x02 \x01(\bR\tunhealthyB9\n" +
 	"\x0fio.vitess.protoZ&vitess.io/vitess/go/vt/proto/vtorcdatab\x06proto3"
 
 var (
@@ -158,17 +268,20 @@ func file_vtorcdata_proto_rawDescGZIP() []byte {
 	return file_vtorcdata_proto_rawDescData
 }
 
-var file_vtorcdata_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_vtorcdata_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_vtorcdata_proto_goTypes = []any{
-	(*Keyspace)(nil), // 0: vtorcdata.Keyspace
-	(*Shard)(nil),    // 1: vtorcdata.Shard
+	(*Keyspace)(nil),           // 0: vtorcdata.Keyspace
+	(*Shard)(nil),              // 1: vtorcdata.Shard
+	(*PrimaryHealthEvent)(nil), // 2: vtorcdata.PrimaryHealthEvent
+	(*PrimaryHealthState)(nil), // 3: vtorcdata.PrimaryHealthState
 }
 var file_vtorcdata_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	2, // 0: vtorcdata.PrimaryHealthState.events:type_name -> vtorcdata.PrimaryHealthEvent
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_vtorcdata_proto_init() }
@@ -182,7 +295,7 @@ func file_vtorcdata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vtorcdata_proto_rawDesc), len(file_vtorcdata_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

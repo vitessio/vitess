@@ -48,7 +48,7 @@ func patchTail(rb *reorderBuffer) bool {
 	if extra > 0 {
 		// Potentially allocating memory. However, this only
 		// happens with ill-formed UTF-8.
-		x := make([]byte, 0)
+		x := make([]byte, 0, extra)
 		x = append(x, rb.out[len(rb.out)-extra:]...)
 		rb.out = rb.out[:end]
 		decomposeToLastBoundary(rb)

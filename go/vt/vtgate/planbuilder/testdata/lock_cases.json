@@ -17,10 +17,7 @@
         "lock_func": [
           "get_lock('xyz', 10)"
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -41,10 +38,7 @@
         "lock_func": [
           "is_free_lock('xyz')"
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -65,10 +59,7 @@
         "lock_func": [
           "get_lock(:v1, :v2)"
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {
@@ -126,10 +117,7 @@
           "get_lock('xyz', 10)",
           "is_free_lock('abc')"
         ]
-      },
-      "TablesUsed": [
-        "main.dual"
-      ]
+      }
     }
   },
   {

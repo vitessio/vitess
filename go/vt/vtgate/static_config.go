@@ -24,6 +24,7 @@ import vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 type StaticConfig struct {
 	OnlineDDLEnabled bool
 	DirectDDLEnabled bool
+	EnableBinlogDump bool
 	TxMode           vtgatepb.TransactionMode
 }
 
@@ -33,6 +34,10 @@ func (s *StaticConfig) OnlineEnabled() bool {
 
 func (s *StaticConfig) DirectEnabled() bool {
 	return s.DirectDDLEnabled
+}
+
+func (s *StaticConfig) BinlogDumpEnabled() bool {
+	return s.EnableBinlogDump
 }
 
 func (s *StaticConfig) TransactionMode() vtgatepb.TransactionMode {

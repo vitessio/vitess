@@ -29,13 +29,13 @@
 
 .container {
     display: grid;
-    grid-gap: 16px;
+    gap: 16px;
     max-width: 720px;
 }
 
 .form {
     display: grid;
-    grid-gap: 8px;
+    gap: 8px;
 }
 
 .sqlInput {

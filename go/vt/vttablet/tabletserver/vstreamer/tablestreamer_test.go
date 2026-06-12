@@ -17,7 +17,6 @@ limitations under the License.
 package vstreamer
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -28,7 +27,7 @@ import (
 
 // TestTableStreamer streams all tables and ensures all rows are received in the correct order.
 func TestTableStreamer(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	execStatements(t, []string{
 		// Single PK
 		"create table t1(id int, val varbinary(128), primary key(id))",

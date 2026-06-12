@@ -56,17 +56,11 @@ func TestPrepFetchForRollback(t *testing.T) {
 	conn := &StatefulConnection{}
 	pp.Put(conn, "aa")
 	got := pp.FetchForRollback("bb")
-	if got != nil {
-		t.Errorf("Get(bb): %v, want nil", got)
-	}
+	assert.Nilf(t, got, "Get(bb): %v, want nil", got)
 	got = pp.FetchForRollback("aa")
-	if got != conn {
-		t.Errorf("pp.Get(aa): %p, want %p", got, conn)
-	}
+	assert.Equalf(t, conn, got, "pp.Get(aa): %p, want %p", got, conn)
 	got = pp.FetchForRollback("aa")
-	if got != nil {
-		t.Errorf("Get(aa): %v, want nil", got)
-	}
+	assert.Nilf(t, got, "Get(aa): %v, want nil", got)
 }
 
 func TestPrepFetchForCommit(t *testing.T) {

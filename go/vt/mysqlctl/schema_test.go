@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -199,7 +198,7 @@ func TestGetSchemaAndSchemaChange(t *testing.T) {
 	query = fmt.Sprintf(query, sqltypes.EncodeStringSQL("fakesqldb"), tableList)
 	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("TABLE_NAME|COLUMN_NAME", "varchar|varchar"), "test_table|col1", "test_table|col2"))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := testMysqld.GetSchema(ctx, db.Name(), &tabletmanagerdata.GetSchemaRequest{})
 	assert.NoError(t, err)
 	want := &tabletmanagerdata.SchemaDefinition{
@@ -283,7 +282,7 @@ func TestGetSchemaAndSchemaChange(t *testing.T) {
 	db.AddQuery("\nSET foreign_key_checks = 0", &sqltypes.Result{})
 	db.AddQuery("\nDROP DATABASE _vt_preflight", &sqltypes.Result{})
 
-	l, err := testMysqld.PreflightSchemaChange(context.Background(), db.Name(), []string{})
+	l, err := testMysqld.PreflightSchemaChange(t.Context(), db.Name(), []string{})
 	assert.NoError(t, err)
 	assert.Empty(t, l)
 
@@ -330,7 +329,7 @@ func TestGetSchemaAndSchemaChange(t *testing.T) {
 	})
 
 	query = "EXPECT THIS QUERY TO BE EXECUTED"
-	_, err = testMysqld.PreflightSchemaChange(context.Background(), db.Name(), []string{query})
+	_, err = testMysqld.PreflightSchemaChange(t.Context(), db.Name(), []string{query})
 	assert.ErrorContains(t, err, query)
 }
 
@@ -343,7 +342,7 @@ func TestResolveTables(t *testing.T) {
 		testMysqld.Close()
 	}()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := ResolveTables(ctx, testMysqld, db.Name(), []string{})
 	assert.ErrorContains(t, err, "no schema defined")
 	assert.Nil(t, res)
@@ -404,7 +403,7 @@ func TestGetColumns(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	want := sqltypes.MakeTestFields("col1|col2", "varchar|varchar")
 
@@ -438,7 +437,7 @@ func TestGetPrimaryKeyColumns(t *testing.T) {
 	query = fmt.Sprintf(query, sqltypes.EncodeStringSQL("fakesqldb"), tableList)
 	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|column_name", "varchar|varchar"), "fakesqldb|col1", "fakesqldb2|col2"))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	res, err := testMysqld.GetPrimaryKeyColumns(ctx, db.Name(), "test_table")
 	assert.NoError(t, err)
 	assert.Contains(t, res, "col1")

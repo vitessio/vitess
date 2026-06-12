@@ -17,44 +17,52 @@ limitations under the License.
 package logic
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func TestDiscoveryQueue(t *testing.T) {
 	q := NewDiscoveryQueue()
 	require.Zero(t, q.QueueLen())
 
+	tabletAlias := &topodatapb.TabletAlias{
+		Cell: "zone1",
+		Uid:  1,
+	}
+	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
+
 	// Push
-	q.Push(t.Name())
+	q.Push(tabletAlias)
 	require.Equal(t, 1, q.QueueLen())
-	_, found := q.enqueued[t.Name()]
+	_, found := q.enqueued[tabletAliasString]
 	require.True(t, found)
 
 	// Push duplicate
-	q.Push(t.Name())
+	q.Push(tabletAlias)
 	require.Equal(t, 1, q.QueueLen())
 
 	// Consume
-	require.Equal(t, t.Name(), q.Consume())
+	require.Equal(t, tabletAlias, q.Consume())
 	require.Equal(t, 1, q.QueueLen())
-	_, found = q.enqueued[t.Name()]
+	_, found = q.enqueued[tabletAliasString]
 	require.True(t, found)
 
 	// Release
-	q.Release(t.Name())
+	q.Release(tabletAlias)
 	require.Zero(t, q.QueueLen())
-	_, found = q.enqueued[t.Name()]
+	_, found = q.enqueued[tabletAliasString]
 	require.False(t, found)
 }
 
 type testDiscoveryQueue interface {
 	QueueLen() int
-	Push(string)
-	Consume() string
-	Release(string)
+	Push(*topodatapb.TabletAlias)
+	Consume() *topodatapb.TabletAlias
+	Release(*topodatapb.TabletAlias)
 }
 
 func BenchmarkDiscoveryQueues(b *testing.B) {
@@ -69,7 +77,10 @@ func BenchmarkDiscoveryQueues(b *testing.B) {
 		b.Run(test.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				for i := range 1000 {
-					q.Push(b.Name() + strconv.Itoa(i))
+					q.Push(&topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  uint32(i),
+					})
 				}
 				q.QueueLen()
 				for range 1000 {

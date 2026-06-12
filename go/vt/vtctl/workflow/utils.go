@@ -617,6 +617,24 @@ func ReverseWorkflowName(workflow string) string {
 	return workflow + reverseSuffix
 }
 
+// resolveWorkflowKeepData preserves request field presence so we can tell the
+// difference between "keep_data was omitted" and "keep_data was explicitly set
+// to false". That matters for reverse workflows: omitting keep_data should take
+// the safer path and keep the data by default, while an explicit false must
+// still be honored so callers can force cleanup.
+func resolveWorkflowKeepData(workflow string, keepData *bool) (bool, []string) {
+	if keepData != nil {
+		return *keepData, nil
+	}
+	if !strings.HasSuffix(workflow, reverseSuffix) {
+		return false, nil
+	}
+
+	return true, []string{
+		fmt.Sprintf("Workflow %s is a reverse workflow; keeping data by default. Explicitly set keep_data=false or pass --keep-data=false to remove the data.", workflow),
+	}
+}
+
 // Straight copy-paste of encodeString from wrangler/keyspace.go. I want to make
 // this public, but it doesn't belong in package workflow. Maybe package sqltypes,
 // or maybe package sqlescape?

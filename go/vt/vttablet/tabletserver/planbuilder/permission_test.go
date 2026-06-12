@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -65,7 +67,7 @@ func TestBuildPermissions(t *testing.T) {
 		input:  "set a=1",
 		output: nil,
 	}, {
-		input:  "show variable like 'a%'",
+		input:  "show variables like 'a%'",
 		output: nil,
 	}, {
 		input:  "describe select * from t",
@@ -224,9 +226,7 @@ func TestBuildPermissions(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {
 			stmt, err := sqlparser.NewTestParser().Parse(tcase.input)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 			got := BuildPermissions(stmt)
 			utils.MustMatch(t, tcase.output, got)
 		})

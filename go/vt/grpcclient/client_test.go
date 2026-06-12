@@ -19,7 +19,6 @@ package grpcclient
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -41,37 +40,31 @@ func TestDialErrors(t *testing.T) {
 	}
 	wantErr := "Unavailable"
 	for _, address := range addresses {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		gconn, err := DialContext(ctx, address, true, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			cancel()
-			t.Fatal(err)
+			require.NoError(t, err)
 		}
 		vtg := vtgateservicepb.NewVitessClient(gconn)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
 		gconn.Close()
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("DialContext(%s, FailFast=true): %v, must contain %s", address, err, wantErr)
-		}
+		require.ErrorContainsf(t, err, wantErr, "DialContext(%s, FailFast=true): %v, must contain %s", address, err, wantErr)
 	}
 
 	wantErr = "DeadlineExceeded"
 	for _, address := range addresses {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		gconn, err := DialContext(ctx, address, false, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		cancel()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		vtg := vtgateservicepb.NewVitessClient(gconn)
-		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
+		ctx, cancel = context.WithTimeout(t.Context(), 10*time.Millisecond)
 		_, err = vtg.Execute(ctx, &vtgatepb.ExecuteRequest{})
 		cancel()
 		gconn.Close()
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("DialContext(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
-		}
+		require.ErrorContainsf(t, err, wantErr, "DialContext(%s, FailFast=false): %v, must contain %s", address, err, wantErr)
 	}
 }
 
@@ -92,7 +85,6 @@ func TestRegisterGRPCClientFlags(t *testing.T) {
 	require.Equal(t, "", compression)
 	require.Equal(t, "", credsFile)
 
-	// Use SetFlagVariantsForTests to randomly pick dashed or underscored keys.
 	flagMap := map[string]string{
 		"--grpc-keepalive-time":           "5s",
 		"--grpc-keepalive-timeout":        "5s",

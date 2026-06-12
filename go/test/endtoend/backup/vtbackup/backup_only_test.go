@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/utils"
 )
 
 var vtInsertTest = `
@@ -75,9 +74,13 @@ func TestFailingReplication(t *testing.T) {
 	go func() {
 		<-time.After(30 * time.Second)
 		_, err = primary.VttabletProcess.QueryTablet("GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';", keyspaceName, true)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		_, err = primary.VttabletProcess.QueryTablet("FLUSH PRIVILEGES;", keyspaceName, true)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	startTime := time.Now()
@@ -132,6 +135,11 @@ func prepareCluster(t *testing.T) {
 
 	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
+	// restore() returns as soon as the vttablet's HTTP endpoint is responsive,
+	// but RestoreData runs in the background and holds the actionSema for the
+	// entire duration of the restore. We need to wait for it to finish before
+	// issuing RPCs like SetWritable that also need the actionSema.
+	waitForRestoreComplete(t, primary.VttabletProcess, 180*time.Second)
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
 	err = localCluster.VtctldClientProcess.ExecuteCommand(
@@ -236,23 +244,23 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 
 	// Take the back using vtbackup executable
 	extraArgs := []string{
-		"--allow_first_backup",
+		"--allow-first-backup",
 		"--db-credentials-file", dbCredentialFile,
-		utils.GetFlagVariantForTests("--mysql-socket"), mysqlSocket.Name(),
+		"--mysql-socket", mysqlSocket.Name(),
 
 		// Use opentsdb for stats.
-		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",
+		"--stats-backend", "opentsdb",
 		// Write stats to file for reading afterwards.
-		utils.GetFlagVariantForTests("--opentsdb-uri"), "file://" + statsPath,
+		"--opentsdb-uri", "file://" + statsPath,
 	}
 	if restartBeforeBackup {
-		extraArgs = append(extraArgs, "--restart_before_backup")
+		extraArgs = append(extraArgs, "--restart-before-backup")
 	}
 	if disableRedoLog {
 		extraArgs = append(extraArgs, "--disable-redo-log")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	if !initialBackup && disableRedoLog {
@@ -345,6 +353,28 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	tablet.VttabletProcess.SupportsBackup = true
 	err := tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
+}
+
+// waitForRestoreComplete waits for a vttablet's background restore to finish.
+// The tablet type transitions replica -> restore -> replica during a restore.
+// This function polls until it observes "restore" and then sees "replica" again.
+// If the restore completes faster than the polling interval and "restore" is
+// never observed, the function returns since the restore is already done.
+func waitForRestoreComplete(t *testing.T, vttablet *cluster.VttabletProcess, timeout time.Duration) {
+	t.Helper()
+	sawRestore := false
+	assert.Eventually(t, func() bool {
+		tabletType := vttablet.GetTabletType()
+		if tabletType == "restore" {
+			sawRestore = true
+		}
+		return sawRestore && tabletType == "replica"
+	}, timeout, 300*time.Millisecond)
+	if sawRestore {
+		require.Equal(t, "replica", vttablet.GetTabletType(), "timed out waiting for tablet restore to complete")
+	}
+	// If we never observed "restore" type, the restore likely completed
+	// before we started polling. Nothing to wait for.
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {

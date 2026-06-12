@@ -77,3 +77,7 @@ report
 .mise.toml
 /errors/
 go/flags/endtoend/count_flags.sh
+/coverage.out
+
+# claude
+/.claude/worktrees/

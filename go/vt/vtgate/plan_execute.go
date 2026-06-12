@@ -324,10 +324,10 @@ func showStartsImplicitTx(stmt sqlparser.Statement) bool {
 	case *sqlparser.ShowCreate:
 		// SHOW CREATE TABLE/DATABASE/etc. do not start implicit transactions in MySQL.
 		return false
-	case *sqlparser.ShowOther:
-		// ShowOther covers SHOW PROCESSLIST, SHOW ENGINE STATUS, SHOW BINARY LOGS,
-		// SHOW GRANTS, SHOW REPLICA STATUS, etc. These are server-state commands
-		// that don't start implicit transactions in MySQL.
+	case *sqlparser.ShowEngine, *sqlparser.ShowGrants, *sqlparser.ShowProfile, *sqlparser.ShowCreateUser,
+		*sqlparser.ShowBinlogEvents, *sqlparser.ShowBinaryLogs,
+		*sqlparser.ShowReplicationStatus, *sqlparser.ShowReplicationSourceStatus, *sqlparser.ShowReplicas:
+		// Server-state commands that don't start implicit transactions in MySQL.
 		return false
 	case *sqlparser.ShowBasic:
 		// Some SHOW commands do not start implicit transactions in MySQL, but we need to look at the command to determine which ones.
@@ -335,7 +335,8 @@ func showStartsImplicitTx(stmt sqlparser.Statement) bool {
 		case sqlparser.VariableSession, sqlparser.VariableGlobal,
 			sqlparser.StatusSession, sqlparser.StatusGlobal,
 			sqlparser.Warnings, sqlparser.Engines, sqlparser.Plugins, sqlparser.Privilege,
-			sqlparser.OpenTable,
+			sqlparser.OpenTable, sqlparser.Errors, sqlparser.Events, sqlparser.ProcessList,
+			sqlparser.Profiles, sqlparser.FunctionC, sqlparser.ProcedureC,
 			// Vitess-specific SHOW commands are handled internally by vtgate and don't access InnoDB data.
 			sqlparser.GtidExecGlobal, sqlparser.VGtidExecGlobal,
 			sqlparser.VitessMigrations, sqlparser.VitessReplicationStatus,
@@ -481,6 +482,7 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 
 func (e *Executor) setLogStats(logStats *logstats.LogStats, plan *engine.Plan, vcursor *econtext.VCursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
 	logStats.StmtType = plan.QueryType.String()
+	logStats.PlanType = plan.Type.String()
 	logStats.ActiveKeyspace = vcursor.GetKeyspace()
 	logStats.TabletType = vcursor.TabletType().String()
 	errCount := e.logExecutionEnd(logStats, execStart, plan, vcursor, err, qr)
@@ -497,8 +499,13 @@ func (e *Executor) logExecutionEnd(logStats *logstats.LogStats, execStart time.T
 	} else {
 		logStats.RowsAffected = qr.RowsAffected
 		logStats.RowsReturned = uint64(len(qr.Rows))
-		// log the tables used in the plan for successful query execution.
+		// log the tables and routing indexes used in the plan for successful query execution.
 		logStats.TablesUsed = plan.TablesUsed
+		executedRoot := vcursor.ExecutedPrimitive()
+		if executedRoot == nil {
+			executedRoot = plan.Instructions
+		}
+		logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 	}
 
 	e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vcursor.TabletType().String(), int64(logStats.ShardQueries), logStats.TablesUsed)
@@ -510,6 +517,7 @@ func (e *Executor) logPlanningFinished(logStats *logstats.LogStats, plan *engine
 	execStart := time.Now()
 	if plan != nil {
 		logStats.StmtType = plan.QueryType.String()
+		logStats.PlanType = plan.Type.String()
 	}
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	return execStart

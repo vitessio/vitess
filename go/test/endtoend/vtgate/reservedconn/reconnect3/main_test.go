@@ -17,7 +17,6 @@ limitations under the License.
 package reservedconn
 
 import (
-	"context"
 	"flag"
 	"os"
 	"testing"
@@ -75,12 +74,19 @@ func TestMain(m *testing.M) {
 }
 
 func TestMysqlDownServingChange(t *testing.T) {
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "set default_week_format = 1")
 	_ = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ * from test")
+
+	// Disable VTOrc emergency reparents to prevent VTOrc from racing with the manual ERS below.
+	_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspaceName)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspaceName)
+	})
 
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NoError(t,

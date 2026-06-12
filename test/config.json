@@ -702,7 +702,10 @@
       "Packages": [
         "vitess.io/vitess/go/test/endtoend/tabletmanager"
       ],
-      "Args": [],
+      "Args": [
+        "-timeout",
+        "20m"
+      ],
       "Command": [],
       "Manual": false,
       "Shard": "18",
@@ -785,6 +788,18 @@
       "Tags": [
         "site_test"
       ],
+      "Needs": []
+    },
+    "tabletmanager_disk_health_monitor": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "tabletmanager_disk_health_monitor",
+      "Tags": [],
       "Needs": []
     },
     "tabletmanager_zk2": {
@@ -1312,6 +1327,18 @@
       "Tags": [],
       "Needs": []
     },
+    "vtgate_schematracker_multi_ks_routing": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vtgate/schematracker/multi_ks_routing"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtgate_schema_tracker",
+      "Tags": [],
+      "Needs": []
+    },
     "vtgate_mysql84": {
       "File": "unused.go",
       "Packages": [
@@ -1423,7 +1450,9 @@
       "Manual": false,
       "Shard": "vtgate_transaction",
       "Tags": [],
-      "Needs": [],
+      "Needs": [
+        "larger-runner"
+      ],
       "BuildTag": "debug2PC"
     },
     "vtgate_transaction_restart": {
@@ -1514,7 +1543,9 @@
       "Manual": false,
       "Shard": "vtgate_transaction",
       "Tags": [],
-      "Needs": [],
+      "Needs": [
+        "larger-runner"
+      ],
       "BuildTag": "debug2PC"
     },
     "vtgate_transaction_timeout": {
@@ -1863,6 +1894,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1881,6 +1913,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1899,6 +1932,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1917,6 +1951,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1935,6 +1970,7 @@
       "Shard": "vreplication_multi_tenant",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1953,6 +1989,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1971,6 +2008,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -1989,6 +2027,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2007,6 +2046,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2025,6 +2065,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2083,6 +2124,7 @@
       "Shard": "vreplication_copy_parallel",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2101,6 +2143,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2119,6 +2162,7 @@
       "Shard": "vreplication_partial_movetables_and_materialize",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2149,7 +2193,7 @@
       ],
       "Args": [
         "-run",
-        "TestMultiVStreamsKeyspaceReshard",
+        "TestMultiVStreamsKeyspace",
         "-timeout",
         "15m"
       ],
@@ -2242,6 +2286,7 @@
       "Shard": "vtorc",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "memory-check"
       ]
     },
@@ -2317,6 +2362,7 @@
       "Shard": "vreplication_v2",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2355,6 +2401,7 @@
       "Shard": "vreplication_cellalias",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2373,6 +2420,7 @@
       "Shard": "vreplication_foreign_key_stress",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]
@@ -2393,6 +2441,7 @@
       "Shard": "vreplication_across_db_versions",
       "Tags": [],
       "Needs": [
+        "larger-runner",
         "limit-resources",
         "binlog-compression"
       ]

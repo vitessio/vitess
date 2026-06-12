@@ -76,10 +76,10 @@ CELL=zone1 ../common/scripts/vtorc-up.sh
 wait_for_healthy_shard commerce 0 || exit 1
 
 # create the schema
-vtctldclient ApplySchema --sql-file create_commerce_schema.sql commerce || fail "Failed to apply schema for the commerce keyspace"
+vtctldclient ApplySchema --sql-file ../common/create_commerce_schema.sql commerce || fail "Failed to apply schema for the commerce keyspace"
 
 # create the vschema
-vtctldclient ApplyVSchema --vschema-file vschema_commerce_initial.json commerce || fail "Failed to apply vschema for the commerce keyspace"
+vtctldclient ApplyVSchema --vschema-file ../common/vschema_commerce_initial.json commerce || fail "Failed to apply vschema for the commerce keyspace"
 
 # start vtgate
 CELL=zone1 ../common/scripts/vtgate-up.sh

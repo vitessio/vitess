@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e3f713f2d8f53843e71c69a996d56f51aa9adfb9 # v2.14.1
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
 
@@ -37,16 +37,19 @@ jobs:
           persist-credentials: 'false'
 
       - name: Set up Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
+          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
 
       - name: Tune the OS
+        timeout-minutes: 5
         uses: ./.github/actions/tune-os
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@6bc82e05fd0ea64601dd4b465378bbcf57de0314 # v4.32.1
+        timeout-minutes: 5
+        uses: github/codeql-action/init@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4.35.5
         with:
           languages: ${{ matrix.language }}
           # If you wish to specify cu stom queries, you can do so here or in a config file.
@@ -57,6 +60,7 @@ jobs:
           # queries: security-extended,security-and-quality
 
       - name: Setup MySQL
+        timeout-minutes: 8
         uses: ./.github/actions/setup-mysql
         with:
           flavor: mysql-8.4
@@ -78,11 +82,12 @@ jobs:
           make build
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@6bc82e05fd0ea64601dd4b465378bbcf57de0314 # v4.32.1
+        timeout-minutes: 15
+        uses: github/codeql-action/analyze@9e0d7b8d25671d64c341c19c0152d693099fb5ba # v4.35.5
 
       - name: Slack Workflow Notification
         if: ${{ failure() }}
-        uses: Gamesight/slack-workflow-status@68bf00d0dbdbcb206c278399aa1ef6c14f74347a # v1.3.0
+        uses: Gamesight/slack-workflow-status@2e709ce51fd47f02b7221db8547e6e6f49f81f1d # v2.0.0
         with:
           repo_token: ${{secrets.GITHUB_TOKEN}}
           slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}

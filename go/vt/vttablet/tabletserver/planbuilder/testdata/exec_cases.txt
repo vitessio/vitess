@@ -775,10 +775,11 @@ options:PassthroughDMLs
 }
 
 # show
-"show a"
+"show processlist"
 {
-  "PlanID": "OtherRead",
-  "TableName": ""
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show processlist"
 }
 
 # describe

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 	"sync"
 
 	"vitess.io/vitess/go/mysql"
@@ -79,6 +80,11 @@ func NewBinlogConnection(cp dbconfigs.Connector) (*BinlogConnection, error) {
 	return bc, nil
 }
 
+// ServerID returns the server ID used by this binlog connection.
+func (bc *BinlogConnection) ServerID() uint32 {
+	return bc.serverID
+}
+
 // connectForReplication create a MySQL connection ready to use for replication.
 func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 	ctx := context.Background()
@@ -122,7 +128,8 @@ func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, bin
 	ctx, bc.cancel = context.WithCancel(ctx)
 
 	log.Info(fmt.Sprintf("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID))
-	if err := bc.SendBinlogDumpCommand(bc.serverID, binlogFilename, startPos); err != nil {
+	// VStream uses blocking mode (nonBlock=false) - it continuously streams events
+	if err := bc.SendBinlogDumpGTIDCommand(bc.serverID, binlogFilename, 4, startPos, 0); err != nil {
 		log.Error(fmt.Sprintf("couldn't send binlog dump command: %v", err))
 		return nil, nil, err
 	}
@@ -229,7 +236,7 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 	}
 
 	// Start with the most recent binlog file until we find the right event.
-	for binlogIndex := len(binlogs.Rows) - 1; binlogIndex >= 0; binlogIndex-- {
+	for _, row := range slices.Backward(binlogs.Rows) {
 		// Exit the loop early if context is canceled.
 		select {
 		case <-ctx.Done():
@@ -237,7 +244,7 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 		default:
 		}
 
-		filename := binlogs.Rows[binlogIndex][0].ToString()
+		filename := row[0].ToString()
 		blTimestamp, err := bc.getBinlogTimeStamp(filename)
 		if err != nil {
 			return "", err

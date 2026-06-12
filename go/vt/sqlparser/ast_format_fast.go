@@ -61,13 +61,17 @@ func (node *Select) FormatFast(buf *TrackedBuffer) {
 	}
 
 	node.SelectExprs.FormatFast(buf)
-	buf.WriteString(" from ")
 
-	prefix := ""
-	for _, expr := range node.From {
-		buf.WriteString(prefix)
-		expr.FormatFast(buf)
-		prefix = ", "
+	if len(node.From) == 0 {
+		buf.WriteString(" from dual")
+	} else {
+		buf.WriteString(" from ")
+		prefix := ""
+		for _, expr := range node.From {
+			buf.WriteString(prefix)
+			expr.FormatFast(buf)
+			prefix = ", "
+		}
 	}
 
 	node.Where.FormatFast(buf)
@@ -442,58 +446,91 @@ func (node *AlterMigration) FormatFast(buf *TrackedBuffer) {
 	case CleanupMigrationType:
 		alterType = "cleanup"
 	case CleanupAllMigrationType:
-		alterType = "cleanup all"
+		if node.Context != "" {
+			alterType = "cleanup"
+		} else {
+			alterType = "cleanup all"
+		}
 	case LaunchMigrationType:
 		alterType = "launch"
 	case LaunchAllMigrationType:
-		alterType = "launch all"
+		if node.Context != "" {
+			alterType = "launch"
+		} else {
+			alterType = "launch all"
+		}
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CompleteAllMigrationType:
-		alterType = "complete all"
+		if node.Context != "" {
+			alterType = "complete"
+		} else {
+			alterType = "complete all"
+		}
 	case PostponeCompleteMigrationType:
 		alterType = "postpone complete"
 	case PostponeCompleteAllMigrationType:
-		alterType = "postpone complete all"
+		if node.Context != "" {
+			alterType = "postpone complete"
+		} else {
+			alterType = "postpone complete all"
+		}
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
-		alterType = "cancel all"
+		if node.Context != "" {
+			alterType = "cancel"
+		} else {
+			alterType = "cancel all"
+		}
 	case ThrottleMigrationType:
 		alterType = "throttle"
 	case ThrottleAllMigrationType:
-		alterType = "throttle all"
+		if node.Context != "" {
+			alterType = "throttle"
+		} else {
+			alterType = "throttle all"
+		}
 	case UnthrottleMigrationType:
 		alterType = "unthrottle"
 	case UnthrottleAllMigrationType:
-		alterType = "unthrottle all"
+		if node.Context != "" {
+			alterType = "unthrottle"
+		} else {
+			alterType = "unthrottle all"
+		}
 	case ForceCutOverMigrationType:
 		alterType = "force_cutover"
 	case ForceCutOverAllMigrationType:
-		alterType = "force_cutover all"
+		if node.Context != "" {
+			alterType = "force_cutover"
+		} else {
+			alterType = "force_cutover all"
+		}
 	case SetCutOverThresholdMigrationType:
 		alterType = "cutover_threshold"
 	}
 	buf.WriteByte(' ')
 	buf.WriteString(alterType)
 	if node.Threshold != "" {
-		buf.WriteString(" '")
-		buf.WriteString(node.Threshold)
-		buf.WriteByte('\'')
+		buf.WriteByte(' ')
+		buf.WriteString(encodeSQLString(node.Threshold))
+	}
+	if node.Context != "" {
+		buf.WriteString(" context ")
+		buf.WriteString(encodeSQLString(node.Context))
 	}
 	if node.Expire != "" {
-		buf.WriteString(" expire '")
-		buf.WriteString(node.Expire)
-		buf.WriteByte('\'')
+		buf.WriteString(" expire ")
+		buf.WriteString(encodeSQLString(node.Expire))
 	}
 	if node.Ratio != nil {
 		buf.WriteString(" ratio ")
 		node.Ratio.FormatFast(buf)
 	}
 	if node.Shards != "" {
-		buf.WriteString(" vitess_shards '")
-		buf.WriteString(node.Shards)
-		buf.WriteByte('\'')
+		buf.WriteString(" vitess_shards ")
+		buf.WriteString(encodeSQLString(node.Shards))
 	}
 }
 
@@ -1812,11 +1849,7 @@ func (node TableName) FormatFast(buf *TrackedBuffer) {
 		node.Qualifier.FormatFast(buf)
 		buf.WriteByte('.')
 	}
-	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
-		buf.WriteString("dual")
-	} else {
-		node.Name.FormatFast(buf)
-	}
+	node.Name.FormatFast(buf)
 }
 
 // FormatFast formats the node.
@@ -3065,14 +3098,23 @@ func (node *ShowBasic) FormatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(node.Command.ToString())
 	if !node.Tbl.IsEmpty() {
-		buf.WriteString(" from ")
-		node.Tbl.FormatFast(buf)
+		switch node.Command {
+		case FunctionC, ProcedureC:
+			buf.WriteByte(' ')
+			node.Tbl.FormatFast(buf)
+		default:
+			buf.WriteString(" from ")
+			node.Tbl.FormatFast(buf)
+		}
 	}
 	if node.DbName.NotEmpty() {
 		buf.WriteString(" from ")
 		node.DbName.FormatFast(buf)
 	}
 	node.Filter.FormatFast(buf)
+	if node.Limit != nil {
+		node.Limit.FormatFast(buf)
+	}
 }
 
 func (node *ShowTransactionStatus) FormatFast(buf *TrackedBuffer) {
@@ -3098,9 +3140,121 @@ func (node *ShowCreate) FormatFast(buf *TrackedBuffer) {
 }
 
 // FormatFast formats the node.
-func (node *ShowOther) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("show ")
-	buf.WriteString(node.Command)
+func (node *ShowEngine) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show engine ")
+	buf.WriteString(node.EngineName)
+	buf.WriteByte(' ')
+	buf.WriteString(node.Action)
+}
+
+// FormatFast formats the node.
+func (node *ShowGrants) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show grants")
+	if node.User != nil {
+		if node.User.Name != nil || len(node.UsingRole) > 0 {
+			buf.WriteString(" for ")
+			node.User.formatTo(buf)
+		}
+		if len(node.UsingRole) > 0 {
+			buf.WriteString(" using ")
+			for i, role := range node.UsingRole {
+				if i > 0 {
+					buf.WriteString(", ")
+				}
+				role.formatTo(buf)
+			}
+		}
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowProfile) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show profile")
+	for i, t := range node.Types {
+		if i == 0 {
+			buf.WriteString(" ")
+		} else {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(t)
+	}
+	if node.ForQuery != nil {
+		buf.WriteString(" for query ")
+		node.ForQuery.FormatFast(buf)
+	}
+	if node.Limit != nil {
+		node.Limit.FormatFast(buf)
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowCreateUser) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show create user ")
+	if node.User != nil {
+		node.User.formatTo(buf)
+	} else {
+		buf.WriteString("current_user")
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowBinlogEvents) FormatFast(buf *TrackedBuffer) {
+	if node.IsRelaylog {
+		buf.WriteString("show relaylog events")
+	} else {
+		buf.WriteString("show binlog events")
+	}
+	if node.LogName != "" {
+		buf.WriteString(" in ")
+		buf.WriteString(encodeSQLString(node.LogName))
+	}
+	if node.Position != nil {
+		buf.WriteString(" from ")
+		node.Position.FormatFast(buf)
+	}
+	if node.Limit != nil {
+		node.Limit.FormatFast(buf)
+	}
+	if node.Channel != "" {
+		buf.WriteString(" for channel ")
+		buf.WriteString(encodeSQLString(node.Channel))
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowReplicationStatus) FormatFast(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.WriteString("show slave status")
+	} else {
+		buf.WriteString("show replica status")
+	}
+	if node.Channel != "" {
+		buf.WriteString(" for channel ")
+		buf.WriteString(encodeSQLString(node.Channel))
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowReplicationSourceStatus) FormatFast(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.WriteString("show master status")
+	} else {
+		buf.WriteString("show binary log status")
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowReplicas) FormatFast(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.WriteString("show slave hosts")
+	} else {
+		buf.WriteString("show replicas")
+	}
+}
+
+// FormatFast formats the node.
+func (node *ShowBinaryLogs) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("show binary logs")
 }
 
 // FormatFast formats the node.

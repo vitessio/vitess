@@ -17,7 +17,6 @@ limitations under the License.
 package topotests
 
 import (
-	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -26,6 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -51,37 +53,25 @@ func TestFixShardReplication(t *testing.T) {
 		Alias:    alias,
 	}
 	if err := ts.CreateTablet(ctx, tablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
+		require.NoError(t, err)
 	}
 
 	// Make sure it's in the ShardReplication.
 	sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil {
-		t.Fatalf("GetShardReplication failed: %v", err)
-	}
-	if len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
-		t.Errorf("Missing or wrong alias in ShardReplication: %v", sri)
-	}
+	require.NoError(t, err)
+	require.Lenf(t, sri.Nodes, 1, "Missing or wrong alias in ShardReplication: %v", sri)
+	assert.Truef(t, proto.Equal(sri.Nodes[0].TabletAlias, alias), "Missing or wrong alias in ShardReplication: %v", sri)
 
 	// Run FixShardReplication, should do nothing.
 	logger := logutil.NewMemoryLogger()
 	problem, err := topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	if err != nil {
-		t.Errorf("FixShardReplication failed: %v", err)
-	}
-	if problem != nil {
-		t.Errorf("FixShardReplication should have found no issues, got %+v", problem)
-	}
+	assert.NoError(t, err)
+	assert.Nilf(t, problem, "FixShardReplication should have found no issues, got %+v", problem)
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil {
-		t.Fatalf("GetShardReplication failed: %v", err)
-	}
-	if len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
-		t.Errorf("Missing or wrong alias in ShardReplication: %v", sri)
-	}
-	if !strings.Contains(logger.String(), "All entries in replication graph are valid") {
-		t.Errorf("Wrong log: %v", logger.String())
-	}
+	require.NoError(t, err)
+	require.Lenf(t, sri.Nodes, 1, "Missing or wrong alias in ShardReplication: %v", sri)
+	assert.Truef(t, proto.Equal(sri.Nodes[0].TabletAlias, alias), "Missing or wrong alias in ShardReplication: %v", sri)
+	assert.Containsf(t, logger.String(), "All entries in replication graph are valid", "Wrong log: %v", logger.String())
 
 	bogusTablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
@@ -97,34 +87,25 @@ func TestFixShardReplication(t *testing.T) {
 		})
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardReplicationFields failed: %v", err)
+		require.NoError(t, err)
 	}
 	logger.Clear()
 	problem, err = topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	if err != nil {
-		t.Errorf("FixShardReplication failed: %v", err)
-	}
-	if problem == nil {
-		t.Errorf("FixShardReplication should have found problem, but found none")
-	} else {
-		if problem.Type != topodatapb.ShardReplicationError_NOT_FOUND {
-			t.Errorf("FixShardReplication problem.Type mismatch: want %q got %q", topoproto.ShardReplicationErrorTypeString(topodatapb.ShardReplicationError_NOT_FOUND), topoproto.ShardReplicationErrorTypeString(problem.Type))
-		}
-
-		if !topoproto.TabletAliasEqual(problem.TabletAlias, bogusTablet.Alias) {
-			t.Errorf("FixShardReplication problem.TabletAlias mismatch: want %q got %q", topoproto.TabletAliasString(bogusTablet.Alias), topoproto.TabletAliasString(problem.TabletAlias))
-		}
+	assert.NoError(t, err)
+	if assert.NotNil(t, problem, "FixShardReplication should have found problem, but found none") {
+		assert.Equalf(t, topodatapb.ShardReplicationError_NOT_FOUND, problem.Type,
+			"FixShardReplication problem.Type mismatch: want %q got %q",
+			topoproto.ShardReplicationErrorTypeString(topodatapb.ShardReplicationError_NOT_FOUND),
+			topoproto.ShardReplicationErrorTypeString(problem.Type))
+		assert.Truef(t, topoproto.TabletAliasEqual(problem.TabletAlias, bogusTablet.Alias),
+			"FixShardReplication problem.TabletAlias mismatch: want %q got %q",
+			topoproto.TabletAliasString(bogusTablet.Alias), topoproto.TabletAliasString(problem.TabletAlias))
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil {
-		t.Fatalf("GetShardReplication failed: %v", err)
-	}
-	if len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
-		t.Errorf("Missing or wrong alias in ShardReplication: %v", sri)
-	}
-	if !strings.Contains(logger.String(), "but does not exist, removing it") {
-		t.Errorf("Wrong log: %v", logger.String())
-	}
+	require.NoError(t, err)
+	require.Lenf(t, sri.Nodes, 1, "Missing or wrong alias in ShardReplication: %v", sri)
+	assert.Truef(t, proto.Equal(sri.Nodes[0].TabletAlias, alias), "Missing or wrong alias in ShardReplication: %v", sri)
+	assert.Containsf(t, logger.String(), "but does not exist, removing it", "Wrong log: %v", logger.String())
 
 	// Add a bogus entries: a tablet with wrong keyspace.
 	bogusTablet = &topodatapb.Tablet{
@@ -136,7 +117,7 @@ func TestFixShardReplication(t *testing.T) {
 		},
 	}
 	if err := ts.CreateTablet(ctx, bogusTablet); err != nil {
-		t.Fatalf("CreateTablet failed: %v", err)
+		require.NoError(t, err)
 	}
 	if err := ts.UpdateShardReplicationFields(ctx, cell, keyspace, shard, func(sr *topodatapb.ShardReplication) error {
 		sr.Nodes = append(sr.Nodes, &topodatapb.ShardReplication_Node{
@@ -144,32 +125,23 @@ func TestFixShardReplication(t *testing.T) {
 		})
 		return nil
 	}); err != nil {
-		t.Fatalf("UpdateShardReplicationFields failed: %v", err)
+		require.NoError(t, err)
 	}
 	logger.Clear()
 	problem, err = topo.FixShardReplication(ctx, ts, logger, cell, keyspace, shard)
-	if err != nil {
-		t.Errorf("FixShardReplication failed: %v", err)
-	}
-	if problem == nil {
-		t.Errorf("FixShardReplication should have found problem, but found none")
-	} else {
-		if problem.Type != topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH {
-			t.Errorf("FixShardReplication problem.Type mismatch: want %q got %q", topoproto.ShardReplicationErrorTypeString(topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH), topoproto.ShardReplicationErrorTypeString(problem.Type))
-		}
-
-		if !topoproto.TabletAliasEqual(problem.TabletAlias, bogusTablet.Alias) {
-			t.Errorf("FixShardReplication problem.TabletAlias mismatch: want %q got %q", topoproto.TabletAliasString(bogusTablet.Alias), topoproto.TabletAliasString(problem.TabletAlias))
-		}
+	assert.NoError(t, err)
+	if assert.NotNil(t, problem, "FixShardReplication should have found problem, but found none") {
+		assert.Equalf(t, topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH, problem.Type,
+			"FixShardReplication problem.Type mismatch: want %q got %q",
+			topoproto.ShardReplicationErrorTypeString(topodatapb.ShardReplicationError_TOPOLOGY_MISMATCH),
+			topoproto.ShardReplicationErrorTypeString(problem.Type))
+		assert.Truef(t, topoproto.TabletAliasEqual(problem.TabletAlias, bogusTablet.Alias),
+			"FixShardReplication problem.TabletAlias mismatch: want %q got %q",
+			topoproto.TabletAliasString(bogusTablet.Alias), topoproto.TabletAliasString(problem.TabletAlias))
 	}
 	sri, err = ts.GetShardReplication(ctx, cell, keyspace, shard)
-	if err != nil {
-		t.Fatalf("GetShardReplication failed: %v", err)
-	}
-	if len(sri.Nodes) != 1 || !proto.Equal(sri.Nodes[0].TabletAlias, alias) {
-		t.Errorf("Missing or wrong alias in ShardReplication: %v", sri)
-	}
-	if !strings.Contains(logger.String(), "but has wrong keyspace/shard/cell, removing it") {
-		t.Errorf("Wrong log: %v", logger.String())
-	}
+	require.NoError(t, err)
+	require.Lenf(t, sri.Nodes, 1, "Missing or wrong alias in ShardReplication: %v", sri)
+	assert.Truef(t, proto.Equal(sri.Nodes[0].TabletAlias, alias), "Missing or wrong alias in ShardReplication: %v", sri)
+	assert.Containsf(t, logger.String(), "but has wrong keyspace/shard/cell, removing it", "Wrong log: %v", logger.String())
 }

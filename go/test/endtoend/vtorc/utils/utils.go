@@ -40,7 +40,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/logic"
 
@@ -135,7 +134,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 		}
 	}
 	clusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 	// Initialize Cluster
 	shard0.Vttablets = tablets
@@ -796,6 +795,27 @@ func MakeAPICallRetry(t *testing.T, vtorc *cluster.VTOrcProcess, url string, ret
 	}
 }
 
+// MakeAPICallRetryTimeout is used to make an API call and retry until timeout.
+// The function provided takes in the status and response and returns if we should continue to retry or not.
+func MakeAPICallRetryTimeout(t *testing.T, vtorc *cluster.VTOrcProcess, url string, timeout time.Duration, retry func(int, string) bool) (status int, response string) {
+	t.Helper()
+	timer := time.After(timeout)
+	for {
+		select {
+		case <-timer:
+			require.FailNow(t, "timed out waiting for api to work", "Last response - %s", response)
+			return
+		default:
+			status, response, _ = MakeAPICall(t, vtorc, url)
+			if retry(status, response) {
+				time.Sleep(time.Second)
+				continue
+			}
+			return
+		}
+	}
+}
+
 // SetupNewClusterSemiSync is used to setup a new cluster with semi-sync set.
 // It creates a cluster with 4 tablets, one of which is a Replica
 func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
@@ -820,7 +840,7 @@ func SetupNewClusterSemiSync(t *testing.T) *VTOrcClusterInfo {
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 
 	// Initialize Cluster
@@ -894,7 +914,7 @@ func AddSemiSyncKeyspace(t *testing.T, clusterInfo *VTOrcClusterInfo) {
 		clusterInfo.ClusterInstance.VtTabletExtraArgs = oldVttabletArgs
 	}()
 	clusterInfo.ClusterInstance.VtTabletExtraArgs = []string{
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 	}
 
 	// Initialize Cluster
@@ -996,6 +1016,20 @@ func WaitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValu
 	return false
 }
 
+// GetSuccessfulRecoveryCount returns the current successful recovery count for
+// the given recovery name, keyspace, and shard. Returns 0 if the metric is not
+// yet available.
+func GetSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string) int {
+	t.Helper()
+	vars := vtorcInstance.GetVars()
+	successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
+	return GetIntFromValue(successfulRecoveriesMap[mapKey])
+}
+
 // WaitForSuccessfulRecoveryCount waits until the given recovery name's count of successful runs matches the count expected
 func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess, recoveryName, keyspace, shard string, countExpected int) {
 	t.Helper()
@@ -1003,7 +1037,8 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 	mapKey := fmt.Sprintf("%s.%s.%s", recoveryName, keyspace, shard)
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		successfulRecoveriesMap := vars["SuccessfulRecoveries"].(map[string]any)
+		successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
+		require.True(c, ok, "SuccessfulRecoveries metric not yet available")
 		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
 		assert.EqualValues(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful recovery count")
@@ -1101,7 +1136,8 @@ func WaitForDetectedProblems(t *testing.T, vtorcInstance *cluster.VTOrcProcess, 
 	timeout := 15 * time.Second
 	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		vars := vtorcInstance.GetVars()
-		problems := vars["DetectedProblems"].(map[string]any)
+		problems, ok := vars["DetectedProblems"].(map[string]any)
+		require.True(c, ok, "DetectedProblems metric not yet available")
 		actual, ok := problems[key]
 		actual = GetIntFromValue(actual)
 		assert.True(c, ok,

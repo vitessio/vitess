@@ -127,6 +127,16 @@ func (f *Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	}, nil
 }
 
+// AddCell adds a new cell to the factory. This is useful for tests that need
+// to dynamically add cells after the factory has been created.
+func (f *Factory) AddCell(cell string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.cells[cell]; !ok {
+		f.cells[cell] = f.newDirectory(cell, nil)
+	}
+}
+
 // SetError forces the given error to be returned from all calls and propagates
 // the error to all active watches.
 func (f *Factory) SetError(err error) {

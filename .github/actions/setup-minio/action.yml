@@ -12,7 +12,7 @@ runs:
 
     - name: Get Minio (on cache miss)
       if: steps.cache-minio.outputs.cache-hit != 'true'
-      shell: bash
+      shell: bash -e {0}
       run: |
         curl -sLo minio_20250907161309.0.0_amd64.deb.tmp https://dl.min.io/community/server/minio/release/linux-amd64/minio_20250907161309.0.0_amd64.deb
 
@@ -21,7 +21,7 @@ runs:
         [[ "$?" -eq 0 ]] && mv minio_20250907161309.0.0_amd64.deb.tmp minio_20250907161309.0.0_amd64.deb
 
     - name: Install Minio package
-      shell: bash
+      shell: bash -e {0}
       run: |
         sudo dpkg -i minio_20250907161309.0.0_amd64.deb
         sudo systemctl disable minio

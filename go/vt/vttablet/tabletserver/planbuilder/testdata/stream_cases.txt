@@ -50,6 +50,14 @@
   "FullQuery": "show table status"
 }
 
+# show binary log status
+"show binary log status"
+{
+  "PlanID": "SelectStream",
+  "TableName": "",
+  "FullQuery": "show binary log status"
+}
+
 # other
 "desc foo"
 {
@@ -70,13 +78,7 @@
 "select get_lock('foo', 10) from dual"
 {
   "PlanID": "SelectStream",
-  "TableName": "dual",
-  "Permissions": [
-    {
-      "TableName": "dual",
-      "Role": 0
-    }
-  ],
+  "TableName": "",
   "FullQuery": "select get_lock('foo', 10) from dual",
   "NeedsReservedConn": true
 }

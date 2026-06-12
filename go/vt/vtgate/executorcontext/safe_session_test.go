@@ -17,7 +17,6 @@ limitations under the License.
 package executorcontext
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
@@ -163,9 +162,7 @@ func TestPrequeries(t *testing.T) {
 	want := []string{"set s1 = 'apa', s2 = 42"}
 	preQueries := session.SetPreQueries()
 
-	if !reflect.DeepEqual(want, preQueries) {
-		t.Errorf("got %v but wanted %v", preQueries, want)
-	}
+	assert.Equalf(t, want, preQueries, "got %v but wanted %v", preQueries, want)
 }
 
 func TestTimeZone(t *testing.T) {

@@ -219,13 +219,7 @@ e2e_test: build
 
 # Run the code coverage tools, compute aggregate.
 unit_test_cover: build dependency_check demo
-	source build.env
-	go test $(VT_GO_PARALLEL) -count=1 -failfast -covermode=atomic -coverpkg=vitess.io/vitess/go/... -coverprofile=coverage.out ./go/...
-	# Handle go tool cover failures due to not handling `//line` directives, which
-	# the goyacc compiler adds to the generated parser in sql.go. See:
-	# https://github.com/golang/go/issues/41222
-	sed -i'' -e '/^vitess.io\/vitess\/go\/vt\/sqlparser\/yaccpar/d' coverage.out
-	go tool $(VT_GO_PARALLEL) cover -html=coverage.out
+	source build.env && tools/run_codecov.sh $(COVERAGE_PACKAGES)
 
 unit_test_race: build dependency_check
 	RACE=1 tools/unit_test_runner.sh
@@ -252,11 +246,6 @@ java_test:
 	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
-install_protoc-gen-go:
-	GOBIN=$(VTROOTBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -m -f '{{ .Version }}' google.golang.org/protobuf)
-	GOBIN=$(VTROOTBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0 # the GRPC compiler its own pinned version
-	GOBIN=$(VTROOTBIN) go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto@$(shell go list -m -f '{{ .Version }}' github.com/planetscale/vtprotobuf)
-
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
@@ -267,15 +256,16 @@ ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
 
-$(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
+$(PROTO_GO_OUTS): minimaltools proto/*.proto
 	$(VTROOT)/bin/protoc \
-		--go_out=. --plugin protoc-gen-go="${VTROOTBIN}/protoc-gen-go" \
-		--go-grpc_out=. --plugin protoc-gen-go-grpc="${VTROOTBIN}/protoc-gen-go-grpc" \
-		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${VTROOTBIN}/protoc-gen-go-vtproto" \
+		--go_out=. --plugin protoc-gen-go="$(shell go tool -n protoc-gen-go)" \
+		--go-grpc_out=. --plugin protoc-gen-go-grpc="$(shell go tool -n protoc-gen-go-grpc)" \
+		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="$(shell go tool -n protoc-gen-go-vtproto)" \
 		--go-vtproto_opt=features=marshal+unmarshal+size+pool+clone \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamTablesResponse \
+		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.BinlogDumpResponse \
 		-I${PWD}/dist/vt-protoc-21.3/include:proto $(PROTO_SRCS)
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
@@ -286,7 +276,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=53
+BOOTSTRAP_VERSION=56
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -318,7 +308,7 @@ define build_docker_image
 		docker buildx build --platform "$$(go env GOOS)/$$(go env GOARCH)" -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	else \
 		echo "Building docker using straight docker build"; \
-		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+		docker build --platform=linux/amd64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	fi
 endef
 
@@ -376,11 +366,11 @@ dependency_check:
 
 # Checks for formatting and linting errors.
 lint:
-	golangci-lint run ./go/...
+	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run ./go/...
 
 # Applies autofixes for formatting and linting errors if supported.
 lint-fix:
-	golangci-lint run --fix ./go/...
+	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run --fix ./go/...
 
 vtadmin_web_install:
 	cd web/vtadmin && npm install
@@ -393,7 +383,7 @@ vtadmin_web_proto_types: vtadmin_web_install
 
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
-	go tool gofumpt -w ./go/vt/vtadmin/
+	go tool -modfile=tools/gofumpt/go.mod gofumpt -w ./go/vt/vtadmin/
 
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh

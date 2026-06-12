@@ -17,6 +17,7 @@ limitations under the License.
 package common
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,6 +43,8 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 )
+
+const reverseWorkflowKeepDataHelpSuffix = " Defaults to true for an explicitly specified _reverse workflow unless --keep-data=false is provided."
 
 var (
 	client     vtctldclient.VtctldClient
@@ -108,6 +111,30 @@ func SetCommandCtx(ctx context.Context) {
 
 func GetCommandCtx() context.Context {
 	return commandCtx
+}
+
+func OptionalBoolFromFlag(cmd *cobra.Command, flagName string, value bool) *bool {
+	flag := cmd.Flags().Lookup(flagName)
+	if flag == nil || !flag.Changed {
+		return nil
+	}
+
+	return &value
+}
+
+func AppendWarnings(buf *bytes.Buffer, warnings []string) {
+	if len(warnings) == 0 {
+		return
+	}
+
+	for _, warning := range warnings {
+		fmt.Fprintf(buf, "WARNING: %s\n", warning)
+	}
+	buf.WriteByte('\n')
+}
+
+func ReverseWorkflowKeepDataHelpText(base string) string {
+	return base + reverseWorkflowKeepDataHelpSuffix
 }
 
 func ParseCells(cmd *cobra.Command) error {
@@ -192,9 +219,11 @@ func ParseTableMaterializeSettings(tableSettings string, parser *sqlparser.Parse
 }
 
 func validateOnDDL(cmd *cobra.Command) error {
-	if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(CreateOptions.OnDDL)]; !ok {
+	normalized := strings.ToUpper(CreateOptions.OnDDL)
+	if _, ok := binlogdatapb.OnDDLAction_value[normalized]; !ok {
 		return fmt.Errorf("invalid on-ddl value: %s", CreateOptions.OnDDL)
 	}
+	CreateOptions.OnDDL = normalized
 	return nil
 }
 
@@ -272,13 +301,13 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 
 	// Plain text formatted output.
 	tout := strings.Builder{}
-	tout.WriteString(fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n",
-		BaseOptions.TargetKeyspace, BaseOptions.Workflow))
+	fmt.Fprintf(&tout, "The following vreplication streams exist for workflow %s.%s:\n\n",
+		BaseOptions.TargetKeyspace, BaseOptions.Workflow)
 	for _, shardstreams := range resp.ShardStreams {
 		for _, shardstream := range shardstreams.Streams {
 			tablet := fmt.Sprintf("%s-%d", shardstream.Tablet.Cell, shardstream.Tablet.Uid)
-			tout.WriteString(fmt.Sprintf("id=%d on %s/%s: Status: %s. %s.\n",
-				shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info))
+			fmt.Fprintf(&tout, "id=%d on %s/%s: Status: %s. %s.\n",
+				shardstream.Id, BaseOptions.TargetKeyspace, tablet, shardstream.Status, shardstream.Info)
 		}
 	}
 	if len(resp.TableCopyState) > 0 {
@@ -292,16 +321,16 @@ func OutputStatusResponse(resp *vtctldatapb.WorkflowStatusResponse, format strin
 			tout.WriteString("\n\t")
 			tout.WriteString(table)
 			tout.WriteString(": ")
-			tout.WriteString(fmt.Sprintf("RowsCopied:%d, ", tcs.RowsCopied))
-			tout.WriteString(fmt.Sprintf("RowsTotal:%d, ", tcs.RowsTotal))
-			tout.WriteString(fmt.Sprintf("RowsPercentage:%.2f, ", tcs.RowsPercentage))
-			tout.WriteString(fmt.Sprintf("BytesCopied:%d, ", tcs.BytesCopied))
-			tout.WriteString(fmt.Sprintf("BytesTotal:%d, ", tcs.BytesTotal))
-			tout.WriteString(fmt.Sprintf("BytesPercentage:%.2f", tcs.BytesPercentage))
+			fmt.Fprintf(&tout, "RowsCopied:%d, ", tcs.RowsCopied)
+			fmt.Fprintf(&tout, "RowsTotal:%d, ", tcs.RowsTotal)
+			fmt.Fprintf(&tout, "RowsPercentage:%.2f, ", tcs.RowsPercentage)
+			fmt.Fprintf(&tout, "BytesCopied:%d, ", tcs.BytesCopied)
+			fmt.Fprintf(&tout, "BytesTotal:%d, ", tcs.BytesTotal)
+			fmt.Fprintf(&tout, "BytesPercentage:%.2f", tcs.BytesPercentage)
 			// If we're talking to an older server it won't provide this field. We should
 			// not show a wrong or confusing value in this case so elide it from the output.
 			if tcs.Phase != vtctldatapb.TableCopyPhase_UNKNOWN {
-				tout.WriteString(fmt.Sprintf(", Phase:%s", tcs.Phase))
+				fmt.Fprintf(&tout, ", Phase:%s", tcs.Phase)
 			}
 		}
 		tout.WriteString("\n")

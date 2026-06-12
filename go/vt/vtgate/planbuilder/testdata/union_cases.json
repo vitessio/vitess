@@ -448,7 +448,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.music",
         "user.user"
       ]
@@ -644,7 +643,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -951,7 +949,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }
@@ -1198,7 +1195,6 @@
         ]
       },
       "TablesUsed": [
-        "main.dual",
         "user.user"
       ]
     }

@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
-
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
@@ -78,13 +78,19 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 		}
 	}
 
-	primaryInstance, err := inst.ReadTopologyInstanceBufferable(primary.Alias, nil)
+	primaryAlias, err := topoproto.ParseTabletAlias(primary.Alias)
+	require.NoError(t, err)
+
+	replicaAlias, err := topoproto.ParseTabletAlias(replica.Alias)
+	require.NoError(t, err)
+
+	primaryInstance, err := inst.ReadTopologyInstanceBufferable(primaryAlias, nil)
 	require.NoError(t, err)
 	require.NotNil(t, primaryInstance)
 	assert.Equal(t, utils.Hostname, primaryInstance.Hostname)
 	assert.Equal(t, primary.MySQLPort, primaryInstance.Port)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primaryInstance.TabletType)
-	assert.Contains(t, primaryInstance.InstanceAlias, "zone1")
+	assert.Contains(t, primaryInstance.InstanceAlias.String(), "zone1")
 	assert.NotEqual(t, 0, primaryInstance.ServerID)
 	assert.Greater(t, len(primaryInstance.ServerUUID), 10)
 	assert.Regexp(t, "[58].[704].*", primaryInstance.Version)
@@ -131,13 +137,13 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	err = logic.EnableRecovery()
 	require.NoError(t, err)
 
-	replicaInstance, err := inst.ReadTopologyInstanceBufferable(replica.Alias, nil)
+	replicaInstance, err := inst.ReadTopologyInstanceBufferable(replicaAlias, nil)
 	require.NoError(t, err)
 	require.NotNil(t, replicaInstance)
 	assert.Equal(t, utils.Hostname, replicaInstance.Hostname)
 	assert.Equal(t, replica.MySQLPort, replicaInstance.Port)
 	assert.Equal(t, topodatapb.TabletType_REPLICA, replicaInstance.TabletType)
-	assert.Contains(t, replicaInstance.InstanceAlias, "zone1")
+	assert.Contains(t, replicaInstance.InstanceAlias.String(), "zone1")
 	assert.NotEqual(t, 0, replicaInstance.ServerID)
 	assert.Greater(t, len(replicaInstance.ServerUUID), 10)
 	assert.Regexp(t, "[58].[704].*", replicaInstance.Version)

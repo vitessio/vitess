@@ -48,23 +48,18 @@ type MysqlctlProcess struct {
 	ExtraArgs       []string
 	InitMysql       bool
 	SecureTransport bool
-	MajorVersion    int
 }
 
 // InitDb executes mysqlctl command to add cell info
 func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	args := []string{
-		// todo: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
-		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
-		"init",
+		"--tablet-uid", strconv.Itoa(mysqlctl.TabletUID),
+		"--mysql-port", strconv.Itoa(mysqlctl.MySQLPort),
+		"--log-format", "text",
 	}
-	if mysqlctl.MajorVersion < 18 {
-		args = append(args, "--")
-	}
+	args = append(args, "init")
 
-	// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-	args = append(args, "--init_db_sql_file", mysqlctl.InitDBFile)
+	args = append(args, "--init-db-sql-file", mysqlctl.InitDBFile)
 	if *isCoverage {
 		args = append([]string{"--test.coverprofile=" + getCoveragePath("mysql-initdb.out"), "--test.v"}, args...)
 	}
@@ -98,11 +93,14 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 }
 
 func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
+	args := []string{
+		"--tablet-uid", strconv.Itoa(mysqlctl.TabletUID),
+		"--mysql-port", strconv.Itoa(mysqlctl.MySQLPort),
+		"--log-format", "text",
+	}
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
-		"--mysql_port", strconv.Itoa(mysqlctl.MySQLPort),
+		args...,
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-start.out")}...)
@@ -153,11 +151,7 @@ ssl_key={{.ServerKey}}
 
 		if init {
 			tmpProcess.Args = append(tmpProcess.Args, "init")
-			if mysqlctl.MajorVersion < 18 {
-				tmpProcess.Args = append(tmpProcess.Args, "--")
-			}
-			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-			tmpProcess.Args = append(tmpProcess.Args, "--init_db_sql_file", mysqlctl.InitDBFile)
+			tmpProcess.Args = append(tmpProcess.Args, "--init-db-sql-file", mysqlctl.InitDBFile)
 		} else {
 			tmpProcess.Args = append(tmpProcess.Args, "start")
 		}
@@ -227,10 +221,13 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
 func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
+	args := []string{
+		"--tablet-uid", strconv.Itoa(mysqlctl.TabletUID),
+		"--log-format", "text",
+	}
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--tablet_uid", strconv.Itoa(mysqlctl.TabletUID),
+		args...,
 	)
 	if *isCoverage {
 		tmpProcess.Args = append(tmpProcess.Args, []string{"--test.coverprofile=" + getCoveragePath("mysql-stop.out")}...)
@@ -263,16 +260,11 @@ func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirect
 		return nil, err
 	}
 
-	version, err := GetMajorVersion("mysqlctl")
-	if err != nil {
-		log.Warn(fmt.Sprintf("failed to get major mysqlctl version; backwards-compatibility for CLI changes may not work: %s", err))
-	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
 		LogDirectory: tmpDirectory,
 		InitDBFile:   initFile,
-		MajorVersion: version,
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID

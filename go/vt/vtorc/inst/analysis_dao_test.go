@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -49,19 +50,21 @@ var initialSQL = []string{
 // run by it. It only checks the analysis part after the rows have been read. This tests fakes the db and explicitly returns the
 // rows that are specified in the test.
 func TestGetDetectionAnalysisDecision(t *testing.T) {
+	resetPrimaryHealthState()
 	tests := []struct {
 		name           string
 		info           []*test.InfoForRecoveryAnalysis
 		codeWanted     AnalysisCode
 		shardWanted    string
 		keyspaceWanted string
+		preFunc        func()
 		wantErr        string
 	}{
 		{
 			name: "ClusterHasNoPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -80,7 +83,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "PrimaryTabletDeleted",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -100,7 +103,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "StalledDiskPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -125,7 +128,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "PrimarySemiSyncBlocked",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -155,7 +158,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "LockedSemiSync",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -185,7 +188,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "DeadPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -206,10 +209,71 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			codeWanted:     DeadPrimary,
 		},
 		{
-			name: "DeadPrimaryWithoutReplicas",
+			name: "IncapacitatedPrimaryHealthWindow",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
 					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              policy.DurabilityNone,
+				LastCheckValid:                0,
+				CountReplicas:                 2,
+				CountValidReplicas:            2,
+				CountValidReplicatingReplicas: 2,
+				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			preFunc: func() {
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+			},
+			codeWanted: IncapacitatedPrimary,
+		},
+		{
+			name: "DeadPrimaryHealthUnhealthyIgnored",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				DurabilityPolicy:              policy.DurabilityNone,
+				LastCheckValid:                0,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 0,
+				IsPrimary:                     1,
+				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			preFunc: func() {
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, true)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+				RecordPrimaryHealthCheck(&topodatapb.TabletAlias{Cell: "zon1", Uid: 100}, false)
+			},
+			codeWanted: DeadPrimary,
+		},
+		{
+			name: "DeadPrimaryWithoutReplicas",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -231,7 +295,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "DeadPrimaryAndReplicas",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -253,7 +317,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "DeadPrimaryAndSomeReplicas",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -277,7 +341,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "PrimaryHasPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -300,7 +364,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "PrimaryIsReadOnly",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -324,7 +388,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "PrimaryCurrentTypeMismatch",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -347,7 +411,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "Unknown tablet type shouldn't run the mismatch recovery analysis",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -373,7 +437,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "PrimarySemiSyncMustNotBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -397,7 +461,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "PrimarySemiSyncMustBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -405,13 +469,15 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlHostname: "localhost",
 					MysqlPort:     6709,
 				},
-				DurabilityPolicy:       policy.DurabilitySemiSync,
-				LastCheckValid:         1,
-				CountReplicas:          4,
-				CountValidReplicas:     4,
-				IsPrimary:              1,
-				SemiSyncPrimaryEnabled: 0,
-				CurrentTabletType:      int(topodatapb.TabletType_PRIMARY),
+				DurabilityPolicy:                      policy.DurabilitySemiSync,
+				LastCheckValid:                        1,
+				CountReplicas:                         4,
+				CountValidReplicas:                    4,
+				CountValidReplicatingReplicas:         4,
+				CountValidSemiSyncReplicatingReplicas: 1,
+				IsPrimary:                             1,
+				SemiSyncPrimaryEnabled:                0,
+				CurrentTabletType:                     int(topodatapb.TabletType_PRIMARY),
 			}},
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
@@ -421,7 +487,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "NotConnectedToPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -440,7 +506,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -460,7 +526,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "ReplicaIsWritable",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -479,7 +545,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -489,7 +555,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				},
 				DurabilityPolicy: policy.DurabilityNone,
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid: 1,
 				ReadOnly:       0,
@@ -502,7 +568,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "ConnectedToWrongPrimary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -521,7 +587,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -531,7 +597,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				},
 				DurabilityPolicy: policy.DurabilityNone,
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 102},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 				},
 				LastCheckValid: 1,
 				ReadOnly:       1,
@@ -544,7 +610,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "ReplicationStopped",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -563,7 +629,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -573,7 +639,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				},
 				DurabilityPolicy: policy.DurabilityNone,
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid:     1,
 				ReadOnly:           1,
@@ -587,7 +653,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "No recoveries on drained tablets",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -606,7 +672,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -616,7 +682,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				},
 				DurabilityPolicy: policy.DurabilityNone,
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid:     1,
 				ReadOnly:           1,
@@ -630,7 +696,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "ReplicaMisconfigured",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -649,7 +715,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -659,7 +725,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				},
 				DurabilityPolicy: policy.DurabilityNone,
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid:    1,
 				ReadOnly:          1,
@@ -674,7 +740,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "ReplicaSemiSyncMustBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -694,7 +760,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -703,7 +769,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlPort:     6709,
 				},
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				DurabilityPolicy:       policy.DurabilitySemiSync,
 				LastCheckValid:         1,
@@ -718,7 +784,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "ReplicaSemiSyncMustNotBeSet",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -737,7 +803,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -746,7 +812,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 					MysqlPort:     6709,
 				},
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				DurabilityPolicy:       policy.DurabilityNone,
 				LastCheckValid:         1,
@@ -761,7 +827,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "SnapshotKeyspace",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -782,7 +848,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "EmptyDurabilityPolicy",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -803,7 +869,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "Empty database_instance table",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -823,7 +889,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -842,7 +908,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "DeadPrimary when VTOrc is starting up",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -854,7 +920,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				IsInvalid:        1,
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -866,7 +932,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				ReplicationStopped: 1,
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 103},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 103},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -885,7 +951,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "Invalid Primary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -904,7 +970,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "ErrantGTID",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -923,7 +989,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -934,7 +1000,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				DurabilityPolicy: policy.DurabilityNone,
 				ErrantGTID:       "some errant GTID",
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid: 1,
 				ReadOnly:       1,
@@ -947,7 +1013,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			name: "ErrantGTID on a non-replica",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -966,7 +1032,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				CurrentTabletType:             int(topodatapb.TabletType_PRIMARY),
 			}, {
 				TabletInfo: &topodatapb.Tablet{
-					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					Hostname:      "localhost",
 					Keyspace:      "ks",
 					Shard:         "0",
@@ -977,7 +1043,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 				DurabilityPolicy: policy.DurabilityNone,
 				ErrantGTID:       "some errant GTID",
 				PrimaryTabletInfo: &topodatapb.Tablet{
-					Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				},
 				LastCheckValid: 1,
 				ReadOnly:       1,
@@ -989,6 +1055,10 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			resetPrimaryHealthState()
+			if tt.preFunc != nil {
+				tt.preFunc()
+			}
 			oldDB := db.Db
 			defer func() {
 				db.Db = oldDB
@@ -1036,7 +1106,7 @@ func TestStalePrimary(t *testing.T) {
 	info := []*test.InfoForRecoveryAnalysis{
 		{
 			TabletInfo: &topodatapb.Tablet{
-				Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 				Hostname:      "localhost",
 				Keyspace:      "ks",
 				Shard:         "0",
@@ -1060,7 +1130,7 @@ func TestStalePrimary(t *testing.T) {
 		},
 		{
 			TabletInfo: &topodatapb.Tablet{
-				Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 				Hostname:      "localhost",
 				Keyspace:      "ks",
 				Shard:         "0",
@@ -1070,7 +1140,7 @@ func TestStalePrimary(t *testing.T) {
 			},
 			DurabilityPolicy: policy.DurabilitySemiSync,
 			PrimaryTabletInfo: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 			},
 			LastCheckValid:            1,
 			ReadOnly:                  1,
@@ -1079,7 +1149,7 @@ func TestStalePrimary(t *testing.T) {
 		},
 		{
 			TabletInfo: &topodatapb.Tablet{
-				Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 102},
+				Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 				Hostname:      "localhost",
 				Keyspace:      "ks",
 				Shard:         "0",
@@ -1100,7 +1170,7 @@ func TestStalePrimary(t *testing.T) {
 		},
 	}
 
-	var rowMaps []sqlutils.RowMap
+	rowMaps := make([]sqlutils.RowMap, 0, len(info))
 	for _, analysis := range info {
 		analysis.SetValuesFromTabletInfo()
 		rowMaps = append(rowMaps, analysis.ConvertToRowMap())
@@ -1124,6 +1194,7 @@ func TestStalePrimary(t *testing.T) {
 // This test is somewhere between a unit test, and an end-to-end test. It is specifically useful for testing situations which are hard to come by in end-to-end test, but require
 // real-world data to test specifically.
 func TestGetDetectionAnalysis(t *testing.T) {
+	defer resetPrimaryHealthState()
 	// The test is intended to be used as follows. The initial data is stored into the database. Following this, some specific queries are run that each individual test specifies to get the desired state.
 	tests := []struct {
 		name           string
@@ -1232,24 +1303,24 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 			}()
 
 			updates := []struct {
-				tabletAlias             string
+				tabletAlias             *topodatapb.TabletAlias
 				analysisCode            AnalysisCode
 				writeCounterExpectation int64
 				wantErr                 string
 			}{
 				{
 					// Store a new analysis for the zone1-100 tablet.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicationStopped,
 					writeCounterExpectation: 1,
 				}, {
 					// Write the same analysis, no new write should happen.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicationStopped,
 					writeCounterExpectation: 1,
 				}, {
 					// Change the analysis. This should trigger an update.
-					tabletAlias:             "zone1-100",
+					tabletAlias:             &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					analysisCode:            ReplicaSemiSyncMustBeSet,
 					writeCounterExpectation: 2,
 				},
@@ -1319,21 +1390,21 @@ func TestPostProcessAnalyses(t *testing.T) {
 			analyses: []*DetectionAnalysis{
 				{
 					Analysis:              InvalidPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_RDONLY,
 				}, {
 					Analysis:              ConnectedToWrongPrimary,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-101",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
@@ -1341,21 +1412,21 @@ func TestPostProcessAnalyses(t *testing.T) {
 				}, {
 					Analysis:              ReplicationStopped,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-102",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_RDONLY,
 					ReplicationStopped:    true,
 				}, {
 					Analysis:              InvalidReplica,
-					AnalyzedInstanceAlias: "zone1-108",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 108},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
 					LastCheckValid:        false,
 				}, {
 					Analysis:              NoProblem,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					LastCheckValid:        true,
@@ -1365,21 +1436,21 @@ func TestPostProcessAnalyses(t *testing.T) {
 			want: []*DetectionAnalysis{
 				{
 					Analysis:              DeadPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_RDONLY,
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_REPLICA,
@@ -1391,13 +1462,13 @@ func TestPostProcessAnalyses(t *testing.T) {
 			analyses: []*DetectionAnalysis{
 				{
 					Analysis:              InvalidPrimary,
-					AnalyzedInstanceAlias: "zone1-100",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
 				}, {
 					Analysis:              NoProblem,
-					AnalyzedInstanceAlias: "zone1-202",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 202},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					LastCheckValid:        true,
@@ -1405,14 +1476,14 @@ func TestPostProcessAnalyses(t *testing.T) {
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-101",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_REPLICA,
 				}, {
 					Analysis:              ReplicationStopped,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-102",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_RDONLY,
@@ -1420,7 +1491,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 				}, {
 					Analysis:              NoProblem,
 					LastCheckValid:        true,
-					AnalyzedInstanceAlias: "zone1-302",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302},
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard80,
 					TabletType:            topodatapb.TabletType_REPLICA,
@@ -1435,6 +1506,104 @@ func TestPostProcessAnalyses(t *testing.T) {
 			}
 			result := postProcessAnalyses(tt.analyses, clusters)
 			require.ElementsMatch(t, tt.want, result)
+		})
+	}
+}
+
+func TestDeclaresBefore(t *testing.T) {
+	tests := []struct {
+		name     string
+		problem  *DetectionAnalysisProblem
+		code     AnalysisCode
+		expected bool
+	}{
+		{
+			name:     "ReplicationStopped declares before PrimarySemiSyncBlocked",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
+			code:     PrimarySemiSyncBlocked,
+			expected: true,
+		},
+		{
+			name:     "ReplicationStopped does not declare before DeadPrimary",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
+			code:     DeadPrimary,
+			expected: false,
+		},
+		{
+			name:     "PrimaryIsReadOnly declares before PrimarySemiSyncBlocked",
+			problem:  GetDetectionAnalysisProblem(PrimaryIsReadOnly),
+			code:     PrimarySemiSyncBlocked,
+			expected: true,
+		},
+		{
+			name:     "PrimaryIsReadOnly does not declare before PrimaryDiskStalled",
+			problem:  GetDetectionAnalysisProblem(PrimaryIsReadOnly),
+			code:     PrimaryDiskStalled,
+			expected: false,
+		},
+		{
+			name:     "ReplicationStopped does not declare before PrimaryDiskStalled",
+			problem:  GetDetectionAnalysisProblem(ReplicationStopped),
+			code:     PrimaryDiskStalled,
+			expected: false,
+		},
+		{
+			name:     "problem with no BeforeAnalyses",
+			problem:  GetDetectionAnalysisProblem(NotConnectedToPrimary),
+			code:     PrimarySemiSyncBlocked,
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, declaresBefore(tt.problem, tt.code))
+		})
+	}
+}
+
+func TestDeclaresAfter(t *testing.T) {
+	tests := []struct {
+		name             string
+		shardWideProblem *DetectionAnalysisProblem
+		code             AnalysisCode
+		expected         bool
+	}{
+		{
+			name: "shard-wide problem with AfterAnalyses referencing suppressed code",
+			shardWideProblem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{
+					Analysis:    PrimarySemiSyncBlocked,
+					Description: "test shard-wide",
+					Priority:    detectionAnalysisPriorityShardWideAction,
+				},
+				AfterAnalyses: []AnalysisCode{ReplicationStopped},
+			},
+			code:     ReplicationStopped,
+			expected: true,
+		},
+		{
+			name: "shard-wide problem with AfterAnalyses not referencing suppressed code",
+			shardWideProblem: &DetectionAnalysisProblem{
+				Meta: &DetectionAnalysisProblemMeta{
+					Analysis:    PrimarySemiSyncBlocked,
+					Description: "test shard-wide",
+					Priority:    detectionAnalysisPriorityShardWideAction,
+				},
+				AfterAnalyses: []AnalysisCode{ReplicationStopped},
+			},
+			code:     NotConnectedToPrimary,
+			expected: false,
+		},
+		{
+			name:             "shard-wide problem with no AfterAnalyses",
+			shardWideProblem: GetDetectionAnalysisProblem(PrimarySemiSyncBlocked),
+			code:             ReplicationStopped,
+			expected:         false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, declaresAfter(tt.shardWideProblem, tt.code))
 		})
 	}
 }

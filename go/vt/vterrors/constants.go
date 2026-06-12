@@ -51,6 +51,9 @@ const (
 // ConnectionRefused is for gRPC client not being able to connect to a server
 const ConnectionRefused = "connection refused"
 
+// GTIDSetMismatch is the error message prefix when a tablet doesn't have the requested GTID position.
+const GTIDSetMismatch = "GTIDSet Mismatch"
+
 // RxWrongTablet regex for invalid tablet type error
 var RxWrongTablet = regexp.MustCompile("(wrong|invalid) tablet type")
 

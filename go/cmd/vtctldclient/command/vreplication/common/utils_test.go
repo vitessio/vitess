@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
@@ -42,7 +43,7 @@ import (
 )
 
 func TestParseAndValidateCreateOptions(t *testing.T) {
-	common.SetCommandCtx(context.Background())
+	common.SetCommandCtx(t.Context())
 	ctx, cancel := context.WithTimeout(common.GetCommandCtx(), 60*time.Second)
 	defer cancel()
 	cells := []string{"zone1", "zone2", "zone3"}
@@ -116,6 +117,48 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 				require.Equal(t, cells, common.CreateOptions.Cells)
 			},
 		},
+		{
+			name: "invalid on-ddl value",
+			setFunc: func(cmd *cobra.Command) error {
+				onDDLFlag := cmd.Flags().Lookup("on-ddl")
+				if err := onDDLFlag.Value.Set("INVALID"); err != nil {
+					return err
+				}
+				onDDLFlag.Changed = true
+				return nil
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid on-ddl normalizes to uppercase",
+			setFunc: func(cmd *cobra.Command) error {
+				onDDLFlag := cmd.Flags().Lookup("on-ddl")
+				if err := onDDLFlag.Value.Set("exec"); err != nil {
+					return err
+				}
+				onDDLFlag.Changed = true
+				return nil
+			},
+			wantErr: false,
+			checkFunc: func() {
+				require.Equal(t, "EXEC", common.CreateOptions.OnDDL)
+			},
+		},
+		{
+			name: "valid on-ddl EXEC_IGNORE",
+			setFunc: func(cmd *cobra.Command) error {
+				onDDLFlag := cmd.Flags().Lookup("on-ddl")
+				if err := onDDLFlag.Value.Set("exec_ignore"); err != nil {
+					return err
+				}
+				onDDLFlag.Changed = true
+				return nil
+			},
+			wantErr: false,
+			checkFunc: func() {
+				require.Equal(t, "EXEC_IGNORE", common.CreateOptions.OnDDL)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -132,9 +175,8 @@ func TestParseAndValidateCreateOptions(t *testing.T) {
 				}
 				return nil
 			}
-			if err := test(); (err != nil) != tt.wantErr {
-				t.Errorf("ParseAndValidateCreateOptions() error = %v, wantErr %t", err, tt.wantErr)
-			}
+			err := test()
+			assert.Falsef(t, (err != nil) != tt.wantErr, "ParseAndValidateCreateOptions() error = %v, wantErr %t", err, tt.wantErr)
 			if tt.checkFunc != nil {
 				tt.checkFunc()
 			}

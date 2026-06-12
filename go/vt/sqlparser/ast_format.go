@@ -56,12 +56,17 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		buf.literal(SQLCalcFoundRowsStr)
 	}
 
-	buf.astPrintf(node, "%v from ", node.SelectExprs)
+	buf.astPrintf(node, "%v", node.SelectExprs)
 
-	prefix := ""
-	for _, expr := range node.From {
-		buf.astPrintf(node, "%s%v", prefix, expr)
-		prefix = ", "
+	if len(node.From) == 0 {
+		buf.literal(" from dual")
+	} else {
+		buf.literal(" from ")
+		prefix := ""
+		for _, expr := range node.From {
+			buf.astPrintf(node, "%s%v", prefix, expr)
+			prefix = ", "
+		}
 	}
 
 	buf.astPrintf(node, "%v%v%v",
@@ -316,50 +321,85 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	case CleanupMigrationType:
 		alterType = "cleanup"
 	case CleanupAllMigrationType:
-		alterType = "cleanup all"
+		if node.Context != "" {
+			alterType = "cleanup"
+		} else {
+			alterType = "cleanup all"
+		}
 	case LaunchMigrationType:
 		alterType = "launch"
 	case LaunchAllMigrationType:
-		alterType = "launch all"
+		if node.Context != "" {
+			alterType = "launch"
+		} else {
+			alterType = "launch all"
+		}
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CompleteAllMigrationType:
-		alterType = "complete all"
+		if node.Context != "" {
+			alterType = "complete"
+		} else {
+			alterType = "complete all"
+		}
 	case PostponeCompleteMigrationType:
 		alterType = "postpone complete"
 	case PostponeCompleteAllMigrationType:
-		alterType = "postpone complete all"
+		if node.Context != "" {
+			alterType = "postpone complete"
+		} else {
+			alterType = "postpone complete all"
+		}
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
-		alterType = "cancel all"
+		if node.Context != "" {
+			alterType = "cancel"
+		} else {
+			alterType = "cancel all"
+		}
 	case ThrottleMigrationType:
 		alterType = "throttle"
 	case ThrottleAllMigrationType:
-		alterType = "throttle all"
+		if node.Context != "" {
+			alterType = "throttle"
+		} else {
+			alterType = "throttle all"
+		}
 	case UnthrottleMigrationType:
 		alterType = "unthrottle"
 	case UnthrottleAllMigrationType:
-		alterType = "unthrottle all"
+		if node.Context != "" {
+			alterType = "unthrottle"
+		} else {
+			alterType = "unthrottle all"
+		}
 	case ForceCutOverMigrationType:
 		alterType = "force_cutover"
 	case ForceCutOverAllMigrationType:
-		alterType = "force_cutover all"
+		if node.Context != "" {
+			alterType = "force_cutover"
+		} else {
+			alterType = "force_cutover all"
+		}
 	case SetCutOverThresholdMigrationType:
 		alterType = "cutover_threshold"
 	}
 	buf.astPrintf(node, " %#s", alterType)
 	if node.Threshold != "" {
-		buf.astPrintf(node, " '%#s'", node.Threshold)
+		buf.astPrintf(node, " %#s", encodeSQLString(node.Threshold))
+	}
+	if node.Context != "" {
+		buf.astPrintf(node, " context %#s", encodeSQLString(node.Context))
 	}
 	if node.Expire != "" {
-		buf.astPrintf(node, " expire '%#s'", node.Expire)
+		buf.astPrintf(node, " expire %#s", encodeSQLString(node.Expire))
 	}
 	if node.Ratio != nil {
 		buf.astPrintf(node, " ratio %v", node.Ratio)
 	}
 	if node.Shards != "" {
-		buf.astPrintf(node, " vitess_shards '%#s'", node.Shards)
+		buf.astPrintf(node, " vitess_shards %#s", encodeSQLString(node.Shards))
 	}
 }
 
@@ -1399,11 +1439,7 @@ func (node TableName) Format(buf *TrackedBuffer) {
 	if node.Qualifier.NotEmpty() {
 		buf.astPrintf(node, "%v.", node.Qualifier)
 	}
-	if node.Qualifier.IsEmpty() && node.Name.String() == "dual" {
-		buf.WriteString("dual")
-	} else {
-		buf.astPrintf(node, "%v", node.Name)
-	}
+	buf.astPrintf(node, "%v", node.Name)
 }
 
 // Format formats the node.
@@ -2343,12 +2379,20 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 	}
 	buf.astPrintf(node, "%s", node.Command.ToString())
 	if !node.Tbl.IsEmpty() {
-		buf.astPrintf(node, " from %v", node.Tbl)
+		switch node.Command {
+		case FunctionC, ProcedureC:
+			buf.astPrintf(node, " %v", node.Tbl)
+		default:
+			buf.astPrintf(node, " from %v", node.Tbl)
+		}
 	}
 	if node.DbName.NotEmpty() {
 		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
 }
 
 func (node *ShowTransactionStatus) Format(buf *TrackedBuffer) {
@@ -2368,8 +2412,113 @@ func (node *ShowCreate) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowOther) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s", node.Command)
+func (node *ShowEngine) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show engine %s %s", node.EngineName, node.Action)
+}
+
+// Format formats the node.
+func (node *ShowGrants) Format(buf *TrackedBuffer) {
+	buf.literal("show grants")
+	if node.User != nil {
+		if node.User.Name != nil || len(node.UsingRole) > 0 {
+			buf.literal(" for ")
+			node.User.formatTo(buf)
+		}
+		if len(node.UsingRole) > 0 {
+			buf.literal(" using ")
+			for i, role := range node.UsingRole {
+				if i > 0 {
+					buf.literal(", ")
+				}
+				role.formatTo(buf)
+			}
+		}
+	}
+}
+
+// Format formats the node.
+func (node *ShowProfile) Format(buf *TrackedBuffer) {
+	buf.literal("show profile")
+	for i, t := range node.Types {
+		if i == 0 {
+			buf.literal(" ")
+		} else {
+			buf.literal(", ")
+		}
+		buf.literal(t)
+	}
+	if node.ForQuery != nil {
+		buf.astPrintf(node, " for query %v", node.ForQuery)
+	}
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
+}
+
+// Format formats the node.
+func (node *ShowCreateUser) Format(buf *TrackedBuffer) {
+	buf.literal("show create user ")
+	if node.User != nil {
+		node.User.formatTo(buf)
+	} else {
+		buf.literal("current_user")
+	}
+}
+
+// Format formats the node.
+func (node *ShowBinlogEvents) Format(buf *TrackedBuffer) {
+	if node.IsRelaylog {
+		buf.literal("show relaylog events")
+	} else {
+		buf.literal("show binlog events")
+	}
+	if node.LogName != "" {
+		buf.astPrintf(node, " in %s", encodeSQLString(node.LogName))
+	}
+	if node.Position != nil {
+		buf.astPrintf(node, " from %v", node.Position)
+	}
+	if node.Limit != nil {
+		buf.astPrintf(node, "%v", node.Limit)
+	}
+	if node.Channel != "" {
+		buf.astPrintf(node, " for channel %s", encodeSQLString(node.Channel))
+	}
+}
+
+// Format formats the node.
+func (node *ShowReplicationStatus) Format(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.literal("show slave status")
+	} else {
+		buf.literal("show replica status")
+	}
+	if node.Channel != "" {
+		buf.astPrintf(node, " for channel %s", encodeSQLString(node.Channel))
+	}
+}
+
+// Format formats the node.
+func (node *ShowReplicationSourceStatus) Format(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.literal("show master status")
+	} else {
+		buf.literal("show binary log status")
+	}
+}
+
+// Format formats the node.
+func (node *ShowReplicas) Format(buf *TrackedBuffer) {
+	if node.Legacy {
+		buf.literal("show slave hosts")
+	} else {
+		buf.literal("show replicas")
+	}
+}
+
+// Format formats the node.
+func (node *ShowBinaryLogs) Format(buf *TrackedBuffer) {
+	buf.literal("show binary logs")
 }
 
 // Format formats the node.
