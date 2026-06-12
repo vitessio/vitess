@@ -89,7 +89,7 @@ func TestMainCommandMetadata(t *testing.T) {
 	require.NotEmpty(t, Main.Version)
 }
 
-// CheckCellFlags tests cover validation of cell and cells_to_watch. We use
+// CheckCellFlags tests cover validation of cell and cells-to-watch. We use
 // memorytopo + fakes so we don't need a real topo. The len(cellsInTopo)==0
 // branch isn't covered here—that would need a topo that returns [] from
 // GetKnownCells, and memorytopo doesn't give us that.
@@ -151,7 +151,7 @@ func TestCheckCellFlags_CellsToWatchInvalidCell(t *testing.T) {
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
 
 	err := CheckCellFlags(ctx, fake, "c1", "c1,bad")
-	require.ErrorContains(t, err, "is not valid") // cells_to_watch entries should be in topo
+	require.ErrorContains(t, err, "is not valid") // cells-to-watch entries should be in topo
 	require.ErrorContains(t, err, "Available cells")
 }
 
@@ -162,7 +162,7 @@ func TestCheckCellFlags_CellsToWatchEmpty(t *testing.T) {
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
 
 	err := CheckCellFlags(ctx, fake, "c1", "")
-	require.ErrorContains(t, err, "cells_to_watch flag cannot be empty") // empty string should fail
+	require.ErrorContains(t, err, "cells-to-watch flag cannot be empty") // empty string should fail
 }
 
 func TestCheckCellFlags_CellsToWatchEmptyAfterSplit(t *testing.T) {
@@ -172,7 +172,7 @@ func TestCheckCellFlags_CellsToWatchEmptyAfterSplit(t *testing.T) {
 	fake := &fakesrvtopo.FakeSrvTopo{Ts: ts}
 
 	err := CheckCellFlags(ctx, fake, "c1", ",")
-	require.ErrorContains(t, err, "cells_to_watch flag cannot be empty") // comma-only should count as empty
+	require.ErrorContains(t, err, "cells-to-watch flag cannot be empty") // comma-only should count as empty
 }
 
 func TestCheckCellFlags_Success(t *testing.T) {

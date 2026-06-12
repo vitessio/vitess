@@ -85,7 +85,7 @@ func init() {
 	srvTopoCounts = stats.NewCountersWithSingleLabel("ResilientSrvTopoServer", "Resilient srvtopo server operations", "type")
 }
 
-// CheckCellFlags will check validation of cell and cells_to_watch flag
+// CheckCellFlags will check validation of cell and cells-to-watch flag
 // it will help to avoid strange behaviors when vtgate runs but actually does not work
 func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cellsToWatch string) error {
 	// topo check
@@ -116,7 +116,7 @@ func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cells
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell:[%v] does not exist in topo", cell)
 	}
 
-	// cells_to_watch valid check
+	// cells-to-watch valid check
 	cells := make([]string, 0, 1)
 	for c := range strings.SplitSeq(cellsToWatch, ",") {
 		if c == "" {
@@ -129,7 +129,7 @@ func CheckCellFlags(ctx context.Context, serv srvtopo.Server, cell string, cells
 		cells = append(cells, c)
 	}
 	if len(cells) == 0 {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cells_to_watch flag cannot be empty")
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cells-to-watch flag cannot be empty")
 	}
 
 	return nil
@@ -164,7 +164,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	err := CheckCellFlags(ctx, resilientServer, cell, vtgate.CellsToWatch)
 	if err != nil {
-		return fmt.Errorf("cells_to_watch validation failed: %v", err)
+		return fmt.Errorf("cells-to-watch validation failed: %v", err)
 	}
 
 	plannerVersion, _ := plancontext.PlannerNameToVersion(plannerName)
