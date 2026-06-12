@@ -771,9 +771,25 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 	)
 }
 
-// WaitForPreparedTwoPCTransactions waits for all the prepared transactions to complete.
+// hasUnresolvedTwoPCTransactions checks if this tablet has any unresolved 2PC transactions.
+func (tsv *TabletServer) hasUnresolvedTwoPCTransactions(ctx context.Context) (bool, error) {
+	if !tsv.te.preparedPool.IsEmpty() {
+		return true, nil
+	}
+	if !tsv.te.twopcEnabled {
+		return false, nil
+	}
+	count, err := tsv.te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(365*24*time.Hour))
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// WaitForPreparedTwoPCTransactions waits for all unresolved 2PC transactions on this tablet to be resolved.
 func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) error {
-	if tsv.te.preparedPool.IsEmpty() {
+	hasUnresolved, lastErr := tsv.hasUnresolvedTwoPCTransactions(ctx)
+	if lastErr == nil && !hasUnresolved {
 		return nil
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -781,10 +797,17 @@ func (tsv *TabletServer) WaitForPreparedTwoPCTransactions(ctx context.Context) e
 	for {
 		select {
 		case <-ctx.Done():
+			if lastErr != nil {
+				log.Error(fmt.Sprintf("Error reading unresolved transactions during wait: %v", lastErr))
+			}
 			// Return an error if we run out of time.
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Prepared transactions have not been resolved yet")
 		case <-ticker.C:
-			if tsv.te.preparedPool.IsEmpty() {
+			var err error
+			hasUnresolved, err = tsv.hasUnresolvedTwoPCTransactions(ctx)
+			if err != nil {
+				lastErr = err
+			} else if !hasUnresolved {
 				return nil
 			}
 		}

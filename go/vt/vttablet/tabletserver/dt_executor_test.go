@@ -675,6 +675,34 @@ func TestNoTwopc(t *testing.T) {
 	}
 }
 
+func TestTwoPCNotAllowed(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, _, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	tsv.SetTwoPCAllowed(TwoPCAllowed_TabletControls, false)
+	require.False(t, tsv.te.IsTwoPCAllowed())
+
+	testcases := []struct {
+		desc    string
+		fun     func() error
+		wantErr string
+	}{{
+		desc:    "Prepare",
+		fun:     func() error { return txe.Prepare(1, "aa") },
+		wantErr: "VT10002: atomic distributed transaction not allowed: 2pc is enabled, but not currently allowed",
+	}, {
+		desc:    "CreateTransaction",
+		fun:     func() error { return txe.CreateTransaction("aa", nil) },
+		wantErr: "VT10002: atomic distributed transaction not allowed: 2pc is enabled, but not currently allowed",
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			require.EqualError(t, tc.fun(), tc.wantErr)
+		})
+	}
+}
+
 func newTestTxExecutor(t *testing.T, ctx context.Context) (txe *DTExecutor, tsv *TabletServer, db *fakesqldb.DB, closer func()) {
 	db = setUpQueryExecutorTest(t)
 	logStats := tabletenv.NewLogStats(ctx, "TestTxExecutor", streamlog.NewQueryLogConfigForTest())
