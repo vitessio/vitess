@@ -173,6 +173,21 @@ func TestWaitlistTryReturnConnAllWaitersExpired(t *testing.T) {
 	}
 }
 
+func TestWaitlistMaybeStarvingCountSkipsExpiredWaiters(t *testing.T) {
+	wl := waitlist[*TestConn]{}
+	wl.init()
+
+	expiredCtx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	pushWaiter(&wl, expiredCtx)
+	pushWaiter(&wl, t.Context())
+
+	// only the live waiter is maybe starving; the expired waiter cannot use
+	// a connection and must not cause the starving worker to hand one out
+	require.Equal(t, 1, wl.maybeStarvingCount())
+}
+
 func TestWaitlistHandoverToLiveWaiter(t *testing.T) {
 	wl := waitlist[*TestConn]{}
 	wl.init()

@@ -135,9 +135,13 @@ func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
 	wl.mu.Lock()
 	defer wl.mu.Unlock()
 
-	// iterate the waitlist looking for waiters with an expired Context,
-	// or remove everything if force is true
+	// count the waiters that no returner has aged yet; they may be starving.
+	// Waiters whose context has already expired cannot use a connection and
+	// are only listed until they remove themselves, so they don't count.
 	for e := wl.list.Front(); e != nil; e = e.Next() {
+		if e.Value.ctx.Err() != nil {
+			continue
+		}
 		if e.Value.age == 0 {
 			maybeStarving++
 		}
