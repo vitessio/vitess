@@ -281,3 +281,18 @@ func TestVReplicationMaxRowJSONBytesFlagRejectsNegative(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorContains(t, err, "must be non-negative")
 }
+
+// TestVReplicationConfigCapsParallelReplicationWorkers pins the upper bound:
+// the per-workflow override rejects values above the cap, and the tablet-wide
+// flag value is clamped (each worker holds two MySQL connections per
+// workflow, so an unbounded value could exhaust the target's max_connections).
+func TestVReplicationConfigCapsParallelReplicationWorkers(t *testing.T) {
+	_, err := NewVReplicationConfig(map[string]string{
+		"vreplication-parallel-replication-workers": "65",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be at most 64")
+
+	require.Equal(t, 64, cappedParallelReplicationWorkers(1000))
+	require.Equal(t, 4, cappedParallelReplicationWorkers(4))
+}

@@ -19,13 +19,26 @@ package vttablet
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/log"
 )
+
+// maxParallelReplicationWorkers bounds --vreplication-parallel-replication-workers
+// and its per-workflow override. Each worker holds two MySQL connections per
+// workflow (double-buffered apply), plus the main connection, so an unbounded
+// value would let a single workflow exhaust the target's max_connections.
+const maxParallelReplicationWorkers = 64
+
+// warnParallelReplicationWorkersCap rate-limits the flag-clamp warning to once
+// per process; GetVReplicationConfigDefaults can be called per workflow.
+var warnParallelReplicationWorkersCap sync.Once
 
 /*
   This file contains the model for all the configuration parameters for VReplication workflows. It also provides methods to
@@ -97,7 +110,7 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		HeartbeatUpdateInterval:    vreplicationHeartbeatUpdateInterval,
 		StoreCompressedGTID:        vreplicationStoreCompressedGTID,
 		ParallelInsertWorkers:      vreplicationParallelInsertWorkers,
-		ParallelReplicationWorkers: vreplicationParallelReplicationWorkers,
+		ParallelReplicationWorkers: cappedParallelReplicationWorkers(vreplicationParallelReplicationWorkers),
 		TabletTypesStr:             vreplicationTabletTypesStr,
 		EnableHttpLog:              vreplicationEnableHttpLog,
 		MaxRowJSONBytes:            vreplicationMaxRowJSONBytes,
@@ -220,6 +233,8 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				// documents "<= 1 to disable parallelism" so 0 and 1 both
 				// fall through to the serial applier path.
 				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be >= 0; 0 or 1 disables parallel apply)", k, value))
+			} else if value > maxParallelReplicationWorkers {
+				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be at most %d; each worker holds two MySQL connections per workflow)", k, value, maxParallelReplicationWorkers))
 			} else {
 				c.ParallelReplicationWorkers = value
 			}
@@ -349,4 +364,22 @@ func (c VReplicationConfig) Map() map[string]string {
 func (c VReplicationConfig) String() string {
 	s, _ := json.Marshal(c.Map())
 	return string(s)
+}
+
+// cappedParallelReplicationWorkers clamps the tablet-wide flag value to
+// maxParallelReplicationWorkers, warning once per process. The per-workflow
+// override rejects out-of-range values outright (it has an error path); the
+// flag is clamped instead so an over-eager value degrades gracefully rather
+// than failing tablet startup.
+func cappedParallelReplicationWorkers(value int) int {
+	if value <= maxParallelReplicationWorkers {
+		return value
+	}
+	warnParallelReplicationWorkersCap.Do(func() {
+		log.Warn("--vreplication-parallel-replication-workers exceeds the maximum; capping",
+			slog.Int("requested", value),
+			slog.Int("max", maxParallelReplicationWorkers),
+		)
+	})
+	return maxParallelReplicationWorkers
 }

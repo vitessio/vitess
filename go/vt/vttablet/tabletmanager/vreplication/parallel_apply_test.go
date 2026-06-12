@@ -1101,7 +1101,7 @@ func TestWorkerLoopCancelDoesNotUnblockBlockedBatchFlush(t *testing.T) {
 	defer cancel()
 
 	vp, _ := testVPlayer(t)
-	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Running
+	vp.vr.storeState(binlogdatapb.VReplicationWorkflowState_Running)
 	vp.batchMode = true
 	vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
 		"t1": {
@@ -3990,7 +3990,15 @@ func TestApplyEvent_VERSIONIsIgnored(t *testing.T) {
 	require.Equal(t, commitEvent, vp.unsavedEvent)
 }
 
-func TestApplyEvent_JournalRawEventGtidIsDurablySavedBeforeTermination(t *testing.T) {
+// TestApplyEvent_JournalDoesNotPersistPositionBeforeTransition pins that a
+// JOURNAL event must NOT durably advance the saved position when it is
+// registered. registerJournal returns nil as soon as THIS participant has
+// joined — here participant ks:1 has not — and the engine's journaler state
+// is in-memory only. If the position were saved past the journal and the
+// tablet restarted before all participants joined, the stream would resume
+// past the journal, never re-register, and the workflow would hang forever
+// waiting for a transition that can no longer happen.
+func TestApplyEvent_JournalDoesNotPersistPositionBeforeTransition(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
 
@@ -4054,18 +4062,14 @@ func TestApplyEvent_JournalRawEventGtidIsDurablySavedBeforeTermination(t *testin
 	}, true)
 	require.ErrorIs(t, err, io.EOF)
 
-	assert.Equal(t, journalPos, vp.pos)
-	assert.Equal(t, journalPos, vp.vr.stats.LastPosition())
-
-	foundPosUpdate := false
-	for _, query := range recording.queries {
-		if strings.Contains(query, fmt.Sprintf("update _vt.vreplication set pos='%s'", replication.EncodePosition(journalPos))) {
-			foundPosUpdate = true
-			break
-		}
-	}
-	assert.True(t, foundPosUpdate, "queries: %v", recording.queries)
+	// This participant registered with the journaler...
 	require.Contains(t, vp.vr.vre.journaler, "wf:1")
+	// ...but the in-memory and durable positions must remain BEFORE the
+	// journal event so a restart re-delivers it and re-registers.
+	assert.Equal(t, oldPos, vp.pos)
+	for _, query := range recording.queries {
+		assert.NotContains(t, query, "update _vt.vreplication set pos=", "no position may be persisted at journal registration; queries: %v", recording.queries)
+	}
 }
 
 // TestVPlayerLagSnapshotIsAtomic pins the invariant that lag-state reads
@@ -6203,71 +6207,117 @@ func TestCommitLoop_EXECIGNOREIdempotentAddUniqueIndexInvalidatesUniqueSecondary
 	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
 }
 
-func TestCommitTxn(t *testing.T) {
+// TestCommitLoop_WorkerTxnCommitProtocol drives a single worker transaction
+// through the real commitLoop and pins the commit protocol end-to-end: the
+// position update and COMMIT run on the worker's connection, the worker's
+// done channel is signaled, and the scheduler observes the committed order.
+func TestCommitLoop_WorkerTxnCommitProtocol(t *testing.T) {
+	ctx := testCtx(t)
 	vp, _ := testVPlayer(t)
-	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
 
-	calledCommit := 0
-	vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-		return &sqltypes.Result{}, nil
-	}
-	vp.commit = func() error {
-		calledCommit++
-		return nil
-	}
-
-	posReached, err := vp.commitTxn(ctx, &applyTxnPayload{timestamp: 123})
-	require.NoError(t, err)
-	require.False(t, posReached)
-	require.Equal(t, 1, calledCommit)
-}
-
-func TestCommitTxnWorkerRestoresSaveStop(t *testing.T) {
-	vp, _ := testVPlayer(t)
-	ctx := testCtx(t)
-
-	vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-		return &sqltypes.Result{}, nil
-	}
-	vp.commit = func() error {
-		return nil
-	}
-
-	vp.saveStop = true
-
-	payload := &applyTxnPayload{timestamp: 123, client: &vdbClient{}}
-	posReached, err := vp.commitTxn(ctx, payload)
-	require.NoError(t, err)
-	require.False(t, posReached)
-	require.True(t, vp.saveStop)
-}
-
-func TestCommitTxnWorkerSetsStateOnStopPos(t *testing.T) {
-	vp, mockDB := testVPlayer(t)
-	ctx := testCtx(t)
-
-	mockDB.AddInvariant("update _vt.vreplication set state=", &sqltypes.Result{})
+	recording := &recordingDBClient{}
+	workerClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	require.NoError(t, workerClient.Begin())
 
 	pos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
 	require.NoError(t, err)
-	vrClient := vp.vr.dbClient
-	workerClient := newVDBClient(binlogplayer.NewMockDBClient(t), vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
 
-	vp.pos = pos
+	doneCh := make(chan struct{}, 1)
+	txn := &applyTxn{
+		order: 1,
+		payload: &applyTxnPayload{
+			pos:       pos,
+			timestamp: 100,
+			query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				return workerClient.Execute(sql)
+			},
+			commit:             workerClient.Commit,
+			client:             workerClient,
+			lastEventTimestamp: 100,
+		},
+		done: doneCh,
+	}
+
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- txn
+	close(commitCh)
+
+	require.NoError(t, vp.commitLoop(ctx, scheduler, commitCh))
+
+	require.NotEmpty(t, recording.queries)
+	assert.Contains(t, recording.queries[0], "update _vt.vreplication set pos=")
+	assert.False(t, workerClient.InTransaction, "commitLoop must commit the worker's transaction")
+	select {
+	case <-doneCh:
+	default:
+		t.Fatal("commitLoop must signal the worker's done channel after committing")
+	}
+	scheduler.mu.Lock()
+	defer scheduler.mu.Unlock()
+	assert.Equal(t, int64(1), scheduler.lastCommittedOrder)
+}
+
+// TestCommitLoop_WorkerStopPosSetsStateAndStops pins the stop-position path
+// of the worker commit protocol: when the transaction's position reaches
+// stopPos, the Stopped state update is written on the worker's connection
+// (inside the same MySQL transaction as the position update), the
+// transaction commits, the worker is unblocked, and commitLoop returns
+// io.EOF to stop the stream.
+func TestCommitLoop_WorkerStopPosSetsStateAndStops(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+
+	pos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
 	vp.stopPos = pos
 	vp.saveStop = true
-	vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
-		return &sqltypes.Result{}, nil
-	}
-	vp.commit = func() error {
-		return nil
+
+	recording := &recordingDBClient{}
+	workerClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	require.NoError(t, workerClient.Begin())
+
+	doneCh := make(chan struct{}, 1)
+	txn := &applyTxn{
+		order: 1,
+		payload: &applyTxnPayload{
+			pos:       pos,
+			timestamp: 100,
+			query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				return workerClient.Execute(sql)
+			},
+			commit:             workerClient.Commit,
+			client:             workerClient,
+			lastEventTimestamp: 100,
+		},
+		done: doneCh,
 	}
 
-	payload := &applyTxnPayload{timestamp: 123, client: workerClient}
-	posReached, err := vp.commitTxn(ctx, payload)
-	require.NoError(t, err)
-	require.True(t, posReached)
-	require.Equal(t, vrClient, vp.vr.dbClient)
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- txn
+	close(commitCh)
+
+	err = vp.commitLoop(ctx, scheduler, commitCh)
+	require.ErrorIs(t, err, io.EOF, "reaching the stop position must stop the stream")
+
+	assert.False(t, workerClient.InTransaction, "the worker's transaction must be committed")
+	var sawPosUpdate, sawStateUpdate bool
+	for _, q := range recording.queries {
+		if strings.Contains(q, "update _vt.vreplication set pos=") {
+			sawPosUpdate = true
+		}
+		if strings.Contains(q, "update _vt.vreplication set state=") {
+			sawStateUpdate = true
+		}
+	}
+	assert.True(t, sawPosUpdate, "position update must run on the worker's connection")
+	assert.True(t, sawStateUpdate, "the Stopped state update must run on the worker's connection so it commits atomically with the position")
+	select {
+	case <-doneCh:
+	default:
+		t.Fatal("commitLoop must signal the worker's done channel after committing")
+	}
 }
 
 func TestSetState_BatchedTransactionDefersStateUpdateUntilCommit(t *testing.T) {
@@ -6275,7 +6325,7 @@ func TestSetState_BatchedTransactionDefersStateUpdateUntilCommit(t *testing.T) {
 	recording := &recordingDBClient{}
 
 	vp.vr.dbClient = newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
-	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Stopped
+	vp.vr.storeState(binlogdatapb.VReplicationWorkflowState_Stopped)
 	vp.vr.dbClient.maxBatchSize = 1024
 
 	require.NoError(t, vp.vr.dbClient.Begin())
@@ -6308,7 +6358,7 @@ func TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites(t *testing.T
 
 	dbClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
 	vp.vr.dbClient = dbClient
-	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Running
+	vp.vr.storeState(binlogdatapb.VReplicationWorkflowState_Running)
 	dbClient.maxBatchSize = 1024
 
 	require.NoError(t, dbClient.Begin())
@@ -6343,7 +6393,7 @@ func TestSetStateImmediate_FollowedByAddQueryToTrxBatchPreservesNoDuplicate(t *t
 
 	dbClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
 	vp.vr.dbClient = dbClient
-	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Running
+	vp.vr.storeState(binlogdatapb.VReplicationWorkflowState_Running)
 	dbClient.maxBatchSize = 1024
 
 	require.NoError(t, dbClient.Begin())

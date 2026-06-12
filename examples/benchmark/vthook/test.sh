@@ -1,1 +1,0 @@
-/Users/matt/git/vitess/examples/benchmark/test/vthook-test.sh

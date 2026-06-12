@@ -197,6 +197,15 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 		txn := s.popReadyLocked()
 		if txn != nil {
 			s.markInflightLocked(txn)
+			// Pass the baton: one wakeup (e.g. a markCommitted that released
+			// a multi-key writeset) can make several pending transactions
+			// ready at once, but each waiter pops at most one. Signal the
+			// next waiter while pending work remains so independent ready
+			// transactions dispatch immediately instead of waiting for the
+			// next commit event.
+			if s.pendingCount > 0 {
+				s.cond.Signal()
+			}
 			return txn, nil
 		}
 		// Check closed only after attempting to drain any queued work so
@@ -391,6 +400,15 @@ func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 		if s.inflightCommitMeta > 0 {
 			return false
 		}
+		// NOTE: sequence_number/last_committed reset per binlog FILE on the
+		// source, while lastCommittedSequence only advances (max). After a
+		// binlog rotation the new file's small commitParent values compare
+		// against the old file's high watermark, making this check vacuously
+		// true. That is safe ONLY because of the inflightCommitMeta == 0
+		// gate above: with nothing inflight, every earlier-ordered txn has
+		// already committed, so the parent is durably applied regardless of
+		// what this comparison says. Do not remove that gate without
+		// rethinking rotation.
 		ready := txn.commitParent <= s.lastCommittedSequence
 		return ready
 	}
@@ -497,7 +515,14 @@ func (s *applyScheduler) advanceCommittedSequence(seq int64) {
 	defer s.mu.Unlock()
 	if seq > s.lastCommittedSequence {
 		s.lastCommittedSequence = seq
-		s.cond.Broadcast()
+		// Only wake waiters when there is pending work that could now be
+		// ready. During catch-up on a filtered shard this is called for
+		// every empty transaction (thousands/sec); an unconditional
+		// Broadcast would wake all N workers each time just to rescan an
+		// empty queue.
+		if s.pendingCount > 0 {
+			s.cond.Broadcast()
+		}
 	}
 }
 

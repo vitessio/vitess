@@ -784,7 +784,8 @@ func writesetErrorForcesSerialization(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "partial row image on table ") ||
-		strings.Contains(err.Error(), "not in streamed fields")
+		strings.Contains(err.Error(), "not in streamed fields") ||
+		strings.Contains(err.Error(), "no usable writeset identity")
 }
 
 // computeLastEventTimestamp scans events in reverse to find the last event
@@ -2439,52 +2440,4 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			return ctx.Err()
 		}
 	}
-}
-
-// commitTxn commits a worker's transaction. It executes the position update
-// SQL and commit on the worker's connection directly (via payload.query and
-// payload.commit), WITHOUT holding serialMu. After commit, it briefly locks
-// serialMu to update vp state (unsavedEvent, timeLastSaved).
-// To avoid self-deadlock when the stop position is reached, setState is
-// called on the main connection AFTER the worker's transaction is committed
-// and the row lock is released.
-func (vp *vplayer) commitTxn(ctx context.Context, payload *applyTxnPayload) (bool, error) {
-	queryFn := payload.query
-	commitFn := payload.commit
-	if queryFn == nil {
-		queryFn = vp.query
-	}
-	if commitFn == nil {
-		commitFn = vp.commit
-	}
-
-	pos := payload.pos
-	if pos.IsZero() {
-		pos = vp.pos
-	}
-
-	updateSQL := binlogplayer.GenerateUpdatePos(vp.vr.id, pos,
-		time.Now().Unix(), payload.timestamp,
-		vp.vr.stats.CopyRowCount.Get(),
-		vp.vr.workflowConfig.StoreCompressedGTID)
-
-	if _, err := queryFn(ctx, updateSQL); err != nil {
-		return false, fmt.Errorf("error %v updating position", err)
-	}
-	if err := commitFn(); err != nil {
-		return false, err
-	}
-
-	vp.numAccumulatedHeartbeats = 0
-	vp.unsavedEvent = nil
-	vp.timeLastSaved = time.Now()
-	vp.vr.stats.SetLastPosition(pos)
-	posReached := !vp.stopPos.IsZero() && pos.AtLeast(vp.stopPos)
-
-	if posReached && vp.saveStop {
-		if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
-			return false, err
-		}
-	}
-	return posReached, nil
 }

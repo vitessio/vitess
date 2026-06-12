@@ -319,6 +319,11 @@ type txnWritesetCache struct {
 	canonicalTargetNames map[string]string
 	resolvedFKRefs       map[string][]fkConstraintRef
 	resolvedParentRefs   map[string][]parentFKRef
+	// relevantColsCache caches, per source table name, the set of column
+	// indexes the writeset depends on (PK plus FK-joined columns). Building
+	// it is O(columns + FK refs) with a map allocation, which is too
+	// expensive to repeat for every row change in the hot path.
+	relevantColsCache map[string]map[int]struct{}
 }
 
 // writesetKeysForParentFKRef generates writeset keys for a parent table row
@@ -521,6 +526,21 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 				fieldIdxCache[rowEvent.TableName] = fieldIdx
 			}
 		}
+		// Resolve the writeset-relevant column set once per table.
+		var relevantCols map[int]struct{}
+		if cache != nil {
+			if cache.relevantColsCache == nil {
+				cache.relevantColsCache = make(map[string]map[int]struct{})
+			}
+			var ok bool
+			relevantCols, ok = cache.relevantColsCache[rowEvent.TableName]
+			if !ok {
+				relevantCols = writesetRelevantColumns(plan, fieldIdx, refs, pRefs)
+				cache.relevantColsCache[rowEvent.TableName] = relevantCols
+			}
+		} else {
+			relevantCols = writesetRelevantColumns(plan, fieldIdx, refs, pRefs)
+		}
 		for _, change := range rowEvent.RowChanges {
 			// Partial row images (DataColumns/JsonPartialValues) omit columns
 			// from the binlog payload. buildTxnWriteset decodes rows with
@@ -541,8 +561,8 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 					(change.After != nil && len(change.After.Lengths) != len(plan.Fields))
 			}
 			if !isPartialRow {
-				isPartialRow = rowHasNegativeRelevantLengths(change.Before, plan, fieldIdx, refs, pRefs) ||
-					rowHasNegativeRelevantLengths(change.After, plan, fieldIdx, refs, pRefs)
+				isPartialRow = rowHasNegativeRelevantLengths(change.Before, relevantCols) ||
+					rowHasNegativeRelevantLengths(change.After, relevantCols)
 			}
 			if isPartialRow {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "partial row image on table %s: forcing serialization", rowEvent.TableName)
@@ -582,17 +602,11 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 	return keys, nil
 }
 
-// rowHasNegativeRelevantLengths returns true when a row image has -1
-// (omitted) lengths for any column the writeset depends on (PK or FK-joined
-// column). vstreamer encodes omitted columns as -1 length without publishing
-// a DataColumns bitmap on BEFORE rows, and the same sentinel can appear on
-// AFTER rows under partial-image producers that do not set a bitmap. Treating
-// those as partial images lets us fail closed and serialize instead of
-// hashing against wrong-slot (NULL) values.
-func rowHasNegativeRelevantLengths(row *querypb.Row, plan *TablePlan, fieldIdx map[string]int, refs []fkConstraintRef, pRefs []parentFKRef) bool {
-	if row == nil {
-		return false
-	}
+// writesetRelevantColumns builds the set of column indexes the writeset
+// depends on (PK plus FK-joined columns) for one table plan. Callers cache
+// the result per table (see txnWritesetCache.relevantColsCache) so the map
+// is built once per table per fetch instead of once per row change.
+func writesetRelevantColumns(plan *TablePlan, fieldIdx map[string]int, refs []fkConstraintRef, pRefs []parentFKRef) map[int]struct{} {
 	relevantColumns := make(map[int]struct{})
 	for i, isPK := range plan.PKIndices {
 		if isPK {
@@ -612,6 +626,20 @@ func rowHasNegativeRelevantLengths(row *querypb.Row, plan *TablePlan, fieldIdx m
 				relevantColumns[idx] = struct{}{}
 			}
 		}
+	}
+	return relevantColumns
+}
+
+// rowHasNegativeRelevantLengths returns true when a row image has -1
+// (omitted) lengths for any column the writeset depends on (PK or FK-joined
+// column). vstreamer encodes omitted columns as -1 length without publishing
+// a DataColumns bitmap on BEFORE rows, and the same sentinel can appear on
+// AFTER rows under partial-image producers that do not set a bitmap. Treating
+// those as partial images lets us fail closed and serialize instead of
+// hashing against wrong-slot (NULL) values.
+func rowHasNegativeRelevantLengths(row *querypb.Row, relevantColumns map[int]struct{}) bool {
+	if row == nil {
+		return false
 	}
 	for i, length := range row.Lengths {
 		if length < 0 {
@@ -723,10 +751,12 @@ func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, fieldI
 		return nil
 	}
 	if len(plan.PKIndices) == 0 {
-		if len(plan.IdentityColumns) != 0 {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no usable writeset identity for %s", tableName)
-		}
-		return nil
+		// Fail closed: a plan with no identity must not silently contribute
+		// zero keys. In a txn that also touches keyed tables the writeset
+		// would be non-empty and this table's rows would race with no
+		// conflict tracking at all. The error routes the txn to the serial
+		// path (see writesetErrorForcesSerialization).
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no usable writeset identity for %s", tableName)
 	}
 	identityIndexes, err := writesetIdentityFieldIndexes(plan, tableName, fieldIdx)
 	if err != nil {
@@ -772,10 +802,8 @@ func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, fieldI
 			}
 		}
 		if !hasPK {
-			if len(plan.IdentityColumns) != 0 {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no usable writeset identity for %s", tableName)
-			}
-			return nil
+			// Fail closed, same as the empty-PKIndices case above.
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no usable writeset identity for %s", tableName)
 		}
 		keySet[d.Sum64()] = struct{}{}
 		return nil

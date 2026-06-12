@@ -1145,7 +1145,13 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed reading vreplication table after locking")
 	}
 
-	if !shouldWaitForParallelApply {
+	// The parallel-apply pre-rename wait happens in-lock in the production
+	// branch above, so the post-lock wait is redundant there. The test-suite
+	// branch has no queued RENAME (and therefore no MDL conflict to avoid)
+	// but also never performed the in-lock wait, so it must still wait here —
+	// otherwise StopVReplication below can fire before the stream has caught
+	// up to postWritesPos and the cutover loses tail writes.
+	if !shouldWaitForParallelApply || isVreplicationTestSuite {
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "waiting for post-lock pos: %v", replication.EncodePosition(postWritesPos))
 		if err := waitForPos(s, postWritesPos, onlineDDL.CutOverThreshold); err != nil {
 			e.updateMigrationStage(ctx, onlineDDL.UUID, "timeout while waiting for post-lock pos: %v", err)

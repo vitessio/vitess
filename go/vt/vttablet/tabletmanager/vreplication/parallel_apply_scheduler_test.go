@@ -704,3 +704,78 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 		}
 	}
 }
+
+// TestApplySchedulerMultiKeyReleaseWakesAllReadyWaiters pins the wakeup
+// chain: committing one transaction whose writeset held multiple keys can
+// make several pending transactions ready at once, and every blocked waiter
+// whose transaction became ready must be dispatched without waiting for a
+// further commit. A single cond.Signal with no baton-passing strands all
+// but one of them until the next commit event, losing parallelism exactly
+// when the pipeline is busiest (batched mega-transactions release many
+// keys per commit).
+func TestApplySchedulerMultiKeyReleaseWakesAllReadyWaiters(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	// megaTxn holds two writeset keys; blocker keeps a third key inflight for
+	// the whole test so markCommitted(megaTxn) does not take the
+	// all-drained Broadcast path.
+	megaTxn := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []uint64{100, 200}}
+	blocker := &applyTxn{order: 2, sequenceNumber: 11, commitParent: 9, hasCommitMeta: true, writeset: []uint64{900}}
+	require.NoError(t, s.enqueue(megaTxn))
+	require.NoError(t, s.enqueue(blocker))
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, megaTxn, got)
+	got, err = s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, blocker, got)
+
+	// Two pending transactions, each conflicting with a different one of
+	// megaTxn's keys.
+	waiterA := &applyTxn{order: 3, sequenceNumber: 12, commitParent: 9, hasCommitMeta: true, writeset: []uint64{100}}
+	waiterB := &applyTxn{order: 4, sequenceNumber: 13, commitParent: 9, hasCommitMeta: true, writeset: []uint64{200}}
+	require.NoError(t, s.enqueue(waiterA))
+	require.NoError(t, s.enqueue(waiterB))
+
+	// Two workers block in nextReady before the commit.
+	results := make(chan *applyTxn, 2)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			txn, err := s.nextReady(ctx)
+			if err != nil {
+				errs <- err
+				return
+			}
+			results <- txn
+		}()
+	}
+	// Wait until both goroutines are parked in cond.Wait. There is no direct
+	// hook for "waiter count", so poll the scheduler state: both pending txns
+	// are still queued and neither result has arrived.
+	require.Eventually(t, func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.pendingCount == 2
+	}, 30*time.Second, time.Millisecond)
+
+	// One commit releases both keys; both waiters must be dispatched without
+	// any further commit happening (blocker stays inflight throughout).
+	require.NoError(t, s.markCommitted(megaTxn))
+
+	dispatched := make(map[int64]bool)
+	for range 2 {
+		select {
+		case txn := <-results:
+			dispatched[txn.order] = true
+		case err := <-errs:
+			t.Fatalf("nextReady returned error: %v", err)
+		case <-time.After(30 * time.Second):
+			t.Fatalf("timed out waiting for both ready transactions to be dispatched; got %v", dispatched)
+		}
+	}
+	require.True(t, dispatched[waiterA.order])
+	require.True(t, dispatched[waiterB.order])
+}

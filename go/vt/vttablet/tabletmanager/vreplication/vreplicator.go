@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -109,8 +110,12 @@ type vreplicator struct {
 	// source
 	source          *binlogdatapb.BinlogSource
 	sourceVStreamer VStreamerClient
-	state           binlogdatapb.VReplicationWorkflowState
-	stats           *binlogplayer.Stats
+	// state is the workflow state as last written by setState*. It is read
+	// by worker goroutines (updateFKCheck) and the controller while the
+	// parallel commitLoop may be writing it, so access goes through
+	// getState/storeState.
+	state atomic.Int32 // binlogdatapb.VReplicationWorkflowState
+	stats *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld     mysqlctl.MysqlDaemon
 	colInfoMap map[string][]*ColumnInfo
@@ -314,7 +319,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 					return err
 				}
 			} else {
-				if vr.state != binlogdatapb.VReplicationWorkflowState_Copying {
+				if vr.getState() != binlogdatapb.VReplicationWorkflowState_Copying {
 					if err := vr.setState(binlogdatapb.VReplicationWorkflowState_Copying, ""); err != nil {
 						vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 						return err
@@ -533,7 +538,7 @@ func (vr *vreplicator) setMessage(message string) (err error) {
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
-	insertLog(vr.dbClient, LogMessage, vr.id, vr.state.String(), message)
+	insertLog(vr.dbClient, LogMessage, vr.id, vr.getState().String(), message)
 	return nil
 }
 
@@ -555,7 +560,17 @@ func (vr *vreplicator) maxQuerySize(dbc *vdbClient) int64 {
 }
 
 func (vr *vreplicator) insertLog(typ, message string) {
-	insertLog(vr.dbClient, typ, vr.id, vr.state.String(), message)
+	insertLog(vr.dbClient, typ, vr.id, vr.getState().String(), message)
+}
+
+// getState returns the workflow state as last recorded by setState*.
+func (vr *vreplicator) getState() binlogdatapb.VReplicationWorkflowState {
+	return binlogdatapb.VReplicationWorkflowState(vr.state.Load())
+}
+
+// storeState records the workflow state. Use setState* to also persist it.
+func (vr *vreplicator) storeState(state binlogdatapb.VReplicationWorkflowState) {
+	vr.state.Store(int32(state))
 }
 
 func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, message string) error {
@@ -599,6 +614,14 @@ func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdat
 		if _, err := dbClient.ExecuteTrxQueryBatch(); err != nil {
 			return fmt.Errorf("could not flush pending batched queries before set state: %v: %v", query, err)
 		}
+		// The flush succeeded: everything buffered so far has executed on the
+		// wire, and each immediate ExecuteFetch below executes on the wire
+		// while also appending itself to the batch buffer (for Retry). Mark
+		// the buffer flushed on EVERY exit path — including error returns —
+		// or a later CommitTrxQueryBatch would replay already-executed
+		// queries in a fresh MySQL transaction, double-executing them and
+		// breaking atomicity with the position write.
+		defer dbClient.markTrxBatchedQueriesFlushed()
 	}
 	if !immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0 {
 		if err := dbClient.AddQueryToTrxBatch(query); err != nil {
@@ -609,17 +632,11 @@ func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdat
 			return fmt.Errorf("could not set state: %v: %v", query, err)
 		}
 	}
-	if state == vr.state {
-		if batchedImmediate {
-			dbClient.markTrxBatchedQueriesFlushed()
-		}
+	if state == vr.getState() {
 		return nil
 	}
 	insertLog(dbClient, LogStateChange, vr.id, state.String(), message)
-	vr.state = state
-	if batchedImmediate {
-		dbClient.markTrxBatchedQueriesFlushed()
-	}
+	vr.storeState(state)
 
 	return nil
 }
@@ -671,7 +688,16 @@ func (vr *vreplicator) getSettingFKRestrict() error {
 
 func (vr *vreplicator) resetFKCheckAfterCopy(dbClient *vdbClient) error {
 	_, err := dbClient.Execute(fmt.Sprintf("set @@session.foreign_key_checks=%d", vr.originalFKCheckSetting))
-	return err
+	if err != nil {
+		return err
+	}
+	// Keep the connection's cached FK session state coherent: updateFKCheck
+	// skips its SET when the cache says the session already matches, so a
+	// session mutation here must be reflected in the cache or the applier
+	// will silently run with the wrong foreign_key_checks setting.
+	dbClient.foreignKeyChecksEnabled = vr.originalFKCheckSetting != 0
+	dbClient.foreignKeyChecksStateInitialized = true
+	return nil
 }
 
 func (vr *vreplicator) resetFKRestrictAfterCopy(dbClient *vdbClient) error {
@@ -777,7 +803,14 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 
 func (vr *vreplicator) clearFKCheck(dbClient *vdbClient) error {
 	_, err := dbClient.Execute("set @@session.foreign_key_checks=0")
-	return err
+	if err != nil {
+		return err
+	}
+	// See resetFKCheckAfterCopy: the cached FK session state must follow
+	// every out-of-band session mutation.
+	dbClient.foreignKeyChecksEnabled = false
+	dbClient.foreignKeyChecksStateInitialized = true
+	return nil
 }
 
 func (vr *vreplicator) clearFKRestrict(dbClient *vdbClient) error {

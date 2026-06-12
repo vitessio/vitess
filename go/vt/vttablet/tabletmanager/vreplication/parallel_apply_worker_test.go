@@ -440,7 +440,7 @@ func TestApplyWorkerApplyEventSetsFKChecksAfterRotate(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx := t.Context()
 	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1"}
-	vp.vr.state = binlogdatapb.VReplicationWorkflowState_Running
+	vp.vr.storeState(binlogdatapb.VReplicationWorkflowState_Running)
 
 	db0 := &recordingDBClient{}
 	db1 := &recordingDBClient{}

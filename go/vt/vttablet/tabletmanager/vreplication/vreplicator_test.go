@@ -1011,3 +1011,31 @@ func TestThrottlerAppNames(t *testing.T) {
 	assert.Contains(t, vc.throttlerAppName, "vcopier")
 	assert.NotContains(t, vc.throttlerAppName, "vplayer")
 }
+
+// TestFKCheckHelpersUpdateSessionCache pins that clearFKCheck and
+// resetFKCheckAfterCopy keep the vdbClient's cached foreign_key_checks
+// session state coherent. updateFKCheck skips the SET when the cache says
+// the session already matches, so any helper that mutates the session
+// out-of-band MUST update the cache — otherwise an atomic-copy workflow's
+// catchup -> clearFKCheck -> copy -> resetFKCheckAfterCopy -> catchup cycle
+// leaves the session FK state out of sync with what the applier believes,
+// silently applying with the wrong foreign_key_checks setting.
+func TestFKCheckHelpersUpdateSessionCache(t *testing.T) {
+	dbc := binlogplayer.NewMockDBClient(t)
+	vdbc := newVDBClient(dbc, binlogplayer.NewStats(), 0)
+	vr := &vreplicator{originalFKCheckSetting: 1}
+
+	// Simulate updateFKCheck having initialized the cache with FK checks ON.
+	vdbc.foreignKeyChecksEnabled = true
+	vdbc.foreignKeyChecksStateInitialized = true
+
+	// The mock treats "set @@session.foreign_key_checks..." as an invariant,
+	// so no per-query expectations are needed.
+	require.NoError(t, vr.clearFKCheck(vdbc))
+	assert.False(t, vdbc.foreignKeyChecksEnabled, "clearFKCheck must record FK checks as disabled in the session cache")
+	assert.True(t, vdbc.foreignKeyChecksStateInitialized)
+
+	require.NoError(t, vr.resetFKCheckAfterCopy(vdbc))
+	assert.True(t, vdbc.foreignKeyChecksEnabled, "resetFKCheckAfterCopy must record the restored FK state in the session cache")
+	assert.True(t, vdbc.foreignKeyChecksStateInitialized)
+}

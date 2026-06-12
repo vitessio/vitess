@@ -286,7 +286,7 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 		// If this is an atomic copy, we must update the foreign_key_checks state even when the vplayer runs during
 		// the copy phase, i.e., for catchup and fastforward.
 		mustUpdate = true
-	} else if vp.vr.state == binlogdatapb.VReplicationWorkflowState_Running {
+	} else if vp.vr.getState() == binlogdatapb.VReplicationWorkflowState_Running {
 		// If the vreplication workflow is in Running state, we must update the foreign_key_checks
 		// state for all workflow types.
 		mustUpdate = true
@@ -492,35 +492,6 @@ func (vp *vplayer) recordPositionSave(pos replication.Position, clearUnsavedEven
 		vp.timeLastSaved = time.Now()
 	}
 	vp.vr.stats.SetLastPosition(pos)
-}
-
-// journalEventPosition resolves a JOURNAL event's GTID string into a
-// full replication.Position, deriving the flavor from whatever base
-// position is available. JOURNAL events may carry a bare GTID with no
-// flavor/domain prefix when they reference the same server that produced
-// them, so the full position has to be reconstructed from context.
-func (vp *vplayer) journalEventPosition(eventGtid string) (replication.Position, error) {
-	if strings.Contains(eventGtid, "/") {
-		return binlogplayer.DecodePosition(eventGtid)
-	}
-
-	basePos := vp.pos
-	if basePos.GTIDSet == nil {
-		switch {
-		case vp.startPos.GTIDSet != nil:
-			basePos = vp.startPos
-		case vp.stopPos.GTIDSet != nil:
-			basePos = vp.stopPos
-		default:
-			return replication.Position{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot derive journal position from event gtid %q without a base position", eventGtid)
-		}
-	}
-
-	gtid, err := replication.ParseGTID(basePos.GTIDSet.Flavor(), eventGtid)
-	if err != nil {
-		return replication.Position{}, err
-	}
-	return replication.AppendGTID(basePos, gtid), nil
 }
 
 // setStopPositionState marks the workflow as Stopped using the given
@@ -988,30 +959,25 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			// All were found. We must register journal.
 		}
-		// Register the journal before persisting the position so that if
-		// registerJournal fails we have not advanced past the journal event
-		// — otherwise the workflow stops at a position past the journal and
-		// the journal is silently skipped on restart. registerJournal is
-		// idempotent (see Engine.registerJournal in engine.go: per-key lookup,
-		// existing-participant guard), so re-entering this handler if the
-		// position write below fails is safe.
+		// We must NOT persist the position past the journal event here.
+		// registerJournal returns nil as soon as THIS participant has
+		// registered, even when other participants of the journal have not
+		// joined yet, and the engine's journaler state is in-memory only.
+		// The position is only safe to advance once transitionJournal has
+		// durably rewritten the participating streams. If we saved the
+		// position now and the tablet restarted before all participants
+		// joined, this stream would resume past the journal, never
+		// re-register, and the workflow would hang forever waiting for a
+		// transition that can no longer happen. Keeping the saved position
+		// before the journal means a restart re-delivers the journal event,
+		// and registerJournal is idempotent (per-key lookup,
+		// existing-participant guard), so re-registering is safe.
 		log.Info(fmt.Sprintf("Binlog event registering journal event %+v", event.Journal))
 		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
 			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
 				return err
 			}
 			return io.EOF
-		}
-		if event.EventGtid != "" {
-			journalPos, err := vp.journalEventPosition(event.EventGtid)
-			if err != nil {
-				return err
-			}
-			vp.pos = journalPos
-			if _, err := vp.updatePosWithoutStop(ctx, journalPos, event.Timestamp, vp.query); err != nil {
-				return err
-			}
-			vp.recordPositionSave(journalPos, false)
 		}
 		if stats != nil {
 			stats.Send(fmt.Sprintf("%v", event.Journal))

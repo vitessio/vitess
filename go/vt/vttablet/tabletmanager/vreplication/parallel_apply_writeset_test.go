@@ -365,6 +365,15 @@ func TestBuildTxnWritesetAllowsFullRowImageWithNullValue(t *testing.T) {
 	require.Equal(t, []uint64{expected}, keys)
 }
 
+// TestBuildTxnWritesetNoPK pins that a table plan with no usable identity
+// (no PK columns and no identity columns) fails closed instead of silently
+// contributing zero keys. Silent no-keys would be a correctness hole: in a
+// transaction that also touches keyed tables, the writeset would be
+// non-empty, the scheduler would use writeset-only conflict detection, and
+// this table's rows would race with no conflict tracking at all.
+// buildColInfoMap's PK -> PK-equivalent -> all-columns fallback should make
+// this unreachable for real tables, but the writeset builder must not rely
+// on that staying true.
 func TestBuildTxnWritesetNoPK(t *testing.T) {
 	plan := &TablePlan{
 		TargetName: "t1",
@@ -377,8 +386,12 @@ func TestBuildTxnWritesetNoPK(t *testing.T) {
 	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
 
 	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{vevent})
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no usable writeset identity")
 	require.Nil(t, keys)
+	// The error must route the transaction to the serial path, not fail the
+	// workflow: over-serialization is safe, a bricked workflow is not.
+	require.True(t, writesetErrorForcesSerialization(err))
 }
 
 func TestBuildTxnWritesetFailsClosedWithoutUsableIdentity(t *testing.T) {
@@ -396,6 +409,7 @@ func TestBuildTxnWritesetFailsClosedWithoutUsableIdentity(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no usable writeset identity")
 	require.Nil(t, keys)
+	require.True(t, writesetErrorForcesSerialization(err), "missing identity must serialize the txn, not fail the workflow")
 }
 
 func TestWritesetKeysForChangeMissingPlan(t *testing.T) {
