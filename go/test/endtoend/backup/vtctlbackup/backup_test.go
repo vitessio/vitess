@@ -19,6 +19,8 @@ package vtctlbackup
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
@@ -65,6 +67,35 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 	}
 
 	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+}
+
+// TestBuiltinBackupChunked uses a low chunk threshold and chunk size (4MiB each) to force
+// InnoDB files (ibdata1, undo tablespaces) to be split into multiple chunks during backup.
+// This verifies that MySQL can start successfully and read back rows after a chunked restore.
+func TestBuiltinBackupChunked(t *testing.T) {
+	defer setDefaultCommonArgs()
+	commonTabletArg = append(
+		getDefaultCommonArgs(),
+		"--builtinbackup-file-chunk-threshold", "4194304",
+		"--builtinbackup-file-chunk-size", "4194304",
+	)
+
+	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
+	require.Nilf(t, err, "setup failed with status code %d", code)
+	defer TearDownCluster()
+
+	t.Run("TestChunkedBackup", chunkedBackup)
+}
+
+// TestBuiltinBackupNonChunked verifies that with the default threshold of 0, no chunking
+// occurs and the MANIFEST remains compatible with older Vitess versions.
+func TestBuiltinBackupNonChunked(t *testing.T) {
+	defer setDefaultCommonArgs()
+	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
+	require.Nilf(t, err, "setup failed with status code %d", code)
+	defer TearDownCluster()
+
+	t.Run("TestNonChunkedBackup", nonChunkedBackup)
 }
 
 func setDefaultCompressionFlag() {

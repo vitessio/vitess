@@ -326,7 +326,7 @@ func TestBackupFileSourceCloseError(t *testing.T) {
 	}
 
 	// backupFile should handle the error gracefully.
-	err = be.backupFile(ctx, params, bh, fe, "0")
+	err = be.backupFile(ctx, params, bh, fe, "0", -1)
 
 	// Should succeed after retries.
 	assert.NoError(t, err)
@@ -365,7 +365,7 @@ func TestBackupFileDestinationCloseError(t *testing.T) {
 		Name: "source.txt",
 	}
 
-	err = be.backupFile(ctx, params, bh, fe, "0")
+	err = be.backupFile(ctx, params, bh, fe, "0", -1)
 
 	// Should succeed after retries.
 	assert.NoError(t, err)
@@ -411,7 +411,7 @@ func TestBackupFileDestinationCloseMaxRetries(t *testing.T) {
 		Name: "destination.txt",
 	}
 
-	err = be.backupFile(ctx, params, bh, fe, "0")
+	err = be.backupFile(ctx, params, bh, fe, "0", -1)
 
 	// Should fail due to close error (context deadline exceeded).
 	assert.Error(t, err)

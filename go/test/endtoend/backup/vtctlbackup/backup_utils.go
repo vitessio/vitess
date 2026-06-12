@@ -977,6 +977,68 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	require.NoError(t, err)
 }
 
+func chunkedBackup(t *testing.T) {
+	verifyBackupChunking(t, true)
+}
+
+func nonChunkedBackup(t *testing.T) {
+	verifyBackupChunking(t, false)
+}
+
+func verifyBackupChunking(t *testing.T, expectChunked bool) {
+	verifyInitialReplication(t)
+
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
+
+	restoreWaitForBackup(t, "replica", nil, true)
+
+	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
+
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
+	backupLocation := path.Join(localCluster.CurrentVTDATAROOT, "backups", keyspaceName, shardName, backups[0])
+
+	manifestData, err := os.ReadFile(path.Join(backupLocation, "MANIFEST"))
+	require.NoError(t, err)
+
+	var manifest struct {
+		FileEntries []struct {
+			Name   string
+			Chunks []struct {
+				StorageName string
+			}
+		}
+	}
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+
+	totalChunks := 0
+	for _, fe := range manifest.FileEntries {
+		if len(fe.Chunks) > 0 {
+			t.Logf("File %s: %d chunks", fe.Name, len(fe.Chunks))
+			totalChunks += len(fe.Chunks)
+		}
+	}
+	t.Logf("Total chunks in manifest: %d", totalChunks)
+
+	if expectChunked {
+		assert.Greater(t, totalChunks, 0, "expected at least one file to be chunked")
+	} else {
+		assert.Equal(t, 0, totalChunks, "expected no chunking with threshold=0")
+	}
+
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	require.NoError(t, err)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+
+	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
+	err = replica2.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	require.NoError(t, err)
+}
+
 func InitTestTable(t *testing.T) {
 	_, err := primary.VttabletProcess.QueryTablet("DROP TABLE IF EXISTS vt_insert_test", keyspaceName, true)
 	require.NoError(t, err)
