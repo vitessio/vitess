@@ -185,7 +185,8 @@ var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*)\*/`)
 // this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
 func startSpanTestable(ctx context.Context, query, label string,
 	newSpan func(context.Context, string) (trace.Span, context.Context),
-	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context, error) {
+	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error),
+) (trace.Span, context.Context, error) {
 	_, comments := sqlparser.SplitMarginComments(query)
 	match := r.FindStringSubmatch(comments.Leading)
 	span, ctx := getSpan(ctx, match, newSpan, label, newSpanFromString)
@@ -258,7 +259,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), callback)
+		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), false, callback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
@@ -319,7 +320,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 			session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
 		} else {
 			firstPacket := true
-			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()
@@ -447,7 +448,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, true, callback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}

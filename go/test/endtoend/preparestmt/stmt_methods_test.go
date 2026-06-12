@@ -489,36 +489,96 @@ func TestInsertTest(t *testing.T) {
 	assert.Equal(t, int64(1), ra)
 }
 
+type specializedPlanQuery struct {
+	query string
+	args  []any
+}
+
+// specializedPlanQueries are prepared queries whose baseline plan is a scatter
+// (or fails outright, in the window-function case) but whose specialized plan
+// targets a single shard once the equality predicates are known to point at the
+// same shard.
+var specializedPlanQueries = []specializedPlanQuery{{
+	query: `select 1 from t1 tbl1, t1 tbl2 where tbl1.id = ? and tbl2.id = ?`,
+	args:  []any{1, 1},
+}, {
+	query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ?`,
+	args:  []any{1, 1, 1},
+}, {
+	query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3, t1 tbl4 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ? and tbl4.id = ?`,
+	args:  []any{1, 1, 1, 1},
+}, {
+	query: `SELECT e.id, e.name, s.age, ROW_NUMBER() OVER (PARTITION BY e.age ORDER BY s.name DESC) AS age_rank FROM t1 e, t1 s where e.id = ? and s.id = ?`,
+	args:  []any{1, 1},
+}}
+
+// streamingSpecializedPlanQueries mirror specializedPlanQueries with distinct
+// table aliases. The plan cache is keyed by query text and does not include the
+// workload, so reusing the OLTP query strings would let the plans cached by
+// TestSpecializedPlan satisfy the OLAP lookups here — masking whether the
+// streaming path builds the specialized plan itself. Distinct aliases yield the
+// same plan shapes under different cache keys, so the streaming path is forced
+// to build them.
+var streamingSpecializedPlanQueries = []specializedPlanQuery{{
+	query: `select 1 from t1 stbl1, t1 stbl2 where stbl1.id = ? and stbl2.id = ?`,
+	args:  []any{1, 1},
+}, {
+	query: `select 1 from t1 stbl1, t1 stbl2, t1 stbl3 where stbl1.id = ? and stbl2.id = ? and stbl3.id = ?`,
+	args:  []any{1, 1, 1},
+}, {
+	query: `select 1 from t1 stbl1, t1 stbl2, t1 stbl3, t1 stbl4 where stbl1.id = ? and stbl2.id = ? and stbl3.id = ? and stbl4.id = ?`,
+	args:  []any{1, 1, 1, 1},
+}, {
+	query: `SELECT se.id, se.name, ss.age, ROW_NUMBER() OVER (PARTITION BY se.age ORDER BY ss.name DESC) AS age_rank FROM t1 se, t1 ss where se.id = ? and ss.id = ?`,
+	args:  []any{1, 1},
+}}
+
 // TestSpecializedPlan tests the specialized plan generation for the query.
 func TestSpecializedPlan(t *testing.T) {
 	dbInfo.KeyspaceName = sks
 	dbo := Connect(t, "interpolateParams=false")
 	defer dbo.Close()
 
+	runAndValidateSpecializedPlans(t, dbo, dbo.Prepare, specializedPlanQueries)
+}
+
+// TestSpecializedPlanStreaming is the OLAP/streaming counterpart of
+// TestSpecializedPlan. Specialized plans are only built on the execute path, so
+// before https://github.com/vitessio/vitess/issues/19569 was fixed the
+// streaming path never built them and the window-function query failed with
+// "window functions are only supported for single-shard queries".
+func TestSpecializedPlanStreaming(t *testing.T) {
+	dbInfo.KeyspaceName = sks
+	dbo := Connect(t, "interpolateParams=false")
+	defer dbo.Close()
+
+	// Pin a single connection so the workload setting and the prepared
+	// statements share the same session.
+	conn, err := dbo.Conn(t.Context())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecContext(t.Context(), "set workload = olap")
+	require.NoError(t, err)
+
+	runAndValidateSpecializedPlans(t, dbo, func(query string) (*sql.Stmt, error) {
+		return conn.PrepareContext(t.Context(), query)
+	}, streamingSpecializedPlanQueries)
+}
+
+// runAndValidateSpecializedPlans prepares and executes the supplied queries
+// using the supplied prepare function, asserts that the optimized branch was
+// taken for every execution, and validates the cached specialized plans.
+func runAndValidateSpecializedPlans(t *testing.T, dbo *sql.DB, prepare func(query string) (*sql.Stmt, error), queries []specializedPlanQuery) {
+	t.Helper()
+
 	oMap := getVarValue[map[string]any](t, "OptimizedQueryExecutions", clusterInstance.VtgateProcess.GetVars)
 	initExecCount := getVarValue[float64](t, "Passthrough", func() map[string]any {
 		return oMap
 	})
 
-	queries := []struct {
-		query string
-		args  []any
-	}{{
-		query: `select 1 from t1 tbl1, t1 tbl2 where tbl1.id = ? and tbl2.id = ?`,
-		args:  []any{1, 1},
-	}, {
-		query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ?`,
-		args:  []any{1, 1, 1},
-	}, {
-		query: `select 1 from t1 tbl1, t1 tbl2, t1 tbl3, t1 tbl4 where tbl1.id = ? and tbl2.id = ? and tbl3.id = ? and tbl4.id = ?`,
-		args:  []any{1, 1, 1, 1},
-	}, {
-		query: `SELECT e.id, e.name, s.age, ROW_NUMBER() OVER (PARTITION BY e.age ORDER BY s.name DESC) AS age_rank FROM t1 e, t1 s where e.id = ? and s.id = ?`,
-		args:  []any{1, 1},
-	}}
-
 	for _, q := range queries {
-		stmt, err := dbo.Prepare(q.query)
+		stmt, err := prepare(q.query)
 		require.NoError(t, err)
 
 		for i := 0; i < 5; i++ {
