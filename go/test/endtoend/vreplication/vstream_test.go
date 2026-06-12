@@ -35,11 +35,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
@@ -236,7 +238,9 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 
 // TestVStreamLaggingDDLRowEvents confirms that when the schema historian is enabled via the --track-schema-versions flag, we don't
 // fail to handle older ROW events in the VStream that were created prior to a DDL which modified the table structure and thus
-// impacted the binlog event field number to table column mapping.
+// impacted the binlog event field number to table column mapping. This includes recovering the value mappings for an ENUM or SET
+// column that was added and then dropped — also when the column has a binary collation and thus reports as BINARY rather than
+// ENUM/SET in field metadata — which requires the historian to have recorded the column's type definition (issue #20175).
 func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	oldArgs := slices.Clone(extraVTTabletArgs)
 	extraVTTabletArgs = append(extraVTTabletArgs,
@@ -301,16 +305,24 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	defer vtgateConn.Close()
 	_, err = vtgateConn.ExecuteFetch("use `"+defaultSourceKs+"`", 1000, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("alter table loadtest add column age int default 1 after id", 1000, false)
+	_, err = vtgateConn.ExecuteFetch("alter table loadtest add column age int default 1 after id, "+
+		"add column plan enum('free','standard','enterprise') not null default 'free' after age, "+
+		"add column roles set('admin','user') not null default 'user' after plan, "+
+		// A binary collation makes the column report as BINARY rather than ENUM in
+		// field metadata, exercising the historian's name-based type enrichment.
+		"add column tier enum('gold','silver') collate utf8mb4_bin not null default 'gold' after roles", 1000, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("insert into loadtest (id, name) values (2001, 'cust1'), (2002, 'cust2'), (2003, 'cust3')", 1000, false)
+	_, err = vtgateConn.ExecuteFetch("insert into loadtest (id, name, plan, roles, tier) values "+
+		"(2001, 'cust1', 'standard', 'admin,user', 'silver'), (2002, 'cust2', 'enterprise', 'user', 'gold'), (2003, 'cust3', 'free', 'admin', 'silver')", 1000, false)
 	require.NoError(t, err)
-	_, err = vtgateConn.ExecuteFetch("alter table loadtest drop column age", 1000, false)
+	_, err = vtgateConn.ExecuteFetch("alter table loadtest drop column age, drop column plan, drop column roles, drop column tier", 1000, false)
 	require.NoError(t, err)
 
 	streamCtx, streamCancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer streamCancel()
 	rowEvents := 0
+	var loadtestFields []*querypb.Field
+	var decodedValues []string
 	// We use eventually here as it's still possible that the schema tracker's stream encounters an error and
 	// pauses for a few seconds before restarting.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -325,10 +337,36 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 		evs, err := reader.Recv()
 		require.NoError(t, err)
 		for _, ev := range evs {
-			if ev.Type == binlogdatapb.VEventType_ROW && strings.HasSuffix(ev.RowEvent.TableName, ".loadtest") {
-				rowEvents += len(ev.RowEvent.RowChanges)
+			switch ev.Type {
+			case binlogdatapb.VEventType_FIELD:
+				if strings.HasSuffix(ev.FieldEvent.TableName, ".loadtest") {
+					loadtestFields = ev.FieldEvent.Fields
+				}
+			case binlogdatapb.VEventType_ROW:
+				if strings.HasSuffix(ev.RowEvent.TableName, ".loadtest") {
+					rowEvents += len(ev.RowEvent.RowChanges)
+					for _, rowChange := range ev.RowEvent.RowChanges {
+						if rowChange.After == nil {
+							continue
+						}
+						// MakeRowTrusted indexes fields by position without bounds checks, so
+						// confirm the FIELD event arrived first and matches the row's shape.
+						require.NotNilf(t, loadtestFields, "received a ROW event for the loadtest table before its FIELD event")
+						require.Lenf(t, rowChange.After.Lengths, len(loadtestFields),
+							"loadtest ROW event value count does not match the preceding FIELD event's field count")
+						for _, val := range sqltypes.MakeRowTrusted(loadtestFields, rowChange.After) {
+							decodedValues = append(decodedValues, val.ToString())
+						}
+					}
+				}
 			}
 		}
+	}
+	// The resumed stream replays the inserts that reference the since-dropped ENUM (plan, tier)
+	// and SET (roles) columns. With --track-schema-versions the historian supplies their
+	// type definitions, so the values must decode to the exact strings inserted (issue #20175).
+	for _, want := range []string{"free", "standard", "enterprise", "admin,user", "user", "admin", "gold", "silver"} {
+		assert.Containsf(t, decodedValues, want, "expected decoded ENUM/SET value %q in resumed loadtest rows; got %v", want, decodedValues)
 	}
 }
 

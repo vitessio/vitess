@@ -53,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -589,7 +590,8 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 		log.V(2).Info("Reading schema for table: " + tableName)
 		tableType := row[1].String()
-		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv())
+		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv(),
+			se.env.Config().TrackSchemaVersions)
 		if err != nil {
 			// Non recoverable error:
 			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
@@ -925,7 +927,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 		defer conn.Recycle()
 		cst := *st       // Make a copy
 		cst.Fields = nil // We're going to refresh the columns/fields
-		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr); err != nil {
+		if err := fetchColumns(&cst, conn, se.cp.DBName(), tableNameStr, se.env.Config().TrackSchemaVersions); err != nil {
 			return nil, err
 		}
 		// Update the PK columns for the table as well as they may have changed.
@@ -1051,17 +1053,61 @@ func (se *Engine) GetSchema() map[string]*Table {
 	return tables
 }
 
-// MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema
+// MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema.
+//
+// ENUM and SET fields carry their full type definition (the ColumnType, e.g.
+// enum('a','b')), recorded when the table was loaded (see
+// fetchEnumSetColumnTypes). This lets schema version tracking decode
+// historical ROW events for these columns even after they are dropped or
+// modified: the binlog only stores the integer index (ENUM) or bitmask (SET),
+// so the string values are otherwise unrecoverable once the live column
+// changes.
 func (se *Engine) MarshalMinimalSchema() ([]byte, error) {
+	dbSchema, err := se.snapshotMinimalSchema()
+	if err != nil {
+		return nil, err
+	}
+	return dbSchema.MarshalVT()
+}
+
+// snapshotMinimalSchema builds a MinimalSchema from the in-memory schema under
+// se.mu. Each field is deep-copied so that the ENUM/SET type definitions can be
+// attached without mutating the live se.tables fields (newMinimalTable
+// otherwise shares the *querypb.Field pointers), which must keep an empty
+// ColumnType: live tables get fresh definitions at decode time instead.
+//
+// A field that reports as ENUM/SET but has no recorded type definition fails
+// the snapshot: persisting it would be permanently lossy (nothing can backfill
+// the string values once the live column changes), while a failed save is
+// retried by the schema tracker from the previous GTID. This can only happen
+// if a concurrent DDL hits the narrow window between the two
+// information_schema reads in fetchColumns; the next reload of the table
+// resolves it. Binary-collation ENUM/SET columns report as BINARY and so
+// cannot be verified this way.
+func (se *Engine) snapshotMinimalSchema() (*binlogdatapb.MinimalSchema, error) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	dbSchema := &binlogdatapb.MinimalSchema{
 		Tables: make([]*binlogdatapb.MinimalTable, 0, len(se.tables)),
 	}
 	for _, table := range se.tables {
-		dbSchema.Tables = append(dbSchema.Tables, newMinimalTable(table))
+		mt := newMinimalTable(table)
+		clonedFields := make([]*querypb.Field, len(mt.Fields))
+		for i, field := range mt.Fields {
+			cloned := field.CloneVT()
+			if columnType, ok := table.EnumSetColumnTypes[field.Name]; ok {
+				cloned.ColumnType = columnType
+			} else if field.Type == querypb.Type_ENUM || field.Type == querypb.Type_SET {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+					"no type definition recorded for ENUM/SET column %s.%s; "+
+						"the column may have been changed by a concurrent schema change", mt.Name, field.Name)
+			}
+			clonedFields[i] = cloned
+		}
+		mt.Fields = clonedFields
+		dbSchema.Tables = append(dbSchema.Tables, mt)
 	}
-	return dbSchema.MarshalVT()
+	return dbSchema, nil
 }
 
 func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {

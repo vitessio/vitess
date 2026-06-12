@@ -158,7 +158,7 @@ func (tr *Tracker) process(ctx context.Context) {
 				}
 				if event.Type == binlogdatapb.VEventType_DDL &&
 					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.Environment().Parser()) {
-					if err := tr.schemaUpdated(gtid, event.Statement, event.Timestamp); err != nil {
+					if err := tr.schemaUpdated(ctx, gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
 						log.Error(fmt.Sprintf("Error updating schema: %s for ddl %q at pos %s",
 							tr.env.Environment().Parser().TruncateForLog(err.Error()), event.Statement, gtid))
@@ -253,17 +253,26 @@ func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) (string, err
 	return gtid, nil
 }
 
-func (tr *Tracker) schemaUpdated(gtid string, ddl string, timestamp int64) error {
+func (tr *Tracker) schemaUpdated(ctx context.Context, gtid string, ddl string, timestamp int64) error {
 	log.Info(fmt.Sprintf("Processing schemaUpdated event for gtid %s, ddl %s", gtid, ddl))
 	if gtid == "" || ddl == "" {
 		return errors.New("got invalid gtid or ddl in schemaUpdated")
 	}
-	ctx := context.Background()
 	// Engine will have reloaded the schema because vstream will reload it on a DDL
 	return tr.saveCurrentSchemaToDb(ctx, gtid, ddl, timestamp)
 }
 
+// schemaVersionSaveTimeout bounds a schema version save (an information_schema
+// read plus an insert into the sidecar schema_version table) so that a stuck
+// MySQL cannot wedge the tracker's event loop or Tracker.Close, which waits on
+// it. A timed-out save is retried from the previous GTID like any other failed
+// save.
+const schemaVersionSaveTimeout = 1 * time.Minute
+
 func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, timestamp int64) error {
+	ctx, cancel := context.WithTimeout(ctx, schemaVersionSaveTimeout)
+	defer cancel()
+
 	blob, err := tr.engine.MarshalMinimalSchema()
 	if err != nil {
 		return err
