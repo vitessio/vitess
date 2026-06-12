@@ -705,7 +705,7 @@ func (pr *PlannedReparenter) reparentTablets(
 	stoppedRdonly := sets.New[string]()
 	if promoteReplicaRequired && opts.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA {
 		var err error
-		stoppedRdonly, err = stopRdonlyReplicatingFromTablet(ctx, pr.tmc, tabletMap, ev.NewPrimary)
+		stoppedRdonly, err = stopRdonlyReplicatingFromTablet(replCtx, pr.tmc, tabletMap, ev.NewPrimary)
 		if err != nil {
 			return err
 		}

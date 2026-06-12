@@ -51,10 +51,11 @@ import (
 )
 
 var (
-	tmclientLock        sync.Mutex
-	tmclientFactoryLock sync.Mutex
-	tmclients           = map[string]tmclient.TabletManagerClient{}
-	tmclientFactories   = map[string]func() tmclient.TabletManagerClient{}
+	tmclientLock                sync.Mutex
+	tmclientFactoryLock         sync.Mutex
+	tmclients                   = map[string]tmclient.TabletManagerClient{}
+	tmclientFactories           = map[string]func() tmclient.TabletManagerClient{}
+	setReplicationSourceCallsMu sync.Mutex
 )
 
 // NewVtctldServerWithTabletManagerClient returns a new
@@ -175,7 +176,6 @@ func init() {
 // with mock delays and response values, for use in unit tests.
 type TabletManagerClient struct {
 	tmclient.TabletManagerClient
-	setReplicationSourceCallsMu sync.Mutex
 
 	// If true, the call will return an error.
 	CallError bool
@@ -1265,7 +1265,7 @@ func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, table
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
-	fake.setReplicationSourceCallsMu.Lock()
+	setReplicationSourceCallsMu.Lock()
 	fake.SetReplicationSourceCalls = append(fake.SetReplicationSourceCalls, SetReplicationSourceCall{
 		TabletAlias:           key,
 		ParentAlias:           topoproto.TabletAliasString(parent),
@@ -1275,7 +1275,7 @@ func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, table
 		SemiSync:              semiSync,
 		HeartbeatInterval:     heartbeatInterval,
 	})
-	fake.setReplicationSourceCallsMu.Unlock()
+	setReplicationSourceCallsMu.Unlock()
 
 	if fake.SetReplicationSourceDelays != nil {
 		if delay, ok := fake.SetReplicationSourceDelays[key]; ok {
