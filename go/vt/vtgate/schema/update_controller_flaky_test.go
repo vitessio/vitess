@@ -317,3 +317,14 @@ func TestViewsUpdates(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateControllerSetIgnore(t *testing.T) {
+	uc := &updateController{}
+	assert.False(t, uc.ignore)
+
+	uc.setIgnore(true)
+	assert.True(t, uc.ignore)
+
+	uc.setIgnore(false)
+	assert.False(t, uc.ignore)
+}
