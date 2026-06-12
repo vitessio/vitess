@@ -2193,7 +2193,7 @@
       ],
       "Args": [
         "-run",
-        "TestMultiVStreamsKeyspaceReshard",
+        "TestMultiVStreamsKeyspace",
         "-timeout",
         "15m"
       ],
