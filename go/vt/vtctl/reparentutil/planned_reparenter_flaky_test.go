@@ -4309,8 +4309,11 @@ func TestPlannedReparenterReparentTabletsForceStartsDetachedRdonly(t *testing.T)
 	replicaSourcedAlias := topoproto.TabletAliasString(replicaSourcedRdonly.Alias)
 	assert.Equal(t, topoproto.TabletAliasString(sourceReplica.Alias), tmc.setReplicationSourceParent(detachedAlias))
 	assert.Equal(t, topoproto.TabletAliasString(sourceReplica.Alias), tmc.setReplicationSourceParent(replicaSourcedAlias))
+	// Under the REPLICA rdonly policy, every rdonly being repointed gets
+	// forceStartReplication=true so we always converge on "replicating from a
+	// replica" regardless of the tablet's pre-reparent state.
 	assert.True(t, tmc.setReplicationSourceForceStart(detachedAlias))
-	assert.False(t, tmc.setReplicationSourceForceStart(replicaSourcedAlias))
+	assert.True(t, tmc.setReplicationSourceForceStart(replicaSourcedAlias))
 }
 
 func TestPlannedReparenterReparentTabletsFailsWhenDetachingRdonlyFails(t *testing.T) {

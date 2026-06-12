@@ -480,10 +480,9 @@ func TestStopRdonlyReplicatingFromTablet(t *testing.T) {
 		},
 	}
 
-	stopped, err := stopRdonlyReplicatingFromTablet(t.Context(), tmc, tabletMap, sourceTablet)
+	err := stopRdonlyReplicatingFromTablet(t.Context(), tmc, tabletMap, sourceTablet)
 
 	require.NoError(t, err)
-	assert.True(t, stopped.Has(topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias)))
 	assert.ElementsMatch(t, []string{
 		topoproto.TabletAliasString(rdonlyFromSourceTablet.Alias),
 		topoproto.TabletAliasString(rdonlyFromAcker.Alias),
@@ -555,9 +554,8 @@ func TestStopRdonlyReplicatingFromTabletErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			stopped, err := stopRdonlyReplicatingFromTablet(t.Context(), tt.tmc, tt.tabletMap, tt.tablet)
+			err := stopRdonlyReplicatingFromTablet(t.Context(), tt.tmc, tt.tabletMap, tt.tablet)
 			require.ErrorContains(t, err, tt.wantErr)
-			assert.Nil(t, stopped)
 		})
 	}
 }
