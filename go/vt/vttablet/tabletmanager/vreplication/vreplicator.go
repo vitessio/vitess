@@ -115,7 +115,17 @@ type vreplicator struct {
 	// parallel commitLoop may be writing it, so access goes through
 	// getState/storeState.
 	state atomic.Int32 // binlogdatapb.VReplicationWorkflowState
-	stats *binlogplayer.Stats
+	// inCopyPhase reports whether the workflow still has tables to copy
+	// (_vt.copy_state is non-empty). It is refreshed from the durable row
+	// on every loadSettings call, so — unlike state, which is only updated
+	// by setState calls — it is truthful immediately after a tablet
+	// restart. That matters for AtomicCopy: its copy path (copyAll) never
+	// calls setState(Copying) — only initTablesForCopy does, on first
+	// start — so after a restart the in-memory state stays at zero for the
+	// whole remaining copy. The controller's AtomicCopy terminal-error
+	// guard reads this from another goroutine, hence atomic.
+	inCopyPhase atomic.Bool
+	stats       *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld     mysqlctl.MysqlDaemon
 	colInfoMap map[string][]*ColumnInfo
@@ -501,6 +511,7 @@ func (vr *vreplicator) loadSettings(ctx context.Context, dbClient *vdbClient) (s
 		vr.WorkflowType = int32(settings.WorkflowType)
 		vr.WorkflowSubType = int32(settings.WorkflowSubType)
 		vr.WorkflowName = settings.WorkflowName
+		vr.inCopyPhase.Store(numTablesToCopy != 0)
 	}
 	return settings, numTablesToCopy, err
 }
@@ -561,6 +572,12 @@ func (vr *vreplicator) maxQuerySize(dbc *vdbClient) int64 {
 
 func (vr *vreplicator) insertLog(typ, message string) {
 	insertLog(vr.dbClient, typ, vr.id, vr.getState().String(), message)
+}
+
+// isInCopyPhase reports whether the workflow had tables left to copy as of
+// the last loadSettings call.
+func (vr *vreplicator) isInCopyPhase() bool {
+	return vr.inCopyPhase.Load()
 }
 
 // getState returns the workflow state as last recorded by setState*.

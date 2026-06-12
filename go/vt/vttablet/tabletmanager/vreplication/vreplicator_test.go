@@ -1039,3 +1039,49 @@ func TestFKCheckHelpersUpdateSessionCache(t *testing.T) {
 	assert.True(t, vdbc.foreignKeyChecksEnabled, "resetFKCheckAfterCopy must record the restored FK state in the session cache")
 	assert.True(t, vdbc.foreignKeyChecksStateInitialized)
 }
+
+// copyPhaseDBClient serves loadSettings like failingDBClient but reports a
+// non-empty _vt.copy_state, simulating a workflow restarted mid-copy.
+type copyPhaseDBClient struct {
+	failingDBClient
+}
+
+func (c *copyPhaseDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	if strings.Contains(query, "from _vt.copy_state where vrepl_id=") {
+		return sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+			"2",
+		), nil
+	}
+	return c.failingDBClient.ExecuteFetch(query, maxrows)
+}
+
+// TestLoadSettingsTracksCopyPhase is a restart-style regression test: a fresh
+// vreplicator (in-memory state at its zero value, as after a tablet or
+// controller restart) whose durable _vt.copy_state still has rows must report
+// that it is in the copy phase. The controller's AtomicCopy terminal-error
+// guard needs this durable-evidence signal because the AtomicCopy copy path
+// (copyAll) never calls setState(Copying) — only initTablesForCopy does, on
+// first start — so after a restart the entire remaining copy phase would
+// otherwise run with vr.state at zero and copy-phase errors would be
+// misclassified as retryable.
+func TestLoadSettingsTracksCopyPhase(t *testing.T) {
+	vr := &vreplicator{
+		id:       1,
+		dbClient: newVDBClient(&copyPhaseDBClient{}, binlogplayer.NewStats(), 0),
+	}
+	require.False(t, vr.isInCopyPhase(), "zero value must preserve existing (retryable) behavior")
+
+	_, numTablesToCopy, err := vr.loadSettings(t.Context(), vr.dbClient)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), numTablesToCopy)
+	require.True(t, vr.isInCopyPhase(), "loadSettings must record that tables remain to be copied")
+
+	// Once the copy completes (no copy_state rows), the next loadSettings
+	// clears the flag so post-copy errors are classified as before.
+	vr.dbClient = newVDBClient(&failingDBClient{}, binlogplayer.NewStats(), 0)
+	_, numTablesToCopy, err = vr.loadSettings(t.Context(), vr.dbClient)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), numTablesToCopy)
+	require.False(t, vr.isInCopyPhase())
+}
