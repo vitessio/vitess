@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -1764,7 +1765,6 @@ func TestResolveVStreamParams(t *testing.T) {
 			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
 		})
 	}
-
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {

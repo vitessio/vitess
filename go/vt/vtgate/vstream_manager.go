@@ -177,7 +177,8 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 }
 
 func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func(events []*binlogdatapb.VEvent) error) error {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func(events []*binlogdatapb.VEvent) error,
+) error {
 	vgtid, filter, flags, err := vsm.resolveParams(ctx, tabletType, vgtid, filter, flags)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
@@ -223,8 +224,8 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 
 // resolveParams provides defaults for the inputs if they're not specified.
 func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (*binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags, error) {
-
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags,
+) (*binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags, error) {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -320,59 +321,8 @@ func (vsm *vstreamManager) GetTotalStreamDelay() int64 {
 func (vs *vstream) stream(ctx context.Context) error {
 	ctx, vs.cancel = context.WithCancel(ctx)
 
-	vs.wg.Add(1)
-	go func() {
-		defer vs.wg.Done()
-
-<<<<<<< HEAD
-||||||| parent of 2bf20f8712 (vtgate: fix vstream StopOnReshard hang on reshard convergence (#20262))
-		go func() {
-			ageTimer := time.NewTimer(maxAge + jitter)
-			defer ageTimer.Stop()
-
-			select {
-			case <-ageTimer.C:
-				log.Info(
-					"vstream exceeded maximum age",
-					slog.Duration("max_age", maxAge),
-					slog.Duration("jitter", jitter),
-				)
-				msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, jitter)
-				vs.once.Do(func() {
-					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
-				})
-				vs.cancel()
-			case <-ctx.Done():
-			}
-		}()
-	}
-
-	vs.wg.Go(func() {
-=======
-		go func() {
-			ageTimer := time.NewTimer(maxAge + jitter)
-			defer ageTimer.Stop()
-
-			select {
-			case <-ageTimer.C:
-				log.Info(
-					"vstream exceeded maximum age",
-					slog.Duration("max_age", maxAge),
-					slog.Duration("jitter", jitter),
-				)
-				msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, jitter)
-				vs.once.Do(func() {
-					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
-				})
-				vs.cancel()
-			case <-ctx.Done():
-			}
-		}()
-	}
-
 	var sendWg sync.WaitGroup
 	sendWg.Go(func() {
->>>>>>> 2bf20f8712 (vtgate: fix vstream StopOnReshard hang on reshard convergence (#20262))
 		// sendEvents returns either if the given context has been canceled or if
 		// an error is returned from the callback. If the callback returns an error,
 		// we need to cancel the context to stop the other stream goroutines
@@ -380,7 +330,7 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.cancel()
 
 		vs.sendEvents(ctx)
-	}()
+	})
 
 	// Make a copy first, because the ShardGtids list can change once streaming starts.
 	copylist := append(([]*binlogdatapb.ShardGtid)(nil), vs.vgtid.ShardGtids...)
@@ -474,7 +424,6 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 		vs.vsm.vstreamsCount.Add(labelValues, 1)
 
 		err := vs.streamFromTablet(ctx, sgtid)
-
 		// Set the error on exit. First one wins.
 		if err != nil {
 			log.Errorf("Error in vstream for %+v: %v", sgtid, err)
@@ -898,7 +847,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
-
 }
 
 // maybeUpdateTableNames updates table names when the ExcludeKeyspaceFromTableName flag is disabled.
@@ -906,7 +854,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 // duplicate table names. If we enable the ExcludeKeyspaceFromTableName flag to not update the table names, there is no need to
 // clone the entire event, whcih improves performance. This is typically safely used by clients only streaming one keyspace.
 func maybeUpdateTableName(event *binlogdatapb.VEvent, keyspace string, excludeKeyspaceFromTableName bool,
-	tableNameExtractor func(ev *binlogdatapb.VEvent) *string) *binlogdatapb.VEvent {
+	tableNameExtractor func(ev *binlogdatapb.VEvent) *string,
+) *binlogdatapb.VEvent {
 	if excludeKeyspaceFromTableName {
 		return event
 	}
@@ -1000,7 +949,7 @@ func (vs *vstream) sendAll(ctx context.Context, sgtid *binlogdatapb.ShardGtid, e
 					Shard:    event.Shard,
 				}
 			} else if event.Type == binlogdatapb.VEventType_LASTPK {
-				var foundIndex = -1
+				foundIndex := -1
 				eventTablePK := event.LastPKEvent.TableLastPK
 				for idx, pk := range sgtid.TablePKs {
 					if pk.TableName == eventTablePK.TableName {
