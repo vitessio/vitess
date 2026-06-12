@@ -1399,7 +1399,6 @@ func runStressWaiterTimeoutStormCycle(t *testing.T, cycle int) {
 			return nil
 		})
 	}
-	held = nil
 
 	// Recycle decrements the borrowed count before reaching for the
 	// waitlist mutex, so once InUse hits zero every returner is parked on
