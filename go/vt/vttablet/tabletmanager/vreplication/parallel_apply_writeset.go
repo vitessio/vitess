@@ -38,7 +38,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var writesetTextValueMarker = [2]byte{0xFF, 0x00}
+var (
+	writesetTextValueMarker = [2]byte{0xFF, 0x00}
+	// writesetKeySeparator separates the table name from the key values in
+	// the digest. A package-level array (Go has no []byte constants) so
+	// writesetDigestInit never allocates for it.
+	writesetKeySeparator = [1]byte{':'}
+)
 
 // fieldIndexForName resolves a column-name lookup in a field-index map by
 // trying the exact spelling first and falling back to lowercase. The maps are
@@ -70,7 +76,7 @@ func writesetDigestAddPayload(d *xxhash.Digest, payload []byte) {
 func writesetDigestInit(d *xxhash.Digest, tableName string) {
 	d.Reset()
 	d.WriteString(tableName)
-	d.Write([]byte{':'})
+	d.Write(writesetKeySeparator[:])
 }
 
 // writesetDigestAddValue folds a sqltypes.Value into the digest by writing
@@ -114,12 +120,11 @@ func writesetDigestAddFieldValue(d *xxhash.Digest, field *querypb.Field, v sqlty
 	semanticHash.Reset()
 	collation.Hash(&semanticHash, raw, 0)
 
-	var scratch [8]byte
-	binary.LittleEndian.PutUint64(scratch[:], semanticHash.Sum64())
-	payload := make([]byte, len(writesetTextValueMarker)+len(scratch))
-	copy(payload, writesetTextValueMarker[:])
-	copy(payload[len(writesetTextValueMarker):], scratch[:])
-	writesetDigestAddPayload(d, payload)
+	// Fixed-size stack buffer: marker followed by the 8-byte collation hash.
+	var payload [len(writesetTextValueMarker) + 8]byte
+	copy(payload[:], writesetTextValueMarker[:])
+	binary.LittleEndian.PutUint64(payload[len(writesetTextValueMarker):], semanticHash.Sum64())
+	writesetDigestAddPayload(d, payload[:])
 	return nil
 }
 
@@ -319,6 +324,11 @@ type txnWritesetCache struct {
 	canonicalTargetNames map[string]string
 	resolvedFKRefs       map[string][]fkConstraintRef
 	resolvedParentRefs   map[string][]parentFKRef
+	// identityIdxCache caches, per source table name, the plan's identity
+	// column positions resolved against the streamed fields. The list is
+	// stable per plan, so resolving it per row change would allocate a
+	// slice per change for composite-identity tables.
+	identityIdxCache map[string][]int
 	// relevantColsCache caches, per source table name, the set of column
 	// indexes the writeset depends on (PK plus FK-joined columns). Building
 	// it is O(columns + FK refs) with a map allocation, which is too
@@ -526,6 +536,29 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 				fieldIdxCache[rowEvent.TableName] = fieldIdx
 			}
 		}
+		// Resolve the plan's identity column positions once per table.
+		var identityIndexes []int
+		if cache != nil {
+			if cache.identityIdxCache == nil {
+				cache.identityIdxCache = make(map[string][]int)
+			}
+			var ok bool
+			identityIndexes, ok = cache.identityIdxCache[rowEvent.TableName]
+			if !ok {
+				var err error
+				identityIndexes, err = writesetIdentityFieldIndexes(plan, targetTableName, fieldIdx)
+				if err != nil {
+					return nil, err
+				}
+				cache.identityIdxCache[rowEvent.TableName] = identityIndexes
+			}
+		} else {
+			var err error
+			identityIndexes, err = writesetIdentityFieldIndexes(plan, targetTableName, fieldIdx)
+			if err != nil {
+				return nil, err
+			}
+		}
 		// Resolve the writeset-relevant column set once per table.
 		var relevantCols map[int]struct{}
 		if cache != nil {
@@ -575,7 +608,7 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 			if change.After != nil && plan.Fields != nil {
 				afterVals = sqltypes.MakeRowTrusted(plan.Fields, change.After)
 			}
-			if err := writesetKeysForChangeWithFieldIdx(plan, targetTableName, fieldIdx, beforeVals, afterVals, keySet); err != nil {
+			if err := writesetKeysForChangeWithFieldIdx(plan, targetTableName, identityIndexes, beforeVals, afterVals, keySet); err != nil {
 				return nil, err
 			}
 			for i := range refs {
@@ -708,7 +741,11 @@ func txnTouchesUnsupportedWritesetMapping(events []*binlogdatapb.VEvent, tablePl
 // writesetKeysForChange extracts PK-based writeset keys from pre-decoded row
 // values and inserts them directly into the caller's keySet map as uint64 hashes.
 func writesetKeysForChange(plan *TablePlan, tableName string, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
-	return writesetKeysForChangeWithFieldIdx(plan, tableName, nil, beforeVals, afterVals, keySet)
+	identityIndexes, err := writesetIdentityFieldIndexes(plan, tableName, nil)
+	if err != nil {
+		return err
+	}
+	return writesetKeysForChangeWithFieldIdx(plan, tableName, identityIndexes, beforeVals, afterVals, keySet)
 }
 
 // writesetIdentityFieldIndexes resolves a plan's declared identity column
@@ -742,11 +779,11 @@ func writesetIdentityFieldIndexes(plan *TablePlan, tableName string, fieldIdx ma
 }
 
 // writesetKeysForChangeWithFieldIdx is the indexed variant of
-// writesetKeysForChange: it takes a pre-built field-index map so multi-row
-// txns do not rebuild the lookup per change. The keys it inserts into
-// keySet are what the scheduler compares to decide which concurrent txns
-// conflict.
-func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, fieldIdx map[string]int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
+// writesetKeysForChange: it takes the plan's identity column positions
+// pre-resolved (see writesetIdentityFieldIndexes) so multi-row txns do not
+// re-resolve them per change. The keys it inserts into keySet are what the
+// scheduler compares to decide which concurrent txns conflict.
+func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, identityIndexes []int, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
 	if plan == nil {
 		return nil
 	}
@@ -757,10 +794,6 @@ func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, fieldI
 		// conflict tracking at all. The error routes the txn to the serial
 		// path (see writesetErrorForcesSerialization).
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no usable writeset identity for %s", tableName)
-	}
-	identityIndexes, err := writesetIdentityFieldIndexes(plan, tableName, fieldIdx)
-	if err != nil {
-		return err
 	}
 	appendKey := func(vals []sqltypes.Value) error {
 		if len(vals) == 0 {
