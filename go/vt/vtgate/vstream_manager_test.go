@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -1242,6 +1243,81 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	require.EqualExportedValues(t, want1, receivedResponses[2])
 }
 
+func TestVStreamStopOnReshardEndsWhenParticipantsConverge(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+
+		ks := "TestVStream"
+		cell := "aa"
+		_ = createSandbox(ks)
+		hc := discovery.NewFakeHealthCheck(nil)
+		st := getSandboxTopo(ctx, cell, ks, []string{"-80", "80-"})
+		vsm := newTestVStreamManager(ctx, hc, st, cell)
+		sbc0 := hc.AddTestTablet(cell, "1.1.1.1", 1001, ks, "-80", topodatapb.TabletType_PRIMARY, true, 1, nil)
+		addTabletToSandboxTopo(t, ctx, st, ks, "-80", sbc0.Tablet())
+		sbc1 := hc.AddTestTablet(cell, "1.1.1.1", 1002, ks, "80-", topodatapb.TabletType_PRIMARY, true, 1, nil)
+		addTabletToSandboxTopo(t, ctx, st, ks, "80-", sbc1.Tablet())
+
+		journal := &binlogdatapb.Journal{
+			Id:            1,
+			MigrationType: binlogdatapb.MigrationType_SHARDS,
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-40",
+				Gtid:     "pos40",
+			}, {
+				Keyspace: ks,
+				Shard:    "40-80",
+				Gtid:     "pos4080",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+				Gtid:     "pos80",
+			}},
+			Participants: []*binlogdatapb.KeyspaceShard{{
+				Keyspace: ks,
+				Shard:    "-80",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+			}},
+		}
+		journalEvents := []*binlogdatapb.VEvent{
+			{Type: binlogdatapb.VEventType_BEGIN},
+			{Type: binlogdatapb.VEventType_JOURNAL, Journal: journal},
+			{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid"},
+			{Type: binlogdatapb.VEventType_COMMIT},
+		}
+		sbc0.AddVStreamEvents(journalEvents, nil)
+		sbc1.AddVStreamEvents(journalEvents, nil)
+
+		vgtid := &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: ks,
+				Shard:    "-80",
+				Gtid:     "pos80",
+			}, {
+				Keyspace: ks,
+				Shard:    "80-",
+				Gtid:     "pos80",
+			}},
+		}
+
+		var journalCount int
+		err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{StopOnReshard: true}, func(events []*binlogdatapb.VEvent) error {
+			for _, ev := range events {
+				if ev.Type == binlogdatapb.VEventType_JOURNAL {
+					journalCount++
+				}
+			}
+			return nil
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, 2, journalCount)
+	})
+}
+
 func TestVStreamJournalNoMatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1689,7 +1765,6 @@ func TestResolveVStreamParams(t *testing.T) {
 			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
 		})
 	}
-
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {
