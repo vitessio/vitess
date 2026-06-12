@@ -1189,7 +1189,7 @@ func TestErrantGTIDCountGaugeIsResetWhenResolved(t *testing.T) {
 
 	// First poll: the replica has an errant GTID under its own UUID.
 	replicaInstance := &Instance{
-		InstanceAlias:          replicaTablet.Alias,
+		InstanceAlias:          replicaAlias,
 		ServerUUID:             replicaUUID,
 		SourceUUID:             primaryUUID,
 		AncestryUUID:           replicaUUID + "," + primaryUUID,
