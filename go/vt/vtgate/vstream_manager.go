@@ -359,7 +359,66 @@ func (vs *vstream) stream(ctx context.Context) error {
 		defer vs.streamLivenessTimer.Stop()
 	}
 
+<<<<<<< HEAD
 	vs.wg.Go(func() {
+||||||| parent of 2bf20f8712 (vtgate: fix vstream StopOnReshard hang on reshard convergence (#20262))
+	if vs.flags.GetMaxStreamAgeSeconds() > 0 {
+		maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
+		jitterHalfRange := int64(StreamAgeJitterRange(maxAge))
+		jitter := time.Duration(rand.Int64N(2*jitterHalfRange) - jitterHalfRange)
+
+		go func() {
+			ageTimer := time.NewTimer(maxAge + jitter)
+			defer ageTimer.Stop()
+
+			select {
+			case <-ageTimer.C:
+				log.Info(
+					"vstream exceeded maximum age",
+					slog.Duration("max_age", maxAge),
+					slog.Duration("jitter", jitter),
+				)
+				msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, jitter)
+				vs.once.Do(func() {
+					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
+				})
+				vs.cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
+
+	vs.wg.Go(func() {
+=======
+	if vs.flags.GetMaxStreamAgeSeconds() > 0 {
+		maxAge := time.Duration(vs.flags.GetMaxStreamAgeSeconds()) * time.Second
+		jitterHalfRange := int64(StreamAgeJitterRange(maxAge))
+		jitter := time.Duration(rand.Int64N(2*jitterHalfRange) - jitterHalfRange)
+
+		go func() {
+			ageTimer := time.NewTimer(maxAge + jitter)
+			defer ageTimer.Stop()
+
+			select {
+			case <-ageTimer.C:
+				log.Info(
+					"vstream exceeded maximum age",
+					slog.Duration("max_age", maxAge),
+					slog.Duration("jitter", jitter),
+				)
+				msg := fmt.Sprintf("vstream exceeded maximum age of %v (jitter: %v)", maxAge, jitter)
+				vs.once.Do(func() {
+					vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream exceeded maximum age")
+				})
+				vs.cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
+
+	var sendWg sync.WaitGroup
+	sendWg.Go(func() {
+>>>>>>> 2bf20f8712 (vtgate: fix vstream StopOnReshard hang on reshard convergence (#20262))
 		// sendEvents returns either if the given context has been canceled or if
 		// an error is returned from the callback. If the callback returns an error,
 		// we need to cancel the context to stop the other stream goroutines
@@ -375,6 +434,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 		vs.startOneStream(ctx, sgtid)
 	}
 	vs.wg.Wait()
+	close(vs.eventCh)
+	sendWg.Wait()
 
 	return vs.getError()
 }
@@ -414,7 +475,12 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				vs.setError(ctx.Err(), "context ended while sending events")
 			})
 			return
-		case evs := <-vs.eventCh:
+		case evs, ok := <-vs.eventCh:
+			if !ok {
+				// The channel is closed once all shard streams have ended, so
+				// there are no more events to send.
+				return
+			}
 			if err := send(evs); err != nil {
 				log.Info(fmt.Sprintf("Error in vstream send events to client: %v", err))
 				vs.once.Do(func() {
