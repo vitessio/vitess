@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/test"
 )
@@ -1356,8 +1357,57 @@ func TestPostProcessAnalyses(t *testing.T) {
 		},
 	}
 
+	// Shared fixtures for the QuorumDetail cases below. The quorum matcher records QuorumDetail as a
+	// side effect while matching; postProcessAnalyses folds it into the winning quorum analysis and
+	// drops it from any other analysis that won instead.
+	quorumDescription := "Primary vttablet is unreachable by VTOrc and confirmed down by a quorum of the shard's replicas"
+	quorumDetail := &QuorumResult{
+		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
+		Down: true, DownVotes: 1, TotalObservers: 1, Fraction: 1, MinObservers: 1,
+		Observers: []ObserverVote{{Alias: "zone1-0000000101", Vote: "down", ConsecutiveFailures: 5, Fresh: true}},
+	}
+
+	// Cold-start fixtures: VTOrc has never reached the primary's vttablet (no instance row), so
+	// the analysis is InvalidPrimary while the reachable replicas' fresh shard-peer reports can
+	// still confirm the primary down. postProcessAnalyses upgrades such an analysis to
+	// PrimaryTabletUnreachableByQuorum so the recovery can run; with absent quorum data or the
+	// feature disabled it must stay InvalidPrimary (fail closed).
+	invalidPrimaryAnalysis := func() *DetectionAnalysis {
+		return &DetectionAnalysis{
+			Analysis:              InvalidPrimary,
+			Description:           "VTOrc hasn't been able to reach the primary even once since restart/shutdown",
+			AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			AnalyzedKeyspace:      keyspace,
+			AnalyzedShard:         shard0,
+			TabletType:            topodatapb.TabletType_PRIMARY,
+		}
+	}
+	upgradedQuorumDetail := &QuorumResult{
+		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
+		Down: true, DownVotes: 2, TotalObservers: 2, Fraction: 1, MinObservers: 1,
+		Observers: []ObserverVote{
+			{Alias: "zone1-0000000101", TabletType: "REPLICA", Vote: "down", ConsecutiveFailures: 5, Fresh: true},
+			{Alias: "zone1-0000000102", TabletType: "REPLICA", Vote: "down", ConsecutiveFailures: 5, Fresh: true},
+		},
+	}
+	seedQuorumDown := func(t *testing.T) {
+		t.Helper()
+		resetShardPeerHealth()
+		t.Cleanup(resetShardPeerHealth)
+		now := time.Now()
+		primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+		RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, keyspace, shard0, reportFor(primary, 5, 0, now), now)
+		RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, topodatapb.TabletType_REPLICA, keyspace, shard0, reportFor(primary, 5, 0, now), now)
+	}
+	enableERSOnTabletUnreachable := func(t *testing.T) {
+		t.Helper()
+		config.SetERSOnTabletUnreachable(true)
+		t.Cleanup(func() { config.SetERSOnTabletUnreachable(false) })
+	}
+
 	tests := []struct {
 		name     string
+		prep     func(t *testing.T)
 		analyses []*DetectionAnalysis
 		want     []*DetectionAnalysis
 	}{
@@ -1498,13 +1548,111 @@ func TestPostProcessAnalyses(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "QuorumDetail dropped from a non-quorum analysis",
+			analyses: []*DetectionAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					Description:           "Primary cannot be reached by vtorc and none of its replicas is replicating",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail: &QuorumResult{
+						PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
+						Down: true, DownVotes: 2, TotalObservers: 2,
+					},
+				},
+			},
+			want: []*DetectionAnalysis{
+				{
+					Analysis:              DeadPrimary,
+					Description:           "Primary cannot be reached by vtorc and none of its replicas is replicating",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+				},
+			},
+		},
+		{
+			name: "QuorumDetail summary folded into quorum analysis description",
+			analyses: []*DetectionAnalysis{
+				{
+					Analysis:              PrimaryTabletUnreachableByQuorum,
+					Description:           quorumDescription,
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail:          quorumDetail,
+				},
+			},
+			want: []*DetectionAnalysis{
+				{
+					Analysis:              PrimaryTabletUnreachableByQuorum,
+					Description:           quorumDescription + " [" + quorumDetail.Summary() + "]",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail:          quorumDetail,
+				},
+			},
+		},
+		{
+			name: "InvalidPrimary upgraded to PrimaryTabletUnreachableByQuorum when a fresh quorum confirms the primary down",
+			prep: func(t *testing.T) {
+				enableERSOnTabletUnreachable(t)
+				seedQuorumDown(t)
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis()},
+			want: []*DetectionAnalysis{
+				{
+					Analysis:              PrimaryTabletUnreachableByQuorum,
+					Description:           quorumDescription + " [" + upgradedQuorumDetail.Summary() + "]",
+					AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					AnalyzedKeyspace:      keyspace,
+					AnalyzedShard:         shard0,
+					TabletType:            topodatapb.TabletType_PRIMARY,
+					QuorumDetail:          upgradedQuorumDetail,
+				},
+			},
+		},
+		{
+			name: "InvalidPrimary stays without quorum data (fail closed)",
+			prep: func(t *testing.T) {
+				enableERSOnTabletUnreachable(t)
+				resetShardPeerHealth()
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis()},
+			want:     []*DetectionAnalysis{invalidPrimaryAnalysis()},
+		},
+		{
+			name: "InvalidPrimary stays when quorum ERS is disabled",
+			prep: func(t *testing.T) {
+				seedQuorumDown(t)
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis()},
+			want:     []*DetectionAnalysis{invalidPrimaryAnalysis()},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.prep != nil {
+				tt.prep(t)
+			}
 			if tt.want == nil {
 				tt.want = tt.analyses
 			}
 			result := postProcessAnalyses(tt.analyses, clusters)
+			// The quorum upgrade evaluates at time.Now(); zero the timestamp so expected
+			// QuorumResult fixtures compare deterministically.
+			for _, analysis := range result {
+				if analysis.QuorumDetail != nil {
+					analysis.QuorumDetail.EvaluatedAt = time.Time{}
+				}
+			}
 			require.ElementsMatch(t, tt.want, result)
 		})
 	}

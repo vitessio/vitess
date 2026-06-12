@@ -6,6 +6,7 @@
 
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
+        - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
@@ -25,6 +26,23 @@
 ## <a id="major-changes"/>Major Changes</a>
 
 ### <a id="new-support"/>New Support</a>
+
+#### <a id="vtorc-quorum-unreachable-primary"/>VTOrc failover of an unreachable primary `vttablet` via replica quorum</a>
+
+VTOrc can now run an Emergency Reparent Shard (ERS) when a `PRIMARY` tablet's `vttablet` process is unreachable while its MySQL keeps running — a case the existing replication-based detection misses, because the replicas keep replicating from the still-running MySQL.
+
+To avoid acting on VTOrc's own connectivity problems (for example, a network partition between VTOrc and the primary), the failover requires a quorum: a configurable fraction of the shard's `REPLICA`/`RDONLY` tablets must also report the primary's `vttablet` unreachable, in addition to VTOrc's own failed check. The liveness signal is gathered over the existing `Ping` and `FullStatus` RPCs — there is no new protocol or service.
+
+The feature is opt-in and disabled by default:
+
+- On `vttablet`, set `--track-shard-tablet-health` so the tablet periodically pings its shard peers and reports their liveness in `FullStatus`.
+- On VTOrc, set `--emergency-reparent-on-tablet-unreachable` to act on the quorum. The strictness is tunable via `--shard-quorum-fraction` (default `1.0`, i.e. unanimous), `--shard-quorum-min-observers`, `--shard-tablet-health-failure-threshold`, and `--shard-tablet-health-freshness`.
+
+The quorum decision is observable: VTOrc logs why it did or did not fail over an unreachable primary, records the per-observer vote tally in the recovery audit message, and exposes the live per-shard quorum state — the primary, the verdict, and each observer's vote — at the read-only `/api/shard-quorum` endpoint.
+
+Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
+
+See [#19918](https://github.com/vitessio/vitess/issues/19918).
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 

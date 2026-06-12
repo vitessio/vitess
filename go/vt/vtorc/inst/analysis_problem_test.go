@@ -15,10 +15,13 @@ package inst
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/protoutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -326,4 +329,42 @@ func TestGroupDetectionAnalysesByShard(t *testing.T) {
 	ks2 := result["ks2/0"]
 	require.Len(t, ks2, 1)
 	assert.Equal(t, PrimaryIsReadOnly, ks2[0].Analysis)
+}
+
+func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
+	now := time.Now()
+	primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	resetShardPeerHealth()
+	RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, "ks", "0",
+		[]*replicationdatapb.ShardPeerHealth{{TabletAlias: primary, ConsecutivePingFailures: 5, LastAttemptedPing: protoutil.TimeToProto(now)}}, now)
+	RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, topodatapb.TabletType_REPLICA, "ks", "0",
+		[]*replicationdatapb.ShardPeerHealth{{TabletAlias: primary, ConsecutivePingFailures: 5, LastAttemptedPing: protoutil.TimeToProto(now)}}, now)
+
+	a := &DetectionAnalysis{
+		IsClusterPrimary:      true,
+		LastCheckValid:        false,
+		AnalyzedInstanceAlias: primary,
+		AnalyzedKeyspace:      "ks",
+		AnalyzedShard:         "0",
+	}
+	problem := GetDetectionAnalysisProblem(PrimaryTabletUnreachableByQuorum)
+	require.NotNil(t, problem)
+	assert.False(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false), "feature is disabled by default")
+	assert.True(t, matchPrimaryTabletUnreachableByQuorum(a, now))
+
+	// When the matcher fires, it records the structured quorum detail for the audit.
+	require.NotNil(t, a.QuorumDetail, "matcher must record the quorum detail when it fires")
+	assert.True(t, a.QuorumDetail.Down)
+	assert.Equal(t, 2, a.QuorumDetail.DownVotes)
+
+	// If VTOrc can still reach the primary, no match.
+	a.LastCheckValid = true
+	assert.False(t, problem.MatchFunc(a, &clusterAnalysis{}, nil, &topodatapb.Tablet{Alias: primary}, false, false))
+
+	// The non-firing path must not record a quorum detail. Use a fresh analysis because the
+	// earlier firing already set QuorumDetail on `a`.
+	notFired := &DetectionAnalysis{IsClusterPrimary: true, LastCheckValid: true, AnalyzedInstanceAlias: primary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
+	assert.False(t, matchPrimaryTabletUnreachableByQuorum(notFired, now))
+	assert.Nil(t, notFired.QuorumDetail)
 }
