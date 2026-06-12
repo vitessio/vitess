@@ -24,7 +24,7 @@ import (
 	"plugin"
 	"sync"
 
-	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -62,7 +62,7 @@ func AuthenticationStreamInterceptor(authn Authenticator) grpc.StreamServerInter
 			return vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "%s", err)
 		}
 
-		wrappedStream := middleware.WrapServerStream(ss)
+		wrappedStream := grpc_middleware.WrapServerStream(ss)
 		wrappedStream.WrappedContext = NewContext(ss.Context(), actor)
 
 		return handler(srv, wrappedStream)
