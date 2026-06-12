@@ -265,7 +265,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), callback)
+		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), false, callback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
@@ -326,7 +326,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 			session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
 		} else {
 			firstPacket := true
-			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()
@@ -454,7 +454,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, true, callback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}

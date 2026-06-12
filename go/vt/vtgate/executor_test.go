@@ -198,7 +198,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 		}
 
 		sbclookup.SetResults([]*sqltypes.Result{result})
-		err = executor.StreamExecute(ctx, nil, "TestExecutorMaxMemoryRowsExceeded", session, test.query, nil, fn)
+		err = executor.StreamExecute(ctx, nil, "TestExecutorMaxMemoryRowsExceeded", session, test.query, nil, false, fn)
 		require.NoError(t, err, "maxMemoryRows limit does not apply to StreamExecute")
 	}
 }
@@ -353,7 +353,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	var results []*sqltypes.Result
 
 	// begin.
-	err := executor.StreamExecute(ctx, nil, "TestExecute", session, "begin", nil, func(result *sqltypes.Result) error {
+	err := executor.StreamExecute(ctx, nil, "TestExecute", session, "begin", nil, false, func(result *sqltypes.Result) error {
 		results = append(results, result)
 		return nil
 	})
@@ -2065,7 +2065,7 @@ func TestOlapSelectDatabase(t *testing.T) {
 		cbInvoked = true
 		return nil
 	}
-	err := executor.StreamExecute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, cb)
+	err := executor.StreamExecute(context.Background(), nil, "TestExecute", econtext.NewSafeSession(session), sql, nil, false, cb)
 	assert.NoError(t, err)
 	assert.True(t, cbInvoked)
 }
@@ -2736,7 +2736,7 @@ func TestExecutorVExplainQueries(t *testing.T) {
 	// Test the streaming side as well
 	var results []sqltypes.Row
 	session = econtext.NewAutocommitSession(&vtgatepb.Session{})
-	err = executor.StreamExecute(ctx, nil, "TestExecutorVExplainQueries", session, "vexplain queries select * from user where name = 'apa'", nil, func(result *sqltypes.Result) error {
+	err = executor.StreamExecute(ctx, nil, "TestExecutorVExplainQueries", session, "vexplain queries select * from user where name = 'apa'", nil, false, func(result *sqltypes.Result) error {
 		results = append(results, result.Rows...)
 		return nil
 	})
@@ -2924,7 +2924,7 @@ func TestExecutorTruncateErrors(t *testing.T) {
 	_, err := executorExecSession(ctx, executor, session, "invalid statement", nil)
 	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
-	err = executor.StreamExecute(ctx, nil, "TestExecute", session, "invalid statement", nil, fn)
+	err = executor.StreamExecute(ctx, nil, "TestExecute", session, "invalid statement", nil, false, fn)
 	assert.EqualError(t, err, "syntax error at posi [TRUNCATED]")
 
 	_, _, err = executor.Prepare(context.Background(), "TestExecute", session, "invalid statement")
@@ -3033,7 +3033,7 @@ func TestExecutorKillStmt(t *testing.T) {
 		})
 		t.Run("stream:"+tc.query+tc.errStr, func(t *testing.T) {
 			mysqlCtx := &fakeMysqlConnection{ErrMsg: tc.errStr}
-			err := executor.StreamExecute(context.Background(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, func(result *sqltypes.Result) error {
+			err := executor.StreamExecute(context.Background(), mysqlCtx, "TestExecutorKillStmt", econtext.NewAutocommitSession(&vtgatepb.Session{}), tc.query, nil, false, func(result *sqltypes.Result) error {
 				return nil
 			})
 			if tc.errStr != "" {
