@@ -504,3 +504,48 @@ func sqlModeWorkflowSettingsResult(workflowType binlogdatapb.VReplicationWorkflo
 		}},
 	}
 }
+
+// recordingFailingDBClient records every query while delegating behavior to
+// failingDBClient (which serves the standard setup queries).
+type recordingFailingDBClient struct {
+	failingDBClient
+	queries []string
+}
+
+func (c *recordingFailingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	c.queries = append(c.queries, query)
+	return c.failingDBClient.ExecuteFetch(query, maxrows)
+}
+
+// TestCreateWorkerConnSetsReadCommitted pins that worker connections run at
+// READ COMMITTED. The writeset scheduler models PK/unique/FK conflicts, but
+// it cannot model InnoDB gap/next-key locks, which REPEATABLE READ takes
+// even for point operations on absent rows (e.g. DELETE of a row that does
+// not exist, or delete-marking in a non-unique secondary index). A
+// later-ordered transaction's gap lock can block an earlier-ordered
+// transaction's INSERT while the commitLoop's strict ordering keeps that gap
+// lock held until the earlier transaction commits — a deadlock InnoDB's
+// detector cannot see because half the cycle lives in the commitLoop. READ
+// COMMITTED takes no gap locks for row-image application and is MySQL's own
+// recommendation for row-based parallel appliers.
+func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
+	recording := &recordingFailingDBClient{}
+	vr := &vreplicator{
+		id:             1,
+		stats:          binlogplayer.NewStats(),
+		workflowConfig: vttablet.InitVReplicationConfigDefaults(),
+		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return recording }},
+	}
+	conn, err := createWorkerConn(t.Context(), vr)
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+
+	found := false
+	for _, q := range recording.queries {
+		if strings.Contains(q, "transaction_isolation='READ-COMMITTED'") {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "worker connections must run at READ COMMITTED to avoid gap-lock deadlocks through the commit order; queries: %v", recording.queries)
+}

@@ -779,3 +779,128 @@ func TestApplySchedulerMultiKeyReleaseWakesAllReadyWaiters(t *testing.T) {
 	require.True(t, dispatched[waiterA.order])
 	require.True(t, dispatched[waiterB.order])
 }
+
+// TestApplySchedulerNoMetaNoWritesetIsGlobal pins ready-check case 7: a
+// transaction without commit metadata and without a writeset must serialize
+// as global, with BOTH inflightGlobal and inflightMissingMeta held and then
+// released in balance. An unbalanced release here would silently wedge the
+// scheduler (counter stuck > 0) or unsafely unblock it (counter goes
+// negative-equivalent via early zero).
+func TestApplySchedulerNoMetaNoWritesetIsGlobal(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	opaque := &applyTxn{order: 1} // no meta, no writeset
+	other := &applyTxn{order: 2, sequenceNumber: 10, commitParent: 0, hasCommitMeta: true, writeset: []uint64{100}}
+	require.NoError(t, s.enqueue(opaque))
+	require.NoError(t, s.enqueue(other))
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, opaque, got)
+	s.mu.Lock()
+	require.Equal(t, 1, s.inflightGlobal, "no-meta/no-writeset must count as global")
+	require.Equal(t, 1, s.inflightMissingMeta, "no-meta/no-writeset must count as missing-meta")
+	s.mu.Unlock()
+
+	// While the opaque txn is inflight, everything else is blocked.
+	requireNoReadyTxn(t, s)
+
+	require.NoError(t, s.markCommitted(opaque))
+	s.mu.Lock()
+	require.Zero(t, s.inflightGlobal, "release must balance the global count")
+	require.Zero(t, s.inflightMissingMeta, "release must balance the missing-meta count")
+	s.mu.Unlock()
+	requireReadyTxn(t, s, other)
+}
+
+// TestApplySchedulerNoMetaWritesetBlockedByInflightCommitMeta pins the
+// blocked direction of ready-check case 8: a transaction without commit
+// metadata (even with a non-conflicting writeset) must not run alongside an
+// inflight transaction that has metadata — the two metadata modes never mix.
+func TestApplySchedulerNoMetaWritesetBlockedByInflightCommitMeta(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	withMeta := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []uint64{100}}
+	noMeta := &applyTxn{order: 2, writeset: []uint64{200}} // disjoint writeset, no metadata
+	require.NoError(t, s.enqueue(withMeta))
+	require.NoError(t, s.enqueue(noMeta))
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, withMeta, got)
+
+	requireNoReadyTxn(t, s)
+
+	require.NoError(t, s.markCommitted(withMeta))
+	requireReadyTxn(t, s, noMeta)
+}
+
+// TestApplySchedulerForceGlobalWaitsForInflightAndThenBlocksAll pins the
+// blocked direction of ready-check case 3: a forceGlobal transaction (e.g. a
+// DDL) must wait until ALL inflight work drains, and while it is inflight it
+// must block everything behind it. A regression here would let a DDL execute
+// concurrently with inflight row transactions on other connections.
+func TestApplySchedulerForceGlobalWaitsForInflightAndThenBlocksAll(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	row := &applyTxn{order: 1, sequenceNumber: 10, commitParent: 9, hasCommitMeta: true, writeset: []uint64{100}}
+	global := &applyTxn{order: 2, forceGlobal: true}
+	row2 := &applyTxn{order: 3, sequenceNumber: 11, commitParent: 9, hasCommitMeta: true, writeset: []uint64{200}}
+	require.NoError(t, s.enqueue(row))
+	require.NoError(t, s.enqueue(global))
+	require.NoError(t, s.enqueue(row2))
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, row, got)
+
+	// The DDL must not be dispatchable while the row txn is inflight, and
+	// head-of-line blocking must also keep row2 queued behind it.
+	requireNoReadyTxn(t, s)
+
+	require.NoError(t, s.markCommitted(row))
+	// Dispatch via nextReady so the DDL is actually marked inflight
+	// (requireReadyTxn only pops, without marking).
+	got, err = s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, global, got)
+
+	// While the DDL is inflight, nothing else may start.
+	requireNoReadyTxn(t, s)
+
+	require.NoError(t, s.markCommitted(global))
+	requireReadyTxn(t, s, row2)
+}
+
+// TestApplySchedulerClosedWithUnreachablePendingWorkErrors pins the abandoned
+// -work escape hatch: when the scheduler is closed while pending transactions
+// exist that can never become ready (nothing is inflight to advance the
+// scheduler state), nextReady must return errSchedulerAbandonedPendingWork —
+// not io.EOF (which would silently drop the pending suffix) and not block
+// forever (which would leak the worker).
+func TestApplySchedulerClosedWithUnreachablePendingWorkErrors(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	// commitParent 0 skips enqueue's lastCommittedSequence seeding, keeping
+	// the watermark at 0.
+	first := &applyTxn{order: 1, sequenceNumber: 1, commitParent: 0, hasCommitMeta: true, writeset: []uint64{100}}
+	// Empty writeset -> commit-parent fallback; parent 99 is never reached.
+	stuck := &applyTxn{order: 2, sequenceNumber: 100, commitParent: 99, hasCommitMeta: true}
+	require.NoError(t, s.enqueue(first))
+	require.NoError(t, s.enqueue(stuck))
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, first, got)
+	require.NoError(t, s.markCommitted(got))
+
+	// Nothing inflight, the pending txn is permanently blocked, and the
+	// scheduler is closed: workers must get the abandoned-work error.
+	require.Equal(t, io.EOF, s.close())
+	_, err = s.nextReady(ctx)
+	require.ErrorIs(t, err, errSchedulerAbandonedPendingWork)
+}

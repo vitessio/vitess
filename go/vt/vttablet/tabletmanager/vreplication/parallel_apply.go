@@ -500,12 +500,28 @@ func extractDDLRenameTargets(sql string, parser *sqlparser.Parser) map[string]st
 	return renames
 }
 
+// uniqueKeyColumnsEqual reports whether two per-index unique-key column lists
+// are identical (same number of indexes, each with the same ordered columns).
+func uniqueKeyColumnsEqual(a, b [][]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !slices.Equal(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // shouldPublishExecIgnoreDDLBarrier decides whether an ALTER that adds or
-// drops a unique secondary index has actually flipped the cached plan's
-// HasExtraUniqueSecondary flag. When the flag changes, an ExecIgnore barrier
-// must be published so rows planned under the old flag do not leak into
-// execution under the new one. Returning false means the ALTER does not touch
-// correctness-relevant plan state and the barrier can be skipped.
+// drops a unique secondary index has actually changed the cached plan's
+// writeset state — either its force-serialize (HasExtraUniqueSecondary) flag
+// or its hashable unique-key column lists. When the state changes, an
+// ExecIgnore barrier must be published so rows planned under the old state do
+// not leak into execution under the new one. Returning false means the ALTER
+// does not touch correctness-relevant plan state and the barrier can be
+// skipped.
 func shouldPublishExecIgnoreDDLBarrier(ctx context.Context, vp *vplayer, statement string) (bool, error) {
 	if vp == nil || vp.vr == nil || vp.vr.vre == nil || vp.vr.vre.env == nil {
 		return false, nil
@@ -532,20 +548,22 @@ func shouldPublishExecIgnoreDDLBarrier(ctx context.Context, vp *vplayer, stateme
 			if option.IndexDefinition == nil || option.IndexDefinition.Info == nil || !option.IndexDefinition.Info.IsUnique() {
 				continue
 			}
-			hasExtraUniqueSecondary, err := vp.vr.hasExtraUniqueSecondaryIndex(ctx, cachedPlan.TargetName, cachedPlan)
+			uniqueKeys, mustSerialize, err := vp.vr.writesetUniqueKeys(ctx, cachedPlan.TargetName, cachedPlan)
 			if err != nil {
 				return false, err
 			}
-			return hasExtraUniqueSecondary != cachedPlan.HasExtraUniqueSecondary, nil
+			return mustSerialize != cachedPlan.HasExtraUniqueSecondary ||
+				!uniqueKeyColumnsEqual(uniqueKeys, cachedPlan.UniqueKeyColumns), nil
 		case *sqlparser.DropKey:
 			if option.Type != sqlparser.NormalKeyType && option.Type != sqlparser.ConstraintType {
 				continue
 			}
-			hasExtraUniqueSecondary, err := vp.vr.hasExtraUniqueSecondaryIndex(ctx, cachedPlan.TargetName, cachedPlan)
+			uniqueKeys, mustSerialize, err := vp.vr.writesetUniqueKeys(ctx, cachedPlan.TargetName, cachedPlan)
 			if err != nil {
 				return false, err
 			}
-			return hasExtraUniqueSecondary != cachedPlan.HasExtraUniqueSecondary, nil
+			return mustSerialize != cachedPlan.HasExtraUniqueSecondary ||
+				!uniqueKeyColumnsEqual(uniqueKeys, cachedPlan.UniqueKeyColumns), nil
 		}
 	}
 	return false, nil

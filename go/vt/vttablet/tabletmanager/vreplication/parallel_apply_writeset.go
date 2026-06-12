@@ -334,6 +334,10 @@ type txnWritesetCache struct {
 	// it is O(columns + FK refs) with a map allocation, which is too
 	// expensive to repeat for every row change in the hot path.
 	relevantColsCache map[string]map[int]struct{}
+	// uniqueKeyIdxCache caches, per source table name, the resolved field
+	// positions of each hashable unique secondary index (plan.UniqueKeyColumns),
+	// so the column-name lookups happen once per table instead of per change.
+	uniqueKeyIdxCache map[string][][]int
 }
 
 // writesetKeysForParentFKRef generates writeset keys for a parent table row
@@ -421,6 +425,50 @@ func writesetKeysForFKRef(ref *fkConstraintRef, fields []*querypb.Field, fieldId
 		return err
 	}
 	return appendFKKey(afterVals)
+}
+
+// writesetKeysForUniqueKey emits conflict keys for one hashable unique
+// secondary index, for both row images, mirroring MySQL's WRITESET tracking.
+// A NULL in any key column emits no key for that image: MySQL unique indexes
+// permit multiple NULLs, so a NULL-valued key cannot conflict with anything.
+// The index ordinal is folded into the digest so different indexes on the
+// same table produce distinct key spaces (a cross-index hash collision would
+// only over-serialize, but unambiguous inputs are cheap).
+func writesetKeysForUniqueKey(tableName string, ordinal int, colIdxs []int, fields []*querypb.Field, beforeVals, afterVals []sqltypes.Value, keySet map[uint64]struct{}) error {
+	appendKey := func(vals []sqltypes.Value) error {
+		if len(vals) == 0 {
+			return nil
+		}
+		var d xxhash.Digest
+		writesetDigestInit(&d, tableName)
+		var ordinalScratch [8]byte
+		binary.LittleEndian.PutUint64(ordinalScratch[:], uint64(ordinal))
+		writesetDigestAddPayload(&d, ordinalScratch[:])
+		for _, idx := range colIdxs {
+			if idx >= len(vals) {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unique key index out of range for %s", tableName)
+			}
+			val := vals[idx]
+			// A NULL key column cannot conflict: MySQL unique indexes permit
+			// multiple NULLs. Emit no key for this image.
+			if val.IsNull() {
+				return nil
+			}
+			var field *querypb.Field
+			if idx < len(fields) {
+				field = fields[idx]
+			}
+			if err := writesetDigestAddFieldValue(&d, field, val); err != nil {
+				return err
+			}
+		}
+		keySet[d.Sum64()] = struct{}{}
+		return nil
+	}
+	if err := appendKey(beforeVals); err != nil {
+		return err
+	}
+	return appendKey(afterVals)
 }
 
 // buildTxnWriteset builds writeset keys for the given events.
@@ -522,9 +570,10 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 				resolvedParentRefs[targetTableName] = pRefs
 			}
 		}
-		// Build fieldIdx once per table for FK and composite identity lookups.
+		// Build fieldIdx once per table for FK, composite identity, and
+		// unique-key column lookups.
 		var fieldIdx map[string]int
-		if len(refs) > 0 || len(pRefs) > 0 || len(plan.IdentityColumns) > 1 {
+		if len(refs) > 0 || len(pRefs) > 0 || len(plan.IdentityColumns) > 1 || len(plan.UniqueKeyColumns) > 0 {
 			var ok bool
 			fieldIdx, ok = fieldIdxCache[rowEvent.TableName]
 			if !ok {
@@ -555,6 +604,30 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 		} else {
 			var err error
 			identityIndexes, err = writesetIdentityFieldIndexes(plan, targetTableName, fieldIdx)
+			if err != nil {
+				return nil, err
+			}
+		}
+		// Resolve the hashable unique secondary indexes' field positions once
+		// per table.
+		var uniqueKeyIndexes [][]int
+		if cache != nil {
+			if cache.uniqueKeyIdxCache == nil {
+				cache.uniqueKeyIdxCache = make(map[string][][]int)
+			}
+			var ok bool
+			uniqueKeyIndexes, ok = cache.uniqueKeyIdxCache[rowEvent.TableName]
+			if !ok {
+				var err error
+				uniqueKeyIndexes, err = writesetUniqueKeyFieldIndexes(plan, targetTableName, fieldIdx)
+				if err != nil {
+					return nil, err
+				}
+				cache.uniqueKeyIdxCache[rowEvent.TableName] = uniqueKeyIndexes
+			}
+		} else {
+			var err error
+			uniqueKeyIndexes, err = writesetUniqueKeyFieldIndexes(plan, targetTableName, fieldIdx)
 			if err != nil {
 				return nil, err
 			}
@@ -611,6 +684,11 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 			if err := writesetKeysForChangeWithFieldIdx(plan, targetTableName, identityIndexes, beforeVals, afterVals, keySet); err != nil {
 				return nil, err
 			}
+			for ord, colIdxs := range uniqueKeyIndexes {
+				if err := writesetKeysForUniqueKey(targetTableName, ord, colIdxs, plan.Fields, beforeVals, afterVals, keySet); err != nil {
+					return nil, err
+				}
+			}
 			for i := range refs {
 				if err := writesetKeysForFKRef(&refs[i], plan.Fields, fieldIdx, beforeVals, afterVals, keySet); err != nil {
 					return nil, err
@@ -639,6 +717,15 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 // depends on (PK plus FK-joined columns) for one table plan. Callers cache
 // the result per table (see txnWritesetCache.relevantColsCache) so the map
 // is built once per table per fetch instead of once per row change.
+//
+// Hashable unique-secondary columns are intentionally NOT included here. A
+// -1 length on a relevant column trips the partial-image guard and forces
+// serialization, but a NULL value in a full row image is also encoded as a
+// -1 length. Unique-secondary columns are commonly nullable, and a NULL
+// unique value cannot conflict (MySQL permits multiple NULLs), so the
+// emitter (writesetKeysForUniqueKey) skips it. Adding such columns to the
+// relevance set would force-serialize every NULL unique value and negate the
+// parallelism this change unlocks.
 func writesetRelevantColumns(plan *TablePlan, fieldIdx map[string]int, refs []fkConstraintRef, pRefs []parentFKRef) map[int]struct{} {
 	relevantColumns := make(map[int]struct{})
 	for i, isPK := range plan.PKIndices {
@@ -776,6 +863,39 @@ func writesetIdentityFieldIndexes(plan *TablePlan, tableName string, fieldIdx ma
 		indexes = append(indexes, idx)
 	}
 	return indexes, nil
+}
+
+// writesetUniqueKeyFieldIndexes resolves each hashable unique key's column
+// names to positions in the streamed fields. Returns an error (which routes
+// to serialization via writesetErrorForcesSerialization's "not in streamed
+// fields" match) when a column is missing.
+func writesetUniqueKeyFieldIndexes(plan *TablePlan, tableName string, fieldIdx map[string]int) ([][]int, error) {
+	if plan == nil || len(plan.UniqueKeyColumns) == 0 {
+		return nil, nil
+	}
+	if fieldIdx == nil {
+		fieldIdx = make(map[string]int, len(plan.Fields))
+		for i, f := range plan.Fields {
+			if f == nil {
+				continue
+			}
+			fieldIdx[f.Name] = i
+			fieldIdx[strings.ToLower(f.Name)] = i
+		}
+	}
+	uniqueKeyIndexes := make([][]int, 0, len(plan.UniqueKeyColumns))
+	for _, cols := range plan.UniqueKeyColumns {
+		indexes := make([]int, 0, len(cols))
+		for _, colName := range cols {
+			idx, ok := fieldIndexForName(fieldIdx, colName)
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "writeset unique key column %q not in streamed fields for %s", colName, tableName)
+			}
+			indexes = append(indexes, idx)
+		}
+		uniqueKeyIndexes = append(uniqueKeyIndexes, indexes)
+	}
+	return uniqueKeyIndexes, nil
 }
 
 // writesetKeysForChangeWithFieldIdx is the indexed variant of

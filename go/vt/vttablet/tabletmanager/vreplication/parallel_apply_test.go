@@ -2920,7 +2920,12 @@ func TestScheduleItems_CopyStateForceGlobal(t *testing.T) {
 	assert.True(t, got.forceGlobal)
 }
 
-func TestScheduleItems_ExtraUniqueSecondaryIndexForcesGlobal(t *testing.T) {
+// TestScheduleItems_UniqueSecondaryIndexEmitsWritesetKey pins that a plain
+// unique secondary no longer force-serializes: the scheduled txn carries a
+// writeset that includes the unique-key conflict key (so colliding unique
+// values serialize against each other while non-colliding rows run in
+// parallel), rather than being marked forceGlobal.
+func TestScheduleItems_UniqueSecondaryIndexEmitsWritesetKey(t *testing.T) {
 	ctx := testCtx(t)
 	vp, _ := testVPlayer(t)
 	scheduler := newApplyScheduler(ctx)
@@ -2972,6 +2977,11 @@ func TestScheduleItems_ExtraUniqueSecondaryIndexForcesGlobal(t *testing.T) {
 	}, false))
 	require.NoError(t, vp.dbClient.Rollback())
 
+	// Confirm the FIELD handler classified the plain unique secondary as
+	// hashable (emits a writeset key) rather than force-serializing.
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
+
 	err = vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
@@ -2986,7 +2996,22 @@ func TestScheduleItems_ExtraUniqueSecondaryIndexForcesGlobal(t *testing.T) {
 
 	got, err := scheduler.nextReady(ctx)
 	require.NoError(t, err)
-	assert.True(t, got.forceGlobal)
+	// The txn runs in parallel (not force-serialized) and carries the
+	// unique-key conflict key for email="a".
+	assert.False(t, got.forceGlobal)
+	expectedUniqueKey := map[uint64]struct{}{}
+	require.NoError(t, writesetKeysForUniqueKey(
+		tableName, 0, []int{1},
+		vp.tablePlans[tableName].Fields,
+		nil,
+		[]sqltypes.Value{sqltypes.NewInt32(1), sqltypes.NewVarChar("a")},
+		expectedUniqueKey,
+	))
+	require.Len(t, expectedUniqueKey, 1)
+	for key := range expectedUniqueKey {
+		assert.Contains(t, got.writeset, key,
+			"scheduled txn writeset must include the unique-key conflict key")
+	}
 }
 
 func TestScheduleItems_UnsupportedWritesetMappingForcesGlobal(t *testing.T) {
@@ -3038,7 +3063,7 @@ func TestScheduleItems_UnsupportedWritesetMappingForcesGlobal(t *testing.T) {
 	require.NoError(t, scheduler.markCommitted(got))
 }
 
-func TestApplyEvent_FIELDMarksExtraUniqueSecondaryIndex(t *testing.T) {
+func TestApplyEvent_FIELDEmitsWritesetKeyForUniqueSecondaryIndex(t *testing.T) {
 	ctx := testCtx(t)
 	vp, _ := testVPlayer(t)
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
@@ -3088,7 +3113,11 @@ func TestApplyEvent_FIELDMarksExtraUniqueSecondaryIndex(t *testing.T) {
 	}, false))
 	require.NoError(t, vp.dbClient.Rollback())
 
-	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	// A plain (non-prefix, non-expression) unique secondary not covered by
+	// the identity no longer force-serializes; it emits a writeset unique
+	// key instead.
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDMarksAlternateIdentityAgainstPrimaryKeyAsUnsafe(t *testing.T) {
@@ -3146,7 +3175,10 @@ func TestApplyEvent_FIELDMarksAlternateIdentityAgainstPrimaryKeyAsUnsafe(t *test
 	require.NoError(t, vp.dbClient.Rollback())
 
 	require.Equal(t, []string{"email"}, vp.tablePlans[tableName].IdentityColumns)
+	// PK(id) does not match the chosen identity (email): the writeset hasher
+	// can't reason about it, so force-serialize and emit no unique keys.
 	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDCachesExtraUniqueSecondaryLookup(t *testing.T) {
@@ -3202,9 +3234,13 @@ func TestApplyEvent_FIELDCachesExtraUniqueSecondaryLookup(t *testing.T) {
 
 	vp.vr.mysqld = nil
 
+	// Second FIELD reuses the cached unique-key analysis (mysqld is nil, so a
+	// fresh schema fetch would fail): a plain unique secondary emits a
+	// writeset unique key, no force-serialization.
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
-	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDCachesNoExtraUniqueSecondaryLookup(t *testing.T) {
@@ -3259,15 +3295,17 @@ func TestApplyEvent_FIELDCachesNoExtraUniqueSecondaryLookup(t *testing.T) {
 	require.NoError(t, vp.dbClient.Rollback())
 	require.Contains(t, vp.tablePlans, tableName)
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 
 	vp.vr.mysqld = nil
 
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
-func TestApplyEvent_FIELDMarksNullableExtraUniqueSecondaryIndex(t *testing.T) {
+func TestApplyEvent_FIELDEmitsWritesetKeyForNullableUniqueSecondaryIndex(t *testing.T) {
 	ctx := testCtx(t)
 	vp, _ := testVPlayer(t)
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
@@ -3317,7 +3355,11 @@ func TestApplyEvent_FIELDMarksNullableExtraUniqueSecondaryIndex(t *testing.T) {
 	}, false))
 	require.NoError(t, vp.dbClient.Rollback())
 
-	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	// A NULLABLE plain unique secondary is still hashable: NULL key values
+	// simply emit no key at write time (MySQL permits multiple NULLs), so we
+	// emit a writeset unique key rather than force-serializing.
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDIgnoresIdentityEquivalentReorderedUniqueSecondaryIndex(t *testing.T) {
@@ -3372,7 +3414,10 @@ func TestApplyEvent_FIELDIgnoresIdentityEquivalentReorderedUniqueSecondaryIndex(
 	require.NoError(t, vp.dbClient.Rollback())
 
 	require.Equal(t, []string{"a", "b"}, vp.tablePlans[tableName].IdentityColumns)
+	// The unique secondary covers the full identity, so it can't create
+	// cross-identity conflicts: no force-serialization, no extra unique key.
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 // TestApplyEvent_FIELDIgnoresUniqueSecondaryIndexThatContainsIdentity covers a
@@ -3432,7 +3477,10 @@ func TestApplyEvent_FIELDIgnoresUniqueSecondaryIndexThatContainsIdentity(t *test
 	require.NoError(t, vp.dbClient.Rollback())
 
 	require.Equal(t, []string{"id"}, vp.tablePlans[tableName].IdentityColumns)
+	// UNIQUE(id, name) is a superset of the identity (id), so it adds no
+	// conflicts beyond the PK: no force-serialization, no extra unique key.
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDIgnoresIdentityEquivalentReorderedPrimaryKey(t *testing.T) {
@@ -3491,7 +3539,11 @@ func TestApplyEvent_FIELDIgnoresIdentityEquivalentReorderedPrimaryKey(t *testing
 	require.NoError(t, vp.dbClient.Rollback())
 
 	require.Equal(t, []string{"b", "a"}, vp.tablePlans[tableName].IdentityColumns)
+	// The unique secondary's column set equals the identity (reordered), so
+	// it can't create cross-identity conflicts: no force-serialization, no
+	// extra unique key.
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDMarksPrefixUniqueIndexAsExtraUniqueSecondary(t *testing.T) {
@@ -3545,7 +3597,10 @@ func TestApplyEvent_FIELDMarksPrefixUniqueIndexAsExtraUniqueSecondary(t *testing
 	require.NoError(t, vp.dbClient.Rollback())
 
 	require.Equal(t, []string{"email"}, vp.tablePlans[tableName].IdentityColumns)
+	// A prefix unique index enforces uniqueness over a derived value the
+	// hasher can't reproduce, so it force-serializes and emits no unique key.
 	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testing.T) {
@@ -3599,7 +3654,9 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	}
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
+	// Before the DDL: only a non-unique secondary, so no unique keys.
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 
 	ddlEvent := &binlogdatapb.VEvent{
 		Type:      binlogdatapb.VEventType_DDL,
@@ -3609,15 +3666,20 @@ func TestApplyEvent_FIELDAfterExecutedDDLRefreshesUniqueSecondaryLookup(t *testi
 	execStatements(t, []string{"alter table " + qualifiedTableName + " add unique key uk_email(email)"})
 	publishExecutedDDLBarrier(t, vp, ddlEvent.Statement)
 
+	// After the DDL barrier the FIELD handler re-runs the unique-key analysis:
+	// the new plain unique secondary emits a writeset unique key.
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
-	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 
 	vp.vr.mysqld = nil
 
+	// The refreshed analysis is cached; a later FIELD reuses it (mysqld nil).
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
-	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestWorkerLoop_FIELDRefreshesPublishedDDLBarrierState(t *testing.T) {
@@ -3674,6 +3736,7 @@ func TestWorkerLoop_FIELDRefreshesPublishedDDLBarrierState(t *testing.T) {
 	require.NoError(t, vp.applyEvent(ctx, fieldEvent, false))
 	require.NoError(t, vp.dbClient.Rollback())
 	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 
 	workerDB := &recordingDBClient{}
 	workerClient := newVDBClient(workerDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
@@ -3722,7 +3785,11 @@ func TestWorkerLoop_FIELDRefreshesPublishedDDLBarrierState(t *testing.T) {
 	require.NoError(t, scheduler.enqueue(fieldTxn))
 	require.Same(t, fieldTxn, <-commitCh)
 
-	assert.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	// The worker-loop FIELD refresh re-ran the unique-key analysis after the
+	// published DDL barrier: the new plain unique secondary emits a writeset
+	// unique key (it does not force-serialize).
+	assert.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	assert.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 
 	cancel()
 	require.ErrorIs(t, <-errCh, context.Canceled)
@@ -3870,7 +3937,11 @@ func TestApplyEvent_FIELDRefreshTargetInvalidatesUniqueSecondaryCache(t *testing
 	}, false))
 	require.NoError(t, vp.dbClient.Rollback())
 
-	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	// The refresh-target barrier invalidated the cached plan, so the FIELD
+	// handler re-ran the unique-key analysis: the plain unique secondary
+	// emits a writeset unique key rather than force-serializing.
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDRefreshTargetInvalidatesUniqueSecondaryCacheAcrossMultipleBarriers(t *testing.T) {
@@ -3941,7 +4012,11 @@ func TestApplyEvent_FIELDRefreshTargetInvalidatesUniqueSecondaryCacheAcrossMulti
 	}, false))
 	require.NoError(t, vp.dbClient.Rollback())
 
-	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	// Across multiple barriers the cache was invalidated and the FIELD handler
+	// re-ran the unique-key analysis: the plain unique secondary emits a
+	// writeset unique key rather than force-serializing.
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 func TestApplyEvent_FIELDWithoutParallelApplySkipsUniqueSecondaryLookup(t *testing.T) {
@@ -3971,6 +4046,28 @@ func TestApplyEvent_FIELDWithoutParallelApplySkipsUniqueSecondaryLookup(t *testi
 
 	require.Contains(t, vp.tablePlans, "t1")
 	require.False(t, vp.tablePlans["t1"].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans["t1"].UniqueKeyColumns)
+
+	// During the copy phase (catchup/fastforward run the SERIAL applier and
+	// this vplayer's table plans die with it), the lookup must be skipped
+	// even when parallel workers are configured: the schema fetch is a
+	// wasted mysqld round-trip and a needless failure mode. vr.mysqld is
+	// nil here, so reaching the lookup would fail loudly.
+	vp.vr.workflowConfig.ParallelReplicationWorkers = 4
+	vp.copyState = map[string]*sqltypes.Result{"t1": nil}
+	delete(vp.tablePlans, "t1")
+	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: "t1",
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+			},
+		},
+	}, false))
+	require.Contains(t, vp.tablePlans, "t1")
+	require.False(t, vp.tablePlans["t1"].HasExtraUniqueSecondary)
+	require.Nil(t, vp.tablePlans["t1"].UniqueKeyColumns)
 }
 
 func TestApplyEvent_VERSIONIsIgnored(t *testing.T) {
@@ -6204,7 +6301,11 @@ func TestCommitLoop_EXECIGNOREIdempotentAddUniqueIndexInvalidatesUniqueSecondary
 	}, false))
 	require.NoError(t, vp.dbClient.Rollback())
 
-	require.True(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	// The idempotent EXEC_IGNORE add-unique-index barrier invalidated the
+	// cached plan, so the FIELD handler re-ran the unique-key analysis: the
+	// plain unique secondary emits a writeset unique key.
+	require.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+	require.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
 }
 
 // TestCommitLoop_WorkerTxnCommitProtocol drives a single worker transaction

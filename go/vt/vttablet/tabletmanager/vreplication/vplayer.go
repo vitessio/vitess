@@ -827,7 +827,13 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err != nil {
 			return err
 		}
-		if vp.vr.workflowConfig.ParallelReplicationWorkers > 1 {
+		// HasExtraUniqueSecondary only matters to the parallel applier's
+		// writeset scheduling, which runs only in the replication phase
+		// (fetchAndApply requires len(copyState) == 0). During copy-phase
+		// catchup/fastforward this vplayer is serial and its table plans
+		// die with it, so the schema lookup would be a wasted mysqld
+		// round-trip and a needless failure mode.
+		if vp.vr.workflowConfig.ParallelReplicationWorkers > 1 && len(vp.copyState) == 0 {
 			vp.tablePlansMu.RLock()
 			cachedPlan := vp.tablePlans[event.FieldEvent.TableName]
 			vp.tablePlansMu.RUnlock()
@@ -838,12 +844,14 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			cacheInvalidatedByDDL := (hasStaleEntry && staleEntry.stalePlan == cachedPlan) || cacheInvalidatedByRefreshTarget
 			if cachedPlan != nil && cachedPlan.TargetName == tplan.TargetName && !cacheInvalidatedByDDL {
 				tplan.HasExtraUniqueSecondary = cachedPlan.HasExtraUniqueSecondary
+				tplan.UniqueKeyColumns = cachedPlan.UniqueKeyColumns
 			} else {
-				hasExtraUniqueSecondary, err := vp.vr.hasExtraUniqueSecondaryIndex(ctx, tplan.TargetName, tplan)
+				uniqueKeys, mustSerialize, err := vp.vr.writesetUniqueKeys(ctx, tplan.TargetName, tplan)
 				if err != nil {
 					return err
 				}
-				tplan.HasExtraUniqueSecondary = hasExtraUniqueSecondary
+				tplan.UniqueKeyColumns = uniqueKeys
+				tplan.HasExtraUniqueSecondary = mustSerialize
 			}
 		}
 		fieldTableName := event.FieldEvent.TableName

@@ -46,30 +46,106 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-// TestHasExtraUniqueSecondaryIndexFromSpec_NoIdentityWithUniqueSecondary
-// pins the defensive behavior for tables that reach the parallel applier
-// without any identity columns but DO have unique-not-null secondary
-// indexes. The PK-based writeset can't reason about uniqueness on those
-// columns, so two parallel inserts could collide at apply time. Force
-// serialization (return true) instead of letting them race.
-func TestHasExtraUniqueSecondaryIndexFromSpec_NoIdentityWithUniqueSecondary(t *testing.T) {
+// TestWritesetUniqueKeysFromSpec pins the spec-analysis rules the parallel
+// applier relies on. Plain-column unique secondaries that aren't covered by
+// the identity now emit writeset unique keys (uniqueKeys set, mustSerialize
+// false) instead of force-serializing; only uniqueness the hasher cannot
+// reason about (prefix/expression indexes, PK/identity mismatch, no usable
+// identity) still forces serialization.
+func TestWritesetUniqueKeysFromSpec(t *testing.T) {
 	parser := sqlparser.NewTestParser()
-	parsedDDL, err := parser.ParseStrictDDL(
-		"create table t1 (id int, email varchar(64) not null, unique key uk_email(email))",
-	)
-	require.NoError(t, err)
-	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
-	require.True(t, ok)
-	tableSpec := createTable.GetTableSpec()
-	require.NotNil(t, tableSpec)
-
-	plan := &TablePlan{
-		TargetName:      "t1",
-		IdentityColumns: nil, // no usable identity
+	specFor := func(t *testing.T, ddl string) *sqlparser.TableSpec {
+		t.Helper()
+		parsedDDL, err := parser.ParseStrictDDL(ddl)
+		require.NoError(t, err)
+		createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+		require.True(t, ok)
+		tableSpec := createTable.GetTableSpec()
+		require.NotNil(t, tableSpec)
+		return tableSpec
 	}
 
-	got := hasExtraUniqueSecondaryIndexFromSpec(plan, tableSpec)
-	require.True(t, got, "no identity + unique secondary index must force serialization")
+	tests := []struct {
+		name              string
+		ddl               string
+		identityCols      []string
+		wantUniqueKeys    [][]string
+		wantMustSerialize bool
+	}{
+		{
+			// No usable identity but a unique-not-null secondary the
+			// PK-based writeset can't reason about: force serialization.
+			name:              "no identity with unique secondary",
+			ddl:               "create table t1 (id int, email varchar(64) not null, unique key uk_email(email))",
+			identityCols:      nil,
+			wantMustSerialize: true,
+		},
+		{
+			// Plain single-column unique secondary not covered by the
+			// identity: emit a writeset unique key, don't serialize.
+			name:           "plain unique secondary emits key",
+			ddl:            "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
+			identityCols:   []string{"id"},
+			wantUniqueKeys: [][]string{{"email"}},
+		},
+		{
+			// Multi-column plain unique secondary: ordered column list.
+			name:           "composite unique secondary emits ordered key",
+			ddl:            "create table t1 (id int not null, a int not null, b int not null, primary key(id), unique key uk_ab(a, b))",
+			identityCols:   []string{"id"},
+			wantUniqueKeys: [][]string{{"a", "b"}},
+		},
+		{
+			// Unique secondary whose column set contains the identity can't
+			// create cross-identity conflicts: skip it (no key, no serialize).
+			name:         "unique secondary covering identity is skipped",
+			ddl:          "create table t1 (id int not null, b int not null, primary key(id), unique key uk_idb(id, b))",
+			identityCols: []string{"id"},
+		},
+		{
+			// Prefix index on the unique secondary: uniqueness is over a
+			// derived value, force serialization.
+			name:              "prefix unique secondary serializes",
+			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email(8)))",
+			identityCols:      []string{"id"},
+			wantMustSerialize: true,
+		},
+		{
+			// Expression/functional unique index: force serialization.
+			name:              "expression unique secondary serializes",
+			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email((lower(email))))",
+			identityCols:      []string{"id"},
+			wantMustSerialize: true,
+		},
+		{
+			// PK does not match the chosen replication identity: the
+			// PK-based writeset key is unreliable, force serialization.
+			name:              "pk identity mismatch serializes",
+			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
+			identityCols:      []string{"email"},
+			wantMustSerialize: true,
+		},
+		{
+			// A mix: one hashable key plus one covered-by-identity key.
+			name:           "mixed hashable and covered keys",
+			ddl:            "create table t1 (id int not null, email varchar(64) not null, b int not null, primary key(id), unique key uk_email(email), unique key uk_idb(id, b))",
+			identityCols:   []string{"id"},
+			wantUniqueKeys: [][]string{{"email"}},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tableSpec := specFor(t, tc.ddl)
+			plan := &TablePlan{
+				TargetName:      "t1",
+				IdentityColumns: tc.identityCols,
+			}
+			uniqueKeys, mustSerialize := writesetUniqueKeysFromSpec(plan, tableSpec)
+			assert.Equal(t, tc.wantMustSerialize, mustSerialize)
+			assert.Equal(t, tc.wantUniqueKeys, uniqueKeys)
+		})
+	}
 }
 
 func TestMaxQuerySize(t *testing.T) {

@@ -1025,50 +1025,57 @@ func (vr *vreplicator) getTargetTableSpec(ctx context.Context, tableName string)
 	return createTable.GetTableSpec(), nil
 }
 
-// hasExtraUniqueSecondaryIndex reports whether the target table has a
-// unique secondary index whose column set is not already covered by
-// the plan's identity columns. The parallel applier needs this signal
-// because writeset keys derived from the PK alone would miss
-// conflicts enforced by such an index, which could otherwise let two
-// conflicting inserts schedule in parallel and deadlock at apply time.
-func (vr *vreplicator) hasExtraUniqueSecondaryIndex(ctx context.Context, tableName string, plan *TablePlan) (bool, error) {
+// writesetUniqueKeys analyzes the target table's unique secondary indexes
+// for parallel-apply writeset hashing. nil plan -> (nil, false, nil).
+func (vr *vreplicator) writesetUniqueKeys(ctx context.Context, tableName string, plan *TablePlan) (uniqueKeys [][]string, mustSerialize bool, err error) {
 	if plan == nil {
-		return false, nil
+		return nil, false, nil
 	}
 	tableSpec, err := vr.getTargetTableSpec(ctx, tableName)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
-	return hasExtraUniqueSecondaryIndexFromSpec(plan, tableSpec), nil
+	uniqueKeys, mustSerialize = writesetUniqueKeysFromSpec(plan, tableSpec)
+	return uniqueKeys, mustSerialize, nil
 }
 
-// hasExtraUniqueSecondaryIndexFromSpec is the pure-logic core of
-// hasExtraUniqueSecondaryIndex, separated so the conflict-detection rules
-// can be unit-tested without a live mysqld schema fetch.
-func hasExtraUniqueSecondaryIndexFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec) bool {
+// writesetUniqueKeysFromSpec analyzes the target table's unique secondary
+// indexes for parallel-apply writeset hashing, mirroring MySQL's WRITESET
+// dependency tracking (which hashes every unique key, not just the PK:
+// uniqueness constraints make transactions on DIFFERENT rows order-dependent,
+// e.g. one txn freeing a unique value and another claiming it).
+// It returns:
+//   - uniqueKeys: ordered column-name lists (lowercased, index order) of each
+//     plain-column unique secondary index not covered by the identity. The
+//     writeset builder emits additional conflict keys for these.
+//   - mustSerialize: true when the table carries uniqueness the hasher cannot
+//     reason about — prefix or expression index columns, a PK that does not
+//     match the replication identity, or unique secondaries with no usable
+//     identity — in which case the table's transactions force-serialize.
+func writesetUniqueKeysFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec) (uniqueKeys [][]string, mustSerialize bool) {
 	if plan == nil || tableSpec == nil {
-		return false
+		return nil, false
 	}
 	secondaryKeys := extractSecondaryKeys(tableSpec)
 	if len(secondaryKeys) == 0 {
-		return false
+		return nil, false
 	}
 
 	identityCols := plan.IdentityColumns
 	if len(identityCols) == 0 {
 		// No usable identity but the table has secondary indexes that may
 		// enforce uniqueness we cannot reason about via PK-based writeset
-		// keys. Force serialization (return true) for any unique-not-null
-		// secondary so two parallel inserts cannot collide at apply time.
+		// keys. Force serialization for any unique-not-null secondary so two
+		// parallel inserts cannot collide at apply time.
 		for _, secondaryKey := range secondaryKeys {
 			if secondaryKey == nil || secondaryKey.Info == nil {
 				continue
 			}
 			if secondaryKey.Info.IsUnique() {
-				return true
+				return nil, true
 			}
 		}
-		return false
+		return nil, false
 	}
 
 	identityColSet := make(map[string]struct{}, len(identityCols))
@@ -1085,7 +1092,7 @@ func hasExtraUniqueSecondaryIndexFromSpec(plan *TablePlan, tableSpec *sqlparser.
 		}
 		primaryKeyColumnCount = len(index.Columns)
 		if primaryKeyColumnCount != len(identityCols) {
-			return true
+			return nil, true
 		}
 		for i, idxCol := range index.Columns {
 			if idxCol.Expression != nil {
@@ -1109,7 +1116,7 @@ func hasExtraUniqueSecondaryIndexFromSpec(plan *TablePlan, tableSpec *sqlparser.
 		break
 	}
 	if primaryKeyColumnCount > 0 && !primaryKeyMatchesIdentity && !primaryKeyMatchesIdentitySet {
-		return true
+		return nil, true
 	}
 
 	for _, secondaryKey := range secondaryKeys {
@@ -1123,7 +1130,8 @@ func hasExtraUniqueSecondaryIndexFromSpec(plan *TablePlan, tableSpec *sqlparser.
 		// Functional expressions and prefix lengths break that reasoning
 		// because uniqueness is enforced over a derived value rather than
 		// the raw column, so identity uniqueness no longer implies index
-		// uniqueness.
+		// uniqueness, and we cannot hash a faithful writeset key for them.
+		indexColNames := make([]string, 0, len(secondaryKey.Columns))
 		indexColSet := make(map[string]struct{}, len(secondaryKey.Columns))
 		hasDerivedColumn := false
 		for _, idxCol := range secondaryKey.Columns {
@@ -1134,10 +1142,12 @@ func hasExtraUniqueSecondaryIndexFromSpec(plan *TablePlan, tableSpec *sqlparser.
 				hasDerivedColumn = true
 				break
 			}
-			indexColSet[idxCol.Column.Lowered()] = struct{}{}
+			colName := idxCol.Column.Lowered()
+			indexColNames = append(indexColNames, colName)
+			indexColSet[colName] = struct{}{}
 		}
 		if hasDerivedColumn {
-			return true
+			return nil, true
 		}
 		containsIdentity := true
 		for _, col := range identityCols {
@@ -1147,11 +1157,14 @@ func hasExtraUniqueSecondaryIndexFromSpec(plan *TablePlan, tableSpec *sqlparser.
 			}
 		}
 		if containsIdentity {
+			// The index's column set contains all identity columns, so two
+			// rows with different identities cannot collide on it. No extra
+			// writeset key needed.
 			continue
 		}
-		return true
+		uniqueKeys = append(uniqueKeys, indexColNames)
 	}
-	return false
+	return uniqueKeys, false
 }
 
 func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {

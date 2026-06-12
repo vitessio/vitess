@@ -1315,3 +1315,233 @@ func TestBuildTxnWritesetBacktickedDirectColumnPlanStaysSupported(t *testing.T) 
 	assert.Equal(t, "id", tplan.Fields[0].Name)
 	assert.Equal(t, "email", tplan.Fields[1].Name)
 }
+
+// keySetsIntersect reports whether two writeset key slices share any key.
+func keySetsIntersect(a, b []uint64) bool {
+	set := make(map[uint64]struct{}, len(a))
+	for _, k := range a {
+		set[k] = struct{}{}
+	}
+	for _, k := range b {
+		if _, ok := set[k]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// uniqueKeyRowEvent builds a single-change ROW event for an (id, email) table.
+func uniqueKeyRowEvent(id, email string) *binlogdatapb.VEvent {
+	values := append([]byte(id), []byte(email)...)
+	row := &querypb.Row{Values: values, Lengths: []int64{int64(len(id)), int64(len(email))}}
+	return &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: row}},
+		},
+	}
+}
+
+// uniqueKeyPlan builds an (id PK, email) table plan with a hashable unique
+// secondary on email.
+func uniqueKeyPlan() *TablePlan {
+	return &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "email", Type: querypb.Type_VARCHAR},
+		},
+		PKIndices:        []bool{true, false},
+		IdentityColumns:  []string{"id"},
+		UniqueKeyColumns: [][]string{{"email"}},
+	}
+}
+
+// TestBuildTxnWritesetUniqueKeySameValueDifferentIdentityConflicts pins the
+// core MySQL-WRITESET behavior: two changes on DIFFERENT identities but the
+// SAME unique secondary value must produce intersecting writesets (so they
+// serialize), while different unique values must stay disjoint.
+func TestBuildTxnWritesetUniqueKeySameValueDifferentIdentityConflicts(t *testing.T) {
+	plan := uniqueKeyPlan()
+	plans := map[string]*TablePlan{"t1": plan}
+
+	// id=1 and id=2 both claim email "a@x".
+	sameValueA, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("1", "a@x")})
+	require.NoError(t, err)
+	sameValueB, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("2", "a@x")})
+	require.NoError(t, err)
+	require.True(t, keySetsIntersect(sameValueA, sameValueB),
+		"changes on different identities sharing a unique value must conflict")
+
+	// id=2 with a different email "b@x" must not conflict with id=1/"a@x".
+	differentValue, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("2", "b@x")})
+	require.NoError(t, err)
+	require.False(t, keySetsIntersect(sameValueA, differentValue),
+		"changes with different unique values must not conflict")
+}
+
+// TestBuildTxnWritesetUniqueKeyUpdateEmitsBothImages pins that an UPDATE moving
+// a unique value emits keys for BOTH the before holder and the after holder, so
+// it conflicts with both the txn freeing the old value and the txn claiming the
+// new one.
+func TestBuildTxnWritesetUniqueKeyUpdateEmitsBothImages(t *testing.T) {
+	plan := uniqueKeyPlan()
+	plans := map[string]*TablePlan{"t1": plan}
+
+	// UPDATE id=1 moving email from "old@x" to "new@x".
+	beforeRow := &querypb.Row{Values: []byte("1old@x"), Lengths: []int64{1, 5}}
+	afterRow := &querypb.Row{Values: []byte("1new@x"), Lengths: []int64{1, 5}}
+	updateEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{Before: beforeRow, After: afterRow}},
+		},
+	}
+	updateKeys, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{updateEvent})
+	require.NoError(t, err)
+
+	// A concurrent txn claiming the freed "old@x" value (different identity).
+	oldHolder, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("7", "old@x")})
+	require.NoError(t, err)
+	// A concurrent txn that already holds the "new@x" value (different identity).
+	newHolder, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("8", "new@x")})
+	require.NoError(t, err)
+
+	require.True(t, keySetsIntersect(updateKeys, oldHolder),
+		"the UPDATE must conflict with a txn claiming the freed before-image value")
+	require.True(t, keySetsIntersect(updateKeys, newHolder),
+		"the UPDATE must conflict with a txn holding the after-image value")
+}
+
+// TestBuildTxnWritesetUniqueKeyNullEmitsNoKey pins that a NULL unique value
+// emits no unique-key key (two NULL rows do not conflict, since MySQL unique
+// indexes permit multiple NULLs) while the PK key is still emitted.
+func TestBuildTxnWritesetUniqueKeyNullEmitsNoKey(t *testing.T) {
+	plan := uniqueKeyPlan()
+	plans := map[string]*TablePlan{"t1": plan}
+
+	// id=1 with NULL email, id=2 with NULL email: -1 length encodes NULL.
+	nullRowA := &querypb.Row{Values: []byte("1"), Lengths: []int64{1, -1}}
+	nullRowB := &querypb.Row{Values: []byte("2"), Lengths: []int64{1, -1}}
+	eventA := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: nullRowA}},
+		},
+	}
+	eventB := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: nullRowB}},
+		},
+	}
+
+	keysA, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{eventA})
+	require.NoError(t, err)
+	keysB, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{eventB})
+	require.NoError(t, err)
+
+	// Only the PK key is emitted (one key each), and the two NULL-email rows
+	// on different identities do not conflict.
+	require.Len(t, keysA, 1, "NULL unique value must emit no unique-key key, only the PK key")
+	require.Len(t, keysB, 1)
+	require.False(t, keySetsIntersect(keysA, keysB),
+		"two NULL unique values on different identities must not conflict")
+
+	// Sanity: the single emitted key is the PK key.
+	pkKeyA := testWritesetHash("t1", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1")))
+	require.Equal(t, []uint64{pkKeyA}, keysA)
+}
+
+// TestBuildTxnWritesetUniqueKeyCaseInsensitiveCollationConflicts pins that two
+// unique values differing only by case under a case-insensitive collation hash
+// to the same unique key and therefore conflict.
+func TestBuildTxnWritesetUniqueKeyCaseInsensitiveCollationConflicts(t *testing.T) {
+	collationID := uint32(collations.MySQL8().LookupByName("utf8mb4_general_ci"))
+	require.NotZero(t, collationID)
+
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "email", Type: querypb.Type_VARCHAR, Charset: collationID},
+		},
+		PKIndices:        []bool{true, false},
+		IdentityColumns:  []string{"id"},
+		UniqueKeyColumns: [][]string{{"email"}},
+	}
+	plans := map[string]*TablePlan{"t1": plan}
+
+	// Different identities, unique values "A@X" vs "a@x".
+	upperKeys, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("1", "A@X")})
+	require.NoError(t, err)
+	lowerKeys, err := buildTxnWriteset(plans, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("2", "a@x")})
+	require.NoError(t, err)
+
+	require.True(t, keySetsIntersect(upperKeys, lowerKeys),
+		"unique values equal under a case-insensitive collation must hash to the same unique key")
+}
+
+// TestBuildTxnWritesetUniqueKeyColumnMissingForcesSerialization pins that a
+// unique-key column absent from the streamed fields produces a "not in streamed
+// fields" error that routes the txn to the serial path.
+func TestBuildTxnWritesetUniqueKeyColumnMissingForcesSerialization(t *testing.T) {
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "email", Type: querypb.Type_VARCHAR},
+		},
+		PKIndices:       []bool{true, false},
+		IdentityColumns: []string{"id"},
+		// The unique key references a column the stream never sends.
+		UniqueKeyColumns: [][]string{{"missing_col"}},
+	}
+
+	_, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{uniqueKeyRowEvent("1", "a@x")})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not in streamed fields")
+	require.True(t, writesetErrorForcesSerialization(err),
+		"a missing unique-key column must route the txn to the serial path")
+}
+
+// TestBuildTxnWritesetUniqueKeyOrdinalDiscriminatesIndexes pins that two
+// different unique indexes with coincidentally equal values produce distinct
+// keys: the index ordinal is folded into the digest, so equal values on
+// different indexes do not over-serialize by colliding.
+func TestBuildTxnWritesetUniqueKeyOrdinalDiscriminatesIndexes(t *testing.T) {
+	// Two single-column unique secondaries (a, b), both INT64. A row with
+	// a == b would, without the ordinal discriminator, hash both unique keys
+	// to the same value.
+	plan := &TablePlan{
+		TargetName: "t1",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "a", Type: querypb.Type_INT64},
+			{Name: "b", Type: querypb.Type_INT64},
+		},
+		PKIndices:        []bool{true, false, false},
+		IdentityColumns:  []string{"id"},
+		UniqueKeyColumns: [][]string{{"a"}, {"b"}},
+	}
+
+	// id=1, a=7, b=7.
+	row := &querypb.Row{Values: []byte("177"), Lengths: []int64{1, 1, 1}}
+	event := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: row}},
+		},
+	}
+
+	keys, err := buildTxnWriteset(map[string]*TablePlan{"t1": plan}, nil, nil, []*binlogdatapb.VEvent{event})
+	require.NoError(t, err)
+	// PK key + two distinct unique-key keys = 3 keys, none colliding despite
+	// a == b.
+	require.Len(t, keys, 3, "equal values on different unique indexes must produce distinct keys")
+}

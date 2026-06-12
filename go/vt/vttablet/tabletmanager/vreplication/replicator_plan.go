@@ -244,8 +244,15 @@ type TablePlan struct {
 	// IdentityColumns stores the chosen replication identity columns in key order.
 	IdentityColumns []string
 	// PKIndices is an array, length = #columns, true if column is part of the PK
-	PKIndices               []bool
+	PKIndices []bool
+	// HasExtraUniqueSecondary means the table has uniqueness the writeset
+	// hasher cannot reason about (prefix/expression unique indexes, PK/identity
+	// mismatch); transactions touching it force-serialize.
 	HasExtraUniqueSecondary bool
+	// UniqueKeyColumns holds, per hashable unique secondary index, the ordered
+	// column names whose values get extra writeset keys (MySQL-WRITESET-style)
+	// so cross-row unique-value conflicts serialize against each other.
+	UniqueKeyColumns [][]string
 	// HasUnsupportedWritesetMapping means the streamed FIELD layout cannot be
 	// mapped positionally back to target PK/FK columns for safe writeset hashing.
 	HasUnsupportedWritesetMapping bool
