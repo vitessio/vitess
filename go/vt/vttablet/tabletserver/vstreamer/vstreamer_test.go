@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -74,7 +75,7 @@ func TestParseEventsDrainsBufferedEventsBeforeTerminalError(t *testing.T) {
 
 	streamErr := errors.New("stream ended after buffered events")
 	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
-	vse := &Engine{keyspace: testenv.DBName, shard: testenv.DefaultShard}
+	vse := &Engine{keyspace: testenv.DBName, shard: testenv.DefaultShard, throttledCounts: stats.NewCounter("", "")}
 
 	for i := range 64 {
 		events := make(chan mysql.BinlogEvent, len(input))
@@ -128,6 +129,10 @@ func TestParseEventsDrainsBufferedEventsBeforeTerminalErrorWhenThrottled(t *test
 		keyspace:        testenv.DBName,
 		shard:           testenv.DefaultShard,
 		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.VStreamerName, throttlebase.UndefinedScope),
+		// Unpublished counter (empty name skips stats registration): this bare
+		// Engine bypasses NewEngine, so any counter the production code touches
+		// must be non-nil here.
+		throttledCounts: stats.NewCounter("", ""),
 	}
 
 	events := make(chan mysql.BinlogEvent, len(input))
@@ -203,7 +208,7 @@ func TestParseEventsReturnsNilOnClientEOF(t *testing.T) {
 	close(errCh)
 
 	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
-	vse := &Engine{keyspace: testenv.DBName, shard: testenv.DefaultShard}
+	vse := &Engine{keyspace: testenv.DBName, shard: testenv.DefaultShard, throttledCounts: stats.NewCounter("", "")}
 
 	sendCalls := 0
 	vs := &vstreamer{
@@ -240,6 +245,9 @@ func TestParseEventsClientEOFDuringThrottleDoesNotPanicAfterReturn(t *testing.T)
 		keyspace:        testenv.DBName,
 		shard:           testenv.DefaultShard,
 		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.VStreamerName, throttlebase.UndefinedScope),
+		// Unpublished counter: bare Engines bypass NewEngine, so counters the
+		// production code touches must be non-nil.
+		throttledCounts: stats.NewCounter("", ""),
 	}
 
 	vs := &vstreamer{
@@ -286,6 +294,9 @@ func TestParseEventsReturnsPendingSourceErrorAfterFullyThrottledTimeout(t *testi
 		keyspace:        testenv.DBName,
 		shard:           testenv.DefaultShard,
 		throttlerClient: throttle.NewBackgroundClient(nil, throttlerapp.VStreamerName, throttlebase.UndefinedScope),
+		// Unpublished counter: bare Engines bypass NewEngine, so counters the
+		// production code touches must be non-nil.
+		throttledCounts: stats.NewCounter("", ""),
 	}
 
 	vs := &vstreamer{
