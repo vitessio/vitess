@@ -8792,6 +8792,8 @@ func TestPlannedReparentShard(t *testing.T) {
 		expected            *vtctldatapb.PlannedReparentShardResponse
 		expectEventsToOccur bool
 		expectedErr         string
+		setup               func(context.Context, *testing.T, vtctlservicepb.VtctldServer)
+		assertion           func(*testing.T, tmclient.TabletManagerClient)
 	}{
 		{
 			name: "successful reparent",
@@ -8913,6 +8915,166 @@ func TestPlannedReparentShard(t *testing.T) {
 			expectEventsToOccur: true,
 		},
 		{
+			name: "replica sourced rdonly reparents to demoted primary",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     17101,
+					Keyspace:      "testkeyspace",
+					Shard:         "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:          topodatapb.TabletType_REPLICA,
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     17100,
+					Keyspace:      "testkeyspace",
+					Shard:         "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type:          topodatapb.TabletType_RDONLY,
+					Hostname:      "localhost",
+					MysqlHostname: "localhost",
+					MysqlPort:     17102,
+					Keyspace:      "testkeyspace",
+					Shard:         "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000101": {
+						Status: &replicationdatapb.PrimaryStatus{
+							Position: "primary-demotion position",
+						},
+					},
+				},
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000101": {
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
+					},
+					"zone1-0000000102": {
+						Statuses: map[string]string{
+							reparentutil.InnodbBufferPoolsDataVar: "123",
+						},
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000101": {
+						Position: "doesn't matter",
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Result: "promotion position",
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000102": {
+						Position: &replicationdatapb.Status{
+							SourceHost: "localhost",
+							SourcePort: 17100,
+						},
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+					"zone1-0000000102": nil,
+				},
+				StopReplicationResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"primary-demotion position": nil,
+					},
+				},
+			},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
+			},
+			expected: &vtctldatapb.PlannedReparentShardResponse{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				PromotedPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expectEventsToOccur: true,
+			setup: func(ctx context.Context, t *testing.T, vtctld vtctlservicepb.VtctldServer) {
+				_, err := vtctld.SetKeyspaceReplicationSourcePolicy(ctx, &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+					Keyspace:     "testkeyspace",
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+				})
+				require.NoError(t, err)
+			},
+			assertion: func(t *testing.T, tmc tmclient.TabletManagerClient) {
+				fakeTMC, ok := tmc.(*testutil.TabletManagerClient)
+				require.True(t, ok)
+
+				var rdonlyCall *testutil.SetReplicationSourceCall
+				for i := range fakeTMC.SetReplicationSourceCalls {
+					call := &fakeTMC.SetReplicationSourceCalls[i]
+					if call.TabletAlias == "zone1-0000000102" {
+						rdonlyCall = call
+					}
+				}
+				require.NotNil(t, rdonlyCall)
+				assert.Equal(t, "zone1-0000000101", rdonlyCall.ParentAlias)
+				assert.True(t, rdonlyCall.ForceStartReplication)
+			},
+		},
+		{
 			// Note: this is testing the error-handling done in
 			// (*VtctldServer).PlannedReparentShard, not the logic of an PRS.
 			// That logic is tested in reparentutil, and not here. Therefore,
@@ -9024,6 +9186,9 @@ func TestPlannedReparentShard(t *testing.T) {
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
+			if tt.setup != nil {
+				tt.setup(ctx, t, vtctld)
+			}
 			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
 
 			// We defer this because we want to check in both error and non-
@@ -9047,6 +9212,9 @@ func TestPlannedReparentShard(t *testing.T) {
 
 			assert.NoError(t, err)
 			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+			if tt.assertion != nil {
+				tt.assertion(t, tt.tmc)
+			}
 		})
 	}
 }
@@ -11400,6 +11568,32 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 			},
 		},
 		{
+			name: "durability policy is orthogonal to rdonly replication source policy",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name: "ks1",
+					Keyspace: &topodatapb.Keyspace{
+						DurabilityPolicy: policy.DurabilitySemiSync,
+						ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+							RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
+				Keyspace:         "ks1",
+				DurabilityPolicy: policy.DurabilityNone,
+			},
+			expected: &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
+				Keyspace: &topodatapb.Keyspace{
+					DurabilityPolicy: policy.DurabilityNone,
+					ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+						RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+					},
+				},
+			},
+		},
+		{
 			name: "keyspace not found",
 			req: &vtctldatapb.SetKeyspaceDurabilityPolicyRequest{
 				Keyspace: "ks1",
@@ -11435,6 +11629,133 @@ func TestSetKeyspaceDurabilityPolicy(t *testing.T) {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 			resp, err := vtctld.SetKeyspaceDurabilityPolicy(ctx, tt.req)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestSetKeyspaceReplicationSourcePolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		keyspaces   []*vtctldatapb.Keyspace
+		req         *vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest
+		expected    *vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse
+		expectedErr string
+	}{
+		{
+			name: "ok",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name: "ks1",
+					Keyspace: &topodatapb.Keyspace{
+						DurabilityPolicy: policy.DurabilitySemiSync,
+					},
+				},
+				{
+					Name:     "ks2",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+				Keyspace:     "ks1",
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+			},
+			expected: &vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse{
+				Keyspace: &topodatapb.Keyspace{
+					DurabilityPolicy: policy.DurabilitySemiSync,
+					ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+						RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+					},
+				},
+			},
+		},
+		{
+			name: "replica policy is orthogonal to durability policy",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name: "ks1",
+					Keyspace: &topodatapb.Keyspace{
+						DurabilityPolicy: policy.DurabilityNone,
+					},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+				Keyspace:     "ks1",
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+			},
+			expected: &vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse{
+				Keyspace: &topodatapb.Keyspace{
+					DurabilityPolicy: policy.DurabilityNone,
+					ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+						RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+					},
+				},
+			},
+		},
+		{
+			name: "unspecified clears config",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name: "ks1",
+					Keyspace: &topodatapb.Keyspace{
+						ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+							RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+				Keyspace:     "ks1",
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_UNSPECIFIED,
+			},
+			expected: &vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse{
+				Keyspace: &topodatapb.Keyspace{},
+			},
+		},
+		{
+			name: "keyspace not found",
+			req: &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+				Keyspace: "ks1",
+			},
+			expectedErr: "node doesn't exist: keyspaces/ks1",
+		},
+		{
+			name: "invalid policy",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "ks1",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			req: &vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest{
+				Keyspace:     "ks1",
+				RdonlyPolicy: topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy(100),
+			},
+			expectedErr: "rdonly replication source policy <100> is not a valid policy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+
+			ts := memorytopo.NewServer(ctx, "zone1")
+			testutil.AddKeyspaces(ctx, t, ts, tt.keyspaces...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			resp, err := vtctld.SetKeyspaceReplicationSourcePolicy(ctx, tt.req)
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
 				return

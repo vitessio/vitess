@@ -71,8 +71,9 @@ type PlannedReparentOptions struct {
 	// set these options inside a PlannedReparent without leaking these details
 	// back out to the caller.
 
-	lockAction string
-	durability policy.Durabler
+	lockAction              string
+	durability              policy.Durabler
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig
 }
 
 // NewPlannedReparenter returns a new PlannedReparenter object, ready to perform
@@ -531,6 +532,11 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
+	opts.replicationSourceConfig, err = pr.ts.GetKeyspaceReplicationSourceConfig(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
 	ev.ShardInfo = *shardInfo
 
 	event.DispatchUpdate(ev, "reading tablet map")
@@ -635,6 +641,10 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return vterrors.Wrap(err, lostTopologyLockMsg)
 	}
 
+	if promoteReplicaRequired {
+		markPlannedPromotionInTabletMap(tabletMap, ev.NewPrimary.Alias)
+	}
+
 	if err := pr.reparentTablets(ctx, ev, reparentJournalPos, promoteReplicaRequired, tabletMap, opts); err != nil {
 		return err
 	}
@@ -648,6 +658,21 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		}
 	}
 	return nil
+}
+
+func markPlannedPromotionInTabletMap(tabletMap map[string]*topo.TabletInfo, newPrimaryAlias *topodatapb.TabletAlias) {
+	for _, tabletInfo := range tabletMap {
+		if tabletInfo == nil || tabletInfo.Tablet == nil || tabletInfo.Alias == nil {
+			continue
+		}
+		if topoproto.TabletAliasEqual(tabletInfo.Alias, newPrimaryAlias) {
+			tabletInfo.Type = topodatapb.TabletType_PRIMARY
+			continue
+		}
+		if tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+			tabletInfo.Type = topodatapb.TabletType_REPLICA
+		}
+	}
 }
 
 func (pr *PlannedReparenter) reparentTablets(
@@ -676,6 +701,13 @@ func (pr *PlannedReparenter) reparentTablets(
 	replicasWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
+	rdonlyReplicaPolicy := opts.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA
+	if promoteReplicaRequired && rdonlyReplicaPolicy {
+		if err := stopRdonlyReplicatingFromTablet(replCtx, pr.tmc, tabletMap, ev.NewPrimary); err != nil {
+			return err
+		}
+	}
+
 	// Point all replicas at the new primary and check that they receive the
 	// reparent journal entry, proving that they are replicating from the new
 	// primary. We do this concurrently with adding the journal entry (after
@@ -703,9 +735,16 @@ func (pr *PlannedReparenter) reparentTablets(
 			// primary was. Instead, we rely on the former primary to remember
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
-			forceStartReplication := false
-			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication, policy.IsReplicaSemiSync(opts.durability, ev.NewPrimary, tablet), 0); err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
+			forceStartReplication := rdonlyReplicaPolicy && tablet.Type == topodatapb.TabletType_RDONLY
+			source, err := DesiredReplicationSource(ev.NewPrimary, tablet, tabletMap, opts.durability, opts.replicationSourceConfig)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to select replication source: %v", alias, err))
+				return
+			}
+
+			sourceAliasStr := topoproto.TabletAliasString(source.Alias)
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, source.Alias, reparentJournalTimestamp, "", forceStartReplication, policy.IsReplicaSemiSync(opts.durability, source, tablet), 0); err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, sourceAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
 	}

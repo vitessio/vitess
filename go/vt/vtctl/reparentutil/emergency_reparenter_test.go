@@ -3974,6 +3974,162 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 	}
 }
 
+func TestEmergencyReparenterReparentReplicasReparentsReplicaSourcedRdonly(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	acker := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+	rdonly := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_RDONLY,
+	}
+
+	tmc := &recordingTabletManagerClient{
+		TabletManagerClient: &testutil.TabletManagerClient{
+			PopulateReparentJournalResults: map[string]error{
+				"zone1-0000000100": nil,
+			},
+			PromoteReplicaResults: map[string]struct {
+				Result string
+				Error  error
+			}{
+				"zone1-0000000100": {
+					Error: nil,
+				},
+			},
+			SetReplicationSourceResults: map[string]error{
+				"zone1-0000000101": nil,
+				"zone1-0000000102": nil,
+			},
+		},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		topoproto.TabletAliasString(primary.Alias): {Tablet: primary},
+		topoproto.TabletAliasString(acker.Alias):   {Tablet: acker},
+		topoproto.TabletAliasString(rdonly.Alias):  {Tablet: rdonly},
+	}
+	statusMap := map[string]*replicationdatapb.StopReplicationStatus{
+		topoproto.TabletAliasString(acker.Alias): {
+			Before: &replicationdatapb.Status{
+				IoState:  int32(replication.ReplicationStateRunning),
+				SqlState: int32(replication.ReplicationStateRunning),
+			},
+		},
+	}
+
+	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+	_, err = erp.reparentReplicas(ctx, &events.Reparent{
+		ShardInfo: topo.ShardInfo{
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 99},
+			},
+		},
+	}, primary, tabletMap, statusMap, EmergencyReparentOptions{
+		WaitReplicasTimeout: time.Second,
+		durability:          durability,
+		replicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+		},
+	}, false)
+	require.NoError(t, err)
+
+	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(acker.Alias)))
+	assert.Eventually(t, func() bool {
+		return tmc.setReplicationSourceCalled(topoproto.TabletAliasString(rdonly.Alias))
+	}, 30*time.Second, 10*time.Millisecond)
+	assert.Equal(t, topoproto.TabletAliasString(acker.Alias), tmc.setReplicationSourceParent(topoproto.TabletAliasString(rdonly.Alias)))
+}
+
+func TestEmergencyReparenterReplicaSourcedRdonlyDoesNotSatisfyReplicaSuccess(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+
+	primary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	replica := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+	rdonly := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+		Keyspace: "ks",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_RDONLY,
+	}
+
+	tmc := &recordingTabletManagerClient{
+		TabletManagerClient: &testutil.TabletManagerClient{
+			PopulateReparentJournalResults: map[string]error{
+				"zone1-0000000100": nil,
+			},
+			PromoteReplicaResults: map[string]struct {
+				Result string
+				Error  error
+			}{
+				"zone1-0000000100": {
+					Error: nil,
+				},
+			},
+			SetReplicationSourceDelays: map[string]time.Duration{
+				"zone1-0000000101": 100 * time.Millisecond,
+			},
+			SetReplicationSourceResults: map[string]error{
+				"zone1-0000000101": assert.AnError,
+				"zone1-0000000102": nil,
+			},
+		},
+	}
+	tabletMap := map[string]*topo.TabletInfo{
+		topoproto.TabletAliasString(primary.Alias): {Tablet: primary},
+		topoproto.TabletAliasString(replica.Alias): {Tablet: replica},
+		topoproto.TabletAliasString(rdonly.Alias):  {Tablet: rdonly},
+	}
+
+	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+	_, err = erp.reparentReplicas(ctx, &events.Reparent{
+		ShardInfo: topo.ShardInfo{
+			Shard: &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 99},
+			},
+		},
+	}, primary, tabletMap, nil, EmergencyReparentOptions{
+		WaitReplicasTimeout: time.Second,
+		durability:          durability,
+		replicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+			RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+		},
+	}, false)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "1 replica(s) failed")
+	assert.True(t, tmc.setReplicationSourceCalled(topoproto.TabletAliasString(rdonly.Alias)))
+	assert.Equal(t, topoproto.TabletAliasString(replica.Alias), tmc.setReplicationSourceParent(topoproto.TabletAliasString(rdonly.Alias)))
+}
+
 func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 	t.Parallel()
 

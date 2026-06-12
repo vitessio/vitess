@@ -287,6 +287,7 @@ CREATE TABLE vitess_keyspace (
 	keyspace varchar(128) NOT NULL,
 	keyspace_type smallint(5) NOT NULL,
 	durability_policy varchar(512) NOT NULL,
+	rdonly_replication_source_policy smallint(5) NOT NULL,
 	disable_emergency_reparent tinyint NOT NULL,
 	PRIMARY KEY (keyspace)
 )`,

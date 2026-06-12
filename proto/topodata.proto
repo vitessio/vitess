@@ -180,6 +180,17 @@ message Tablet {
   reserved 3, 11, 15;
 }
 
+message ReplicationSourceConfig {
+  enum RdonlyReplicationSourcePolicy {
+    // Use the existing behavior for rdonly tablets.
+    UNSPECIFIED = 0;
+    // Rdonly tablets must replicate from a replica.
+    REPLICA = 1;
+  }
+
+  RdonlyReplicationSourcePolicy rdonly_policy = 1;
+}
+
 // A Shard contains data about a subset of the data whithin a keyspace.
 message Shard {
   // primary_alias is the tablet alias of the primary for the shard.
@@ -323,6 +334,9 @@ message Keyspace {
 
   // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
   querythrottler.Config query_throttler_config = 12;
+
+  // ReplicationSourceConfig controls how Vitess selects MySQL replication sources.
+  ReplicationSourceConfig replication_source_config = 13;
 }
 
 // ShardReplication describes the MySQL replication relationships

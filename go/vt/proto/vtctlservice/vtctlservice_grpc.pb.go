@@ -530,6 +530,8 @@ type VtctldClient interface {
 	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
 	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
 	SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtctldata.SetKeyspaceDurabilityPolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
+	// SetKeyspaceReplicationSourcePolicy updates the replication source policy for a keyspace.
+	SetKeyspaceReplicationSourcePolicy(ctx context.Context, in *vtctldata.SetKeyspaceReplicationSourcePolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceReplicationSourcePolicyResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -1610,6 +1612,15 @@ func (c *vtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context, in *vtct
 	return out, nil
 }
 
+func (c *vtctldClient) SetKeyspaceReplicationSourcePolicy(ctx context.Context, in *vtctldata.SetKeyspaceReplicationSourcePolicyRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceReplicationSourcePolicyResponse, error) {
+	out := new(vtctldata.SetKeyspaceReplicationSourcePolicyResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceReplicationSourcePolicy", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldata.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(vtctldata.SetShardIsPrimaryServingResponse)
@@ -2212,6 +2223,8 @@ type VtctldServer interface {
 	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
 	// SetKeyspaceDurabilityPolicy updates the DurabilityPolicy for a keyspace.
 	SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error)
+	// SetKeyspaceReplicationSourcePolicy updates the replication source policy for a keyspace.
+	SetKeyspaceReplicationSourcePolicy(context.Context, *vtctldata.SetKeyspaceReplicationSourcePolicyRequest) (*vtctldata.SetKeyspaceReplicationSourcePolicyResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -2606,6 +2619,9 @@ func (UnimplementedVtctldServer) RunHealthCheck(context.Context, *vtctldata.RunH
 }
 func (UnimplementedVtctldServer) SetKeyspaceDurabilityPolicy(context.Context, *vtctldata.SetKeyspaceDurabilityPolicyRequest) (*vtctldata.SetKeyspaceDurabilityPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetKeyspaceDurabilityPolicy not implemented")
+}
+func (UnimplementedVtctldServer) SetKeyspaceReplicationSourcePolicy(context.Context, *vtctldata.SetKeyspaceReplicationSourcePolicyRequest) (*vtctldata.SetKeyspaceReplicationSourcePolicyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceReplicationSourcePolicy not implemented")
 }
 func (UnimplementedVtctldServer) SetShardIsPrimaryServing(context.Context, *vtctldata.SetShardIsPrimaryServingRequest) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetShardIsPrimaryServing not implemented")
@@ -4404,6 +4420,24 @@ func _Vtctld_SetKeyspaceDurabilityPolicy_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_SetKeyspaceReplicationSourcePolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetKeyspaceReplicationSourcePolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetKeyspaceReplicationSourcePolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceReplicationSourcePolicy",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetKeyspaceReplicationSourcePolicy(ctx, req.(*vtctldata.SetKeyspaceReplicationSourcePolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_SetShardIsPrimaryServing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.SetShardIsPrimaryServingRequest)
 	if err := dec(in); err != nil {
@@ -5404,6 +5438,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetKeyspaceDurabilityPolicy",
 			Handler:    _Vtctld_SetKeyspaceDurabilityPolicy_Handler,
+		},
+		{
+			MethodName: "SetKeyspaceReplicationSourcePolicy",
+			Handler:    _Vtctld_SetKeyspaceReplicationSourcePolicy_Handler,
 		},
 		{
 			MethodName: "SetShardIsPrimaryServing",

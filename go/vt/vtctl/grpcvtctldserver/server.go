@@ -3709,7 +3709,25 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, err
 	}
 
-	if err = s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet), 0); err != nil {
+	replicationSourceConfig, err := s.ts.GetKeyspaceReplicationSourceConfig(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	var tabletMap map[string]*topo.TabletInfo
+	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA {
+		tabletMap, err = s.ts.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	source, err := reparentutil.DesiredReplicationSource(shardPrimary.Tablet, tablet.Tablet, tabletMap, durability, replicationSourceConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = s.tmc.SetReplicationSource(ctx, tablet.Tablet, source.Alias, 0, "", false, policy.IsReplicaSemiSync(durability, source, tablet.Tablet), 0); err != nil {
 		return nil, err
 	}
 
@@ -3910,6 +3928,61 @@ func (s *VtctldServer) SetKeyspaceDurabilityPolicy(ctx context.Context, req *vtc
 	return &vtctldatapb.SetKeyspaceDurabilityPolicyResponse{
 		Keyspace: ki.Keyspace,
 	}, nil
+}
+
+// SetKeyspaceReplicationSourcePolicy is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetKeyspaceReplicationSourcePolicy(ctx context.Context, req *vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest) (resp *vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceReplicationSourcePolicy")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("rdonly_policy", req.RdonlyPolicy.String())
+
+	if err := validateRdonlyReplicationSourcePolicy(req.RdonlyPolicy); err != nil {
+		return nil, err
+	}
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceReplicationSourcePolicy")
+	if lockErr != nil {
+		err = lockErr
+		return nil, err
+	}
+
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.RdonlyPolicy == topodatapb.ReplicationSourceConfig_UNSPECIFIED {
+		ki.ReplicationSourceConfig = nil
+	} else {
+		ki.ReplicationSourceConfig = &topodatapb.ReplicationSourceConfig{
+			RdonlyPolicy: req.RdonlyPolicy,
+		}
+	}
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse{
+		Keyspace: ki.Keyspace,
+	}, nil
+}
+
+func validateRdonlyReplicationSourcePolicy(rdonlyPolicy topodatapb.ReplicationSourceConfig_RdonlyReplicationSourcePolicy) error {
+	switch rdonlyPolicy {
+	case topodatapb.ReplicationSourceConfig_UNSPECIFIED,
+		topodatapb.ReplicationSourceConfig_REPLICA:
+		return nil
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "rdonly replication source policy <%s> is not a valid policy", rdonlyPolicy.String())
+	}
 }
 
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldServer interface.

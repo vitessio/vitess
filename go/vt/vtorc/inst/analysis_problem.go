@@ -374,6 +374,19 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 	},
 	{
 		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    RdonlyReplicationSourceMustBeReplica,
+			Description: "Rdonly replication source must be a replica",
+			Priority:    detectionAnalysisPriorityMedium,
+		},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return tablet.Type == topodatapb.TabletType_RDONLY &&
+				!a.IsPrimary &&
+				rdonlyReplicationSourcePolicyRequiresReplica(ca) &&
+				!rdonlyReplicationSourceIsReplica(ca, primary, tablet)
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
 			Analysis:    ReplicaMisconfigured,
 			Description: "Replica has been misconfigured",
 			Priority:    detectionAnalysisPriorityMedium,
@@ -389,6 +402,11 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			Priority:    detectionAnalysisPriorityMedium,
 		},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			if tablet.Type == topodatapb.TabletType_RDONLY &&
+				rdonlyReplicationSourcePolicyRequiresReplica(ca) &&
+				rdonlyReplicationSourceIsReplica(ca, primary, tablet) {
+				return false
+			}
 			return topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryAlias != nil && !topoproto.TabletAliasEqual(a.AnalyzedInstancePrimaryAlias, ca.primaryAlias)
 		},
 	},
@@ -479,6 +497,26 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 			return a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0
 		},
 	},
+}
+
+func rdonlyReplicationSourcePolicyRequiresReplica(ca *clusterAnalysis) bool {
+	return ca != nil && ca.replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA
+}
+
+func rdonlyReplicationSourceIsReplica(ca *clusterAnalysis, source, tablet *topodatapb.Tablet) bool {
+	if source == nil || source.Alias == nil || tablet == nil || tablet.Alias == nil {
+		return false
+	}
+	if ca != nil && ca.shardPrimary != nil && ca.shardPrimary.Alias != nil && topoproto.TabletAliasEqual(source.Alias, ca.shardPrimary.Alias) {
+		return false
+	}
+	if topoproto.TabletAliasEqual(source.Alias, tablet.Alias) {
+		return false
+	}
+	if source.Keyspace != tablet.Keyspace || source.Shard != tablet.Shard {
+		return false
+	}
+	return source.Type == topodatapb.TabletType_REPLICA
 }
 
 func sortDetectionAnalysisMatchedProblems(allProblems []*DetectionAnalysisProblem) {

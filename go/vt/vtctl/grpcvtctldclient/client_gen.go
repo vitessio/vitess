@@ -865,6 +865,15 @@ func (client *gRPCVtctldClient) SetKeyspaceDurabilityPolicy(ctx context.Context,
 	return client.c.SetKeyspaceDurabilityPolicy(ctx, in, opts...)
 }
 
+// SetKeyspaceReplicationSourcePolicy is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SetKeyspaceReplicationSourcePolicy(ctx context.Context, in *vtctldatapb.SetKeyspaceReplicationSourcePolicyRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceReplicationSourcePolicyResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SetKeyspaceReplicationSourcePolicy(ctx, in, opts...)
+}
+
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldatapb.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
 	if client.c == nil {

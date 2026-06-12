@@ -102,7 +102,8 @@ func TestAPIEndpoints(t *testing.T) {
 				"disable_emergency_reparent": "0",
 				"durability_policy": "none",
 				"keyspace": "ks",
-				"keyspace_type": "0"
+				"keyspace_type": "0",
+				"rdonly_replication_source_policy": "0"
 			}
 		]
 	},`)

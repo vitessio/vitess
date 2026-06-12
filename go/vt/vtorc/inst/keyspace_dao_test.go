@@ -94,8 +94,27 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			},
 			semiSyncAckersWanted: 0,
 		}, {
+			name:         "Success with replication source config",
+			keyspaceName: "ks5",
+			keyspace: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilitySemiSync,
+				ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+				},
+			},
+			keyspaceWanted: &topodatapb.Keyspace{
+				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
+				DurabilityPolicy: policy.DurabilitySemiSync,
+				ReplicationSourceConfig: &topodatapb.ReplicationSourceConfig{
+					RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+				},
+				VtorcState: vtorcconfig.DefaultKeyspaceTopoConfig,
+			},
+			semiSyncAckersWanted: 1,
+		}, {
 			name:         "Success with ERS disabled in Vtorc",
-			keyspaceName: "ks4",
+			keyspaceName: "ks6",
 			keyspace: &topodatapb.Keyspace{
 				KeyspaceType:     topodatapb.KeyspaceType_NORMAL,
 				DurabilityPolicy: policy.DurabilityNone,
@@ -113,7 +132,7 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			semiSyncAckersWanted: 0,
 		}, {
 			name:           "No keyspace found",
-			keyspaceName:   "ks5",
+			keyspaceName:   "ks7",
 			keyspace:       nil,
 			keyspaceWanted: nil,
 			err:            ErrKeyspaceNotFound.Error(),
@@ -150,4 +169,26 @@ func TestSaveAndReadKeyspace(t *testing.T) {
 			require.EqualValues(t, tt.semiSyncAckersWanted, policy.SemiSyncAckers(durabilityPolicy, nil))
 		})
 	}
+}
+
+func TestGetReplicationSourceConfig(t *testing.T) {
+	defer db.ClearVTOrcDatabase()
+
+	want := &topodatapb.ReplicationSourceConfig{
+		RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+	}
+	keyspaceInfo := &topo.KeyspaceInfo{
+		Keyspace: &topodatapb.Keyspace{
+			ReplicationSourceConfig: want,
+		},
+	}
+	keyspaceInfo.SetKeyspaceName("ks")
+	require.NoError(t, SaveKeyspace(keyspaceInfo))
+
+	got, err := GetReplicationSourceConfig("ks")
+	require.NoError(t, err)
+	require.Equal(t, want.RdonlyPolicy, got.RdonlyPolicy)
+
+	_, err = GetReplicationSourceConfig("missing")
+	require.EqualError(t, err, ErrKeyspaceNotFound.Error())
 }

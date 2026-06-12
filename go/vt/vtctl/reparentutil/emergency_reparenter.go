@@ -65,8 +65,9 @@ type EmergencyReparentOptions struct {
 
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
-	lockAction string
-	durability policy.Durabler
+	lockAction              string
+	durability              policy.Durabler
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig
 }
 
 // counters for Emergency Reparent Shard
@@ -216,6 +217,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	erp.logger.Infof("Getting a new durability policy for %v", keyspaceDurability)
 	opts.durability, err = policy.GetDurabilityPolicy(keyspaceDurability)
+	if err != nil {
+		return err
+	}
+
+	opts.replicationSourceConfig, err = erp.ts.GetKeyspaceReplicationSourceConfig(ctx, keyspace)
 	if err != nil {
 		return err
 	}
@@ -695,13 +701,59 @@ func (erp *EmergencyReparenter) reparentReplicas(
 		}
 	}
 
+	handleReplicaSourcedRdonly := func(alias string, ti *topo.TabletInfo) {
+		defer replWg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				erp.logger.Errorf("panic in replica-sourced rdonly handler for %s: %v", alias, r)
+			}
+		}()
+		erp.logger.Infof("setting replication source on replica-sourced rdonly %s", alias)
+
+		forceStart := false
+		if status, ok := statusMap[alias]; ok {
+			fs, err := ReplicaWasRunning(status)
+			if err != nil {
+				err = vterrors.Wrapf(err, "rdonly tablet %s could not determine StopReplicationStatus", alias)
+				erp.logger.Errorf2(err, "replica-sourced rdonly failed to inspect replication state during ERS; VTOrc will retry replication repair")
+
+				return
+			}
+
+			forceStart = fs
+		}
+
+		source, err := DesiredReplicationSource(newPrimaryTablet, ti.Tablet, tabletMap, opts.durability, opts.replicationSourceConfig)
+		if err != nil {
+			err = vterrors.Wrapf(err, "rdonly tablet %s failed to select replication source", alias)
+			erp.logger.Errorf2(err, "replica-sourced rdonly failed to select replication source during ERS; VTOrc will retry replication repair")
+
+			return
+		}
+
+		sourceAliasStr := topoproto.TabletAliasString(source.Alias)
+		err = erp.tmc.SetReplicationSource(replCtx, ti.Tablet, source.Alias, 0, "", forceStart, policy.IsReplicaSemiSync(opts.durability, source, ti.Tablet), 0)
+		if err != nil {
+			err = vterrors.Wrapf(err, "rdonly tablet %s SetReplicationSource(%s) failed", alias, sourceAliasStr)
+			erp.logger.Errorf2(err, "replica-sourced rdonly failed to reparent during ERS; VTOrc will retry replication repair")
+
+			return
+		}
+	}
+
 	numReplicas := 0
+	newPrimaryAlias := topoproto.TabletAliasString(newPrimaryTablet.Alias)
 
 	for alias, ti := range tabletMap {
 		switch {
-		case alias == topoproto.TabletAliasString(newPrimaryTablet.Alias):
+		case alias == newPrimaryAlias:
 			continue
-		case !opts.IgnoreReplicas.Has(alias):
+		case opts.IgnoreReplicas.Has(alias):
+			continue
+		case !intermediateReparent && isReplicaSourcedRdonly(ti, opts.replicationSourceConfig):
+			replWg.Add(1)
+			go handleReplicaSourcedRdonly(alias, ti)
+		default:
 			replWg.Add(1)
 			numReplicas++
 			go handleReplica(alias, ti)
@@ -774,6 +826,13 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			return replicasStartedReplication, nil
 		}
 	}
+}
+
+func isReplicaSourcedRdonly(tabletInfo *topo.TabletInfo, replicationSourceConfig *topodatapb.ReplicationSourceConfig) bool {
+	if tabletInfo == nil || tabletInfo.Tablet == nil {
+		return false
+	}
+	return tabletInfo.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA
 }
 
 // isIntermediateSourceIdeal is used to find whether the intermediate source that ERS chose is also the ideal one or not

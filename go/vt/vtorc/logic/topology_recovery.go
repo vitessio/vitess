@@ -685,7 +685,8 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 		recoveryFunc = reconcileStaleTopoPrimaryFunc
 	// replica
 	case inst.NotConnectedToPrimary, inst.ConnectedToWrongPrimary, inst.ReplicationStopped, inst.ReplicaIsWritable,
-		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured:
+		inst.ReplicaSemiSyncMustBeSet, inst.ReplicaSemiSyncMustNotBeSet, inst.ReplicaMisconfigured,
+		inst.RdonlyReplicationSourceMustBeReplica:
 		recoveryFunc = fixReplicaFunc
 	// primary, non actionable
 	case inst.DeadPrimaryAndReplicas:
@@ -1333,14 +1334,51 @@ func fixReplica(ctx context.Context, analysisEntry *inst.DetectionAnalysis, logg
 		return false, topologyRecovery, err
 	}
 
+	replicationSourceConfig, err := inst.GetReplicationSourceConfig(analyzedTablet.Keyspace)
+	if err != nil {
+		logger.Info(fmt.Sprintf("Could not read the replication source config for %v/%v", analyzedTablet.Keyspace, analyzedTablet.Shard))
+		return false, topologyRecovery, err
+	}
+
 	err = setReadOnly(ctx, analyzedTablet)
 	if err != nil {
 		logger.Info(fmt.Sprintf("Could not set the tablet %v to readonly - %v", analysisEntry.AnalyzedInstanceAlias, err))
 		return true, topologyRecovery, err
 	}
 
-	err = setReplicationSource(ctx, analyzedTablet, primaryTablet, policy.IsReplicaSemiSync(durabilityPolicy, primaryTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)
+	sourceTablet, err := desiredReplicationSourceForFixReplica(ctx, analyzedTablet, primaryTablet, durabilityPolicy, replicationSourceConfig)
+	if err != nil {
+		return true, topologyRecovery, err
+	}
+
+	err = setReplicationSource(ctx, analyzedTablet, sourceTablet, policy.IsReplicaSemiSync(durabilityPolicy, sourceTablet, analyzedTablet), float64(analysisEntry.ReplicaNetTimeout)/2)
 	return true, topologyRecovery, err
+}
+
+func desiredReplicationSourceForFixReplica(
+	ctx context.Context,
+	analyzedTablet *topodatapb.Tablet,
+	primaryTablet *topodatapb.Tablet,
+	durabilityPolicy policy.Durabler,
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig,
+) (*topodatapb.Tablet, error) {
+	if analyzedTablet.Type != topodatapb.TabletType_RDONLY ||
+		replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_UNSPECIFIED {
+		return primaryTablet, nil
+	}
+
+	tablets, err := getShardTablets(ctx, analyzedTablet.Keyspace, analyzedTablet.Shard)
+	if err != nil {
+		return nil, err
+	}
+	tabletMap := make(map[string]*topo.TabletInfo, len(tablets))
+	for _, tabletInfo := range tablets {
+		if tabletInfo == nil || tabletInfo.Tablet == nil || tabletInfo.Alias == nil {
+			continue
+		}
+		tabletMap[topoproto.TabletAliasString(tabletInfo.Alias)] = tabletInfo
+	}
+	return reparentutil.DesiredReplicationSource(primaryTablet, analyzedTablet, tabletMap, durabilityPolicy, replicationSourceConfig)
 }
 
 // reconcileStaleTopoPrimary updates the type of a tablet in topology to REPLICA when the tablet has a stale type of

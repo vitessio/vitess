@@ -168,3 +168,23 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestGetKeyspaceReplicationSourceConfig(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+
+	want := &topodatapb.ReplicationSourceConfig{
+		RdonlyPolicy: topodatapb.ReplicationSourceConfig_REPLICA,
+	}
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{
+		ReplicationSourceConfig: want,
+	}))
+
+	got, err := ts.GetKeyspaceReplicationSourceConfig(ctx, "ks")
+	require.NoError(t, err)
+	require.Equal(t, want.RdonlyPolicy, got.RdonlyPolicy)
+
+	_, err = ts.GetKeyspaceReplicationSourceConfig(ctx, "missing")
+	require.Error(t, err)
+}

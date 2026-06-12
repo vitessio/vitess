@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -170,9 +171,9 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 }
 
 // SetReplicationSource is used to set the replication source on the specified
-// tablet to the current shard primary (if available). It also figures out if
-// the tablet should be sending semi-sync ACKs or not and passes that to the
-// tabletmanager RPC.
+// tablet to the desired source for its keyspace and tablet type. It also
+// figures out if the tablet should be sending semi-sync ACKs or not and passes
+// that to the tabletmanager RPC.
 //
 // It does not start the replication forcefully.
 // If we are unable to find the shard primary of the tablet from the topo server
@@ -194,8 +195,178 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return err
 	}
 
-	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
-	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync, 0)
+	replicationSourceConfig, err := ts.GetKeyspaceReplicationSourceConfig(ctx, tablet.Keyspace)
+	if err != nil {
+		return err
+	}
+
+	var tabletMap map[string]*topo.TabletInfo
+	if tablet.Type == topodatapb.TabletType_RDONLY && replicationSourceConfig.GetRdonlyPolicy() == topodatapb.ReplicationSourceConfig_REPLICA {
+		tabletMap, err = ts.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
+		if err != nil {
+			return err
+		}
+	}
+
+	source, err := DesiredReplicationSource(shardPrimary.Tablet, tablet, tabletMap, durability, replicationSourceConfig)
+	if err != nil {
+		return err
+	}
+
+	isSemiSync := policy.IsReplicaSemiSync(durability, source, tablet)
+	return tmc.SetReplicationSource(ctx, tablet, source.Alias, 0, "", false, isSemiSync, 0)
+}
+
+func DesiredReplicationSource(
+	primary *topodatapb.Tablet,
+	tablet *topodatapb.Tablet,
+	tabletMap map[string]*topo.TabletInfo,
+	durability policy.Durabler,
+	replicationSourceConfig *topodatapb.ReplicationSourceConfig,
+) (*topodatapb.Tablet, error) {
+	if primary == nil || primary.Alias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "primary tablet must have an alias")
+	}
+	if tablet == nil || tablet.Alias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet must have an alias")
+	}
+
+	rdonlyPolicy := replicationSourceConfig.GetRdonlyPolicy()
+	if tablet.Type != topodatapb.TabletType_RDONLY || rdonlyPolicy == topodatapb.ReplicationSourceConfig_UNSPECIFIED {
+		return primary, nil
+	}
+
+	switch rdonlyPolicy {
+	case topodatapb.ReplicationSourceConfig_REPLICA:
+		return replicaSourceForRdonlyTablet(primary, tablet, tabletMap)
+	default:
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unsupported rdonly replication source policy %v", rdonlyPolicy)
+	}
+}
+
+func stopRdonlyReplicatingFromTablet(
+	ctx context.Context,
+	tmc tmclient.TabletManagerClient,
+	tabletMap map[string]*topo.TabletInfo,
+	tablet *topodatapb.Tablet,
+) error {
+	if tablet == nil || tablet.Alias == nil {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet must have an alias")
+	}
+
+	aliases := make([]string, 0, len(tabletMap))
+	for alias := range tabletMap {
+		aliases = append(aliases, alias)
+	}
+	sort.Strings(aliases)
+
+	for _, alias := range aliases {
+		ti := tabletMap[alias]
+		if ti == nil || ti.Tablet == nil || ti.Alias == nil || ti.Type != topodatapb.TabletType_RDONLY {
+			continue
+		}
+
+		rdonly := ti.Tablet
+		status, err := tmc.ReplicationStatus(ctx, rdonly)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to read rdonly replication status on %s", alias)
+		}
+
+		replicatingFromTablet, err := replicationStatusSourceMatchesTablet(status, tablet)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to inspect rdonly replication source on %s", alias)
+		}
+		if !replicatingFromTablet {
+			continue
+		}
+		if err := tmc.StopReplication(ctx, rdonly); err != nil {
+			return vterrors.Wrapf(err, "failed to stop rdonly replication on %s", alias)
+		}
+	}
+
+	return nil
+}
+
+func replicationStatusSourceMatchesTablet(status *replicationdatapb.Status, tablet *topodatapb.Tablet) (bool, error) {
+	if status == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "replication status is nil")
+	}
+	if tablet == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet is nil")
+	}
+
+	if status.SourceHost == "" && status.SourcePort == 0 {
+		return false, nil
+	}
+	if status.SourceHost == "" || status.SourcePort == 0 {
+		return false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "replication source is incomplete: host %q port %d", status.SourceHost, status.SourcePort)
+	}
+	if status.SourcePort != tablet.MysqlPort {
+		return false, nil
+	}
+
+	if tablet.MysqlHostname != "" && status.SourceHost == tablet.MysqlHostname {
+		return true, nil
+	}
+	if tablet.Hostname != "" && status.SourceHost == tablet.Hostname {
+		return true, nil
+	}
+	return false, nil
+}
+
+func replicaSourceForRdonlyTablet(primary *topodatapb.Tablet, tablet *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, error) {
+	type sourceCandidate struct {
+		alias  string
+		tablet *topodatapb.Tablet
+	}
+
+	sortSourceCandidates := func(candidates []sourceCandidate) {
+		sort.Slice(candidates, func(i, j int) bool {
+			return candidates[i].alias < candidates[j].alias
+		})
+	}
+
+	sameCellCandidates := make([]sourceCandidate, 0, len(tabletMap))
+	otherCellCandidates := make([]sourceCandidate, 0, len(tabletMap))
+
+	for _, ti := range tabletMap {
+		if ti == nil || ti.Tablet == nil || ti.Alias == nil {
+			continue
+		}
+
+		candidate := ti.Tablet
+		if topoproto.TabletAliasEqual(candidate.Alias, primary.Alias) || topoproto.TabletAliasEqual(candidate.Alias, tablet.Alias) {
+			continue
+		}
+		if candidate.Keyspace != tablet.Keyspace || candidate.Shard != tablet.Shard {
+			continue
+		}
+		if candidate.Type != topodatapb.TabletType_REPLICA {
+			continue
+		}
+
+		candidateEntry := sourceCandidate{
+			alias:  topoproto.TabletAliasString(candidate.Alias),
+			tablet: candidate,
+		}
+		if candidate.Alias.Cell == tablet.Alias.Cell {
+			sameCellCandidates = append(sameCellCandidates, candidateEntry)
+			continue
+		}
+		otherCellCandidates = append(otherCellCandidates, candidateEntry)
+	}
+
+	sortSourceCandidates(sameCellCandidates)
+	if len(sameCellCandidates) > 0 {
+		return sameCellCandidates[0].tablet, nil
+	}
+
+	sortSourceCandidates(otherCellCandidates)
+	if len(otherCellCandidates) > 0 {
+		return otherCellCandidates[0].tablet, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no replica available as replication source for rdonly tablet %s", topoproto.TabletAliasString(tablet.Alias))
 }
 
 // replicationSnapshot stores the status maps and the tablets that were reachable
