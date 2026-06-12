@@ -138,9 +138,10 @@ func New(name string, opts Options) *Server {
 	recoveryHandler := func(p any) (err error) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "panic triggered: %v", p)
 	}
+	recoveryOpt := grpc_recovery.WithRecoveryHandler(recoveryHandler)
 
-	streamInterceptors = append(streamInterceptors, grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandler(recoveryHandler)))
-	unaryInterceptors = append(unaryInterceptors, grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandler(recoveryHandler)))
+	streamInterceptors = append(streamInterceptors, grpc_recovery.StreamServerInterceptor(recoveryOpt))
+	unaryInterceptors = append(unaryInterceptors, grpc_recovery.UnaryServerInterceptor(recoveryOpt))
 
 	gserv := grpc.NewServer(
 		grpc.ChainStreamInterceptor(streamInterceptors...),
