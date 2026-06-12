@@ -312,6 +312,22 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]`)
 }
 
+// TestShardTargetedDMLInOLAP covers https://github.com/vitessio/vitess/issues/19561.
+// When a session targets a specific shard, DML is planned as a Send primitive whose
+// streaming path (used in OLAP mode) issues a StreamExecute RPC to the tablet. DML
+// must succeed on that path and run in an implicit transaction, just like the
+// non-streaming path.
+func TestShardTargetedDMLInOLAP(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	qr := utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+	utils.AssertMatches(t, conn, `select id1, id2 from t1`, `[[INT64(1) INT64(1)]]`)
+}
+
 func TestCreateIndex(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()

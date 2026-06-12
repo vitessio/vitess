@@ -1486,6 +1486,78 @@ func TestReplaceSchemaName(t *testing.T) {
 	}
 }
 
+// TestQueryExecutorStreamDML verifies that DML executed on the streaming path
+// (StreamExecute) runs through the same transactional machinery as Execute and
+// delivers its single result through the callback. Before the fix for #19561
+// and #19564, BuildStreaming rejected DML outright and Stream had no DML
+// handling, so DML in OLAP mode could not start an implicit transaction.
+func TestQueryExecutorStreamDML(t *testing.T) {
+	dmlResult := &sqltypes.Result{RowsAffected: 1}
+
+	testcases := []struct {
+		input     string
+		dbQuery   string
+		planWant  planbuilder.PlanType
+		inTxQuery string
+	}{
+		{
+			input:    "insert into test_table(a) values(1)",
+			dbQuery:  "insert into test_table(a) values (1)",
+			planWant: planbuilder.PlanInsert,
+		},
+		{
+			input:    "update test_table set a=1",
+			dbQuery:  "update test_table set a = 1 limit 10001",
+			planWant: planbuilder.PlanUpdateLimit,
+		},
+		{
+			input:    "delete from test_table where pk = 1",
+			dbQuery:  "delete from test_table where pk = 1 limit 10001",
+			planWant: planbuilder.PlanDeleteLimit,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			db.AddQuery(tcase.dbQuery, dmlResult)
+			ctx := t.Context()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
+
+			// Outside a transaction: Stream must start an implicit transaction
+			// for the DML (the gap described in #19564).
+			qre := newTestQueryExecutorStreaming(ctx, tsv, tcase.input, 0)
+			require.Equal(t, tcase.planWant, qre.plan.PlanID)
+
+			var got *sqltypes.Result
+			err := qre.Stream(func(result *sqltypes.Result) error {
+				got = result
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, dmlResult, got)
+
+			// Inside an existing transaction: the DML must run on that
+			// connection, like Execute's connID != 0 branch.
+			target := tsv.sm.Target()
+			state, err := tsv.Begin(ctx, nil, target, nil)
+			require.NoError(t, err)
+			defer tsv.Commit(ctx, target, state.TransactionID)
+
+			qre = newTestQueryExecutorStreaming(ctx, tsv, tcase.input, state.TransactionID)
+			got = nil
+			err = qre.Stream(func(result *sqltypes.Result) error {
+				got = result
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, dmlResult, got)
+		})
+	}
+}
+
 func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	testCases := []struct {
 		// whether or not the consolidator is enabled by default on the tablet
