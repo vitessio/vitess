@@ -91,17 +91,8 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	select {
 	case <-closeChan:
 		// Pool was closed while we were waiting.
-		removed := false
-
 		wl.mu.Lock()
-		// Try to find and remove ourselves from the list.
-		for e := wl.list.Front(); e != nil; e = e.Next() {
-			if e == elem {
-				wl.list.Remove(elem)
-				removed = true
-				break
-			}
-		}
+		removed := wl.list.RemoveIfPresent(elem)
 		wl.mu.Unlock()
 
 		if removed {
@@ -115,17 +106,8 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	case <-ctx.Done():
 		// Context expired. We need to try to remove ourselves from the waitlist to
 		// prevent another goroutine from trying to hand us a connection later on.
-		removed := false
-
 		wl.mu.Lock()
-		// Try to find and remove ourselves from the list.
-		for e := wl.list.Front(); e != nil; e = e.Next() {
-			if e == elem {
-				wl.list.Remove(elem)
-				removed = true
-				break
-			}
-		}
+		removed := wl.list.RemoveIfPresent(elem)
 		wl.mu.Unlock()
 
 		if removed {
