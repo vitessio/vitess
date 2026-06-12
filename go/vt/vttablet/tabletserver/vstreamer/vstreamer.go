@@ -438,6 +438,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					default:
 						// Do nothing special.
 					}
+					vs.vse.throttledCounts.Add(1)
 					select {
 					case <-drainSourceEvents:
 						drainingAfterSourceError = true

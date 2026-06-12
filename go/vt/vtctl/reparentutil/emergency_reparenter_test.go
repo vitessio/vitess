@@ -4939,7 +4939,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 			validTablets:        []*topodatapb.Tablet{primaryTablet, replicaTablet},
 			tabletsReachable:    []*topodatapb.Tablet{primaryTablet, replicaTablet, rdonlyTablet, rdonlyCrossCellTablet},
 			tabletsTakingBackup: noTabletsTakingBackup,
-			filteredTablets:     nil,
+			filteredTablets:     []*topodatapb.Tablet{},
 		}, {
 			name:       "filter mixed",
 			durability: policy.DurabilityCrossCell,

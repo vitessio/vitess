@@ -4335,6 +4335,90 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 			},
 			wantErr: "context deadline exceeded",
 		}, {
+			// Mixed status-variable shapes that the buffer-pool tiebreaking
+			// fallback must omit from the returned map:
+			//   - missing key (e.g. MariaDB doesn't expose this status variable)
+			//   - present but empty string (variant returns the row with no value)
+			//   - present but non-numeric (logged as a warning, then omitted)
+			//   - present and numeric (kept)
+			// Each omitted tablet still participates in PRS — only its
+			// buffer-pool warmth score is dropped so the sorter's all-or-nothing
+			// gate falls back to durability ordering instead of treating the
+			// missing tablet as a legitimate zero.
+			name: "Missing, empty, and non-numeric values are omitted",
+			tmc: &testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: map[string]struct {
+					Statuses map[string]string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "1231",
+						},
+					},
+					"zone1-0000000200": {
+						// Missing key: variant doesn't expose the status variable.
+						Statuses: map[string]string{},
+					},
+					"zone1-0000000201": {
+						// Present but empty.
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "",
+						},
+					},
+					"zone1-0000000202": {
+						// Present but non-numeric.
+						Statuses: map[string]string{
+							InnodbBufferPoolsDataVar: "not-a-number",
+						},
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000200": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  200,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000201": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  201,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"zone1-0000000202": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  202,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			// Only the numeric value survives. The other three are reachable
+			// (no RPC error) so the function still returns nil — verifyAllTabletsReachable
+			// is about reachability, not about populating every tablet's score.
+			wantBufferPoolsData: map[string]int{
+				"zone1-0000000100": 1231,
+			},
+		}, {
 			name: "Restore tablet skipped before RPC",
 			tmc: &testutil.TabletManagerClient{
 				GetGlobalStatusVarsDelays: map[string]time.Duration{
@@ -4402,8 +4486,9 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 			defer ts.Close()
 
 			pr := &PlannedReparenter{
-				ts:  ts,
-				tmc: tt.tmc,
+				ts:     ts,
+				tmc:    tt.tmc,
+				logger: logutil.NewMemoryLogger(),
 			}
 			if tt.remoteOpTime != 0 {
 				oldTime := topo.RemoteOperationTimeout

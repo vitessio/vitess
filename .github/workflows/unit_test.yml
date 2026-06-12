@@ -74,7 +74,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99 # v2.19.2
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
 
@@ -116,6 +116,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+          cache-dependency-path: |
+            go.sum
+            tools/**/go.sum
 
       - name: Set up python
         if: steps.changes.outputs.unit_tests == 'true'
@@ -141,7 +144,6 @@ jobs:
           sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
 
           go mod download
-          go install golang.org/x/tools/cmd/goimports@v0.39.0
 
       - name: Run make tools
         if: steps.changes.outputs.unit_tests == 'true'
@@ -195,5 +197,5 @@ jobs:
         run: |
           echo '## Slowest Tests' >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          go tool gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
+          go tool -modfile=tools/gotestsum/go.mod gotestsum tool slowest --num 20 --jsonfile report.json | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

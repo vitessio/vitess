@@ -29,7 +29,7 @@ jobs:
           password: ${{ secrets.ANTITHESIS_GAR_KEY }}
 
       - name: Build and push vitess instrumented image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           file: ./test/antithesis/compose/Dockerfile.vitess-instrumented
@@ -40,7 +40,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-vitess:${{ github.sha }}
 
       - name: Build and push config image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ./test/antithesis/compose
           file: ./test/antithesis/compose/Dockerfile.config
@@ -51,7 +51,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-config:${{ github.sha }}
 
       - name: Build and push client image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ./test/antithesis/compose/antithesis-client
           file: ./test/antithesis/compose/antithesis-client/Dockerfile
@@ -62,7 +62,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REPOSITORY }}/vitess-antithesis-client:${{ github.sha }}
 
       - name: Build and push mysql image
-        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ./test/antithesis/compose/source_db/mysql
           file: ./test/antithesis/compose/source_db/mysql/Dockerfile
