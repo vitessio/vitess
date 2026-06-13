@@ -21,6 +21,8 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[VTOrc](#minor-changes-vtorc)**
+        - [Full-disk detection and recovery on the primary](#vtorc-disk-full-recovery)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +138,15 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-disk-full-recovery"/>Full-disk detection and recovery on the primary</a>
+
+VTTablet's existing disk health monitor (`--disk-write-dir`) now distinguishes between a *stalled* disk (write times out) and a *full* disk (write fails with `ENOSPC`). The two signals are reported separately on `FullStatus`, and the tablet flips itself to `NOT_SERVING` if either fires.
+
+VTOrc gains a matching analysis (`PrimaryDiskFull`) and a new flag, `--enable-primary-disk-full-recovery` (default `false`), that mirrors the existing `--enable-primary-disk-stalled-recovery`. When enabled and a primary's disk is full, VTOrc runs `EmergencyReparentShard` to fail over to a healthy replica. Replicas with full disks are excluded from being promoted, but can still serve as the intermediate replication source for catch-up — so ERS still picks the most-advanced candidate, then chooses a different replica for promotion.
+
+Operators must opt in to the recovery action explicitly. Without the flag, VTOrc will still surface the analysis but take no action.
+
+See [#20318](https://github.com/vitessio/vitess/pull/20318) for details.
