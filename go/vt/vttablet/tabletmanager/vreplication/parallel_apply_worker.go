@@ -67,6 +67,23 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 		dbClient.Close()
 		return nil, err
 	}
+	// Workers apply transactions concurrently. The writeset scheduler models
+	// PK/unique/FK conflicts, but it cannot model InnoDB gap/next-key locks,
+	// which REPEATABLE READ takes even for point operations on absent rows
+	// (e.g. DELETE of a row that does not exist, or delete-marking in a
+	// non-unique secondary index). A later-ordered transaction's gap lock can
+	// block an earlier-ordered transaction's INSERT while the commitLoop's
+	// strict ordering keeps that gap lock held until the earlier transaction
+	// commits — a deadlock InnoDB's detector cannot see because half the
+	// cycle lives in the commitLoop (MySQL's MTA has its Commit_order_manager
+	// for exactly this). READ COMMITTED takes no gap locks for row-image
+	// application and is MySQL's own recommendation for row-based parallel
+	// appliers. Statement-based events force-serialize, so RC cannot change
+	// their outcome either.
+	if _, err := dbClient.ExecuteFetch("set session transaction_isolation='READ-COMMITTED'", 1); err != nil {
+		dbClient.Close()
+		return nil, err
+	}
 	vdbc := newVDBClientWithID(dbClient, vr.stats, vr.workflowConfig.RelayLogMaxItems, vr.id)
 	if _, err := vr.setSQLMode(ctx, vdbc); err != nil {
 		dbClient.Close()

@@ -213,6 +213,7 @@ func TestNewApplyWorker(t *testing.T) {
 
 	mockDB := binlogplayer.NewMockDBClient(t)
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -272,6 +273,7 @@ func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {
 			workerDB := binlogplayer.NewMockDBClient(t)
 			workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
 			workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+			workerDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
 			workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -315,6 +317,7 @@ func TestCreateWorkerConn_UsesRunningFKSessionSettings(t *testing.T) {
 	workerDB := binlogplayer.NewMockDBClient(t)
 	workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
 	workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
+	workerDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
 	workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -530,9 +533,11 @@ func (c *recordingFailingDBClient) ExecuteFetch(query string, maxrows int) (*sql
 // recommendation for row-based parallel appliers.
 func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
 	recording := &recordingFailingDBClient{}
+	stats := binlogplayer.NewStats()
 	vr := &vreplicator{
 		id:             1,
-		stats:          binlogplayer.NewStats(),
+		stats:          stats,
+		dbClient:       newVDBClient(&failingDBClient{}, stats, 0),
 		workflowConfig: vttablet.InitVReplicationConfigDefaults(),
 		vre:            &Engine{dbClientFactoryFiltered: func() binlogplayer.DBClient { return recording }},
 	}

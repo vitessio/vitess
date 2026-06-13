@@ -75,6 +75,8 @@ func TestParseEventsDrainsBufferedEventsBeforeTerminalError(t *testing.T) {
 
 	streamErr := errors.New("stream ended after buffered events")
 	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
+	// A nil throttlerClient is intentional and safe: Client.ThrottleCheckOK
+	// nil-checks its receiver and reports "not throttled".
 	vse := &Engine{keyspace: testenv.DBName, shard: testenv.DefaultShard, throttledCounts: stats.NewCounter("", "")}
 
 	for i := range 64 {
@@ -208,6 +210,8 @@ func TestParseEventsReturnsNilOnClientEOF(t *testing.T) {
 	close(errCh)
 
 	cp := dbconfigs.New(&mysql.ConnParams{DbName: testenv.DBName})
+	// A nil throttlerClient is intentional and safe: Client.ThrottleCheckOK
+	// nil-checks its receiver and reports "not throttled".
 	vse := &Engine{keyspace: testenv.DBName, shard: testenv.DefaultShard, throttledCounts: stats.NewCounter("", "")}
 
 	sendCalls := 0
