@@ -65,6 +65,13 @@ type DetectionAnalysisProblem struct {
 	// BeforeAnalyses defines problems that must be recovered after this problem.
 	BeforeAnalyses []AnalysisCode
 
+	// PreserveWithShardWideAnalyses lists shard-wide analyses under which
+	// this problem must NOT be suppressed — used for per-tablet diagnostics
+	// the shard-wide recovery needs visibility into (e.g. ReplicaDiskFull
+	// alongside PrimaryDiskFull so ERS can exclude full-disk replicas from
+	// promotion).
+	PreserveWithShardWideAnalyses []AnalysisCode
+
 	// MatchFunc is a function that returns true when the provided conditions match this problem.
 	MatchFunc func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool
 }
@@ -150,6 +157,33 @@ var detectionAnalysisProblems = []*DetectionAnalysisProblem{
 		BeforeAnalyses: []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas},
 		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
 			return a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskStalled
+		},
+	},
+	// PrimaryDiskFull — same constraint as PrimaryDiskStalled: only ERS can
+	// recover a full-disk primary, so other analyses must NOT declare
+	// `BeforeAnalyses: PrimaryDiskFull`. PrimarySemiSyncBlocked is listed so
+	// a stale `semi_sync_blocked=1` from a prior poll doesn't mask the
+	// disk-full root cause.
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    PrimaryDiskFull,
+			Description: "Primary has a full disk",
+			Priority:    detectionAnalysisPriorityShardWideAction,
+		},
+		BeforeAnalyses: []AnalysisCode{DeadPrimary, DeadPrimaryAndReplicas, DeadPrimaryAndSomeReplicas, DeadPrimaryWithoutReplicas, PrimarySemiSyncBlocked},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return a.IsClusterPrimary && !a.LastCheckValid && a.IsDiskFull
+		},
+	},
+	{
+		Meta: &DetectionAnalysisProblemMeta{
+			Analysis:    ReplicaDiskFull,
+			Description: "Replica has a full disk",
+			Priority:    detectionAnalysisPriorityLow,
+		},
+		PreserveWithShardWideAnalyses: []AnalysisCode{PrimaryDiskFull},
+		MatchFunc: func(a *DetectionAnalysis, ca *clusterAnalysis, primary, tablet *topodatapb.Tablet, isInvalid, isStaleBinlogCoordinates bool) bool {
+			return topo.IsReplicaType(a.TabletType) && !a.LastCheckValid && a.IsDiskFull
 		},
 	},
 

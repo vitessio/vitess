@@ -153,6 +153,7 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 type testDiskMonitor struct {
 	mu            sync.Mutex
 	isDiskStalled bool
+	isDiskFull    bool
 }
 
 func (t *testDiskMonitor) IsDiskStalled() bool {
@@ -161,10 +162,22 @@ func (t *testDiskMonitor) IsDiskStalled() bool {
 	return t.isDiskStalled
 }
 
+func (t *testDiskMonitor) IsDiskFull() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.isDiskFull
+}
+
 func (t *testDiskMonitor) setDiskStalled(ds bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.isDiskStalled = ds
+}
+
+func (t *testDiskMonitor) setDiskFull(df bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.isDiskFull = df
 }
 
 // TestIsServing tests IsServing() functionality.
@@ -179,6 +192,10 @@ func TestIsServing(t *testing.T) {
 	require.True(t, sm.IsServing())
 
 	tdm.setDiskStalled(true)
+	require.False(t, sm.IsServing())
+
+	tdm.setDiskStalled(false)
+	tdm.setDiskFull(true)
 	require.False(t, sm.IsServing())
 }
 

@@ -62,6 +62,8 @@ const (
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
 	PrimaryTabletUnreachableByQuorum       AnalysisCode = "PrimaryTabletUnreachableByQuorum"
+	PrimaryDiskFull                        AnalysisCode = "PrimaryDiskFull"
+	ReplicaDiskFull                        AnalysisCode = "ReplicaDiskFull"
 
 	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
 	// has been elected. VTOrc should demote this primary to a replica.
@@ -162,6 +164,7 @@ type DetectionAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
 	IsDiskStalled                             bool
+	IsDiskFull                                bool
 	QuorumDetail                              *QuorumResult `json:",omitempty"`
 }
 

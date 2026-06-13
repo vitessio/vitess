@@ -78,9 +78,17 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 			newAnalysisCode:  inst.PrimaryDiskStalled,
 			shouldBeEqual:    true,
 		}, {
+			prevAnalysisCode: inst.DeadPrimary,
+			newAnalysisCode:  inst.PrimaryDiskFull,
+			shouldBeEqual:    true,
+		}, {
 			// PrimarySemiSyncBlocked and PrimaryDiskStalled have the same recovery
 			prevAnalysisCode: inst.PrimarySemiSyncBlocked,
 			newAnalysisCode:  inst.PrimaryDiskStalled,
+			shouldBeEqual:    true,
+		}, {
+			prevAnalysisCode: inst.PrimarySemiSyncBlocked,
+			newAnalysisCode:  inst.PrimaryDiskFull,
 			shouldBeEqual:    true,
 		}, {
 			// DeadPrimary and PrimaryTabletDeleted are different recoveries.
@@ -306,6 +314,25 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
+			name:       "PrimaryDiskFull with ERS enabled",
+			ersEnabled: true,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.PrimaryDiskFull,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+		}, {
+			name:       "PrimaryDiskFull with ERS disabled",
+			ersEnabled: false,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.PrimaryDiskFull,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantRecoverySkipCode: RecoverySkipERSDisabled,
+		}, {
 			name:       "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled: true,
 			analysisEntry: &inst.DetectionAnalysis{
@@ -418,6 +445,16 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 				AnalyzedShard:    shard,
 			},
 			wantRecoveryFunction: recoverErrantGTIDDetectedFunc,
+			wantRecoverySkipCode: RecoverySkipNoRecoveryAction,
+		}, {
+			name:       "ReplicaDiskFull",
+			ersEnabled: false,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.ReplicaDiskFull,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: noRecoveryFunc,
 			wantRecoverySkipCode: RecoverySkipNoRecoveryAction,
 		}, {
 			name:       "DeadPrimary with global ERS enabled and keyspace ERS disabled",
@@ -740,6 +777,11 @@ func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
 			analysis:    inst.PrimaryTabletUnreachableByQuorum,
 			wantIgnored: false,
 		},
+		{
+			name:        "PrimaryDiskFull does NOT skip primary refresh",
+			analysis:    inst.PrimaryDiskFull,
+			wantIgnored: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -756,6 +798,53 @@ func TestShardWideRecoveryIgnoredTablets(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFullDiskAliasesToPreventPromotion(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	t.Cleanup(db.ClearVTOrcDatabase)
+
+	const (
+		keyspace = "ks"
+		shard    = "0"
+	)
+	replicaAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
+	replicaTablet := &topodatapb.Tablet{
+		Alias:         replicaAlias,
+		Hostname:      "replica",
+		MysqlHostname: "replica",
+		MysqlPort:     3306,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+	}
+	require.NoError(t, inst.SaveTablet(replicaTablet))
+	require.NoError(t, inst.WriteInstance(&inst.Instance{
+		InstanceAlias: replicaAlias,
+		Hostname:      "replica",
+		Port:          3306,
+		Cell:          "zone1",
+		TabletType:    topodatapb.TabletType_REPLICA,
+		FullDisk:      true,
+	}, true, nil))
+
+	aliases := fullDiskAliasesToPreventPromotion(&inst.DetectionAnalysis{
+		Analysis:              inst.DeadPrimary,
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
+	}, log.NewPrefixedLogger("test"))
+	require.True(t, aliases.Has("zone1-0000000101"))
+	require.False(t, aliases.Has("zone1-0000000100"))
+
+	aliases = fullDiskAliasesToPreventPromotion(&inst.DetectionAnalysis{
+		Analysis:              inst.PrimaryDiskFull,
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
+	}, log.NewPrefixedLogger("test"))
+	require.True(t, aliases.Has("zone1-0000000101"))
+	require.True(t, aliases.Has("zone1-0000000100"))
 }
 
 func TestRecoverShardAnalyses(t *testing.T) {

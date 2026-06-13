@@ -18,10 +18,11 @@ package tabletserver
 
 import (
 	"context"
+	"errors"
 	"os"
-	"path"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -49,6 +50,8 @@ func registerInitFlags(fs *pflag.FlagSet) {
 type DiskHealthMonitor interface {
 	// IsDiskStalled returns true if the disk is stalled or rejecting writes.
 	IsDiskStalled() bool
+	// IsDiskFull returns true if the disk is rejecting writes with ENOSPC.
+	IsDiskFull() bool
 }
 
 func newDiskHealthMonitor(ctx context.Context) DiskHealthMonitor {
@@ -62,24 +65,29 @@ func newDiskHealthMonitor(ctx context.Context) DiskHealthMonitor {
 type writeFunction func() error
 
 func attemptFileWrite() error {
-	file, err := os.Create(path.Join(stalledDiskWriteDir, ".stalled_disk_check"))
+	file, err := os.CreateTemp(stalledDiskWriteDir, ".stalled_disk_check_")
 	if err != nil {
 		return err
 	}
+	defer os.Remove(file.Name())
+
 	_, err = file.WriteString(strconv.FormatInt(time.Now().UnixNano(), 10))
 	if err != nil {
+		_ = file.Close()
 		return err
 	}
 	err = file.Sync()
 	if err != nil {
+		_ = file.Close()
 		return err
 	}
 	return file.Close()
 }
 
 type pollingDiskHealthMonitor struct {
-	stalledMutex         sync.RWMutex
+	healthMutex          sync.RWMutex
 	stalled              bool
+	full                 bool
 	writeInProgressMutex sync.RWMutex
 	writeInProgress      bool
 	writeFunc            writeFunction
@@ -91,8 +99,9 @@ var _ DiskHealthMonitor = &pollingDiskHealthMonitor{}
 
 func newPollingDiskHealthMonitor(ctx context.Context, writeFunc writeFunction, pollingInterval, writeTimeout time.Duration) *pollingDiskHealthMonitor {
 	fs := &pollingDiskHealthMonitor{
-		stalledMutex:         sync.RWMutex{},
+		healthMutex:          sync.RWMutex{},
 		stalled:              false,
+		full:                 false,
 		writeInProgressMutex: sync.RWMutex{},
 		writeInProgress:      false,
 		writeFunc:            writeFunc,
@@ -123,24 +132,45 @@ func (fs *pollingDiskHealthMonitor) poll(ctx context.Context) {
 
 			select {
 			case <-time.After(fs.writeTimeout):
-				fs.setIsDiskStalled(true)
+				fs.setDiskHealth(true, false)
 			case err := <-ch:
-				fs.setIsDiskStalled(err != nil)
+				fs.setDiskHealthFromWriteError(err)
 			}
 		}
 	}
 }
 
 func (fs *pollingDiskHealthMonitor) IsDiskStalled() bool {
-	fs.stalledMutex.RLock()
-	defer fs.stalledMutex.RUnlock()
+	fs.healthMutex.RLock()
+	defer fs.healthMutex.RUnlock()
 	return fs.stalled
 }
 
-func (fs *pollingDiskHealthMonitor) setIsDiskStalled(isStalled bool) {
-	fs.stalledMutex.Lock()
-	defer fs.stalledMutex.Unlock()
+func (fs *pollingDiskHealthMonitor) IsDiskFull() bool {
+	fs.healthMutex.RLock()
+	defer fs.healthMutex.RUnlock()
+	return fs.full
+}
+
+// setDiskHealthFromWriteError sets disk health from a probe-write outcome.
+// Invariant: stalled and full are mutually exclusive — downstream consumers
+// rely on this, do not introduce a state where both are true.
+func (fs *pollingDiskHealthMonitor) setDiskHealthFromWriteError(err error) {
+	switch {
+	case err == nil:
+		fs.setDiskHealth(false, false)
+	case errors.Is(err, syscall.ENOSPC):
+		fs.setDiskHealth(false, true)
+	default:
+		fs.setDiskHealth(true, false)
+	}
+}
+
+func (fs *pollingDiskHealthMonitor) setDiskHealth(isStalled, isFull bool) {
+	fs.healthMutex.Lock()
+	defer fs.healthMutex.Unlock()
 	fs.stalled = isStalled
+	fs.full = isFull
 }
 
 func (fs *pollingDiskHealthMonitor) isWriteInProgress() bool {
@@ -164,5 +194,9 @@ func newNoopDiskHealthMonitor() DiskHealthMonitor {
 }
 
 func (fs *noopDiskHealthMonitor) IsDiskStalled() bool {
+	return false
+}
+
+func (fs *noopDiskHealthMonitor) IsDiskFull() bool {
 	return false
 }
