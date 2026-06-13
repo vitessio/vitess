@@ -297,16 +297,21 @@ func (qb *queryBuilder) joinWith(other *queryBuilder, onCondition sqlparser.Expr
 		}
 	}
 
-	qb.mergeWhereClauses(stmt, otherStmt)
-
 	var newFromClause []sqlparser.TableExpr
 	switch joinType {
 	case sqlparser.NormalJoinType:
+		qb.mergeWhereClauses(stmt, otherStmt)
 		newFromClause = append(stmt.GetFrom(), otherStmt.GetFrom()...)
 		for _, pred := range sqlparser.SplitAndExpression(nil, onCondition) {
 			qb.addPredicate(pred)
 		}
 	default:
+		rhsWhere := otherStmt.GetWherePredicate()
+		if rhsWhere != nil {
+			otherStmt.SetWherePredicate(nil)
+			onCondition = sqlparser.AndExpressions(onCondition, rhsWhere)
+		}
+		qb.mergeWhereClauses(stmt, otherStmt)
 		newFromClause = []sqlparser.TableExpr{buildJoin(stmt, otherStmt, onCondition, joinType)}
 	}
 
