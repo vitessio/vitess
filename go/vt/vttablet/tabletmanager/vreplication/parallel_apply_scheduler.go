@@ -548,8 +548,15 @@ func (s *applyScheduler) advanceCommittedSequence(seq int64) {
 	}
 }
 
-// waitForIdle blocks until there are no pending or inflight transactions.
-// Used in tests to synchronize after enqueuing work.
+// waitForIdle blocks until there are no pending or inflight transactions of
+// any class. scheduleLoop calls it as a barrier after a DDL fetch so that the
+// DDL, its FK-metadata refresh, and any FIELD events for DDL-affected tables
+// are fully applied before the next fetch snapshots plans/FK refs. The idle
+// predicate must therefore cover every inflight counter — including
+// inflightNoConflict (position-only saves, OTHER/IGNORE stops) and the
+// inflightWriteset map — so the barrier cannot return while any dispatched
+// transaction is still uncommitted. This mirrors the fully-drained predicate
+// in nextReady's abandoned-work check.
 func (s *applyScheduler) waitForIdle(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -560,7 +567,8 @@ func (s *applyScheduler) waitForIdle(ctx context.Context) error {
 		if err := s.ctx.Err(); err != nil {
 			return err
 		}
-		if s.pendingCount == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 {
+		if s.pendingCount == 0 && s.inflightGlobal == 0 && s.inflightMissingMeta == 0 &&
+			s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0 && s.inflightNoConflict == 0 {
 			return nil
 		}
 		s.cond.Wait()

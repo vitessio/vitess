@@ -289,6 +289,31 @@ func TestApplySchedulerWaitForIdle(t *testing.T) {
 		return len(doneCh) > 0
 	}, 200*time.Millisecond, 5*time.Millisecond)
 	require.NoError(t, <-doneCh)
+
+	// A dispatched-but-uncommitted noConflict txn (e.g. a position-only save)
+	// must also keep waitForIdle blocked: the DDL barrier relies on it to
+	// guarantee ALL scheduled work has been applied before the next fetch.
+	// noConflict txns bump only inflightNoConflict, so an idle check that
+	// omits that counter would let the barrier return too early.
+	noConflict := &applyTxn{order: 2, noConflict: true}
+	require.NoError(t, s.enqueue(noConflict))
+	gotNoConflict, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Same(t, noConflict, gotNoConflict)
+
+	noConflictDone := make(chan error, 1)
+	go func() {
+		noConflictDone <- s.waitForIdle(ctx)
+	}()
+	assert.Never(t, func() bool {
+		return len(noConflictDone) > 0
+	}, 50*time.Millisecond, 5*time.Millisecond)
+
+	require.NoError(t, s.markCommitted(gotNoConflict))
+	assert.Eventually(t, func() bool {
+		return len(noConflictDone) > 0
+	}, 200*time.Millisecond, 5*time.Millisecond)
+	require.NoError(t, <-noConflictDone)
 }
 
 func TestApplySchedulerWaitForIdleCancelled(t *testing.T) {

@@ -558,7 +558,9 @@ func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
 	// the target mysqld (no vtgate sysvar rewriting), and the
 	// transaction_isolation sysvar spelling is flavor-specific (MariaDB used
 	// tx_isolation until 11.1; MySQL only added transaction_isolation in
-	// 5.7.20). The statement form works everywhere.
-	require.Contains(t, recording.queries, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED",
+	// 5.7.20). The statement form works everywhere. Lowercase keeps it
+	// consistent with the other session-setup statements and the framework's
+	// globalDBQueries filter (which skips lowercase "set ..." setup queries).
+	require.Contains(t, recording.queries, "set session transaction isolation level read committed",
 		"worker connections must run at READ COMMITTED to avoid gap-lock deadlocks through the commit order")
 }
