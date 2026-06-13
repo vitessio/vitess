@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Link, Redirect, Route, Switch, useParams, useRouteMatch } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 
 import { useWorkflow } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
@@ -39,7 +39,6 @@ interface RouteParams {
 
 export const Stream = () => {
     const params = useParams<RouteParams>();
-    const { path, url } = useRouteMatch();
     const { data: workflow } = useWorkflow({
         clusterID: params.clusterID,
         keyspace: params.keyspace,
@@ -77,16 +76,16 @@ export const Stream = () => {
             </WorkspaceHeader>
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="JSON" to={`${url}/json`} />
-                    <Tab text="JSON Tree" to={`${url}/json_tree`} />
+                    <Tab text="JSON" to="json" />
+                    <Tab text="JSON Tree" to="json_tree" />
                 </TabContainer>
 
-                <Switch>
-                    <Route path={`${path}/json`}>{stream && <Code code={JSON.stringify(stream, null, 2)} />}</Route>
-                    <Route path={`${path}/json_tree`}>{stream && <JSONViewTree data={stream} />}</Route>
+                <Routes>
+                    <Route path="json" element={stream ? <Code code={JSON.stringify(stream, null, 2)} /> : null} />
+                    <Route path="json_tree" element={stream ? <JSONViewTree data={stream} /> : null} />
 
-                    <Redirect exact from={path} to={`${path}/json`} />
-                </Switch>
+                    <Route index element={<Navigate to="json" replace />} />
+                </Routes>
             </ContentContainer>
         </div>
     );

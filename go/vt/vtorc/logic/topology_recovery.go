@@ -117,8 +117,8 @@ var (
 		"Shard",
 	})
 
-	// shardsLockCounter is a count of in-flight shard locks. Use atomics to read/update.
-	shardsLockCounter int64
+	// shardsLockCounter is a count of in-flight shard locks.
+	shardsLockCounter atomic.Int64
 
 	// recoveriesCounterLabels are labels for grouping the counter based stats for recoveries.
 	recoveriesCounterLabels = []string{"RecoveryType", "Keyspace", "Shard"}
@@ -214,7 +214,7 @@ func NewTopologyRecoveryStep(id int64, message string) *TopologyRecoveryStep {
 func init() {
 	// ShardLocksActive is a stats representation of shardsLockCounter.
 	stats.NewGaugeFunc("ShardLocksActive", "Number of actively-held shard locks", func() int64 {
-		return atomic.LoadInt64(&shardsLockCounter)
+		return shardsLockCounter.Load()
 	})
 	urgentOperations = cache.New(urgentOperationsInterval, 2*urgentOperationsInterval)
 	go initializeTopologyRecoveryPostConfiguration()
@@ -236,8 +236,7 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 	if shard == "" {
 		return nil, nil, errors.New("can't lock shard: shard name is unspecified")
 	}
-	val := atomic.LoadInt32(&hasReceivedSIGTERM)
-	if val > 0 {
+	if hasReceivedSIGTERM.Load() > 0 {
 		return nil, nil, errors.New("can't lock shard: SIGTERM received")
 	}
 
@@ -247,16 +246,16 @@ func LockShard(ctx context.Context, keyspace, shard, lockAction string) (context
 		shardLockTimings.Add("Lock", lockTime)
 	}()
 
-	atomic.AddInt64(&shardsLockCounter, 1)
+	shardsLockCounter.Add(1)
 	ctx, unlock, err := ts.TryLockShard(ctx, keyspace, shard, lockAction)
 	if err != nil {
-		atomic.AddInt64(&shardsLockCounter, -1)
+		shardsLockCounter.Add(-1)
 		return nil, nil, err
 	}
 	return ctx, func(e *error) {
 		startTime := time.Now()
 		defer func() {
-			atomic.AddInt64(&shardsLockCounter, -1)
+			shardsLockCounter.Add(-1)
 			shardLockTimings.Add("Unlock", time.Since(startTime))
 		}()
 		unlock(e)
@@ -833,6 +832,27 @@ func getRecoverFunctionName(recoveryFunctionCode recoveryFunction) string {
 	}
 }
 
+// shardWideRecoveryIgnoredTablets returns the list of tablet aliases to skip
+// during the pre-recovery refresh for shard-wide recoveries. Dead primaries
+// are skipped because they are unreachable; reachable-but-unhealthy primaries
+// (PrimarySemiSyncBlocked, PrimaryDiskStalled) are NOT skipped so that
+// checkIfAlreadyFixed evaluates fresh state.
+func shardWideRecoveryIgnoredTablets(recoveryFunctionCode recoveryFunction, analysisEntry *inst.DetectionAnalysis) []*topodatapb.TabletAlias {
+	var tabletsToIgnore []*topodatapb.TabletAlias
+	if recoveryFunctionCode == recoverDeadPrimaryFunc {
+		switch analysisEntry.Analysis {
+		case inst.PrimarySemiSyncBlocked, inst.PrimaryDiskStalled:
+			// Reachable primary — refresh it so checkIfAlreadyFixed
+			// evaluates current state. The problem may have been
+			// resolved by a prior dependency recovery.
+			// See https://github.com/vitessio/vitess/issues/19941
+		default:
+			tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
+		}
+	}
+	return tabletsToIgnore
+}
+
 // isShardWideRecovery returns whether the given recovery is a recovery that affects all tablets in a shard
 func isShardWideRecovery(recoveryFunctionCode recoveryFunction) bool {
 	switch recoveryFunctionCode {
@@ -950,11 +970,8 @@ func executeCheckAndRecoverFunction(analysisEntry *inst.DetectionAnalysis) (err 
 		// of a shard because a new tablet could have been promoted, and we need to have this visibility
 		// before we run a shard-wide operation of our own.
 		if isShardWideRecovery(checkAndRecoverFunctionCode) {
-			tabletsToIgnore := make([]*topodatapb.TabletAlias, 0)
-			if checkAndRecoverFunctionCode == recoverDeadPrimaryFunc {
-				tabletsToIgnore = append(tabletsToIgnore, analysisEntry.AnalyzedInstanceAlias)
-			}
-			// We ignore the dead primary tablet because it is going to be unreachable. If all the other tablets aren't able to reach this tablet either,
+			tabletsToIgnore := shardWideRecoveryIgnoredTablets(checkAndRecoverFunctionCode, analysisEntry)
+			// We ignore dead primary tablets because they are going to be unreachable. If all the other tablets aren't able to reach this tablet either,
 			// we can proceed with the dead primary recovery. We don't need to refresh the information for this dead tablet.
 			logger.Info("Force refreshing all shard tablets")
 			forceRefreshAllTabletsInShard(ctx, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, tabletsToIgnore)
@@ -1054,26 +1071,32 @@ func recheckPrimaryHealth(analysisEntry *inst.DetectionAnalysis, recoveryLabels 
 	discoveryFunc(primaryTabletAlias, true)
 
 	// checking if the original analysis is valid even after the primary refresh.
-	recoveryRequired, err := checkIfAlreadyFixed(analysisEntry)
+	alreadyFixed, err := checkIfAlreadyFixed(analysisEntry)
 	if err != nil {
 		log.Info(fmt.Sprintf("recheckPrimaryHealth: Checking if recovery is required returned err: %v", err))
 		return err
 	}
 
-	// The original analysis for the tablet has changed.
-	// This could mean that either the original analysis has changed or some other Vtorc instance has already performing the mitigation.
-	// In either case, the original analysis is stale which can be safely aborted.
-	if recoveryRequired {
-		log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
-		recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
-		// original analysis is stale, abort.
-		return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
+	if !alreadyFixed {
+		return nil
 	}
 
-	return nil
+	// The original analysis for the tablet has changed.
+	// This could mean that either the original analysis has changed or some other
+	// VTOrc instance has already performing the mitigation.
+	// In either case, the original analysis is stale which can be safely aborted.
+	log.Info(fmt.Sprintf("recheckPrimaryHealth: Primary recovery is required, Tablet alias: %v", primaryTabletAlias))
+	recoveriesSkippedCounter.Add(append(recoveryLabels, RecoverySkipPrimaryRecovery.String()), 1)
+	return fmt.Errorf("aborting %s, primary mitigation is required", originalAnalysisEntry)
 }
 
-// checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
+// checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not.
+//
+// Note: GetDetectionAnalysis may suppress non-primary analyses when a shard-wide
+// action is detected. Problems that declare a dependency on the shard-wide action
+// (via BeforeAnalyses/AfterAnalyses) survive suppression and will still be found
+// here. Non-dependent problems are intentionally suppressed — the shard-wide
+// action takes priority and they will be re-detected on a future poll.
 func checkIfAlreadyFixed(analysisEntry *inst.DetectionAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
 	analysisEntries, err := inst.GetDetectionAnalysis(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, &inst.DetectionAnalysisHints{})
@@ -1431,7 +1454,7 @@ func reconcileStaleTopoPrimary(ctx context.Context, analysisEntry *inst.Detectio
 	})
 
 	// Update the tablet's type directly in the topology to REPLICA.
-	_, err = topotools.ChangeType(ctx, ts, analyzedTablet.Alias, topodatapb.TabletType_REPLICA, nil)
+	_, err = changeTabletTypeInTopo(ctx, analyzedTablet, topodatapb.TabletType_REPLICA)
 	if err != nil {
 		// If the tablet's type is already REPLICA in the topology, we consider that a success. This can happen
 		// if we race with the goroutine above and `SetReplicationSource` already changed the type to REPLICA
@@ -1451,6 +1474,14 @@ func forceDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replic
 	defer cancel()
 
 	return tmc.DemotePrimary(ctx, tablet, true)
+}
+
+// changeTabletTypeInTopo updates the tablet type in topology for the given tablet.
+func changeTabletTypeInTopo(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType) (*topodatapb.Tablet, error) {
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	return topotools.ChangeType(ctx, ts, tablet.Alias, tabletType, nil)
 }
 
 // recoverErrantGTIDDetected changes the tablet type of a replica tablet that has errant GTIDs.

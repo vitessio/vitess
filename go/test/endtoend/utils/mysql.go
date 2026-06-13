@@ -236,14 +236,14 @@ func CompareVitessAndMySQLResults(t TestingT, query string, vtConn *mysql.Conn, 
 	errStr := "Query (" + query + ") results mismatched.\nVitess Results:\n"
 	var errStrSb236 strings.Builder
 	for _, row := range vtQr.Rows {
-		errStrSb236.WriteString(fmt.Sprintf("%s\n", row))
+		fmt.Fprintf(&errStrSb236, "%s\n", row)
 	}
 	errStr += errStrSb236.String()
 	errStr += fmt.Sprintf("Vitess RowsAffected: %v\n", vtQr.RowsAffected)
 	errStr += "MySQL Results:\n"
 	var errStrSb241 strings.Builder
 	for _, row := range mysqlQr.Rows {
-		errStrSb241.WriteString(fmt.Sprintf("%s\n", row))
+		fmt.Fprintf(&errStrSb241, "%s\n", row)
 	}
 	errStr += errStrSb241.String()
 	errStr += fmt.Sprintf("MySQL RowsAffected: %v\n", mysqlQr.RowsAffected)
@@ -295,8 +295,8 @@ func checkFields(t TestingT, columnName string, vtField, myField *querypb.Field)
 		}
 	}
 
-	// starting in Vitess 20, decimal types are properly sized in their field information
-	if BinaryIsAtLeastAtVersion(20, "vtgate") && vtField.Type == sqltypes.Decimal {
+	// decimal types are properly sized in their field information
+	if vtField.Type == sqltypes.Decimal {
 		if vtField.Decimals != myField.Decimals {
 			t.Errorf("for column %s field decimals count do not match\nNot equal: \nMySQL: %v\nVitess: %v\n", columnName, myField.Decimals, vtField.Decimals)
 		}

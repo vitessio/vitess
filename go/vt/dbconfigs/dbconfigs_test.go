@@ -233,50 +233,30 @@ func TestAccessors(t *testing.T) {
 		DBName:         "db",
 		Charset:        "utf8",
 	}
-	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
-		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
-	}
-	if got, want := dbc.AllPrivsConnector().connParams.DbName, ""; got != want {
-		t.Errorf("dbc.AllPrivsWithDB().DbName: %v, want %v", got, want)
-	}
-	if got, want := dbc.AllPrivsWithDB().connParams.DbName, "db"; got != want {
-		t.Errorf("dbc.AllPrivsWithDB().DbName: %v, want %v", got, want)
-	}
-	if got, want := dbc.AppDebugWithDB().connParams.DbName, "db"; got != want {
-		t.Errorf("dbc.AppDebugWithDB().DbName: %v, want %v", got, want)
-	}
-	if got, want := dbc.DbaConnector().connParams.DbName, ""; got != want {
-		t.Errorf("dbc.Dba().DbName: %v, want %v", got, want)
-	}
-	if got, want := dbc.DbaWithDB().connParams.DbName, "db"; got != want {
-		t.Errorf("dbc.DbaWithDB().DbName: %v, want %v", got, want)
-	}
-	if got, want := dbc.FilteredWithDB().connParams.DbName, "db"; got != want {
-		t.Errorf("dbc.FilteredWithDB().DbName: %v, want %v", got, want)
-	}
-	if got, want := dbc.ReplConnector().connParams.DbName, ""; got != want {
-		t.Errorf("dbc.Repl().DbName: %v, want %v", got, want)
-	}
+	assert.Equal(t, "db", dbc.AppWithDB().connParams.DbName, "dbc.AppWithDB().DbName")
+	assert.Equal(t, "", dbc.AllPrivsConnector().connParams.DbName, "dbc.AllPrivsWithDB().DbName")
+	assert.Equal(t, "db", dbc.AllPrivsWithDB().connParams.DbName, "dbc.AllPrivsWithDB().DbName")
+	assert.Equal(t, "db", dbc.AppDebugWithDB().connParams.DbName, "dbc.AppDebugWithDB().DbName")
+	assert.Equal(t, "", dbc.DbaConnector().connParams.DbName, "dbc.Dba().DbName")
+	assert.Equal(t, "db", dbc.DbaWithDB().connParams.DbName, "dbc.DbaWithDB().DbName")
+	assert.Equal(t, "db", dbc.FilteredWithDB().connParams.DbName, "dbc.FilteredWithDB().DbName")
+	assert.Equal(t, "", dbc.ReplConnector().connParams.DbName, "dbc.Repl().DbName")
 }
 
 func TestCredentialsFileHUP(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "credentials.json")
-	if err != nil {
-		t.Fatalf("couldn't create temp file: %v", err)
-	}
+	require.NoError(t, err)
 	defer os.Remove(tmpFile.Name())
 	dbCredentialsFile = tmpFile.Name()
 	dbCredentialsServer = "file"
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", oldStr, oldStr)
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-		t.Fatalf("couldn't write temp file: %v", err)
+		require.NoError(t, err)
 	}
 	cs := GetCredentialsServer()
 	_, pass, _ := cs.GetUserAndPassword(oldStr)
-	if pass != oldStr {
-		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
-	}
+	require.Equalf(t, oldStr, pass, "%s's Password should still be '%s'", oldStr, oldStr)
 	hupTest(t, tmpFile, oldStr, "str2")
 	hupTest(t, tmpFile, "str2", "str3") // still handling the signal
 }
@@ -285,22 +265,16 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 	cs := GetCredentialsServer()
 	jsonConfig := fmt.Sprintf("{\"%s\": [\"%s\"]}", newStr, newStr)
 	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0o600); err != nil {
-		t.Fatalf("couldn't overwrite temp file: %v", err)
+		require.NoError(t, err)
 	}
 	_, pass, _ := cs.GetUserAndPassword(oldStr)
-	if pass != oldStr {
-		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
-	}
+	require.Equalf(t, oldStr, pass, "%s's Password should still be '%s'", oldStr, oldStr)
 	_ = syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
 	_, _, err := cs.GetUserAndPassword(oldStr)
-	if err != ErrUnknownUser {
-		t.Fatalf("Should not have old %s after config reload", oldStr)
-	}
+	require.Equalf(t, ErrUnknownUser, err, "Should not have old %s after config reload", oldStr)
 	_, pass, _ = cs.GetUserAndPassword(newStr)
-	if pass != newStr {
-		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
-	}
+	require.Equalf(t, newStr, pass, "%s's Password should be '%s'", newStr, newStr)
 }
 
 func TestYaml(t *testing.T) {

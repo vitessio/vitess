@@ -5972,7 +5972,7 @@ INPUT
 select 1 + /*!00000 2 node_modules/ + 3 /*!99999 noise*/ + 4;
 END
 ERROR
-syntax error at position 57
+syntax error at position 36
 END
 INPUT
 select 1, st_touches(t.geom, p.geom) from tbl_polygon t, tbl_polygon p where t.id = 'POLY1' and p.id = 'POLY2';
@@ -20251,8 +20251,8 @@ END
 INPUT
 select 1/*!2*/;
 END
-OUTPUT
-select 1 from dual
+ERROR
+syntax error at position 13 near '2'
 END
 INPUT
 select a, t1.* as 'with_alias', b from t1;
@@ -22238,7 +22238,7 @@ INPUT
 select 1/*!000002*/;
 END
 ERROR
-syntax error at position 20 near '2'
+syntax error at position 18 near '2'
 END
 INPUT
 select 1, min(a) from t1i where a=99;

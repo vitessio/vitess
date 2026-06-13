@@ -300,13 +300,13 @@ func getStructFieldNames(s any) []string {
 
 func displayListings(listings []*VDiffListing) string {
 	var strArray2 [][]string
-	var strArray []string
 	str := ""
 
 	if len(listings) == 0 {
 		return ""
 	}
 	fields := getStructFieldNames(VDiffListing{})
+	strArray := make([]string, 0, len(fields))
 	strArray = append(strArray, fields...)
 	strArray2 = append(strArray2, strArray)
 	for _, listing := range listings {

@@ -33,6 +33,7 @@ import (
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/sync/semaphore"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
@@ -57,6 +58,16 @@ var (
 	baseTimeout    = 30 * time.Second
 
 	certPath, keyPath, caPath, authFile string
+
+	zkLockAcquisition = stats.NewGaugeDuration(
+		"ZkLockAcquisition",
+		"Time to acquire a zookeeper lock")
+	zkConnAcquisitionRetry = stats.NewCounter(
+		"ZkConnAcquisitionRetry",
+		"Number of retries to acquire a zookeeper connection")
+	zkConnState = stats.NewCountersWithSingleLabel(
+		"ZkConnState",
+		"Number of times the zookeeper connection has entered each state", "state")
 )
 
 func init() {
@@ -236,14 +247,18 @@ func (c *ZkConn) Close() error {
 // https://issues.apache.org/jira/browse/ZOOKEEPER-22
 func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error) (err error) {
 	// Handle concurrent access to a Zookeeper server here.
+	start := time.Now()
 	err = c.sem.Acquire(ctx, 1)
 	if err != nil {
 		return err
 	}
+	duration := time.Since(start)
+	zkLockAcquisition.Set(duration)
 	defer c.sem.Release(1)
 
 	for i := range maxAttempts {
 		if i > 0 {
+			zkConnAcquisitionRetry.Add(1)
 			// Add a bit of backoff time before retrying:
 			// 1 second base + up to 5 seconds.
 			time.Sleep(1*time.Second + time.Duration(rand.Int64N(5e9)))
@@ -324,6 +339,7 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 // clears out the connection record.
 func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 	for event := range session {
+		zkConnState.Add(event.State.String(), 1)
 		switch event.State {
 		case zk.StateDisconnected, zk.StateExpired, zk.StateConnecting:
 			c.mu.Lock()

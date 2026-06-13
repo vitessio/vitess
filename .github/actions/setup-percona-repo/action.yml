@@ -4,7 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Build weekly cache key
-      shell: bash
+      shell: bash -e {0}
       run: echo "PERCONA_RELEASE_CACHE_WEEK=$(date +%G-%V)" >> "$GITHUB_ENV"
 
     - name: Cache percona-release package
@@ -16,12 +16,12 @@ runs:
 
     - name: Get Percona Apt Repo package (on cache miss)
       if: steps.cache-percona-release.outputs.cache-hit != 'true'
-      shell: bash
+      shell: bash -e {0}
       run: |
         curl -sLo percona-release_latest.deb https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
 
     - name: Install Percona Apt Repo package
-      shell: bash
+      shell: bash -e {0}
       run: |
         sudo apt-get -qq install -y gnupg2 lsb-release
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i percona-release_latest.deb

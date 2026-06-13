@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { useCallback, useMemo } from 'react';
-import { useHistory, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrayFormatType, parse, QueryParams, stringify } from '../util/queryString';
 
 export interface URLQueryOptions {
@@ -51,7 +51,7 @@ export const useURLQuery = (
      * This does not affect location.pathname: if your current path
      * is "/test?greeting=hello", then calling `pushQuery({ greeting: "hi" })`
      * will push "/test?greeting=hi". If you *do* want to update the pathname,
-     * then use useHistory()'s history.push directly.
+     * then use useNavigate() directly.
      */
     pushQuery: (nextQuery: QueryParams) => void;
 
@@ -62,27 +62,14 @@ export const useURLQuery = (
      * This does not affect location.pathname: if your current path
      * is "/test?greeting=hello", then calling `replaceQuery({ greeting: "hi" })`
      * will replace "/test?greeting=hi". If you *do* want to update the pathname,
-     * then use useHistory()'s history.replace directly.
+     * then use useNavigate() directly.
      */
     replaceQuery: (nextQuery: QueryParams) => void;
 } => {
-    const history = useHistory();
+    const navigate = useNavigate();
     const location = useLocation();
 
-    // A spicy note: typically, we always want to use the `location` from useLocation() instead of useHistory().
-    // From the React documentation: https://github.com/ReactTraining/react-router/blob/master/packages/react-router/docs/api/history.md#history-is-mutable
-    //
-    //      The history object is mutable. Therefore it is recommended to access the location from the render props of <Route>,
-    //      not from history.location. This ensures your assumptions about React are correct in lifecycle hooks.
-    //
-    // However, in a *test* environment, the "?...string" one usually finds at `location.search`
-    // is (confusingly) nested at `location.location.search`. This seems like a discrepancy between how
-    // `history.push` + `history.replace` calls are handled by `Router` + memory history (used for tests)
-    // vs. `BrowserRouter` (used "for real", in the browser).
-    //
-    // So, in practice, this `search` variable is set to `location.search` "for real" (in the browser)
-    // and only falls back to `location.location.search` for tests. It's... not ideal. :/ But it seems to work.
-    const search = location.search || history.location.search;
+    const search = location.search;
 
     // Destructure `opts` for more granular useMemo and useCallback dependencies.
     const { arrayFormat, parseBooleans, parseNumbers } = opts;
@@ -101,17 +88,17 @@ export const useURLQuery = (
     const pushQuery = useCallback(
         (nextQuery: QueryParams) => {
             const nextSearch = stringify({ ...query, ...nextQuery }, { arrayFormat });
-            return history.push({ search: `?${nextSearch}` });
+            return navigate({ search: `?${nextSearch}` });
         },
-        [arrayFormat, history, query]
+        [arrayFormat, navigate, query]
     );
 
     const replaceQuery = useCallback(
         (nextQuery: QueryParams) => {
             const nextSearch = stringify({ ...query, ...nextQuery }, { arrayFormat });
-            return history.replace({ search: `?${nextSearch}` });
+            return navigate({ search: `?${nextSearch}` }, { replace: true });
         },
-        [arrayFormat, history, query]
+        [arrayFormat, navigate, query]
     );
 
     return { query, pushQuery, replaceQuery };

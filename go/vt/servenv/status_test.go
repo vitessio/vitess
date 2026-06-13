@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/google/safehtml/template"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv/testutils"
@@ -61,9 +62,7 @@ func TestStatus(t *testing.T) {
 		`h1.*test_section.*/h1`,
 	}
 	for _, cas := range cases {
-		if !regexp.MustCompile(cas).Match(body) {
-			t.Errorf("failed matching: %q", cas)
-		}
+		assert.Truef(t, regexp.MustCompile(cas).Match(body), "failed matching: %q", cas)
 	}
 	t.Logf("body: \n%s", body)
 }
@@ -100,9 +99,7 @@ func TestNamedStatus(t *testing.T) {
 		`h1.*test_section.*/h1`,
 	}
 	for _, cas := range cases {
-		if !regexp.MustCompile(cas).Match(body) {
-			t.Errorf("failed matching: %q", cas)
-		}
+		assert.Truef(t, regexp.MustCompile(cas).Match(body), "failed matching: %q", cas)
 	}
 	t.Logf("body: \n%s", body)
 }

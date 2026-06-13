@@ -5211,6 +5211,8 @@ func CloneRefOfUserOrRole(n *UserOrRole) *UserOrRole {
 		return nil
 	}
 	out := *n
+	out.Name = CloneRefOfString(n.Name)
+	out.Host = CloneRefOfString(n.Host)
 	return &out
 }
 
@@ -5372,6 +5374,15 @@ func CloneRefOfRenameTablePair(n *RenameTablePair) *RenameTablePair {
 	out := *n
 	out.FromTable = CloneTableName(n.FromTable)
 	out.ToTable = CloneTableName(n.ToTable)
+	return &out
+}
+
+// CloneRefOfString creates a deep clone of the input.
+func CloneRefOfString(n *string) *string {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 

@@ -67,9 +67,14 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		if node.As.IsEmpty() {
 			node.As = tableName.Name
 		}
-		// replace the table name with the original table
-		tableName.Qualifier = sqlparser.IdentifierCS{}
+		// Replace the table name with the resolved routed table, fully qualified
+		// by the target keyspace. Preserving the keyspace keeps the AST
+		// self-consistent so any later FindTableOrVindex lookup resolves to the
+		// same target instead of falling back to the session's default keyspace.
+		// RemoveKeyspaceIgnoreSysSchema in the SQL builder strips the qualifier
+		// before the query is sent to vttablet.
 		tableName.Name = vindexTable.Name
+		tableName.Qualifier = sqlparser.NewIdentifierCS(vindexTable.Keyspace.Name)
 		node.Expr = tableName
 	}
 	return true

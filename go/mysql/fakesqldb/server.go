@@ -562,7 +562,7 @@ func (db *DB) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) err
 }
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet) error {
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet replication.GTIDSet, flags uint16) error {
 	return nil
 }
 
@@ -844,7 +844,7 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 	db.AddQueryPattern(selectQueryPattern, result)
 
 	// mock query for returning columns from information_schema.columns based on specified result
-	var cols []string
+	cols := make([]string, 0, len(result.Fields))
 	for _, field := range result.Fields {
 		cols = append(cols, field.Name)
 	}

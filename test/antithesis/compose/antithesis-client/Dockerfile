@@ -1,0 +1,34 @@
+FROM golang:1.26.3@sha256:2d6c80227255c3112a4d08e67ba98e58efd3846daf15d9d7d4c389565d881b1a AS builder
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY cmd/entrypoint ./cmd/entrypoint
+COPY cmd/healthcheck ./cmd/healthcheck
+COPY cmd/sleep ./cmd/sleep
+
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-entrypoint ./cmd/entrypoint
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-healthcheck ./cmd/healthcheck
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -race -o /out/antithesis-sleep ./cmd/sleep
+
+FROM docker.io/library/debian:bookworm-slim@sha256:0104b334637a5f19aa9c983a91b54c89887c0984081f2068983107a6f6c21eeb
+
+RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir --break-system-packages mysql-connector-python==9.6.0 antithesis==0.2.0
+
+COPY --from=builder /out/antithesis-entrypoint /antithesis-entrypoint
+COPY --from=builder /out/antithesis-healthcheck /opt/antithesis/test/v1/main/eventually_vitess_health
+COPY --from=builder /out/antithesis-sleep /opt/antithesis/test/v1/main/serial_driver_sleep
+
+COPY ./helper.py /opt/antithesis/resources/helper.py
+COPY crud/ /opt/antithesis/test/v1/crud
+COPY --from=builder /out/antithesis-healthcheck /opt/antithesis/test/v1/crud/eventually_vitess_health
+# Temporarily remove the bank test from the client image
+# COPY bank-test/ /opt/antithesis/test/v1/bank-test
+
+RUN mkdir -p /opt/antithesis/catalog \
+    && ln -s /opt/antithesis/test /opt/antithesis/catalog/test \
+    && ln -s /opt/antithesis/resources /opt/antithesis/catalog/resources
+
+ENTRYPOINT ["/antithesis-entrypoint"]

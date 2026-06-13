@@ -17,10 +17,9 @@ limitations under the License.
 package vindexes
 
 import (
-	"context"
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -91,7 +90,7 @@ func TestReverseBitsCreateVindex(t *testing.T) {
 }
 
 func TestReverseBitsMap(t *testing.T) {
-	got, err := reverseBits.Map(context.Background(), nil, []sqltypes.Value{
+	got, err := reverseBits.Map(t.Context(), nil, []sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(3),
@@ -110,41 +109,28 @@ func TestReverseBitsMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\xa0\x00\x00\x00\x00\x00\x00\x00")),
 		key.DestinationKeyspaceID([]byte("`\x00\x00\x00\x00\x00\x00\x00")),
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Map(): %#v, want %+v", got, want)
-	}
+	assert.Equal(t, want, got, "Map()")
 }
 
 func TestReverseBitsVerify(t *testing.T) {
 	ids := []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}
 	ksids := [][]byte{[]byte("\x80\x00\x00\x00\x00\x00\x00\x00"), []byte("\x80\x00\x00\x00\x00\x00\x00\x00")}
-	got, err := reverseBits.Verify(context.Background(), nil, ids, ksids)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []bool{true, false}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("reverseBits.Verify: %v, want %v", got, want)
-	}
+	got, err := reverseBits.Verify(t.Context(), nil, ids, ksids)
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false}, got, "reverseBits.Verify")
 
 	// Failure test
-	_, err = reverseBits.Verify(context.Background(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
+	_, err = reverseBits.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
 	require.EqualError(t, err, "cannot parse uint64 from \"aa\"")
 }
 
 func TestReverseBitsReverseMap(t *testing.T) {
 	got, err := reverseBits.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x80\x00\x00\x00\x00\x00\x00\x00")})
 	require.NoError(t, err)
-	want := []sqltypes.Value{sqltypes.NewUint64(uint64(1))}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ReverseMap(): %v, want %v", got, want)
-	}
+	assert.Equal(t, []sqltypes.Value{sqltypes.NewUint64(uint64(1))}, got, "ReverseMap()")
 }
 
 func TestReverseBitsReverseMapNeg(t *testing.T) {
 	_, err := reverseBits.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x80\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\x00\x00\x00\x00\x00")})
-	want := "invalid keyspace id: 80000000000000008000000000000000"
-	if err.Error() != want {
-		t.Error(err)
-	}
+	require.EqualError(t, err, "invalid keyspace id: 80000000000000008000000000000000")
 }

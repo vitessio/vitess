@@ -38,30 +38,22 @@ import (
 // It can be spawned manually
 type VtctldClientProcess struct {
 	VtProcess
-	Server                   string
-	TempDirectory            string
-	ZoneName                 string
-	VtctldClientMajorVersion int
-	Quiet                    bool
+	Server        string
+	TempDirectory string
+	ZoneName      string
+	Quiet         bool
 }
 
 // VtctldClientProcessInstance returns a VtctldClientProcess handle
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VtctldClientProcessInstance(grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtctldClientProcess {
-	version, err := GetMajorVersion("vtctld") // `vtctldclient` does not have a --version flag, so we assume both vtctl/vtctldclient have the same version
-	if err != nil {
-		log.Warn(fmt.Sprintf("failed to get major vtctldclient version; interop with CLI changes for VEP-4 may not work: %s", err))
-	}
-
 	base := VtProcessInstance("vtctldclient", "vtctldclient", topoPort, hostname)
-	vtctldclient := &VtctldClientProcess{
-		VtProcess:                base,
-		Server:                   fmt.Sprintf("%s:%d", hostname, grpcPort),
-		TempDirectory:            tmpDirectory,
-		VtctldClientMajorVersion: version,
+	return &VtctldClientProcess{
+		VtProcess:     base,
+		Server:        fmt.Sprintf("%s:%d", hostname, grpcPort),
+		TempDirectory: tmpDirectory,
 	}
-	return vtctldclient
 }
 
 // ExecuteCommand executes any vtctldclient command

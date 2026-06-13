@@ -1765,7 +1765,7 @@ func FnReplace(yield Query) {
 		// From / to strings are converted into the collation of
 		// the input string.
 		`REPLACE('fooÿbar', _latin1 0xFF, _latin1 0xFE)`,
-		// First occurence is replaced
+		// First occurrence is replaced
 		`replace('fff', 'ff', 'gg')`,
 	}
 

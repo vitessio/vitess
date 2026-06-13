@@ -17,11 +17,11 @@ limitations under the License.
 package newfeaturetest
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -42,10 +42,14 @@ func testCommitError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.Lo
 	createTxAndInsertRows(conn, t, &idx)
 
 	go func() {
+		defer func() {
+			commitDone <- true
+		}()
 		<-tabletStopped
 		_, err := conn.ExecuteFetch("commit", 0, false)
-		require.ErrorContains(t, err, "VT15001")
-		commitDone <- true
+		if !assert.ErrorContains(t, err, "VT15001") {
+			return
+		}
 	}()
 
 	reparent(t, clusterInstance, tablets, tabletStopped, commitDone)
@@ -64,18 +68,26 @@ func testExecuteError(t *testing.T, conn *mysql.Conn, clusterInstance *cluster.L
 	createTxAndInsertRows(conn, t, &idx)
 
 	go func() {
+		defer func() {
+			executeDone <- true
+		}()
 		idx += 5
 		<-tabletStopped
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
-		require.ErrorContains(t, err, "VT15001")
+		if !assert.ErrorContains(t, err, "VT15001") {
+			return
+		}
 
 		// Subsequent queries after a VT15001 should start returning a VT09032 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
-		require.ErrorContains(t, err, "VT09032")
+		if !assert.ErrorContains(t, err, "VT09032") {
+			return
+		}
 
 		_, err = conn.ExecuteFetch("rollback", 0, false)
-		require.NoError(t, err)
-		executeDone <- true
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	reparent(t, clusterInstance, tablets, tabletStopped, executeDone)
@@ -93,27 +105,37 @@ func testExecuteErrorWhileTabletIsNotServing(t *testing.T, conn *mysql.Conn, clu
 	createTxAndInsertRows(conn, t, &idx)
 
 	go func() {
+		defer func() {
+			executeDone <- true
+		}()
 		idx += 5
 		<-tabletNotServing
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
-		require.ErrorContains(t, err, "VT15001")
+		if !assert.ErrorContains(t, err, "VT15001") {
+			return
+		}
 		// Depending on whether vtgate has re-established its health stream to the
 		// restarted tablet by the time the query runs, the underlying reason is
 		// either the tablet rejecting the query as the wrong type, or vtgate not
 		// yet having a live connection to it. Both are valid VT15001 transaction
 		// errors against a no-longer-serving pinned tablet.
-		require.True(t,
+		if !assert.True(t,
 			strings.Contains(err.Error(), vterrors.WrongTablet) ||
 				strings.Contains(err.Error(), "is either down or nonexistent"),
-			"unexpected VT15001 reason: %v", err)
+			"unexpected VT15001 reason: %v", err) {
+			return
+		}
 
 		// Subsequent queries after a VT15001 should start returning a VT09032 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
-		require.ErrorContains(t, err, "VT09032")
+		if !assert.ErrorContains(t, err, "VT09032") {
+			return
+		}
 
 		_, err = conn.ExecuteFetch("rollback", 0, false)
-		require.NoError(t, err)
-		executeDone <- true
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	makeTabletNotServing(t, clusterInstance, tablets, tabletNotServing, executeDone)
@@ -213,7 +235,7 @@ func TestErrorsInTransaction(t *testing.T) {
 	// tablets[0] is the primary tablet in the beginning.
 	utils.ConfirmReplication(t, tablets[primary], []*cluster.Vttablet{tablets[1], tablets[2]})
 
-	conn, err := mysql.Connect(context.Background(), &vtParams)
+	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 
 	_, err = conn.ExecuteFetch("delete from vt_insert_test", 0, false)

@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -357,7 +356,9 @@ func TestFlushLock(t *testing.T) {
 	go func() {
 		ctx := t.Context()
 		conn2, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer conn2.Close()
 
 		cnt.Add(1)
@@ -378,7 +379,7 @@ func TestFlushLock(t *testing.T) {
 	for cnt.Load() != 2 {
 		select {
 		case <-timeout:
-			t.Fatalf("test timeout waiting for select query to complete")
+			require.Fail(t, "test timeout waiting for select query to complete")
 		default:
 		}
 	}
@@ -843,7 +844,7 @@ func TestDDLTargeted(t *testing.T) {
 // TestTabletTargeting tests tablet-specific routing with USE keyspace:shard@tablet-alias syntax.
 // When shard is specified, tablet-specific routing bypasses vindex-based shard resolution.
 func TestTabletTargeting(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()

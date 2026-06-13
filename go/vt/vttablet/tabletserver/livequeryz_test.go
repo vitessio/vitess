@@ -17,7 +17,6 @@ limitations under the License.
 package tabletserver
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,9 +31,9 @@ func TestLiveQueryzHandlerJSON(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/livequeryz/?format=json", nil)
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
-	err := queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
+	err := queryList.Add(NewQueryDetail(t.Context(), &testConn{id: 1}))
 	require.NoError(t, err)
-	err = queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
+	err = queryList.Add(NewQueryDetail(t.Context(), &testConn{id: 2}))
 	require.NoError(t, err)
 
 	livequeryzHandler([]*QueryList{queryList}, resp, req)
@@ -45,9 +44,9 @@ func TestLiveQueryzHandlerHTTP(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/livequeryz/", nil)
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
-	err := queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 1}))
+	err := queryList.Add(NewQueryDetail(t.Context(), &testConn{id: 1}))
 	require.NoError(t, err)
-	err = queryList.Add(NewQueryDetail(context.Background(), &testConn{id: 2}))
+	err = queryList.Add(NewQueryDetail(t.Context(), &testConn{id: 2}))
 	require.NoError(t, err)
 
 	livequeryzHandler([]*QueryList{queryList}, resp, req)
@@ -58,10 +57,9 @@ func TestLiveQueryzHandlerHTTPFailedInvalidForm(t *testing.T) {
 	req, _ := http.NewRequest("POST", "/livequeryz/", nil)
 
 	livequeryzHandler([]*QueryList{NewQueryList("test", sqlparser.NewTestParser())}, resp, req)
-	if resp.Code != http.StatusInternalServerError {
-		t.Fatalf("http call should fail and return code: %d, but got: %d",
-			http.StatusInternalServerError, resp.Code)
-	}
+	require.Equalf(t, http.StatusInternalServerError, resp.Code,
+		"http call should fail and return code: %d, but got: %d",
+		http.StatusInternalServerError, resp.Code)
 }
 
 func TestLiveQueryzHandlerTerminateConn(t *testing.T) {
@@ -70,15 +68,11 @@ func TestLiveQueryzHandlerTerminateConn(t *testing.T) {
 
 	queryList := NewQueryList("test", sqlparser.NewTestParser())
 	testConn := &testConn{id: 1}
-	err := queryList.Add(NewQueryDetail(context.Background(), testConn))
+	err := queryList.Add(NewQueryDetail(t.Context(), testConn))
 	require.NoError(t, err)
-	if testConn.IsKilled() {
-		t.Fatalf("conn should still be alive")
-	}
+	require.Falsef(t, testConn.IsKilled(), "conn should still be alive")
 	livequeryzTerminateHandler([]*QueryList{queryList}, resp, req)
-	if !testConn.IsKilled() {
-		t.Fatalf("conn should be killed")
-	}
+	require.Truef(t, testConn.IsKilled(), "conn should be killed")
 }
 
 func TestLiveQueryzHandlerTerminateFailedInvalidConnID(t *testing.T) {
@@ -86,10 +80,9 @@ func TestLiveQueryzHandlerTerminateFailedInvalidConnID(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/livequeryz//terminate?connID=invalid", nil)
 
 	livequeryzTerminateHandler([]*QueryList{NewQueryList("test", sqlparser.NewTestParser())}, resp, req)
-	if resp.Code != http.StatusInternalServerError {
-		t.Fatalf("http call should fail and return code: %d, but got: %d",
-			http.StatusInternalServerError, resp.Code)
-	}
+	require.Equalf(t, http.StatusInternalServerError, resp.Code,
+		"http call should fail and return code: %d, but got: %d",
+		http.StatusInternalServerError, resp.Code)
 }
 
 func TestLiveQueryzHandlerTerminateFailedInvalidForm(t *testing.T) {
@@ -97,8 +90,7 @@ func TestLiveQueryzHandlerTerminateFailedInvalidForm(t *testing.T) {
 	req, _ := http.NewRequest("POST", "/livequeryz//terminate?inva+lid=2", nil)
 
 	livequeryzTerminateHandler([]*QueryList{NewQueryList("test", sqlparser.NewTestParser())}, resp, req)
-	if resp.Code != http.StatusInternalServerError {
-		t.Fatalf("http call should fail and return code: %d, but got: %d",
-			http.StatusInternalServerError, resp.Code)
-	}
+	require.Equalf(t, http.StatusInternalServerError, resp.Code,
+		"http call should fail and return code: %d, but got: %d",
+		http.StatusInternalServerError, resp.Code)
 }

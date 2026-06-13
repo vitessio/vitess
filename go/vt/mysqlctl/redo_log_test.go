@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,12 +40,12 @@ func TestProcessCanDisableRedoLog(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	res, err := testMysqld.ProcessCanDisableRedoLog(context.Background())
+	res, err := testMysqld.ProcessCanDisableRedoLog(t.Context())
 	assert.NoError(t, err)
 	assert.True(t, res)
 
 	db.AddQuery("SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", &sqltypes.Result{})
-	res, err = testMysqld.ProcessCanDisableRedoLog(context.Background())
+	res, err = testMysqld.ProcessCanDisableRedoLog(t.Context())
 	assert.Error(t, err)
 	assert.False(t, res)
 }

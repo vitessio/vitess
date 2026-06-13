@@ -17,7 +17,6 @@ limitations under the License.
 package vtsql
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,7 +48,7 @@ func assertEffectiveCaller(t *testing.T, ef *vtrpcpb.CallerID, principal string,
 func Test_getQueryContext(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	creds := &StaticAuthCredentials{
 		EffectiveUser: "efuser",

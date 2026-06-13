@@ -1,6 +1,5 @@
 instance-poll-time: 1s
 prevent-cross-cell-failover: false
-snapshot-topology-interval: 0h
 reasonable-replication-lag: 10s
 audit-to-backend: false
 audit-to-syslog: false

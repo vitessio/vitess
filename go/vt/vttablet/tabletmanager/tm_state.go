@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -85,6 +86,10 @@ type tmState struct {
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
 	displayState displayState
+
+	// allowReadsFromDeniedTables allows readonly operations to execute against
+	// denied tables.
+	allowReadsFromDeniedTables map[topodatapb.TabletType]bool
 }
 
 func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
@@ -149,9 +154,11 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 		ts.isResharding = len(shardInfo.SourceShards) > 0
 
 		ts.deniedTables = make(map[topodatapb.TabletType][]string)
+		ts.allowReadsFromDeniedTables = make(map[topodatapb.TabletType]bool)
 		for _, tc := range shardInfo.TabletControls {
 			if topo.InCellList(ts.tm.tabletAlias.Cell, tc.Cells) {
 				ts.deniedTables[tc.TabletType] = tc.DeniedTables
+				ts.allowReadsFromDeniedTables[tc.TabletType] = tc.AllowReads
 			}
 		}
 	}
@@ -404,6 +411,18 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 			qr := rules.NewQueryRule("enforce denied tables", "denied_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)
+			}
+			// This pathway allows SELECT-family queries to bypass
+			// denied-table rules on the target of a MoveTables workflow
+			// when MirrorTraffic is active. Non-SELECT plans remain
+			// blocked by adding them as plan conditions on the deny rule.
+			if ts.allowReadsFromDeniedTables[ts.tablet.Type] {
+				for plan := range planbuilder.NumPlans {
+					if strings.HasPrefix(plan.String(), "Select") {
+						continue
+					}
+					qr.AddPlanCond(plan)
+				}
 			}
 			denyListRules.Add(qr)
 		}

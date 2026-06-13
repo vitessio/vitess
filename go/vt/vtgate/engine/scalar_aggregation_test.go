@@ -131,7 +131,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -168,7 +168,7 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 		TruncateColumnCount: 1,
 	}
 
-	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 	assert.NoError(t, err)
 	assert.Equal(t, "[[DECIMAL(4)]]", fmt.Sprintf("%v", qr.Rows))
 }
@@ -240,13 +240,13 @@ func TestScalarGroupConcatWithAggrOnEngine(t *testing.T) {
 				}},
 				Input: fp,
 			}
-			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+			qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
 			utils.MustMatch(t, tcase.expResult, qr)
 
 			fp.rewind()
 			results := &sqltypes.Result{}
-			err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 				if qr.Fields != nil {
 					results.Fields = qr.Fields
 				}
@@ -283,13 +283,13 @@ func TestScalarDistinctAggrOnEngine(t *testing.T) {
 		},
 		Input: fp,
 	}
-	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	require.Equal(t, `[[INT64(4) DECIMAL(1300)]]`, fmt.Sprintf("%v", qr.Rows))
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -327,13 +327,13 @@ func TestScalarDistinctPushedDown(t *testing.T) {
 		},
 		Input: fp,
 	}
-	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+	qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	require.Equal(t, `[[INT64(27) DECIMAL(1430)]]`, fmt.Sprintf("%v", qr.Rows))
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -402,13 +402,13 @@ func TestScalarGroupConcat(t *testing.T) {
 				}},
 				Input: fp,
 			}
-			qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
+			qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expResult, qr)
 
 			fp.rewind()
 			results := &sqltypes.Result{}
-			err = oa.TryStreamExecute(context.Background(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+			err = oa.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 				if qr.Fields != nil {
 					results.Fields = qr.Fields
 				}

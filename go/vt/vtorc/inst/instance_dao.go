@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -54,7 +53,10 @@ var (
 	instanceWriteSem = semaphore.NewWeighted(config.GetBackendWriteConcurrency())
 )
 
-var forgetAliases *cache.Cache
+var (
+	forgetAliases     *cache.Cache
+	forgetAliasesOnce sync.Once
+)
 
 var (
 	readTopologyInstanceCounter = stats.NewCounter("InstanceReadTopology", "Number of times an instance was read from the topology")
@@ -62,10 +64,7 @@ var (
 	currentErrantGTIDCount      = stats.NewGaugesWithSingleLabel("CurrentErrantGTIDCount", "Number of errant GTIDs a vttablet currently has", "TabletAlias")
 )
 
-var (
-	emptyQuotesRegexp            = regexp.MustCompile(`^""$`)
-	cacheInitializationCompleted atomic.Bool
-)
+var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
 
 func init() {
 	go initializeInstanceDao()
@@ -73,12 +72,18 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	InitializeForgetAliasesCache()
+	initForgetAliasesCache()
 }
 
+func initForgetAliasesCache() {
+	forgetAliasesOnce.Do(func() {
+		forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
+	})
+}
+
+// InitializeForgetAliasesCache ensures the forgetAliases cache is initialized.
 func InitializeForgetAliasesCache() {
-	forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
-	cacheInitializationCompleted.Store(true)
+	initForgetAliasesCache()
 }
 
 // ExecDBWriteFunc chooses how to execute a write onto the database: whether synchronously or not
@@ -1105,6 +1110,7 @@ func UpdateInstanceLastAttemptedCheck(tabletAlias *topodatapb.TabletAlias) error
 
 // InstanceIsForgotten returns true if an instance was forgotten.
 func InstanceIsForgotten(tabletAlias *topodatapb.TabletAlias) bool {
+	initForgetAliasesCache()
 	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
 	_, found := forgetAliases.Get(tabletAliasString)
 	return found
@@ -1118,6 +1124,7 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		log.Error(errMsg)
 		return errors.New(errMsg)
 	}
+	initForgetAliasesCache()
 	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
 	forgetAliases.Set(tabletAliasString, true, cache.DefaultExpiration)
 	log.Info(fmt.Sprintf("Forgetting: %v", tabletAliasString))
@@ -1185,40 +1192,6 @@ func ForgetLongUnseenInstances() error {
 		_ = AuditOperation("forget-unseen", nil, fmt.Sprintf("Forgotten instances: %d", rows))
 	}
 	return err
-}
-
-// SnapshotTopologies records topology graph for all existing topologies
-func SnapshotTopologies() error {
-	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`INSERT OR IGNORE
-			INTO database_instance_topology_history (
-				snapshot_unix_timestamp,
-				alias,
-				hostname,
-				port,
-				source_host,
-				source_port,
-				keyspace,
-				shard,
-				version
-			)
-			SELECT
-				STRFTIME('%s', 'now'),
-				vitess_tablet.alias, vitess_tablet.hostname, vitess_tablet.port,
-				database_instance.source_host, database_instance.source_port,
-				vitess_tablet.keyspace, vitess_tablet.shard, database_instance.version
-			FROM
-				vitess_tablet LEFT JOIN database_instance USING (alias, hostname, port)
-			`,
-		)
-		if err != nil {
-			log.Error(err.Error())
-			return err
-		}
-
-		return nil
-	}
-	return ExecDBWriteFunc(writeFunc)
 }
 
 func ExpireStaleInstanceBinlogCoordinates() error {

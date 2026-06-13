@@ -92,7 +92,7 @@ func (g *Generator) WriteToFile(out string) {
 	fmt.Fprintf(&file, "package %s\n\n", g.local.Name())
 	fmt.Fprintf(&file, "import (\n")
 
-	var sortedPackages []Package
+	sortedPackages := make([]Package, 0, len(g.imported))
 	for pkg := range g.imported {
 		sortedPackages = append(sortedPackages, pkg)
 	}
@@ -159,7 +159,7 @@ func (g *Generator) gatherPackages(tt reflect.Type) {
 		g.imported[Package(pkg)] = true
 	}
 	switch tt.Kind() {
-	case reflect.Array, reflect.Chan, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Array, reflect.Chan, reflect.Map, reflect.Pointer, reflect.Slice:
 		g.gatherPackages(tt.Elem())
 	case reflect.Struct:
 		for field := range tt.Fields() {

@@ -109,7 +109,7 @@ func TestSetUDV(t *testing.T) {
 			if q.expectedRows != "" {
 				result := fmt.Sprintf("%v", qr.Rows)
 				if diff := cmp.Diff(q.expectedRows, result); diff != "" {
-					t.Errorf("%s\nfor query: %s", diff, q.query)
+					assert.Failf(t, "rows differ", "%s\nfor query: %s", diff, q.query)
 				}
 			}
 		})

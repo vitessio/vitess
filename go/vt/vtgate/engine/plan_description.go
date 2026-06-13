@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -165,9 +166,12 @@ func PrimitiveDescriptionFromMap(data map[string]any) (pd PrimitiveDescription, 
 		pd.InputName = inpName.(string)
 	}
 	if avgRows, isPresent := data["AvgNumberOfRows"]; isPresent {
-		pd.RowsReceived = RowsReceived{
-			int(avgRows.(float64)),
+		noOfCalls := 1
+		if n, ok := data["NoOfCalls"]; ok {
+			noOfCalls = int(n.(float64))
 		}
+		totalRows := int(math.Round(avgRows.(float64) * float64(noOfCalls)))
+		pd.RowsReceived = RowsReceived{totalRows}
 	}
 	if sq, isPresent := data["ShardsQueried"]; isPresent {
 		sq := int(sq.(float64))

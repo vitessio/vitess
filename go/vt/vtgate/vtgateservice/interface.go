@@ -51,6 +51,9 @@ type VTGateService interface {
 	// Update Stream methods
 	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error
 
+	// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
+	BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error
+
 	// HandlePanic should be called with defer at the beginning of each
 	// RPC implementation method, before calling any of the previous methods
 	HandlePanic(err *error)
@@ -63,4 +66,7 @@ type MySQLConnection interface {
 	KillQuery(uint32) error
 	// KillConnection closes the connection and also stops any executing query on it.
 	KillConnection(context.Context, uint32) error
+	// SetQueryWasSlow stores whether the most recently completed statement
+	// should be marked as slow on the MySQL protocol connection.
+	SetQueryWasSlow(bool)
 }

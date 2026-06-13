@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vthash"
@@ -45,7 +45,7 @@ type (
 		Original     string                  // Original holds the raw query text
 		Instructions Primitive               // Instructions define how the query is executed.
 		BindVarNeeds *sqlparser.BindVarNeeds // BindVarNeeds lists required bind vars discovered during planning.
-		Warnings     []*query.QueryWarning   // Warnings accumulates any warnings generated for this plan.
+		Warnings     []*querypb.QueryWarning // Warnings accumulates any warnings generated for this plan.
 		TablesUsed   []string                // TablesUsed enumerates the tables this query accesses.
 		QueryHints   sqlparser.QueryHints    // QueryHints stores any SET_VAR hints that influenced plan generation.
 		ParamsCount  uint16                  // ParamsCount is the total number of bind parameters (?) in the query.
@@ -281,6 +281,58 @@ func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVa
 		BindVarNeeds: bindVarNeeds,
 		TablesUsed:   tablesUsed,
 	}
+}
+
+// GetRoutingIndexes walks the primitive tree rooted at p and collects vindex
+// routing information from any Route or DML primitives that use a vindex for
+// shard routing. The caller is expected to pass the post-PlanSwitcher root —
+// i.e. vcursor.ExecutedPrimitive() if a PlanSwitcher recorded a choice,
+// otherwise plan.Instructions — so that this function does not need to
+// re-evaluate PlanSwitcher conditions.
+//
+// For inserts, ColVindexes[0] is the primary vindex that determines shard
+// placement; the remaining ColVindexes are secondary/owned vindexes populated
+// as a side effect.
+func GetRoutingIndexes(p Primitive) [][3]string {
+	if p == nil {
+		return nil
+	}
+	var result [][3]string
+	Visit(p, func(node Primitive) {
+		var rp *RoutingParameters
+		switch n := node.(type) {
+		case *Route:
+			rp = n.RoutingParameters
+		case *Update:
+			rp = n.RoutingParameters
+		case *Delete:
+			rp = n.RoutingParameters
+		case *VindexLookup:
+			// WireupRoute lifts the lookup-planable vindex into a VindexLookup
+			// wrapper and reroutes the underlying Route via ByDestination with
+			// a nil Vindex, so the actual routing vindex lives here, not on
+			// the wrapped Route.
+			if n.Keyspace != nil && n.Vindex != nil {
+				result = append(result, [3]string{n.Keyspace.Name, n.Vindex.String(), n.Opcode.String()})
+			}
+			return
+		case *Insert:
+			if n.Keyspace != nil && len(n.ColVindexes) > 0 {
+				result = append(result, [3]string{n.Keyspace.Name, n.ColVindexes[0].Name, "EqualUnique"})
+			}
+			return
+		case *InsertSelect:
+			if n.Keyspace != nil && len(n.ColVindexes) > 0 {
+				result = append(result, [3]string{n.Keyspace.Name, n.ColVindexes[0].Name, "EqualUnique"})
+			}
+			return
+		}
+		if rp == nil || rp.Vindex == nil || rp.Keyspace == nil {
+			return
+		}
+		result = append(result, [3]string{rp.Keyspace.Name, rp.Vindex.String(), rp.Opcode.String()})
+	})
+	return result
 }
 
 // MarshalJSON serializes the plan into a JSON representation.

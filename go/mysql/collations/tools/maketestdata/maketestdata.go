@@ -213,7 +213,7 @@ func main() {
 
 		var total int
 		var collationNames []string
-		var interestingCollations []collations.ID
+		interestingCollations := make([]collations.ID, 0, len(rootCollations)+len(collationsForLanguage[lang]))
 		interestingCollations = append(interestingCollations, rootCollations...)
 		interestingCollations = append(interestingCollations, collationsForLanguage[lang]...)
 

@@ -16,11 +16,13 @@ will NOT be rebuilt automatically on every push to the Vitess main branch.**
 To build a new bootstrap image, use the [build.sh](https://github.com/vitessio/vitess/blob/main/docker/bootstrap/build.sh)
 script.
 
-First build the `common` image, then any flavors you want. For example:
+First build the `common` image, then any flavors you want. The second argument is
+the bootstrap version number (see [CHANGELOG.md](CHANGELOG.md) for the current version).
+For example:
 
 ```sh
-vitess$ docker/bootstrap/build.sh common
-vitess$ docker/bootstrap/build.sh mysql80
+vitess$ docker/bootstrap/build.sh common 54
+vitess$ docker/bootstrap/build.sh mysql80 54
 ```
 
 Is it also possible to specify the resulting image name:

@@ -17,7 +17,6 @@ limitations under the License.
 package cluster_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -590,7 +589,7 @@ func TestFindTablet(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -800,7 +799,7 @@ func TestFindTablets(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1186,7 +1185,7 @@ func TestFindWorkflows(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1474,7 +1473,7 @@ func TestGetCellInfos(t *testing.T) {
 				VtctldClient: tt.vtctld,
 			})
 			defer c.Close()
-			cellInfos, err := c.GetCellInfos(context.Background(), tt.req)
+			cellInfos, err := c.GetCellInfos(t.Context(), tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -1556,7 +1555,7 @@ func TestGetCellsAliases(t *testing.T) {
 				VtctldClient: tt.vtctld,
 			})
 			defer c.Close()
-			cellsAliases, err := c.GetCellsAliases(context.Background())
+			cellsAliases, err := c.GetCellsAliases(t.Context())
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -1690,7 +1689,7 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2710,7 +2709,7 @@ func TestGetSchema(t *testing.T) {
 func TestGetShardReplicationPositions(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name      string
 		cfg       testutil.TestClusterConfig
@@ -3012,7 +3011,7 @@ func TestGetVSchema(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3169,7 +3168,7 @@ func TestGetWorkflow(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3334,7 +3333,7 @@ func TestGetWorkflows(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3358,7 +3357,7 @@ func TestGetWorkflows(t *testing.T) {
 func TestSetWritable(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name              string
 		cfg               testutil.TestClusterConfig
@@ -3438,7 +3437,7 @@ func TestToggleTabletReplication(t *testing.T) {
 		Name: "test",
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tests := []struct {
 		name              string
 		cfg               testutil.TestClusterConfig

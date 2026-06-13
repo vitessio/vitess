@@ -277,7 +277,7 @@ func TestChooseBinlogsForIncrementalBackup(t *testing.T) {
 			gtidPurged, err := replication.ParsePosition(replication.Mysql56FlavorID, tc.gtidPurged)
 			require.NoError(t, err)
 			binlogsToBackup, fromGTID, toGTID, err := ChooseBinlogsForIncrementalBackup(
-				context.Background(),
+				t.Context(),
 				backupPos.GTIDSet,
 				gtidPurged.GTIDSet,
 				binlogs,

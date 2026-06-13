@@ -20,9 +20,12 @@ import (
 	"expvar"
 	"fmt"
 	"os"
+	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"vitess.io/vitess/go/stats"
@@ -39,6 +42,38 @@ var be PromBackend
 
 // Init initializes the Prometheus be with the given namespace.
 func Init(namespace string) {
+	// The default Prometheus registry includes a GoCollector that only
+	// exposes /gc/gogc:percent, /gc/gomemlimit:bytes and
+	// /sched/gomaxprocs:threads from runtime/metrics. Replace it with
+	// one that exposes the full set of GC, memory, scheduler, and CPU
+	// metrics.
+	//
+	// Unregister matches by Describe() output (descriptor identity), not
+	// pointer identity, so passing a freshly-created default GoCollector
+	// correctly removes the one registered during the library's init().
+	prometheus.Unregister(collectors.NewGoCollector())
+	prometheus.MustRegister(collectors.NewGoCollector(
+		collectors.WithGoCollectorRuntimeMetrics(
+			collectors.MetricsGC,
+			collectors.MetricsMemory,
+			collectors.MetricsScheduler,
+			collectors.GoRuntimeMetricsRule{Matcher: regexp.MustCompile(`^/cpu/.*`)},
+		),
+	))
+
+	// Expose build environment info not covered by the default go_info metric.
+	// go_info only carries the Go version; this adds compiler, architecture,
+	// and OS as labels.
+	goInfoExt := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "go_info_ext",
+			Help: "Extended information about the Go environment.",
+		},
+		[]string{"compiler", "goarch", "goos"},
+	)
+	goInfoExt.WithLabelValues(runtime.Compiler, runtime.GOARCH, runtime.GOOS).Set(1)
+	prometheus.MustRegister(goInfoExt)
+
 	servenv.HTTPHandle("/metrics", promhttp.Handler())
 	be.namespace = namespace
 	stats.Register(be.publishPrometheusMetric)
