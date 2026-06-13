@@ -18,7 +18,10 @@ limitations under the License.
 
 package testfs
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 func SetStalled(pid int) error {
 	return unsupported(pid)
@@ -37,7 +40,7 @@ func Close(pid int) error {
 }
 
 func Run(mountPoint, backing string) error {
-	return fmt.Errorf("testfs is Linux-only")
+	return errors.New("testfs is Linux-only")
 }
 
 func unsupported(pid int) error {
