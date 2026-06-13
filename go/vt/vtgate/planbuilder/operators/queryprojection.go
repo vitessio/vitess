@@ -164,7 +164,7 @@ func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 		Distinct: sel.Distinct,
 	}
 
-	qp.addSelectExpressions(ctx, sel)
+	qp.addSelectExpressions(ctx, sel.GetColumns())
 	qp.addGroupBy(ctx, sel.GroupBy)
 	qp.addOrderBy(ctx, sel.OrderBy)
 	if !qp.HasAggr && sel.Having != nil {
@@ -183,8 +183,8 @@ func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	return qp
 }
 
-func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext, sel *sqlparser.Select) {
-	for _, selExp := range sel.GetColumns() {
+func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext, columns []sqlparser.SelectExpr) {
+	for _, selExp := range columns {
 		switch selExp := selExp.(type) {
 		case *sqlparser.AliasedExpr:
 			col := SelectExpr{
@@ -214,9 +214,17 @@ func (qp *QueryProjection) addSelectExpressions(ctx *plancontext.PlanningContext
 func createQPFromUnion(ctx *plancontext.PlanningContext, union *sqlparser.Union) *QueryProjection {
 	qp := &QueryProjection{}
 
-	sel := getFirstSelect(union)
-	qp.addSelectExpressions(ctx, sel)
+	qp.addSelectExpressions(ctx, union.GetColumns())
 	qp.addOrderBy(ctx, union.OrderBy)
+
+	return qp
+}
+
+func createQPFromValues(ctx *plancontext.PlanningContext, values *sqlparser.ValuesStatement) *QueryProjection {
+	qp := &QueryProjection{}
+
+	qp.addSelectExpressions(ctx, values.GetColumns())
+	qp.addOrderBy(ctx, values.Order)
 
 	return qp
 }
@@ -743,6 +751,8 @@ func CreateQPFromSelectStatement(ctx *plancontext.PlanningContext, stmt sqlparse
 		return createQPFromSelect(ctx, sel)
 	case *sqlparser.Union:
 		return createQPFromUnion(ctx, sel)
+	case *sqlparser.ValuesStatement:
+		return createQPFromValues(ctx, sel)
 	}
-	panic(vterrors.VT13001("can only create query projection from Union and Select statements"))
+	panic(vterrors.VT13001("can only create query projection from Union, Select and Values statements"))
 }

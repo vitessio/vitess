@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement, ks *vindexes.Keyspace) (engine.Primitive, []string, error) {
+func selectUnshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.TableStatement, ks *vindexes.Keyspace) (engine.Primitive, []string, error) {
 	// this method is used when the query we are handling has all tables in the same unsharded keyspace
 	sqlparser.SafeRewrite(stmt, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {

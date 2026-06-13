@@ -622,6 +622,8 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 			stmt.SetLock(op.Lock)
 		}
 		return buildRoutePrimitive(ctx, op, stmt, hints)
+	case *sqlparser.ValuesStatement:
+		return buildTableRoutePrimitive(ctx, op, stmt, hints)
 	case *sqlparser.Update:
 		return buildUpdatePrimitive(ctx, op, dmlOp, stmt, hints)
 	case *sqlparser.Delete:
@@ -634,6 +636,17 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 }
 
 func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement, hints *queryHints) (engine.Primitive, error) {
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		return buildTableRoutePrimitive(ctx, op, stmt, hints)
+	case *sqlparser.Union:
+		return buildTableRoutePrimitive(ctx, op, stmt, hints)
+	default:
+		return nil, vterrors.VT13001(fmt.Sprintf("select statement %T is not a table statement", stmt))
+	}
+}
+
+func buildTableRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.TableStatement, hints *queryHints) (engine.Primitive, error) {
 	_ = updateSelectedVindexPredicate(op.Routing)
 
 	eroute, err := routeToEngineRoute(ctx, op, hints)

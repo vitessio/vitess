@@ -148,6 +148,8 @@ func (sqb *SubQueryBuilder) inspectStatement(ctx *plancontext.PlanningContext,
 		exprs1, cols1 := sqb.inspectStatement(ctx, stmt.Left)
 		exprs2, cols2 := sqb.inspectStatement(ctx, stmt.Right)
 		return append(exprs1, exprs2...), append(cols1, cols2...)
+	case *sqlparser.ValuesStatement:
+		return nil, nil
 	}
 	panic("unknown type")
 }

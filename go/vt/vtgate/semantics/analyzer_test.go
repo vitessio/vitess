@@ -904,6 +904,42 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	assert.Equal(t, TS1, d2)
 }
 
+func TestValuesStatementUnion(t *testing.T) {
+	queries := []string{
+		"values row(1)",
+		"select 1 union values row(1)",
+		"select * from (select 1) a union values row(1)",
+		"values row(1) union select 2",
+		"values row(1) union values row(2)",
+		"select * from (values row(1) union select 2) as dt",
+		"select * from (values row(1) union values row(2)) as dt",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, query, "")
+			require.Len(t, semTable.SelectExprs(stmt.(sqlparser.TableStatement)), 1)
+		})
+	}
+}
+
+func TestValuesStatementUnionRejectsListArg(t *testing.T) {
+	queries := []string{
+		"select 1 union values ::vals",
+		"values ::vals union select 1",
+		"values ::vals union values ::other",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			stmt, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+			_, err = Analyze(stmt, "", fakeSchemaInfo())
+			require.ErrorContains(t, err, "VT12001: unsupported: VALUES list argument in UNION statements")
+		})
+	}
+}
+
 func TestUnionOrderByRewrite(t *testing.T) {
 	query := "select tabl1.id from tabl1 union select 1 order by 1"
 
