@@ -696,9 +696,7 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 	var observedMu sync.Mutex
 	var workers sync.WaitGroup
 	for range numWorkers {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			for {
 				txn, err := s.nextReady(ctx)
 				if err != nil {
@@ -720,7 +718,7 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 					return
 				}
 			}
-		}()
+		})
 	}
 
 	producers.Wait()
