@@ -69,6 +69,11 @@ func writesetDigestAddPayload(d *xxhash.Digest, payload []byte) {
 	d.Write(payload)
 }
 
+// NOTE on collisions: writeset keys are 64-bit xxhash digests. A hash
+// collision between two unrelated keys creates a FALSE conflict (needless
+// serialization) — never a missed one — so collisions degrade throughput,
+// not correctness.
+//
 // writesetDigestInit initializes an xxhash digest with the table name
 // followed by a ':' separator. Callers declare a stack-local xxhash.Digest
 // and pass its address to avoid heap allocation. xxhash provides better
@@ -329,6 +334,12 @@ type txnWritesetCache struct {
 	// stable per plan, so resolving it per row change would allocate a
 	// slice per change for composite-identity tables.
 	identityIdxCache map[string][]int
+	// planByTarget maps canonical target table names to their plans, for
+	// FK parent lookups (tablePlans itself is keyed by SOURCE table name).
+	planByTarget map[string]*TablePlan
+	// fkStreamedValidated records child source-table names whose FK refs
+	// have been validated against their parent plans' streamed metadata.
+	fkStreamedValidated map[string]struct{}
 	// relevantColsCache caches, per source table name, the set of column
 	// indexes the writeset depends on (PK plus FK-joined columns). Building
 	// it is O(columns + FK refs) with a map allocation, which is too
@@ -471,6 +482,90 @@ func writesetKeysForUniqueKey(tableName string, ordinal int, colIdxs []int, fiel
 	return appendKey(afterVals)
 }
 
+// writesetFieldsHashCompatible reports whether two streamed fields produce
+// identical digests for logically-equal values. writesetDigestAddFieldValue
+// hashes text fields via their collation (driven by Field.Charset) and
+// everything else as a 2-byte type discriminator plus raw bytes — so the FK
+// child/parent hash equality the scheduler relies on requires matching
+// textness, charset (text), or exact type (non-text).
+func writesetFieldsHashCompatible(a, b *querypb.Field) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	aText := sqltypes.IsText(a.Type) && a.Charset != 0
+	bText := sqltypes.IsText(b.Type) && b.Charset != 0
+	if aText != bText {
+		return false
+	}
+	if aText {
+		return a.Charset == b.Charset
+	}
+	return a.Type == b.Type
+}
+
+// validateFKStreamedFieldCompatibility fails closed when a child table's FK
+// columns and the parent's referenced columns have hash-incompatible STREAMED
+// field metadata. queryFKRefs validates the TARGET schema, but the digests
+// are computed from the SOURCE (FIELD-event) metadata, which can diverge for
+// target-only FKs (e.g. source child latin1 vs source parent utf8mb4, or INT
+// vs BIGINT): equal logical values would then hash to different keys and the
+// child/parent transactions could reorder. Parents whose plan has not been
+// streamed yet are skipped — they cannot generate parent-side keys until
+// their FIELD event arrives, and FIELD-bearing transactions serialize.
+func validateFKStreamedFieldCompatibility(childPlan *TablePlan, childFieldIdx map[string]int, refs []fkConstraintRef, cache *txnWritesetCache, tablePlans map[string]*TablePlan) error {
+	if len(refs) == 0 {
+		return nil
+	}
+	var planByTarget map[string]*TablePlan
+	if cache != nil && cache.planByTarget != nil {
+		planByTarget = cache.planByTarget
+	} else {
+		planByTarget = make(map[string]*TablePlan, len(tablePlans))
+		for _, plan := range tablePlans {
+			if plan != nil && plan.TargetName != "" {
+				planByTarget[plan.TargetName] = plan
+			}
+		}
+		if cache != nil {
+			cache.planByTarget = planByTarget
+		}
+	}
+	for i := range refs {
+		ref := &refs[i]
+		parentPlan := planByTarget[ref.ParentTable]
+		if parentPlan == nil || len(parentPlan.Fields) == 0 {
+			continue
+		}
+		parentFieldIdx := make(map[string]int, len(parentPlan.Fields))
+		for j, f := range parentPlan.Fields {
+			if f == nil {
+				continue
+			}
+			parentFieldIdx[f.Name] = j
+			parentFieldIdx[strings.ToLower(f.Name)] = j
+		}
+		for k, childCol := range ref.ChildColumnNames {
+			if k >= len(ref.ReferencedColumnNames) {
+				break
+			}
+			childIdx, ok := fieldIndexForName(childFieldIdx, childCol)
+			if !ok || childIdx >= len(childPlan.Fields) {
+				continue // missing columns are caught by the key emitters
+			}
+			parentIdx, ok := fieldIndexForName(parentFieldIdx, ref.ReferencedColumnNames[k])
+			if !ok || parentIdx >= len(parentPlan.Fields) {
+				continue
+			}
+			if !writesetFieldsHashCompatible(childPlan.Fields[childIdx], parentPlan.Fields[parentIdx]) {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"FK streamed field metadata mismatch between child column %q and parent %s.%q: forcing serialization",
+					childCol, ref.ParentTable, ref.ReferencedColumnNames[k])
+			}
+		}
+	}
+	return nil
+}
+
 // buildTxnWriteset builds writeset keys for the given events.
 // fieldIdxCache is an optional cache of field-name→index maps, shared
 // across transactions on the same scheduler goroutine. Pass nil to
@@ -583,6 +678,27 @@ func buildTxnWritesetWithCache(tablePlans map[string]*TablePlan, fkRefs map[stri
 					fieldIdx[strings.ToLower(f.Name)] = i
 				}
 				fieldIdxCache[rowEvent.TableName] = fieldIdx
+			}
+		}
+		// Fail closed when this child's FK columns and the parent's
+		// referenced columns have hash-incompatible STREAMED metadata
+		// (validated once per child table per fetch; parents without a
+		// streamed plan yet are re-checked on later transactions).
+		if len(refs) > 0 {
+			validated := false
+			if cache != nil {
+				_, validated = cache.fkStreamedValidated[rowEvent.TableName]
+			}
+			if !validated {
+				if err := validateFKStreamedFieldCompatibility(plan, fieldIdx, refs, cache, tablePlans); err != nil {
+					return nil, err
+				}
+				if cache != nil {
+					if cache.fkStreamedValidated == nil {
+						cache.fkStreamedValidated = make(map[string]struct{})
+					}
+					cache.fkStreamedValidated[rowEvent.TableName] = struct{}{}
+				}
 			}
 		}
 		// Resolve the plan's identity column positions once per table.

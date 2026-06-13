@@ -18,8 +18,10 @@ package vreplication
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math/rand/v2"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -511,14 +513,13 @@ func TestApplySchedulerEnqueueBlocksWhenOutstandingOrdersReachCap(t *testing.T) 
 		return len(errCh) > 0
 	}, 100*time.Millisecond, 5*time.Millisecond)
 
-	s.mu.Lock()
-	s.lastCommittedOrder = 1
-	s.cond.Broadcast()
-	s.mu.Unlock()
+	// Advance durable progress through the real path: markCommitted bumps
+	// lastCommittedOrder and wakes the order-window waiter (orderCond).
+	require.NoError(t, s.markCommitted(&applyTxn{order: 1, noConflict: true}))
 
 	assert.Eventually(t, func() bool {
 		return len(errCh) > 0
-	}, 200*time.Millisecond, 5*time.Millisecond)
+	}, 30*time.Second, 5*time.Millisecond)
 	require.NoError(t, <-errCh)
 
 	s.mu.Lock()
@@ -577,17 +578,20 @@ func TestApplySchedulerPendingCompaction(t *testing.T) {
 	require.Equal(t, 2, s.pendingCount)
 }
 
-// TestApplySchedulerConcurrentEnqueueAndCommitStress exercises the
-// scheduler under many concurrent enqueues, worker-side nextReady calls,
-// and markCommitted calls to flush out deadlocks, lost wakeups, and
-// counter-balance bugs. Runs fast enough for the normal test suite.
+// TestApplySchedulerConcurrentEnqueueAndCommitStress exercises the scheduler
+// under concurrent producers and real worker goroutines (nextReady +
+// markCommitted, so inflight state and the writeset-refcount machinery are
+// genuinely engaged) to flush out deadlocks, lost wakeups, counter-balance
+// bugs, and — most importantly — conflicting dispatches.
 //
 // Correctness properties checked:
-//   - Every enqueued transaction is eventually observed by nextReady.
-//   - nextReady returns transactions in strictly increasing order.
+//   - No two concurrently-dispatched transactions share a writeset key, and
+//     forceGlobal transactions run exclusively (verified by an external
+//     conflict tracker, independent of the scheduler's own bookkeeping).
+//   - Every enqueued transaction is dispatched exactly once.
 //   - After all work drains, every inflight counter is zero.
 func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	s := newApplyScheduler(ctx)
 
@@ -643,41 +647,93 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 		}(p)
 	}
 
-	// Consumer goroutines simulate workers: pull via nextReady, mark committed.
-	// Record the order sequence observed by the commit serializer to verify
-	// strict monotonicity (mirrors the real commitLoop invariant).
+	// External conflict tracker: validates, independently of the scheduler's
+	// own counters, that no two dispatched-and-uncommitted transactions
+	// conflict. Registration is atomic with the check under one mutex.
+	var (
+		trackerMu    sync.Mutex
+		activeKeys   = map[uint64]int64{} // key -> holding txn order
+		activeGlobal int64                // order of the active forceGlobal txn, 0 = none
+		activeCount  int
+	)
+	dispatch := func(txn *applyTxn) {
+		trackerMu.Lock()
+		defer trackerMu.Unlock()
+		if activeGlobal != 0 {
+			t.Errorf("txn %d dispatched while forceGlobal txn %d active", txn.order, activeGlobal)
+		}
+		if txn.forceGlobal {
+			if activeCount != 0 {
+				t.Errorf("forceGlobal txn %d dispatched with %d txns active", txn.order, activeCount)
+			}
+			activeGlobal = txn.order
+		}
+		for _, k := range txn.writeset {
+			if holder, conflict := activeKeys[k]; conflict {
+				t.Errorf("txn %d dispatched with writeset key %d held by active txn %d", txn.order, k, holder)
+			}
+			activeKeys[k] = txn.order
+		}
+		activeCount++
+	}
+	finish := func(txn *applyTxn) {
+		trackerMu.Lock()
+		defer trackerMu.Unlock()
+		if txn.forceGlobal {
+			activeGlobal = 0
+		}
+		for _, k := range txn.writeset {
+			delete(activeKeys, k)
+		}
+		activeCount--
+	}
+
+	// Worker goroutines: the REAL dispatch path. nextReady marks inflight;
+	// markCommitted releases it. The tracker unregisters BEFORE
+	// markCommitted, mirroring the real pipeline where a conflicting txn may
+	// dispatch the instant the commit releases the scheduler state.
 	observed := make([]int64, 0, totalTxns)
 	var observedMu sync.Mutex
-	commitDone := make(chan struct{})
-	go func() {
-		defer close(commitDone)
-		for {
-			if len(observed) == totalTxns {
-				return
+	var workers sync.WaitGroup
+	for range numWorkers {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for {
+				txn, err := s.nextReady(ctx)
+				if err != nil {
+					if !errors.Is(err, io.EOF) && ctx.Err() == nil {
+						t.Errorf("nextReady: %v", err)
+					}
+					return
+				}
+				dispatch(txn)
+				if txn.order%7 == 0 {
+					runtime.Gosched() // widen the race window a little
+				}
+				observedMu.Lock()
+				observed = append(observed, txn.order)
+				observedMu.Unlock()
+				finish(txn)
+				if err := s.markCommitted(txn); err != nil {
+					t.Errorf("markCommitted: %v", err)
+					return
+				}
 			}
-			s.mu.Lock()
-			txn := s.popReadyLocked()
-			s.mu.Unlock()
-			if txn == nil {
-				time.Sleep(10 * time.Microsecond)
-				continue
-			}
-			observedMu.Lock()
-			observed = append(observed, txn.order)
-			observedMu.Unlock()
-			if err := s.markCommitted(txn); err != nil {
-				t.Errorf("markCommitted: %v", err)
-				return
-			}
-		}
-	}()
+		}()
+	}
 
 	producers.Wait()
-
+	s.close()
+	workersDone := make(chan struct{})
+	go func() { workers.Wait(); close(workersDone) }()
 	select {
-	case <-commitDone:
+	case <-workersDone:
 	case <-ctx.Done():
-		t.Fatalf("stress test timed out: observed %d / %d transactions", len(observed), totalTxns)
+		observedMu.Lock()
+		n := len(observed)
+		observedMu.Unlock()
+		t.Fatalf("stress test timed out: observed %d / %d transactions", n, totalTxns)
 	}
 
 	// Invariants after the scheduler has drained.
@@ -686,6 +742,7 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 	require.Zero(t, s.inflightGlobal, "inflightGlobal leaked")
 	require.Zero(t, s.inflightMissingMeta, "inflightMissingMeta leaked")
 	require.Zero(t, s.inflightCommitMeta, "inflightCommitMeta leaked")
+	require.Zero(t, s.inflightNoConflict, "inflightNoConflict leaked")
 	require.Empty(t, s.inflightWriteset, "inflightWriteset leaked")
 	require.Zero(t, s.pendingCount, "pendingCount not drained")
 	require.Len(t, observed, totalTxns)
@@ -698,21 +755,9 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 		}
 		seen[o] = struct{}{}
 	}
-	for i := int64(1); i <= int64(totalTxns); i++ {
-		if _, ok := seen[i]; !ok {
-			t.Fatalf("order %d missing from observed sequence", i)
-		}
-	}
+	require.Len(t, seen, totalTxns)
 }
 
-// TestApplySchedulerMultiKeyReleaseWakesAllReadyWaiters pins the wakeup
-// chain: committing one transaction whose writeset held multiple keys can
-// make several pending transactions ready at once, and every blocked waiter
-// whose transaction became ready must be dispatched without waiting for a
-// further commit. A single cond.Signal with no baton-passing strands all
-// but one of them until the next commit event, losing parallelism exactly
-// when the pipeline is busiest (batched mega-transactions release many
-// keys per commit).
 func TestApplySchedulerMultiKeyReleaseWakesAllReadyWaiters(t *testing.T) {
 	ctx := t.Context()
 	s := newApplyScheduler(ctx)
@@ -903,4 +948,60 @@ func TestApplySchedulerClosedWithUnreachablePendingWorkErrors(t *testing.T) {
 	require.Equal(t, io.EOF, s.close())
 	_, err = s.nextReady(ctx)
 	require.ErrorIs(t, err, errSchedulerAbandonedPendingWork)
+}
+
+// TestApplySchedulerClosedWaitsForInflightNoConflict pins that the
+// abandoned-pending-work check does NOT fire while a noConflict transaction
+// is dispatched but uncommitted: a noConflict position-save carrying commit
+// metadata advances lastCommittedSequence when it commits, which can unblock
+// the pending head. Erroring early would convert a clean stop-drain into a
+// spurious workflow restart.
+func TestApplySchedulerClosedWaitsForInflightNoConflict(t *testing.T) {
+	ctx := t.Context()
+	s := newApplyScheduler(ctx)
+
+	// Position-only save with metadata: its commit publishes sequence 99.
+	save := &applyTxn{order: 1, sequenceNumber: 99, commitParent: 0, hasCommitMeta: true, noConflict: true}
+	// Blocked on commit-parent 99 (empty writeset fallback).
+	stuck := &applyTxn{order: 2, sequenceNumber: 100, commitParent: 99, hasCommitMeta: true}
+	require.NoError(t, s.enqueue(save))
+	require.NoError(t, s.enqueue(stuck))
+
+	got, err := s.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, save, got)
+
+	require.Equal(t, io.EOF, s.close())
+
+	// A worker parks in nextReady. With the save still uncommitted it must
+	// WAIT, not return errSchedulerAbandonedPendingWork.
+	type result struct {
+		txn *applyTxn
+		err error
+	}
+	resCh := make(chan result, 1)
+	go func() {
+		txn, err := s.nextReady(ctx)
+		resCh <- result{txn, err}
+	}()
+	select {
+	case r := <-resCh:
+		t.Fatalf("nextReady returned early (txn=%v err=%v); it must wait for the inflight noConflict txn to commit", r.txn, r.err)
+	case <-time.After(2 * time.Second):
+	}
+
+	// Committing the save publishes sequence 99 and unblocks the head.
+	require.NoError(t, s.markCommitted(save))
+	select {
+	case r := <-resCh:
+		require.NoError(t, r.err)
+		require.Equal(t, stuck, r.txn)
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for the unblocked transaction to be dispatched")
+	}
+
+	// With nothing inflight and nothing pending, drain ends cleanly.
+	require.NoError(t, s.markCommitted(stuck))
+	_, err = s.nextReady(ctx)
+	require.ErrorIs(t, err, io.EOF)
 }

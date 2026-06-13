@@ -73,8 +73,8 @@ type applyTxn struct {
 	// done is a buffered channel (cap 1) used to synchronize the commitLoop
 	// with the worker that applied this transaction. The commitLoop sends on
 	// done after committing, unblocking the worker to reuse its DB connection.
-	// Pooled across sync.Pool cycles to avoid per-txn allocation.
-	// Nil for commitOnly transactions (workers don't wait on them).
+	// Always freshly allocated by acquireApplyTxn; commitOnly transactions
+	// carry one too but never use it (workers don't wait on them).
 	done chan struct{}
 }
 
@@ -85,6 +85,13 @@ type applyScheduler struct {
 
 	mu   sync.Mutex
 	cond *sync.Cond
+	// orderCond is a dedicated condition for the enqueue backpressure wait
+	// (maxOutstandingOrders). The shared cond's Signal in markCommitted can
+	// land on an idle worker that consumes the wakeup without re-signaling,
+	// leaving the scheduleLoop asleep until the pipeline fully drains (the
+	// allDrained Broadcast backstop). A dedicated cond makes the order-window
+	// wakeup deterministic.
+	orderCond *sync.Cond
 
 	// pending is the queue of transactions waiting to be dispatched to
 	// workers. Entries are set to nil when consumed; pendingOff tracks
@@ -121,6 +128,12 @@ type applyScheduler struct {
 	// metadata. When > 0, no-metadata transactions with writesets must
 	// wait to prevent mixing metadata modes.
 	inflightCommitMeta int
+	// inflightNoConflict counts dispatched-but-uncommitted noConflict
+	// transactions. They do not participate in conflict checking, but the
+	// abandoned-pending-work check must not fire while one is in flight:
+	// its markCommitted can advance lastCommittedSequence and unblock the
+	// pending head.
+	inflightNoConflict int
 
 	// closed is set by close() to signal that no more transactions will
 	// be enqueued. nextReady checks this to return io.EOF instead of
@@ -137,11 +150,13 @@ func newApplyScheduler(ctx context.Context) *applyScheduler {
 		inflightWriteset: make(map[uint64]int),
 	}
 	s.cond = sync.NewCond(&s.mu)
+	s.orderCond = sync.NewCond(&s.mu)
 	go func() {
 		<-ctx.Done()
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.cond.Broadcast()
+		s.orderCond.Broadcast()
 	}()
 	return s
 }
@@ -159,7 +174,7 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 		return io.EOF
 	}
 	for s.maxOutstandingOrders > 0 && txn.order > 0 && txn.order-s.lastCommittedOrder > s.maxOutstandingOrders {
-		s.cond.Wait()
+		s.orderCond.Wait()
 		if err := s.ctx.Err(); err != nil {
 			return err
 		}
@@ -223,7 +238,7 @@ func (s *applyScheduler) nextReady(ctx context.Context) (*applyTxn, error) {
 			// Return a non-EOF error so the controller retries the stream
 			// from the last saved position instead of silently abandoning
 			// the pending work.
-			if s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0 {
+			if s.inflightGlobal == 0 && s.inflightMissingMeta == 0 && s.inflightCommitMeta == 0 && len(s.inflightWriteset) == 0 && s.inflightNoConflict == 0 {
 				return nil, errSchedulerAbandonedPendingWork
 			}
 		}
@@ -257,6 +272,9 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	}
 	if txn.order > 0 && txn.order > s.lastCommittedOrder {
 		s.lastCommittedOrder = txn.order
+		// Wake the scheduleLoop if it is blocked on the order window; only
+		// commits advance lastCommittedOrder, so this is the only wake site.
+		s.orderCond.Signal()
 	}
 	// Track pre-release state to decide between Signal and Broadcast.
 	wasForceGlobal := txn.forceGlobal
@@ -430,6 +448,7 @@ func (s *applyScheduler) isReadyLocked(txn *applyTxn) bool {
 // writeset keys to inflightWriteset. Must be called under s.mu.
 func (s *applyScheduler) markInflightLocked(txn *applyTxn) {
 	if txn.noConflict {
+		s.inflightNoConflict++
 		return
 	}
 	if txn.forceGlobal {
@@ -458,6 +477,9 @@ func (s *applyScheduler) markInflightLocked(txn *applyTxn) {
 // writeset keys. The inverse of markInflightLocked. Must be called under s.mu.
 func (s *applyScheduler) releaseInflightLocked(txn *applyTxn) {
 	if txn.noConflict {
+		if s.inflightNoConflict > 0 {
+			s.inflightNoConflict--
+		}
 		return
 	}
 	if txn.forceGlobal {
@@ -556,5 +578,6 @@ func (s *applyScheduler) close() error {
 	}
 	s.closed = true
 	s.cond.Broadcast()
+	s.orderCond.Broadcast()
 	return io.EOF
 }

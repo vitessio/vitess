@@ -5170,7 +5170,14 @@ func TestScheduleItems_BatchingMergedSequenceAdvanced(t *testing.T) {
 	}
 	vp.tablePlansVersion.Store(1)
 
-	// Two transactions with commit meta — first gets merged, its sequence should be advanced
+	// Pre-advance the watermark so enqueue's idle-seeding path (which seeds
+	// lastCommittedSequence from the enqueued txn's commitParent) cannot
+	// mask the mergedSequences behavior this test pins.
+	scheduler.advanceCommittedSequence(9)
+
+	// Two transactions with commit meta — the first gets merged into the
+	// second's batch, so its sequence (10) must ride along in mergedSequences
+	// and publish only when the batch commits.
 	items := [][]*binlogdatapb.VEvent{{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5", SequenceNumber: 10, CommitParent: 9},
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
@@ -5190,11 +5197,29 @@ func TestScheduleItems_BatchingMergedSequenceAdvanced(t *testing.T) {
 	err := vp.scheduleItems(ctx, scheduler, state, items)
 	require.NoError(t, err)
 
-	// First txn was merged, its sequence (10) should have been advanced
+	// The merged-away sequence must NOT be visible yet: publishing it at
+	// enqueue time would let an empty-writeset dependent with commitParent=10
+	// run before the batch containing sequence 10 has actually committed.
 	scheduler.mu.Lock()
 	seq := scheduler.lastCommittedSequence
 	scheduler.mu.Unlock()
-	assert.GreaterOrEqual(t, seq, int64(10))
+	assert.Equal(t, int64(9), seq)
+
+	// Both source transactions were batched into a single txn that carries
+	// the surviving commit meta (sequence 11) plus the merged-away sequence.
+	txn, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), txn.order)
+	assert.Equal(t, int64(11), txn.sequenceNumber)
+	assert.Len(t, txn.payload.events, 2)
+	require.Equal(t, []int64{10}, txn.mergedSequences)
+
+	// Committing the batch publishes both its own and the merged sequence.
+	require.NoError(t, scheduler.markCommitted(txn))
+	scheduler.mu.Lock()
+	seq = scheduler.lastCommittedSequence
+	scheduler.mu.Unlock()
+	assert.Equal(t, int64(11), seq)
 }
 
 func TestScheduleItems_StopPosSetsMustSave(t *testing.T) {
@@ -5506,37 +5531,58 @@ func TestCommitLoop_InOrderCommit(t *testing.T) {
 }
 
 func TestCommitLoop_OutOfOrderReordering(t *testing.T) {
-	vp, mockDB := testVPlayer(t)
+	vp, _ := testVPlayer(t)
 	ctx := testCtx(t)
 	scheduler := newApplyScheduler(ctx)
 
-	mockDB.AddInvariant("update _vt.vreplication set pos=", &sqltypes.Result{})
-	mockDB.AddInvariant("commit", &sqltypes.Result{})
-	mockDB.AddInvariant("begin", &sqltypes.Result{})
-
 	commitCh := make(chan *applyTxn, 3)
 
-	pos1, _ := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
-
-	// Send transactions out of order: 2, 1, 3
-	for _, order := range []int64{2, 1, 3} {
-		txn := &applyTxn{
+	// Each txn records its position write through its own query closure.
+	// commitLoop is single-goroutine, so plain slices are safe here.
+	var committedOrders []int64
+	var committedSQL []string
+	makeTxn := func(order int64) *applyTxn {
+		pos, err := replication.DecodePosition(fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", 4+order))
+		require.NoError(t, err)
+		return &applyTxn{
 			order: order,
 			payload: &applyTxnPayload{
-				pos:                pos1,
+				pos:                pos,
 				timestamp:          100 * order,
 				commitOnly:         true,
 				updatePosOnly:      true,
 				lastEventTimestamp: 100 * order,
+				query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+					committedOrders = append(committedOrders, order)
+					committedSQL = append(committedSQL, sql)
+					return &sqltypes.Result{}, nil
+				},
 			},
 			done: make(chan struct{}),
 		}
-		commitCh <- txn
+	}
+
+	// Send transactions out of order: 2, 1, 3
+	for _, order := range []int64{2, 1, 3} {
+		commitCh <- makeTxn(order)
 	}
 	close(commitCh)
 
 	err := vp.commitLoop(ctx, scheduler, commitCh)
 	require.NoError(t, err)
+
+	// The position writes must happen in strict order despite arrival order,
+	// and each write must carry its own txn's position.
+	require.Equal(t, []int64{1, 2, 3}, committedOrders)
+	require.Len(t, committedSQL, 3)
+	assert.Contains(t, committedSQL[0], ":1-5")
+	assert.Contains(t, committedSQL[1], ":1-6")
+	assert.Contains(t, committedSQL[2], ":1-7")
+
+	scheduler.mu.Lock()
+	lastCommittedOrder := scheduler.lastCommittedOrder
+	scheduler.mu.Unlock()
+	assert.Equal(t, int64(3), lastCommittedOrder)
 }
 
 // TestCommitLoop_ZeroOrderIsRejected pins the invariant that every txn
@@ -6060,6 +6106,126 @@ func TestCommitLoop_WorkerStopPosStateFailureDoesNotCommit(t *testing.T) {
 	assert.Zero(t, scheduler.inflightCommitMeta)
 }
 
+// TestCommitLoop_WorkerPosUpdateFailureDoesNotCommit pins the failure path
+// where the position update on the worker's connection fails: the commitLoop
+// must return the error without committing the worker's transaction, without
+// signaling the worker's done channel (the connection is in an unknown state
+// and must not be reused), and without advancing the scheduler.
+func TestCommitLoop_WorkerPosUpdateFailureDoesNotCommit(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+
+	posErr := errors.New("pos update failed")
+	workerClient := newVDBClient(&failingDBClient{failOnQuery: map[string]error{
+		"update _vt.vreplication set pos=": posErr,
+	}}, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	require.NoError(t, workerClient.Begin())
+	t.Cleanup(func() {
+		_ = workerClient.Rollback()
+	})
+
+	pos1, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+
+	doneCh := make(chan struct{}, 1)
+	txn := &applyTxn{
+		order: 1,
+		payload: &applyTxnPayload{
+			pos:       pos1,
+			timestamp: 100,
+			query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				return workerClient.Execute(sql)
+			},
+			commit:             workerClient.Commit,
+			client:             workerClient,
+			lastEventTimestamp: 100,
+		},
+		done: doneCh,
+	}
+
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- txn
+	close(commitCh)
+
+	err = vp.commitLoop(ctx, scheduler, commitCh)
+	require.ErrorContains(t, err, posErr.Error())
+	assert.True(t, workerClient.InTransaction)
+	assert.NotContains(t, workerClient.queries, "commit")
+	select {
+	case <-doneCh:
+		require.Fail(t, "worker done signaled after failed position update")
+	default:
+	}
+
+	scheduler.mu.Lock()
+	defer scheduler.mu.Unlock()
+	assert.Zero(t, scheduler.lastCommittedOrder)
+	assert.Zero(t, scheduler.lastCommittedSequence)
+	assert.Zero(t, scheduler.inflightGlobal)
+	assert.Zero(t, scheduler.inflightMissingMeta)
+	assert.Zero(t, scheduler.inflightCommitMeta)
+}
+
+// TestCommitLoop_WorkerCommitFailureKeepsTransactionOpen pins the failure
+// path where the position update succeeds but the COMMIT itself fails: the
+// commitLoop must return the error, the vdbClient must still consider the
+// transaction open (a failed COMMIT leaves the server-side state unknown),
+// the worker must not be signaled to reuse the connection, and the scheduler
+// must not record the txn as committed.
+func TestCommitLoop_WorkerCommitFailureKeepsTransactionOpen(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+
+	commitErr := errors.New("commit failed")
+	workerClient := newVDBClient(&failingCommitDBClient{commitErr: commitErr}, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	require.NoError(t, workerClient.Begin())
+	t.Cleanup(func() {
+		_ = workerClient.Rollback()
+	})
+
+	pos1, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+
+	doneCh := make(chan struct{}, 1)
+	txn := &applyTxn{
+		order: 1,
+		payload: &applyTxnPayload{
+			pos:       pos1,
+			timestamp: 100,
+			query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+				return workerClient.Execute(sql)
+			},
+			commit:             workerClient.Commit,
+			client:             workerClient,
+			lastEventTimestamp: 100,
+		},
+		done: doneCh,
+	}
+
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- txn
+	close(commitCh)
+
+	err = vp.commitLoop(ctx, scheduler, commitCh)
+	require.ErrorContains(t, err, commitErr.Error())
+	assert.True(t, workerClient.InTransaction)
+	select {
+	case <-doneCh:
+		require.Fail(t, "worker done signaled after failed commit")
+	default:
+	}
+
+	scheduler.mu.Lock()
+	defer scheduler.mu.Unlock()
+	assert.Zero(t, scheduler.lastCommittedOrder)
+	assert.Zero(t, scheduler.lastCommittedSequence)
+	assert.Zero(t, scheduler.inflightGlobal)
+	assert.Zero(t, scheduler.inflightMissingMeta)
+	assert.Zero(t, scheduler.inflightCommitMeta)
+}
+
 func TestCommitLoop_CommitOnlyEOFStillMarksCommitted(t *testing.T) {
 	ctx := testCtx(t)
 	vp, mockDB := testVPlayer(t)
@@ -6427,7 +6593,15 @@ func TestCommitLoop_WorkerStopPosSetsStateAndStops(t *testing.T) {
 	}
 }
 
-func TestSetState_BatchedTransactionDefersStateUpdateUntilCommit(t *testing.T) {
+// TestSetState_BatchedTransactionExecutesImmediatelyWithoutReplay pins the
+// mid-batch setState contract: the pending batch is flushed first (inside
+// the same open MySQL transaction, preserving stop-path atomicity), the
+// state UPDATE and insertLog statements execute immediately, and the batch
+// buffer is marked flushed so the later CommitTrxQueryBatch sends only
+// "commit" — replaying nothing. Deferring the state UPDATE into the batch
+// (the previous design) double-executed insertLog's SELECT/INSERT on
+// replay, duplicating vreplication_log rows.
+func TestSetState_BatchedTransactionExecutesImmediatelyWithoutReplay(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	recording := &recordingDBClient{}
 
@@ -6437,14 +6611,30 @@ func TestSetState_BatchedTransactionDefersStateUpdateUntilCommit(t *testing.T) {
 
 	require.NoError(t, vp.vr.dbClient.Begin())
 	require.NoError(t, vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, ""))
-	assert.Empty(t, recording.queries)
-	require.Len(t, vp.vr.dbClient.queries, 2)
-	assert.Equal(t, "begin", vp.vr.dbClient.queries[0])
-	assert.Contains(t, vp.vr.dbClient.queries[1], "update _vt.vreplication set state='Stopped'")
+	// The state UPDATE executed on the wire immediately (after the batch
+	// flush), within the open transaction.
+	require.NotEmpty(t, recording.queries)
+	sawStateUpdate := 0
+	for _, q := range recording.queries {
+		if strings.Contains(q, "update _vt.vreplication set state='Stopped'") {
+			sawStateUpdate++
+		}
+	}
+	require.Equal(t, 1, sawStateUpdate)
 
+	// The later batch commit must replay nothing: only "commit" goes out.
+	preCommit := len(recording.queries)
 	require.NoError(t, vp.vr.dbClient.CommitTrxQueryBatch())
-	require.Len(t, recording.queries, 1)
-	assert.Contains(t, recording.queries[0], "update _vt.vreplication set state='Stopped'")
+	require.Equal(t, preCommit+1, len(recording.queries))
+	assert.Equal(t, "commit", recording.queries[len(recording.queries)-1])
+	// Still exactly one state UPDATE — no double execution.
+	sawStateUpdate = 0
+	for _, q := range recording.queries {
+		if strings.Contains(q, "update _vt.vreplication set state='Stopped'") {
+			sawStateUpdate++
+		}
+	}
+	require.Equal(t, 1, sawStateUpdate)
 }
 
 // TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites exercises

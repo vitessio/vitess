@@ -520,6 +520,15 @@ func (c *recordingFailingDBClient) ExecuteFetch(query string, maxrows int) (*sql
 	return c.failingDBClient.ExecuteFetch(query, maxrows)
 }
 
+// failingCommitDBClient delegates to failingDBClient but fails COMMIT, for
+// exercising commit-failure paths (failingDBClient.Commit always succeeds).
+type failingCommitDBClient struct {
+	failingDBClient
+	commitErr error
+}
+
+func (c *failingCommitDBClient) Commit() error { return c.commitErr }
+
 // TestCreateWorkerConnSetsReadCommitted pins that worker connections run at
 // READ COMMITTED. The writeset scheduler models PK/unique/FK conflicts, but
 // it cannot model InnoDB gap/next-key locks, which REPEATABLE READ takes

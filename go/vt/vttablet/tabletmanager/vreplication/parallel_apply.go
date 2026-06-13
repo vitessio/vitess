@@ -734,6 +734,15 @@ func extractFieldRefreshTables(events []*binlogdatapb.VEvent) map[string]struct{
 // Same-txn FIELD+ROW means the worker may build or replace the plan before it
 // applies the row. The scheduler cannot safely compute a writeset from the
 // pre-apply snapshot, so serialize these rare refresh transactions.
+//
+// This guard is also what keeps concurrent plan refreshes ordered: vstreamer
+// emits FIELD in the same transaction as the first ROW for that table, so
+// every plan-storing transaction is forceGlobal and two workers can never
+// store table plans for the same table out of order. A FIELD-only
+// transaction (no ROW for that table) would bypass this; if vstreamer ever
+// emits those, the pendingFieldRefreshTables serialization still covers the
+// ordering of later row transactions, but the plan-store race between two
+// FIELD-only txns would need revisiting.
 func txnNeedsFieldRefreshSerialization(events []*binlogdatapb.VEvent) bool {
 	refreshedTables := extractFieldRefreshTables(events)
 	if len(refreshedTables) == 0 {
@@ -803,7 +812,8 @@ func writesetErrorForcesSerialization(err error) bool {
 	}
 	return strings.Contains(err.Error(), "partial row image on table ") ||
 		strings.Contains(err.Error(), "not in streamed fields") ||
-		strings.Contains(err.Error(), "no usable writeset identity")
+		strings.Contains(err.Error(), "no usable writeset identity") ||
+		strings.Contains(err.Error(), "streamed field metadata mismatch")
 }
 
 // computeLastEventTimestamp scans events in reverse to find the last event
@@ -1470,7 +1480,13 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		// runs, leaving the counter permanently stuck at 1 — every future ROW
 		// txn touching this table would then be force-serialized for the
 		// lifetime of the workflow.
-		refreshedTables := extractFieldRefreshTables(payload.events)
+		// Skip the full event scan in the common rowOnly case; curHasFieldEvent
+		// already tracks whether any FIELD event was accumulated (the
+		// commitLoop side has the analogous map-emptiness guard).
+		var refreshedTables map[string]struct{}
+		if state.curHasFieldEvent {
+			refreshedTables = extractFieldRefreshTables(payload.events)
+		}
 		if len(refreshedTables) != 0 {
 			if pendingFieldRefreshTables == nil {
 				pendingFieldRefreshTables = make(map[string]int, len(refreshedTables))
@@ -1504,6 +1520,10 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				}
 				vp.serialMu.Unlock()
 			}
+			// Return the unsent txn to the pool, matching the DDL/OTHER/JOURNAL
+			// and enqueueCommitOnly paths: a retry storm must not defeat the
+			// pool by leaking one applyTxn + payload per failed enqueue.
+			releaseApplyTxn(txn)
 			return err
 		}
 		// Pre-allocate with capacity 16 to avoid the nil→1→2→4→8 growth
@@ -1920,8 +1940,9 @@ func (vp *vplayer) enqueueCommitOnly(ctx context.Context, scheduler *applySchedu
 	txn.forceGlobal = true
 	txn.noConflict = updatePosOnly
 	txn.payload = payload
-	// done is nil for commitOnly transactions; workers send them
-	// directly to commitCh without waiting for completion.
+	// commitOnly transactions carry a pooled done channel like any other
+	// txn, but it is unused: workers forward them directly to commitCh
+	// without waiting for completion.
 	if err := scheduler.enqueue(txn); err != nil {
 		// Match the DDL/OTHER/JOURNAL branch above: return the unsent txn
 		// to the pool so retry storms don't leak per-call.

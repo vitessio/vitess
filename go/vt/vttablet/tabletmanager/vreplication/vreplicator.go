@@ -591,24 +591,22 @@ func (vr *vreplicator) storeState(state binlogdatapb.VReplicationWorkflowState) 
 }
 
 func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, message string) error {
-	return vr.setStateWithDBClient(vr.dbClient, state, message, false)
+	return vr.setStateWithDBClient(vr.dbClient, state, message)
 }
 
-// setStateWithDBClientImmediate updates the stream state using the supplied
-// connection immediately, even when the connection is in batch mode. The
-// commitLoop uses this after a worker has already flushed its batch but before
-// COMMIT so the stop-state write stays in the same transaction as the row
-// changes and position update.
+// setStateWithDBClientImmediate is setStateWithDBClient; the name survives at
+// call sites (e.g. the parallel commitLoop) to document that the stop-state
+// write executes immediately within the connection's open transaction.
 func (vr *vreplicator) setStateWithDBClientImmediate(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string) error {
-	return vr.setStateWithDBClient(dbClient, state, message, true)
+	return vr.setStateWithDBClient(dbClient, state, message)
 }
 
 // setStateWithDBClient writes the workflow's state/message row to
-// _vt.vreplication using the supplied connection. The immediate flag
-// forces a direct ExecuteFetch even when the connection is mid-batch,
-// which the parallel commitLoop uses so the stop-state write lands in
-// the same transaction as the worker's row updates and position save.
-func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string, immediate bool) error {
+// _vt.vreplication using the supplied connection. Mid-batch, it flushes the
+// pending batch first and executes its own writes immediately (still inside
+// the same open MySQL transaction), marking the buffer flushed so nothing
+// double-executes on the later batch commit.
+func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdatapb.VReplicationWorkflowState, message string) error {
 	if message != "" {
 		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 			Time:    time.Now(),
@@ -617,37 +615,27 @@ func (vr *vreplicator) setStateWithDBClient(dbClient *vdbClient, state binlogdat
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
-	// In batch-commit mode the immediate path runs queries via ExecuteFetch,
-	// which executes them on the wire AND appends them to the trx batch
-	// buffer (for Retry). CommitTrxQueryBatch would then replay them in a
-	// fresh MySQL transaction, doubling the state UPDATE and vreplication_log
-	// INSERT and breaking atomicity with the position write. Flush any
-	// already-batched queries first so they share the same MySQL transaction
-	// as the upcoming immediate writes, then mark the immediate writes as
-	// flushed before returning so the caller's CommitTrxQueryBatch only
-	// sends "commit".
-	batchedImmediate := immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0
-	if batchedImmediate {
+	// In batch-commit mode, queries run via ExecuteFetch execute on the wire
+	// AND get appended to the trx batch buffer (for Retry). A later
+	// CommitTrxQueryBatch would replay them in a fresh MySQL transaction,
+	// doubling the state UPDATE and the vreplication_log SELECT/INSERT that
+	// insertLog below issues, and breaking atomicity with the position
+	// write. So mid-batch we always: flush the pending batch first (the
+	// flush stays inside the same open MySQL transaction, preserving
+	// stop-path atomicity with the position update), run the state write
+	// and insertLog immediately, and mark the buffer flushed on EVERY exit
+	// path so the caller's CommitTrxQueryBatch only sends "commit".
+	// (Deferring the state UPDATE into the batch instead is not an option:
+	// insertLog must read getLastLog and cannot be batched, so its
+	// statements would double-execute on replay.)
+	if dbClient.InTransaction && dbClient.maxBatchSize > 0 {
 		if _, err := dbClient.ExecuteTrxQueryBatch(); err != nil {
 			return fmt.Errorf("could not flush pending batched queries before set state: %v: %v", query, err)
 		}
-		// The flush succeeded: everything buffered so far has executed on the
-		// wire, and each immediate ExecuteFetch below executes on the wire
-		// while also appending itself to the batch buffer (for Retry). Mark
-		// the buffer flushed on EVERY exit path — including error returns —
-		// or a later CommitTrxQueryBatch would replay already-executed
-		// queries in a fresh MySQL transaction, double-executing them and
-		// breaking atomicity with the position write.
 		defer dbClient.markTrxBatchedQueriesFlushed()
 	}
-	if !immediate && dbClient.InTransaction && dbClient.maxBatchSize > 0 {
-		if err := dbClient.AddQueryToTrxBatch(query); err != nil {
-			return fmt.Errorf("could not set state: %v: %v", query, err)
-		}
-	} else {
-		if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-			return fmt.Errorf("could not set state: %v: %v", query, err)
-		}
+	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
 	if state == vr.getState() {
 		return nil

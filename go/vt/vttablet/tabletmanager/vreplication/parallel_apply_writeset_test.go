@@ -1545,3 +1545,46 @@ func TestBuildTxnWritesetUniqueKeyOrdinalDiscriminatesIndexes(t *testing.T) {
 	// a == b.
 	require.Len(t, keys, 3, "equal values on different unique indexes must produce distinct keys")
 }
+
+// TestBuildTxnWritesetFKStreamedMetadataMismatchSerializes pins the
+// fail-closed path for target-only FKs whose SOURCE column metadata
+// diverges: queryFKRefs validates the TARGET schema, but the digests hash
+// the streamed (FIELD-event) metadata, so a child column streamed as INT64
+// referencing a parent column streamed as VARCHAR would hash equal logical
+// values to different keys and let the child/parent transactions reorder.
+// Such transactions must serialize instead.
+func TestBuildTxnWritesetFKStreamedMetadataMismatchSerializes(t *testing.T) {
+	collationID := uint32(collations.MySQL8().LookupByName("utf8mb4_general_ci"))
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_id", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	parentPlan := &TablePlan{
+		TargetName: "parent",
+		Fields: []*querypb.Field{
+			// The parent's referenced column streams as text: hash-incompatible
+			// with the child's INT64.
+			{Name: "id", Type: querypb.Type_VARCHAR, Charset: collationID},
+		},
+		PKIndices: []bool{true},
+	}
+	tablePlans := map[string]*TablePlan{"child": childPlan, "parent": parentPlan}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {{ParentTable: "parent", ChildColumnNames: []string{"parent_id"}, ReferencedColumnNames: []string{"id"}}},
+	}
+
+	row := &querypb.Row{Values: []byte("142"), Lengths: []int64{1, 2}}
+	change := &binlogdatapb.RowChange{After: row}
+	rowEvent := &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{change}}
+	vevent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: rowEvent}
+
+	keys, err := buildTxnWriteset(tablePlans, fkRefs, buildParentFKRefs(fkRefs), []*binlogdatapb.VEvent{vevent})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "streamed field metadata mismatch")
+	require.Nil(t, keys)
+	require.True(t, writesetErrorForcesSerialization(err), "metadata mismatch must serialize the txn, not fail the workflow")
+}

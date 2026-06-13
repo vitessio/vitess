@@ -503,7 +503,7 @@ func (vp *vplayer) setStopPositionState(dbClient *vdbClient) error {
 	if !vp.saveStop {
 		return nil
 	}
-	return vp.vr.setStateWithDBClient(dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos), false)
+	return vp.vr.setStateWithDBClient(dbClient, binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos))
 }
 
 // setStopPositionStateImmediate marks the workflow as Stopped using a

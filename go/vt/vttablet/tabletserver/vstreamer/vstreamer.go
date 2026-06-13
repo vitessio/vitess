@@ -541,6 +541,18 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				if pendingStreamErr != nil {
 					return pendingStreamErr
 				}
+				// throttleEvents closes throttledEvents right after sending its
+				// timeout error to throttlerErrs; both select cases become ready
+				// at once and Go picks randomly, so when the closed-channel case
+				// wins we must surface the real throttler error rather than a
+				// misleading "unexpected server EOF".
+				select {
+				case err := <-throttlerErrs:
+					if err != nil {
+						return err
+					}
+				default:
+				}
 				select {
 				case <-ctx.Done():
 					return nil
