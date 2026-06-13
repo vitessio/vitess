@@ -41,6 +41,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -52,6 +53,121 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+func TestIsMySQLReachable_SucceedsOnFirstAttempt(t *testing.T) {
+	calls := 0
+	err := isMySQLReachable(func() error {
+		calls++
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+func TestIsMySQLReachable_RetriesTransientConnError(t *testing.T) {
+	defer func(d time.Duration) { healthCheckRetryBaseDelay = d }(healthCheckRetryBaseDelay)
+	healthCheckRetryBaseDelay = time.Millisecond
+
+	calls := 0
+	err := isMySQLReachable(func() error {
+		calls++
+		if calls < 3 {
+			return sqlerror.NewSQLError(sqlerror.CRConnectionError, "", "socket backlog full")
+		}
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 3, calls)
+}
+
+func TestIsMySQLReachable_RetriesTCPConnError(t *testing.T) {
+	defer func(d time.Duration) { healthCheckRetryBaseDelay = d }(healthCheckRetryBaseDelay)
+	healthCheckRetryBaseDelay = time.Millisecond
+
+	calls := 0
+	err := isMySQLReachable(func() error {
+		calls++
+		if calls < 2 {
+			return sqlerror.NewSQLError(sqlerror.CRConnHostError, "", "connection refused")
+		}
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 2, calls)
+}
+
+func TestIsMySQLReachable_FailsAfterAllRetries(t *testing.T) {
+	defer func(d time.Duration) { healthCheckRetryBaseDelay = d }(healthCheckRetryBaseDelay)
+	healthCheckRetryBaseDelay = time.Millisecond
+
+	calls := 0
+	err := isMySQLReachable(func() error {
+		calls++
+		return sqlerror.NewSQLError(sqlerror.CRConnectionError, "", "socket backlog full")
+	})
+	assert.Error(t, err)
+	assert.Equal(t, healthCheckMaxRetries, calls)
+	assert.Contains(t, err.Error(), "socket backlog full")
+}
+
+func TestIsMySQLReachable_NoRetryOnNonTransientError(t *testing.T) {
+	calls := 0
+	err := isMySQLReachable(func() error {
+		calls++
+		return sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, "", "access denied")
+	})
+	assert.Error(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+func TestIsMySQLReachable_TooManyConnectionsTreatedAsReachable(t *testing.T) {
+	calls := 0
+	err := isMySQLReachable(func() error {
+		calls++
+		return sqlerror.NewSQLError(sqlerror.CRServerHandshakeErr, "", "Too many connections")
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+func TestIsMySQLReachable_MaxUserConnectionsTreatedAsReachable(t *testing.T) {
+	calls := 0
+	err := isMySQLReachable(func() error {
+		calls++
+		return sqlerror.NewSQLError(sqlerror.ERUserLimitReached, sqlerror.SSUnknownSQLState, "User 'vt_app' has exceeded the 'max_user_connections' resource (current value: 1000)")
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+func TestIsMySQLReachable_TooManyUserConnectionsTreatedAsReachable(t *testing.T) {
+	calls := 0
+	err := isMySQLReachable(func() error {
+		calls++
+		return sqlerror.NewSQLError(sqlerror.ERTooManyUserConnections, sqlerror.SSUnknownSQLState, "Too many connections for user")
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, calls)
+}
+
+func TestIsMySQLReachable_ExponentialBackoff(t *testing.T) {
+	defer func(d time.Duration) { healthCheckRetryBaseDelay = d }(healthCheckRetryBaseDelay)
+	healthCheckRetryBaseDelay = 50 * time.Millisecond
+
+	var timestamps []time.Time
+	err := isMySQLReachable(func() error {
+		timestamps = append(timestamps, time.Now())
+		return sqlerror.NewSQLError(sqlerror.CRConnectionError, "", "socket backlog full")
+	})
+	assert.Error(t, err)
+	assert.Equal(t, healthCheckMaxRetries, len(timestamps))
+
+	gap1 := timestamps[1].Sub(timestamps[0])
+	gap2 := timestamps[2].Sub(timestamps[1])
+	assert.True(t, gap1 >= 40*time.Millisecond, "first retry delay too short: %v", gap1)
+	assert.True(t, gap2 >= 80*time.Millisecond, "second retry delay too short: %v", gap2)
+	assert.True(t, gap2 > gap1, "backoff should be exponential: gap1=%v gap2=%v", gap1, gap2)
+}
 
 func TestStrictMode(t *testing.T) {
 	db := fakesqldb.New(t)
