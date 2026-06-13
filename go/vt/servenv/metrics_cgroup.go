@@ -22,8 +22,13 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/containerd/cgroups/v3"
@@ -36,6 +41,8 @@ import (
 var (
 	once                         sync.Once
 	cgroupManager                *cgroup2.Manager
+	cgroupMemoryPath             string
+	cgroupMemoryLimit            atomic.Uint64
 	lastCpu                      uint64
 	lastTime                     time.Time
 	errCgroupMetricsNotAvailable = errors.New("cgroup metrics are not available")
@@ -46,7 +53,14 @@ func setup() {
 		log.Warn("cgroup metrics are only supported with cgroup v2, will use host metrics")
 		return
 	}
-	manager, err := getCgroupManager()
+	groupPath, err := cgroup2.NestedGroupPath("")
+	if err != nil {
+		log.Warn(fmt.Sprintf("Failed to resolve cgroup path for metrics, will use host metrics: %v", err))
+		return
+	}
+	cgroupMemoryPath = cgroupMemoryPathForGroupPath(groupPath)
+
+	manager, err := cgroup2.Load(groupPath)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Failed to init cgroup manager for metrics, will use host metrics: %v", err))
 	}
@@ -58,16 +72,8 @@ func setup() {
 	lastTime = time.Now()
 }
 
-func getCgroupManager() (*cgroup2.Manager, error) {
-	path, err := cgroup2.NestedGroupPath("")
-	if err != nil {
-		return nil, fmt.Errorf("failed to build nested cgroup paths: %w", err)
-	}
-	cgroupManager, err := cgroup2.Load(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load cgroup manager: %w", err)
-	}
-	return cgroupManager, nil
+func cgroupMemoryPathForGroupPath(groupPath string) string {
+	return filepath.Join("/sys/fs/cgroup", strings.TrimLeft(groupPath, string(os.PathSeparator)))
 }
 
 func getCgroupCpuUsage() (float64, error) {
@@ -119,16 +125,67 @@ func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration
 
 func getCgroupMemoryUsage() (float64, error) {
 	once.Do(setup)
-	if cgroupManager == nil {
+	if cgroupMemoryPath == "" {
 		return -1, errCgroupMetricsNotAvailable
 	}
-	stats, err := cgroupManager.Stat()
+	return getCgroupMemoryUsageAtPath(cgroupMemoryPath, &cgroupMemoryLimit)
+}
+
+func getCgroupMemoryUsageAtPath(path string, cachedLimit *atomic.Uint64) (float64, error) {
+	usage, err := readCgroupMemoryValue(filepath.Join(path, "memory.current"))
 	if err != nil {
-		return -1, fmt.Errorf("failed to get cgroup stats: %w", err)
+		return -1, fmt.Errorf("failed to read cgroup memory.current: %w", err)
 	}
-	usage := stats.Memory.Usage
-	limit := stats.Memory.UsageLimit
+	limit, err := getCgroupMemoryLimitAtPath(path, cachedLimit)
+	if err != nil {
+		return -1, err
+	}
 	return computeMemoryUsage(usage, limit)
+}
+
+func getCgroupMemoryLimitAtPath(path string, cachedLimit *atomic.Uint64) (uint64, error) {
+	if cachedLimit != nil {
+		if limit := cachedLimit.Load(); limit != 0 {
+			return limit, nil
+		}
+	}
+
+	limit, err := readCgroupMemoryValue(filepath.Join(path, "memory.max"))
+	if err != nil {
+		return 0, fmt.Errorf("failed to read cgroup memory.max: %w", err)
+	}
+	if limit == math.MaxUint64 {
+		vmem, err := mem.VirtualMemory()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get virtual memory stats: %w", err)
+		}
+		limit = vmem.Total
+	}
+	if cachedLimit != nil && limit != 0 {
+		cachedLimit.Store(limit)
+	}
+	return limit, nil
+}
+
+func readCgroupMemoryValue(path string) (uint64, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	value := strings.TrimSpace(string(data))
+	if value == "" {
+		return 0, errors.New("empty cgroup value")
+	}
+	if value == "max" {
+		return math.MaxUint64, nil
+	}
+
+	parsed, err := strconv.ParseUint(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse cgroup value %q: %w", value, err)
+	}
+	return parsed, nil
 }
 
 func computeMemoryUsage(usage uint64, limit uint64) (float64, error) {

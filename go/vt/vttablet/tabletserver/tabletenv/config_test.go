@@ -86,6 +86,7 @@ func TestConfigParse(t *testing.T) {
 gracePeriods: {}
 healthcheck: {}
 hotRowProtection: {}
+memoryPressure: {}
 olap: {}
 olapReadPool: {}
 oltp: {}
@@ -145,6 +146,10 @@ hotRowProtection:
   maxGlobalQueueSize: 1000
   maxQueueSize: 20
   mode: disable
+memoryPressure:
+  hardThreshold: 0.9
+  resumeThreshold: 0.7
+  softThreshold: 0.8
 messagePostponeParallelism: 4
 olap:
   txTimeoutSeconds: 30s
@@ -178,6 +183,20 @@ txPool:
   timeoutSeconds: 1s
 `
 	utils.MustMatch(t, want, string(gotBytes))
+}
+
+func TestVerifyMemoryPressureConfig(t *testing.T) {
+	cfg := NewDefaultConfig()
+	cfg.MemoryPressure.Enable = true
+	cfg.MemoryPressure.SoftThreshold = 0.80
+	cfg.MemoryPressure.HardThreshold = 0.90
+	cfg.MemoryPressure.ResumeThreshold = 0.80
+
+	err := cfg.Verify()
+	require.ErrorContains(t, err, "--memory-pressure-resume-threshold must be < --memory-pressure-soft-threshold")
+
+	cfg.MemoryPressure.ResumeThreshold = 0.70
+	require.NoError(t, cfg.Verify())
 }
 
 func TestClone(t *testing.T) {

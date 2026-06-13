@@ -29,6 +29,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -318,6 +319,41 @@ func TestQueryTimeout(t *testing.T) {
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryTimeout", int(100*time.Millisecond))
 	compareIntDiff(t, vend, "Kills/Connections", vstart, 1)
+}
+
+func TestMemoryPressureBackpressure(t *testing.T) {
+	vstart := framework.DebugVars()
+
+	client := framework.NewClient()
+	err := client.Begin(false)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if client.TransactionID() != 0 {
+			require.NoError(t, client.Rollback())
+		}
+	})
+
+	original := framework.Server.Config().MemoryPressure
+	t.Cleanup(func() {
+		framework.Server.SetMemoryPressureForTests(original, servenv.MemoryUsage)
+	})
+
+	framework.Server.SetMemoryPressureForTests(tabletenv.MemoryPressureConfig{
+		Enable:          true,
+		SoftThreshold:   0.80,
+		HardThreshold:   0.90,
+		ResumeThreshold: 0.70,
+	}, func() float64 {
+		return 0.95
+	})
+
+	err = framework.NewClient().Begin(false)
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	require.ErrorContains(t, err, "memory pressure")
+	compareIntDiff(t, framework.DebugVars(), "MemoryPressureRejectedRequests/Begin.hard.hard", vstart, 1)
+
+	require.NoError(t, client.Rollback())
 }
 
 // TestHeartbeatMetric validates the heartbeat metrics exists from the connection pool.
