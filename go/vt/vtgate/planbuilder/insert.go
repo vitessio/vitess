@@ -41,6 +41,10 @@ func gen4InsertStmtPlanner(version querypb.ExecuteOptions_PlannerVersion, insStm
 	// insert query does not support table alias.
 	insStmt.Table.As = sqlparser.NewIdentifierCS("")
 
+	if err := rejectInternalTableDML(insStmt); err != nil {
+		return nil, err
+	}
+
 	// Check single unsharded. Even if the table is for single unsharded but sequence table is used.
 	// We cannot shortcut here as sequence column needs additional planning.
 	ks, tables := ctx.SemTable.SingleUnshardedKeyspace()

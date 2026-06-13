@@ -512,8 +512,12 @@ func testReshardV2Workflow(t *testing.T) {
 
 	// create internal tables on the original customer shards that should be
 	// ignored and not show up on the new shards
-	execMultipleQueries(t, vtgateConn, defaultTargetKs+"/-80", internalSchema)
-	execMultipleQueries(t, vtgateConn, defaultTargetKs+"/80-", internalSchema)
+	for _, shard := range []string{"-80", "80-"} {
+		tablet := vc.getPrimaryTablet(t, defaultTargetKs, shard)
+
+		err := tablet.MultiQueryTablet(internalSchema, defaultTargetKs, true)
+		require.NoError(t, err)
+	}
 
 	createAdditionalTargetShards(t, "-40,40-80,80-c0,c0-")
 	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")

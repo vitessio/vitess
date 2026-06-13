@@ -169,6 +169,10 @@ func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersi
 
 func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema plancontext.VSchema) (*planResult, error)) (*planResult, error) {
 	if vschema.ShardDestination() != nil {
+		if err := rejectInternalTableDML(stmt); err != nil {
+			return nil, err
+		}
+
 		return buildPlanForBypass(stmt, reservedVars, vschema)
 	}
 	return f(stmt, reservedVars, vschema)
@@ -330,6 +334,10 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 }
 
 func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
+	if err := rejectInternalTableLoad(query, vschema.Environment().Parser()); err != nil {
+		return nil, err
+	}
+
 	keyspace, err := vschema.SelectedKeyspace()
 	if err != nil {
 		return nil, err
