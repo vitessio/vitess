@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -110,7 +112,8 @@ func ExecDBWriteFunc(f func() error) error {
 
 func ExpireTableData(tableName string, timestampColumn string) error {
 	writeFunc := func() error {
-		query := fmt.Sprintf(`DELETE
+		query := fmt.Sprintf(
+			`DELETE
 			FROM %s
 			WHERE
 				%s < DATETIME('now', PRINTF('-%%d DAY', ?))
@@ -173,6 +176,7 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
 	stalledDisk := false
+	fullDisk := false
 	instance := NewInstance()
 	instanceFound := false
 	partialSuccess := false
@@ -216,8 +220,21 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		RecordPrimaryHealthCheck(tabletAlias, true)
 	}
-	if config.GetStalledDiskPrimaryRecovery() && fs.DiskStalled {
-		stalledDisk = true
+	stalledDisk = config.GetStalledDiskPrimaryRecovery() && fs.DiskStalled
+	fullDisk = config.GetFullDiskPrimaryRecovery() && fs.DiskFull
+	if fullDisk || stalledDisk {
+		// First-discovery insert: if this fails, UpdateInstanceLastChecked
+		// has no row to UPDATE and disk-health state is lost until the next
+		// poll.
+		if writeErr := writeDiskHealthInstance(tablet, stalledDisk, fullDisk); writeErr != nil {
+			log.Error(
+				"failed to persist disk health instance",
+				slog.String("alias", topoproto.TabletAliasString(tablet.Alias)),
+				slog.Bool("stalled_disk", stalledDisk),
+				slog.Bool("full_disk", fullDisk),
+				slog.Any("error", writeErr),
+			)
+		}
 		goto Cleanup
 	}
 	partialSuccess = true // We at least managed to read something from the server.
@@ -228,6 +245,8 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		instance.ServerID = uint(fs.ServerId)
 		instance.TabletType = fs.TabletType
+		instance.StalledDisk = stalledDisk
+		instance.FullDisk = fullDisk
 		instance.Version = fs.Version
 		instance.ReadOnly = fs.ReadOnly
 		instance.LogBinEnabled = fs.LogBinEnabled
@@ -399,9 +418,21 @@ Cleanup:
 	// updated on success by writeInstance. If the reason is a
 	// stalled disk, we can record that as well.
 	latency.Start("backend")
-	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess, stalledDisk)
+	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess, stalledDisk, fullDisk)
 	latency.Stop("backend")
 	return nil, err
+}
+
+func writeDiskHealthInstance(tablet *topodatapb.Tablet, stalledDisk, fullDisk bool) error {
+	return writeManyInstances([]*Instance{{
+		InstanceAlias: tablet.Alias,
+		Hostname:      tablet.MysqlHostname,
+		Port:          int(tablet.MysqlPort),
+		Cell:          tablet.Alias.Cell,
+		TabletType:    tablet.Type,
+		StalledDisk:   stalledDisk,
+		FullDisk:      fullDisk,
+	}}, false, false)
 }
 
 // detectErrantGTIDs detects the errant GTIDs on an instance.
@@ -637,6 +668,8 @@ func readInstanceRow(m sqlutils.RowMap) (*Instance, error) {
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
 	instance.AllowTLS = m.GetBool("allow_tls")
 	instance.LastDiscoveryLatency = time.Duration(m.GetInt64("last_discovery_latency")) * time.Nanosecond
+	instance.StalledDisk = m.GetBool("is_disk_stalled")
+	instance.FullDisk = m.GetBool("is_disk_full")
 
 	var err error
 	instance.InstanceAlias, err = topoproto.ParseTabletAlias(m.GetString("alias"))
@@ -671,7 +704,8 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 		if sort == "" {
 			sort = `alias`
 		}
-		query := fmt.Sprintf(`SELECT
+		query := fmt.Sprintf(
+			`SELECT
 				*,
 				STRFTIME('%%s', 'now') - STRFTIME('%%s', last_checked) AS seconds_since_last_checked,
 				IFNULL(last_checked <= last_seen, 0) AS is_last_check_valid,
@@ -746,7 +780,8 @@ func ReadProblemInstances(keyspace, shard string) ([]*Instance, error) {
 			OR (gtid_errant != '')
 		)`
 
-	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5,
+	args := sqlutils.Args(
+		keyspace, keyspace, shard, shard, config.GetInstancePollSeconds()*5,
 		config.GetReasonableReplicationLagSeconds(),
 		config.GetReasonableReplicationLagSeconds(),
 	)
@@ -762,6 +797,34 @@ func ReadInstancesWithErrantGTIds(keyspace, shard string) ([]*Instance, error) {
 
 	args := sqlutils.Args(keyspace, keyspace, shard, shard)
 	return readInstancesByCondition(condition, args, "")
+}
+
+func readFullDiskInstances(keyspace, shard string) ([]*Instance, error) {
+	condition := `
+		vitess_tablet.keyspace = ?
+		AND vitess_tablet.shard = ?
+		AND database_instance.is_disk_full != 0`
+
+	return readInstancesByCondition(condition, sqlutils.Args(keyspace, shard), "")
+}
+
+func ReadFullDiskReplicas(keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
+	instances, err := readFullDiskInstances(keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+
+	aliases := make([]*topodatapb.TabletAlias, 0, len(instances))
+	for _, instance := range instances {
+		tablet, err := ReadTablet(instance.InstanceAlias)
+		if err != nil {
+			return nil, err
+		}
+		if topo.IsReplicaType(tablet.Type) {
+			aliases = append(aliases, tablet.Alias)
+		}
+	}
+	return aliases, nil
 }
 
 // GetKeyspaceShardName gets the keyspace shard name for the given instance key
@@ -861,7 +924,8 @@ func mkInsert(table string, columns []string, values []string, nrRows int, inser
 	}
 
 	col := strings.Join(columns, ", ")
-	query := fmt.Sprintf(`%s %s
+	query := fmt.Sprintf(
+		`%s %s
 			(%s)
 		VALUES
 			%s
@@ -948,6 +1012,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		"semi_sync_blocked",
 		"last_discovery_latency",
 		"is_disk_stalled",
+		"is_disk_full",
 	}
 
 	values := make([]string, len(columns))
@@ -1028,6 +1093,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 		args = append(args, instance.SemiSyncBlocked)
 		args = append(args, instance.LastDiscoveryLatency.Nanoseconds())
 		args = append(args, instance.StalledDisk)
+		args = append(args, instance.FullDisk)
 	}
 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
@@ -1073,18 +1139,21 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 
 // UpdateInstanceLastChecked updates the last_check timestamp in the vtorc backed database
 // for a given instance
-func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSuccess bool, stalledDisk bool) error {
+func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSuccess, stalledDisk, fullDisk bool) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`UPDATE database_instance
+		_, err := db.ExecVTOrc(
+			`UPDATE database_instance
 			SET
 				last_checked = DATETIME('now'),
 				last_check_partial_success = ?,
-				is_disk_stalled = ?
+				is_disk_stalled = ?,
+				is_disk_full = ?
 			WHERE
 				alias = ?
 			`,
 			partialSuccess,
 			stalledDisk,
+			fullDisk,
 			topoproto.TabletAliasString(tabletAlias),
 		)
 		if err != nil {
@@ -1105,7 +1174,8 @@ func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSucce
 // we have a "hanging" issue.
 func UpdateInstanceLastAttemptedCheck(tabletAlias *topodatapb.TabletAlias) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`UPDATE database_instance
+		_, err := db.ExecVTOrc(
+			`UPDATE database_instance
 			SET
 				last_attempted_check = DATETIME('now')
 			WHERE
@@ -1146,7 +1216,8 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	currentErrantGTIDCount.Reset(tabletAliasString)
 
 	// Delete from the 'vitess_tablet' table.
-	_, err := db.ExecVTOrc(`DELETE FROM
+	_, err := db.ExecVTOrc(
+		`DELETE FROM
 			vitess_tablet
 		WHERE
 			alias = ?`,
@@ -1158,7 +1229,8 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	}
 
 	// Also delete from the 'database_instance' table.
-	sqlResult, err := db.ExecVTOrc(`DELETE FROM
+	sqlResult, err := db.ExecVTOrc(
+		`DELETE FROM
 			database_instance
 		WHERE
 			alias = ?`,
@@ -1185,7 +1257,8 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 
 // ForgetLongUnseenInstances will remove entries of all instances that have long since been last seen.
 func ForgetLongUnseenInstances() error {
-	sqlResult, err := db.ExecVTOrc(`DELETE
+	sqlResult, err := db.ExecVTOrc(
+		`DELETE
 		FROM database_instance
 		WHERE
 			last_seen < DATETIME('now', PRINTF('-%d HOUR', ?))
@@ -1210,7 +1283,8 @@ func ForgetLongUnseenInstances() error {
 func ExpireStaleInstanceBinlogCoordinates() error {
 	expireSeconds := max(config.GetReasonableReplicationLagSeconds()*2, config.StaleInstanceCoordinatesExpireSeconds)
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(`DELETE FROM
+		_, err := db.ExecVTOrc(
+			`DELETE FROM
 				database_instance_stale_binlog_coordinates
 			WHERE
 				first_seen < DATETIME('now', PRINTF('-%d SECOND', ?))

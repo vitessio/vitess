@@ -19,24 +19,24 @@ limitations under the License.
 package diskhealthmonitor
 
 import (
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor/testfs"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 )
 
 // TestDiskHealthMonitor_StallAndRecover exercises the full integration path
 // of the stalled disk monitor: probe write -> timeout -> IsDiskStalled() ->
 // StateManager flips the tablet to NOT_SERVING. We stall the FUSE-backed
-// --disk-write-dir by sending SIGUSR1 to the helper (see fuse_helper's signal
-// protocol), then SIGHUP to clear and verify the tablet returns to SERVING.
+// --disk-write-dir through testfs, then clear it and verify the tablet
+// returns to SERVING.
 func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 	require.NotNil(t, primaryTablet, "primary tablet not initialized in TestMain")
-	require.NotNil(t, fuseHelperCmd, "fuse helper not initialized in TestMain")
+	require.NotNil(t, testfsCmd, "testfs not initialized in TestMain")
 	assertHelperAlive(t)
 
 	require.NoError(
@@ -49,9 +49,12 @@ func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 
 	require.NoError(
 		t,
-		syscall.Kill(fuseHelperCmd.Process.Pid, syscall.SIGUSR1),
-		"failed to send SIGUSR1 (stall) to fuse helper",
+		testfs.SetStalled(testfsCmd.Process.Pid),
+		"failed to stall testfs",
 	)
+	t.Cleanup(func() {
+		_ = testfs.Clear(testfsCmd.Process.Pid)
+	})
 
 	// Pin the cause before asserting the integration outcome: NOT_SERVING is
 	// the AND of several state-manager predicates, so a green test must also
@@ -69,8 +72,8 @@ func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 
 	require.NoError(
 		t,
-		syscall.Kill(fuseHelperCmd.Process.Pid, syscall.SIGHUP),
-		"failed to send SIGHUP (clear) to fuse helper",
+		testfs.Clear(testfsCmd.Process.Pid),
+		"failed to clear testfs",
 	)
 
 	assertEventuallyDiskStalled(t, false)
@@ -90,14 +93,54 @@ func TestDiskHealthMonitor_StallAndRecover(t *testing.T) {
 	assertHelperAlive(t)
 }
 
-// assertHelperAlive fails the test immediately if the fuse_helper subprocess
+func TestDiskHealthMonitor_FullAndRecover(t *testing.T) {
+	require.NotNil(t, primaryTablet, "primary tablet not initialized in TestMain")
+	require.NotNil(t, testfsCmd, "testfs not initialized in TestMain")
+	assertHelperAlive(t)
+
+	require.NoError(
+		t,
+		primaryTablet.VttabletProcess.WaitForTabletStatusesForTimeout(
+			[]string{"SERVING"}, tabletStatusTimeout,
+		),
+		"primary tablet did not reach SERVING before disk full",
+	)
+
+	require.NoError(t, testfs.SetFull(testfsCmd.Process.Pid), "failed to set testfs full")
+	t.Cleanup(func() {
+		_ = testfs.Clear(testfsCmd.Process.Pid)
+	})
+	assertEventuallyDiskFull(t, true)
+
+	require.NoError(
+		t,
+		primaryTablet.VttabletProcess.WaitForTabletStatusesForTimeout(
+			[]string{"NOT_SERVING"}, tabletStatusTimeout,
+		),
+		"primary tablet did not transition to NOT_SERVING after disk full",
+	)
+
+	require.NoError(t, testfs.Clear(testfsCmd.Process.Pid), "failed to clear testfs")
+	assertEventuallyDiskFull(t, false)
+
+	require.NoError(
+		t,
+		primaryTablet.VttabletProcess.WaitForTabletStatusesForTimeout(
+			[]string{"SERVING"}, tabletStatusTimeout,
+		),
+		"primary tablet did not recover to SERVING after disk full cleared",
+	)
+	assertHelperAlive(t)
+}
+
+// assertHelperAlive fails the test immediately if the testfs subprocess
 // has exited. helperDied is closed by the watcher in TestMain, so this is a
 // non-blocking, race-free check that any number of callers can perform.
 func assertHelperAlive(t *testing.T) {
 	t.Helper()
 	select {
 	case <-helperDied:
-		require.Failf(t, "fuse_helper exited unexpectedly", "wait error: %v", helperWaitErr)
+		require.Failf(t, "testfs exited unexpectedly", "wait error: %v", helperWaitErr)
 	default:
 	}
 }
@@ -109,15 +152,37 @@ func assertHelperAlive(t *testing.T) {
 func assertEventuallyDiskStalled(t *testing.T, want bool) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", primaryTablet.Alias)
-		if err != nil {
+		status, ok := fullStatus()
+		if !ok {
 			return false
 		}
-		status := &replicationdatapb.FullStatus{}
-		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(out), status); err != nil {
-			return false
-		}
-		return status.DiskStalled == want
+		// Pin the mutual-exclusion invariant from both sides: a stalled disk
+		// must never be reported as full.
+		return status.DiskStalled == want && !status.DiskFull
 	}, tabletStatusTimeout, 200*time.Millisecond,
 		"FullStatus.DiskStalled did not become %v within %s", want, tabletStatusTimeout)
+}
+
+func assertEventuallyDiskFull(t *testing.T, want bool) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		status, ok := fullStatus()
+		if !ok {
+			return false
+		}
+		return status.DiskFull == want && !status.DiskStalled
+	}, tabletStatusTimeout, 200*time.Millisecond,
+		"FullStatus.DiskFull did not become %v within %s", want, tabletStatusTimeout)
+}
+
+func fullStatus() (*replicationdatapb.FullStatus, bool) {
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", primaryTablet.Alias)
+	if err != nil {
+		return nil, false
+	}
+	status := &replicationdatapb.FullStatus{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(out), status); err != nil {
+		return nil, false
+	}
+	return status, true
 }

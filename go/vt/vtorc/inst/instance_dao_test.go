@@ -26,15 +26,19 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
+	"github.com/sjmudd/stopwatch"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 )
 
 var spacesRegexp = regexp.MustCompile(`[ \t\n\r]+`)
@@ -79,13 +83,13 @@ func TestMkInsertSingle(t *testing.T) {
 				version, major_version, version_comment, binlog_server, read_only, binlog_format,
 				binlog_row_image, log_bin, log_replica_updates, binary_log_file, binary_log_pos, source_host, source_port, replica_net_timeout, heartbeat_interval,
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant,
-				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, semi_sync_blocked, last_discovery_latency, is_disk_stalled, last_seen)
+				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, semi_sync_blocked, last_discovery_latency, is_disk_stalled, is_disk_full, last_seen)
 		VALUES
-				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
+				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
 	a1 := `zone1-0000000710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT,
 	FULL, false, false, , 0, , 0, 0, 0,
-	false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,`
+	false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false, false,`
 
 	sql1, args1, err := mkInsertForInstances(instances[:1], false, true)
 	require.NoError(t, err)
@@ -102,16 +106,16 @@ func TestMkInsertThree(t *testing.T) {
 				version, major_version, version_comment, binlog_server, read_only, binlog_format,
 				binlog_row_image, log_bin, log_replica_updates, binary_log_file, binary_log_pos, source_host, source_port, replica_net_timeout, heartbeat_interval,
 				replica_sql_running, replica_io_running, replication_sql_thread_state, replication_io_thread_state, has_replication_filters, supports_oracle_gtid, oracle_gtid, source_uuid, ancestry_uuid, executed_gtid_set, gtid_mode, gtid_purged, gtid_errant,
-				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, semi_sync_blocked, last_discovery_latency, is_disk_stalled, last_seen)
+				source_log_file, read_source_log_pos, relay_source_log_file, exec_source_log_pos, relay_log_file, relay_log_pos, last_sql_error, last_io_error, replication_lag_seconds, replica_lag_seconds, sql_delay, replication_depth, is_co_primary, has_replication_credentials, allow_tls, semi_sync_enforced, semi_sync_primary_enabled, semi_sync_primary_timeout, semi_sync_primary_wait_for_replica_count, semi_sync_replica_enabled, semi_sync_primary_status, semi_sync_primary_clients, semi_sync_replica_status, semi_sync_blocked, last_discovery_latency, is_disk_stalled, is_disk_full, last_seen)
 		VALUES
-				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
-				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
-				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
+				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
+				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now')),
+				(?, ?, ?, ?, DATETIME('now'), DATETIME('now'), 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'))
        `
 	a3 := `
-		zone1-0000000710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false ,false, 0, false,
-		zone1-0000000720, i720, 3306, zone1, 2, 720, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 20, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
-		zone1-0000000730, i730, 3306, zone1, 2, 730, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 30, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false,
+		zone1-0000000710, i710, 3306, zone1, 1, 710, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 10, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false ,false, 0, false, false,
+		zone1-0000000720, i720, 3306, zone1, 2, 720, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 20, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false, false,
+		zone1-0000000730, i730, 3306, zone1, 2, 730, , 5.6.7, 5.6, MySQL, false, false, STATEMENT, FULL, false, false, , 0, , 0, 0, 0, false, false, 0, 0, false, false, false, , , , , , , , 0, mysql.000007, 30, , 0, , , {0 false}, {0 false}, 0, 0, false, false, false, false, false, 0, 0, false, false, 0, false, false, 0, false, false,
 		`
 
 	sql3, args3, err := mkInsertForInstances(instances[:3], true, true)
@@ -369,6 +373,82 @@ func TestReadInstancesWithErrantGTIds(t *testing.T) {
 	}
 }
 
+func TestReadFullDiskReplicas(t *testing.T) {
+	defer db.ClearVTOrcDatabase()
+	for _, query := range append(
+		initialSQL,
+		// zone1-0000000101 is the shard primary. It must not be returned
+		// even if the primary is also marked full.
+		"update database_instance set is_disk_full = true where alias = 'zone1-0000000101'",
+		// Simulate a stale instance row: the tablet currently is a REPLICA in
+		// topology, but the last successful instance read still said PRIMARY.
+		fmt.Sprintf("update database_instance set tablet_type = %d, is_disk_full = true where alias = 'zone1-0000000100'", topodatapb.TabletType_PRIMARY),
+		fmt.Sprintf("update database_instance set tablet_type = %d, is_disk_full = true where alias = 'zone1-0000000112'", topodatapb.TabletType_BACKUP),
+	) {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	// zone1-0000000112 starts as RDONLY in initialSQL; force the topology
+	// record to BACKUP so the test also covers non-primary, non-replica tablet
+	// types.
+	backupTablet, err := ReadTablet(&topodatapb.TabletAlias{Cell: "zone1", Uid: 112})
+	require.NoError(t, err)
+	backupTablet.Type = topodatapb.TabletType_BACKUP
+	require.NoError(t, SaveTablet(backupTablet))
+
+	aliases, err := ReadFullDiskReplicas("ks", "0")
+	require.NoError(t, err)
+	aliasStrings := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		aliasStrings = append(aliasStrings, topoproto.TabletAliasString(alias))
+	}
+	require.ElementsMatch(t, []string{"zone1-0000000100"}, aliasStrings)
+}
+
+func TestReadTopologyInstanceBufferableRecordsFullDiskWithoutExistingInstance(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	t.Cleanup(db.ClearVTOrcDatabase)
+
+	config.SetFullDiskPrimaryRecovery(true)
+	t.Cleanup(func() { config.SetFullDiskPrimaryRecovery(false) })
+
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}
+	tablet := &topodatapb.Tablet{
+		Alias:         alias,
+		Hostname:      "primary",
+		MysqlHostname: "primary",
+		MysqlPort:     3306,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+	}
+	require.NoError(t, SaveTablet(tablet))
+
+	controller := gomock.NewController(t)
+	mockTMC := tmcmock.NewMockTabletManagerClient(controller)
+	oldTMC := tmc
+	t.Cleanup(func() {
+		tmc = oldTMC
+	})
+	tmc = mockTMC
+
+	mockTMC.EXPECT().FullStatus(gomock.Any(), tablet).Return(&replicationdatapb.FullStatus{
+		DiskFull: true,
+	}, nil)
+
+	instance, err := ReadTopologyInstanceBufferable(alias, stopwatch.NewNamedStopwatch())
+	require.NoError(t, err)
+	require.Nil(t, instance)
+
+	instance, found, err := ReadInstance(alias)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.True(t, instance.FullDisk)
+	require.False(t, instance.StalledDisk)
+	require.Equal(t, topodatapb.TabletType_PRIMARY, instance.TabletType)
+}
+
 // TestReadInstanceAllFields tests that we read all the fields for a specific instance.
 func TestReadInstanceAllFields(t *testing.T) {
 	// Clear the database after the test. The easiest way to do that is to run all the initialization commands again.
@@ -459,6 +539,7 @@ func TestReadInstanceAllFields(t *testing.T) {
 		IsRecentlyChecked:                  false,
 		SecondsSinceLastSeen:               sql.NullInt64{},
 		StalledDisk:                        false,
+		FullDisk:                           false,
 		AllowTLS:                           false,
 		Problems:                           nil,
 		LastDiscoveryLatency:               0,
@@ -630,6 +711,7 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 		tabletAlias      *topodatapb.TabletAlias
 		partialSuccess   bool
 		stalledDisk      bool
+		fullDisk         bool
 		conditionToCheck string
 	}{
 		{
@@ -637,24 +719,35 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   false,
 			stalledDisk:      false,
-			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = false",
+			fullDisk:         false,
+			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = false and is_disk_full = false",
 		}, {
 			name:             "Verify partial success",
 			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   true,
 			stalledDisk:      false,
-			conditionToCheck: "last_checked >= datetime('now', '-30 second') and last_check_partial_success = true and is_disk_stalled = false",
+			fullDisk:         false,
+			conditionToCheck: "last_checked >= datetime('now', '-30 second') and last_check_partial_success = true and is_disk_stalled = false and is_disk_full = false",
 		}, {
 			name:             "Verify stalled disk",
 			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   false,
 			stalledDisk:      true,
-			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = true",
+			fullDisk:         false,
+			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = true and is_disk_full = false",
+		}, {
+			name:             "Verify full disk",
+			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			partialSuccess:   false,
+			stalledDisk:      false,
+			fullDisk:         true,
+			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = false and is_disk_full = true",
 		}, {
 			name:           "Verify no error on nil tablet",
 			tabletAlias:    nil,
 			partialSuccess: true,
 			stalledDisk:    true,
+			fullDisk:       true,
 		},
 	}
 
@@ -669,7 +762,7 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := UpdateInstanceLastChecked(tt.tabletAlias, tt.partialSuccess, tt.stalledDisk)
+			err := UpdateInstanceLastChecked(tt.tabletAlias, tt.partialSuccess, tt.stalledDisk, tt.fullDisk)
 			require.NoError(t, err)
 
 			if tt.conditionToCheck != "" {

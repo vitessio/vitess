@@ -61,6 +61,8 @@ const (
 	PrimarySemiSyncBlocked                 AnalysisCode = "PrimarySemiSyncBlocked"
 	ErrantGTIDDetected                     AnalysisCode = "ErrantGTIDDetected"
 	PrimaryDiskStalled                     AnalysisCode = "PrimaryDiskStalled"
+	PrimaryDiskFull                        AnalysisCode = "PrimaryDiskFull"
+	ReplicaDiskFull                        AnalysisCode = "ReplicaDiskFull"
 
 	// StaleTopoPrimary describes when a tablet still has the type PRIMARY in the topology when a newer primary
 	// has been elected. VTOrc should demote this primary to a replica.
@@ -150,6 +152,7 @@ type DetectionAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	IsReadOnly                                bool
 	IsDiskStalled                             bool
+	IsDiskFull                                bool
 }
 
 // hasMinSemiSyncAckers returns true if there are a minimum number of semi-sync ackers enabled and replicating.
