@@ -80,7 +80,13 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 	// application and is MySQL's own recommendation for row-based parallel
 	// appliers. Statement-based events force-serialize, so RC cannot change
 	// their outcome either.
-	if _, err := dbClient.ExecuteFetch("set session transaction_isolation='READ-COMMITTED'", 1); err != nil {
+	//
+	// Use the SQL-standard statement form rather than setting the
+	// transaction_isolation sysvar: this connection goes directly to the
+	// target mysqld (no vtgate sysvar compatibility layer), and the sysvar
+	// spelling is flavor-specific (MariaDB used tx_isolation until 11.1;
+	// MySQL only added transaction_isolation in 5.7.20).
+	if _, err := dbClient.ExecuteFetch("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED", 1); err != nil {
 		dbClient.Close()
 		return nil, err
 	}

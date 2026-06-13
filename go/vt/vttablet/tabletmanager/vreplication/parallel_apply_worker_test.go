@@ -213,7 +213,7 @@ func TestNewApplyWorker(t *testing.T) {
 
 	mockDB := binlogplayer.NewMockDBClient(t)
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-	mockDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -273,7 +273,7 @@ func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {
 			workerDB := binlogplayer.NewMockDBClient(t)
 			workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
 			workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-			workerDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+			workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 			workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -317,7 +317,7 @@ func TestCreateWorkerConn_UsesRunningFKSessionSettings(t *testing.T) {
 	workerDB := binlogplayer.NewMockDBClient(t)
 	workerDB.RemoveInvariants("select @@session.sql_mode", "set @@session.sql_mode", "set @@session.foreign_key_checks")
 	workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-	workerDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+	workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -554,12 +554,11 @@ func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
-	found := false
-	for _, q := range recording.queries {
-		if strings.Contains(q, "transaction_isolation='READ-COMMITTED'") {
-			found = true
-			break
-		}
-	}
-	require.True(t, found, "worker connections must run at READ COMMITTED to avoid gap-lock deadlocks through the commit order; queries: %v", recording.queries)
+	// Pin the SQL-standard statement form: the worker conn talks directly to
+	// the target mysqld (no vtgate sysvar rewriting), and the
+	// transaction_isolation sysvar spelling is flavor-specific (MariaDB used
+	// tx_isolation until 11.1; MySQL only added transaction_isolation in
+	// 5.7.20). The statement form works everywhere.
+	require.Contains(t, recording.queries, "SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED",
+		"worker connections must run at READ COMMITTED to avoid gap-lock deadlocks through the commit order")
 }

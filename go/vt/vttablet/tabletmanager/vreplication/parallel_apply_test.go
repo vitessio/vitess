@@ -682,7 +682,7 @@ func TestApplyEventsParallelReturnsScheduleError(t *testing.T) {
 	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-	mockDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -729,7 +729,7 @@ func TestApplyEventsParallelCommitsScheduledPrefixBeforeScheduleError(t *testing
 	vp.vr.workflowConfig.StoreCompressedGTID = false
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-	mockDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -781,7 +781,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopPosEvenIfLaterScheduleFa
 	vp.vr.workflowConfig.StoreCompressedGTID = false
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-	mockDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -840,7 +840,7 @@ func TestApplyEventsParallelReturnsNilAfterEmptyTxnStopPosEvenIfLaterScheduleFai
 	vp.vr.workflowConfig.StoreCompressedGTID = false
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-	mockDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -900,7 +900,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopDDLEvenIfLaterScheduleFa
 	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_STOP
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-	mockDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -960,7 +960,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledRelevantJournalEvenIfLaterSc
 	}}
 
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
-	mockDB.AddInvariant("set session transaction_isolation", &sqltypes.Result{})
+	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
