@@ -18,6 +18,7 @@ package newfeaturetest
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,7 +97,15 @@ func testExecuteErrorWhileTabletIsNotServing(t *testing.T, conn *mysql.Conn, clu
 		<-tabletNotServing
 		_, err := conn.ExecuteFetch(utils.GetInsertMultipleValuesQuery(idx, idx+1, idx+2, idx+3), 0, false)
 		require.ErrorContains(t, err, "VT15001")
-		require.ErrorContains(t, err, vterrors.WrongTablet)
+		// Depending on whether vtgate has re-established its health stream to the
+		// restarted tablet by the time the query runs, the underlying reason is
+		// either the tablet rejecting the query as the wrong type, or vtgate not
+		// yet having a live connection to it. Both are valid VT15001 transaction
+		// errors against a no-longer-serving pinned tablet.
+		require.True(t,
+			strings.Contains(err.Error(), vterrors.WrongTablet) ||
+				strings.Contains(err.Error(), "is either down or nonexistent"),
+			"unexpected VT15001 reason: %v", err)
 
 		// Subsequent queries after a VT15001 should start returning a VT09032 error until we issue a ROLLBACK
 		_, err = conn.ExecuteFetch("select * from vt_insert_test", 1, false)
