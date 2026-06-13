@@ -30,10 +30,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 /*
@@ -103,7 +104,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	var gtid string
 
 	vstreamOptions := &binlogdatapb.VStreamOptions{
-		ConfigOverrides: vc.vr.workflowConfig.Overrides,
+		ConfigOverrides: vc.vr.workflowConfig.SourceOverrides(),
 	}
 	serr := vc.vr.sourceVStreamer.VStreamTables(ctx, func(resp *binlogdatapb.VStreamTablesResponse) error {
 		defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())

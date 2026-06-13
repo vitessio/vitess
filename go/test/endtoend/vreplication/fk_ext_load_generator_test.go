@@ -103,6 +103,11 @@ type SimpleLoadGenerator struct {
 	ch              chan bool
 	runCtx          context.Context
 	runCtxCancel    context.CancelFunc
+	// vtgateConn is reused across execQueryWithRetry calls during Start()'s
+	// goroutine. Opening a fresh TCP connection per DML piles up thousands of
+	// sockets in TIME_WAIT and exhausts the macOS ephemeral port range
+	// (49152-65535), which in turn stalls unrelated gRPC reconnects.
+	vtgateConn *mysql.Conn
 }
 
 func (lg *SimpleLoadGenerator) SetOverrideConstraints(allow bool) {
@@ -199,7 +204,6 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 	defer cancel()
 	errCh := make(chan error)
 	qrCh := make(chan *sqltypes.Result)
-	var vtgateConn *mysql.Conn
 	go func() {
 		var qr *sqltypes.Result
 		var err error
@@ -219,23 +223,27 @@ func (lg *SimpleLoadGenerator) execQueryWithRetry(query string) (*sqltypes.Resul
 			if retry {
 				time.Sleep(tickInterval)
 			}
-			// We need to parse the error as well as the output of vdiff to determine if the error is retryable, since
-			// sometimes it is observed that we get the error output as part of vdiff output.
-			vtgateConn, err = lg.getVtgateConn(ctx)
-			if err != nil {
-				if !isQueryRetryable(err) {
-					errCh <- err
-					return
+			// Reuse lg.vtgateConn across calls so we don't burn a TCP
+			// connection per DML. On error we close and null it out so the
+			// retry path above opens a fresh one.
+			if lg.vtgateConn == nil {
+				lg.vtgateConn, err = lg.getVtgateConn(ctx)
+				if err != nil {
+					if !isQueryRetryable(err) {
+						errCh <- err
+						return
+					}
+					time.Sleep(tickInterval)
+					continue
 				}
-				time.Sleep(tickInterval)
-				continue
 			}
-			qr, err = vtgateConn.ExecuteFetch(query, 1000, false)
-			vtgateConn.Close()
+			qr, err = lg.vtgateConn.ExecuteFetch(query, 1000, false)
 			if err == nil {
 				qrCh <- qr
 				return
 			}
+			lg.vtgateConn.Close()
+			lg.vtgateConn = nil
 			if !isQueryRetryable(err) {
 				errCh <- err
 				return
@@ -276,6 +284,10 @@ func (lg *SimpleLoadGenerator) Start() error {
 	lg.state = LoadGeneratorStateRunning
 	go func() {
 		defer func() {
+			if lg.vtgateConn != nil {
+				lg.vtgateConn.Close()
+				lg.vtgateConn = nil
+			}
 			lg.state = LoadGeneratorStateStopped
 			log.Info("Load generator stopped")
 		}()

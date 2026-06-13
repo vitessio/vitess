@@ -6,6 +6,7 @@
 
 - **[Major Changes](#major-changes)**
     - **[New Support](#new-support)**
+        - [Experimental parallel VReplication applier](#vreplication-parallel-applier)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [Snapshot Topology feature removed](#vtorc-snapshot-topology-removed)
@@ -15,6 +16,8 @@
 - **[Minor Changes](#minor-changes)**
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
+        - [Unknown VStream event types are now hard errors in the applier](#vreplication-unknown-event-error)
+        - [Workflow config overrides sent to source tablets are now allowlisted](#vreplication-source-overrides-allowlist)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -25,6 +28,15 @@
 ## <a id="major-changes"/>Major Changes</a>
 
 ### <a id="new-support"/>New Support</a>
+
+#### <a id="vreplication-parallel-applier"/>Experimental parallel VReplication applier</a>
+
+> [!WARNING]
+> This feature is experimental.
+
+VReplication can now apply binlog events using multiple concurrent MySQL connections instead of a single serial connection. Set `--vreplication-parallel-replication-workers=N` (default `1` = serial, maximum `64`) on `vttablet`, or the `vreplication-parallel-replication-workers` per-workflow config override, to dispatch non-conflicting transactions to `N` worker goroutines during the replication (running) phase. Conflicts are detected with target-side writeset hashing (primary key, unique key, and foreign key values — similar to MySQL's own `WRITESET` dependency tracking), so it works regardless of the source's `binlog_transaction_dependency_tracking` setting. Commits remain strictly ordered, so the workflow position, lag metrics, and `WaitForPos` semantics are unchanged. Transactions the conflict detector cannot reason about (DDL, statement-based events, partial row images, prefix/expression unique indexes, and similar) fall back to serial application.
+
+Note that each worker holds two MySQL connections, so a workflow with `N` workers uses `2N+2` target-side connections.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
@@ -83,6 +95,14 @@ When calling `cancel` or `complete` on an auto-generated `_reverse` workflow wit
 | `_reverse`   | `--keep-data=false` | `false`            | No              |
 
 The `--keep-data` flag help text has been updated to note this default explicitly. This change applies to MoveTables, Reshard, and other VReplication workflow types that use the shared cancel/complete paths.
+
+#### <a id="vreplication-unknown-event-error"/>Unknown VStream event types are now hard errors in the applier</a>
+
+The VReplication applier previously ignored VStream event types it did not recognize. It now fails the workflow with an error for unknown event types (and unknown `on-ddl` actions), failing closed instead of silently skipping events. All event types produced by supported Vitess versions are handled; this only affects streams from sources emitting event types unknown to the target's version.
+
+#### <a id="vreplication-source-overrides-allowlist"/>Workflow config overrides sent to source tablets are now allowlisted</a>
+
+When a workflow has per-workflow config overrides, the target now sends only the source-relevant subset (packet size, timeouts, experimental flags, and similar) to the source tablet's VStreamer instead of the full override map. This keeps newer target-only override keys from failing workflows whose source tablets run an older version that rejects unknown keys.
 
 See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 

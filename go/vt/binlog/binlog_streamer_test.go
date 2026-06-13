@@ -200,6 +200,70 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 	assert.Truef(t, got.equal(want), "binlogConnStreamer.parseEvents(): got %v, want %v", got, want)
 }
 
+func TestStreamerParseEventsDrainsBufferedEventsBeforeTerminalError(t *testing.T) {
+	f := mysql.NewMySQL56BinlogFormat()
+	s := mysql.NewFakeBinlogStream()
+	s.ServerID = 62344
+
+	input := []mysql.BinlogEvent{
+		mysql.NewRotateEvent(f, s, 0, ""),
+		mysql.NewFormatDescriptionEvent(f, s),
+		mysql.NewMariaDBGTIDEvent(f, s, replication.MariadbGTID{Domain: 0, Sequence: 0xd}, false /* hasBegin */),
+		mysql.NewQueryEvent(f, s, mysql.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "BEGIN",
+		}),
+		mysql.NewQueryEvent(f, s, mysql.Query{
+			Database: "vt_test_keyspace",
+			SQL:      "insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */",
+		}),
+		mysql.NewXIDEvent(f, s),
+	}
+
+	want := []*binlogdatapb.BinlogTransaction{
+		{
+			Statements: []*binlogdatapb.BinlogTransaction_Statement{
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_SET, Sql: []byte("SET TIMESTAMP=1407805592")},
+				{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into vt_a(eid, id) values (1, 1) /* _stream vt_a (eid id ) (1 1 ); */")},
+			},
+			EventToken: &querypb.EventToken{
+				Timestamp: 1407805592,
+				Position: replication.EncodePosition(replication.Position{
+					GTIDSet: replication.MariadbGTIDSet{
+						0: replication.MariadbGTID{
+							Domain:   0,
+							Server:   62344,
+							Sequence: 0x0d,
+						},
+					},
+				}),
+			},
+		},
+	}
+
+	mcp := &mysql.ConnParams{DbName: "vt_test_keyspace"}
+	dbcfgs := dbconfigs.New(mcp)
+	streamErr := errors.New("stream ended after buffered events")
+
+	for i := range 64 {
+		events := make(chan mysql.BinlogEvent, len(input))
+		errs := make(chan error, 1)
+		for _, ev := range input {
+			events <- ev
+		}
+		close(events)
+		errs <- streamErr
+		close(errs)
+
+		var got binlogStatements
+		bls := NewStreamer(dbcfgs, nil, nil, replication.Position{}, 0, (&got).sendTransaction)
+
+		_, err := bls.parseEvents(t.Context(), events, errs)
+		require.ErrorIs(t, err, streamErr, "iteration %d", i)
+		require.True(t, got.equal(want), "iteration %d: got %#v want %#v", i, got, want)
+	}
+}
+
 func TestStreamerStop(t *testing.T) {
 	events := make(chan mysql.BinlogEvent)
 	errs := make(chan error)
