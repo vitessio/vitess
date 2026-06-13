@@ -54,8 +54,9 @@ type EmergencyReparenter struct {
 // EmergencyReparentShard operations. Options are passed by value, so it is safe
 // for callers to mutate and reuse options structs for multiple calls.
 type EmergencyReparentOptions struct {
-	NewPrimaryAlias *topodatapb.TabletAlias
-	IgnoreReplicas  sets.Set[string]
+	NewPrimaryAlias          *topodatapb.TabletAlias
+	IgnoreReplicas           sets.Set[string]
+	PreventPromotionReplicas sets.Set[string]
 	// WaitAllTablets is used to specify whether ERS should wait for all the tablets to return and not proceed
 	// further after n-1 tablets have returned.
 	WaitAllTablets            bool
@@ -851,6 +852,13 @@ func (erp *EmergencyReparenter) filterValidCandidates(validTablets []*topodatapb
 	notPreferredValidTablets := make([]*topodatapb.Tablet, 0, len(validTablets))
 	for _, tablet := range validTablets {
 		tabletAliasStr := topoproto.TabletAliasString(tablet.Alias)
+		if opts.PreventPromotionReplicas.Has(tabletAliasStr) {
+			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it is marked ineligible for promotion", tabletAliasStr)
+			if opts.NewPrimaryAlias != nil && topoproto.TabletAliasEqual(opts.NewPrimaryAlias, tablet.Alias) {
+				return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "proposed primary %s is marked ineligible for promotion", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+			}
+			continue
+		}
 		// Remove tablets which have MustNot promote rule since they must never be promoted
 		if policy.PromotionRule(opts.durability, tablet) == promotionrule.MustNot {
 			erp.logger.Infof("Removing %s from list of valid candidates for promotion because it has the Must Not promote rule", tabletAliasStr)
