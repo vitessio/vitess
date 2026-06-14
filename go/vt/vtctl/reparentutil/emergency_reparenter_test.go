@@ -1870,10 +1870,11 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000101",
 		},
 		{
-			// Regression test: if every candidate has mutually errant GTIDs, findErrantGTIDs
-			// returns an empty map, which previously caused findMostAdvanced to panic with
-			// "index out of range [0] with length 0" when indexing the empty tablet slice.
-			name:                 "all candidates filtered out by errant GTID detection",
+			// Two leading candidates have incomparable Combined GTID positions (each
+			// side has unique writes under a different server UUID). ERS must abort
+			// upfront with a "suspected split-brain" error instead of silently picking
+			// one side.
+			name:                 "suspected split-brain on incomparable leading candidates",
 			durability:           policy.DurabilityNone,
 			emergencyReparentOps: EmergencyReparentOptions{},
 			tmc: &testutil.TabletManagerClient{
@@ -1941,7 +1942,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shard:            "-",
 			cells:            []string{"zone1"},
 			shouldErr:        true,
-			errShouldContain: "no valid candidates for emergency reparent",
+			errShouldContain: "suspected split-brain: leading candidates have incomparable Combined GTID positions",
 		},
 	}
 

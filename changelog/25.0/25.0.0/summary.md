@@ -21,6 +21,8 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[VTCtld](#minor-changes-vtctld)**
+        - [EmergencyReparentShard fails fast on suspected split-brain](#vtctld-ers-split-brain-detection)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +138,13 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-vtctld"/>VTCtld</a>
+
+#### <a id="vtctld-ers-split-brain-detection"/>EmergencyReparentShard fails fast on suspected split-brain</a>
+
+When the leading GTID-based candidates for `EmergencyReparentShard` have incomparable `Combined` positions (suspected split-brain), ERS now aborts upfront with a clear `FAILED_PRECONDITION` error naming the diverged tablets, rather than silently picking one side. Pre-PR ERS would pick blindly and let the losing side's unique GTIDs become errant on those tablets — a silent data-integrity incident that surfaced later via lag alerts or downstream consistency checks. See [#20199](https://github.com/vitessio/vitess/issues/20199) for the bug this addresses.
+
+A new `--allow-split-brain-promotion` flag is added to `vtctldclient EmergencyReparentShard` (and `--allow_split_brain_promotion` on the legacy `vtctl`). It is **off by default**. Operators who deliberately need to force ERS through a detected split-brain — typically because they already know which side to keep and plan to re-clone the losing side — can set it to convert the abort into a `WARN` log and proceed. The non-promoted side's unique GTIDs will become errant after promotion, so this is an explicit operator override, not a default-on safety knob.
+
+A new `EmergencyReparentSplitBrainOverrides` stat is exported for observability. It counts split-brain detections bypassed by `--allow-split-brain-promotion` per detection. It stays at zero unless an operator has deliberately invoked the escape hatch.
