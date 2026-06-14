@@ -78,6 +78,7 @@ const (
 	RecoverySkipERSDisabled
 	RecoverySkipStaleAnalysis
 	RecoverySkipPrimaryRecovery
+	RecoverySkipDiskRecoveryDisabled
 )
 
 // String represents a RecoverySkip as a string.
@@ -93,6 +94,8 @@ func (rsc RecoverySkipCode) String() string {
 		return "StaleAnalysis"
 	case RecoverySkipPrimaryRecovery:
 		return "PrimaryRecovery"
+	case RecoverySkipDiskRecoveryDisabled:
+		return "DiskRecoveryDisabled"
 	default:
 		return "None"
 	}
@@ -381,11 +384,9 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 	return true, topologyRecovery, err
 }
 
-// fullDiskAliasesToPreventPromotion returns the set of tablet aliases ERS must
-// not promote because their disks are full. A DB read failure is logged and
-// treated as "no known full-disk replicas" — proceeding with ERS (even with an
-// incomplete picture) is safer than aborting recovery of a DeadPrimary on a
-// transient backend error.
+// fullDiskAliasesToPreventPromotion returns the tablet aliases ERS must not
+// promote because their disks are full. A read failure is logged and treated
+// as "none known" so DeadPrimary recovery can still proceed.
 func fullDiskAliasesToPreventPromotion(analysisEntry *inst.DetectionAnalysis, logger *log.PrefixedLogger) sets.Set[string] {
 	preventPromotionReplicas := sets.New[string]()
 	if analysisEntry.Analysis == inst.PrimaryDiskFull {
@@ -694,9 +695,19 @@ func getCheckAndRecoverFunctionCode(analysisEntry *inst.DetectionAnalysis) (reco
 	switch analysisCode {
 	// primary
 	case inst.DeadPrimary, inst.DeadPrimaryAndSomeReplicas, inst.PrimaryDiskStalled, inst.PrimaryDiskFull, inst.PrimarySemiSyncBlocked, inst.PrimaryTabletUnreachableByQuorum:
-		// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
-		if !isERSEnabled(analysisEntry) {
-			log.Info(fmt.Sprintf("VTOrc not configured to run EmergencyReparentShard, skipping recovering %v", analysisCode))
+		// Disk-specific recovery flags can disable a disk-health recovery
+		// independent of the global ERS toggle. The corresponding analysis
+		// still fires for observability, but no recovery action is taken.
+		switch {
+		case analysisCode == inst.PrimaryDiskStalled && !config.GetStalledDiskPrimaryRecovery():
+			log.Info("VTOrc not configured to recover from a stalled disk, skipping recovery", slog.Any("analysis", analysisCode))
+			recoverySkipCode = RecoverySkipDiskRecoveryDisabled
+		case analysisCode == inst.PrimaryDiskFull && !config.GetFullDiskPrimaryRecovery():
+			log.Info("VTOrc not configured to recover from a full disk, skipping recovery", slog.Any("analysis", analysisCode))
+			recoverySkipCode = RecoverySkipDiskRecoveryDisabled
+		case !isERSEnabled(analysisEntry):
+			// If ERS is disabled globally, on the keyspace or the shard, skip recovery.
+			log.Info("VTOrc not configured to run EmergencyReparentShard, skipping recovery", slog.Any("analysis", analysisCode))
 			recoverySkipCode = RecoverySkipERSDisabled
 		}
 		recoveryFunc = recoverDeadPrimaryFunc

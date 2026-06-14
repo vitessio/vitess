@@ -492,6 +492,11 @@ func SetFullDiskPrimaryRecovery(val bool) {
 	enablePrimaryDiskFullRecovery.Set(val)
 }
 
+// SetStalledDiskPrimaryRecovery sets the value for the enablePrimaryDiskStalledRecovery variable. This should only be used from tests.
+func SetStalledDiskPrimaryRecovery(val bool) {
+	enablePrimaryDiskStalledRecovery.Set(val)
+}
+
 // ERSOnTabletUnreachableEnabled reports whether quorum-confirmed ERS for an unreachable
 // primary vttablet is enabled.
 func ERSOnTabletUnreachableEnabled() bool {

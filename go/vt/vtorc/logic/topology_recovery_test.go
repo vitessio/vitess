@@ -135,6 +135,16 @@ func TestAnalysisEntriesHaveSameRecovery(t *testing.T) {
 		},
 	}
 	t.Parallel()
+	// Disk-specific recovery flags must be on for PrimaryDisk{Stalled,Full}
+	// to dedupe with the other shard-wide primary recoveries. Set after
+	// t.Parallel so the state is established when subtests run, after any
+	// sequential tests that toggle these flags have finished.
+	config.SetStalledDiskPrimaryRecovery(true)
+	config.SetFullDiskPrimaryRecovery(true)
+	t.Cleanup(func() {
+		config.SetStalledDiskPrimaryRecovery(false)
+		config.SetFullDiskPrimaryRecovery(false)
+	})
 	for _, tt := range tests {
 		t.Run(string(tt.prevAnalysisCode)+","+string(tt.newAnalysisCode), func(t *testing.T) {
 			res := analysisEntriesHaveSameRecovery(&inst.DetectionAnalysis{Analysis: tt.prevAnalysisCode}, &inst.DetectionAnalysis{Analysis: tt.newAnalysisCode})
@@ -260,6 +270,8 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 		name                         string
 		ersEnabled                   bool
 		convertTabletWithErrantGTIDs bool
+		stalledDiskRecoveryEnabled   bool
+		fullDiskRecoveryEnabled      bool
 		analysisEntry                *inst.DetectionAnalysis
 		wantRecoveryFunction         recoveryFunction
 		wantRecoverySkipCode         RecoverySkipCode
@@ -295,8 +307,9 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			},
 			wantRecoveryFunction: recoverIncapacitatedPrimaryFunc,
 		}, {
-			name:       "StalledDiskPrimary with ERS enabled",
-			ersEnabled: true,
+			name:                       "StalledDiskPrimary with stalled-recovery enabled and ERS enabled",
+			ersEnabled:                 true,
+			stalledDiskRecoveryEnabled: true,
 			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryDiskStalled,
 				AnalyzedKeyspace: keyspace,
@@ -304,8 +317,9 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
-			name:       "StalledDiskPrimary with ERS disabled",
-			ersEnabled: false,
+			name:                       "StalledDiskPrimary with stalled-recovery enabled and ERS disabled",
+			ersEnabled:                 false,
+			stalledDiskRecoveryEnabled: true,
 			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryDiskStalled,
 				AnalyzedKeyspace: keyspace,
@@ -314,8 +328,20 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 			wantRecoverySkipCode: RecoverySkipERSDisabled,
 		}, {
-			name:       "PrimaryDiskFull with ERS enabled",
-			ersEnabled: true,
+			name:                       "StalledDiskPrimary with stalled-recovery disabled",
+			ersEnabled:                 true,
+			stalledDiskRecoveryEnabled: false,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.PrimaryDiskStalled,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantRecoverySkipCode: RecoverySkipDiskRecoveryDisabled,
+		}, {
+			name:                    "PrimaryDiskFull with full-recovery enabled and ERS enabled",
+			ersEnabled:              true,
+			fullDiskRecoveryEnabled: true,
 			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryDiskFull,
 				AnalyzedKeyspace: keyspace,
@@ -323,8 +349,9 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 		}, {
-			name:       "PrimaryDiskFull with ERS disabled",
-			ersEnabled: false,
+			name:                    "PrimaryDiskFull with full-recovery enabled and ERS disabled",
+			ersEnabled:              false,
+			fullDiskRecoveryEnabled: true,
 			analysisEntry: &inst.DetectionAnalysis{
 				Analysis:         inst.PrimaryDiskFull,
 				AnalyzedKeyspace: keyspace,
@@ -332,6 +359,17 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			},
 			wantRecoveryFunction: recoverDeadPrimaryFunc,
 			wantRecoverySkipCode: RecoverySkipERSDisabled,
+		}, {
+			name:                    "PrimaryDiskFull with full-recovery disabled",
+			ersEnabled:              true,
+			fullDiskRecoveryEnabled: false,
+			analysisEntry: &inst.DetectionAnalysis{
+				Analysis:         inst.PrimaryDiskFull,
+				AnalyzedKeyspace: keyspace,
+				AnalyzedShard:    shard,
+			},
+			wantRecoveryFunction: recoverDeadPrimaryFunc,
+			wantRecoverySkipCode: RecoverySkipDiskRecoveryDisabled,
 		}, {
 			name:       "PrimarySemiSyncBlocked with ERS enabled",
 			ersEnabled: true,
@@ -510,6 +548,11 @@ func TestGetCheckAndRecoverFunctionCode(t *testing.T) {
 			convertErrantVal := config.ConvertTabletWithErrantGTIDs()
 			config.SetConvertTabletWithErrantGTIDs(tt.convertTabletWithErrantGTIDs)
 			defer config.SetConvertTabletWithErrantGTIDs(convertErrantVal)
+
+			config.SetStalledDiskPrimaryRecovery(tt.stalledDiskRecoveryEnabled)
+			defer config.SetStalledDiskPrimaryRecovery(false)
+			config.SetFullDiskPrimaryRecovery(tt.fullDiskRecoveryEnabled)
+			defer config.SetFullDiskPrimaryRecovery(false)
 
 			gotFunc, recoverySkipCode := getCheckAndRecoverFunctionCode(tt.analysisEntry)
 			require.Equal(t, tt.wantRecoveryFunction, gotFunc)
@@ -845,6 +888,61 @@ func TestFullDiskAliasesToPreventPromotion(t *testing.T) {
 	}, log.NewPrefixedLogger("test"))
 	require.True(t, aliases.Has("zone1-0000000101"))
 	require.True(t, aliases.Has("zone1-0000000100"))
+}
+
+// TestExecuteCheckAndRecoverFunctionDiskRecoveryDisabled pins the contract
+// that operators rely on: when --enable-primary-disk-{full,stalled}-recovery
+// is off, executeCheckAndRecoverFunction must return without performing any
+// recovery work. This is the end-to-end guard above the unit-level skip-code
+// check in TestGetCheckAndRecoverFunctionCode.
+func TestExecuteCheckAndRecoverFunctionDiskRecoveryDisabled(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	t.Cleanup(db.ClearVTOrcDatabase)
+
+	// Both flags off — recovery must be skipped even though ERS is enabled.
+	// Snapshot+restore so this test cannot leak global state into later tests.
+	prevStalled := config.GetStalledDiskPrimaryRecovery()
+	prevFull := config.GetFullDiskPrimaryRecovery()
+	config.SetStalledDiskPrimaryRecovery(false)
+	config.SetFullDiskPrimaryRecovery(false)
+	t.Cleanup(func() {
+		config.SetStalledDiskPrimaryRecovery(prevStalled)
+		config.SetFullDiskPrimaryRecovery(prevFull)
+	})
+
+	tests := []struct {
+		name     string
+		analysis inst.AnalysisCode
+	}{
+		{name: "PrimaryDiskFull", analysis: inst.PrimaryDiskFull},
+		{name: "PrimaryDiskStalled", analysis: inst.PrimaryDiskStalled},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const (
+				keyspace = "ks"
+				shard    = "0"
+			)
+			counterKey := RecoverDeadPrimaryRecoveryName + "." + keyspace + "." + shard + "." + RecoverySkipDiskRecoveryDisabled.String()
+			recoveriesKey := RecoverDeadPrimaryRecoveryName + "." + keyspace + "." + shard
+
+			beforeSkipped := recoveriesSkippedCounter.Counts()[counterKey]
+			beforeRun := recoveriesCounter.Counts()[recoveriesKey]
+
+			err := executeCheckAndRecoverFunction(&inst.DetectionAnalysis{
+				Analysis:              tt.analysis,
+				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				AnalyzedKeyspace:      keyspace,
+				AnalyzedShard:         shard,
+			})
+			require.NoError(t, err)
+
+			require.Equal(t, beforeSkipped+1, recoveriesSkippedCounter.Counts()[counterKey],
+				"skipped-recovery counter must increment with reason=DiskRecoveryDisabled")
+			require.Equal(t, beforeRun, recoveriesCounter.Counts()[recoveriesKey],
+				"recoveries counter must NOT increment when the recovery is skipped")
+		})
+	}
 }
 
 func TestRecoverShardAnalyses(t *testing.T) {

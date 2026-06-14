@@ -23,26 +23,32 @@ import (
 	"fmt"
 )
 
+// SetStalled is a non-Linux stub for the FUSE-backed testfs control API.
 func SetStalled(pid int) error {
 	return unsupported(pid)
 }
 
+// SetFull is a non-Linux stub for the FUSE-backed testfs control API.
 func SetFull(pid int) error {
 	return unsupported(pid)
 }
 
+// Clear is a non-Linux stub for the FUSE-backed testfs control API.
 func Clear(pid int) error {
 	return unsupported(pid)
 }
 
+// Close is a non-Linux stub for the FUSE-backed testfs control API.
 func Close(pid int) error {
 	return unsupported(pid)
 }
 
+// Run is a non-Linux stub for the FUSE-backed testfs entrypoint.
 func Run(mountPoint, backing string) error {
 	return errors.New("testfs is Linux-only")
 }
 
+// unsupported returns a uniform error for testfs operations on non-Linux platforms.
 func unsupported(pid int) error {
 	return fmt.Errorf("testfs is Linux-only for pid %d", pid)
 }

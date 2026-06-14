@@ -66,10 +66,9 @@ type DetectionAnalysisProblem struct {
 	BeforeAnalyses []AnalysisCode
 
 	// PreserveWithShardWideAnalyses lists shard-wide analyses under which
-	// this problem must NOT be suppressed — used for per-tablet diagnostics
-	// the shard-wide recovery needs visibility into (e.g. ReplicaDiskFull
-	// alongside PrimaryDiskFull so ERS can exclude full-disk replicas from
-	// promotion).
+	// this problem must NOT be suppressed. Observability only — recovery
+	// actions read state directly from the backend, not from preserved
+	// entries; do not treat as load-bearing.
 	PreserveWithShardWideAnalyses []AnalysisCode
 
 	// MatchFunc is a function that returns true when the provided conditions match this problem.
