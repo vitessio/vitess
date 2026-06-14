@@ -18,6 +18,7 @@ package smartconnpool
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -116,7 +117,7 @@ func pushWaiter(wl *waitlist[*TestConn], ctx context.Context) *list.Element[wait
 	return elem
 }
 
-func TestWaitlistTryReturnConnSkipsExpiredWaiters(t *testing.T) {
+func TestWaitlistTryReturnConnEvictsExpiredWaiters(t *testing.T) {
 	wl := waitlist[*TestConn]{}
 	wl.init()
 
@@ -137,13 +138,14 @@ func TestWaitlistTryReturnConnSkipsExpiredWaiters(t *testing.T) {
 		require.Fail(t, "live waiter did not receive the returned connection")
 	}
 
-	// the expired waiter got nothing and is still in the list:
-	// removing itself is its own responsibility
-	require.Equal(t, 1, wl.waiting())
+	// the expired waiter was evicted from the list and woken with a nil, so it
+	// stops waiting and returns its context error
+	require.Equal(t, 0, wl.waiting())
 	select {
-	case <-expired.Value.conn:
-		require.Fail(t, "expired waiter must not receive a connection")
+	case got := <-expired.Value.conn:
+		require.Nil(t, got, "expired waiter must be woken with a nil, not a connection")
 	default:
+		require.Fail(t, "expired waiter was not woken")
 	}
 }
 
@@ -163,12 +165,15 @@ func TestWaitlistTryReturnConnAllWaitersExpired(t *testing.T) {
 	conn := &Pooled[*TestConn]{Conn: &TestConn{}}
 	require.False(t, wl.tryReturnConn(conn))
 
-	require.Equal(t, waiterCount, wl.waiting())
+	// every waiter was expired, so the returner evicted them all (waking each
+	// with a nil) and kept the connection (nothing live to hand it to)
+	require.Equal(t, 0, wl.waiting())
 	for _, w := range waiters {
 		select {
-		case <-w.Value.conn:
-			require.Fail(t, "expired waiter must not receive a connection")
+		case got := <-w.Value.conn:
+			require.Nil(t, got, "expired waiter must be woken with a nil, not a connection")
 		default:
+			require.Fail(t, "expired waiter was not woken")
 		}
 	}
 }
@@ -270,4 +275,66 @@ func TestWaitlistClaimedWaiterStillReceivesAfterExpiry(t *testing.T) {
 	}, 30*time.Second, time.Millisecond)
 	require.NoError(t, res.err)
 	require.Same(t, conn, res.conn)
+}
+
+// TestWaitlistConvoyDrainsUnderConcurrentReturns is a bounded reproduction of
+// the production timeout-storm convoy: a large prefix of expired waiters sits
+// at the head of the waitlist while live waiters queue behind it, and several
+// returners hand connections back concurrently. The fix requires a returner to
+// evict the dead prefix as it scans, so the list drains to empty and every
+// live waiter is served. On the unpatched skip-and-leave code the expired
+// waiters are left in place, so waiting() never reaches zero and this fails.
+func TestWaitlistConvoyDrainsUnderConcurrentReturns(t *testing.T) {
+	const (
+		expiredWaiters = 4000
+		liveWaiters    = 64
+		returners      = 8
+	)
+
+	wl := waitlist[*TestConn]{}
+	wl.init()
+
+	poolClose := make(chan struct{})
+
+	// dead prefix: synthetic waiters whose context already expired, with no
+	// goroutine behind them, so they linger in the list exactly like the
+	// timed-out waiters that pile up under a real timeout storm.
+	expiredCtx, cancel := context.WithCancel(t.Context())
+	cancel()
+	for range expiredWaiters {
+		pushWaiter(&wl, expiredCtx)
+	}
+
+	// live waiters queue behind the dead prefix
+	var served atomic.Int64
+	var waiters sync.WaitGroup
+	for range liveWaiters {
+		waiters.Go(func() {
+			conn, err := wl.waitForConn(t.Context(), nil, poolClose, 0)
+			if err == nil && conn != nil {
+				served.Add(1)
+			}
+		})
+	}
+	require.Eventually(t, func() bool {
+		return wl.waiting() == expiredWaiters+liveWaiters
+	}, 30*time.Second, time.Millisecond, "waiters did not all enqueue")
+
+	// concurrent returners hand back exactly liveWaiters connections; the first
+	// returner to win the mutex also evicts the whole dead prefix as it scans.
+	var toIssue atomic.Int64
+	toIssue.Store(liveWaiters)
+	var returnersWG sync.WaitGroup
+	for range returners {
+		returnersWG.Go(func() {
+			for toIssue.Add(-1) >= 0 {
+				wl.tryReturnConn(&Pooled[*TestConn]{Conn: &TestConn{}})
+			}
+		})
+	}
+	returnersWG.Wait()
+	waiters.Wait()
+
+	require.Equal(t, int64(liveWaiters), served.Load(), "every live waiter should receive a connection")
+	require.Equal(t, 0, wl.waiting(), "the expired prefix must be evicted, leaving an empty waitlist")
 }

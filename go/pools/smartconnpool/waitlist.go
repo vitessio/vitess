@@ -32,7 +32,7 @@ type waiter[C Connection] struct {
 	// conn is a channel that will receive the connection when it's ready
 	conn chan *Pooled[C]
 	// ctx is the request context of the waiting client; returners sample it
-	// under the waitlist mutex to skip waiters that can no longer use a
+	// under the waitlist mutex to evict waiters that can no longer use a
 	// connection
 	ctx context.Context
 	// age is the amount of cycles this client has been on the waitlist
@@ -100,8 +100,9 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 		}
 
 		// if we weren't able to remove ourselves from the waitlist, it means
-		// another goroutine is trying to hand us a connection
-		return <-elem.Value.conn, nil
+		// a returner reached us first: it either handed us a connection or
+		// evicted us (a nil on the channel), so read the outcome.
+		return waitResult(ctx, <-elem.Value.conn)
 
 	case <-ctx.Done():
 		// Context expired. We need to try to remove ourselves from the waitlist to
@@ -115,12 +116,26 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 		}
 
 		// if we weren't able to remove ourselves from the waitlist, it means
-		// another goroutine is trying to hand us a connection
-		return <-elem.Value.conn, nil
+		// a returner reached us first: it either handed us a connection or
+		// evicted us (a nil on the channel), so read the outcome.
+		return waitResult(ctx, <-elem.Value.conn)
 
 	case conn := <-elem.Value.conn:
+		return waitResult(ctx, conn)
+	}
+}
+
+// waitResult interprets what a returner left on the waiter's channel: a real
+// connection is a successful handoff, while a nil means the returner evicted
+// the waiter because its context had expired.
+func waitResult[C Connection](ctx context.Context, conn *Pooled[C]) (*Pooled[C], error) {
+	if conn != nil {
 		return conn, nil
 	}
+	if err := context.Cause(ctx); err != nil {
+		return nil, err
+	}
+	return nil, ErrTimeout
 }
 
 func (wl *waitlist[C]) aboveWaiterCap(maxWaiters uint) bool {
@@ -137,7 +152,7 @@ func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
 
 	// count the waiters that no returner has aged yet; they may be starving.
 	// Waiters whose context has already expired cannot use a connection and
-	// are only listed until they remove themselves, so they don't count.
+	// are only listed until a returner evicts them, so they don't count.
 	for e := wl.list.Front(); e != nil; e = e.Next() {
 		if e.Value.ctx.Err() != nil {
 			continue
@@ -151,7 +166,7 @@ func (wl *waitlist[C]) maybeStarvingCount() (maybeStarving int) {
 }
 
 // tryReturnConn tries handing over a connection to one of the waiters in the
-// pool. Waiters whose context has already expired are skipped; if every
+// pool. Waiters whose context has already expired are evicted; if every
 // waiter has expired, the connection is not handed over at all.
 func (wl *waitlist[D]) tryReturnConn(conn *Pooled[D]) bool {
 	// fast path: if there's nobody waiting there's nothing to do
@@ -166,6 +181,7 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	const maxAge = 8
 	var (
 		target      *list.Element[waiter[D]]
+		next        *list.Element[waiter[D]]
 		connSetting = conn.Conn.Setting()
 	)
 
@@ -173,12 +189,19 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 	// iterate through the waitlist looking for either waiters that have been
 	// here too long, or a waiter that is looking exactly for the same Setting
 	// as the one we have in our connection.
-	for e := wl.list.Front(); e != nil; e = e.Next() {
-		// Skip waiters whose context has already expired: they cannot use the
-		// connection and will remove themselves from the waitlist. They must
-		// remain in the list — absence from the list is how a waiter knows a
-		// returner is committed to handing it a connection.
+	for e := wl.list.Front(); e != nil; e = next {
+		next = e.Next() // capture before any Remove unlinks e
+
+		// Evict waiters whose context has already expired: they cannot use the
+		// connection, and removing them here is what keeps the list from
+		// accumulating a dead prefix that every later return must re-scan. Wake
+		// them with a nil so they stop waiting. This send can't block while we
+		// hold the mutex: the channel is buffered and a listed waiter's buffer
+		// is always empty, since only a returner sends and only while removing
+		// the waiter from the list.
 		if e.Value.ctx.Err() != nil {
+			wl.list.Remove(e)
+			e.Value.conn <- nil
 			continue
 		}
 		if target == nil {
@@ -208,8 +231,8 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 		return false
 	}
 
-	// if we have a target to return the connection to, simply write the connection
-	// into the waiter's channel.
+	// hand the connection to the live target. The channel is buffered, so the
+	// send completes without waiting for the waiter to be scheduled.
 	target.Value.conn <- conn
 	// Allow the goroutine waiting on the channel to start running _now_.
 	runtime.Gosched()
@@ -220,7 +243,9 @@ func (wl *waitlist[D]) tryReturnConnSlow(conn *Pooled[D]) bool {
 func (wl *waitlist[C]) init() {
 	wl.nodes.New = func() any {
 		return &list.Element[waiter[C]]{
-			Value: waiter[C]{conn: make(chan *Pooled[C])},
+			// buffered (cap 1) so returners never block handing off a
+			// connection or waking an evicted waiter
+			Value: waiter[C]{conn: make(chan *Pooled[C], 1)},
 		}
 	}
 	wl.list.Init()
