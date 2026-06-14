@@ -241,7 +241,8 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, func(value *sqltypes.Result) error {
+	// The streaming gRPC API has no prepared-statement field, so prepared is always false here.
+	session, vtgErr := vtg.server.StreamExecute(ctx, nil, session, request.Query.Sql, request.Query.BindVariables, false, func(value *sqltypes.Result) error {
 		// Send is not safe to call concurrently, but vtgate
 		// guarantees that it's not.
 		return stream.Send(&vtgatepb.StreamExecuteResponse{
@@ -324,6 +325,17 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 	if vtgErr != nil {
 		log.Info(fmt.Sprintf("VStream grpc error: %v", vtgErr))
 	}
+	return vterrors.ToGRPC(vtgErr)
+}
+
+// BinlogDumpGTID is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) BinlogDumpGTID(request *vtgatepb.BinlogDumpGTIDRequest, stream vtgateservicepb.Vitess_BinlogDumpGTIDServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	vtgErr := vtg.server.BinlogDumpGTID(ctx, request,
+		func(response *vtgatepb.BinlogDumpResponse) error {
+			return stream.Send(response)
+		})
 	return vterrors.ToGRPC(vtgErr)
 }
 

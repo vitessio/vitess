@@ -55,9 +55,7 @@ func TestMustParseGTIDError(t *testing.T) {
 		assert.NotNil(t, err, "wrong error, got %#v, want %#v", err, want)
 
 		got, ok := err.(error)
-		if !ok || !strings.HasPrefix(got.Error(), want) {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
+		assert.Truef(t, ok && strings.HasPrefix(got.Error(), want), "wrong error, got %#v, want %#v", got, want)
 	}()
 
 	MustParseGTID("unknown flavor !@$!@", "yowzah")
@@ -77,9 +75,8 @@ func TestEncodeGTID(t *testing.T) {
 	}
 	want := "myflav/1:2:3-4-5-6"
 
-	if got := EncodeGTID(input); got != want {
-		t.Errorf("EncodeGTID(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := EncodeGTID(input)
+	assert.Equalf(t, want, got, "EncodeGTID(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestDecodeGTID(t *testing.T) {
@@ -112,9 +109,7 @@ func TestMustDecodeGTIDError(t *testing.T) {
 		assert.NotNil(t, err, "wrong error, got %#v, want %#v", err, want)
 
 		got, ok := err.(error)
-		if !ok || !strings.HasPrefix(got.Error(), want) {
-			t.Errorf("wrong error, got %#v, want %#v", got, want)
-		}
+		assert.Truef(t, ok && strings.HasPrefix(got.Error(), want), "wrong error, got %#v, want %#v", got, want)
 	}()
 
 	MustDecodeGTID("unknown flavor !@$!@/yowzah")
@@ -124,9 +119,8 @@ func TestEncodeNilGTID(t *testing.T) {
 	input := GTID(nil)
 	want := ""
 
-	if got := EncodeGTID(input); got != want {
-		t.Errorf("EncodeGTID(%#v) = %#v, want %#v", input, got, want)
-	}
+	got := EncodeGTID(input)
+	assert.Equalf(t, want, got, "EncodeGTID(%#v) = %#v, want %#v", input, got, want)
 }
 
 func TestDecodeNilGTID(t *testing.T) {

@@ -209,9 +209,6 @@ func (uvs *uvstreamer) buildTablePlan() error {
 
 // check which rule matches table, validate table is in schema
 func matchTable(tableName string, filter *binlogdatapb.Filter, tables map[string]*schema.Table) (*binlogdatapb.Rule, error) {
-	if tableName == "dual" {
-		return nil, nil
-	}
 	found := false
 	for _, rule := range filter.Rules {
 		switch {

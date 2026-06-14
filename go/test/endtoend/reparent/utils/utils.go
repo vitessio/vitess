@@ -18,13 +18,11 @@ package utils
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
@@ -85,22 +82,22 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 	require.NoError(t, err)
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		utils.GetFlagVariantForTests("--lock-tables-timeout"), "5s",
+		"--lock-tables-timeout", "5s",
 		// Fast health checks help find corner cases.
-		utils.GetFlagVariantForTests("--health-check-interval"), "1s",
-		utils.GetFlagVariantForTests("--track-schema-versions")+"=true",
-		utils.GetFlagVariantForTests("--queryserver-enable-online-ddl")+"=false")
+		"--health-check-interval", "1s",
+		"--track-schema-versions"+"=true",
+		"--queryserver-enable-online-ddl"+"=false")
 
 	if len(extraVttabletFlags) > 0 {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, extraVttabletFlags...)
 	}
 
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-		"--enable_buffer",
+		"--enable-buffer",
 		// Long timeout in case failover is slow.
-		utils.GetFlagVariantForTests("--buffer-window"), "10m",
-		utils.GetFlagVariantForTests("--buffer-max-failover-duration"), "10m",
-		utils.GetFlagVariantForTests("--buffer-min-time-between-failovers"), "20m",
+		"--buffer-window", "10m",
+		"--buffer-max-failover-duration", "10m",
+		"--buffer-min-time-between-failovers", "20m",
 	)
 
 	// Start keyspace
@@ -188,16 +185,15 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	shard.Vttablets = tablets
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
-		// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-		"--lock_tables_timeout", "5s",
-		"--track_schema_versions=true",
+		"--lock-tables-timeout", "5s",
+		"--track-schema-versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
 		// All the tests in this package reparent frequently between different tablets
 		// This means that Promoting a tablet to primary is sometimes immediately followed by a DemotePrimary call.
 		// In this case, the close method and initSchema method of the onlineDDL executor race.
 		// If the initSchema acquires the lock, then it takes about 30 seconds for it to run during which time the
 		// DemotePrimary rpc is stalled!
-		"--queryserver_enable_online_ddl"+"=false")
+		"--queryserver-enable-online-ddl"+"=false")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -221,11 +217,9 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 			require.FailNow(t, "Error starting mysql: %s", err.Error())
 		}
 	}
-	if clusterInstance.VtctlMajorVersion >= 14 {
-		clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
-		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, "--durability-policy="+durability)
-		require.NoError(t, err, out)
-	}
+	clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
+	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", KeyspaceName, "--durability-policy="+durability)
+	require.NoError(t, err, out)
 
 	setupShard(ctx, t, clusterInstance, shardName, tablets)
 	return clusterInstance
@@ -283,10 +277,9 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		[]string{
-			// TODO: Remove underscore(_) flags in v25, replace them with dashed(-) notation
-			"--lock_tables_timeout", "5s",
-			"--track_schema_versions=true",
-			"--queryserver_enable_online_ddl" + "=false",
+			"--lock-tables-timeout", "5s",
+			"--track-schema-versions=true",
+			"--queryserver-enable-online-ddl" + "=false",
 		},
 		clusterInstance.DefaultCharset)
 	tablet.VttabletProcess.SupportsBackup = supportsBackup
@@ -371,7 +364,7 @@ func PrsWithTimeout(t *testing.T, clusterInstance *cluster.LocalProcessCluster, 
 		fmt.Sprintf("%s/%s", KeyspaceName, ShardName),
 	}
 	if actionTimeout != "" {
-		args = append(args, "--action_timeout", actionTimeout)
+		args = append(args, "--action-timeout", actionTimeout)
 	}
 	if waitTimeout != "" {
 		args = append(args, "--wait-replicas-timeout", waitTimeout)
@@ -396,7 +389,7 @@ func Ers(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, to
 func ErsIgnoreTablet(clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
-		args = append(args, "--action_timeout", timeout)
+		args = append(args, "--action-timeout", timeout)
 	}
 	args = append(args, "EmergencyReparentShard", fmt.Sprintf("%s/%s", KeyspaceName, ShardName))
 	if tab != nil {
@@ -683,23 +676,13 @@ func CheckReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttab
 
 // CheckReparentFromOutside checks that cluster was reparented from outside
 func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
-	if clusterInstance.VtctlMajorVersion > 19 { // TODO: (ajm188) remove else clause after next release
-		result, err := clusterInstance.VtctldClientProcess.GetShardReplication(KeyspaceName, ShardName, cell1)
-		require.Nil(t, err, "error should be Nil")
-		require.NotNil(t, result[cell1], "result should not be nil")
-		if !downPrimary {
-			assert.Len(t, result[cell1].Nodes, 3)
-		} else {
-			assert.Len(t, result[cell1].Nodes, 2)
-		}
+	result, err := clusterInstance.VtctldClientProcess.GetShardReplication(KeyspaceName, ShardName, cell1)
+	require.Nil(t, err, "error should be Nil")
+	require.NotNil(t, result[cell1], "result should not be nil")
+	if !downPrimary {
+		assert.Len(t, result[cell1].Nodes, 3)
 	} else {
-		result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, KeyspaceShard)
-		require.Nil(t, err, "error should be Nil")
-		if !downPrimary {
-			assertNodeCount(t, result, int(3))
-		} else {
-			assertNodeCount(t, result, int(2))
-		}
+		assert.Len(t, result[cell1].Nodes, 2)
 	}
 
 	// make sure the primary status page says it's the primary
@@ -708,7 +691,7 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 
 	// make sure the primary health stream says it's the primary too
 	// (health check is disabled on these servers, force it first)
-	err := clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
+	err = clusterInstance.VtctldClientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	require.NoError(t, err)
 
 	shrs, err := clusterInstance.StreamTabletHealth(context.Background(), tablet, 1)
@@ -717,16 +700,6 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 
 	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
 	assert.True(t, streamHealthResponse.PrimaryTermStartTimestamp >= baseTime)
-}
-
-func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]any)
-	err := json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
-
-	nodes := reflect.ValueOf(resultMap["nodes"])
-	got := nodes.Len()
-	assert.Equal(t, want, got)
 }
 
 // WaitForReplicationPosition waits for tablet B to catch up to the replication position of tablet A.

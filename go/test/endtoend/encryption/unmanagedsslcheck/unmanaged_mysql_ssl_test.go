@@ -17,7 +17,6 @@ limitations under the License.
 package unmanagedsslcheck
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -132,7 +131,7 @@ func startMySQLWithSSLRequired(t *testing.T, testUser string) (vttest.LocalClust
 	}
 
 	connParams := cluster.MySQLConnParams()
-	conn, err := mysql.Connect(context.Background(), &connParams)
+	conn, err := mysql.Connect(t.Context(), &connParams)
 	if err != nil {
 		cleanup()
 		return cluster, cleanup, err

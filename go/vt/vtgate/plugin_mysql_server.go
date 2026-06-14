@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -37,7 +38,6 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -87,16 +87,6 @@ var (
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
-
-	// binlogDumpRequests tracks binlog dump request counts by status
-	binlogDumpRequests = stats.NewCountersWithSingleLabel(
-		"VtgateBinlogDumpRequests",
-		"Vtgate binlog dump request counts",
-		"status",
-		"authorized", // successfully authorized requests
-		"denied",     // denied due to user ACL
-		"disabled",   // denied because feature is disabled
-	)
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -136,6 +126,25 @@ type vtgateHandler struct {
 	connections map[uint32]*mysql.Conn
 
 	busyConnections atomic.Int32
+}
+
+type vtgateMySQLConnection struct {
+	handler         *vtgateHandler
+	conn            *mysql.Conn
+	slowQueryStates []bool
+}
+
+func (vmc *vtgateMySQLConnection) KillQuery(connectionID uint32) error {
+	return vmc.handler.KillQuery(connectionID)
+}
+
+func (vmc *vtgateMySQLConnection) KillConnection(ctx context.Context, connectionID uint32) error {
+	return vmc.handler.KillConnection(ctx, connectionID)
+}
+
+func (vmc *vtgateMySQLConnection) SetQueryWasSlow(slow bool) {
+	setSlowQueryStatus(vmc.conn, slow)
+	vmc.slowQueryStates = append(vmc.slowQueryStates, slow)
 }
 
 func newVtgateHandler(vtg *VTGate) *vtgateHandler {
@@ -197,7 +206,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 // Regexp to extract parent span id over the sql query
-var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*)\*/`)
+var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*?)\*/`)
 
 // this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
 func startSpanTestable(ctx context.Context, query, label string,
@@ -229,6 +238,50 @@ func getSpan(ctx context.Context, match []string, newSpan func(context.Context, 
 
 func startSpan(ctx context.Context, query, label string) (trace.Span, context.Context, error) {
 	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
+}
+
+// extractSpanContext extracts the VT_SPAN_CONTEXT value from a query's leading comments.
+// Returns empty string if no span context is found.
+func extractSpanContext(query string) string {
+	_, comments := sqlparser.SplitMarginComments(query)
+	match := r.FindStringSubmatch(comments.Leading)
+	if len(match) != 0 {
+		return match[1]
+	}
+	return ""
+}
+
+// startSpanFromPrepareTestable creates a span for a prepared statement execution,
+// caching the extracted VT_SPAN_CONTEXT on the PrepareData to avoid re-parsing
+// the SQL comments on every execution.
+func startSpanFromPrepareTestable(ctx context.Context, prepare *mysql.PrepareData, label string,
+	newSpan func(context.Context, string) (trace.Span, context.Context),
+	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error),
+) (trace.Span, context.Context, error) {
+	if prepare.SpanContext == nil {
+		sc := extractSpanContext(prepare.PrepareStmt)
+		prepare.SpanContext = &sc
+	}
+
+	var span trace.Span
+	if *prepare.SpanContext != "" {
+		var err error
+		span, ctx, err = newSpanFromString(ctx, *prepare.SpanContext, label)
+		if err == nil {
+			trace.AnnotateSQL(span, sqlparser.Preview(prepare.PrepareStmt))
+			return span, ctx, nil
+		}
+		log.Warn("Unable to parse VT_SPAN_CONTEXT", slog.Any("error", err))
+		// Clear the cached value so subsequent executions skip the parse attempt.
+		*prepare.SpanContext = ""
+	}
+	span, ctx = newSpan(ctx, label)
+	trace.AnnotateSQL(span, sqlparser.Preview(prepare.PrepareStmt))
+	return span, ctx, nil
+}
+
+func startSpanFromPrepare(ctx context.Context, prepare *mysql.PrepareData, label string) (trace.Span, context.Context, error) {
+	return startSpanFromPrepareTestable(ctx, prepare, label, trace.NewSpan, trace.NewFromString)
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -265,6 +318,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		c.RemoteAddr().String(), /* component: running client process */
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	if !session.InTransaction {
 		vh.busyConnections.Add(1)
@@ -276,14 +330,18 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		session, err := vh.vtg.StreamExecute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), callback)
+		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
+		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
+		if result := deferredResult(); result != nil {
+			return callback(result)
+		}
 		return nil
 	}
-	session, result, err := vh.vtg.Execute(ctx, vh, session, query, make(map[string]*querypb.BindVariable), false)
+	session, result, err := vh.vtg.Execute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
 
 	if err := sqlerror.NewSQLErrorFromError(err); err != nil {
 		return err
@@ -322,6 +380,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 		c.RemoteAddr().String(), /* component: running client process */
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	if !session.InTransaction {
 		vh.busyConnections.Add(1)
@@ -334,15 +393,25 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
-			session, err = vh.vtg.StreamExecuteMulti(ctx, vh, session, sql, callback)
+			session, err = vh.streamExecuteMultiQuery(ctx, c, mysqlCtx, session, sql, callback)
 		} else {
 			firstPacket := true
-			session, err = vh.vtg.StreamExecute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			var deferredResult *sqltypes.Result
+			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
+				if firstPacket && len(result.Fields) == 0 {
+					deferredResult = result
+					firstPacket = false
+					return nil
+				}
 				defer func() {
 					firstPacket = false
 				}()
 				return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
 			})
+			if err == nil && deferredResult != nil {
+				fillInTxStatusFlags(c, session)
+				return callback(sqltypes.QueryResponse{QueryResult: deferredResult}, false, true)
+			}
 		}
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
@@ -354,7 +423,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 	var result *sqltypes.Result
 	var queryResults []sqltypes.QueryResponse
 	if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
-		session, results, err = vh.vtg.ExecuteMulti(ctx, vh, session, sql)
+		session, results, err = vh.vtg.ExecuteMulti(ctx, mysqlCtx, session, sql)
 		for _, res := range results {
 			queryResults = append(queryResults, sqltypes.QueryResponse{QueryResult: res})
 		}
@@ -362,17 +431,71 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 			queryResults = append(queryResults, sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)})
 		}
 	} else {
-		session, result, err = vh.vtg.Execute(ctx, vh, session, sql, make(map[string]*querypb.BindVariable), false)
+		session, result, err = vh.vtg.Execute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), false)
 		queryResults = append(queryResults, sqltypes.QueryResponse{QueryResult: result, QueryError: sqlerror.NewSQLErrorFromError(err)})
 	}
 
 	fillInTxStatusFlags(c, session)
 	for idx, res := range queryResults {
+		applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
 		if callbackErr := callback(res, idx < len(queryResults)-1, true); callbackErr != nil {
 			return callbackErr
 		}
 	}
 	return nil
+}
+
+func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.Conn, mysqlCtx *vtgateMySQLConnection, session *vtgatepb.Session, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
+	queries, err := vh.vtg.executor.Environment().Parser().SplitStatementToPieces(sql)
+	if err != nil {
+		return session, err
+	}
+	if len(queries) == 0 {
+		return session, sqlparser.ErrEmpty
+	}
+	for idx, query := range queries {
+		firstPacket := true
+		more := idx < len(queries)-1
+		var deferredResult *sqltypes.Result
+		func() {
+			queryCtx := ctx
+			var cancel context.CancelFunc
+			if mysqlQueryTimeout != 0 {
+				queryCtx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				defer cancel()
+			}
+			session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
+				if firstPacket && len(result.Fields) == 0 {
+					deferredResult = result
+					firstPacket = false
+					return nil
+				}
+				if firstPacket {
+					applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
+				}
+				defer func() {
+					firstPacket = false
+				}()
+				return callback(sqltypes.QueryResponse{QueryResult: result}, more, firstPacket)
+			})
+		}()
+		if err != nil {
+			if firstPacket {
+				applyMultiQueryStatusFlags(c, mysqlCtx.slowQueryStates, idx)
+				return session, callback(sqltypes.QueryResponse{QueryError: sqlerror.NewSQLErrorFromError(err)}, false, true)
+			}
+			return session, err
+		}
+		if deferredResult != nil {
+			previousStatusFlags := c.StatusFlags
+			fillInTxStatusFlags(c, session)
+			applyMultiQueryStatusFlagsWithPrevious(c, mysqlCtx.slowQueryStates, idx, previousStatusFlags)
+			if err := callback(sqltypes.QueryResponse{QueryResult: deferredResult}, more, true); err != nil {
+				return session, err
+			}
+		}
+	}
+	return session, nil
 }
 
 func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
@@ -386,6 +509,30 @@ func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 	} else {
 		c.StatusFlags &= mysql.NoServerStatusAutocommit
 	}
+}
+
+func setSlowQueryStatus(c *mysql.Conn, slow bool) {
+	c.StatusFlags = slowQueryStatusFlags(c.StatusFlags, slow)
+}
+
+func applyMultiQueryStatusFlags(c *mysql.Conn, slowQueryStates []bool, idx int) {
+	applyMultiQueryStatusFlagsWithPrevious(c, slowQueryStates, idx, c.StatusFlags)
+}
+
+func applyMultiQueryStatusFlagsWithPrevious(c *mysql.Conn, slowQueryStates []bool, idx int, previousStatusFlags uint16) {
+	if idx > 0 && idx-1 < len(slowQueryStates) {
+		c.SetPendingMultiResultStatusFlags(slowQueryStatusFlags(previousStatusFlags, slowQueryStates[idx-1]))
+	}
+	if idx < len(slowQueryStates) {
+		setSlowQueryStatus(c, slowQueryStates[idx])
+	}
+}
+
+func slowQueryStatusFlags(statusFlags uint16, slow bool) uint16 {
+	if slow {
+		return statusFlags | mysql.ServerQueryWasSlow
+	}
+	return statusFlags &^ mysql.ServerQueryWasSlow
 }
 
 // ComPrepare is the handler for command prepare.
@@ -440,6 +587,12 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		defer cancel()
 	}
 
+	span, ctx, err := startSpanFromPrepare(ctx, prepare, "vtgateHandler.ComStmtExecute")
+	if err != nil {
+		return vterrors.Wrap(err, "failed to extract span")
+	}
+	defer span.Finish()
+
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
 	// Fill in the ImmediateCallerID with the UserData returned by
@@ -453,6 +606,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		c.RemoteAddr().String(), /* component: running client process */
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
+	mysqlCtx := &vtgateMySQLConnection{handler: vh, conn: c}
 
 	session := vh.session(c)
 	if !session.InTransaction {
@@ -465,20 +619,43 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		_, err := vh.vtg.StreamExecute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
+		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true, streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
 		fillInTxStatusFlags(c, session)
+		if result := deferredResult(); result != nil {
+			return callback(result)
+		}
 		return nil
 	}
-	_, qr, err := vh.vtg.Execute(ctx, vh, session, prepare.PrepareStmt, prepare.BindVars, true)
+	_, qr, err := vh.vtg.Execute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true)
 	if err != nil {
 		return sqlerror.NewSQLErrorFromError(err)
 	}
 	fillInTxStatusFlags(c, session)
 
 	return callback(qr)
+}
+
+func deferFirstOKOnlyResult(callback func(*sqltypes.Result) error) (func(*sqltypes.Result) error, func() *sqltypes.Result) {
+	firstPacket := true
+	var deferredResult *sqltypes.Result
+
+	streamCallback := func(result *sqltypes.Result) error {
+		if firstPacket {
+			firstPacket = false
+			if len(result.Fields) == 0 {
+				deferredResult = result
+				return nil
+			}
+		}
+		return callback(result)
+	}
+	return streamCallback, func() *sqltypes.Result {
+		return deferredResult
+	}
 }
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
@@ -590,20 +767,25 @@ func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "binlog dump requires keyspace and shard (e.g., 'commerce:0', 'commerce:0@primary', 'commerce:0@primary|zone1-100'): %s", targetString)
 	}
 
-	// File/position-based resumption is only valid when targeting a specific
-	// tablet. When routing via health check, vtgate may pick a different
-	// replica each time, and binlog filenames/positions differ across replicas.
-	// GTIDs are consistent across replicas and can always be used.
-	hasFilePosition := logFile != "" || logPos > 4
-	if hasFilePosition && tabletAlias == nil {
+	// File/position-based replication is not supported through vtgate.
+	// Binlog filenames and positions are local to individual MySQL instances and
+	// differ across replicas, making them unsuitable for vtgate's routing model.
+	// Use GTIDs for all binlog dump operations.
+	if logFile != "" {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-			"binlog filename/position can only be used with tablet targeting (e.g., 'commerce:0@primary|zone1-100'); "+
-				"use GTIDs for shard-level targeting, as binlog positions differ across replicas")
+			"binlog filename is not supported; use GTIDs instead")
+	}
+	if logPos < 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"Client requested source to start replication from position < 4")
+	}
+	if logPos > 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"only binlog position 4 is supported; use GTIDs for positioning")
 	}
 
 	// Build the BinlogDumpGTID request
 	request := &binlogdatapb.BinlogDumpGTIDRequest{
-		BinlogFilename: logFile,
 		BinlogPosition: logPos,
 		Flags:          uint32(flags),
 		Target:         target,

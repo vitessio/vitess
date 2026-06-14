@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "from_table": "table_a",
+      "to_tables": ["ks_a.table_a"]
+    },
+    {
+      "from_table": "table_b",
+      "to_tables": ["ks_b.table_b"]
+    }
+  ]
+}

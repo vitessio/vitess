@@ -81,15 +81,13 @@ describe('api/http', () => {
             try {
                 await api.fetchTablets();
             } catch (error) {
-                let e: HttpResponseNotOkError = error as HttpResponseNotOkError;
-                /* eslint-disable jest/no-conditional-expect */
+                const e: HttpResponseNotOkError = error as HttpResponseNotOkError;
                 expect(e.name).toEqual(HTTP_RESPONSE_NOT_OK_ERROR);
                 expect(e.message).toEqual('[status 500] /api/tablets: oh_no something went wrong');
                 expect(e.response).toEqual(response);
 
                 expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                 expect(errorHandler.notify).toHaveBeenCalledWith(e);
-                /* eslint-enable jest/no-conditional-expect */
             }
         });
 
@@ -109,8 +107,7 @@ describe('api/http', () => {
             try {
                 await api.vtfetch(endpoint);
             } catch (error) {
-                let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
-                /* eslint-disable jest/no-conditional-expect */
+                const e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
                 expect(e.message).toContain(
                     `[status 504] /api/tablets: Unexpected token '<', "<html><hea"... is not valid JSON`
@@ -118,7 +115,6 @@ describe('api/http', () => {
 
                 expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                 expect(errorHandler.notify).toHaveBeenCalledWith(e);
-                /* eslint-enable jest/no-conditional-expect */
             }
         });
 
@@ -131,10 +127,8 @@ describe('api/http', () => {
             try {
                 await api.vtfetch(endpoint);
             } catch (error) {
-                let e: MalformedHttpResponseError = error as MalformedHttpResponseError;
-                /* eslint-disable jest/no-conditional-expect */
+                const e: MalformedHttpResponseError = error as MalformedHttpResponseError;
                 expect(e.name).toEqual(MALFORMED_HTTP_RESPONSE_ERROR);
-                /* eslint-enable jest/no-conditional-expect */
             }
         });
 
@@ -188,8 +182,7 @@ describe('api/http', () => {
                 try {
                     await api.vtfetch(endpoint);
                 } catch (error) {
-                    let e: HttpFetchError = error as HttpFetchError;
-                    /* eslint-disable jest/no-conditional-expect */
+                    const e: HttpFetchError = error as HttpFetchError;
                     expect(e.message).toEqual(
                         'Invalid fetch credentials property: nope. Must be undefined or one of omit, same-origin, include'
                     );
@@ -197,7 +190,6 @@ describe('api/http', () => {
 
                     expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                     expect(errorHandler.notify).toHaveBeenCalledWith(e);
-                    /* eslint-enable jest/no-conditional-expect */
                 }
 
                 vi.restoreAllMocks();
@@ -234,13 +226,11 @@ describe('api/http', () => {
                 try {
                     await api.vtfetch(endpoint, { method });
                 } catch (e: any) {
-                    /* eslint-disable jest/no-conditional-expect */
                     expect(e.message).toEqual(`Cannot execute write request in read-only mode: ${method} ${endpoint}`);
                     expect(global.fetch).toHaveBeenCalledTimes(0);
 
                     expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                     expect(errorHandler.notify).toHaveBeenCalledWith(e);
-                    /* eslint-enable jest/no-conditional-expect */
                 }
 
                 vi.clearAllMocks();
@@ -264,13 +254,11 @@ describe('api/http', () => {
                     transform: (e) => null, // doesn't matter
                 });
             } catch (error) {
-                let e: HttpFetchError = error as HttpFetchError;
-                /* eslint-disable jest/no-conditional-expect */
+                const e: HttpFetchError = error as HttpFetchError;
                 expect(e.message).toMatch('expected entities to be an array, got null');
 
                 expect(errorHandler.notify).toHaveBeenCalledTimes(1);
                 expect(errorHandler.notify).toHaveBeenCalledWith(e);
-                /* eslint-enable jest/no-conditional-expect */
             }
         });
     });

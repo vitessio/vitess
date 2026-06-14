@@ -523,6 +523,7 @@ type (
 	AlterMigration struct {
 		Type      AlterMigrationType
 		UUID      string
+		Context   string
 		Expire    string
 		Ratio     *Literal
 		Threshold string
@@ -2028,9 +2029,10 @@ type (
 	}
 
 	// UserOrRole represents a MySQL user ('user'@'host') or role specification.
+	// When both Name and Host are nil, this represents CURRENT_USER.
 	UserOrRole struct {
-		Name string
-		Host string
+		Name *string
+		Host *string
 	}
 
 	// ShowEngine represents SHOW ENGINE engine_name {STATUS | MUTEX}.
@@ -2442,8 +2444,9 @@ type (
 
 	// AliasedExpr defines an aliased SELECT expression.
 	AliasedExpr struct {
-		Expr Expr
-		As   IdentifierCI
+		Expr            Expr
+		As              IdentifierCI
+		InputExpression string
 	}
 
 	// Nextval defines the NEXT VALUE expression.

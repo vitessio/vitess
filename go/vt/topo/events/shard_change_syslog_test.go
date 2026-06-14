@@ -23,6 +23,8 @@ import (
 	"log/syslog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/hack"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -48,10 +50,6 @@ func TestShardChangeSyslog(t *testing.T) {
 	wantSev, wantMsg := syslog.LOG_INFO, fmt.Sprintf("%s/%s [shard] %s value: %s", "keyspace-123", "shard-123", "status", sc.Shard.String())
 	gotSev, gotMsg := sc.Syslog()
 
-	if gotSev != wantSev {
-		t.Errorf("wrong severity: got %v, want %v", gotSev, wantSev)
-	}
-	if gotMsg != wantMsg {
-		t.Errorf("wrong message: got %v, want %v", gotMsg, wantMsg)
-	}
+	assert.Equalf(t, wantSev, gotSev, "wrong severity: got %v, want %v", gotSev, wantSev)
+	assert.Equalf(t, wantMsg, gotMsg, "wrong message: got %v, want %v", gotMsg, wantMsg)
 }

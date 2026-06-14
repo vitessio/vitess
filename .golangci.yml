@@ -1,6 +1,6 @@
 version: "2"
 run:
-  go: "1.25"
+  go: "1.26"
 linters:
   default: none
   enable:
@@ -130,10 +130,13 @@ linters:
       # we must construct this big regex match for now.
       - linters:
           - prealloc
-        path: ^go/(cache|cmd|event|flagutil|mysql|pools|sqltypes|stats|test|textutil|tools)/
+        path: _test\.go$
       - linters:
           - prealloc
-        path: ^go/vt/(binlog|discovery|graph|grpcclient|mysqlctl|schemadiff|sidecardb|sqlparser|throttler|topo|vitessdriver|vtadmin|vtctl|vtexplain|vtgate|vttablet|vttest|wrangler)/
+        path: ^go/(test|tools)/
+      - linters:
+          - prealloc
+        path: ^go/vt/(sqlparser|vtgate/planbuilder|vttablet)/
       - linters:
           - errcheck
         path: ^go/vt/proto/

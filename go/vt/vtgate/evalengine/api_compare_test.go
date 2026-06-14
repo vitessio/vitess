@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -74,7 +73,7 @@ func (tc testCase) run(t *testing.T) {
 		fields[i] = &querypb.Field{Type: value.Type()}
 	}
 	venv := vtenv.NewTestEnv()
-	env := NewExpressionEnv(context.Background(), tc.bv, NewEmptyVCursor(venv, time.UTC))
+	env := NewExpressionEnv(t.Context(), tc.bv, NewEmptyVCursor(venv, time.UTC))
 	env.Row = tc.row
 	ast := &astCompiler{
 		cfg: &Config{
@@ -83,9 +82,7 @@ func (tc testCase) run(t *testing.T) {
 		},
 	}
 	cmp, err := ast.translateComparisonExpr2(tc.op, tc.v1, tc.v2)
-	if err != nil {
-		t.Fatalf("failed to convert: %v", err)
-	}
+	require.NoError(t, err)
 
 	v, err := cmp.eval(env)
 	if tc.err == "" {
@@ -1284,15 +1281,14 @@ func TestNullsafeCompareCollate(t *testing.T) {
 				require.Error(t, err)
 			}
 			if !vterrors.Equals(err, tcase.err) {
-				t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+				// vterrors.Print panics on nil; only call when the assertion fails.
+				assert.Fail(t, "NullsafeCompare error mismatch", "NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
 			}
 			if tcase.err != nil {
 				return
 			}
 
-			if got != tcase.out {
-				t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
-			}
+			assert.Equalf(t, tcase.out, got, "NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		})
 	}
 }
@@ -1422,9 +1418,7 @@ func TestCompareSorter(t *testing.T) {
 			sorted := sorter.Sorted()
 			assert.Equal(t, len(want), len(sorted))
 			for i := 0; i < len(want); i++ {
-				if !sqltypes.RowEqual(want[i], sorted[i]) {
-					t.Fatalf("row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
-				}
+				require.True(t, sqltypes.RowEqual(want[i], sorted[i]), "row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
 			}
 		})
 	}

@@ -168,13 +168,16 @@ func (p *Projection) Inputs() ([]Primitive, []map[string]any) {
 // description implements the Primitive interface
 func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
-	for idx, e := range p.Exprs {
-		expr := sqlparser.String(e)
-		alias := p.Cols[idx]
-		if alias != "" {
-			expr += " as " + alias
+	if len(p.Exprs) > 0 {
+		exprs = make([]string, 0, len(p.Exprs))
+		for idx, e := range p.Exprs {
+			expr := sqlparser.String(e)
+			alias := p.Cols[idx]
+			if alias != "" {
+				expr += " as " + alias
+			}
+			exprs = append(exprs, expr)
 		}
-		exprs = append(exprs, expr)
 	}
 	return PrimitiveDescription{
 		OperatorType: "Projection",

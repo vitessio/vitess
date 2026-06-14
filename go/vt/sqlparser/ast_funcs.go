@@ -64,6 +64,7 @@ func Append(buf *strings.Builder, node SQLNode) {
 		Builder: buf,
 		fast:    true,
 	}
+	tbuf.literal = tbuf.WriteString
 	node.FormatFast(tbuf)
 }
 
@@ -738,7 +739,8 @@ func (node *ColName) Equal(c *ColName) bool {
 // NewIdentifierCI makes a new IdentifierCI.
 func NewIdentifierCI(str string) IdentifierCI {
 	return IdentifierCI{
-		val: str,
+		val:     str,
+		lowered: strings.ToLower(str),
 	}
 }
 
@@ -1042,12 +1044,6 @@ func (node IdentifierCI) CompliantName() string {
 // This function should generally be used only for optimizing
 // comparisons.
 func (node IdentifierCI) Lowered() string {
-	if node.val == "" {
-		return ""
-	}
-	if node.lowered == "" {
-		node.lowered = strings.ToLower(node.val)
-	}
 	return node.lowered
 }
 
@@ -1079,6 +1075,7 @@ func (node *IdentifierCI) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	node.val = result
+	node.lowered = strings.ToLower(result)
 	return nil
 }
 
@@ -2316,12 +2313,16 @@ func formatUserOrRoleHost(atID string) string {
 }
 
 func (node *UserOrRole) formatTo(buf *TrackedBuffer) {
+	if node.Name == nil {
+		buf.WriteString("current_user")
+		return
+	}
 	buf.WriteString("'")
-	buf.WriteString(node.Name)
+	buf.WriteString(*node.Name)
 	buf.WriteString("'")
-	if node.Host != "" {
+	if node.Host != nil {
 		buf.WriteString("@'")
-		buf.WriteString(node.Host)
+		buf.WriteString(*node.Host)
 		buf.WriteString("'")
 	}
 }
@@ -2512,6 +2513,16 @@ func (ae *AliasedExpr) ColumnName() string {
 		if node.Type == StrVal {
 			return node.Val
 		}
+	case *IntroducerExpr:
+		// MySQL strips the charset introducer for string literals:
+		// _utf8 'hello' → column name is 'hello', not '_utf8 hello'
+		if lit, ok := node.Expr.(*Literal); ok && lit.Type == StrVal {
+			return lit.Val
+		}
+	}
+
+	if ae.InputExpression != "" {
+		return ae.InputExpression
 	}
 
 	return String(ae.Expr)

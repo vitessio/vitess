@@ -89,12 +89,13 @@ def run_setup():
     log(f"Creating {num_accts} accounts...")
 
     for i in range(num_accts):
+        account_id = get_random() % (2**53)
         balance = get_random() % int(1e9)
         total += balance
         try:
             cursor.execute(
-                "INSERT INTO accounts (balance) VALUES (%s)",
-                (balance,)
+                "INSERT INTO accounts (account_id, balance) VALUES (%s, %s)",
+                (account_id, balance)
             )
         except Exception as e:
             log(f"Failed to insert account {i}: {e}")

@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
@@ -34,7 +50,7 @@ type tabletStats struct {
 	Tablet    tabletInfo   `json:"Tablet"`
 	Target    tabletTarget `json:"Target"`
 	Serving   bool         `json:"Serving"`
-	LastError *string      `json:"LastError"`
+	LastError any          `json:"LastError"`
 }
 
 type tabletCacheStatus struct {
@@ -43,7 +59,7 @@ type tabletCacheStatus struct {
 	TabletsStats []tabletStats `json:"TabletsStats"`
 }
 
-const defaultTimeout = 30 * time.Second
+const defaultTimeout = 90 * time.Second
 
 func main() {
 	defaultVtgate := getenv("VTGATE_ADDR", "http://vtgate:8080")
@@ -59,11 +75,13 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
+	fmt.Printf("starting health check (vtgate=%s, cell=%s, timeout=%s)\n", *vtgateAddr, *cell, *timeout)
 	if err := checkEventually(ctx, *vtgateAddr, *cell, *pollInterval); err != nil {
 		assert.Unreachable("Vitess cluster health did not recover within timeout", map[string]any{"error": err.Error()})
 		fmt.Printf("health check failed: %v\n", err)
 		os.Exit(1)
 	}
+	fmt.Println("health check passed")
 }
 
 func checkEventually(ctx context.Context, vtgateAddr string, cell string, pollInterval time.Duration) error {
@@ -105,13 +123,10 @@ func checkOnce(vtgateAddr string, cell string) (bool, error) {
 	if len(cacheStatuses) == 0 {
 		return false, errors.New("health check list is empty")
 	}
-	counts := map[string]*healthCounts{}
+	counts := make(map[string]*healthCounts, len(cacheStatuses))
 	for _, cacheStatus := range cacheStatuses {
 		for _, tablet := range cacheStatus.TabletsStats {
 			if tablet.Tablet.Keyspace == "" || tablet.Tablet.Shard == "" {
-				continue
-			}
-			if !isHealthy(tablet) {
 				continue
 			}
 			key := tablet.Tablet.Keyspace + ":" + tablet.Tablet.Shard
@@ -119,6 +134,9 @@ func checkOnce(vtgateAddr string, cell string) (bool, error) {
 			if entry == nil {
 				entry = &healthCounts{}
 				counts[key] = entry
+			}
+			if !isHealthy(tablet) {
+				continue
 			}
 			if isPrimary(tablet.Target.TabletType) {
 				entry.primaries++
@@ -154,7 +172,7 @@ func isHealthy(stats tabletStats) bool {
 	if stats.LastError == nil {
 		return true
 	}
-	return *stats.LastError == ""
+	return false
 }
 
 func getenv(key string, fallback string) string {

@@ -125,7 +125,7 @@ func assertIsKilledWithin(t testing.TB, client *framework.QueryClient, opts quer
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), opts.StopAfter)
+	ctx, cancel := context.WithTimeout(t.Context(), opts.StopAfter)
 	defer cancel()
 
 	defer func() {

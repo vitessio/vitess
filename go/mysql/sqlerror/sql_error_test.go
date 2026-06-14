@@ -156,6 +156,16 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSNoDB,
 		},
 		{
+			err: errors.New("ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log"),
+			num: ERMasterInfo,
+			ss:  SSUnknownSQLState,
+		},
+		{
+			err: errors.New("ERROR 1872 (HY000): Replica failed to initialize applier metadata structure from the repository"),
+			num: ERReplicaApplierMetadataInitRepository,
+			ss:  SSUnknownSQLState,
+		},
+		{
 			err: errors.New("just some random text here"),
 			num: ERUnknownError,
 			ss:  SSUnknownSQLState,

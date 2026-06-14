@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -97,7 +96,7 @@ func TestInitShardPrimary(t *testing.T) {
 	}
 
 	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
-	resp, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
+	resp, err := vtctld.InitShardPrimary(t.Context(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,
 		PrimaryElectTabletAlias: tablet1.Tablet.Alias,
@@ -153,7 +152,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	}
 
 	vtctld := grpcvtctldserver.NewVtctldServer(vtenv.NewTestEnv(), ts)
-	_, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
+	_, err := vtctld.InitShardPrimary(t.Context(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,
 		PrimaryElectTabletAlias: tablet1.Tablet.Alias,
@@ -161,7 +160,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 
 	assert.Error(t, err)
 
-	resp, err := vtctld.InitShardPrimary(context.Background(), &vtctldatapb.InitShardPrimaryRequest{
+	resp, err := vtctld.InitShardPrimary(t.Context(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
 		Shard:                   tablet1.Tablet.Shard,
 		PrimaryElectTabletAlias: tablet1.Tablet.Alias,
@@ -169,7 +168,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	tablet1PostInit, err := ts.GetTablet(context.Background(), tablet1.Tablet.Alias)
+	tablet1PostInit, err := ts.GetTablet(t.Context(), tablet1.Tablet.Alias)
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tablet1PostInit.Type)
 }

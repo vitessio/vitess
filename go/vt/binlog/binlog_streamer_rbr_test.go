@@ -17,7 +17,6 @@ limitations under the License.
 package binlog
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -271,7 +270,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	bls := NewStreamer(dbcfgs, se, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events, errs)
+	_, err := bls.parseEvents(t.Context(), events, errs)
 	assert.EqualError(t, err, ErrServerEOF.Error(), "unexpected error")
 	assert.Equal(t, want, got, "binlogConnStreamer.parseEvents()")
 }
@@ -510,7 +509,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	bls := NewStreamer(dbcfgs, se, nil, replication.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events, errs)
+	_, err := bls.parseEvents(t.Context(), events, errs)
 	assert.EqualError(t, err, ErrServerEOF.Error(), "unexpected error")
 	assert.Equal(t, want, got, "binlogConnStreamer.parseEvents()")
 }

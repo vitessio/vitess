@@ -53,8 +53,9 @@ func newEchoClient(fallback vtgateservice.VTGateService) *echoClient {
 }
 
 func printSortedMap(val reflect.Value) []byte {
-	var keys []string
-	for _, key := range val.MapKeys() {
+	mapKeys := val.MapKeys()
+	keys := make([]string, 0, len(mapKeys))
+	for _, key := range mapKeys {
 		keys = append(keys, key.String())
 	}
 	sort.Strings(keys)
@@ -117,7 +118,7 @@ func (c *echoClient) Execute(
 	return c.fallbackClient.Execute(ctx, mysqlCtx, session, sql, bindVariables, prepared)
 }
 
-func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	if strings.HasPrefix(sql, EchoPrefix) {
 		callback(echoQueryResult(map[string]any{
 			"callerId": callerid.EffectiveCallerIDFromContext(ctx),
@@ -127,7 +128,7 @@ func (c *echoClient) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.M
 		}))
 		return session, nil
 	}
-	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, callback)
+	return c.fallbackClient.StreamExecute(ctx, mysqlCtx, session, sql, bindVariables, prepared, callback)
 }
 
 // ExecuteMulti is part of the VTGateService interface
@@ -144,7 +145,7 @@ func (c *echoClient) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateserv
 
 func (c *echoClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
 	if len(sqlList) > 0 && strings.HasPrefix(sqlList[0], EchoPrefix) {
-		var queryResponse []sqltypes.QueryResponse
+		queryResponse := make([]sqltypes.QueryResponse, 0, len(sqlList))
 		if bindVariablesList == nil {
 			bindVariablesList = make([]map[string]*querypb.BindVariable, len(sqlList))
 		}

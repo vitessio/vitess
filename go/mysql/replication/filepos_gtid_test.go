@@ -18,6 +18,8 @@ package replication
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_filePosGTID_String(t *testing.T) {
@@ -47,9 +49,8 @@ func Test_filePosGTID_String(t *testing.T) {
 				File: tt.fields.file,
 				Pos:  tt.fields.pos,
 			}
-			if got := gtid.String(); got != tt.want {
-				t.Errorf("FilePosGTID.String() = %v, want %v", got, tt.want)
-			}
+			got := gtid.String()
+			assert.Equalf(t, tt.want, got, "FilePosGTID.String() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -99,9 +100,8 @@ func Test_filePosGTID_ContainsGTID(t *testing.T) {
 				File: tt.fields.file,
 				Pos:  tt.fields.pos,
 			}
-			if got := gtid.ContainsGTID(tt.args.other); got != tt.want {
-				t.Errorf("FilePosGTID.ContainsGTID() = %v, want %v", got, tt.want)
-			}
+			got := gtid.ContainsGTID(tt.args.other)
+			assert.Equalf(t, tt.want, got, "FilePosGTID.ContainsGTID() = %v, want %v", got, tt.want)
 		})
 	}
 }

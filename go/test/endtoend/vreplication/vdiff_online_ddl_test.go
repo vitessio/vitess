@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vreplication
 
 import (
@@ -15,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/utils"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -34,7 +49,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 	vc = setupMinimalCluster(t)
 	defer vc.TearDown()
 	keyspace := defaultSourceKs
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	createQuery := "create table temp (id int, name varchar(100), blb blob, primary key (id))"
@@ -89,12 +104,12 @@ func onlineDDLShow(t *testing.T, keyspace, uuid string) *vtctldata.GetSchemaMigr
 }
 
 func execOnlineDDL(t *testing.T, strategy, keyspace, query string) string {
-	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", utils.GetFlagVariantForTests("--ddl-strategy"), strategy, "--sql", query, keyspace)
+	output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", strategy, "--sql", query, keyspace)
 	require.NoError(t, err, output)
 	output = strings.TrimSpace(output)
 	if strategy != "direct" {
-		// We expect a UUID as the only output, but when using --ddl_strategy we get a warning mixed into the output:
-		//   Flag --ddl_strategy has been deprecated, use --ddl-strategy instead
+		// We expect a UUID as the only output, but when using --ddl-strategy we get a warning mixed into the output:
+		//   Flag --ddl-strategy has been deprecated, use --ddl-strategy instead
 		// In order to prevent this and other similar future issues, lets hunt for the UUID (which should be on its own line)
 		// in the returned output.
 		uuid := ""
@@ -131,7 +146,7 @@ func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
 
 	numRowsStart := getNumRows(t, vtgateConn, keyspace, table)
 	numRows := 0
-	shortCtx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	shortCtx, cancel := context.WithTimeout(t.Context(), defaultTimeout)
 	defer cancel()
 	for {
 		switch {

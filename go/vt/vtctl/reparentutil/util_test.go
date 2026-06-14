@@ -65,7 +65,7 @@ func (fake *chooseNewPrimaryTestTMClient) ReplicationStatus(ctx context.Context,
 func TestElectNewPrimary(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                    string
@@ -814,6 +814,156 @@ func TestElectNewPrimary(t *testing.T) {
 			errContains: nil,
 		},
 		{
+			// Buffer-pool tiebreaking must be skipped unless every VALID tablet has
+			// a value. A missing entry (e.g. a MariaDB replica that doesn't expose
+			// Innodb_buffer_pool_pages_data) used to be treated as a legitimate 0,
+			// which could unfairly outrank a tablet with a legitimately low buffer
+			// pool. When one valid tablet is missing data we fall back to the
+			// next tiebreaker (alias).
+			//
+			// Setup: 101 and 102 tied on position; 102 has buffer data, 101 doesn't.
+			// If tiebreaking applied: 102 would win (higher buffer). The gate
+			// rejects partial data, falls through to alias, and 101 wins.
+			name: "buffer pool tiebreaking skipped when a valid tablet lacks data",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+					},
+					"zone1-0000000102": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{
+				"zone1-0000000102": 50,
+			},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  101,
+			},
+			errContains: nil,
+		},
+		{
+			// The buffer-pool gate is on validTablets (post-RPC filtering), not on
+			// all candidates. An ineligible candidate (taking a backup, lagging
+			// beyond the tolerable threshold, etc.) that lacks buffer-pool data
+			// must NOT disable tiebreaking for the rest. Here 103 is taking a
+			// backup and has no buffer-pool entry; tiebreaking still applies for
+			// 101 vs 102 and 102 wins on higher buffer pool.
+			name: "buffer pool tiebreaking applies when only an ineligible candidate lacks data",
+			tmc: &chooseNewPrimaryTestTMClient{
+				replicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000101": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+					},
+					"zone1-0000000102": {
+						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+					},
+					"zone1-0000000103": {
+						Position:      "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						BackupRunning: true,
+					},
+				},
+			},
+			innodbBufferPoolData: map[string]int{
+				"zone1-0000000101": 50,
+				"zone1-0000000102": 100,
+			},
+			shardInfo: topo.NewShardInfo("testkeyspace", "-", &topodatapb.Shard{
+				PrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			}, nil),
+			tabletMap: map[string]*topo.TabletInfo{
+				"primary": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"replica1": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica2": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+				"replica3": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			avoidPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  0,
+			},
+			expected: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			},
+			errContains: nil,
+		},
+		{
 			name: "no active primary in shard",
 			tmc: &chooseNewPrimaryTestTMClient{
 				replicationStatuses: map[string]*replicationdatapb.Status{
@@ -1156,7 +1306,7 @@ zone1-0000000100 is not a replica`,
 func TestFindPositionForTablet(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := logutil.NewMemoryLogger()
 	tests := []struct {
 		name                   string
@@ -1752,7 +1902,7 @@ func TestWaitForCatchUp(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			logger := logutil.NewMemoryLogger()
 			err := waitForCatchUp(ctx, test.tmc, logger, test.newPrimary, test.source, 2*time.Second)
 			if test.err != "" {

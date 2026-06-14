@@ -17,7 +17,6 @@ limitations under the License.
 package vexec
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -156,7 +155,7 @@ func TestQueryPlanExecute(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			qr, err := tt.plan.Execute(ctx, tt.target)
 			if tt.shouldErr {
@@ -304,7 +303,7 @@ func TestQueryPlanExecuteScatter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
+			ctx := t.Context()
 
 			results, err := tt.plan.ExecuteScatter(ctx, tt.targets...)
 			if tt.shouldErr {

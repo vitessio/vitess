@@ -37,6 +37,7 @@ type LogStats struct {
 
 	Ctx                     context.Context
 	Method                  string
+	PlanType                string
 	TabletType              string
 	StmtType                string
 	SQL                     string
@@ -51,12 +52,14 @@ type LogStats struct {
 	CommitTime              time.Duration
 	Error                   error
 	TablesUsed              []string
+	RoutingIndexesUsed      [][3]string // [keyspace, vindex_name, usage] — vindexes used for shard routing
 	SessionUUID             string
 	CachedPlan              bool
 	ActiveKeyspace          string // ActiveKeyspace is the selected keyspace `use ks`
 	MirrorSourceExecuteTime time.Duration
 	MirrorTargetExecuteTime time.Duration
 	MirrorTargetError       error
+	SlowQuery               bool
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx
@@ -76,6 +79,12 @@ func NewLogStats(ctx context.Context, methodName, sql, sessionUUID string, bindV
 // SaveEndTime sets the end time of this request to now
 func (stats *LogStats) SaveEndTime() {
 	stats.EndTime = time.Now()
+}
+
+// MarkSlowQuery updates the slow-query marker using the configured threshold.
+// A non-positive threshold disables slow-query detection.
+func (stats *LogStats) MarkSlowQuery(threshold time.Duration) {
+	stats.SlowQuery = threshold > 0 && stats.TotalTime() >= threshold
 }
 
 // ImmediateCaller returns the immediate caller stored in LogStats.Ctx
@@ -120,6 +129,19 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 		return "", ""
 	}
 	return ci.RemoteAddr(), ci.Username()
+}
+
+// routingIndexesUsedStrings flattens RoutingIndexesUsed into "keyspace.vindex.opcode"
+// strings so the log output is a flat list of values.
+func (stats *LogStats) routingIndexesUsedStrings() []string {
+	if len(stats.RoutingIndexesUsed) == 0 {
+		return nil
+	}
+	out := make([]string, len(stats.RoutingIndexesUsed))
+	for i, t := range stats.RoutingIndexesUsed {
+		out[i] = t[0] + "." + t[1] + "." + t[2]
+	}
+	return out
 }
 
 // MirorTargetErrorStr returns the mirror target error string or ""
@@ -189,6 +211,8 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Bool(stats.CachedPlan)
 	log.Key("TablesUsed")
 	log.Strings(stats.TablesUsed)
+	log.Key("RoutingIndexesUsed")
+	log.Strings(stats.routingIndexesUsedStrings())
 	log.Key("ActiveKeyspace")
 	log.String(stats.ActiveKeyspace)
 	log.Key("MirrorSourceExecuteTime")
@@ -197,6 +221,8 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Duration(stats.MirrorTargetExecuteTime)
 	log.Key("MirrorTargetError")
 	log.String(stats.MirrorTargetErrorStr())
+	log.Key("SlowQuery")
+	log.Bool(stats.SlowQuery)
 	log.Key("EmitReason")
 	log.String(emitReason)
 

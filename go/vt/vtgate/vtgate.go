@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/viperutil"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -57,6 +58,7 @@ import (
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
@@ -81,8 +83,9 @@ var (
 	maxPayloadSize  int
 	warnPayloadSize int
 
-	noScatter          bool
-	enableShardRouting bool
+	noScatter                 bool
+	preventCrossKeyspaceReads bool
+	enableShardRouting        bool
 
 	// healthCheckRetryDelay is the time to wait before retrying healthcheck
 	healthCheckRetryDelay = 2 * time.Millisecond
@@ -90,8 +93,9 @@ var (
 	healthCheckTimeout = time.Minute
 
 	// System settings related flags
-	sysVarSetEnabled = true
-	setVarEnabled    = true
+	sysVarSetEnabled      = true
+	setVarEnabled         = true
+	deniedSystemVariables []string
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = 5 * time.Second
@@ -163,6 +167,8 @@ var (
 
 	// vtgate views flags
 	queryTimeout int
+	// slowQueryThreshold marks vtgate queries as slow when TotalTime meets or exceeds it.
+	slowQueryThreshold time.Duration
 
 	// queryLogToFile controls whether query logs are sent to a file
 	queryLogToFile string
@@ -191,6 +197,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &defaultDDLStrategy, "ddl-strategy", defaultDDLStrategy, "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 	utils.SetFlagStringVar(fs, &dbDDLPlugin, "dbddl-plugin", dbDDLPlugin, "controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service")
 	utils.SetFlagBoolVar(fs, &noScatter, "no-scatter", noScatter, "when set to true, the planner will fail instead of producing a plan that includes scatter queries")
+	utils.SetFlagBoolVar(fs, &preventCrossKeyspaceReads, "prevent-cross-keyspace-reads", preventCrossKeyspaceReads, "when set to true, the planner will fail instead of producing a plan that includes cross-keyspace joins or UNIONs")
 	fs.BoolVar(&enableShardRouting, "enable-partial-keyspace-migration", enableShardRouting, "(Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)")
 	utils.SetFlagDurationVar(fs, &healthCheckRetryDelay, "healthcheck-retry-delay", healthCheckRetryDelay, "health check retry delay")
 	utils.SetFlagDurationVar(fs, &healthCheckTimeout, "healthcheck-timeout", healthCheckTimeout, "the health check timeout period")
@@ -198,6 +205,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagIntVar(fs, &warnPayloadSize, "warn-payload-size", warnPayloadSize, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 	utils.SetFlagBoolVar(fs, &sysVarSetEnabled, "enable-system-settings", sysVarSetEnabled, "This will enable the system settings to be changed per session at the database connection level")
 	utils.SetFlagBoolVar(fs, &setVarEnabled, "enable-set-var", setVarEnabled, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
+	fs.StringSliceVar(&deniedSystemVariables, "denied-system-variables", deniedSystemVariables, "Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.")
 	utils.SetFlagDurationVar(fs, &lockHeartbeatTime, "lock-heartbeat-time", lockHeartbeatTime, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 	utils.SetFlagBoolVar(fs, &warnShardedOnly, "warn-sharded-only", warnShardedOnly, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 	utils.SetFlagStringVar(fs, &foreignKeyMode, "foreign-key-mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
@@ -206,6 +214,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("enable-binlog-dump", enableBinlogDump.Default(), "Allow users to perform binlog dump operations for CDC/replication")
 	utils.SetFlagBoolVar(fs, &enableSchemaChangeSignal, "schema-change-signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
+	utils.SetFlagDurationVar(fs, &slowQueryThreshold, "slow-query-threshold", slowQueryThreshold, "Mark vtgate queries as slow when their total execution time meets or exceeds this duration. 0 disables slow-query detection.")
 	utils.SetFlagStringVar(fs, &queryLogToFile, "log-queries-to-file", queryLogToFile, "Enable query logging to the specified file")
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
 	utils.SetFlagDurationVar(fs, &messageStreamGracePeriod, "message-stream-grace-period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
@@ -243,6 +252,13 @@ var (
 		"Number of events that had to wait because the skew across shards was too high")
 
 	vindexUnknownParams = stats.NewGauge("VindexUnknownParameters", "Number of parameters unrecognized by Vindexes")
+
+	binlogDumpRequests = stats.NewCountersWithSingleLabel(
+		"BinlogDumpRequests",
+		"Binlog dump request counts",
+		"status",
+		"authorized", "denied", "disabled",
+	)
 
 	timings = stats.NewMultiTimings(
 		"VtgateApi",
@@ -394,11 +410,12 @@ func Init(
 	plans := DefaultPlanCache()
 
 	eConfig := ExecutorConfig{
-		Normalize:           normalizeQueries,
-		StreamSize:          streamBufferSize,
-		AllowScatter:        !noScatter,
-		WarmingReadsPercent: warmingReadsPercent,
-		QueryLogToFile:      queryLogToFile,
+		Normalize:                 normalizeQueries,
+		StreamSize:                streamBufferSize,
+		AllowScatter:              !noScatter,
+		PreventCrossKeyspaceReads: preventCrossKeyspaceReads,
+		WarmingReadsPercent:       warmingReadsPercent,
+		QueryLogToFile:            queryLogToFile,
 	}
 
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)
@@ -666,7 +683,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 
 // StreamExecute executes a streaming query.
 // Note we guarantee the callback will not be called concurrently by multiple go routines.
-func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
+func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool, callback func(*sqltypes.Result) error) (*vtgatepb.Session, error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -685,6 +702,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 			safeSession,
 			sql,
 			bindVariables,
+			prepared,
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
@@ -724,7 +742,7 @@ func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservic
 				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
 				defer cancel()
 			}
-			session, err = vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			session, err = vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()
@@ -774,6 +792,85 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 // VStream streams binlog events.
 func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
 	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, flags, send)
+}
+
+// BinlogDumpGTID streams raw binlog events from a specific keyspace/shard.
+func (vtg *VTGate) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {
+	if !enableBinlogDump.Get() {
+		binlogDumpRequests.Add("disabled", 1)
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "binlog dump is disabled")
+	}
+
+	im := callerid.ImmediateCallerIDFromContext(ctx)
+	if !binlogacl.Authorized(im) {
+		binlogDumpRequests.Add("denied", 1)
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError,
+			"User '%s' is not authorized to perform binlog dump operations", im.GetUsername())
+	}
+
+	binlogDumpRequests.Add("authorized", 1)
+
+	if req.Keyspace == "" || req.Shard == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"binlog dump requires keyspace and shard")
+	}
+
+	tabletType := req.TabletType
+	if tabletType == topodatapb.TabletType_UNKNOWN {
+		tabletType = topodatapb.TabletType_PRIMARY
+	}
+
+	// File/position-based replication is not supported through vtgate.
+	// Binlog filenames and positions are local to individual MySQL instances and
+	// differ across replicas, making them unsuitable for vtgate's routing model.
+	// Use GTIDs for all binlog dump operations.
+	if req.BinlogFilename != "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"binlog filename is not supported; use GTIDs instead")
+	}
+	if req.BinlogPosition < 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"Client requested source to start replication from position < 4")
+	}
+	if req.BinlogPosition > 4 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"only binlog position 4 is supported; use GTIDs for positioning")
+	}
+
+	if req.Flags > 0xFFFF {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"flags value %d exceeds the 2-byte MySQL protocol field (max 65535)", req.Flags)
+	}
+
+	target := &querypb.Target{
+		Keyspace:   req.Keyspace,
+		Shard:      req.Shard,
+		TabletType: tabletType,
+	}
+
+	tabletRequest := &binlogdatapb.BinlogDumpGTIDRequest{
+		Target:         target,
+		BinlogPosition: req.BinlogPosition,
+		GtidSet:        req.GtidSet,
+		Flags:          req.Flags,
+	}
+
+	callback := func(response *binlogdatapb.BinlogDumpResponse) error {
+		return send(&vtgatepb.BinlogDumpResponse{
+			Raw: response.Raw,
+		})
+	}
+
+	if !topoproto.TabletAliasIsZero(req.TabletAlias) {
+		qs, err := vtg.gw.QueryServiceByAlias(ctx, req.TabletAlias, target)
+		if err != nil {
+			return vterrors.Wrapf(err, "failed to get connection to tablet %s",
+				topoproto.TabletAliasString(req.TabletAlias))
+		}
+		return qs.BinlogDumpGTID(ctx, tabletRequest, callback)
+	}
+
+	return vtg.gw.BinlogDumpGTID(ctx, tabletRequest, callback)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.

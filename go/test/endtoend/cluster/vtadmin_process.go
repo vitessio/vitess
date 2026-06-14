@@ -104,7 +104,7 @@ func (vp *VtAdminProcess) Setup() (err error) {
 		vp.Binary,
 		"--addr", vp.Address(),
 		"--http-tablet-url-tmpl", `"http://{{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}"`,
-		"--tracer", `"opentracing-jaeger"`,
+		"--tracer", `"opentelemetry"`,
 		"--grpc-tracing",
 		"--http-tracing",
 		"--rbac",

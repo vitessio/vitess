@@ -55,9 +55,7 @@ var (
 
 func testChecksum(t *testing.T, want, got int64) {
 	t.Helper()
-	if want != got {
-		t.Errorf("want checksum %v, got %v", want, got)
-	}
+	assert.Equalf(t, want, got, "want checksum %v, got %v", want, got)
 }
 
 func init() {
@@ -1406,7 +1404,7 @@ func TestCellAliases(t *testing.T) {
 	cellsAlias := &topodatapb.CellsAlias{
 		Cells: []string{"cell1", "cell2"},
 	}
-	assert.Nil(t, ts.CreateCellsAlias(context.Background(), "region1", cellsAlias), "failed to create cell alias")
+	assert.Nil(t, ts.CreateCellsAlias(t.Context(), "region1", cellsAlias), "failed to create cell alias")
 	defer deleteCellsAlias(t, ts, "region1")
 
 	// add a tablet as replica in diff cell, same region
@@ -1763,7 +1761,7 @@ func createTestTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 var mustMatch = utils.MustMatchFn(".Conn" /* ignored fields*/)
 
 func deleteCellsAlias(t *testing.T, ts *topo.Server, alias string) {
-	if err := ts.DeleteCellsAlias(context.Background(), alias); err != nil {
+	if err := ts.DeleteCellsAlias(t.Context(), alias); err != nil {
 		t.Logf("DeleteCellsAlias(%s) failed: %v", alias, err)
 	}
 }

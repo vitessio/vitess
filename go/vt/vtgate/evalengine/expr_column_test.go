@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -41,7 +43,7 @@ func TestTypeOf(t *testing.T) {
 	t.Run("Check when row value is not null", func(t *testing.T) {
 		tt, _ := c.typeof(env)
 		if tt.Type != sqltypes.Int64 || tt.Flag != typeFlag(0) {
-			t.Errorf("typeof() failed, expected sqltypes.Int64 and typeFlag 0, got %v and %v", tt.Type, tt.Flag)
+			assert.Failf(t, "typeof() failed", "expected sqltypes.Int64 and typeFlag 0, got %v and %v", tt.Type, tt.Flag)
 		}
 	})
 
@@ -51,7 +53,7 @@ func TestTypeOf(t *testing.T) {
 		}
 		tt, _ := c.typeof(env)
 		if tt.Type != querypb.Type_INT64 || tt.Flag != flagNullable {
-			t.Errorf("typeof() failed, expected querypb.Type_INT64 and flagNullable, got %v and %v", tt.Type, tt.Flag)
+			assert.Failf(t, "typeof() failed", "expected querypb.Type_INT64 and flagNullable, got %v and %v", tt.Type, tt.Flag)
 		}
 	})
 
@@ -59,14 +61,14 @@ func TestTypeOf(t *testing.T) {
 		c.Offset = 10
 		tt, _ := c.typeof(env)
 		if tt.Type != sqltypes.Unknown || tt.Flag != flagAmbiguousType {
-			t.Errorf("typeof() failed, expected -1 and flagAmbiguousType, got %v and %v", tt.Type, tt.Flag)
+			assert.Failf(t, "typeof() failed", "expected -1 and flagAmbiguousType, got %v and %v", tt.Type, tt.Flag)
 		}
 	})
 	t.Run("Check when typed is true", func(t *testing.T) {
 		c.Type = querypb.Type_FLOAT32
 		tt, _ := c.typeof(env)
 		if tt.Type != querypb.Type_FLOAT32 || tt.Flag != flagNullable {
-			t.Errorf("typeof() failed, expected querypb.Type_FLOAT32 and flagNullable, got %v and %v", tt.Type, tt.Flag)
+			assert.Failf(t, "typeof() failed", "expected querypb.Type_FLOAT32 and flagNullable, got %v and %v", tt.Type, tt.Flag)
 		}
 	})
 }

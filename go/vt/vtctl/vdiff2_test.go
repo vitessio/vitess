@@ -1,7 +1,22 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vtctl
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"testing"
@@ -263,7 +278,7 @@ func TestVDiff2Unsharded(t *testing.T) {
 				Output: sqltypes.ResultToProto3(tcase.result),
 			}
 			env.tmc.setVDResults(env.tablets[200].tablet, req, res)
-			output, err := env.wr.VDiff2(context.Background(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
+			output, err := env.wr.VDiff2(t.Context(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
 			require.NoError(t, err)
 			vds, err := displayVDiff2ShowSingleSummary(env.wr, options.ReportOptions.Format, "target", env.workflow, UUID, output, false)
 			require.NoError(t, err)
@@ -371,7 +386,7 @@ func TestVDiff2Sharded(t *testing.T) {
 			}
 			env.tmc.setVDResults(env.tablets[200].tablet, req, shard1Res)
 			env.tmc.setVDResults(env.tablets[210].tablet, req, shard2Res)
-			output, err := env.wr.VDiff2(context.Background(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
+			output, err := env.wr.VDiff2(t.Context(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
 			require.NoError(t, err)
 			vds, err := displayVDiff2ShowSingleSummary(env.wr, options.ReportOptions.Format, "target", env.workflow, UUID, output, true /* verbose */)
 			require.NoError(t, err)

@@ -33,7 +33,6 @@ import { Link, useParams } from 'react-router-dom';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { READ_ONLY_COLUMNS } from '../Transactions';
 import { COLUMNS } from '../Transactions';
-import * as React from 'react';
 import { TransactionLink } from '../../links/TransactionLink';
 
 interface RouteParams {
@@ -96,6 +95,7 @@ export const Transaction = () => {
                             const shard = `${participant.keyspace}/${participant.shard}`;
                             return (
                                 <ShardLink
+                                    key={shard}
                                     clusterID={clusterID}
                                     keyspace={participant.keyspace}
                                     shard={participant.shard}

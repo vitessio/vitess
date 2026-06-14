@@ -321,10 +321,10 @@ const (
 	Type_VECTOR Type = 2083
 	// RAW specifies a type which won't be quoted but the value used as-is while encoding.
 	// Properties: 36, None.
-	Type_RAW Type = 2084
+	Type_RAW Type = 36
 	// ROW_TUPLE represents multiple rows.
 	// Properties: 37, None.
-	Type_ROW_TUPLE Type = 2085
+	Type_ROW_TUPLE Type = 37
 )
 
 // Enum value maps for Type.
@@ -366,8 +366,8 @@ var (
 		4129:  "HEXVAL",
 		4130:  "BITNUM",
 		2083:  "VECTOR",
-		2084:  "RAW",
-		2085:  "ROW_TUPLE",
+		36:    "RAW",
+		37:    "ROW_TUPLE",
 	}
 	Type_value = map[string]int32{
 		"NULL_TYPE":  0,
@@ -406,8 +406,8 @@ var (
 		"HEXVAL":     4129,
 		"BITNUM":     4130,
 		"VECTOR":     2083,
-		"RAW":        2084,
-		"ROW_TUPLE":  2085,
+		"RAW":        36,
+		"ROW_TUPLE":  37,
 	}
 )
 
@@ -6255,7 +6255,7 @@ const file_query_proto_rawDesc = "" +
 	"\aISFLOAT\x10\x80\b\x12\r\n" +
 	"\bISQUOTED\x10\x80\x10\x12\v\n" +
 	"\x06ISTEXT\x10\x80 \x12\r\n" +
-	"\bISBINARY\x10\x80@*\xe7\x03\n" +
+	"\bISBINARY\x10\x80@*\xe5\x03\n" +
 	"\x04Type\x12\r\n" +
 	"\tNULL_TYPE\x10\x00\x12\t\n" +
 	"\x04INT8\x10\x81\x02\x12\n" +
@@ -6298,9 +6298,9 @@ const file_query_proto_rawDesc = "" +
 	"\x06HEXNUM\x10\xa0 \x12\v\n" +
 	"\x06HEXVAL\x10\xa1 \x12\v\n" +
 	"\x06BITNUM\x10\xa2 \x12\v\n" +
-	"\x06VECTOR\x10\xa3\x10\x12\b\n" +
-	"\x03RAW\x10\xa4\x10\x12\x0e\n" +
-	"\tROW_TUPLE\x10\xa5\x10*6\n" +
+	"\x06VECTOR\x10\xa3\x10\x12\a\n" +
+	"\x03RAW\x10$\x12\r\n" +
+	"\tROW_TUPLE\x10%*6\n" +
 	"\x10StartCommitState\x12\v\n" +
 	"\aUnknown\x10\x00\x12\b\n" +
 	"\x04Fail\x10\x01\x12\v\n" +
