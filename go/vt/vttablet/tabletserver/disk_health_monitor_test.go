@@ -90,11 +90,17 @@ func TestDiskHealthMonitor_stallDetected(t *testing.T) {
 	require.False(t, diskHealthMonitor.IsDiskFull(), "expected isFull to be false")
 }
 
+// TestDiskHealthMonitor_diskFullAndRecover exercises both ENOSPC (filesystem
+// out of space) and EDQUOT (quota exceeded on xfs/ext4/NFS) as disk-full
+// signals — without EDQUOT handling, quota-bound tablets would be misrouted
+// through the stalled-disk recovery flag.
 func TestDiskHealthMonitor_diskFullAndRecover(t *testing.T) {
 	ctx := t.Context()
 	mockFileWriter := &sequencedMockWriter{
 		sequencedWriteFunctions: []writeFunction{
 			delayedWriteFunction(10*time.Millisecond, syscall.ENOSPC),
+			delayedWriteFunction(10*time.Millisecond, nil),
+			delayedWriteFunction(10*time.Millisecond, syscall.EDQUOT),
 			delayedWriteFunction(10*time.Millisecond, nil),
 		},
 	}
@@ -102,11 +108,19 @@ func TestDiskHealthMonitor_diskFullAndRecover(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return diskHealthMonitor.IsDiskFull() && !diskHealthMonitor.IsDiskStalled()
-	}, 300*time.Millisecond, 10*time.Millisecond)
+	}, 300*time.Millisecond, 10*time.Millisecond, "expected IsDiskFull=true after ENOSPC")
 
 	require.Eventually(t, func() bool {
 		return !diskHealthMonitor.IsDiskFull() && !diskHealthMonitor.IsDiskStalled()
-	}, 300*time.Millisecond, 10*time.Millisecond)
+	}, 300*time.Millisecond, 10*time.Millisecond, "expected IsDiskFull=false after ENOSPC recovery")
+
+	require.Eventually(t, func() bool {
+		return diskHealthMonitor.IsDiskFull() && !diskHealthMonitor.IsDiskStalled()
+	}, 300*time.Millisecond, 10*time.Millisecond, "expected IsDiskFull=true after EDQUOT")
+
+	require.Eventually(t, func() bool {
+		return !diskHealthMonitor.IsDiskFull() && !diskHealthMonitor.IsDiskStalled()
+	}, 300*time.Millisecond, 10*time.Millisecond, "expected IsDiskFull=false after EDQUOT recovery")
 }
 
 type sequencedMockWriter struct {

@@ -437,6 +437,11 @@ func SetFullDiskPrimaryRecovery(val bool) {
 	enablePrimaryDiskFullRecovery.Set(val)
 }
 
+// SetStalledDiskPrimaryRecovery sets the value for the enablePrimaryDiskStalledRecovery variable. This should only be used from tests.
+func SetStalledDiskPrimaryRecovery(val bool) {
+	enablePrimaryDiskStalledRecovery.Set(val)
+}
+
 // MarkConfigurationLoaded is called once configuration has first been loaded.
 // Listeners on ConfigurationLoaded will get a notification
 func MarkConfigurationLoaded() {

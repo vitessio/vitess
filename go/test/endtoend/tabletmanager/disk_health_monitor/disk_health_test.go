@@ -23,10 +23,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/tabletmanager/disk_health_monitor/testfs"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 )
 
 // TestDiskHealthMonitor_StallAndRecover exercises the full integration path
@@ -146,18 +145,13 @@ func assertHelperAlive(t *testing.T) {
 }
 
 // assertEventuallyDiskStalled polls the primary tablet's FullStatus until
-// DiskStalled matches want, or fails the test on timeout. RPC/parse errors
-// are treated as "not yet" so the predicate keeps polling through transient
-// failures during the transition.
+// DiskStalled matches want, or fails the test on timeout. Pins the
+// mutual-exclusion invariant from both sides: a stalled disk must never be
+// reported as full.
 func assertEventuallyDiskStalled(t *testing.T, want bool) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		status, ok := fullStatus()
-		if !ok {
-			return false
-		}
-		// Pin the mutual-exclusion invariant from both sides: a stalled disk
-		// must never be reported as full.
+		status := cluster.FullStatus(t, primaryTablet, clusterInstance.Hostname)
 		return status.DiskStalled == want && !status.DiskFull
 	}, tabletStatusTimeout, 200*time.Millisecond,
 		"FullStatus.DiskStalled did not become %v within %s", want, tabletStatusTimeout)
@@ -166,23 +160,8 @@ func assertEventuallyDiskStalled(t *testing.T, want bool) {
 func assertEventuallyDiskFull(t *testing.T, want bool) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		status, ok := fullStatus()
-		if !ok {
-			return false
-		}
+		status := cluster.FullStatus(t, primaryTablet, clusterInstance.Hostname)
 		return status.DiskFull == want && !status.DiskStalled
 	}, tabletStatusTimeout, 200*time.Millisecond,
 		"FullStatus.DiskFull did not become %v within %s", want, tabletStatusTimeout)
-}
-
-func fullStatus() (*replicationdatapb.FullStatus, bool) {
-	out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", primaryTablet.Alias)
-	if err != nil {
-		return nil, false
-	}
-	status := &replicationdatapb.FullStatus{}
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal([]byte(out), status); err != nil {
-		return nil, false
-	}
-	return status, true
 }

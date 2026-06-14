@@ -220,12 +220,16 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		RecordPrimaryHealthCheck(tabletAlias, true)
 	}
-	stalledDisk = config.GetStalledDiskPrimaryRecovery() && fs.DiskStalled
-	fullDisk = config.GetFullDiskPrimaryRecovery() && fs.DiskFull
-	if fullDisk || stalledDisk {
-		// First-discovery insert: if this fails, UpdateInstanceLastChecked
-		// has no row to UPDATE and disk-health state is lost until the next
-		// poll.
+	stalledDisk = fs.DiskStalled
+	fullDisk = fs.DiskFull
+	if stalledDisk || fullDisk {
+		// Always short-circuit when the tablet reports any disk-health
+		// issue. FullStatus returns only the disk flags in that case, so
+		// processing the rest of `fs` would clobber known-good instance
+		// fields (ServerID, version, replication state) with zero values.
+		// Persistence is unconditional so the analysis pipeline sees the
+		// state truthfully; the recovery flags gate the recovery action
+		// in getCheckAndRecoverFunctionCode.
 		if writeErr := writeDiskHealthInstance(tablet, stalledDisk, fullDisk); writeErr != nil {
 			log.Error(
 				"failed to persist disk health instance",
@@ -423,6 +427,7 @@ Cleanup:
 	return nil, err
 }
 
+// writeDiskHealthInstance persists the disk-health flags for a tablet, creating a minimal row if one does not already exist.
 func writeDiskHealthInstance(tablet *topodatapb.Tablet, stalledDisk, fullDisk bool) error {
 	return writeManyInstances([]*Instance{{
 		InstanceAlias: tablet.Alias,
@@ -799,6 +804,7 @@ func ReadInstancesWithErrantGTIds(keyspace, shard string) ([]*Instance, error) {
 	return readInstancesByCondition(condition, args, "")
 }
 
+// readFullDiskInstances reads all instances in the given keyspace/shard whose last poll reported a full disk.
 func readFullDiskInstances(keyspace, shard string) ([]*Instance, error) {
 	condition := `
 		vitess_tablet.keyspace = ?
@@ -808,6 +814,7 @@ func readFullDiskInstances(keyspace, shard string) ([]*Instance, error) {
 	return readInstancesByCondition(condition, sqlutils.Args(keyspace, shard), "")
 }
 
+// ReadFullDiskReplicas returns the aliases of replica-type tablets in the given keyspace/shard whose last poll reported a full disk.
 func ReadFullDiskReplicas(keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
 	instances, err := readFullDiskInstances(keyspace, shard)
 	if err != nil {

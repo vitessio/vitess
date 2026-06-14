@@ -406,12 +406,9 @@ func TestReadFullDiskReplicas(t *testing.T) {
 	require.ElementsMatch(t, []string{"zone1-0000000100"}, aliasStrings)
 }
 
-func TestReadTopologyInstanceBufferableRecordsFullDiskWithoutExistingInstance(t *testing.T) {
+func TestDiskFullRecordsRowOnFirstDiscovery(t *testing.T) {
 	db.ClearVTOrcDatabase()
 	t.Cleanup(db.ClearVTOrcDatabase)
-
-	config.SetFullDiskPrimaryRecovery(true)
-	t.Cleanup(func() { config.SetFullDiskPrimaryRecovery(false) })
 
 	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}
 	tablet := &topodatapb.Tablet{
@@ -447,6 +444,68 @@ func TestReadTopologyInstanceBufferableRecordsFullDiskWithoutExistingInstance(t 
 	require.True(t, instance.FullDisk)
 	require.False(t, instance.StalledDisk)
 	require.Equal(t, topodatapb.TabletType_PRIMARY, instance.TabletType)
+}
+
+// TestDiskFullRecoveryDisabledPreservesRow pins that when a tablet reports
+// disk-full but recovery is disabled (the default), we must short-circuit to
+// avoid persisting the partial FullStatus response's zero-valued fields over
+// the existing instance row. The disk-full flag is still recorded truthfully
+// — the recovery flag gates the recovery action, not the persistence.
+func TestDiskFullRecoveryDisabledPreservesRow(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	t.Cleanup(db.ClearVTOrcDatabase)
+
+	// Flag stays at its default (false) — we must not corrupt state in this case.
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 201}
+	tablet := &topodatapb.Tablet{
+		Alias:         alias,
+		Hostname:      "primary",
+		MysqlHostname: "primary",
+		MysqlPort:     3306,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+	}
+	require.NoError(t, SaveTablet(tablet))
+
+	// Seed a known-good instance row that must not be clobbered.
+	require.NoError(t, WriteInstance(&Instance{
+		InstanceAlias: alias,
+		Hostname:      "primary",
+		Port:          3306,
+		Cell:          "zone1",
+		TabletType:    topodatapb.TabletType_PRIMARY,
+		ServerID:      42,
+		Version:       "8.0.31",
+	}, true, nil))
+
+	controller := gomock.NewController(t)
+	mockTMC := tmcmock.NewMockTabletManagerClient(controller)
+	oldTMC := tmc
+	t.Cleanup(func() {
+		tmc = oldTMC
+	})
+	tmc = mockTMC
+
+	// FullStatus on a disk-full tablet returns only the disk flags.
+	mockTMC.EXPECT().FullStatus(gomock.Any(), tablet).Return(&replicationdatapb.FullStatus{
+		DiskFull: true,
+	}, nil)
+
+	instance, err := ReadTopologyInstanceBufferable(alias, stopwatch.NewNamedStopwatch())
+	require.NoError(t, err)
+	require.Nil(t, instance)
+
+	// The seeded row's server-side fields must be intact (no clobbering by
+	// the partial FullStatus response), and the disk-full flag must be
+	// recorded truthfully so the analysis pipeline sees it.
+	instance, found, err := ReadInstance(alias)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, uint(42), instance.ServerID)
+	require.Equal(t, "8.0.31", instance.Version)
+	require.True(t, instance.FullDisk)
+	require.False(t, instance.StalledDisk)
 }
 
 // TestReadInstanceAllFields tests that we read all the fields for a specific instance.

@@ -455,6 +455,17 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			if a.IsDiskFull && topo.IsReplicaType(a.TabletType) && problem.Meta.Analysis != ReplicaDiskFull {
 				continue
 			}
+			// A primary with a disk-health issue must not match any other
+			// analysis (e.g. DeadPrimary, InvalidPrimary). The combined
+			// check tolerates both flags being set on the same poll: either
+			// disk analysis can still fire (problem-ordering picks the
+			// winner) instead of silently filtering both out. The recovery
+			// action is gated by the corresponding flag in
+			// getCheckAndRecoverFunctionCode.
+			if a.IsClusterPrimary && (a.IsDiskFull || a.IsDiskStalled) &&
+				problem.Meta.Analysis != PrimaryDiskFull && problem.Meta.Analysis != PrimaryDiskStalled {
+				continue
+			}
 			if problem.HasMatch(a, ca, primaryTablet, tablet, isInvalid, isStaleBinlogCoordinates) {
 				matchedProblems = append(matchedProblems, problem)
 			}
