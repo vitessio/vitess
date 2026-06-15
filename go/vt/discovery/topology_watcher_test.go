@@ -818,6 +818,7 @@ func TestDeadlockBetweenTopologyWatcherAndHealthCheck(t *testing.T) {
 	// the tablet in the health check, but health check has the mutex acquired
 	// already because it is calling updateHealth.
 	// updateHealth itself will be stuck trying to send on the shared channel.
+	updates := 0
 	for i := range 10 {
 		// Update the port of the tablet so that when update Health asks topo watcher to
 		// refresh the tablets, it finds an update and tries to replace it.
@@ -834,5 +835,7 @@ func TestDeadlockBetweenTopologyWatcherAndHealthCheck(t *testing.T) {
 			continue
 		}
 		hc.updateHealth(thc, prevTarget, false, false)
+		updates++
 	}
+	require.NotZero(t, updates, "expected at least one updateHealth call")
 }
