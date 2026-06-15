@@ -939,11 +939,6 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 		releaseOldConn()
 		synctest.Wait()
 
-		// The tablet keeps reporting good health on the new connection: a
-		// trivialUpdate, like the steady-state updates of a healthy replica.
-		newInput <- shr
-		synctest.Wait()
-
 		// The healthcheck cache (healthData) shows a serving tablet with a
 		// live stream, so the healthy (routing) list must include it as well.
 		healthy := hc.GetHealthyTabletStats(target)
