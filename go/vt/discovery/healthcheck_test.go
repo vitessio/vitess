@@ -883,9 +883,9 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := t.Context()
 		ts := memorytopo.NewServer(ctx, "cell")
-		defer ts.Close()
+		t.Cleanup(func() { ts.Close() })
 		hc := createTestHc(ctx, ts)
-		defer hc.Close()
+		t.Cleanup(func() { hc.Close() })
 
 		target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 
@@ -895,12 +895,12 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 		oldInput := make(chan *querypb.StreamHealthResponse)
 		oldConn := createFakeConn(oldTablet, oldInput)
 		oldConn.releaseOnCancel = make(chan struct{})
-		// Always release the parked goroutine, even when an assertion fails
-		// before the inline release: the deferred hc.Close() waits for it, and
-		// a goroutine parked forever would turn the test failure into a
-		// synctest bubble-deadlock panic.
+		// Registered last so it runs before the hc.Close cleanup: hc.Close
+		// waits for this goroutine, and one parked forever would turn an early
+		// assertion failure into a synctest bubble-deadlock panic. OnceFunc
+		// guards against the double close from the deliberate inline release.
 		releaseOldConn := sync.OnceFunc(func() { close(oldConn.releaseOnCancel) })
-		defer releaseOldConn()
+		t.Cleanup(releaseOldConn)
 
 		// The same tablet after the restart: same alias, new ports.
 		newTablet := createTestTablet(0, "cell", "a")
