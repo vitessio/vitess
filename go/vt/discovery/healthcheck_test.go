@@ -856,29 +856,9 @@ func TestRemoveTablet(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
-// TestStaleUpdateFromCanceledCheckConn is a regression test for a race
-// between ReplaceTablet and the replaced tablet's checkConn goroutine.
-//
-// When the topology watcher observes that a tablet's address changed (same
-// alias, new host or port map), it calls ReplaceTablet, which cancels the
-// old tabletHealthCheck and registers a new one under the same alias. The
-// old checkConn goroutine reacts to the cancellation from inside stream()
-// and issues one final updateHealth(Serving: false) from its error path
-// without re-checking its own context. Because updateHealth only verifies
-// that the alias still exists in healthByAlias — not that the update came
-// from the currently registered tabletHealthCheck — that stale update can
-// land after the replacement connection has already reported Serving: true,
-// removing the tablet from the healthy (routing) list and poisoning
-// healthData. Every subsequent response on the new connection is then a
-// trivialUpdate (the new tabletHealthCheck's own Serving field is still
-// true), so recomputeHealthy never runs again: the tablet receives zero
-// traffic until an unrelated non-trivial event in the same
-// keyspace/shard/type triggers a recompute.
-//
-// The stale update's timing is scheduler-dependent (the dying goroutine can
-// be delayed between its stream returning and acquiring hc.mu), so the old
-// connection's stream is gated on cancellation, and synctest.Wait()
-// guarantees each step is fully applied before the next.
+// TestStaleUpdateFromCanceledCheckConn checks that a replaced tablet's
+// canceled checkConn cannot remove its healthy replacement from the routing
+// list with a final, stale updateHealth(Serving: false).
 func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := t.Context()
@@ -895,10 +875,6 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 		oldInput := make(chan *querypb.StreamHealthResponse)
 		oldConn := createFakeConn(oldTablet, oldInput)
 		oldConn.releaseOnCancel = make(chan struct{})
-		// Registered last so it runs before the hc.Close cleanup: hc.Close
-		// waits for this goroutine, and one parked forever would turn an early
-		// assertion failure into a synctest bubble-deadlock panic. OnceFunc
-		// guards against the double close from the deliberate inline release.
 		releaseOldConn := sync.OnceFunc(func() { close(oldConn.releaseOnCancel) })
 		t.Cleanup(releaseOldConn)
 
