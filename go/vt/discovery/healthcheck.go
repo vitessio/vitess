@@ -199,11 +199,6 @@ type (
 	tabletAliasString       string
 )
 
-// aliasKey returns the map key used to index a tablet by its alias.
-func aliasKey(alias *topodata.TabletAlias) tabletAliasString {
-	return tabletAliasString(topoproto.TabletAliasString(alias))
-}
-
 // HealthCheck declares what the TabletGateway needs from the HealthCheck
 type HealthCheck interface {
 	// AddTablet adds the tablet.
@@ -480,7 +475,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	tabletAlias := aliasKey(tablet.Alias)
+	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
 	defer func() {
 		// We want to be sure the tablet is gone from the secondary
 		// maps even if it's already gone from the authoritative map.
@@ -505,7 +500,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 					// clear the healthy list for the primary.
 					//
 					// See the logic in `updateHealth` for more details.
-					alias := aliasKey(healthy[0].Tablet.Alias)
+					alias := tabletAliasString(topoproto.TabletAliasString(healthy[0].Tablet.Alias))
 					if alias == tabletAlias {
 						hc.healthy[key] = []*TabletHealth{}
 					}
@@ -533,7 +528,7 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	tabletAlias := aliasKey(thc.Tablet.Alias)
+	tabletAlias := tabletAliasString(topoproto.TabletAliasString(thc.Tablet.Alias))
 	// let's be sure that this tablet hasn't been deleted from the authoritative map
 	// so that we're not racing to update it and in effect re-adding a copy of the
 	// tablet record that was deleted. Also verify that the update was issued by the
@@ -610,7 +605,7 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 	case isPrimary && !up:
 		if healthy, ok := hc.healthy[targetKey]; ok && len(healthy) > 0 {
 			// isPrimary is true here therefore we should only have 1 tablet in healthy
-			alias := aliasKey(healthy[0].Tablet.Alias)
+			alias := tabletAliasString(topoproto.TabletAliasString(healthy[0].Tablet.Alias))
 			// Clear healthy list for primary if the existing tablet is down
 			if alias == tabletAlias {
 				hc.healthy[targetKey] = []*TabletHealth{}
@@ -888,7 +883,7 @@ func (hc *HealthCheckImpl) GetTabletHealthByAlias(alias *topodata.TabletAlias) (
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	if hd, ok := hc.healthByAlias[aliasKey(alias)]; ok {
+	if hd, ok := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]; ok {
 		return hd.SimpleCopy(), nil
 	}
 	return nil, fmt.Errorf("could not find tablet: %s", alias.String())
@@ -901,7 +896,7 @@ func (hc *HealthCheckImpl) GetTabletHealth(kst KeyspaceShardTabletType, alias *t
 	defer hc.mu.Unlock()
 
 	if hd, ok := hc.healthData[kst]; ok {
-		if th, ok := hd[aliasKey(alias)]; ok {
+		if th, ok := hd[tabletAliasString(topoproto.TabletAliasString(alias))]; ok {
 			return th, nil
 		}
 	}
@@ -913,7 +908,7 @@ func (hc *HealthCheckImpl) GetTabletHealth(kst KeyspaceShardTabletType, alias *t
 func (hc *HealthCheckImpl) registeredHealthCheck(alias *topodata.TabletAlias) *tabletHealthCheck {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	return hc.healthByAlias[aliasKey(alias)]
+	return hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
 }
 
 // TabletConnection returns the Connection to a given tablet.
