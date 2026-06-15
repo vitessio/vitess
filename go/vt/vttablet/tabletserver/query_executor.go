@@ -475,6 +475,8 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) error {
 	if err != nil {
 		return err
 	}
+	qre.logStats.RowsAffected = int(reply.RowsAffected)
+	qre.logStats.Rows = reply.Rows
 	return callback(reply)
 }
 

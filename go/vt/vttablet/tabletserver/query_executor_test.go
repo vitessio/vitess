@@ -1538,6 +1538,9 @@ func TestQueryExecutorStreamDML(t *testing.T) {
 			})
 			require.NoError(t, err)
 			require.Equal(t, dmlResult, got)
+			// The streamed DML result must be reflected in the query log,
+			// just like the non-streaming Execute path.
+			assert.Equal(t, int(dmlResult.RowsAffected), qre.logStats.RowsAffected)
 
 			// Inside an existing transaction: the DML must run on that
 			// connection, like Execute's connID != 0 branch.
