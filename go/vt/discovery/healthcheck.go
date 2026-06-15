@@ -525,9 +525,6 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 
 func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *query.Target, trivialUpdate bool, up bool) {
 	// hc.healthByAlias is authoritative, it should be updated
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(thc.Tablet.Alias))
 	// let's be sure that this tablet hasn't been deleted from the authoritative map
 	// so that we're not racing to update it and in effect re-adding a copy of the
@@ -535,12 +532,20 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 	// tabletHealthCheck currently registered for this alias. After a ReplaceTablet,
 	// the canceled checkConn goroutine of the replaced tablet can still deliver one
 	// final update, which must not overwrite the state reported by its replacement.
-	if registered, ok := hc.healthByAlias[tabletAlias]; !ok || registered != thc {
+	if !hc.isRegisteredHealthCheck(tabletAlias, thc) {
 		hc.logger().Infof("Tablet %v has been deleted or replaced, skipping health update", thc.Tablet)
 		return
 	}
 
 	th := thc.SimpleCopy()
+
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	if !hc.isRegisteredHealthCheckLocked(tabletAlias, thc) {
+		hc.logger().Infof("Tablet %v has been deleted or replaced, skipping health update", thc.Tablet)
+		return
+	}
+
 	targetKey := KeyFromTarget(th.Target)
 	targetChanged := prevTarget.TabletType != th.Target.TabletType || prevTarget.Keyspace != th.Target.Keyspace || prevTarget.Shard != th.Target.Shard
 	if targetChanged {
@@ -901,6 +906,20 @@ func (hc *HealthCheckImpl) GetTabletHealth(kst KeyspaceShardTabletType, alias *t
 		}
 	}
 	return nil, fmt.Errorf("could not find tablet: %s", alias.String())
+}
+
+// isRegisteredHealthCheck reports whether thc is the current healthcheck for tabletAlias.
+func (hc *HealthCheckImpl) isRegisteredHealthCheck(tabletAlias tabletAliasString, thc *tabletHealthCheck) bool {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	return hc.isRegisteredHealthCheckLocked(tabletAlias, thc)
+}
+
+// isRegisteredHealthCheckLocked reports whether thc is the current healthcheck for tabletAlias.
+// hc.mu must be locked before calling it.
+func (hc *HealthCheckImpl) isRegisteredHealthCheckLocked(tabletAlias tabletAliasString, thc *tabletHealthCheck) bool {
+	registered, ok := hc.healthByAlias[tabletAlias]
+	return ok && registered == thc
 }
 
 // registeredHealthCheck returns the tabletHealthCheck currently registered
