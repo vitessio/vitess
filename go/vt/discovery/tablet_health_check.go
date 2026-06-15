@@ -104,7 +104,7 @@ func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 // from the health check connection are logged the first time,
 // but don't continue to log if the connection stays down.
 //
-// thc.mu must be locked before calling this function
+// thc.connMu must be locked before calling this function.
 func (thc *tabletHealthCheck) setServingState(serving bool, reason string) {
 	if !thc.loggedServingState || (serving != thc.Serving) {
 		// Emit the log from a separate goroutine to avoid holding
@@ -185,6 +185,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("health stats mismatch, tablet %+v alias does not match response alias %v", thc.Tablet, shr.TabletAlias))
 	}
 
+	thc.connMu.Lock()
 	prevTarget := thc.Target
 	// check whether this is a trivial update so as to update healthy map
 	trivialUpdate := thc.LastError == nil && thc.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
@@ -199,9 +200,11 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		reason = "healthCheck update error: " + healthErr.Error()
 	}
 	thc.setServingState(serving, reason)
+	serving = thc.Serving
+	thc.connMu.Unlock()
 
 	// notify downstream for primary change
-	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, thc.Serving)
+	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, serving)
 	return nil
 }
 
@@ -308,12 +311,15 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		// This will ensure that this update prevails over any previous message that
 		// stream could have sent.
 		if timedout.Load() {
+			thc.connMu.Lock()
 			thc.LastError = fmt.Errorf("healthcheck timed out (latest %v)", thc.lastResponseTimestamp)
 			thc.setServingState(false, thc.LastError.Error())
-			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
+			target := thc.Target
+			thc.connMu.Unlock()
+			hcErrorCounters.Add([]string{target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)}, 1)
 			// trivialUpdate = false because this is an error
 			// up = false because we did not get a healthy response within the timeout
-			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
+			hc.updateHealth(thc.SimpleCopy(), target, false, false)
 		}
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
@@ -334,25 +340,31 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
 	thc.logger.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
+	thc.connMu.Lock()
 	thc.setServingState(false, err.Error())
 	thc.LastError = err
-	_ = thc.Conn.Close(ctx)
+	conn := thc.Conn
 	thc.Conn = nil
+	thc.connMu.Unlock()
+	_ = conn.Close(ctx)
 }
 
 // finalizeConn closes the health checking connection.
 // To be called only on exit from checkConn().
 func (thc *tabletHealthCheck) finalizeConn() {
+	thc.connMu.Lock()
 	thc.setServingState(false, "finalizeConn closing connection")
 	// Note: checkConn() exits only when thc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.
 	thc.LastError = thc.ctx.Err()
-	if thc.Conn != nil {
+	conn := thc.Conn
+	thc.Conn = nil
+	thc.connMu.Unlock()
+	if conn != nil {
 		// Don't use thc.ctx because it's already closed.
 		// Use a separate context, and add a timeout to prevent unbounded waits.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_ = thc.Conn.Close(ctx)
-		thc.Conn = nil
+		_ = conn.Close(ctx)
 	}
 }
