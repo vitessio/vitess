@@ -324,4 +324,32 @@ func TestRecordShardPeerHealth(t *testing.T) {
 	resetShardPeerHealth()
 	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now.Add(-2*time.Minute))
 	assert.Empty(t, ObservedShards())
+
+	// The ingest path rate-limits pruning so a polling cycle does not scan the whole
+	// observer map once per tablet. A stale record injected after the first ingest
+	// survives a second ingest within shardPeerPruneInterval, and is dropped only once
+	// the interval elapses.
+	resetShardPeerHealth()
+	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now)
+	shardPeerHealthMu.Lock()
+	shardPeerHealthByObserver["zone1-0000000999"] = &observerRecord{
+		observerType: topodatapb.TabletType_REPLICA,
+		keyspace:     "ks",
+		shard:        "0",
+		recordedAt:   now.Add(-2 * staleShardPeerRecordTTL),
+		peers:        map[string]peerReport{},
+	}
+	shardPeerHealthMu.Unlock()
+	// Within the interval: the second ingest must not scan/prune, so the stale record survives.
+	RecordShardPeerHealth(alias(102), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now)
+	shardPeerHealthMu.Lock()
+	_, present := shardPeerHealthByObserver["zone1-0000000999"]
+	shardPeerHealthMu.Unlock()
+	assert.True(t, present, "prune is rate-limited: a within-interval ingest must not drop the stale record")
+	// Past the interval: the ingest prunes, dropping the stale record.
+	RecordShardPeerHealth(alias(103), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now.Add(shardPeerPruneInterval+time.Second))
+	shardPeerHealthMu.Lock()
+	_, present = shardPeerHealthByObserver["zone1-0000000999"]
+	shardPeerHealthMu.Unlock()
+	assert.False(t, present, "prune runs once the interval elapses, dropping the stale record")
 }

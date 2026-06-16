@@ -34,6 +34,14 @@ import (
 // by the (much shorter) freshness window in QuorumOptions.
 const staleShardPeerRecordTTL = time.Minute
 
+// shardPeerPruneInterval rate-limits how often the hot ingest path (RecordShardPeerHealth, once
+// per polled tablet per cycle) scans the whole observer map to drop stale records. Pruning is
+// coarse memory hygiene — the TTL is far longer than the freshness window that actually gates
+// votes — so scanning at most once per interval keeps each ingest amortized O(1) instead of O(n)
+// and bounds the shardPeerHealthMu critical section in large clusters. Read paths still prune on
+// every call, where the cost is not multiplied by the tablet count.
+const shardPeerPruneInterval = staleShardPeerRecordTTL
+
 // QuorumOptions tunes the PrimaryDownByQuorum decision. All fields are supplied by the
 // caller (from config) so the policy itself stays config-free and unit-testable.
 type QuorumOptions struct {
@@ -100,6 +108,9 @@ var (
 	shardPeerHealthMu sync.Mutex
 	// keyed by observer alias string
 	shardPeerHealthByObserver = make(map[string]*observerRecord)
+	// lastShardPeerPruneAt is when the observer map was last scanned for stale records. It
+	// rate-limits pruning on the hot ingest path. Guarded by shardPeerHealthMu.
+	lastShardPeerPruneAt time.Time
 )
 
 // RecordShardPeerHealth stores one observer's shard-peer report, captured from a FullStatus poll.
@@ -150,11 +161,22 @@ func RecordShardPeerHealth(
 		recordedAt:   now,
 		peers:        peers,
 	}
+	maybePruneStaleShardPeerRecordsLocked(now)
+}
+
+// maybePruneStaleShardPeerRecordsLocked prunes at most once per shardPeerPruneInterval. It guards
+// the hot ingest path: pruning on every FullStatus ingest would make a polling cycle O(n²) and
+// lengthen the shardPeerHealthMu critical section in large clusters.
+func maybePruneStaleShardPeerRecordsLocked(now time.Time) {
+	if !lastShardPeerPruneAt.IsZero() && now.Sub(lastShardPeerPruneAt) < shardPeerPruneInterval {
+		return
+	}
 	pruneStaleShardPeerRecordsLocked(now)
 }
 
 // pruneStaleShardPeerRecordsLocked bounds records for deleted tablets without a background task.
 func pruneStaleShardPeerRecordsLocked(now time.Time) {
+	lastShardPeerPruneAt = now
 	for alias, rec := range shardPeerHealthByObserver {
 		if now.Sub(rec.recordedAt) > staleShardPeerRecordTTL {
 			delete(shardPeerHealthByObserver, alias)
@@ -287,6 +309,7 @@ func resetShardPeerHealth() {
 	shardPeerHealthMu.Lock()
 	defer shardPeerHealthMu.Unlock()
 	shardPeerHealthByObserver = make(map[string]*observerRecord)
+	lastShardPeerPruneAt = time.Time{}
 }
 
 // ResetShardPeerHealthForTest clears all stored reports. Exported for use by other packages' tests.

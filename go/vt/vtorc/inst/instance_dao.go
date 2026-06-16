@@ -228,7 +228,13 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		// We begin with a few operations we can run concurrently, and which do not depend on anything
 		instance.ServerID = uint(fs.ServerId)
 		if len(fs.ShardPeerHealth) > 0 {
-			RecordShardPeerHealth(tabletAlias, tablet.Type, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
+			// Use fs.TabletType (the tablet's current self-reported type from
+			// tm.Tablet().Type), not tablet.Type from VTOrc's topo snapshot,
+			// which can lag during promotions/demotions. EvaluatePrimaryQuorum
+			// only counts REPLICA/RDONLY observers, so a stale topo type in the
+			// exact failover window this feature guards could miscount a current
+			// PRIMARY as an observer or drop a newly demoted replica.
+			RecordShardPeerHealth(tabletAlias, fs.TabletType, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
 		}
 		instance.TabletType = fs.TabletType
 		instance.Version = fs.Version
