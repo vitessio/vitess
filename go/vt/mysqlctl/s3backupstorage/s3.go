@@ -248,6 +248,7 @@ func (bh *S3BackupHandle) handleAddFile(ctx context.Context, filename string, pa
 
 		tmClient := transfermanager.New(&timedS3Client{client: bh.s3Client, sendStats: sendStats}, func(o *transfermanager.Options) {
 			o.PartSizeBytes = partSizeBytes
+			o.MultipartUploadThreshold = partSizeBytes
 		})
 
 		// Convert ServerSideEncryption type from s3/types to transfermanager/types
