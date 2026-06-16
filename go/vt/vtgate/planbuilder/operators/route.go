@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/key"
@@ -767,6 +769,7 @@ func isSpecialOrderBy(o OrderBy) bool {
 func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	// if operator is returning data from a single shard, we don't need to do anything more
 	if r.IsSingleShard() {
+		r.planValuesOrdering()
 		return nil
 	}
 
@@ -797,6 +800,46 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		r.Ordering = append(r.Ordering, o)
 	}
 	return nil
+}
+
+func (r *Route) planValuesOrdering() {
+	horizon, ok := r.Source.(*Horizon)
+	if !ok {
+		return
+	}
+	values, ok := horizon.Query.(*sqlparser.ValuesStatement)
+	if !ok || len(values.Order) == 0 || len(values.Rows) == 0 {
+		return
+	}
+
+	columns := values.GetColumns()
+	for _, order := range values.Order {
+		if _, isOrdinal := order.Expr.(*sqlparser.Literal); isOrdinal {
+			continue
+		}
+		if ordinal, ok := valuesOrderByOrdinal(order.Expr, len(columns)); ok {
+			order.Expr = sqlparser.NewIntLiteral(strconv.Itoa(ordinal))
+			continue
+		}
+		offset := horizon.addColumnToValuesUsingColumns(values, columns, aeWrap(order.Expr))
+		order.Expr = sqlparser.NewIntLiteral(strconv.Itoa(offset + 1))
+	}
+}
+
+func valuesOrderByOrdinal(expr sqlparser.Expr, columnCount int) (int, bool) {
+	col, ok := expr.(*sqlparser.ColName)
+	if !ok || col.Qualifier.NonEmpty() {
+		return 0, false
+	}
+	column, found := strings.CutPrefix(col.Name.String(), "column_")
+	if !found {
+		return 0, false
+	}
+	offset, err := strconv.Atoi(column)
+	if err != nil || offset < 0 || offset >= columnCount {
+		return 0, false
+	}
+	return offset + 1, true
 }
 
 func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {

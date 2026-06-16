@@ -940,6 +940,24 @@ func TestValuesStatementUnionRejectsListArg(t *testing.T) {
 	}
 }
 
+func TestValuesStatementOrderByAndWith(t *testing.T) {
+	stmt, semTable := parseAndAnalyze(t, "values row(1) order by column_0", "")
+	values, ok := stmt.(*sqlparser.ValuesStatement)
+	require.True(t, ok)
+	require.Len(t, values.Order, 1)
+	assert.Equal(t, NoTables, semTable.RecursiveDeps(values.Order[0].Expr))
+
+	stmt, semTable = parseAndAnalyze(t, "values row(1) order by 1", "")
+	values, ok = stmt.(*sqlparser.ValuesStatement)
+	require.True(t, ok)
+	require.Len(t, values.Order, 1)
+	assert.Equal(t, "column_0", sqlparser.String(values.Order[0].Expr))
+	assert.Equal(t, NoTables, semTable.RecursiveDeps(values.Order[0].Expr))
+
+	stmt, semTable = parseAndAnalyze(t, "with cte as (select 1) values row(1)", "")
+	require.Len(t, semTable.SelectExprs(stmt.(sqlparser.TableStatement)), 1)
+}
+
 func TestUnionOrderByRewrite(t *testing.T) {
 	query := "select tabl1.id from tabl1 union select 1 order by 1"
 
@@ -1009,6 +1027,9 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
 		serr: "Operand should contain 2 column(s)",
+	}, {
+		sql:  "select (values row(1))",
+		serr: "VT12001: unsupported: VALUES statements in subqueries",
 	}, {
 		sql:  "with x as (select 1), x as (select 1) select * from x",
 		serr: "VT03013: not unique table/alias: 'x'",

@@ -49,6 +49,9 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return NotSingleRouteErr{Inner: &UnsupportedConstruct{errString: "ANY/ALL/SOME comparison operator"}}
 		}
 	case *sqlparser.Subquery:
+		if tableStatementHasValues(node.Select) {
+			return vterrors.VT12001("VALUES statements in subqueries")
+		}
 		return a.checkSubqueryColumns(cursor.Parent(), node)
 	case *sqlparser.Insert:
 		if !a.singleUnshardedKeyspace && node.Action == sqlparser.ReplaceAct {

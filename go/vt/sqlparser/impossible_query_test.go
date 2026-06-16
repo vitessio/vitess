@@ -162,7 +162,17 @@ func TestFormatImpossibleQuery_Union(t *testing.T) {
 		{
 			name:     "union with values",
 			input:    "select 1 union values row(1)",
-			expected: "select 1 from dual where 1 != 1 union values row(1) limit 0",
+			expected: "select 1 from dual where 1 != 1 union (values row(1) limit 0)",
+		},
+		{
+			name:     "values union with select",
+			input:    "values row(1) union select 2",
+			expected: "(values row(1) limit 0) union select 2 from dual where 1 != 1",
+		},
+		{
+			name:     "values union with values",
+			input:    "values row(1) union values row(2)",
+			expected: "(values row(1) limit 0) union (values row(2) limit 0)",
 		},
 	}
 
@@ -196,6 +206,16 @@ func TestFormatImpossibleQuery_Values(t *testing.T) {
 			name:     "values statement with limit",
 			input:    "values row(1) limit 1",
 			expected: "values row(1) limit 0",
+		},
+		{
+			name:     "values statement with order by",
+			input:    "values row(1), row(2) order by column_0",
+			expected: "values row(1), row(2) limit 0",
+		},
+		{
+			name:     "values statement with order by and limit",
+			input:    "values row(1), row(2) order by column_0 limit 1",
+			expected: "values row(1), row(2) limit 0",
 		},
 	}
 
