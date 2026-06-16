@@ -276,11 +276,9 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 // Check is part of the topo.LockDescriptor interface.
 // We use KeepAliveOnce to make sure the lease is still active and well.
 func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
-	// Fast-fail if the background keepalive has already observed an
-	// unexpected halt for this lease. Avoids racing against etcd to
-	// re-discover state we already know.
+	// Log if the background keepalive has already observed an unexpected halt for this lease.
 	if ld.lost.Load() {
-		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "etcd lock %v: lease %d was lost", ld.nodePath, ld.leaseID)
+		log.Error(fmt.Sprintf("etcd lock %v: lease %d was lost", ld.nodePath, ld.leaseID))
 	}
 	_, err := ld.s.cli.KeepAliveOnce(ctx, ld.leaseID)
 	if err != nil {
