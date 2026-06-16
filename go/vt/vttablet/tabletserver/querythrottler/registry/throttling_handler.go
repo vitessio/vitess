@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -42,7 +43,18 @@ type ThrottlingStrategyHandler interface {
 	// Stop gracefully shuts down the throttling strategy and releases any resources.
 	// This method should be called when the strategy is no longer needed.
 	// Implementations should clean up background processes, caches, or other resources.
+	// Stop is terminal: implementations are single-use and must not be restarted after Stop returns.
+	// The QueryThrottler enforces this by always constructing a fresh strategy instance on strategy change.
 	Stop()
+
+	// UpdateConfig applies a new querythrottler config to a live strategy. It is the
+	// single mechanism by which an installed strategy receives nested-config updates,
+	// invoked synchronously by QueryThrottler.HandleConfigUpdate before the snapshot
+	// swap so the (top-level, nested) config pair is published atomically — eliminating
+	// the race that existed when each strategy maintained its own SrvKeyspace watch.
+	// Implementations must extract their relevant sub-config and apply it in a
+	// goroutine-safe way; they must not start watches or do unbounded work here.
+	UpdateConfig(cfg *querythrottlerpb.Config)
 
 	// GetStrategyName returns the name of the strategy.
 	GetStrategyName() string
