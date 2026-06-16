@@ -354,6 +354,10 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	}
 
 	tmClient := transfermanager.New(timedClient, func(o *transfermanager.Options) {
+		// GetObjectRanges uses byte-range GETs sized by PartSizeBytes.
+		// The default (GetObjectParts) reuses original multipart part numbers
+		// and ignores PartSizeBytes entirely.
+		o.GetObjectType = tmtypes.GetObjectRanges
 		if downloadPartSize > 0 {
 			o.PartSizeBytes = downloadPartSize
 		}
