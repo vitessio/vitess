@@ -17,6 +17,8 @@ limitations under the License.
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -126,4 +128,39 @@ func TestRegularExpressions(t *testing.T) {
 			list.checkF(t, regexp.MustCompile(list.regexp), list.input)
 		})
 	}
+}
+
+func TestGoModFilesToUpgrade(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.26.3\n"), 0o644))
+
+	for _, tool := range []string{"goyacc", "gofumpt"} {
+		toolDir := filepath.Join(dir, "tools", tool)
+		require.NoError(t, os.MkdirAll(toolDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(toolDir, "go.mod"), []byte("module example/"+tool+"\n\ngo 1.26.3\n"), 0o644))
+	}
+
+	// A tool directory without a go.mod must not be picked up.
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tools", "notamodule"), 0o755))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(dir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(origWd))
+	})
+
+	files, err := goModFilesToUpgrade()
+	require.NoError(t, err)
+
+	require.Len(t, files, 3)
+	require.Contains(t, files, "./go.mod")
+
+	toolModules := map[string]bool{}
+	for _, file := range files {
+		toolModules[filepath.Base(filepath.Dir(file))] = true
+	}
+	require.True(t, toolModules["goyacc"])
+	require.True(t, toolModules["gofumpt"])
 }

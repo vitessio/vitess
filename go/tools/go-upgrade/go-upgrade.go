@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -396,7 +397,11 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 	}
 
 	if !isSameVersion(old, new) {
-		goModFiles := []string{"./go.mod"}
+		var goModFiles []string
+		goModFiles, err = goModFilesToUpgrade()
+		if err != nil {
+			return err
+		}
 		for _, file := range goModFiles {
 			err = replaceInFile(
 				[]*regexp.Regexp{regexp.MustCompile(regexpReplaceGoModGoVersion)},
@@ -409,6 +414,17 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		}
 	}
 	return nil
+}
+
+// goModFilesToUpgrade returns the list of go.mod files whose Golang version
+// directive must be bumped: the root module along with every tool module
+// located under the tools/ directory.
+func goModFilesToUpgrade() ([]string, error) {
+	toolsGoModFiles, err := filepath.Glob("./tools/*/go.mod")
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{"./go.mod"}, toolsGoModFiles...), nil
 }
 
 // replaceGolangImageReferencesInFile rewrites pinned Go image references in the given file.
