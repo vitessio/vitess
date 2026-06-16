@@ -223,11 +223,11 @@ func TestFilterStatsByReplicationLagOneTabletMin(t *testing.T) {
 }
 
 // BenchmarkFilterStatsByReplicationLag measures the cost of filtering a shard's
-// worth of tablet health by replication lag, across a range of shard sizes.
-// recomputeHealthy calls this while holding the healthcheck lock, so its cost
-// bounds how long that lock is held per health update.
+// worth of tablet health by replication lag, across a range of replica counts.
+// recomputeHealthy calls this on every non-trivial health update while holding
+// the healthcheck lock, so its cost bounds how long that lock is held.
 func BenchmarkFilterStatsByReplicationLag(b *testing.B) {
-	for _, n := range []int{5, 50, 500} {
+	for _, n := range []int{1, 5, 20} {
 		b.Run(fmt.Sprintf("%d_tablets", n), func(b *testing.B) {
 			tablets := make([]*TabletHealth, n)
 			for i := range tablets {
