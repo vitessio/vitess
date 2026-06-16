@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -129,8 +130,20 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 
 // etcdLockDescriptor implements topo.LockDescriptor.
 type etcdLockDescriptor struct {
-	s       *Server
-	leaseID clientv3.LeaseID
+	s        *Server
+	nodePath string
+	leaseID  clientv3.LeaseID
+	// released is set to true when Unlock is called (or when lock
+	// acquisition fails after the keepalive goroutine has started). The
+	// keepalive drain goroutine consults this to distinguish an
+	// expected channel close (we revoked) from an unexpected halt (the
+	// keepalive died on its own and the lease has likely been lost).
+	released atomic.Bool
+	// lost is set when the drain goroutine observes an unexpected
+	// keepalive halt. Callers can consult it via Check() to fail fast
+	// rather than waiting for the next etcd write to surface the
+	// expired lease.
+	lost atomic.Bool
 }
 
 // TryLock is part of the topo.Conn interface.
@@ -206,16 +219,36 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}
+	log.Info(fmt.Sprintf("etcd lock %v: acquired lease %d with TTL %ds", nodePath, lease.ID, ttl))
+
+	ld := &etcdLockDescriptor{
+		s:        s,
+		nodePath: nodePath,
+		leaseID:  lease.ID,
+	}
+
 	go func() {
-		// Drain the lease keepAlive channel, we're not
-		// interested in its contents.
+		// Drain the lease keepAlive channel. The channel closes when
+		// the lease ends -- expected when Unlock revokes it, but it
+		// can also close before Unlock is called (e.g. caller ctx
+		// canceled, etcd client shut down, or other conditions
+		// internal to the etcd client). Without an explicit log, the
+		// lease silently ticks down to auto-expiry while the caller
+		// still believes the lock is held; the loss only surfaces
+		// later as a downstream "lease not found" error. We surface
+		// it here so the loss is directly observable.
 		for range leaseKA {
+		}
+		if !ld.released.Load() {
+			ld.lost.Store(true)
+			log.Error(fmt.Sprintf("etcd lock %v: keepalive channel closed unexpectedly for lease %d; lease may have expired and the lock may no longer be held", nodePath, lease.ID))
 		}
 	}()
 
 	// Create an ephemeral node in the locks directory.
 	key, revision, err := s.newUniqueEphemeralKV(ctx, s.cli, lease.ID, nodePath, contents)
 	if err != nil {
+		ld.released.Store(true)
 		return nil, err
 	}
 
@@ -225,6 +258,7 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 		if err != nil {
 			// We had an error waiting on the last node.
 			// Revoke our lease, this will delete the file.
+			ld.released.Store(true)
 			revokeCtx, revokeCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
 			if _, rerr := s.cli.Revoke(revokeCtx, lease.ID); rerr != nil {
 				log.Warn(fmt.Sprintf("Revoke(%d) failed, may have left %v behind: %v", lease.ID, key, rerr))
@@ -234,10 +268,7 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 		}
 		if done {
 			// No more older nodes, we're it!
-			return &etcdLockDescriptor{
-				s:       s,
-				leaseID: lease.ID,
-			}, nil
+			return ld, nil
 		}
 	}
 }
@@ -245,8 +276,15 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int) (
 // Check is part of the topo.LockDescriptor interface.
 // We use KeepAliveOnce to make sure the lease is still active and well.
 func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
+	// Fast-fail if the background keepalive has already observed an
+	// unexpected halt for this lease. Avoids racing against etcd to
+	// re-discover state we already know.
+	if ld.lost.Load() {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "etcd lock %v: lease %d was lost", ld.nodePath, ld.leaseID)
+	}
 	_, err := ld.s.cli.KeepAliveOnce(ctx, ld.leaseID)
 	if err != nil {
+		log.Error(fmt.Sprintf("etcd lock %v: KeepAliveOnce failed for lease %d: %v", ld.nodePath, ld.leaseID, err))
 		return convertError(err, "lease")
 	}
 	return nil
@@ -254,8 +292,12 @@ func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *etcdLockDescriptor) Unlock(ctx context.Context) error {
+	// Mark the lock as released before revoking so the keepalive drain
+	// goroutine treats the imminent channel close as expected.
+	ld.released.Store(true)
 	_, err := ld.s.cli.Revoke(ctx, ld.leaseID)
 	if err != nil {
+		log.Warn(fmt.Sprintf("etcd lock %v: Revoke of lease %d failed: %v", ld.nodePath, ld.leaseID, err))
 		return convertError(err, "lease")
 	}
 	return nil
