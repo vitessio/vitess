@@ -1050,7 +1050,8 @@ func (ts *trafficSwitcher) stopReverseVReplication(ctx context.Context) error {
 			ts.Logger().Infof("Stopping reverse stream %d on %s for complete", stream.Id, tabletAlias)
 			if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet,
 				binlogplayer.StopVReplication(stream.Id, stoppedForComplete)); err != nil {
-				return err
+				return vterrors.Wrapf(err, "stopping reverse stream %d in workflow %s on %s",
+					stream.Id, ts.ReverseWorkflowName(), tabletAlias)
 			}
 		}
 		return nil

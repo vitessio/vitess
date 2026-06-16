@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -261,11 +262,11 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 			expectedSourceQueries: []*queryResult{
 				{
-					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=1",
+					query:  binlogplayer.StopVReplication(1, stoppedForComplete),
 					result: &querypb.QueryResult{},
 				},
 				{
-					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
+					query:  binlogplayer.StopVReplication(2, stoppedForComplete),
 					result: &querypb.QueryResult{},
 				},
 				{
@@ -316,11 +317,11 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 			expectedSourceQueries: []*queryResult{
 				{
-					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=1",
+					query:  binlogplayer.StopVReplication(1, stoppedForComplete),
 					result: &querypb.QueryResult{},
 				},
 				{
-					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
+					query:  binlogplayer.StopVReplication(2, stoppedForComplete),
 					result: &querypb.QueryResult{},
 				},
 				{
@@ -361,11 +362,11 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 			expectedSourceQueries: []*queryResult{
 				{
-					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=1",
+					query:  binlogplayer.StopVReplication(1, stoppedForComplete),
 					result: &querypb.QueryResult{},
 				},
 				{
-					query:  "update _vt.vreplication set state='Stopped', message='stopped for complete' where id=2",
+					query:  binlogplayer.StopVReplication(2, stoppedForComplete),
 					result: &querypb.QueryResult{},
 				},
 				{

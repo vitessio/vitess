@@ -365,7 +365,8 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 		}
 	}
 	blsKs := tmc.env.sourceKeyspace
-	if strings.HasSuffix(req.Workflow, reverseSuffix) && tablet.Keyspace == tmc.env.sourceKeyspace.KeyspaceName {
+	isReverseWorkflow := strings.HasSuffix(req.Workflow, reverseSuffix)
+	if isReverseWorkflow && tablet.Keyspace == tmc.env.sourceKeyspace.KeyspaceName {
 		blsKs = tmc.env.targetKeyspace
 	} else if tmc.reverse.Load() && tablet.Keyspace == tmc.env.sourceKeyspace.KeyspaceName {
 		blsKs = tmc.env.targetKeyspace
@@ -382,7 +383,7 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 				},
 			},
 		}
-		if strings.HasSuffix(req.Workflow, reverseSuffix) {
+		if isReverseWorkflow {
 			stream.State = binlogdatapb.VReplicationWorkflowState_Running
 		} else if tmc.frozen.Load() {
 			stream.Message = Frozen
