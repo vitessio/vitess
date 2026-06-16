@@ -23,6 +23,13 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Generate GitHub App token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -72,7 +79,7 @@ jobs:
         if: steps.detect-and-update.outputs.create-pr == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
-          token: ${{ secrets.CREATE_PR_VITESS_BOT }}
+          token: ${{ steps.app-token.outputs.token }}
           branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"
           commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
           signoff: true
