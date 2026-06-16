@@ -211,3 +211,7 @@ List of changes between bootstrap image versions.
 ## [48.4] - 2026-05-08
 ### Changes
 - Update build to golang 1.25.10
+
+## [48.5] - 2026-06-16
+### Changes
+- Update build to golang 1.25.11

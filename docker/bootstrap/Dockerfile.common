@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 golang:1.25.10-bookworm@sha256:6e77087079b02aa8079cd7723da7cb4563703226ed54c6f6be7765050cd884d5
+FROM --platform=linux/amd64 golang:1.25.11-bookworm@sha256:86a0f81c06d1ec5c42fc72b47acac06a699d9118906fb666f13cb17a4cf98d25
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
