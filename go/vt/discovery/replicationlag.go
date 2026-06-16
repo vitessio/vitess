@@ -148,9 +148,7 @@ func FilterStatsByReplicationLag(tabletHealthList []*TabletHealth) []*TabletHeal
 func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	// These thresholds are viper-backed flags whose Get() is comparatively
 	// expensive, so read them once instead of per tablet: filtering runs over
-	// every tablet in a shard while holding the healthcheck lock. minNumTablets
-	// is left in the condition below so it keeps short-circuiting: it is only
-	// read when a tablet's lag is actually high.
+	// every tablet in a shard while holding the healthcheck lock.
 	lowLag := lowReplicationLag.Get().Seconds()
 	highLag := highReplicationLagMinServing.Get().Seconds()
 
@@ -170,10 +168,23 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	// Sort by replication lag.
 	sort.Sort(tabletLagSnapshotList(list))
 
-	// Pick tablets with low replication lag, but at least minNumTablets tablets regardless.
+	// Pick tablets with low replication lag, but at least minNumTablets tablets
+	// regardless. The list is sorted by ascending lag, so once we reach a
+	// high-lag tablet every later one is also high-lag; read minNumTablets at
+	// most once, and only when a high-lag tablet actually forces the question.
 	res := make([]*TabletHealth, 0, len(list))
+	var minTablets int
+	minTabletsRead := false
 	for i := 0; i < len(list); i++ {
-		if float64(list[i].ts.Stats.ReplicationLagSeconds) <= lowLag || i < minNumTablets.Get() {
+		if float64(list[i].ts.Stats.ReplicationLagSeconds) <= lowLag {
+			res = append(res, list[i].ts)
+			continue
+		}
+		if !minTabletsRead {
+			minTablets = minNumTablets.Get()
+			minTabletsRead = true
+		}
+		if i < minTablets {
 			res = append(res, list[i].ts)
 		}
 	}
