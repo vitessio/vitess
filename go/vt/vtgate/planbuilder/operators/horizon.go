@@ -109,6 +109,15 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 }
 
 func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool, expr *sqlparser.AliasedExpr) int {
+	if values, ok := h.Query.(*sqlparser.ValuesStatement); ok {
+		if reuse {
+			offset := h.FindCol(ctx, expr.Expr, false)
+			if offset >= 0 {
+				return offset
+			}
+		}
+		return h.addColumnToValues(values, expr)
+	}
 	if !reuse {
 		panic(errNoNewColumns)
 	}
@@ -129,13 +138,59 @@ func (h *Horizon) AddWSColumn(ctx *plancontext.PlanningContext, offset int, unde
 		panic(errNoNewColumns)
 	}
 
-	sel, ok := h.Query.(*sqlparser.Select)
-	if !ok {
+	switch stmt := h.Query.(type) {
+	case *sqlparser.Select:
+		wsOffset := len(cols)
+		stmt.AddSelectExpr(aeWrap(weightStringFor(cols[offset].Expr)))
+		return wsOffset
+	case *sqlparser.ValuesStatement:
+		return h.addColumnToValues(stmt, aeWrap(weightStringFor(cols[offset].Expr)))
+	default:
 		panic(errNoNewColumns)
 	}
-	wsOffset := len(cols)
-	sel.AddSelectExpr(aeWrap(weightStringFor(cols[offset].Expr)))
-	return wsOffset
+}
+
+func (h *Horizon) addColumnToValues(values *sqlparser.ValuesStatement, expr *sqlparser.AliasedExpr) int {
+	return h.addColumnToValuesUsingColumns(values, values.GetColumns(), expr)
+}
+
+func (h *Horizon) addColumnToValuesUsingColumns(values *sqlparser.ValuesStatement, columns []sqlparser.SelectExpr, expr *sqlparser.AliasedExpr) int {
+	if len(values.Rows) == 0 {
+		panic(errNoNewColumns)
+	}
+
+	newOffset := len(values.Rows[0])
+	offsets := make(map[string]int, len(columns))
+	for offset, column := range columns {
+		ae, ok := column.(*sqlparser.AliasedExpr)
+		if !ok {
+			panic(vterrors.VT09015())
+		}
+		offsets[ae.ColumnName()] = offset
+	}
+
+	for i, row := range values.Rows {
+		var missing *sqlparser.ColName
+		newExpr := sqlparser.CopyOnRewrite(expr.Expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+			col, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok || col.Qualifier.NonEmpty() {
+				return
+			}
+			offset, ok := offsets[col.Name.String()]
+			if !ok {
+				missing = col
+				cursor.StopTreeWalk()
+				return
+			}
+			cursor.Replace(row[offset])
+		}, nil).(sqlparser.Expr)
+		if missing != nil {
+			panic(vterrors.VT13001(fmt.Sprintf("could not find the column '%s' on the VALUES statement", sqlparser.String(missing))))
+		}
+		values.Rows[i] = append(row, newExpr)
+	}
+
+	return newOffset
 }
 
 var errNoNewColumns = vterrors.VT13001("can't add new columns to Horizon")

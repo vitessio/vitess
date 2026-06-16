@@ -73,6 +73,37 @@ func TestDDLPlan(t *testing.T) {
 	testPlan(t, "ddl_cases.txt")
 }
 
+func TestValuesStatementPlan(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	testSchema := loadSchema("schema_test.json")
+
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{
+			query: "values row('top-level VALUES ORDER BY generated name', 'values row(1) order by column_0', 1) order by column_0",
+			want:  "values row('top-level VALUES ORDER BY generated name', 'values row(1) order by column_0', 1) order by column_0 asc",
+		},
+		{
+			query: "values row('top-level VALUES ORDER BY ordinal', 'values row(1) order by 1', 1) order by 1",
+			want:  "values row('top-level VALUES ORDER BY ordinal', 'values row(1) order by 1', 1) order by 1 asc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			statement, err := parser.Parse(tt.query)
+			require.NoError(t, err)
+
+			plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
+			require.NoError(t, err)
+			require.Equal(t, PlanSelect, plan.PlanID)
+			require.Equal(t, tt.want, plan.FullQuery.Query)
+		})
+	}
+}
+
 func testPlan(t *testing.T, fileName string) {
 	t.Helper()
 	parser := sqlparser.NewTestParser()

@@ -49,7 +49,7 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 		if node.With != nil {
 			node.With.Format(buf)
 		}
-		if requiresParen(node.Left) {
+		if requiresImpossibleQueryParen(node.Left) {
 			buf.WriteString("(")
 			FormatImpossibleQuery(buf, node.Left)
 			buf.WriteString(")")
@@ -65,7 +65,7 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 		}
 		buf.WriteString(" ")
 
-		if requiresParen(node.Right) {
+		if requiresImpossibleQueryParen(node.Right) {
 			buf.WriteString("(")
 			FormatImpossibleQuery(buf, node.Right)
 			buf.WriteString(")")
@@ -73,13 +73,23 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 			FormatImpossibleQuery(buf, node.Right)
 		}
 	case *ValuesStatement:
+		order := node.Order
 		limit := node.Limit
+		node.Order = nil
 		node.Limit = &Limit{Rowcount: NewIntLiteral("0")}
 		defer func() {
+			node.Order = order
 			node.Limit = limit
 		}()
 		node.Format(buf)
 	default:
 		node.Format(buf)
 	}
+}
+
+func requiresImpossibleQueryParen(stmt TableStatement) bool {
+	if _, ok := stmt.(*ValuesStatement); ok {
+		return true
+	}
+	return requiresParen(stmt)
 }

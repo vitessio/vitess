@@ -330,6 +330,16 @@ func tableStatementHasValuesListArg(stmt sqlparser.TableStatement) bool {
 	return false
 }
 
+func tableStatementHasValues(stmt sqlparser.TableStatement) bool {
+	switch stmt := stmt.(type) {
+	case *sqlparser.ValuesStatement:
+		return true
+	case *sqlparser.Union:
+		return tableStatementHasValues(stmt.Left) || tableStatementHasValues(stmt.Right)
+	}
+	return false
+}
+
 /*
 errors that happen when we are evaluating SELECT expressions are saved until we know
 if we can merge everything into a single route or not
@@ -359,9 +369,9 @@ func isParentDeleteOrUpdate(cursor *sqlparser.Cursor) bool {
 	return isDelete || isUpdate
 }
 
-func isParentSelectStatement(cursor *sqlparser.Cursor) bool {
-	_, isSelect := cursor.Parent().(sqlparser.SelectStatement)
-	return isSelect
+func isParentTableStatement(cursor *sqlparser.Cursor) bool {
+	_, isTableStatement := cursor.Parent().(sqlparser.TableStatement)
+	return isTableStatement
 }
 
 type originable interface {

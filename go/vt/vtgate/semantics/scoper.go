@@ -29,11 +29,13 @@ type (
 	// scoper is responsible for figuring out the scoping for the query,
 	// and keeps the current scope when walking the tree
 	scoper struct {
-		rScope map[*sqlparser.Select]*scope
-		wScope map[*sqlparser.Select]*scope
-		scopes []*scope
-		org    originable
-		binder *binder
+		rScope       map[*sqlparser.Select]*scope
+		wScope       map[*sqlparser.Select]*scope
+		valuesScope  map[*sqlparser.ValuesStatement]*scope
+		valuesWScope map[*sqlparser.ValuesStatement]*scope
+		scopes       []*scope
+		org          originable
+		binder       *binder
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes     map[*sqlparser.Literal]*scope
@@ -61,6 +63,8 @@ func newScoper(si SchemaInformation) *scoper {
 	return &scoper{
 		rScope:            map[*sqlparser.Select]*scope{},
 		wScope:            map[*sqlparser.Select]*scope{},
+		valuesScope:       map[*sqlparser.ValuesStatement]*scope{},
+		valuesWScope:      map[*sqlparser.ValuesStatement]*scope{},
 		specialExprScopes: map[*sqlparser.Literal]*scope{},
 		statementIDs:      map[sqlparser.Statement]TableSet{},
 		si:                si,
@@ -74,6 +78,8 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		s.pushDMLScope(node)
 	case *sqlparser.Select:
 		s.pushSelectScope(node)
+	case *sqlparser.ValuesStatement:
+		s.pushValuesScope(node)
 	case *sqlparser.Union:
 		s.pushUnionScope(node)
 	case sqlparser.TableExpr:
@@ -139,7 +145,7 @@ func (s *scoper) addColumnInfoForGroupBy(cursor *sqlparser.Cursor, node *sqlpars
 }
 
 func (s *scoper) addColumnInfoForOrderBy(cursor *sqlparser.Cursor, node sqlparser.OrderBy) error {
-	if isParentSelectStatement(cursor) {
+	if isParentTableStatement(cursor) {
 		err := s.createSpecialScopePostProjection(cursor.Parent())
 		if err != nil {
 			return err
@@ -205,6 +211,18 @@ func (s *scoper) pushSelectScope(node *sqlparser.Select) {
 	s.wScope[node] = newScope(nil)
 }
 
+func (s *scoper) pushValuesScope(node *sqlparser.ValuesStatement) {
+	currScope := newScope(s.currentScope())
+	currScope.stmtScope = true
+	currScope.stmt = node
+	s.push(currScope)
+
+	s.valuesScope[node] = currScope
+	wScope := newScope(nil)
+	wScope.tables = []TableInfo{createVTableInfoForExpressions(node.GetColumns(), nil, s.org)}
+	s.valuesWScope[node] = wScope
+}
+
 func (s *scoper) pushDMLScope(node sqlparser.SQLNode) {
 	currScope := newScope(s.currentScope())
 	currScope.stmtScope = true
@@ -232,10 +250,10 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	node := cursor.Node()
 	switch node := node.(type) {
 	case sqlparser.OrderBy:
-		if isParentSelectStatement(cursor) {
+		if isParentTableStatement(cursor) {
 			s.popScope()
 		}
-	case *sqlparser.Select, *sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Insert, *sqlparser.Union, *sqlparser.Delete:
+	case *sqlparser.Select, *sqlparser.GroupBy, *sqlparser.Update, *sqlparser.Insert, *sqlparser.Union, *sqlparser.Delete, *sqlparser.ValuesStatement:
 		id := EmptyTableSet()
 		for _, tableInfo := range s.currentScope().tables {
 			set := tableInfo.getTableSet(s.org)
@@ -293,6 +311,16 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 		s.push(nScope)
 
 		if s.rScope[parent] != incomingScope {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: scope counts did not match")
+		}
+	case *sqlparser.ValuesStatement:
+		incomingScope := s.currentScope()
+		nScope := newScope(incomingScope)
+		nScope.tables = s.valuesWScope[parent].tables
+		nScope.stmt = incomingScope.stmt
+		s.push(nScope)
+
+		if s.valuesScope[parent] != incomingScope {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: scope counts did not match")
 		}
 	case *sqlparser.Union:

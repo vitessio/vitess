@@ -127,6 +127,20 @@ func TestToSQLDerivedValuesStatementProjectsColumns(t *testing.T) {
 	assert.Equal(t, "select column_0, column_1 from (values row(1, 2)) as sub", sqlparser.String(stmt))
 }
 
+func TestValuesStatementHorizonAddsHelperColumns(t *testing.T) {
+	values := mustParseValuesStatement(t, "values row(1)")
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	horizon := newHorizon(&Table{}, values)
+
+	wsOffset := horizon.AddWSColumn(ctx, 0, false)
+	assert.Equal(t, 1, wsOffset)
+	assert.Equal(t, "values row(1, weight_string(1))", sqlparser.String(values))
+
+	constOffset := horizon.AddColumn(ctx, true, false, aeWrap(sqlparser.NewIntLiteral("0")))
+	assert.Equal(t, 2, constOffset)
+	assert.Equal(t, "values row(1, weight_string(1), 0)", sqlparser.String(values))
+}
+
 func TestStripDownValuesStatement(t *testing.T) {
 	tests := []struct {
 		name string
