@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Vitess Go binaries
-FROM golang:1.26.4-trixie@sha256:3424c834a8b26df82d4b64cf0c92e0f8f309b4ff7f85581f8ec5026e6f7a44da AS go-builder
+FROM golang:1.26.4-trixie@sha256:069cffa8011efba291595b8030af0f7edfb1d2b6d6e2b86327937cf75d03c6ac AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
