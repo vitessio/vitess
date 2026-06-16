@@ -53,14 +53,24 @@ jobs:
       - name: Upgrade the Golang Dependencies
         id: detect-and-update
         run: |
-          go get -u ./...
+          # Upgrade the root module and every tool module under tools/.
+          modules="."
+          for f in tools/*/go.mod; do
+            modules="${modules} $(dirname "${f}")"
+          done
+
+          for mod in ${modules}; do
+            (cd "${mod}" && go get -u ./...)
+          done
 
           output=$(git status -s)
           if [ -z "${output}" ]; then
             exit 0
           fi
 
-          go mod tidy
+          for mod in ${modules}; do
+            (cd "${mod}" && go mod tidy)
+          done
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
@@ -75,8 +85,8 @@ jobs:
           team-reviewers: Release
           title: "Upgrade the Golang Dependencies"
           body: |
-            This Pull Request updates all the Golang dependencies to their latest version using `go get -u ./...`.
-            
+            This Pull Request updates all the Golang dependencies to their latest version using `go get -u ./...`, both for the root module and for the tool modules under `tools/`.
+
             cc @vitessio/release
           base: main
           labels: |
