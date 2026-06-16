@@ -19,7 +19,6 @@ package schema
 import (
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -40,7 +38,7 @@ import (
 
 // LoadTable creates a Table from the schema info in the database.
 // includeEnumSetColumnTypes also records the ENUM/SET column type definitions
-// needed by schema version tracking (see fetchEnumSetColumnTypes).
+// needed by schema version tracking (see fetchColumns).
 func LoadTable(conn *connpool.PooledConn, databaseName, tableName, tableType string, comment string, collationEnv *collations.Environment, includeEnumSetColumnTypes bool) (*Table, error) {
 	ta := NewTable(tableName, NoType)
 	if strings.Contains(tableType, tmutils.TableView) {
@@ -82,7 +80,18 @@ func fetchColumns(ta *Table, conn *connpool.PooledConn, databaseName, sqlTableNa
 	if !includeEnumSetColumnTypes || !slices.ContainsFunc(ta.Fields, couldBeEnumOrSet) {
 		return nil
 	}
-	return fetchEnumSetColumnTypes(ctx, ta, conn, databaseName, sqlTableName, exec)
+	// Read the type definitions once, right after the fields and on the same
+	// connection, so the window for a concurrent DDL to make them disagree with
+	// the fields is minimal. A DDL that still slips in is self-correcting: it
+	// reloads and snapshots the schema at its own GTID, and if it leaves an
+	// ENUM/SET field with no recorded definition, snapshotMinimalSchema fails
+	// the save closed so the schema tracker retries from the previous GTID.
+	columnTypes, err := readEnumSetColumnTypes(ctx, conn, databaseName, ta.Name.String())
+	if err != nil {
+		return err
+	}
+	ta.EnumSetColumnTypes = columnTypes
+	return nil
 }
 
 // enumSetColumnTypesQuery fetches the full type definition (column_type) of
@@ -103,51 +112,6 @@ func couldBeEnumOrSet(field *querypb.Field) bool {
 	default:
 		return false
 	}
-}
-
-// enumSetColumnTypesFetchAttempts bounds how many times
-// fetchEnumSetColumnTypes re-reads the table's fields and type definitions
-// while waiting for two consecutive definition reads to match, i.e. for
-// concurrent DDL to quiesce.
-const enumSetColumnTypesFetchAttempts = 3
-
-// fetchEnumSetColumnTypes records the full type definition (e.g. enum('a','b'))
-// of the table's ENUM and SET columns. The binlog only stores the integer index
-// (ENUM) or bitmask (SET), so schema version tracking persists the definitions
-// in order to decode historical ROW events after a column is dropped or
-// modified (see snapshotMinimalSchema).
-//
-// The fields and the definitions necessarily come from two separate reads, so
-// to guarantee that they describe the same table definition, the field read is
-// bracketed between two definition reads: the combination is only accepted
-// when both definition reads match, as any concurrent DDL that changed the
-// definitions in the window around the field read would make them differ.
-// Otherwise the reads are retried, with bounded attempts.
-func fetchEnumSetColumnTypes(ctx context.Context, ta *Table, conn *connpool.PooledConn, databaseName, sqlTableName string,
-	exec func(string, int, bool) (*sqltypes.Result, error),
-) error {
-	before, err := readEnumSetColumnTypes(ctx, conn, databaseName, ta.Name.String())
-	if err != nil {
-		return err
-	}
-	for range enumSetColumnTypesFetchAttempts {
-		fields, _, err := mysqlctl.GetColumns(databaseName, sqlTableName, exec)
-		if err != nil {
-			return err
-		}
-		after, err := readEnumSetColumnTypes(ctx, conn, databaseName, ta.Name.String())
-		if err != nil {
-			return err
-		}
-		if maps.Equal(before, after) {
-			ta.Fields = fields
-			ta.EnumSetColumnTypes = after
-			return nil
-		}
-		before = after
-	}
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-		"the ENUM/SET column types of table %s keep changing due to concurrent schema changes", ta.Name.String())
 }
 
 // readEnumSetColumnTypes reads the full type definitions of a table's ENUM

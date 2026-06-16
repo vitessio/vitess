@@ -1056,12 +1056,11 @@ func (se *Engine) GetSchema() map[string]*Table {
 // MarshalMinimalSchema returns a protobuf encoded binlogdata.MinimalSchema.
 //
 // ENUM and SET fields carry their full type definition (the ColumnType, e.g.
-// enum('a','b')), recorded when the table was loaded (see
-// fetchEnumSetColumnTypes). This lets schema version tracking decode
-// historical ROW events for these columns even after they are dropped or
-// modified: the binlog only stores the integer index (ENUM) or bitmask (SET),
-// so the string values are otherwise unrecoverable once the live column
-// changes.
+// enum('a','b')), recorded when the table was loaded (see fetchColumns). This
+// lets schema version tracking decode historical ROW events for these columns
+// even after they are dropped or modified: the binlog only stores the integer
+// index (ENUM) or bitmask (SET), so the string values are otherwise
+// unrecoverable once the live column changes.
 func (se *Engine) MarshalMinimalSchema() ([]byte, error) {
 	dbSchema, err := se.snapshotMinimalSchema()
 	if err != nil {
@@ -1080,10 +1079,16 @@ func (se *Engine) MarshalMinimalSchema() ([]byte, error) {
 // the snapshot: persisting it would be permanently lossy (nothing can backfill
 // the string values once the live column changes), while a failed save is
 // retried by the schema tracker from the previous GTID. This can only happen
-// if a concurrent DDL hits the narrow window between the two
-// information_schema reads in fetchColumns; the next reload of the table
-// resolves it. Binary-collation ENUM/SET columns report as BINARY and so
-// cannot be verified this way.
+// if a concurrent DDL hits the narrow window between the field read and the
+// type-definition read in fetchColumns; the next reload of the table resolves
+// it.
+//
+// This check is asymmetric: a binary-collation ENUM/SET column reports as
+// BINARY (not ENUM/SET) in field metadata, so it cannot be verified here. Its
+// definition is normally still recorded (the information_schema lookup matches
+// on data_type, which is 'enum'/'set' regardless of collation), so the only
+// gap is the same narrow concurrent-DDL window, in which such a column would
+// persist with an empty ColumnType rather than failing the save.
 func (se *Engine) snapshotMinimalSchema() (*binlogdatapb.MinimalSchema, error) {
 	se.mu.Lock()
 	defer se.mu.Unlock()
@@ -1092,19 +1097,27 @@ func (se *Engine) snapshotMinimalSchema() (*binlogdatapb.MinimalSchema, error) {
 	}
 	for _, table := range se.tables {
 		mt := newMinimalTable(table)
-		clonedFields := make([]*querypb.Field, len(mt.Fields))
-		for i, field := range mt.Fields {
-			cloned := field.CloneVT()
-			if columnType, ok := table.EnumSetColumnTypes[field.Name]; ok {
+		// newMinimalTable shares the live Fields slice and its *querypb.Field
+		// pointers. Copy the slice so swapping in cloned ENUM/SET fields below
+		// cannot mutate the live schema; only ENUM/SET fields are cloned (they
+		// get a ColumnType attached), while every other field keeps its shared,
+		// read-only pointer to avoid a per-field allocation on every save.
+		fields := make([]*querypb.Field, len(mt.Fields))
+		copy(fields, mt.Fields)
+		for i, field := range fields {
+			columnType, ok := table.EnumSetColumnTypes[field.Name]
+			switch {
+			case ok:
+				cloned := field.CloneVT()
 				cloned.ColumnType = columnType
-			} else if field.Type == querypb.Type_ENUM || field.Type == querypb.Type_SET {
+				fields[i] = cloned
+			case field.Type == querypb.Type_ENUM || field.Type == querypb.Type_SET:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 					"no type definition recorded for ENUM/SET column %s.%s; "+
 						"the column may have been changed by a concurrent schema change", mt.Name, field.Name)
 			}
-			clonedFields[i] = cloned
 		}
-		mt.Fields = clonedFields
+		mt.Fields = fields
 		dbSchema.Tables = append(dbSchema.Tables, mt)
 	}
 	return dbSchema, nil

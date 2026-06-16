@@ -616,3 +616,36 @@ func TestWaitWithContextStopsOnCancel(t *testing.T) {
 		}
 	})
 }
+
+// TestIsResumePositionUnavailable pins the contract that isResumePositionUnavailable
+// depends on: the MySQL 1236 errno must stay recoverable from the error text after
+// the source vstreamer wraps it (with %v) and after it is flattened across the gRPC
+// boundary. If any layer stops preserving the "(errno 1236) (sqlstate ...)" suffix
+// that SQLError.Error() emits, detection silently breaks and the tracker would retry
+// an unservable position forever, so this guards the real error shapes rather than
+// only a hand-built string.
+func TestIsResumePositionUnavailable(t *testing.T) {
+	const storedPos = "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-42"
+	purged := sqlerror.NewSQLError(sqlerror.ERMasterFatalReadingBinlog, sqlerror.SSUnknownSQLState,
+		"Cannot replicate because the master purged required binary logs")
+	// wrapError in the source vstreamer wraps the error with exactly this format.
+	wrapped := fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %s: %v", storedPos, purged)
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"plain error", errors.New("some other failure"), false},
+		{"direct SQLError 1236", purged, true},
+		{"vstreamer-wrapped (%v)", wrapped, true},
+		{"gRPC-flattened message", fmt.Errorf("rpc error: code = Unknown desc = %s", wrapped.Error()), true},
+		{"different errno", sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownSQLState, "no such table"), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isResumePositionUnavailable(tc.err))
+		})
+	}
+}

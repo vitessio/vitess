@@ -274,9 +274,14 @@ func (tr *Tracker) startupPosition(ctx context.Context) (string, error) {
 
 // isResumePositionUnavailable reports whether a vstream failed because its
 // start position cannot be served from the binlog: it was purged, or it
-// contains GTIDs unknown to the server (MySQL error 1236). The vstreamer
-// flattens errors to text, so the errno is recovered from the message rather
-// than via errors.As.
+// contains GTIDs unknown to the server (MySQL error 1236).
+//
+// The error reaches us flattened to text — the source vstreamer wraps it with
+// %v and it then crosses the gRPC boundary — so the errno is recovered from the
+// message rather than via errors.As. This relies on the original SQLError's
+// "(errno <n>) (sqlstate <s>)" suffix (emitted by SQLError.Error() and matched
+// by sqlerror.NewSQLErrorFromError) surviving every wrapping layer.
+// TestIsResumePositionUnavailable pins that contract against the real shapes.
 func isResumePositionUnavailable(err error) bool {
 	sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 	return ok && (sqlErr.Number() == sqlerror.ERMasterFatalReadingBinlog || sqlErr.Number() == sqlerror.ERSourceHasPurgedRequiredGtids)
