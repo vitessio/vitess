@@ -263,10 +263,10 @@ func (tr *Tracker) startupPosition(ctx context.Context) (string, error) {
 	}
 	if lastPos != "" {
 		if _, err := replication.DecodePosition(lastPos); err == nil {
-			log.Info("Schema tracker resuming from the last saved schema version position " + lastPos)
+			log.Info("Schema tracker resuming from the last saved schema version position", slog.String("position", lastPos))
 			return lastPos, nil
 		}
-		log.Warn("schema tracker cannot parse the last saved schema version position; saving a fresh schema snapshot",
+		log.Warn("Schema tracker cannot parse the last saved schema version position; saving a fresh schema snapshot",
 			slog.String("position", lastPos))
 	}
 	return tr.insertCurrentSchemaSnapshot(ctx)
@@ -279,7 +279,7 @@ func (tr *Tracker) startupPosition(ctx context.Context) (string, error) {
 // than via errors.As.
 func isResumePositionUnavailable(err error) bool {
 	sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
-	return ok && sqlErr.Number() == sqlerror.ERMasterFatalReadingBinlog
+	return ok && (sqlErr.Number() == sqlerror.ERMasterFatalReadingBinlog || sqlErr.Number() == sqlerror.ERSourceHasPurgedRequiredGtids)
 }
 
 func (tr *Tracker) schemaUpdated(ctx context.Context, gtid string, ddl string, timestamp int64) error {
