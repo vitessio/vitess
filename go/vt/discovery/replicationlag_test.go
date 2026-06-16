@@ -221,3 +221,25 @@ func TestFilterStatsByReplicationLagOneTabletMin(t *testing.T) {
 	// Reset to the default
 	testSetMinNumTablets(2)
 }
+
+// BenchmarkFilterStatsByReplicationLag measures the cost of filtering a shard's
+// worth of tablet health by replication lag, across a range of shard sizes.
+// recomputeHealthy calls this while holding the healthcheck lock, so its cost
+// bounds how long that lock is held per health update.
+func BenchmarkFilterStatsByReplicationLag(b *testing.B) {
+	for _, n := range []int{5, 50, 500} {
+		b.Run(fmt.Sprintf("%d_tablets", n), func(b *testing.B) {
+			tablets := make([]*TabletHealth, n)
+			for i := range tablets {
+				tablets[i] = &TabletHealth{
+					Tablet:  topo.NewTablet(uint32(i+1), "cell", fmt.Sprintf("host-%d", i)),
+					Serving: true,
+					Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: uint32(i % 60)},
+				}
+			}
+			for b.Loop() {
+				_ = FilterStatsByReplicationLag(tablets)
+			}
+		})
+	}
+}
