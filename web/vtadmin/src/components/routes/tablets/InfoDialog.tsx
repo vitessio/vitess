@@ -49,28 +49,6 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
 
     const loading = !animationDone || isLoading;
 
-    const SuccessState: React.FC = () => (
-        <div className="w-full flex flex-col justify-center items-center">
-            <span className="flex h-12 w-12 relative items-center justify-center">
-                <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
-            </span>
-            <div className="text-lg mt-3 font-bold">{successTitle || 'Success!'}</div>
-            <div className="text-sm">{successDescription}</div>
-        </div>
-    );
-
-    const FailState: React.FC = () => (
-        <div className="w-full flex flex-col justify-center items-center">
-            <span className="flex h-12 w-12 relative items-center justify-center">
-                <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
-            </span>
-            <div className="text-lg mt-3 font-bold">{errorTitle || 'Error'}</div>
-            <div className="text-sm">
-                {errorDescription}: {error?.message}
-            </div>
-        </div>
-    );
-
     return (
         <Dialog
             isOpen={isOpen}
@@ -112,8 +90,26 @@ const InfoDialog: React.FC<InfoDialogProps> = ({
                             enterFrom="opacity-0"
                             enterTo="opacity-100"
                         >
-                            {data && <SuccessState />}
-                            {error && <FailState />}
+                            {data && (
+                                <div className="w-full flex flex-col justify-center items-center">
+                                    <span className="flex h-12 w-12 relative items-center justify-center">
+                                        <Icon className="fill-current text-green-500" icon={Icons.checkSuccess} />
+                                    </span>
+                                    <div className="text-lg mt-3 font-bold">{successTitle || 'Success!'}</div>
+                                    <div className="text-sm">{successDescription}</div>
+                                </div>
+                            )}
+                            {error && (
+                                <div className="w-full flex flex-col justify-center items-center">
+                                    <span className="flex h-12 w-12 relative items-center justify-center">
+                                        <Icon className="fill-current text-red-500" icon={Icons.alertFail} />
+                                    </span>
+                                    <div className="text-lg mt-3 font-bold">{errorTitle || 'Error'}</div>
+                                    <div className="text-sm">
+                                        {errorDescription}: {error?.message}
+                                    </div>
+                                </div>
+                            )}
                         </Transition>
                     )}
                 </div>

@@ -23,6 +23,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -268,6 +269,11 @@ func createGRPCServer() {
 		Timeout:               gRPCKeepaliveTimeout,
 	}
 	opts = append(opts, grpc.KeepaliveParams(ka))
+
+	// Reuse a fixed pool of worker goroutines for incoming streams instead
+	// of spawning a new goroutine per RPC. This avoids per-RPC goroutine
+	// creation and cold-start scheduling latency on the hot path.
+	opts = append(opts, grpc.NumStreamWorkers(uint32(runtime.GOMAXPROCS(0))))
 
 	opts = append(opts, interceptors()...)
 
