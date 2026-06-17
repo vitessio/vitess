@@ -617,12 +617,12 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 
 	hints := getHints(op.Comments)
 	switch stmt := stmt.(type) {
-	case sqlparser.SelectStatement:
+	case sqlparser.TableStatement:
 		if op.Lock != sqlparser.NoLock {
-			stmt.SetLock(op.Lock)
+			if sel, ok := stmt.(sqlparser.SelectStatement); ok {
+				sel.SetLock(op.Lock)
+			}
 		}
-		return buildRoutePrimitive(ctx, op, stmt, hints)
-	case *sqlparser.ValuesStatement:
 		return buildTableRoutePrimitive(ctx, op, stmt, hints)
 	case *sqlparser.Update:
 		return buildUpdatePrimitive(ctx, op, dmlOp, stmt, hints)
@@ -632,17 +632,6 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		return buildInsertPrimitive(ctx, op, dmlOp, stmt, hints)
 	default:
 		return nil, vterrors.VT13001(fmt.Sprintf("dont know how to %T", stmt))
-	}
-}
-
-func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, stmt sqlparser.SelectStatement, hints *queryHints) (engine.Primitive, error) {
-	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		return buildTableRoutePrimitive(ctx, op, stmt, hints)
-	case *sqlparser.Union:
-		return buildTableRoutePrimitive(ctx, op, stmt, hints)
-	default:
-		return nil, vterrors.VT13001(fmt.Sprintf("select statement %T is not a table statement", stmt))
 	}
 }
 

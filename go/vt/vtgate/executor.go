@@ -1716,7 +1716,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 
 // buildNullFieldTypes builds a list of NULL field types for the given statement.
 func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bool) {
-	sel, ok := stmt.(sqlparser.SelectStatement)
+	sel, ok := stmt.(sqlparser.TableStatement)
 	if !ok {
 		return nil, countArguments(stmt), true
 	}

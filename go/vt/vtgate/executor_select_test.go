@@ -43,6 +43,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -3307,6 +3308,19 @@ func TestPrepareWithUnsupportedQuery(t *testing.T) {
 	sql = "select row_number over" // this is a syntax error. It should return an error.
 	_, _, err = executorPrepare(ctx, executor, session.Session, sql)
 	require.ErrorContains(t, err, "syntax error")
+}
+
+func TestBuildNullFieldTypesValuesStatement(t *testing.T) {
+	stmt, err := sqlparser.NewTestParser().Parse("values row(1, ?)")
+	require.NoError(t, err)
+
+	fields, paramsCount, success := buildNullFieldTypes(stmt)
+	require.True(t, success)
+	assert.EqualValues(t, 1, paramsCount)
+	require.Equal(t, []*querypb.Field{
+		{Name: "column_0", Type: querypb.Type_NULL_TYPE},
+		{Name: "column_1", Type: querypb.Type_NULL_TYPE},
+	}, fields)
 }
 
 func TestSelectDatabasePrepare(t *testing.T) {

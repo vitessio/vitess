@@ -84,26 +84,10 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 }
 
 func createOperatorFromValues(values *sqlparser.ValuesStatement) Operator {
-	if valuesStatementHasSubquery(values) {
+	if sqlparser.ValuesStatementHasSubquery(values) {
 		panic(vterrors.VT12001("subqueries in VALUES statements"))
 	}
 	return newHorizon(createDualRoute(), values)
-}
-
-func valuesStatementHasSubquery(values *sqlparser.ValuesStatement) bool {
-	if len(values.Rows) == 0 {
-		return false
-	}
-
-	found := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
-			found = true
-			return false, nil
-		}
-		return !found, nil
-	}, values.Rows)
-	return found
 }
 
 func addWherePredicates(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op Operator) Operator {

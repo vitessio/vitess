@@ -3201,6 +3201,22 @@ func (node *ValuesStatement) GetColumns() []SelectExpr {
 	return sel
 }
 
+func ValuesStatementHasSubquery(values *ValuesStatement) bool {
+	if len(values.Rows) == 0 {
+		return false
+	}
+
+	found := false
+	_ = Walk(func(node SQLNode) (bool, error) {
+		if _, ok := node.(*Subquery); ok {
+			found = true
+			return false, nil
+		}
+		return !found, nil
+	}, values.Rows)
+	return found
+}
+
 func (node *ValuesStatement) SetComments(comments Comments) {}
 
 func (node *ValuesStatement) GetParsedComments() *ParsedComments { return nil }

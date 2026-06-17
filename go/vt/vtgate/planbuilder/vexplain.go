@@ -141,7 +141,7 @@ func buildVExplainLoggingPlan(ctx context.Context, explain *sqlparser.VExplainSt
 func buildExplainStmtPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	explain := stmt.(*sqlparser.ExplainStmt)
 	switch explain.Statement.(type) {
-	case sqlparser.SelectStatement, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
+	case sqlparser.TableStatement, *sqlparser.Update, *sqlparser.Delete, *sqlparser.Insert:
 		return explainPlan(explain, reservedVars, vschema)
 	default:
 		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
@@ -155,6 +155,17 @@ func explainPlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.Reserve
 	}
 
 	ks := ctx.SemTable.SingleKeyspace()
+	if ks == nil {
+		if _, ok := explain.Statement.(*sqlparser.ValuesStatement); ok {
+			ks, _ = vschema.SelectedKeyspace()
+			if ks == nil {
+				ks, err = vschema.AnyKeyspace()
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	if ks == nil {
 		return nil, vterrors.VT03031()
 	}

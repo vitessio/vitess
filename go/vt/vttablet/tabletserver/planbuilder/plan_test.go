@@ -78,16 +78,19 @@ func TestValuesStatementPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 
 	tests := []struct {
-		query string
-		want  string
+		query       string
+		want        string
+		wantNoLimit string
 	}{
 		{
-			query: "values row('top-level VALUES ORDER BY generated name', 'values row(1) order by column_0', 1) order by column_0",
-			want:  "values row('top-level VALUES ORDER BY generated name', 'values row(1) order by column_0', 1) order by column_0 asc",
+			query:       "values row('top-level VALUES ORDER BY generated name', 'values row(1) order by column_0', 1) order by column_0",
+			want:        "values row('top-level VALUES ORDER BY generated name', 'values row(1) order by column_0', 1) order by column_0 asc limit :#maxLimit",
+			wantNoLimit: "values row('top-level VALUES ORDER BY generated name', 'values row(1) order by column_0', 1) order by column_0 asc",
 		},
 		{
-			query: "values row('top-level VALUES ORDER BY ordinal', 'values row(1) order by 1', 1) order by 1",
-			want:  "values row('top-level VALUES ORDER BY ordinal', 'values row(1) order by 1', 1) order by 1 asc",
+			query:       "values row('top-level VALUES ORDER BY ordinal', 'values row(1) order by 1', 1) order by 1",
+			want:        "values row('top-level VALUES ORDER BY ordinal', 'values row(1) order by 1', 1) order by 1 asc limit :#maxLimit",
+			wantNoLimit: "values row('top-level VALUES ORDER BY ordinal', 'values row(1) order by 1', 1) order by 1 asc",
 		},
 	}
 
@@ -100,6 +103,11 @@ func TestValuesStatementPlan(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, PlanSelect, plan.PlanID)
 			require.Equal(t, tt.want, plan.FullQuery.Query)
+
+			plan, err = Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", true)
+			require.NoError(t, err)
+			require.Equal(t, PlanSelect, plan.PlanID)
+			require.Equal(t, tt.wantNoLimit, plan.FullQuery.Query)
 		})
 	}
 }

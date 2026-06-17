@@ -237,9 +237,6 @@ func (tc *tableCollector) collectValuesUnionTypesAndDeps(
 			return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
 		}
 		for i, expr := range row {
-			if i >= size {
-				return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
-			}
 			_, recursiveDeps, qt := tc.org.depsForExpr(expr)
 			recursive[i] = recursive[i].Merge(recursiveDeps)
 			if err := typers[i].Add(qt, collations); err != nil {
