@@ -2480,6 +2480,27 @@
         "consul"
       ]
     },
+    "vreplication_switch_traffic_order": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestSwitchReadsWritesInAnyOrder",
+        "-timeout",
+        "30m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_v2",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
     "vreplication_v2": {
       "File": "unused.go",
       "Packages": [
