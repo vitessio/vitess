@@ -46,9 +46,9 @@ import (
 
 // init ensures throttler metrics are registered before any test runs, since some tests
 // construct QueryThrottler directly (bypassing NewQueryThrottler) and reference the
-// package-level metric vars. Schema matches TabletConfig{}.EnablePerWorkloadTableMetrics=false.
+// package-level metric vars. The schema is unconditional, so no flag is needed.
 func init() {
-	initThrottlerMetrics(false)
+	initThrottlerMetrics()
 }
 
 func TestSelectThrottlingStrategy(t *testing.T) {
@@ -346,13 +346,13 @@ func TestQueryThrottler_buildLabels(t *testing.T) {
 		{
 			name:               "workload label disabled, no extras",
 			perWorkloadMetrics: false,
-			want:               []string{"strat", "50"},
+			want:               []string{"strat", "unknown", "50"},
 		},
 		{
 			name:               "workload label disabled, with extras",
 			perWorkloadMetrics: false,
 			extras:             []string{"cpu", "false"},
-			want:               []string{"strat", "50", "cpu", "false"},
+			want:               []string{"strat", "unknown", "50", "cpu", "false"},
 		},
 		{
 			name:               "workload label enabled, no extras",
@@ -374,6 +374,36 @@ func TestQueryThrottler_buildLabels(t *testing.T) {
 			require.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// TestQueryThrottler_metricsLabelCountStableAcrossInstances guards the panic the stats schema
+// would suffer if instances with diverging EnablePerWorkloadTableMetrics shared the
+// process-global metrics: the label *count* must be identical regardless of the per-instance
+// flag, otherwise CountersWithMultiLabels.Add / MultiTimings.Record panic on a count mismatch.
+// On the pre-fix code the enabled instance produced 3 base values against a 2-label registered
+// schema, so the Add/Record calls below panicked.
+func TestQueryThrottler_metricsLabelCountStableAcrossInstances(t *testing.T) {
+	enabled := &QueryThrottler{perWorkloadMetrics: true}
+	disabled := &QueryThrottler{perWorkloadMetrics: false}
+
+	enabledBase := enabled.buildLabels("noop", "wl", "50")
+	disabledBase := disabled.buildLabels("noop", "wl", "50")
+	require.Len(t, disabledBase, len(enabledBase), "base label count must not depend on the per-instance flag")
+
+	enabledThrottled := enabled.buildLabels("noop", "wl", "50", "cpu", "false")
+	disabledThrottled := disabled.buildLabels("noop", "wl", "50", "cpu", "false")
+	require.Len(t, disabledThrottled, len(enabledThrottled), "throttled label count must not depend on the per-instance flag")
+
+	require.NotPanics(t, func() {
+		requestsTotal.Add(enabledBase, 1)
+		requestsTotal.Add(disabledBase, 1)
+		requestsThrottled.Add(enabledThrottled, 1)
+		requestsThrottled.Add(disabledThrottled, 1)
+		totalLatency.Record(enabledBase, time.Now())
+		totalLatency.Record(disabledBase, time.Now())
+		evaluateLatency.Record(enabledBase, time.Now())
+		evaluateLatency.Record(disabledBase, time.Now())
+	}, "stats must accept labels from instances regardless of EnablePerWorkloadTableMetrics")
 }
 
 func TestQueryThrottler_extractPriority(t *testing.T) {

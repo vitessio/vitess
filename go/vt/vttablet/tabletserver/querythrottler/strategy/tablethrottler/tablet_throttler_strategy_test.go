@@ -263,10 +263,13 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 				randFloat64: func() float64 { return tt.giveRandValue },
 				randIntN:    func(n int) int { return tt.givePriorityRandValue },
 			})
-			// Start() primes the cache synchronously so Evaluate() sees the
-			// configured throttle result; without it the hot path fails open.
+			// Start() now primes the cache asynchronously in the updater goroutine.
+			// Prime synchronously here so Evaluate() deterministically observes the
+			// configured throttle result instead of racing the background refresh
+			// (or failing open while the cache is still cold).
 			tts.Start()
 			defer tts.Stop()
+			tts.refreshCache()
 
 			decision := tts.Evaluate(context.Background(), tt.giveTabletType, &sqlparser.ParsedQuery{Query: tt.giveSQL}, tt.giveTxnID, toQueryAttributesForTest(tt.giveOptions))
 			if tt.wantErr != "" {

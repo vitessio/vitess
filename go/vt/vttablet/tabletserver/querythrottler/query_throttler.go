@@ -53,6 +53,13 @@ const (
 	queryThrottlerAppName = "QueryThrottler"
 	// defaultPriority is the default priority value when none is specified
 	defaultPriority = 100 // sqlparser.MaxPriorityValue
+	// unknownWorkload is the Workload label value used both when the client supplies no
+	// workload and as the bounded value when per-workload metrics are disabled. The stats
+	// schema always carries a Workload label so the registered label cardinality is identical
+	// for every QueryThrottler in the process, regardless of how each instance set
+	// EnablePerWorkloadTableMetrics. Collapsing the value to this constant when the feature is
+	// off avoids the unbounded cardinality of client-supplied WORKLOAD_NAME directives.
+	unknownWorkload = "unknown"
 )
 
 var (
@@ -64,18 +71,16 @@ var (
 )
 
 // initThrottlerMetrics registers the query throttler stats exactly once per process.
-// The Workload label is included only when includeWorkloadLabel is true: workload names
-// come from the client-supplied WORKLOAD_NAME query directive and are otherwise unbounded,
-// which would cause label-cardinality blowup in the hot path. This mirrors the existing
-// gating used by QueryEngine.queryCounts (see query_engine.go) behind --enable-per-workload-table-metrics.
-func initThrottlerMetrics(includeWorkloadLabel bool) {
+// The schema always carries a Workload label so the registered label cardinality is identical
+// for every QueryThrottler in the process. This decouples registration (process-global, here)
+// from the per-instance decision of what value to emit for Workload: buildLabels emits the
+// client-supplied workload only when EnablePerWorkloadTableMetrics is on and the bounded
+// unknownWorkload sentinel otherwise, so divergent per-instance flags can never produce a
+// label-count mismatch (which would panic on the hot path).
+func initThrottlerMetrics() {
 	metricsInitOnce.Do(func() {
-		baseLabels := []string{"Strategy", "Priority"}
-		throttledLabels := []string{"Strategy", "Priority", "MetricName", "DryRun"}
-		if includeWorkloadLabel {
-			baseLabels = []string{"Strategy", "Workload", "Priority"}
-			throttledLabels = []string{"Strategy", "Workload", "Priority", "MetricName", "DryRun"}
-		}
+		baseLabels := []string{"Strategy", "Workload", "Priority"}
+		throttledLabels := []string{"Strategy", "Workload", "Priority", "MetricName", "DryRun"}
 		requestsTotal = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Requests", "query throttler requests", baseLabels)
 		requestsThrottled = stats.NewCountersWithMultiLabels(queryThrottlerAppName+"Throttled", "query throttler requests throttled", throttledLabels)
 		totalLatency = stats.NewMultiTimings(queryThrottlerAppName+"TotalLatencyNs", "Total time each request takes in query throttling including evaluation, metric checks, and other overhead (nanoseconds)", baseLabels)
@@ -120,9 +125,12 @@ type QueryThrottler struct {
 	// snapshot holds the current immutable {cfg, strategy} pair. Always non-nil after NewQueryThrottler. Updated via atomic Store in HandleConfigUpdate.
 	snapshot atomic.Pointer[stateSnapshot]
 
-	// perWorkloadMetrics, when true, includes the Workload label in throttler stats.
-	// Read once at construction from env.Config().EnablePerWorkloadTableMetrics; the
-	// workload value is otherwise unbounded (client-supplied via WORKLOAD_NAME directive).
+	// perWorkloadMetrics, when true, makes throttler stats emit the client-supplied workload
+	// as the Workload label value; when false the bounded unknownWorkload sentinel is emitted
+	// instead. It gates only the label *value*, never the registered label *count* (the schema
+	// always carries a Workload label). Read once at construction from
+	// env.Config().EnablePerWorkloadTableMetrics; the workload value is otherwise unbounded
+	// (client-supplied via WORKLOAD_NAME directive).
 	perWorkloadMetrics bool
 
 	// newStrategyFactory builds a strategy from a config snapshot. NewQueryThrottler
@@ -138,7 +146,7 @@ func NewQueryThrottler(ctx context.Context, throttler *throttle.Throttler, env t
 	client := throttle.NewBackgroundClient(throttler, throttlerapp.QueryThrottlerName, base.UndefinedScope)
 
 	perWorkloadMetrics := env.Config().EnablePerWorkloadTableMetrics
-	initThrottlerMetrics(perWorkloadMetrics)
+	initThrottlerMetrics()
 
 	qt := &QueryThrottler{
 		ctx:                ctx,
@@ -325,16 +333,17 @@ func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 	log.Info(fmt.Sprintf("QueryThrottler: started event-driven watch for SrvKeyspace keyspace=%s cell=%s", qt.keyspace, qt.cell))
 }
 
-// buildLabels returns the throttler stat label set, optionally appending extras after
-// the base {Strategy, Priority} (or {Strategy, Workload, Priority} when per-workload
-// metrics are enabled). Workload is excluded by default because its value comes from
-// the client-controlled WORKLOAD_NAME query directive and is otherwise unbounded,
-// which would cause label-cardinality blowup in the hot path.
+// buildLabels returns the throttler stat label set: the base {Strategy, Workload, Priority}
+// followed by any extras. The schema always carries a Workload label; this method decides only
+// its value — the client-supplied workload when per-workload metrics are enabled, otherwise the
+// bounded unknownWorkload sentinel, because the workload comes from the client-controlled
+// WORKLOAD_NAME directive and is otherwise unbounded, which would cause label-cardinality blowup
+// in the hot path.
 func (qt *QueryThrottler) buildLabels(strategyName, workload, priorityStr string, extras ...string) []string {
-	if qt.perWorkloadMetrics {
-		return append([]string{strategyName, workload, priorityStr}, extras...)
+	if !qt.perWorkloadMetrics {
+		workload = unknownWorkload
 	}
-	return append([]string{strategyName, priorityStr}, extras...)
+	return append([]string{strategyName, workload, priorityStr}, extras...)
 }
 
 // extractWorkloadName extracts the workload name from ExecuteOptions.
@@ -344,7 +353,7 @@ func (qt *QueryThrottler) buildLabels(strategyName, workload, priorityStr string
 // metric-label cardinality without giving operators an actionable signal.
 func extractWorkloadName(options *querypb.ExecuteOptions) string {
 	if options == nil || options.WorkloadName == "" {
-		return "unknown"
+		return unknownWorkload
 	}
 	return options.WorkloadName
 }
@@ -454,8 +463,11 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 	}
 
 	// Take the lock only for the swap to serialize with Shutdown. Start() runs
-	// under the lock to match the original behavior (consistent with strategy
-	// installation). Throttle() never contends on this lock.
+	// under the lock so the shutdown check, Start, and snapshot.Store are atomic —
+	// this prevents a concurrent Shutdown from completing between Start and Store and
+	// leaking the new strategy's background goroutines. This is safe to hold across
+	// Start() because Start() is non-blocking (its initial cache prime is async), so a
+	// slow throttle check can no longer stall this lock. Throttle() never contends on it.
 	shutdownLost := false
 	func() {
 		qt.mu.Lock()

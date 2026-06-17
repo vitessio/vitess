@@ -167,11 +167,15 @@ func NewTabletThrottlerStrategy(throttleClient ThrottlerClientWrapper, cfg *quer
 // side-effect-free: a strategy that is built but never installed (e.g. because
 // QueryThrottler.HandleConfigUpdate races with Shutdown and the strategy is
 // discarded before the snapshot swap) cannot leak background goroutines.
+//
+// Start is non-blocking: the initial cache prime runs inside the updater goroutine
+// (runCacheUpdater), not synchronously here, so Start never blocks on a throttle check.
+// This matters because callers may hold a lock across Start — QueryThrottler.HandleConfigUpdate
+// invokes it under qt.mu — and a synchronous prime (up to throttleCheckTimeout) would stall
+// Shutdown and subsequent config callbacks behind that lock. The hot path fails open while
+// the cache is unprimed.
 func (s *TabletThrottlerStrategy) Start() {
 	if s.running.CompareAndSwap(false, true) {
-		// Prime the cache immediately to eliminate initial cache misses
-		s.refreshCache()
-
 		updateInterval := resolveCacheUpdateInterval(s.tabletConfig)
 		s.updateTicker = time.NewTicker(updateInterval)
 		go s.runCacheUpdater()
@@ -240,6 +244,12 @@ func (s *TabletThrottlerStrategy) UpdateConfig(cfg *querythrottlerpb.Config) {
 func (s *TabletThrottlerStrategy) runCacheUpdater() {
 	defer close(s.done)
 	defer s.updateTicker.Stop()
+
+	// Prime the cache immediately so the first ticker interval isn't served with a
+	// cold cache. Running it here rather than synchronously in Start keeps Start
+	// non-blocking (callers may hold a lock across it); the hot path fails open until
+	// this first refresh lands.
+	s.refreshCache()
 
 	for {
 		select {
