@@ -67,15 +67,14 @@ func checkValuesStatement(values *sqlparser.ValuesStatement) error {
 		return nil
 	}
 
-	foundSubquery := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
-			foundSubquery = true
-			return false, nil
+	size := len(values.Rows[0])
+	for _, row := range values.Rows[1:] {
+		if len(row) != size {
+			return &UnionColumnsDoNotMatchError{FirstProj: size, SecondProj: len(row)}
 		}
-		return !foundSubquery, nil
-	}, values.Rows)
-	if foundSubquery {
+	}
+
+	if sqlparser.ValuesStatementHasSubquery(values) {
 		return vterrors.VT12001("subqueries in VALUES statements")
 	}
 	return nil

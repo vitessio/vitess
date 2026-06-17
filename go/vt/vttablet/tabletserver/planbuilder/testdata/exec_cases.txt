@@ -39,7 +39,7 @@
 {
   "PlanID": "Select",
   "TableName": "",
-  "FullQuery": "values row(1)"
+  "FullQuery": "values row(1) limit :#maxLimit"
 }
 
 # with no where clause

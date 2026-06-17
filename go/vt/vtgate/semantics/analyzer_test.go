@@ -998,6 +998,12 @@ func TestInvalidQueries(t *testing.T) {
 		sql: "select 1 union select *, m from t1",
 		err: &UnionColumnsDoNotMatchError{FirstProj: 1, SecondProj: 2},
 	}, {
+		sql: "values row(1, 2), row(3)",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 2, SecondProj: 1},
+	}, {
+		sql: "values row(1, 2), row(3) order by column_1 + 1",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 2, SecondProj: 1},
+	}, {
 		sql:  "select * from (select sql_calc_found_rows id from a) as t",
 		serr: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
 	}, {

@@ -17,17 +17,29 @@ limitations under the License.
 package planbuilder
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
+
+type targetDestinationFailingVSchema struct {
+	plancontext.VSchema
+}
+
+func (targetDestinationFailingVSchema) TargetDestination(string) (key.ShardDestination, *vindexes.Keyspace, topodatapb.TabletType, error) {
+	return nil, nil, topodatapb.TabletType_UNKNOWN, errors.New("unexpected TargetDestination fallback")
+}
 
 func TestValuesStatementPlanning(t *testing.T) {
 	env := vtenv.NewTestEnv()
@@ -144,6 +156,57 @@ func TestValuesStatementPlanningRejectsSubqueries(t *testing.T) {
 			require.ErrorContains(t, err, tt.err)
 		})
 	}
+}
+
+func TestValuesStatementPlanningRejectsRaggedRows(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := vindexes.BuildVSchema(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"main": {Sharded: false},
+		},
+	}, sqlparser.NewTestParser())
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+	vw.Keyspace = vschema.Keyspaces["main"].Keyspace
+
+	tests := []string{
+		"values row(1, 2), row(3)",
+		"values row(1, 2), row(3) order by column_1 + 1",
+	}
+
+	for _, query := range tests {
+		t.Run(query, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				_, err = TestBuilder(query, vw, vw.CurrentDb())
+			})
+			require.ErrorContains(t, err, "The used SELECT statements have a different number of columns: 2, 1")
+		})
+	}
+}
+
+func TestExplainValuesStatementPlanning(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := vindexes.BuildVSchema(&vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"main": {Sharded: false},
+		},
+	}, sqlparser.NewTestParser())
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+	vw.Keyspace = vschema.Keyspaces["main"].Keyspace
+
+	stmt, bindVars, err := sqlparser.NewTestParser().Parse2("explain values row(1)")
+	require.NoError(t, err)
+
+	reservedVars := sqlparser.NewReservedVars("vtg", bindVars)
+	plan, err := buildExplainStmtPlan(stmt, reservedVars, targetDestinationFailingVSchema{VSchema: vw})
+	require.NoError(t, err)
+	send, ok := plan.primitive.(*engine.Send)
+	require.True(t, ok)
+	require.Equal(t, "main", send.Keyspace.Name)
+	_, ok = send.TargetDestination.(key.DestinationAnyShard)
+	require.True(t, ok)
+	require.Equal(t, "explain values row(1)", send.Query)
 }
 
 func TestValuesStatementUnionAgainstShardedTable(t *testing.T) {

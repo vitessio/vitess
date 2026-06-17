@@ -132,26 +132,10 @@ func statementHasValuesSubquery(stmt sqlparser.Statement) bool {
 	found := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if values, ok := node.(*sqlparser.ValuesStatement); ok {
-			found = valuesRowsHaveSubquery(values)
+			found = sqlparser.ValuesStatementHasSubquery(values)
 		}
 		return !found, nil
 	}, stmt)
-	return found
-}
-
-func valuesRowsHaveSubquery(values *sqlparser.ValuesStatement) bool {
-	if len(values.Rows) == 0 {
-		return false
-	}
-
-	found := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
-			found = true
-			return false, nil
-		}
-		return !found, nil
-	}, values.Rows)
 	return found
 }
 
