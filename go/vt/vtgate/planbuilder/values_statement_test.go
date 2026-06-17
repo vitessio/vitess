@@ -103,7 +103,16 @@ func TestValuesStatementPlanningRewritesOrderByGeneratedColumns(t *testing.T) {
 			routeQuery: "values row(2, 'b'), row(1, 'a') order by 1 asc",
 		},
 		{
+			query:      "values row(2, 'b'), row(1, 'a') order by COLUMN_0",
+			routeQuery: "values row(2, 'b'), row(1, 'a') order by 1 asc",
+		},
+		{
 			query:         "values row('case', 'sql', 1, 10), row('case', 'sql', 2, 20) order by column_2 + column_3 desc",
+			routeQuery:    "values row('case', 'sql', 1, 10, 1 + 10), row('case', 'sql', 2, 20, 2 + 20) order by 5 desc",
+			truncateCount: 4,
+		},
+		{
+			query:         "values row('case', 'sql', 1, 10), row('case', 'sql', 2, 20) order by COLUMN_2 + Column_3 desc",
 			routeQuery:    "values row('case', 'sql', 1, 10, 1 + 10), row('case', 'sql', 2, 20, 2 + 20) order by 5 desc",
 			truncateCount: 4,
 		},
