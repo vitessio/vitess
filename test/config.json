@@ -2480,6 +2480,25 @@
         "consul"
       ]
     },
+    "vreplication_performance": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestReplicationStress"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_v2",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
     "vreplication_switch_traffic_order": {
       "File": "unused.go",
       "Packages": [

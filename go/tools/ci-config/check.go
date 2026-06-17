@@ -50,20 +50,6 @@ type (
 		Tests map[string]*Test
 	}
 
-	// AllowedOrphan is a test function that is intentionally not run by any
-	// config entry. Reason is mandatory: JSON has no comments, so the
-	// justification must live in the data.
-	AllowedOrphan struct {
-		Package string
-		Test    string
-		Reason  string
-	}
-
-	// Allowlist is the object serialized in test/ci_orphaned_tests.json.
-	Allowlist struct {
-		Orphans []AllowedOrphan
-	}
-
 	// entry is a single named test entry together with the config file it
 	// was loaded from.
 	entry struct {
@@ -75,17 +61,11 @@ type (
 
 const modulePrefix = "vitess.io/vitess/"
 
-// run loads the config files and the allowlist and returns all problems
-// found. It only returns an error for I/O-level failures reading the
-// allowlist; config problems are reported as strings.
-func run(root string, configPaths []string, allowlistPath string) ([]string, error) {
+// run loads the config files and returns all problems found.
+func run(root string, configPaths []string) []string {
 	entries, problems := loadConfigs(configPaths)
-	allow, err := loadAllowlist(allowlistPath)
-	if err != nil {
-		return nil, err
-	}
-	problems = append(problems, runChecks(root, entries, allow)...)
-	return problems, nil
+	problems = append(problems, runChecks(root, entries)...)
+	return problems
 }
 
 // loadConfigs reads every config file and returns the flattened entries in
@@ -122,23 +102,6 @@ func loadConfigs(paths []string) ([]entry, []string) {
 		}
 	}
 	return entries, problems
-}
-
-// loadAllowlist reads the orphan allowlist. A missing file is an empty
-// allowlist, so the tool keeps working on release branches that predate it.
-func loadAllowlist(path string) (Allowlist, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return Allowlist{}, nil
-		}
-		return Allowlist{}, err
-	}
-	var allow Allowlist
-	if err := json.Unmarshal(content, &allow); err != nil {
-		return Allowlist{}, fmt.Errorf("cannot parse %s: %w", path, err)
-	}
-	return allow, nil
 }
 
 // pkgDir maps a package import path from a config entry to a directory
@@ -294,13 +257,11 @@ func splitRegexp(s string) []string {
 //     entry's packages (a regex that matches nothing means the entry silently
 //     runs no tests);
 //   - every test function in a configured package must be selected by at
-//     least one entry, or be listed in the allowlist with a reason;
-//   - every allowlist row must reference an existing, still-unselected test,
-//     so the allowlist shrinks as orphans are re-enabled.
+//     least one entry.
 //
 // Manual entries are skipped entirely: they neither provide coverage (they
 // don't run in CI) nor pull their packages into scope.
-func runChecks(root string, entries []entry, allow Allowlist) []string {
+func runChecks(root string, entries []entry) []string {
 	var problems []string
 	addf := func(format string, a ...any) {
 		problems = append(problems, fmt.Sprintf(format, a...))
@@ -389,14 +350,6 @@ func runChecks(root string, entries []entry, allow Allowlist) []string {
 		}
 	}
 
-	allowed := make(map[string]map[string]bool)
-	for _, orphan := range allow.Orphans {
-		if allowed[orphan.Package] == nil {
-			allowed[orphan.Package] = make(map[string]bool)
-		}
-		allowed[orphan.Package][orphan.Test] = true
-	}
-
 	pkgs := make([]string, 0, len(inScope))
 	for pkg := range inScope {
 		pkgs = append(pkgs, pkg)
@@ -407,36 +360,7 @@ func runChecks(root string, entries []entry, allow Allowlist) []string {
 			if _, ok := covered[pkg][test]; ok {
 				continue
 			}
-			if allowed[pkg][test] {
-				continue
-			}
-			addf("package %s: %s is not run by any entry in test/config*.json; add or broaden an entry to run it, or add it to test/ci_orphaned_tests.json with a reason", pkg, test)
-		}
-	}
-
-	seenRows := make(map[string]bool)
-	for _, orphan := range allow.Orphans {
-		key := orphan.Package + "." + orphan.Test
-		if seenRows[key] {
-			addf("allowlist: duplicate row for %s in package %s", orphan.Test, orphan.Package)
-			continue
-		}
-		seenRows[key] = true
-		if orphan.Reason == "" {
-			addf("allowlist: row for %s in package %s has no Reason", orphan.Test, orphan.Package)
-		}
-		if !inScope[orphan.Package] {
-			addf("allowlist: package %s is not referenced by any test/config*.json entry; remove its rows", orphan.Package)
-			continue
-		}
-		tests := testsCache[orphan.Package]
-		idx := sort.SearchStrings(tests, orphan.Test)
-		if idx >= len(tests) || tests[idx] != orphan.Test {
-			addf("allowlist: %s does not exist in package %s; remove the row", orphan.Test, orphan.Package)
-			continue
-		}
-		if entryName, ok := covered[orphan.Package][orphan.Test]; ok {
-			addf("allowlist: %s in package %s is now covered by entry %q; remove the row", orphan.Test, orphan.Package, entryName)
+			addf("package %s: %s is not run by any entry in test/config*.json; add or broaden an entry to run it", pkg, test)
 		}
 	}
 

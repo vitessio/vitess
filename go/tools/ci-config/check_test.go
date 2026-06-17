@@ -149,20 +149,6 @@ func TestLoadConfigs(t *testing.T) {
 	require.Len(t, problems, 1)
 }
 
-func TestLoadAllowlist(t *testing.T) {
-	t.Run("present", func(t *testing.T) {
-		allow, err := loadAllowlist("testdata/allowlist.json")
-		require.NoError(t, err)
-		require.Len(t, allow.Orphans, 1)
-		require.Equal(t, "TestBar", allow.Orphans[0].Test)
-	})
-	t.Run("missing file is empty allowlist", func(t *testing.T) {
-		allow, err := loadAllowlist("testdata/nosuchallowlist.json")
-		require.NoError(t, err)
-		require.Empty(t, allow.Orphans)
-	})
-}
-
 func entryFor(name string, test *Test) entry {
 	return entry{configFile: "test/config.json", name: name, test: test}
 }
@@ -171,7 +157,7 @@ func TestRunChecks(t *testing.T) {
 	t.Run("entry without -run covers all tests", func(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
-		}, Allowlist{})
+		})
 		require.Empty(t, problems)
 	})
 
@@ -179,7 +165,7 @@ func TestRunChecks(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
 			entryFor("dead", &Test{Packages: []string{pkgA}, Args: []string{"-run", "TestNope"}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, "dead", "TestNope", pkgA)
 		require.Len(t, problems, 1)
 	})
@@ -188,7 +174,7 @@ func TestRunChecks(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
 			entryFor("bad", &Test{Packages: []string{pkgA}, Args: []string{"-run", "Test["}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, "bad", "Test[")
 		require.Len(t, problems, 1)
 	})
@@ -197,7 +183,7 @@ func TestRunChecks(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
 			entryFor("dangling", &Test{Packages: []string{pkgA}, Args: []string{"-run"}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, "dangling", "-run")
 		require.Len(t, problems, 1)
 	})
@@ -205,7 +191,7 @@ func TestRunChecks(t *testing.T) {
 	t.Run("orphaned tests are reported", func(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("foo_only", &Test{Packages: []string{pkgA}, Args: []string{"-run", "TestFoo"}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, pkgA, "TestBar")
 		requireProblem(t, problems, pkgA, "TestExternal")
 		requireProblem(t, problems, pkgA, "TestLinuxOnly")
@@ -216,74 +202,8 @@ func TestRunChecks(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
 			entryFor("subtest", &Test{Packages: []string{pkgA}, Args: []string{"-run", "TestFoo/sub/case"}}),
-		}, Allowlist{})
+		})
 		require.Empty(t, problems)
-	})
-
-	t.Run("allowlisted orphans are accepted", func(t *testing.T) {
-		problems := runChecks(fixtureRoot, []entry{
-			entryFor("foo_only", &Test{Packages: []string{pkgA}, Args: []string{"-run", "TestFoo"}}),
-		}, Allowlist{Orphans: []AllowedOrphan{
-			{Package: pkgA, Test: "TestBar", Reason: "r"},
-			{Package: pkgA, Test: "TestExternal", Reason: "r"},
-			{Package: pkgA, Test: "TestLinuxOnly", Reason: "r"},
-		}})
-		require.Empty(t, problems)
-	})
-
-	t.Run("stale allowlist row for a covered test is reported", func(t *testing.T) {
-		problems := runChecks(fixtureRoot, []entry{
-			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
-		}, Allowlist{Orphans: []AllowedOrphan{
-			{Package: pkgA, Test: "TestFoo", Reason: "r"},
-		}})
-		requireProblem(t, problems, "TestFoo", "covered", "all_pkga")
-		require.Len(t, problems, 1)
-	})
-
-	t.Run("stale allowlist row for a nonexistent test is reported", func(t *testing.T) {
-		problems := runChecks(fixtureRoot, []entry{
-			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
-		}, Allowlist{Orphans: []AllowedOrphan{
-			{Package: pkgA, Test: "TestGone", Reason: "r"},
-		}})
-		requireProblem(t, problems, "TestGone", pkgA)
-		require.Len(t, problems, 1)
-	})
-
-	t.Run("allowlist row for an unconfigured package is reported", func(t *testing.T) {
-		problems := runChecks(fixtureRoot, []entry{
-			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
-		}, Allowlist{Orphans: []AllowedOrphan{
-			{Package: pkgB, Test: "TestB1", Reason: "r"},
-		}})
-		requireProblem(t, problems, pkgB)
-		require.Len(t, problems, 1)
-	})
-
-	t.Run("allowlist row without a reason is reported", func(t *testing.T) {
-		problems := runChecks(fixtureRoot, []entry{
-			entryFor("foo_only", &Test{Packages: []string{pkgA}, Args: []string{"-run", "TestFoo"}}),
-		}, Allowlist{Orphans: []AllowedOrphan{
-			{Package: pkgA, Test: "TestBar"},
-			{Package: pkgA, Test: "TestExternal", Reason: "r"},
-			{Package: pkgA, Test: "TestLinuxOnly", Reason: "r"},
-		}})
-		requireProblem(t, problems, "TestBar", "Reason")
-		require.Len(t, problems, 1)
-	})
-
-	t.Run("duplicate allowlist rows are reported", func(t *testing.T) {
-		problems := runChecks(fixtureRoot, []entry{
-			entryFor("foo_only", &Test{Packages: []string{pkgA}, Args: []string{"-run", "TestFoo"}}),
-		}, Allowlist{Orphans: []AllowedOrphan{
-			{Package: pkgA, Test: "TestBar", Reason: "r"},
-			{Package: pkgA, Test: "TestBar", Reason: "r"},
-			{Package: pkgA, Test: "TestExternal", Reason: "r"},
-			{Package: pkgA, Test: "TestLinuxOnly", Reason: "r"},
-		}})
-		requireProblem(t, problems, "duplicate", "TestBar")
-		require.Len(t, problems, 1)
 	})
 
 	t.Run("multi-package entry must match in every package", func(t *testing.T) {
@@ -291,7 +211,7 @@ func TestRunChecks(t *testing.T) {
 			entryFor("all_pkga", &Test{Packages: []string{pkgA}}),
 			entryFor("all_pkgb", &Test{Packages: []string{pkgB}}),
 			entryFor("multi", &Test{Packages: []string{pkgA, pkgB}, Args: []string{"-run", "TestFoo"}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, "multi", "TestFoo", pkgB)
 		require.Len(t, problems, 1)
 	})
@@ -299,7 +219,7 @@ func TestRunChecks(t *testing.T) {
 	t.Run("missing package directory is reported", func(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("missing", &Test{Packages: []string{"vitess.io/vitess/go/test/endtoend/nosuchpkg"}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, "missing", "nosuchpkg")
 		require.Len(t, problems, 1)
 	})
@@ -307,7 +227,7 @@ func TestRunChecks(t *testing.T) {
 	t.Run("package import path outside the module is reported", func(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("foreign", &Test{Packages: []string{"github.com/foo/bar"}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, "foreign", "github.com/foo/bar")
 		require.Len(t, problems, 1)
 	})
@@ -315,7 +235,7 @@ func TestRunChecks(t *testing.T) {
 	t.Run("package with no test functions is reported", func(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("empty", &Test{Packages: []string{pkgEmpty}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, "empty", pkgEmpty)
 		require.Len(t, problems, 1)
 	})
@@ -323,7 +243,7 @@ func TestRunChecks(t *testing.T) {
 	t.Run("entry without packages is skipped", func(t *testing.T) {
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("command_only", &Test{Command: []string{"some/script.sh"}}),
-		}, Allowlist{})
+		})
 		require.Empty(t, problems)
 	})
 
@@ -331,7 +251,7 @@ func TestRunChecks(t *testing.T) {
 		// A manual entry alone does not bring pkga into scope: no problems.
 		problems := runChecks(fixtureRoot, []entry{
 			entryFor("manual_all", &Test{Packages: []string{pkgA}, Manual: true}),
-		}, Allowlist{})
+		})
 		require.Empty(t, problems)
 
 		// A manual entry does not count as coverage for a package brought
@@ -339,7 +259,7 @@ func TestRunChecks(t *testing.T) {
 		problems = runChecks(fixtureRoot, []entry{
 			entryFor("manual_all", &Test{Packages: []string{pkgA}, Manual: true}),
 			entryFor("foo_only", &Test{Packages: []string{pkgA}, Args: []string{"-run", "TestFoo"}}),
-		}, Allowlist{})
+		})
 		requireProblem(t, problems, pkgA, "TestBar")
 		requireProblem(t, problems, pkgA, "TestExternal")
 		requireProblem(t, problems, pkgA, "TestLinuxOnly")

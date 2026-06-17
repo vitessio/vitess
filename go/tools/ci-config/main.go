@@ -29,8 +29,6 @@ import (
 	"path/filepath"
 )
 
-const allowlistPath = "test/ci_orphaned_tests.json"
-
 func main() {
 	// The same glob test.go uses to load the configs.
 	configPaths, err := filepath.Glob("test/config*.json")
@@ -41,10 +39,7 @@ func main() {
 		log.Fatal("no test/config*.json files found; run this tool from the repository root")
 	}
 
-	problems, err := run(".", configPaths, allowlistPath)
-	if err != nil {
-		log.Fatal(err)
-	}
+	problems := run(".", configPaths)
 	if len(problems) > 0 {
 		fmt.Println("Problems found in the CI test configuration:")
 		for _, problem := range problems {

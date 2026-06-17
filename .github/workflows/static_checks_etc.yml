@@ -114,7 +114,6 @@ jobs:
             ci_config:
               - 'test/config.json'
               - 'test/config_partial_keyspace.json'
-              - 'test/ci_orphaned_tests.json'
               - '.github/workflows/static_checks_etc.yml'
             release_notes:
               - 'changelog/**'

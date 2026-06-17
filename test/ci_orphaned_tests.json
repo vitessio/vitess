@@ -1,9 +1,0 @@
-{
-  "Orphans": [
-    {
-      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
-      "Test": "TestReplicationStress",
-      "Reason": "Performance/stress test that self-skips unless the -perf-test flag is set; intentionally not run in CI. See https://github.com/vitessio/vitess/issues/20261."
-    }
-  ]
-}
