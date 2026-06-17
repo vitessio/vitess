@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[Query Serving](#bug-fixes-query-serving)**
+        - [DML on the streaming (OLAP) path](#query-serving-dml-streaming-olap)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,17 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-query-serving"/>Query Serving</a>
+
+#### <a id="query-serving-dml-streaming-olap"/>DML on the streaming (OLAP) path</a>
+
+Previously, running an INSERT, UPDATE, or DELETE in a shard-targeted session (for example, after `USE ks:-80`) failed with `INSERT not allowed for streaming` when the session was in OLAP mode. VTGate plans such DML as a `Send` primitive and dispatches it to the tablet over the `StreamExecute` RPC, which rejected every DML statement.
+
+These statements now succeed. The client receives the correct `RowsAffected`, and the DML appears in the tablet's per-table query stats just like the equivalent statement on the non-streaming `Execute` path. Since a DML returns only a rows-affected result with no rows to stream, this is a correctness fix rather than a streaming improvement.
+
+Vindex-routed DML still delegates to the non-streaming path and is unchanged. DDL, SET, migrations, and `LOAD` on the streaming path remain rejected.
+
+See [#20268](https://github.com/vitessio/vitess/pull/20268) for details.
