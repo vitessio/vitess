@@ -266,21 +266,28 @@ func Build(env *vtenv.Environment, statement sqlparser.Statement, tables map[str
 
 // BuildStreaming builds a streaming plan based on the schema.
 func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
-	plan := &Plan{
-		PlanID:    PlanSelectStream,
-		FullQuery: GenerateFullQuery(statement),
-	}
-
+	var plan *Plan
 	var err error
 	switch stmt := statement.(type) {
 	case *sqlparser.Select:
+		plan = &Plan{
+			PlanID:    PlanSelectStream,
+			FullQuery: GenerateFullQuery(statement),
+		}
 		if hasLockFunc(stmt) {
 			plan.NeedsReservedConn = true
 		}
 		plan.Table = lookupTables(stmt.From, tables)
 	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
+		plan = &Plan{
+			PlanID:    PlanSelectStream,
+			FullQuery: GenerateFullQuery(statement),
+		}
 	case *sqlparser.Analyze:
-		plan.PlanID = PlanOtherRead
+		plan = &Plan{
+			PlanID:    PlanOtherRead,
+			FullQuery: GenerateFullQuery(statement),
+		}
 	case *sqlparser.Insert:
 		plan, err = analyzeInsert(stmt, tables)
 	case *sqlparser.Update:
