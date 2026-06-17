@@ -57,6 +57,18 @@ jobs:
             evalengine: "1"
             flavor: mysql-8.4
 
+          # arm64 tests (mysql80 only — Oracle's apt repo has no arm64
+          # packages and Ubuntu's archive only ships MySQL 8.0 on arm64)
+          - platform: mysql80
+            evalengine: "0"
+            flavor: mysql-8.0
+            arch: arm64
+
+          - platform: mysql80
+            evalengine: "1"
+            flavor: mysql-8.0
+            arch: arm64
+
           # Race tests (mysql80 only)
           - platform: mysql80
             evalengine: "0"
@@ -69,8 +81,8 @@ jobs:
             flavor: mysql-8.0
             race: true
 
-    name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }})"
-    runs-on: ${{ matrix.race && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }}${{ matrix.arch && format('_{0}', matrix.arch) || '' }})"
+    runs-on: ${{ github.repository == 'vitessio/vitess' && (matrix.arch == 'arm64' && 'oracle-vm-16cpu-64gb-arm64' || 'oracle-vm-16cpu-64gb-x86-64') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
