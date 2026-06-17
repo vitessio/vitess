@@ -156,11 +156,25 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	// Sort by replication lag.
 	sort.Sort(tabletLagSnapshotList(list))
 
-	// Pick tablets with low replication lag, but at least minNumTablets tablets regardless.
-	minTablets := minNumTablets.Get()
+	// Pick tablets with low replication lag, but at least minNumTablets tablets
+	// regardless. minNumTablets.Get() is a viper read that allocates, so defer it:
+	// the list is sorted by ascending lag, so once we reach a high-lag tablet every
+	// later one is also high-lag. Read minNumTablets at most once, and only when a
+	// high-lag tablet actually forces the question — zero times when all tablets
+	// are healthy, which is the common case on the healthcheck hot path.
 	res := make([]*TabletHealth, 0, len(list))
+	var minTablets int
+	minTabletsRead := false
 	for i := 0; i < len(list); i++ {
-		if float64(list[i].ts.Stats.ReplicationLagSeconds) <= lowLag || i < minTablets {
+		if float64(list[i].ts.Stats.ReplicationLagSeconds) <= lowLag {
+			res = append(res, list[i].ts)
+			continue
+		}
+		if !minTabletsRead {
+			minTablets = minNumTablets.Get()
+			minTabletsRead = true
+		}
+		if i < minTablets {
 			res = append(res, list[i].ts)
 		}
 	}
