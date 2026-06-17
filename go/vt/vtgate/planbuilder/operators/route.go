@@ -831,7 +831,7 @@ func valuesOrderByOrdinal(expr sqlparser.Expr, columnCount int) (int, bool) {
 	if !ok || col.Qualifier.NonEmpty() {
 		return 0, false
 	}
-	column, found := strings.CutPrefix(col.Name.String(), "column_")
+	column, found := strings.CutPrefix(col.Name.Lowered(), "column_")
 	if !found {
 		return 0, false
 	}

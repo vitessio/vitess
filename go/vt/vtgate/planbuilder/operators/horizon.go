@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -166,7 +167,7 @@ func (h *Horizon) addColumnToValuesUsingColumns(values *sqlparser.ValuesStatemen
 		if !ok {
 			panic(vterrors.VT09015())
 		}
-		offsets[ae.ColumnName()] = offset
+		offsets[strings.ToLower(ae.ColumnName())] = offset
 	}
 
 	for i, row := range values.Rows {
@@ -176,7 +177,7 @@ func (h *Horizon) addColumnToValuesUsingColumns(values *sqlparser.ValuesStatemen
 			if !ok || col.Qualifier.NonEmpty() {
 				return
 			}
-			offset, ok := offsets[col.Name.String()]
+			offset, ok := offsets[col.Name.Lowered()]
 			if !ok {
 				missing = col
 				cursor.StopTreeWalk()

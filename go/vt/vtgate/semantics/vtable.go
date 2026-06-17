@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -39,7 +41,7 @@ var _ TableInfo = (*vTableInfo)(nil)
 func (v *vTableInfo) dependencies(colName string, org originable) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	for i, name := range v.columnNames {
-		if name != colName {
+		if !strings.EqualFold(name, colName) {
 			continue
 		}
 		deps = deps.merge(v.createCertainForCol(org, i), false)
@@ -54,7 +56,7 @@ func (v *vTableInfo) dependenciesInGroupBy(colName string, org originable) (depe
 	// this method is consciously very similar to vTableInfo.dependencies and should remain so
 	var deps dependencies = &nothing{}
 	for i, name := range v.columnNames {
-		if name != colName {
+		if !strings.EqualFold(name, colName) {
 			continue
 		}
 		if sqlparser.ContainsAggregation(v.cols[i]) {
@@ -126,7 +128,7 @@ func (v *vTableInfo) getTableSet(_ originable) TableSet {
 // GetExprFor implements the TableInfo interface
 func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 	for i, colName := range v.columnNames {
-		if colName == s {
+		if strings.EqualFold(colName, s) {
 			return v.cols[i], nil
 		}
 	}
