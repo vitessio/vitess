@@ -349,6 +349,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		qre.recordUserQuery("Stream", int64(time.Since(start)))
 	}(time.Now())
 
+	// DML on the streaming path runs checkPermissions and the request throttler
+	// inside streamDML, so its stats defer is registered before those checks and
+	// records per-table error stats for their rejections too, matching Execute.
+	switch qre.plan.PlanID {
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
+		return qre.streamDML(callback)
+	}
+
 	if err := qre.checkPermissions(); err != nil {
 		return err
 	}
@@ -358,8 +366,6 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
-		return qre.streamDML(callback)
 	case p.PlanSelectStream:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
@@ -468,6 +474,14 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 		qre.logStats.Rows = reply.Rows
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
 	}(time.Now())
+
+	if err = qre.checkPermissions(); err != nil {
+		return err
+	}
+
+	if err = qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); err != nil {
+		return err
+	}
 
 	switch {
 	case qre.connID != 0:

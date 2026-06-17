@@ -1561,6 +1561,54 @@ func TestQueryExecutorStreamDML(t *testing.T) {
 	}
 }
 
+// TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied verifies that a streamed
+// DML rejected by checkPermissions (a QRFail query rule) still records per-table
+// error stats, matching the non-streaming Execute path. The permission and request
+// throttler checks run early, before the DML reaches the database, so streamDML's
+// stats defer must be registered ahead of them to record these rejections.
+func TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "insert into test_table(a) values(1)"
+
+	bannedAddr := "127.0.0.1"
+	bannedUser := "u2"
+
+	denyRule := rules.NewQueryRule("disable insert", "disable insert", rules.QRFail)
+	denyRule.SetIPCond(bannedAddr)
+	denyRule.SetUserCond(bannedUser)
+	denyRule.AddPlanCond(planbuilder.PlanInsert)
+	denyRule.AddTableCond("test_table")
+
+	rulesName := "denyListStreamDMLQRFail"
+	qrs := rules.New()
+	qrs.Add(denyRule)
+
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
+	}
+	ctx := callinfo.NewContext(t.Context(), callInfo)
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	require.NoError(t, tsv.qe.queryRuleSources.SetRules(rulesName, qrs))
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanInsert, qre.plan.PlanID)
+
+	errCountBefore := tsv.qe.queryErrorCounts.Counts()["test_table.Insert"]
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+
+	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Insert"]
+	assert.Equal(t, errCountBefore+1, errCountAfter,
+		"streamed DML rejected by checkPermissions must record per-table error stats like Execute")
+}
+
 func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	testCases := []struct {
 		// whether or not the consolidator is enabled by default on the tablet
