@@ -111,18 +111,6 @@ func SetMinNumTablets(numTablets int) {
 	minNumTablets.Set(numTablets)
 }
 
-// IsReplicationLagHigh verifies that the given TabletHealth refers to a tablet with high
-// replication lag, i.e. higher than the configured discovery_low_replication_lag flag.
-func IsReplicationLagHigh(tabletHealth *TabletHealth) bool {
-	return float64(tabletHealth.Stats.ReplicationLagSeconds) > lowReplicationLag.Get().Seconds()
-}
-
-// IsReplicationLagVeryHigh verifies that the given TabletHealth refers to a tablet with very high
-// replication lag, i.e. higher than the configured discovery_high_replication_lag_minimum_serving flag.
-func IsReplicationLagVeryHigh(tabletHealth *TabletHealth) bool {
-	return float64(tabletHealth.Stats.ReplicationLagSeconds) > highReplicationLagMinServing.Get().Seconds()
-}
-
 // FilterStatsByReplicationLag filters the list of TabletHealth by TabletHealth.Stats.ReplicationLagSeconds.
 // Note that TabletHealth that is non-serving or has error is ignored.
 //
@@ -168,23 +156,11 @@ func filterStatsByLag(tabletHealthList []*TabletHealth) []*TabletHealth {
 	// Sort by replication lag.
 	sort.Sort(tabletLagSnapshotList(list))
 
-	// Pick tablets with low replication lag, but at least minNumTablets tablets
-	// regardless. The list is sorted by ascending lag, so once we reach a
-	// high-lag tablet every later one is also high-lag; read minNumTablets at
-	// most once, and only when a high-lag tablet actually forces the question.
+	// Pick tablets with low replication lag, but at least minNumTablets tablets regardless.
+	minTablets := minNumTablets.Get()
 	res := make([]*TabletHealth, 0, len(list))
-	var minTablets int
-	minTabletsRead := false
 	for i := 0; i < len(list); i++ {
-		if float64(list[i].ts.Stats.ReplicationLagSeconds) <= lowLag {
-			res = append(res, list[i].ts)
-			continue
-		}
-		if !minTabletsRead {
-			minTablets = minNumTablets.Get()
-			minTabletsRead = true
-		}
-		if i < minTablets {
+		if float64(list[i].ts.Stats.ReplicationLagSeconds) <= lowLag || i < minTablets {
 			res = append(res, list[i].ts)
 		}
 	}
