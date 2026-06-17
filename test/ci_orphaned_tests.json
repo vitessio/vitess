@@ -2,11 +2,6 @@
   "Orphans": [
     {
       "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
-      "Test": "TestMultiVStreamsKeyspaceStopOnReshard",
-      "Reason": "Fails on main: the StopOnReshard vstream hangs until the liveness timeout instead of ending with io.EOF. Fixed and re-enabled by https://github.com/vitessio/vitess/pull/20262; remove this row when it merges."
-    },
-    {
-      "Package": "vitess.io/vitess/go/test/endtoend/vreplication",
       "Test": "TestReplicationStress",
       "Reason": "Performance/stress test that self-skips unless the -perf-test flag is set; intentionally not run in CI. See https://github.com/vitessio/vitess/issues/20261."
     },
