@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTTablet](#bug-fixes-vttablet)**
+        - [Health check resilience for MySQL connection limits](#vttablet-healthcheck-connection-limits)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,19 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vttablet"/>VTTablet</a>
+
+#### <a id="vttablet-healthcheck-connection-limits"/>Health check resilience for MySQL connection limits</a>
+
+VTTablet's MySQL reachability health check no longer takes a tablet out of service when MySQL is reachable but temporarily refusing new connections. Previously, exhausting the app user's `max_user_connections` could cause `CheckMySQL` to decide MySQL was unreachable and move the tablet to `Not connected to mysql`, turning a transient resource-exhaustion event into a prolonged outage.
+
+Three changes improve resilience:
+
+- The reachability check now connects as the DBA user rather than the app user, so it no longer competes against the app user's connection limit.
+- Per-user connection limit errors — `ERTooManyUserConnections` (errno 1203) and `ERUserLimitReached` (errno 1226) — are now treated as "MySQL is reachable but busy," alongside the existing global `max_connections` case. Exceeding `max_user_connections` no longer takes the tablet out of service.
+- Transient socket errors (errno 2002/2003) are retried with exponential backoff (up to 3 attempts at 100ms, 200ms, and 400ms) before the health check fails.
+
+See [#20008](https://github.com/vitessio/vitess/pull/20008) for details.
