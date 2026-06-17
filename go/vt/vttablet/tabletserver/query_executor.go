@@ -439,11 +439,36 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 // same transactional machinery as Execute (an implicit autocommit transaction
 // when none exists, or the active transaction when one does) and the result is
 // delivered through the streaming callback.
-func (qre *QueryExecutor) streamDML(callback StreamCallback) error {
-	var (
-		reply *sqltypes.Result
-		err   error
-	)
+func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
+	var reply *sqltypes.Result
+
+	// Record the per-table and per-plan query stats, just like Execute's deferred
+	// block. Stream's own defer already records QueryTimings, QueryTimingsByTabletType
+	// and the user-query stats, so here we only add the stats the streaming path would
+	// otherwise miss for DML: the QueryEngine/plan counters (including error counts on
+	// the failure path), the query-log fields and the result histogram.
+	defer func(start time.Time) {
+		duration := time.Since(start)
+		mysqlTime := qre.logStats.MysqlResponseTime
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
+		}
+		errCode := vterrors.Code(err).String()
+
+		if reply == nil {
+			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
+			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
+			return
+		}
+
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
+		qre.logStats.RowsAffected = int(reply.RowsAffected)
+		qre.logStats.Rows = reply.Rows
+		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
+	}(time.Now())
+
 	switch {
 	case qre.connID != 0:
 		// Run the DML on the existing transaction or reserved connection, just
@@ -456,7 +481,8 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) error {
 		}
 		defer conn.Unlock()
 		if qre.setting != nil {
-			applied, err := conn.ApplySetting(qre.ctx, qre.setting)
+			var applied bool
+			applied, err = conn.ApplySetting(qre.ctx, qre.setting)
 			if err != nil {
 				return vterrors.Wrap(err, "failed to execute system setting on the connection")
 			}
@@ -475,9 +501,8 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) error {
 	if err != nil {
 		return err
 	}
-	qre.logStats.RowsAffected = int(reply.RowsAffected)
-	qre.logStats.Rows = reply.Rows
-	return callback(reply)
+	err = callback(reply)
+	return err
 }
 
 // MessageStream streams messages from a message table.
