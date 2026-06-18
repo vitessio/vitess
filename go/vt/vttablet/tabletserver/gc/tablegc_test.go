@@ -18,16 +18,52 @@ package gc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/capabilities"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/schema"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
+
+// TestDropTableDisablesForeignKeyChecks verifies that dropTable disables foreign key checks before
+// issuing the DROP (and restores them afterwards). This lets the GC drop a table that is still
+// referenced by another (also-doomed) table's foreign key, regardless of the order in which held
+// tables are reclaimed.
+func TestDropTableDisablesForeignKeyChecks(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "fakesqldb")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TableGCTest")
+
+	collector := &TableGC{env: env}
+
+	err := collector.dropTable(t.Context(), "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_", true)
+	require.NoError(t, err)
+
+	queryLog := strings.ToLower(db.QueryLog())
+	disableIdx := strings.Index(queryLog, "set session foreign_key_checks = 0")
+	dropIdx := strings.Index(queryLog, "drop table if exists")
+	restoreIdx := strings.Index(queryLog, "set session foreign_key_checks = 1")
+
+	require.GreaterOrEqual(t, disableIdx, 0, "foreign_key_checks must be disabled; query log: %s", queryLog)
+	require.GreaterOrEqual(t, dropIdx, 0, "table must be dropped; query log: %s", queryLog)
+	require.GreaterOrEqual(t, restoreIdx, 0, "foreign_key_checks must be restored; query log: %s", queryLog)
+	// foreign_key_checks must be disabled before the drop, and restored after it.
+	assert.Less(t, disableIdx, dropIdx, "foreign_key_checks must be disabled before the drop")
+	assert.Less(t, dropIdx, restoreIdx, "foreign_key_checks must be restored after the drop")
+}
 
 func TestNextTableToPurge(t *testing.T) {
 	tt := []struct {

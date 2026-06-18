@@ -1146,8 +1146,10 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 				return true, nil
 			}, diff.Statement())
 		case *DropTableEntityDiff:
-			// Dropping a child table also leaves a held original (`_vt_hld_…`) that retains its
-			// foreign keys, so it is subject to the same shadow-table conflict as an ALTER.
+			// Dropping a child table leaves a held original (`_vt_hld_…`) that retains its foreign
+			// keys, so it conflicts when a referenced parent *survives* this batch but is altered
+			// incompatibly. A dropped parent is not a conflict (it falls through below): the table GC
+			// reclaims the held pair with foreign key checks disabled, regardless of order.
 			checkSourceForeignKeyShadowConflicts(diff, diff.from)
 		}
 	}
