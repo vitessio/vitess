@@ -1448,14 +1448,26 @@ func TestSchemaDiffForeignKeyShadowConflict(t *testing.T) {
 			expectConflict: true,
 		},
 		{
-			name: "drop child table, drop parent table",
+			name: "drop child table, change referenced column type on parent",
+			fromQueries: []string{
+				"create table parent (id int primary key)",
+				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
+			},
+			toQueries: []string{
+				"create table parent (id varchar(32) primary key)",
+			},
+			reject:         true,
+			expectConflict: true,
+		},
+		{
+			name: "drop child table, drop parent table: reclaimable by GC, not rejected",
 			fromQueries: []string{
 				"create table parent (id int primary key)",
 				"create table child (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references parent (id))",
 			},
 			toQueries:      []string{},
 			reject:         true,
-			expectConflict: true,
+			expectConflict: false,
 		},
 		{
 			name: "drop fk on child, change referenced column collation on parent",

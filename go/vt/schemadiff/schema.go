@@ -1028,9 +1028,6 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 				referencedColumn = fk.ReferenceDefinition.ReferencedColumns[0].String()
 			}
 			switch parentDiff := parentDiff.(type) {
-			case *DropTableEntityDiff:
-				// The parent table is dropped while the foreign key survives on the held child table.
-				breaking = true
 			case *AlterTableEntityDiff:
 				_, parentTo := parentDiff.Entities()
 				parentTable, ok := parentTo.(*CreateTableEntity)
