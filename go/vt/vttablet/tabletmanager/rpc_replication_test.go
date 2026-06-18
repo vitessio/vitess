@@ -311,17 +311,20 @@ func TestDemotePrimaryRollbackUsesDetachedContext(t *testing.T) {
 		),
 		mockMysqlDaemon.EXPECT().SetSemiSyncEnabled(gomock.Any(), true, true).DoAndReturn(
 			func(ctx context.Context, primary bool, replica bool) error {
-				return ctx.Err()
+				require.NoError(t, ctx.Err())
+				return nil
 			},
 		),
 		mockMysqlDaemon.EXPECT().SetSuperReadOnly(gomock.Any(), false).DoAndReturn(
 			func(ctx context.Context, on bool) (mysqlctl.ResetSuperReadOnlyFunc, error) {
-				return nil, ctx.Err()
+				require.NoError(t, ctx.Err())
+				return nil, nil
 			},
 		),
 		mockMysqlDaemon.EXPECT().SetReadOnly(gomock.Any(), false).DoAndReturn(
 			func(ctx context.Context, on bool) error {
-				return ctx.Err()
+				require.NoError(t, ctx.Err())
+				return nil
 			},
 		),
 	)
