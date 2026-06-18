@@ -1180,7 +1180,7 @@ func TestReadTopologyInstanceRecordsObserverTypeFromFullStatus(t *testing.T) {
 	_, _ = ReadTopologyInstanceBufferable(observerAlias, latency)
 
 	opts := QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 1.0, MinObservers: 1}
-	r := EvaluatePrimaryQuorum(primary, "ks", "0", opts, time.Now())
+	r := EvaluatePrimaryQuorum(primary, "ks", "0", 1, opts, time.Now())
 	require.Len(t, r.Observers, 1)
 	assert.Equal(t, "REPLICA", r.Observers[0].TabletType)
 	assert.Equal(t, 1, r.TotalObservers)

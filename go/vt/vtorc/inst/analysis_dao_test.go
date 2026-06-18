@@ -1380,11 +1380,12 @@ func TestPostProcessAnalyses(t *testing.T) {
 			AnalyzedKeyspace:      keyspace,
 			AnalyzedShard:         shard0,
 			TabletType:            topodatapb.TabletType_PRIMARY,
+			CountReplicas:         2, // the shard has 2 replicas; both confirm the primary down below
 		}
 	}
 	upgradedQuorumDetail := &QuorumResult{
 		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
-		Down: true, DownVotes: 2, TotalObservers: 2, Fraction: 1, MinObservers: 1,
+		Down: true, DownVotes: 2, TotalObservers: 2, EligibleObservers: 2, ExpectedObservers: 2, Fraction: 1, MinObservers: 1,
 		Observers: []ObserverVote{
 			{Alias: "zone1-0000000101", TabletType: "REPLICA", Vote: "down", ConsecutiveFailures: 5, Fresh: true},
 			{Alias: "zone1-0000000102", TabletType: "REPLICA", Vote: "down", ConsecutiveFailures: 5, Fresh: true},
@@ -1615,6 +1616,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
+					CountReplicas:         2,
 					QuorumDetail:          upgradedQuorumDetail,
 				},
 			},

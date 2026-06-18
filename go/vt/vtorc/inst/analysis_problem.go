@@ -505,7 +505,7 @@ func matchPrimaryTabletUnreachableByQuorum(a *DetectionAnalysis, now time.Time) 
 	if !a.IsClusterPrimary || a.LastCheckValid {
 		return false
 	}
-	result := evaluateAndLogPrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, now)
+	result := evaluateAndLogPrimaryQuorum(a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, int(a.CountReplicas), now)
 	if result.Down {
 		a.QuorumDetail = &result
 	}
@@ -514,8 +514,8 @@ func matchPrimaryTabletUnreachableByQuorum(a *DetectionAnalysis, now time.Time) 
 
 // evaluateAndLogPrimaryQuorum evaluates the quorum for a primary and logs the decision,
 // rate-limited per verdict so a verdict change (not-down -> down) logs immediately.
-func evaluateAndLogPrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, now time.Time) QuorumResult {
-	result := EvaluatePrimaryQuorum(primaryAlias, keyspace, shard, QuorumOptionsFromConfig(), now)
+func evaluateAndLogPrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, expectedObservers int, now time.Time) QuorumResult {
+	result := EvaluatePrimaryQuorum(primaryAlias, keyspace, shard, expectedObservers, QuorumOptionsFromConfig(), now)
 	logKey := fmt.Sprintf("%s/%s:%t", keyspace, shard, result.Down)
 	if util.ClearToLog("shard_quorum", logKey) {
 		log.Info("shard quorum decision",

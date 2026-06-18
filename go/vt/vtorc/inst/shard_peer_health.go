@@ -75,10 +75,16 @@ type QuorumResult struct {
 	Down           bool // the verdict
 	DownVotes      int  // among FRESH observers only
 	TotalObservers int  // FRESH observers that pinged the primary
-	Fraction       float64
-	MinObservers   int
-	Observers      []ObserverVote // ALL relevant observers incl. stale (stale ones are shown but not counted)
-	EvaluatedAt    time.Time
+	// EligibleObservers is every REPLICA/RDONLY observer that pinged the primary, fresh or
+	// stale. ExpectedObservers is the shard's eligible replica count from VTOrc's topo view
+	// (0 when the caller cannot supply it). The larger of the two is the shard size that the
+	// fresh reporters must form a majority of before a verdict is trusted (see EvaluatePrimaryQuorum).
+	EligibleObservers int
+	ExpectedObservers int
+	Fraction          float64
+	MinObservers      int
+	Observers         []ObserverVote // ALL relevant observers incl. stale (stale ones are shown but not counted)
+	EvaluatedAt       time.Time
 }
 
 // KeyspaceShard identifies a shard.
@@ -185,15 +191,23 @@ func pruneStaleShardPeerRecordsLocked(now time.Time) {
 }
 
 // EvaluatePrimaryQuorum computes the quorum verdict for a primary plus the per-observer tally.
-// Only fresh REPLICA/RDONLY observers in the keyspace/shard that have pinged the primary count
-// toward the verdict; stale observers are surfaced (Vote "stale") for visibility but not counted.
-func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, opts QuorumOptions, now time.Time) QuorumResult {
+// Only fresh REPLICA/RDONLY observers in the keyspace/shard that have pinged the primary vote;
+// stale observers are surfaced (Vote "stale") for visibility but do not vote.
+//
+// expectedObservers is the shard's eligible replica count from VTOrc's topo view (pass 0 when it
+// cannot be supplied, e.g. the observability API). To trust a verdict, the fresh reporters must
+// form a strict majority of the shard — the larger of expectedObservers and the observers actually
+// seen — so a minority (a single partitioned replica while the rest are stale or missing) cannot
+// drive ERS from a minority view. The down decision is then taken over the FRESH reporters only,
+// so a stale or dead replica cannot block a real failover.
+func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, expectedObservers int, opts QuorumOptions, now time.Time) QuorumResult {
 	result := QuorumResult{
-		Keyspace:     keyspace,
-		Shard:        shard,
-		Fraction:     opts.Fraction,
-		MinObservers: opts.MinObservers,
-		EvaluatedAt:  now,
+		Keyspace:          keyspace,
+		Shard:             shard,
+		ExpectedObservers: expectedObservers,
+		Fraction:          opts.Fraction,
+		MinObservers:      opts.MinObservers,
+		EvaluatedAt:       now,
 	}
 	if primaryAlias == nil {
 		return result
@@ -249,9 +263,20 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 
 	sort.Slice(result.Observers, func(i, j int) bool { return result.Observers[i].Alias < result.Observers[j].Alias })
 
+	// Every eligible observer that pinged the primary, fresh or stale: the denominator for the
+	// reporting-majority gate below. The shard size is the larger of this and VTOrc's topo view.
+	result.EligibleObservers = len(result.Observers)
+	quorumBase := max(expectedObservers, result.EligibleObservers)
+
+	// A verdict is trusted only when the fresh reporters form a strict majority of the shard
+	// (2*fresh > quorumBase). This stops a minority view — a single partitioned replica while the
+	// rest are stale or missing — from driving ERS, while the down ratio is still taken over the
+	// fresh reporters so a stale or dead replica cannot block a genuine failover.
+	//
 	// opts.valid() keeps an invalid dynamic config (e.g. Fraction 0) from turning the verdict
 	// fail-open; an invalid config yields no down verdict while still surfacing observer data.
-	if opts.valid() && result.TotalObservers >= opts.MinObservers && result.TotalObservers > 0 {
+	if opts.valid() && result.TotalObservers >= opts.MinObservers && result.TotalObservers > 0 &&
+		2*result.TotalObservers > quorumBase {
 		result.Down = float64(result.DownVotes)/float64(result.TotalObservers) >= opts.Fraction
 	}
 	return result
@@ -271,8 +296,8 @@ func (r QuorumResult) Summary() string {
 		}
 		parts = append(parts, fmt.Sprintf("%s=%s(%d)", o.Alias, o.Vote, o.ConsecutiveFailures))
 	}
-	return fmt.Sprintf("shard quorum %s/%s primary %s %s: %d/%d fresh observers down (fraction %g, min %d) — %s",
-		r.Keyspace, r.Shard, r.PrimaryAlias, verdict, r.DownVotes, r.TotalObservers, r.Fraction, r.MinObservers, strings.Join(parts, ", "))
+	return fmt.Sprintf("shard quorum %s/%s primary %s %s: %d/%d fresh observers down, %d fresh of %d eligible, %d expected (fraction %g, min %d) — %s",
+		r.Keyspace, r.Shard, r.PrimaryAlias, verdict, r.DownVotes, r.TotalObservers, r.TotalObservers, r.EligibleObservers, r.ExpectedObservers, r.Fraction, r.MinObservers, strings.Join(parts, ", "))
 }
 
 // ObservedShards returns the distinct keyspace/shards that currently have shard-peer observer data,
@@ -299,9 +324,10 @@ func ObservedShards() []KeyspaceShard {
 }
 
 // PrimaryDownByQuorum reports whether a quorum of fresh REPLICA/RDONLY observers in the
-// given keyspace/shard consider the primary's vttablet unreachable.
-func PrimaryDownByQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, opts QuorumOptions, now time.Time) bool {
-	return EvaluatePrimaryQuorum(primaryAlias, keyspace, shard, opts, now).Down
+// given keyspace/shard consider the primary's vttablet unreachable. See EvaluatePrimaryQuorum
+// for the meaning of expectedObservers.
+func PrimaryDownByQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard string, expectedObservers int, opts QuorumOptions, now time.Time) bool {
+	return EvaluatePrimaryQuorum(primaryAlias, keyspace, shard, expectedObservers, opts, now).Down
 }
 
 // resetShardPeerHealth clears all stored reports. Test helper.

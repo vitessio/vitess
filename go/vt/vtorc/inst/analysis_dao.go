@@ -686,7 +686,7 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 		if analysis.Analysis != InvalidPrimary || !config.ERSOnTabletUnreachableEnabled() {
 			continue
 		}
-		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, time.Now())
+		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, int(analysis.CountReplicas), time.Now())
 		if !quorum.Down {
 			continue
 		}

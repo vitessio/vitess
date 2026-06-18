@@ -219,7 +219,10 @@ func shardQuorumAPIHandler(response http.ResponseWriter) {
 		if err != nil {
 			primaryAlias = nil
 		}
-		results = append(results, inst.EvaluatePrimaryQuorum(primaryAlias, ks.Keyspace, ks.Shard, opts, now))
+		// expectedObservers 0: this read-only endpoint has no analysis to source the shard's
+		// replica count from, so the majority gate falls back to the observers actually seen.
+		// The authoritative ERS verdict uses the topo replica count (see the analysis matcher).
+		results = append(results, inst.EvaluatePrimaryQuorum(primaryAlias, ks.Keyspace, ks.Shard, 0, opts, now))
 	}
 	returnAsJSON(response, http.StatusOK, results)
 }

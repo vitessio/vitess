@@ -50,10 +50,11 @@ func TestPrimaryDownByQuorum(t *testing.T) {
 	primary := alias(100)
 
 	tests := []struct {
-		name     string
-		seed     func()
-		opts     QuorumOptions
-		expected bool
+		name              string
+		seed              func()
+		expectedObservers int
+		opts              QuorumOptions
+		expected          bool
 	}{
 		{
 			name: "both replicas report down -> quorum",
@@ -241,12 +242,67 @@ func TestPrimaryDownByQuorum(t *testing.T) {
 			opts:     defaultOpts(),
 			expected: false,
 		},
+		{
+			// The core safety property: one fresh down vote while the rest of the shard's
+			// observers are stale must NOT reach a verdict — a minority cannot drive ERS.
+			name: "single fresh down vote with stale majority -> no quorum",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now)
+				// 102-105 reported a minute ago (freshness is 5s) -> stale, but still in the map.
+				for _, uid := range []uint32{102, 103, 104, 105} {
+					RecordShardPeerHealth(alias(uid), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now.Add(-time.Minute))
+				}
+			},
+			expectedObservers: 5,
+			opts:              defaultOpts(),
+			expected:          false,
+		},
+		{
+			// Even with no stale records in the map, a single fresh down vote must not act when
+			// the shard is known (via topo) to have more eligible observers that never reported.
+			name: "single fresh down vote with missing majority -> no quorum",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now)
+			},
+			expectedObservers: 5,
+			opts:              defaultOpts(),
+			expected:          false,
+		},
+		{
+			// A majority of the shard freshly reporting down -> ERS may proceed. A stale or
+			// missing minority does not block it (the ratio is over fresh reporters).
+			name: "majority fresh down with stale minority -> quorum",
+			seed: func() {
+				resetShardPeerHealth()
+				for _, uid := range []uint32{101, 102, 103} {
+					RecordShardPeerHealth(alias(uid), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now)
+				}
+				RecordShardPeerHealth(alias(104), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now.Add(-time.Minute))
+			},
+			expectedObservers: 5,
+			opts:              defaultOpts(),
+			expected:          true,
+		},
+		{
+			// Exactly half of the shard reporting fresh is not a strict majority -> no quorum.
+			name: "half the shard fresh down -> no quorum",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now)
+				RecordShardPeerHealth(alias(102), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now)
+			},
+			expectedObservers: 4,
+			opts:              defaultOpts(),
+			expected:          false,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.seed()
-			got := PrimaryDownByQuorum(primary, "ks", "0", tc.opts, now)
+			got := PrimaryDownByQuorum(primary, "ks", "0", tc.expectedObservers, tc.opts, now)
 			assert.Equal(t, tc.expected, got)
 		})
 	}
@@ -264,13 +320,15 @@ func TestEvaluatePrimaryQuorum(t *testing.T) {
 	RecordShardPeerHealth(alias(103), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 9, 0, now), now.Add(-time.Minute))
 
 	opts := QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 0.5, MinObservers: 1}
-	r := EvaluatePrimaryQuorum(primary, "ks", "0", opts, now)
+	r := EvaluatePrimaryQuorum(primary, "ks", "0", 3, opts, now)
 
 	assert.Equal(t, "zone1-0000000100", r.PrimaryAlias)
-	assert.Equal(t, 2, r.TotalObservers) // 101 + 102 are fresh; 103 is stale
-	assert.Equal(t, 1, r.DownVotes)      // only 101
-	assert.True(t, r.Down)               // 1/2 >= 0.5
-	require.Len(t, r.Observers, 3)       // all three are reported, incl. the stale one
+	assert.Equal(t, 2, r.TotalObservers)    // 101 + 102 are fresh; 103 is stale
+	assert.Equal(t, 3, r.EligibleObservers) // all three pinged the primary, incl. the stale one
+	assert.Equal(t, 3, r.ExpectedObservers) // the topo replica count passed in
+	assert.Equal(t, 1, r.DownVotes)         // only 101
+	assert.True(t, r.Down)                  // 2 fresh of 3 is a majority reporting; 1/2 >= 0.5
+	require.Len(t, r.Observers, 3)          // all three are reported, incl. the stale one
 	// sorted by alias: 101, 102, 103
 	assert.Equal(t, "zone1-0000000101", r.Observers[0].Alias)
 	assert.Equal(t, "down", r.Observers[0].Vote)
@@ -291,13 +349,13 @@ func TestEvaluatePrimaryQuorum(t *testing.T) {
 
 	// MinObservers gate: requiring more fresh observers than exist yields no down verdict, even
 	// though a fresh observer reports the primary down. Reuses the same store (2 fresh, 1 down).
-	gated := EvaluatePrimaryQuorum(primary, "ks", "0", QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 0.5, MinObservers: 3}, now)
+	gated := EvaluatePrimaryQuorum(primary, "ks", "0", 3, QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 0.5, MinObservers: 3}, now)
 	assert.False(t, gated.Down)
 	assert.Equal(t, 2, gated.TotalObservers)
 	assert.Equal(t, 1, gated.DownVotes)
 
 	// A nil primary (e.g. the shard has no primary) yields an empty evaluation with no verdict.
-	empty := EvaluatePrimaryQuorum(nil, "ks", "0", opts, now)
+	empty := EvaluatePrimaryQuorum(nil, "ks", "0", 3, opts, now)
 	assert.False(t, empty.Down)
 	assert.Empty(t, empty.Observers)
 }
