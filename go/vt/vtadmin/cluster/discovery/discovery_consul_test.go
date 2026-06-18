@@ -21,7 +21,7 @@ import (
 	"testing"
 	"text/template"
 
-	consul "github.com/hashicorp/consul/api"
+	consul "github.com/hashicorp/consul/api/v2"
 	"github.com/stretchr/testify/assert"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"

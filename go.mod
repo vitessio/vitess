@@ -31,7 +31,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/hashicorp/consul/api v1.34.3
+	github.com/hashicorp/consul/api/v2 v2.0.0
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/serf v0.10.2 // indirect
 	github.com/klauspost/compress v1.18.6
