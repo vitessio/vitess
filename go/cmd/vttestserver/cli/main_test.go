@@ -269,6 +269,27 @@ func TestGatewayInitialTabletTimeout(t *testing.T) {
 	assertGetKeyspaces(ctx, t, cluster)
 }
 
+func TestNewEnvUsesDataDirWithoutPort(t *testing.T) {
+	conf := config
+	originalBasePort := basePort
+	t.Cleanup(func() {
+		resetConfig(conf)
+		basePort = originalBasePort
+	})
+
+	dir := t.TempDir()
+	config.DataDir = dir
+	basePort = 0
+
+	env, err := newEnv()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, env.TearDown())
+	})
+
+	assert.Equal(t, dir, env.Directory())
+}
+
 func TestExternalTopoServerConsul(t *testing.T) {
 	conf := config
 	defer resetConfig(conf)
@@ -325,7 +346,8 @@ func TestMtlsAuth(t *testing.T) {
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-key", clientKey),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-cert", clientCert),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-ca", caCert),
-		fmt.Sprintf("%s=%s", "--grpc-auth-mtls-allowed-substrings", "CN=ClientApp"))
+		fmt.Sprintf("%s=%s", "--grpc-auth-mtls-allowed-substrings", "CN=ClientApp"),
+	)
 	require.NoError(t, err)
 	defer func() {
 		cluster.PersistentMode = false // Cleanup the tmpdir as we're done
@@ -367,7 +389,8 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-key", clientKey),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-cert", clientCert),
 		fmt.Sprintf("%s=%s", "--vtctld-grpc-ca", caCert),
-		"--grpc-auth-mtls-allowed-substrings="+"CN=ClientApp")
+		"--grpc-auth-mtls-allowed-substrings="+"CN=ClientApp",
+	)
 	defer cluster.TearDown()
 
 	require.Error(t, err)
@@ -377,8 +400,6 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
 	flags = append(flags, []string{
 		"--persistent-mode",
-		// FIXME: if port is not provided, data_dir is not respected
-		fmt.Sprintf("--port=%d", randomPort()),
 		"--data-dir=" + dir,
 	}...)
 	return startCluster(flags...)
