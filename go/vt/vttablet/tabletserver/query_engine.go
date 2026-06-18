@@ -426,7 +426,7 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 		return nil, err
 	}
 
-	splan, err := planbuilder.BuildStreaming(statement, curSchema.tables)
+	splan, err := planbuilder.BuildStreaming(qe.env.Environment(), statement, curSchema.tables, qe.env.Config().DB.DBName)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +605,7 @@ func (qe *QueryEngine) AddStats(plan *TabletPlan, tableName, workload string, ta
 	// But there are special cases like `SELECT ... INTO OUTFILE ''` which return positive rows affected
 	// So we check if it is positive and add that too.
 	switch plan.PlanID {
-	case planbuilder.PlanSelect, planbuilder.PlanSelectStream, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible, planbuilder.PlanShow, planbuilder.PlanOtherRead:
 		qe.queryRowsReturned.Add(keys, rowsReturned)
 		if rowsAffected > 0 {
 			qe.queryRowsAffected.Add(keys, rowsAffected)
