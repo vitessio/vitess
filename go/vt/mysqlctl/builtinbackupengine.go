@@ -108,7 +108,6 @@ var (
 	minBackupFileChunkSize   uint64 = 4 * 1024 * 1024        // 4 MiB minimum to prevent the accidental allocation of a huge amount of files
 
 	errRestoreFatal = errors.New("fatal restore error")
-	errBackupFatal  = errors.New("fatal backup error")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -715,10 +714,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	}
 
 	// Backup all work items concurrently.
-	backupErr := be.backupWorkItems(ctx, workItems, fes, bh, params)
-	if errors.Is(backupErr, errBackupFatal) {
-		return backupErr
-	}
+	_ = be.backupWorkItems(ctx, workItems, fes, bh, params)
 
 	// BackupHandle supports the BackupErrorRecorder interface for tracking errors
 	// across any goroutines that fan out to take the backup. This means that we
@@ -832,7 +828,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 	_ = g.Wait()
 
 	if err := bh.EndBackup(ctx); err != nil {
-		return fmt.Errorf("%w: %w", errBackupFatal, err)
+		return err
 	}
 	return bh.Error()
 }

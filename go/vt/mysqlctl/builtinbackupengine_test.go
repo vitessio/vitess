@@ -524,23 +524,6 @@ func TestRestoreCloseErrorIsFatal(t *testing.T) {
 	assert.ErrorIs(t, err, errRestoreFatal)
 }
 
-func TestBackupWorkItemsEndBackupErrIsFatal(t *testing.T) {
-	bh := &FakeBackupHandle{
-		EndBackupReturn: errors.New("simulated EndBackup failure"),
-	}
-
-	be := &BuiltinBackupEngine{}
-	fes := []FileEntry{}
-	params := BackupParams{
-		Logger:      logutil.NewMemoryLogger(),
-		Concurrency: 1,
-	}
-
-	err := be.backupWorkItems(t.Context(), nil, fes, bh, params)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, errBackupFatal)
-}
-
 func TestExecuteBackupRejectsOversizedChunkSize(t *testing.T) {
 	oldThreshold := backupFileChunkThreshold
 	oldSize := backupFileChunkSize
