@@ -50,7 +50,7 @@ func BenchmarkWaitlistHandoff(b *testing.B) {
 			for range waiters {
 				consumers.Go(func() {
 					for remaining.Add(-1) >= 0 {
-						wl.waitForConn(ctx, nil, closeChan, 0)
+						wl.waitForConn(ctx, nil, closeChan)
 					}
 				})
 			}

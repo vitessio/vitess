@@ -71,71 +71,6 @@ func TestWaitlistPoolCloseWithMultipleWaiters(t *testing.T) {
 
 	assert.Equal(t, int32(waiterCount), expireCount.Load())
 }
-<<<<<<< HEAD
-||||||| parent of e16f8e037f (smartconnpool: don't hand returned connections to expired waiters (#20308))
-
-func TestWaitlistWaiterCap(t *testing.T) {
-	wl := waitlist[*TestConn]{}
-	wl.init()
-
-	poolClose := make(chan struct{})
-
-	const maxWaiters = 3
-
-	errs := make(chan error, maxWaiters)
-	for i := 1; i <= maxWaiters; i++ {
-		go func() {
-			_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
-			errs <- err
-		}()
-
-		assert.Eventually(t, func() bool {
-			return wl.waiting() == i
-		}, time.Second, 5*time.Millisecond)
-	}
-
-	_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
-	assert.ErrorIs(t, err, ErrPoolWaiterCapReached)
-	assert.Equal(t, maxWaiters, wl.waiting())
-
-	close(poolClose)
-
-	for range maxWaiters {
-		assert.NotErrorIs(t, <-errs, ErrPoolWaiterCapReached)
-	}
-}
-=======
-
-func TestWaitlistWaiterCap(t *testing.T) {
-	wl := waitlist[*TestConn]{}
-	wl.init()
-
-	poolClose := make(chan struct{})
-
-	const maxWaiters = 3
-
-	errs := make(chan error, maxWaiters)
-	for i := 1; i <= maxWaiters; i++ {
-		go func() {
-			_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
-			errs <- err
-		}()
-
-		assert.Eventually(t, func() bool {
-			return wl.waiting() == i
-		}, time.Second, 5*time.Millisecond)
-	}
-
-	_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
-	assert.ErrorIs(t, err, ErrPoolWaiterCapReached)
-	assert.Equal(t, maxWaiters, wl.waiting())
-
-	close(poolClose)
-
-	for range maxWaiters {
-		assert.NotErrorIs(t, <-errs, ErrPoolWaiterCapReached)
-	}
-}
 
 // pushWaiter injects a synthetic waitlist entry with no goroutine behind it.
 // The conn channel is buffered so a handoff to it can't block the test.
@@ -236,7 +171,7 @@ func TestWaitlistHandoverToLiveWaiter(t *testing.T) {
 
 	results := make(chan *Pooled[*TestConn], 1)
 	go func() {
-		conn, err := wl.waitForConn(t.Context(), nil, poolClose, 0)
+		conn, err := wl.waitForConn(t.Context(), nil, poolClose)
 		assert.NoError(t, err)
 		results <- conn
 	}()
@@ -279,7 +214,7 @@ func TestWaitlistClaimedWaiterStillReceivesAfterExpiry(t *testing.T) {
 	}
 	results := make(chan result, 1)
 	go func() {
-		conn, err := wl.waitForConn(ctx, nil, poolClose, 0)
+		conn, err := wl.waitForConn(ctx, nil, poolClose)
 		results <- result{conn: conn, err: err}
 	}()
 
@@ -345,7 +280,7 @@ func TestWaitlistConvoyDrainsUnderConcurrentReturns(t *testing.T) {
 	var waiters sync.WaitGroup
 	for range liveWaiters {
 		waiters.Go(func() {
-			conn, err := wl.waitForConn(t.Context(), nil, poolClose, 0)
+			conn, err := wl.waitForConn(t.Context(), nil, poolClose)
 			if err == nil && conn != nil {
 				served.Add(1)
 			}
@@ -373,4 +308,3 @@ func TestWaitlistConvoyDrainsUnderConcurrentReturns(t *testing.T) {
 	require.Equal(t, int64(liveWaiters), served.Load(), "every live waiter should receive a connection")
 	require.Equal(t, 0, wl.waiting(), "the expired prefix must be evicted, leaving an empty waitlist")
 }
->>>>>>> e16f8e037f (smartconnpool: don't hand returned connections to expired waiters (#20308))
