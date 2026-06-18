@@ -1510,6 +1510,17 @@ func TestSchemaDiffForeignKeyShadowConflict(t *testing.T) {
 			expectConflict: false,
 		},
 		{
+			name: "self-referencing fk, referenced column type change: not rejected",
+			fromQueries: []string{
+				"create table t (id int primary key, parent_id int, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references t (id))",
+			},
+			toQueries: []string{
+				"create table t (id bigint primary key, parent_id bigint, key parent_id_idx (parent_id), constraint f foreign key (parent_id) references t (id))",
+			},
+			reject:         true,
+			expectConflict: false,
+		},
+		{
 			name: "char to varchar lockstep stays fk-compatible: not rejected",
 			fromQueries: []string{
 				"create table parent (id char(32) primary key)",
@@ -1548,6 +1559,8 @@ func TestSchemaDiffForeignKeyShadowConflict(t *testing.T) {
 				require.Error(t, err)
 				var conflictErr *ForeignKeyShadowConflictError
 				assert.ErrorAs(t, err, &conflictErr)
+				// The error must name the referenced column; it must never render an empty identifier.
+				assert.NotContains(t, err.Error(), "``")
 			} else {
 				require.NoError(t, err)
 			}

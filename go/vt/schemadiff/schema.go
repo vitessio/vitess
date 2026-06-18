@@ -1005,6 +1005,12 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 	// since it is specific to OnlineDDL's held-table mechanism and is safe under direct strategy.
 	checkForeignKeyShadowConflict := func(childDiff EntityDiff, cFrom *CreateTableEntity, constraintName string, fk *sqlparser.ForeignKeyDefinition) {
 		referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
+		if referencedTableName == cFrom.Name() {
+			// Self-referencing foreign key: the held original table is internally consistent (its
+			// foreign key references its own columns, all at the same version), so it cannot conflict
+			// with a separately-migrated parent. There is no shadow conflict.
+			return
+		}
 		parentDiffs := schemaDiff.diffsByEntityName(referencedTableName)
 		if len(parentDiffs) == 0 {
 			// Parent table is not migrated in this batch: there is no held parent table, and the
@@ -1014,7 +1020,13 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 		childColumns := cFrom.ColumnDefinitionEntitiesMap()
 		for _, parentDiff := range parentDiffs {
 			breaking := false
+			// Default to the first referenced column so that table-level conflicts (a dropped parent
+			// table or a dropped covering index) still name a column in the error. Column-specific
+			// branches below override this with the exact offending column.
 			referencedColumn := ""
+			if len(fk.ReferenceDefinition.ReferencedColumns) > 0 {
+				referencedColumn = fk.ReferenceDefinition.ReferencedColumns[0].String()
+			}
 			switch parentDiff := parentDiff.(type) {
 			case *DropTableEntityDiff:
 				// The parent table is dropped while the foreign key survives on the held child table.
