@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTTablet](#bug-fixes-vttablet)**
+        - [Connection pool livelock under timeout storms](#smartconnpool-expired-waiter-livelock-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,17 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vttablet"/>VTTablet</a>
+
+#### <a id="smartconnpool-expired-waiter-livelock-fix"/>Connection pool livelock under timeout storms</a>
+
+VTTablet connection pools no longer livelock when many queued requests time out at once. Previously, a connection returned to the pool could be handed to a waiting request whose context had already expired. That request failed immediately and recycled the connection to the next expired waiter, so a sustained timeout storm could drive useful throughput to zero, leaving the tablet unable to serve queries until it was restarted.
+
+When handing off a returned connection, the pool now skips and evicts waiters whose context has already expired. If every waiting request has expired, the connection goes back into the pool for new requests to use, and requests whose context expired fail with the usual timeout error.
+
+No configuration change is required.
+
+See [#20308](https://github.com/vitessio/vitess/pull/20308) for details.
