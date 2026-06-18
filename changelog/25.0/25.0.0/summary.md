@@ -17,6 +17,7 @@
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+        - [Ingress bytes tracking in LogStats](#vtgate-ingress-bytes-logstats)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -111,6 +112,16 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+#### <a id="vtgate-ingress-bytes-logstats"/>Ingress bytes tracking in LogStats</a>
+
+VTGate now records an approximate count of inbound request bytes for each query in the `LogStats` struct. The new `IngressBytes` field reports the number of bytes read from the client for the command that produced the query.
+
+For MySQL-protocol connections, this counts the bytes read from client packets for the current command, including prepared-statement long-data chunks that are folded in when `COM_STMT_EXECUTE` consumes them. For gRPC connections, the value is approximated from the size of the protobuf request. When a single command carries multiple statements, the bytes are distributed across them by query length.
+
+**Note:** This data is exposed programmatically through the `LogStats` struct for telemetry and monitoring integrations. It is not currently included in VTGate's query log output, and the field defaults to zero for callers that do not set it.
+
+See [#20358](https://github.com/vitessio/vitess/pull/20358) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
