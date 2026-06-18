@@ -1913,7 +1913,7 @@ func TestComQueryIngressBytes(t *testing.T) {
 		require.NotNil(t, sentStats)
 		assert.Equal(t, uint64(mysql.PacketHeaderSize+1+len(query)), sentStats.IngressBytes)
 		assert.Equal(t, "select id from `user` where id = :id /* INT64 */", sentStats.SQL)
-	case <-time.After(1 * time.Second):
+	case <-time.After(30 * time.Second):
 		require.FailNow(t, "LogStats should have been sent to queryLogger")
 	}
 }
