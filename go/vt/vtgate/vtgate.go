@@ -621,6 +621,22 @@ func (vtg *VTGate) Execute(
 	return session, nil, err
 }
 
+func queryIngressBytesForStatements(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, queries []string) []uint64 {
+	ingressBytes, ok := vtgateservice.IngressBytesFromContext(ctx)
+	if !ok {
+		if mysqlCtx == nil {
+			return nil
+		}
+		ingressBytes = mysqlCtx.IngressBytes()
+	}
+
+	weights := make([]int, len(queries))
+	for i, query := range queries {
+		weights[i] = len(query)
+	}
+	return vtgateservice.AllocateQueryIngressBytes(ingressBytes, weights)
+}
+
 // ExecuteMulti executes multiple non-streaming queries.
 func (vtg *VTGate) ExecuteMulti(
 	ctx context.Context,
@@ -637,13 +653,18 @@ func (vtg *VTGate) ExecuteMulti(
 	}
 	var qr *sqltypes.Result
 	var cancel context.CancelFunc
-	for _, query := range queries {
+	queryIngressBytes := queryIngressBytesForStatements(ctx, mysqlCtx, queries)
+	for index, query := range queries {
+		queryCtx := ctx
+		if queryIngressBytes != nil {
+			queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[index])
+		}
 		func() {
 			if mysqlQueryTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
 				defer cancel()
 			}
-			session, qr, err = vtg.Execute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
+			session, qr, err = vtg.Execute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
 		}()
 		if err != nil {
 			return session, qrs, err
@@ -672,7 +693,11 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 		if len(bindVariablesList) != 0 {
 			bv = bindVariablesList[i]
 		}
-		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, nil, session, sql, bv, false)
+		queryCtx := ctx
+		if ingressBytes, ok := vtgateservice.IngressBytesForQuery(ctx, i); ok {
+			queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, ingressBytes)
+		}
+		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(queryCtx, nil, session, sql, bv, false)
 		if qr := qrl[i].QueryResult; qr != nil {
 			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 			vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
@@ -734,15 +759,20 @@ func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservic
 	var cancel context.CancelFunc
 	firstPacket := true
 	more := true
+	queryIngressBytes := queryIngressBytesForStatements(ctx, mysqlCtx, queries)
 	for idx, query := range queries {
+		queryCtx := ctx
+		if queryIngressBytes != nil {
+			queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[idx])
+		}
 		firstPacket = true
 		more = idx < len(queries)-1
 		func() {
 			if mysqlQueryTimeout != 0 {
-				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
 				defer cancel()
 			}
-			session, err = vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
+			session, err = vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()

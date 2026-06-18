@@ -367,6 +367,60 @@ func TestBasicPackets(t *testing.T) {
 	assert.True(cConn.isEOFPacket(data), "expected EOF")
 }
 
+func TestBytesReadCountsSinglePacketHeaderAndPayload(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+
+	data := []byte{ComQuery, 's', 'e', 'l', 'e', 'c', 't', ' ', '1'}
+	dataWithHeader := make([]byte, PacketHeaderSize+len(data))
+	copy(dataWithHeader[PacketHeaderSize:], data)
+
+	wg := sync.WaitGroup{}
+	wg.Go(func() {
+		require.NoError(t, cConn.writePacket(dataWithHeader))
+	})
+
+	received, err := sConn.readEphemeralPacket()
+	require.NoError(t, err)
+	require.Equal(t, data, received)
+
+	assert.Equal(t, uint64(PacketHeaderSize+len(data)), sConn.GetAndResetBytesRead())
+	assert.Equal(t, uint64(0), sConn.GetAndResetBytesRead())
+
+	sConn.recycleReadPacket()
+	wg.Wait()
+}
+
+func TestBytesReadCountsMultiPacketHeadersAndPayloads(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+
+	data := make([]byte, MaxPacketSize+1000)
+	data[0] = ComStmtExecute
+	data[len(data)-1] = 0xef
+	dataWithHeader := make([]byte, PacketHeaderSize+len(data))
+	copy(dataWithHeader[PacketHeaderSize:], data)
+
+	wg := sync.WaitGroup{}
+	wg.Go(func() {
+		require.NoError(t, cConn.writePacket(dataWithHeader))
+	})
+
+	received, err := sConn.readEphemeralPacket()
+	require.NoError(t, err)
+	require.Equal(t, data, received)
+
+	expected := uint64(len(data) + 2*PacketHeaderSize)
+	assert.Equal(t, expected, sConn.GetAndResetBytesRead())
+
+	sConn.recycleReadPacket()
+	wg.Wait()
+}
+
 func TestOkPackets(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
@@ -985,6 +1039,236 @@ func TestMultiStatementUsesCurrentStatusFlagsForOKOnlyResults(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, more)
 	assert.Zero(t, data.StatusFlags&ServerQueryWasSlow)
+}
+
+type ingressCaptureHandler struct {
+	testRun
+	called       bool
+	callTwice    bool
+	queries      []string
+	ingressBytes []uint64
+}
+
+func (h *ingressCaptureHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	h.called = true
+	h.queries = append(h.queries, query)
+	h.ingressBytes = append(h.ingressBytes, c.IngressBytes())
+	result := selectRowsResult.Copy()
+	if err := callback(result); err != nil {
+		return err
+	}
+	if h.callTwice {
+		return callback(result)
+	}
+	return nil
+}
+
+func (h *ingressCaptureHandler) WarningCount(c *Conn) uint16 {
+	return 0
+}
+
+func (h *ingressCaptureHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
+}
+
+type ingressCaptureStmtHandler struct {
+	testRun
+	called bool
+}
+
+func (h *ingressCaptureStmtHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
+	h.called = true
+	return callback(&sqltypes.Result{})
+}
+
+func (h *ingressCaptureStmtHandler) WarningCount(c *Conn) uint16 {
+	return 0
+}
+
+func (h *ingressCaptureStmtHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
+}
+
+// ingressErrorHandler returns an error from ComQuery WITHOUT invoking the
+// callback, modeling an error/zero-row path where the response never carries
+// stats.
+type ingressErrorHandler struct {
+	testRun
+}
+
+func (h *ingressErrorHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	return sqlerror.NewSQLError(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "boom")
+}
+
+func (h *ingressErrorHandler) WarningCount(c *Conn) uint16 {
+	return 0
+}
+
+func (h *ingressErrorHandler) Env() *vtenv.Environment {
+	return vtenv.NewTestEnv()
+}
+
+func TestHandleNextCommandAttributesOnlyCurrentCommandBytes(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+
+	require.NoError(t, cConn.WriteComQuery("select 1"))
+	sConn.bytesRead = 1234
+
+	handler := &ingressCaptureHandler{}
+	ok := sConn.handleNextCommand(handler)
+
+	require.True(t, ok)
+	require.True(t, handler.called)
+	assert.Equal(t, uint64(PacketHeaderSize+9), sConn.IngressBytes())
+}
+
+func TestHandleNextCommandAttributesOnlyCurrentCommandBytesOnceAcrossCallbacks(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+
+	require.NoError(t, cConn.WriteComQuery("select 1"))
+
+	handler := &ingressCaptureHandler{callTwice: true}
+	ok := sConn.handleNextCommand(handler)
+
+	require.True(t, ok)
+	require.True(t, handler.called)
+	assert.Equal(t, uint64(PacketHeaderSize+9), sConn.IngressBytes())
+}
+
+func TestHandleComQueryAttributesApproximateIngressBytesPerStatement(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+	sConn.Capabilities |= CapabilityClientMultiStatements
+
+	query := "select 1;select 222222"
+	require.NoError(t, cConn.WriteComQuery(query))
+
+	handler := &ingressCaptureHandler{}
+	ok := sConn.handleNextCommand(handler)
+
+	require.True(t, ok)
+	require.Equal(t, []string{"select 1", "select 222222"}, handler.queries)
+	require.Len(t, handler.ingressBytes, 2)
+
+	totalIngressBytes := uint64(PacketHeaderSize + 1 + len(query))
+	firstWeight := uint64(len("select 1"))
+	secondWeight := uint64(len("select 222222"))
+	firstIngressBytes := totalIngressBytes * firstWeight / (firstWeight + secondWeight)
+
+	assert.Equal(t, firstIngressBytes, handler.ingressBytes[0])
+	assert.Equal(t, totalIngressBytes-firstIngressBytes, handler.ingressBytes[1])
+	assert.Equal(t, totalIngressBytes, handler.ingressBytes[0]+handler.ingressBytes[1])
+	assert.Greater(t, handler.ingressBytes[1], handler.ingressBytes[0])
+}
+
+func TestHandleNextCommandAttributesBytesOnComQueryError(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+
+	require.NoError(t, cConn.WriteComQuery("select 1"))
+
+	handler := &ingressErrorHandler{}
+	ok := sConn.handleNextCommand(handler)
+
+	require.True(t, ok)
+	assert.Equal(t, uint64(PacketHeaderSize+9), sConn.IngressBytes())
+}
+
+func TestComStmtSendLongDataBytesFoldIntoExecute(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+	sConn.PrepareData = map[uint32]*PrepareData{
+		7: {
+			PrepareStmt: "insert into t(v) values (?)",
+			ParamsCount: 1,
+			BindVars:    map[string]*querypb.BindVariable{},
+		},
+	}
+
+	longDataPacket := createSendLongDataPacket(7, 0, []byte("large-bind-value"))
+	cConn.sequence = 0
+	require.NoError(t, cConn.writePacket(longDataPacket))
+	require.True(t, sConn.handleNextCommand(&ingressCaptureStmtHandler{}))
+
+	executePacket := []byte{0, 0, 0, 0, ComStmtExecute, 7, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0}
+	executeIngressBytes := uint64(len(executePacket))
+	handler := &ingressCaptureStmtHandler{}
+	cConn.sequence = 0
+	require.NoError(t, cConn.writePacket(executePacket))
+	require.True(t, sConn.handleNextCommand(handler))
+
+	require.True(t, handler.called)
+	assert.Equal(t, uint64(len(longDataPacket))+executeIngressBytes, sConn.IngressBytes())
+}
+
+func TestComStmtResetClearsPendingLongDataIngressBytes(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+	sConn.PrepareData = map[uint32]*PrepareData{
+		7: {
+			PrepareStmt: "insert into t(v) values (?)",
+			ParamsCount: 1,
+			BindVars:    map[string]*querypb.BindVariable{},
+		},
+	}
+
+	longDataPacket := createSendLongDataPacket(7, 0, []byte("large-bind-value"))
+	cConn.sequence = 0
+	require.NoError(t, cConn.writePacket(longDataPacket))
+	require.True(t, sConn.handleNextCommand(&ingressCaptureStmtHandler{}))
+
+	resetPacket := []byte{0, 0, 0, 0, ComStmtReset, 7, 0, 0, 0}
+	cConn.sequence = 0
+	require.NoError(t, cConn.writePacket(resetPacket))
+	require.True(t, sConn.handleNextCommand(&ingressCaptureStmtHandler{}))
+
+	executePacket := []byte{0, 0, 0, 0, ComStmtExecute, 7, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0}
+	handler := &ingressCaptureStmtHandler{}
+	cConn.sequence = 0
+	require.NoError(t, cConn.writePacket(executePacket))
+	require.True(t, sConn.handleNextCommand(handler))
+
+	require.True(t, handler.called)
+	assert.Equal(t, uint64(len(executePacket)), sConn.IngressBytes())
+}
+
+func TestComPrepareBytesNotAttributedToExecute(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+	sConn.PrepareData = map[uint32]*PrepareData{
+		7: {
+			PrepareStmt: "select ?",
+			ParamsCount: 1,
+			BindVars:    map[string]*querypb.BindVariable{},
+		},
+	}
+	sConn.recordPacketBytesRead(100)
+	sConn.ResetBytesRead()
+
+	executePacket := []byte{0, 0, 0, 0, ComStmtExecute, 7, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0}
+	executeIngressBytes := uint64(len(executePacket))
+	handler := &ingressCaptureStmtHandler{}
+	require.NoError(t, cConn.writePacket(executePacket))
+	require.True(t, sConn.handleNextCommand(handler))
+
+	require.True(t, handler.called)
+	assert.Equal(t, executeIngressBytes, sConn.IngressBytes())
 }
 
 func TestMultiStatementOnSplitError(t *testing.T) {

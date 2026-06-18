@@ -1871,3 +1871,49 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
+
+func TestComQueryIngressBytes(t *testing.T) {
+	vtgate, sbc, _ := createVtgateEnv(t)
+	query := "SELECT id FROM user WHERE id = 1"
+
+	sbc.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
+		Rows:   []sqltypes.Row{{sqltypes.NewInt32(42)}},
+	}})
+
+	vh := newVtgateHandler(vtgate)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	subscriber := vtgate.executor.queryLogger.Subscribe("test")
+	defer vtgate.executor.queryLogger.Unsubscribe(subscriber)
+
+	result, err := conn.ExecuteFetch(query, 100, true)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, result.Rows, 1)
+
+	select {
+	case sentStats := <-subscriber:
+		require.NotNil(t, sentStats)
+		assert.Equal(t, uint64(mysql.PacketHeaderSize+1+len(query)), sentStats.IngressBytes)
+		assert.Equal(t, "select id from `user` where id = :id /* INT64 */", sentStats.SQL)
+	case <-time.After(1 * time.Second):
+		require.FailNow(t, "LogStats should have been sent to queryLogger")
+	}
+}

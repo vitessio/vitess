@@ -139,6 +139,7 @@ func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerI
 func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest) (response *vtgatepb.ExecuteResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
+	ctx = vtgateservice.ContextWithIngressBytes(ctx, uint64(request.SizeVT()))
 
 	// Handle backward compatibility.
 	session := request.Session
@@ -157,6 +158,7 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 func (vtg *VTGate) ExecuteMulti(ctx context.Context, request *vtgatepb.ExecuteMultiRequest) (response *vtgatepb.ExecuteMultiResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
+	ctx = vtgateservice.ContextWithIngressBytes(ctx, uint64(request.SizeVT()))
 
 	// Handle backward compatibility.
 	session := request.Session
@@ -174,6 +176,7 @@ func (vtg *VTGate) ExecuteMulti(ctx context.Context, request *vtgatepb.ExecuteMu
 func (vtg *VTGate) StreamExecuteMulti(request *vtgatepb.StreamExecuteMultiRequest, stream vtgateservicepb.Vitess_StreamExecuteMultiServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	ctx = vtgateservice.ContextWithIngressBytes(ctx, uint64(request.SizeVT()))
 
 	session := request.Session
 	if session == nil {
@@ -213,10 +216,14 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	sqlQueries := make([]string, len(request.Queries))
 	bindVars := make([]map[string]*querypb.BindVariable, len(request.Queries))
+	queryWeights := make([]int, len(request.Queries))
 	for queryNum, query := range request.Queries {
 		sqlQueries[queryNum] = query.Sql
 		bindVars[queryNum] = query.BindVariables
+		queryWeights[queryNum] = query.SizeVT()
 	}
+	ctx = vtgateservice.ContextWithIngressBytesByQuery(ctx, vtgateservice.AllocateQueryIngressBytes(uint64(request.SizeVT()), queryWeights))
+
 	// Handle backward compatibility.
 	session := request.Session
 	if session == nil {
@@ -234,6 +241,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream vtgateservicepb.Vitess_StreamExecuteServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	ctx = vtgateservice.ContextWithIngressBytes(ctx, uint64(request.SizeVT()))
 
 	// Handle backward compatibility.
 	session := request.Session

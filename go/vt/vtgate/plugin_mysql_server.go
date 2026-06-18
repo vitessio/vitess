@@ -147,6 +147,10 @@ func (vmc *vtgateMySQLConnection) SetQueryWasSlow(slow bool) {
 	vmc.slowQueryStates = append(vmc.slowQueryStates, slow)
 }
 
+func (vmc *vtgateMySQLConnection) IngressBytes() uint64 {
+	return vmc.conn.IngressBytes()
+}
+
 func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 	return &vtgateHandler{
 		vtg:         vtg,
