@@ -686,7 +686,13 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 		if analysis.Analysis != InvalidPrimary || !config.ERSOnTabletUnreachableEnabled() {
 			continue
 		}
-		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, int(analysis.CountReplicas), time.Now())
+		// Do NOT use analysis.CountReplicas here: it is derived through a join on the primary's
+		// database_instance row, which is exactly what is missing for an InvalidPrimary (VTOrc has
+		// never reached the primary), so it collapses to 0 and would let a single fresh down report
+		// form a 1/1 quorum in a larger shard. Count the shard's REPLICA/RDONLY tablets from the
+		// topo-backed analysis rows instead — the true expected eligible observer population.
+		expectedObservers := shardEligibleObserverCount(result, analysis.AnalyzedKeyspace, analysis.AnalyzedShard)
+		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, expectedObservers, time.Now())
 		if !quorum.Down {
 			continue
 		}
@@ -708,6 +714,20 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 		}
 	}
 	return result
+}
+
+// shardEligibleObserverCount returns the number of REPLICA/RDONLY tablets in the keyspace/shard,
+// counted from the topo-backed analysis rows. Unlike DetectionAnalysis.CountReplicas (joined
+// through the primary's database_instance row), this is available even when VTOrc has never
+// reached the primary, so it gives the quorum gate the true expected observer population.
+func shardEligibleObserverCount(result []*DetectionAnalysis, keyspace, shard string) int {
+	count := 0
+	for _, a := range result {
+		if a.AnalyzedKeyspace == keyspace && a.AnalyzedShard == shard && topo.IsReplicaType(a.TabletType) {
+			count++
+		}
+	}
+	return count
 }
 
 // auditInstanceAnalysisInChangelog will write down an instance's analysis in the database_instance_analysis_changelog table.

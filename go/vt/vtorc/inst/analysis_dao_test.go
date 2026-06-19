@@ -1380,7 +1380,22 @@ func TestPostProcessAnalyses(t *testing.T) {
 			AnalyzedKeyspace:      keyspace,
 			AnalyzedShard:         shard0,
 			TabletType:            topodatapb.TabletType_PRIMARY,
-			CountReplicas:         2, // the shard has 2 replicas; both confirm the primary down below
+			// CountReplicas is 0 for a real InvalidPrimary: it is joined through the primary's
+			// database_instance row, which VTOrc never created. The expected observer count must
+			// instead come from the shard's replica analysis rows below.
+		}
+	}
+	// replicaAnalysis is a healthy, replicating REPLICA in shard0: its vttablet still serves the
+	// shard-peer monitor while its mysqld keeps replicating, so it is a topo-visible eligible
+	// observer but does not make the primary look Dead.
+	replicaAnalysis := func(uid uint32) *DetectionAnalysis {
+		return &DetectionAnalysis{
+			Analysis:              NoProblem,
+			AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			AnalyzedKeyspace:      keyspace,
+			AnalyzedShard:         shard0,
+			TabletType:            topodatapb.TabletType_REPLICA,
+			LastCheckValid:        true,
 		}
 	}
 	upgradedQuorumDetail := &QuorumResult{
@@ -1607,7 +1622,8 @@ func TestPostProcessAnalyses(t *testing.T) {
 				enableERSOnTabletUnreachable(t)
 				seedQuorumDown(t)
 			},
-			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis()},
+			// The shard's two replicas (the topo-visible eligible observers) both report down.
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(), replicaAnalysis(101), replicaAnalysis(102)},
 			want: []*DetectionAnalysis{
 				{
 					Analysis:              PrimaryTabletUnreachableByQuorum,
@@ -1616,10 +1632,28 @@ func TestPostProcessAnalyses(t *testing.T) {
 					AnalyzedKeyspace:      keyspace,
 					AnalyzedShard:         shard0,
 					TabletType:            topodatapb.TabletType_PRIMARY,
-					CountReplicas:         2,
 					QuorumDetail:          upgradedQuorumDetail,
 				},
+				replicaAnalysis(101),
+				replicaAnalysis(102),
 			},
+		},
+		{
+			// Regression for the cold-start minority hole: the shard has three eligible observers
+			// (topo-visible replicas) but only one fresh down report. Because CountReplicas is 0 for
+			// an InvalidPrimary, the expected count must come from the replica analysis rows, so the
+			// single report is a minority (1 of 3) and must NOT upgrade to a quorum failover.
+			name: "InvalidPrimary stays when only a minority of the shard's observers report down",
+			prep: func(t *testing.T) {
+				enableERSOnTabletUnreachable(t)
+				resetShardPeerHealth()
+				t.Cleanup(resetShardPeerHealth)
+				now := time.Now()
+				primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+				RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, keyspace, shard0, reportFor(primary, 5, 0, now), now)
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(), replicaAnalysis(101), replicaAnalysis(102), replicaAnalysis(103)},
+			want:     []*DetectionAnalysis{invalidPrimaryAnalysis(), replicaAnalysis(101), replicaAnalysis(102), replicaAnalysis(103)},
 		},
 		{
 			name: "InvalidPrimary stays without quorum data (fail closed)",
