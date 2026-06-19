@@ -102,6 +102,11 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	var prevCh <-chan *vcopierCopyTaskResult
 	var gtid string
 
+	// Errors observed inside the VStreamTables callback. The callback
+	// returns io.EOF on the first Fail/Cancel; drainAndAggregateErrors
+	// reports them alongside any siblings that race in afterwards.
+	var preTerrs []error
+
 	vstreamOptions := &binlogdatapb.VStreamOptions{
 		ConfigOverrides: vc.vr.workflowConfig.Overrides,
 	}
@@ -174,7 +179,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			buf.Myprintf(
 				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
 				strconv.Itoa(int(vc.vr.id)),
-				encodeString(tableName))
+				encodeString(tableName),
+			)
 			addLatestCopyState := buf.ParsedQuery()
 			copyWorkQueue.open(addLatestCopyState, pkfields, tablePlan)
 		}
@@ -262,19 +268,25 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		// * We keep lastpk up-to-date.
 		select {
 		case result := <-resultCh:
-			if result != nil {
-				switch result.state {
-				case vcopierCopyTaskCancel:
-					log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
-					return io.EOF
-				case vcopierCopyTaskComplete:
-					// Collect lastpk. Needed for logging at the end.
-					lastpk = result.args.lastpk
-				case vcopierCopyTaskFail:
-					return result.err
-				}
-			} else {
+			if result == nil {
 				return io.EOF
+			}
+			switch result.state {
+			case vcopierCopyTaskCancel, vcopierCopyTaskFail:
+				// Defer the report to drainAndAggregateErrors so siblings
+				// that race in after this read are included. Log Cancel
+				// here as the forensic crumb that survives
+				// filterCtxCancelErrs dropping the err.
+				if result.err != nil {
+					preTerrs = append(preTerrs, result.err)
+				}
+				if result.state == vcopierCopyTaskCancel {
+					log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+				}
+				return io.EOF
+			case vcopierCopyTaskComplete:
+				// Collect lastpk. Needed for logging at the end.
+				lastpk = result.args.lastpk
 			}
 		default:
 		}
@@ -285,10 +297,10 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		copyWorkQueue.close()
 	}
 
-	// When tasks are executed async, there may be tasks that complete (or fail)
-	// after the last VStreamTables callback exits. Drain any remaining results
-	// and aggregate errors.
-	if terr := drainAndAggregateErrors(resultCh, serr); terr != nil {
+	// Drain late-arriving task results and aggregate. ctx is passed so a
+	// normal PRS / CopyPhaseDuration cancellation can be stripped, letting
+	// the descriptive ctx-expiration handler below fire.
+	if terr := drainAndAggregateErrors(ctx, resultCh, serr, preTerrs); terr != nil {
 		log.Warn(fmt.Sprintf("task errors in workflow %s: %v", vc.vr.WorkflowName, terr))
 		return terr
 	}
@@ -331,15 +343,22 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx context.Context, tab
 	return nil
 }
 
-// drainAndAggregateErrors drains any remaining results from the result channel,
-// collects errors from failed tasks, and combines them with an optional vstream
-// error into a single aggregated error.
-func drainAndAggregateErrors(resultCh <-chan *vcopierCopyTaskResult, vstreamErr error) error {
-	var terrs []error
+// drainAndAggregateErrors combines preTerrs (errors stashed by the caller's
+// inner-loop), any late-arriving Fail/Cancel results on resultCh, and an
+// optional vstream error into a single aggregated workflow error.
+// formatTaskError surfaces the root cause and collapses dependent-batch
+// failures to a count (issue #20316). When ctx is canceled (PRS /
+// CopyPhaseDuration), cancellation-derived errors are stripped so the
+// caller's existing ctx-expiration handling can fire.
+func drainAndAggregateErrors(ctx context.Context, resultCh <-chan *vcopierCopyTaskResult, vstreamErr error, preTerrs []error) error {
+	terrs := preTerrs
 	for {
 		select {
 		case result := <-resultCh:
-			if result != nil && result.state == vcopierCopyTaskFail {
+			if result == nil {
+				continue
+			}
+			if (result.state == vcopierCopyTaskFail || result.state == vcopierCopyTaskCancel) && result.err != nil {
 				terrs = append(terrs, result.err)
 			}
 		default:
@@ -347,11 +366,14 @@ func drainAndAggregateErrors(resultCh <-chan *vcopierCopyTaskResult, vstreamErr 
 		}
 	}
 done:
-	if vstreamErr != nil {
+	// Skip vstreamErr if it is the synthetic io.EOF the callback returned
+	// after observing a task Fail/Cancel — it would just noise the real
+	// root cause.
+	if vstreamErr != nil && !(errors.Is(vstreamErr, io.EOF) && len(terrs) > 0) {
 		terrs = append(terrs, vstreamErr)
 	}
-	if len(terrs) > 0 {
-		return vterrors.Wrapf(vterrors.Aggregate(terrs), "task error")
+	if ctx.Err() != nil {
+		terrs = filterCtxCancelErrs(terrs)
 	}
-	return nil
+	return formatTaskError(terrs)
 }
