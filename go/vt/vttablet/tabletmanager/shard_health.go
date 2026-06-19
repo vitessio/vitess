@@ -108,8 +108,13 @@ type shardHealthMonitor struct {
 	inflight map[string]bool
 
 	refreshing bool
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
+	// cancel, stopped, and the wg increments are all guarded by mu so that Start and a
+	// concurrent Stop (e.g. shutdown while the initial peer refresh is still running) cannot
+	// race on cancel or misuse the WaitGroup. The monitor is single-use: once stopped it
+	// cannot be started again.
+	cancel  context.CancelFunc
+	stopped bool
+	wg      sync.WaitGroup
 }
 
 func newShardHealthMonitor(
@@ -143,21 +148,42 @@ func (m *shardHealthMonitor) Start(ctx context.Context) {
 	}
 
 	monitorCtx, cancel := context.WithCancel(ctx)
-	m.cancel = cancel
 
+	m.mu.Lock()
+	if m.stopped || m.cancel != nil {
+		// Already stopped (Stop won the race during startup) or already started: do not
+		// launch a second set of loops, and release the unused context.
+		m.mu.Unlock()
+		cancel()
+		return
+	}
+	m.cancel = cancel
+	// Increment the WaitGroup before the (potentially slow) initial refresh and while
+	// holding mu, so a concurrent Stop either observes the increment before its Wait or
+	// installs m.stopped before we get here — never Add-after-Wait.
+	m.wg.Add(2)
+	m.mu.Unlock()
+
+	// Initial synchronous refresh so the first ping round has a peer list. A concurrent Stop
+	// cancels monitorCtx, which unblocks this refresh and makes both loops exit immediately;
+	// the WaitGroup is already incremented, so Stop's Wait correctly drains them.
 	if err := m.refreshPeers(monitorCtx); err != nil {
 		log.Warn("shard health monitor: initial peer refresh failed", slog.Any("error", err))
 	}
 
-	m.wg.Add(2)
 	go m.pingLoop(monitorCtx)
 	go m.refreshLoop(monitorCtx)
 }
 
-// Stop cancels the loops and waits for in-flight work to drain.
+// Stop cancels the loops and waits for in-flight work to drain. It is idempotent and safe to
+// call concurrently with Start.
 func (m *shardHealthMonitor) Stop() {
-	if m.cancel != nil {
-		m.cancel()
+	m.mu.Lock()
+	m.stopped = true
+	cancel := m.cancel
+	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
 	m.wg.Wait()
 }

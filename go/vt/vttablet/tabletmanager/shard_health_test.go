@@ -224,6 +224,49 @@ func TestShardHealthMonitor_StartStopDrainsInflight(t *testing.T) {
 	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
 }
 
+// TestShardHealthMonitor_StartStopConcurrent exercises the shutdown-during-startup race: Start
+// and Stop run as concurrently as possible while the initial peer refresh is held open. Start
+// writes the cancel func and increments the WaitGroup; Stop reads the cancel func and waits. On
+// the unsynchronized version this races on cancel (flagged under -race); with the fix neither
+// call hangs or leaks the loops regardless of which wins.
+func TestShardHealthMonitor_StartStopConcurrent(t *testing.T) {
+	self := peerTablet("zone1", 100)
+	// Hold the initial refresh open so Start spends real time between installing cancel and
+	// launching the loops, maximizing the overlap with a concurrent Stop.
+	releaseRefresh := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseRefresh) }) }
+	t.Cleanup(release)
+	lister := func(ctx context.Context) (map[string]*topo.TabletInfo, error) {
+		select {
+		case <-releaseRefresh:
+		case <-ctx.Done():
+		}
+		return map[string]*topo.TabletInfo{}, nil
+	}
+	m := newShardHealthMonitor(&fakePinger{}, lister, topoproto.TabletAliasString(self.Alias), 10*time.Millisecond, 30*time.Second)
+
+	barrier := make(chan struct{})
+	var loops sync.WaitGroup
+	loops.Add(2)
+	go func() { defer loops.Done(); <-barrier; m.Start(t.Context()) }()
+	go func() { defer loops.Done(); <-barrier; m.Stop() }()
+	close(barrier) // release both as simultaneously as possible
+	release()      // let any in-flight refresh return so Start can complete even if Stop ran first
+
+	finished := make(chan struct{})
+	go func() { loops.Wait(); close(finished) }()
+	select {
+	case <-finished:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "concurrent Start/Stop did not return")
+	}
+
+	// Whichever ordering won, a final (idempotent) Stop must drain the loops.
+	m.Stop()
+	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+}
+
 func TestShardHealthMonitor_StartRejectsNonPositiveTiming(t *testing.T) {
 	tests := []struct {
 		name        string
