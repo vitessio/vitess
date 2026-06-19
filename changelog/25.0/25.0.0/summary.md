@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VReplication](#bug-fixes-vreplication)**
+        - [Root-cause errors surfaced in `_vt.vreplication_log`](#vreplication-log-root-cause-errors)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,17 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-log-root-cause-errors"/>Root-cause errors surfaced in `_vt.vreplication_log`</a>
+
+When a VReplication copy-phase task failed, `_vt.vreplication_log` would often record only a generic `task error: received result is not complete` message, hiding the underlying cause — for example `failed inserting rows: EOF`, a `row JSON payload exceeds vreplication-max-row-json-bytes` precondition failure, or a transaction commit error. To find the real reason, operators had to dig through the raw vttablet logs, which are lost when a tablet restarts.
+
+The copy phase now records the originating error directly in the `message` column. When sibling batches stall waiting on the failed batch, they are collapsed into a count (for example `task error (+1 batches failed waiting on this to complete): ...`) rather than overwriting the root cause. Unrecoverable failures now move the workflow to the `Error` state instead of retrying indefinitely, so the cause is captured in a single log row rather than one row per retry. Normal interruptions, such as a `PlannedReparentShard` or an elapsed copy-phase duration, still follow the existing clean-stop path and are not reported as errors.
+
+No schema or configuration change is required. Because first-failure errors that were previously suppressed are now reported, operators monitoring `vreplication.ErrorCounts` may see an increase in those counters.
+
+See [#20361](https://github.com/vitessio/vitess/pull/20361) for details.
