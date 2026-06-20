@@ -180,6 +180,15 @@ func maybePruneStaleShardPeerRecordsLocked(now time.Time) {
 	pruneStaleShardPeerRecordsLocked(now)
 }
 
+// IsShardHealthObserverType reports whether a tablet of this type participates in the shard-peer
+// health quorum: only REPLICA and RDONLY tablets both run the shard-peer monitor and are eligible
+// to vote on a primary's liveness. It is the single predicate behind the quorum voter filter and
+// the expected-observer counts, so the population that can vote and the population counted in the
+// denominator always agree (e.g. SPARE/EXPERIMENTAL/UNKNOWN tablets are excluded from both).
+func IsShardHealthObserverType(tt topodatapb.TabletType) bool {
+	return tt == topodatapb.TabletType_REPLICA || tt == topodatapb.TabletType_RDONLY
+}
+
 // pruneStaleShardPeerRecordsLocked bounds records for deleted tablets without a background task.
 func pruneStaleShardPeerRecordsLocked(now time.Time) {
 	lastShardPeerPruneAt = now
@@ -223,7 +232,7 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 		if rec.keyspace != keyspace || rec.shard != shard {
 			continue
 		}
-		if rec.observerType != topodatapb.TabletType_REPLICA && rec.observerType != topodatapb.TabletType_RDONLY {
+		if !IsShardHealthObserverType(rec.observerType) {
 			continue
 		}
 		report, ok := rec.peers[primary]

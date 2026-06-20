@@ -243,6 +243,20 @@ func TestPrimaryDownByQuorum(t *testing.T) {
 			expected: false,
 		},
 		{
+			// A SPARE observer must not vote: only REPLICA/RDONLY are shard-health observers. The lone
+			// REPLICA reports down (a 1/1 majority of the real observer); if the SPARE were counted as
+			// a (non-down) voter, the unanimous fraction would see 1/2 and not reach quorum.
+			name: "spare observer does not vote",
+			seed: func() {
+				resetShardPeerHealth()
+				RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 3, 0, now), now)
+				RecordShardPeerHealth(alias(102), topodatapb.TabletType_SPARE, "ks", "0", reportFor(primary, 0, 0, now), now)
+			},
+			expectedObservers: 1,
+			opts:              defaultOpts(),
+			expected:          true,
+		},
+		{
 			// The core safety property: one fresh down vote while the rest of the shard's
 			// observers are stale must NOT reach a verdict — a minority cannot drive ERS.
 			name: "single fresh down vote with stale majority -> no quorum",
@@ -410,4 +424,27 @@ func TestRecordShardPeerHealth(t *testing.T) {
 	_, present = shardPeerHealthByObserver["zone1-0000000999"]
 	shardPeerHealthMu.Unlock()
 	assert.False(t, present, "prune runs once the interval elapses, dropping the stale record")
+}
+
+// TestIsShardHealthObserverType pins the single predicate behind the quorum voter filter and the
+// expected-observer counts: only REPLICA and RDONLY are shard-health observers. In particular
+// SPARE/EXPERIMENTAL/UNKNOWN (which topo.IsReplicaType counts as replica types) must NOT qualify,
+// so the population that can vote and the population counted in the denominator always agree.
+func TestIsShardHealthObserverType(t *testing.T) {
+	observers := []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+	nonObservers := []topodatapb.TabletType{
+		topodatapb.TabletType_PRIMARY,
+		topodatapb.TabletType_SPARE,
+		topodatapb.TabletType_EXPERIMENTAL,
+		topodatapb.TabletType_BACKUP,
+		topodatapb.TabletType_RESTORE,
+		topodatapb.TabletType_DRAINED,
+		topodatapb.TabletType_UNKNOWN,
+	}
+	for _, tt := range observers {
+		assert.Truef(t, IsShardHealthObserverType(tt), "%s should be a shard-health observer", tt)
+	}
+	for _, tt := range nonObservers {
+		assert.Falsef(t, IsShardHealthObserverType(tt), "%s must not be a shard-health observer", tt)
+	}
 }

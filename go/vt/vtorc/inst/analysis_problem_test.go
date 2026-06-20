@@ -342,12 +342,12 @@ func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
 		[]*replicationdatapb.ShardPeerHealth{{TabletAlias: primary, ConsecutivePingFailures: 5, LastAttemptedPing: protoutil.TimeToProto(now)}}, now)
 
 	a := &DetectionAnalysis{
-		IsClusterPrimary:      true,
-		LastCheckValid:        false,
-		AnalyzedInstanceAlias: primary,
-		AnalyzedKeyspace:      "ks",
-		AnalyzedShard:         "0",
-		CountReplicas:         2, // both replicas report down -> a majority of the shard
+		IsClusterPrimary:       true,
+		LastCheckValid:         false,
+		AnalyzedInstanceAlias:  primary,
+		AnalyzedKeyspace:       "ks",
+		AnalyzedShard:          "0",
+		ShardEligibleObservers: 2, // both replicas report down -> a majority of the shard
 	}
 	problem := GetDetectionAnalysisProblem(PrimaryTabletUnreachableByQuorum)
 	require.NotNil(t, problem)
@@ -360,15 +360,15 @@ func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
 	assert.Equal(t, 2, a.QuorumDetail.DownVotes)
 
 	// Minority protection through the matcher: the same two fresh down votes must NOT fire ERS
-	// when the shard is known (via the analysis replica count) to have more eligible observers
+	// when the shard is known (via ShardEligibleObservers from topo) to have more eligible observers
 	// that are not reporting down — a minority view cannot drive a failover.
 	minority := &DetectionAnalysis{
-		IsClusterPrimary:      true,
-		LastCheckValid:        false,
-		AnalyzedInstanceAlias: primary,
-		AnalyzedKeyspace:      "ks",
-		AnalyzedShard:         "0",
-		CountReplicas:         5, // 2 of 5 reporting down is not a majority of the shard
+		IsClusterPrimary:       true,
+		LastCheckValid:         false,
+		AnalyzedInstanceAlias:  primary,
+		AnalyzedKeyspace:       "ks",
+		AnalyzedShard:          "0",
+		ShardEligibleObservers: 5, // 2 of 5 reporting down is not a majority of the shard
 	}
 	assert.False(t, matchPrimaryTabletUnreachableByQuorum(minority, now))
 	assert.Nil(t, minority.QuorumDetail, "the matcher must not record a quorum detail when it does not fire")
