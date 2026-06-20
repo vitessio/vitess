@@ -331,7 +331,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
-		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), streamCallback)
+		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}
@@ -397,7 +397,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 		} else {
 			firstPacket := true
 			var deferredResult *sqltypes.Result
-			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				if firstPacket && len(result.Fields) == 0 {
 					deferredResult = result
 					firstPacket = false
@@ -464,7 +464,7 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 				queryCtx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
 				defer cancel()
 			}
-			session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), func(result *sqltypes.Result) error {
+			session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
 				if firstPacket && len(result.Fields) == 0 {
 					deferredResult = result
 					firstPacket = false
@@ -620,7 +620,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
-		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, streamCallback)
+		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true, streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
 		}

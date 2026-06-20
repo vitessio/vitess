@@ -1385,19 +1385,6 @@ func TestPostProcessAnalyses(t *testing.T) {
 			// instead come from the shard's replica analysis rows below.
 		}
 	}
-	// replicaAnalysis is a healthy, replicating REPLICA in shard0: its vttablet still serves the
-	// shard-peer monitor while its mysqld keeps replicating, so it is a topo-visible eligible
-	// observer but does not make the primary look Dead.
-	replicaAnalysis := func(uid uint32) *DetectionAnalysis {
-		return &DetectionAnalysis{
-			Analysis:              NoProblem,
-			AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
-			AnalyzedKeyspace:      keyspace,
-			AnalyzedShard:         shard0,
-			TabletType:            topodatapb.TabletType_REPLICA,
-			LastCheckValid:        true,
-		}
-	}
 	upgradedQuorumDetail := &QuorumResult{
 		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
 		Down: true, DownVotes: 2, TotalObservers: 2, EligibleObservers: 2, ExpectedObservers: 2, Fraction: 1, MinObservers: 1,
@@ -1422,8 +1409,13 @@ func TestPostProcessAnalyses(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		prep     func(t *testing.T)
+		name string
+		prep func(t *testing.T)
+		// clusters overrides the shared per-shard cluster data for this case. Production builds it
+		// from the unfiltered tablet scan (including healthy replicas), so the quorum cases set
+		// eligibleObservers here rather than smuggling NoProblem replica rows into analyses — which
+		// would never survive GetDetectionAnalysis's NoProblem filter before postProcessAnalyses.
+		clusters map[string]*clusterAnalysis
 		analyses []*DetectionAnalysis
 		want     []*DetectionAnalysis
 	}{
@@ -1622,8 +1614,13 @@ func TestPostProcessAnalyses(t *testing.T) {
 				enableERSOnTabletUnreachable(t)
 				seedQuorumDown(t)
 			},
-			// The shard's two replicas (the topo-visible eligible observers) both report down.
-			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(), replicaAnalysis(101), replicaAnalysis(102)},
+			// The shard has two eligible (REPLICA/RDONLY) observers, counted from the unfiltered
+			// tablet scan; both report the primary down. The healthy replicas are NoProblem and so
+			// are absent from the analysis result — only the InvalidPrimary primary is present.
+			clusters: map[string]*clusterAnalysis{
+				getKeyspaceShardName(keyspace, shard0): {totalTablets: 3, eligibleObservers: 2},
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis()},
 			want: []*DetectionAnalysis{
 				{
 					Analysis:              PrimaryTabletUnreachableByQuorum,
@@ -1634,15 +1631,15 @@ func TestPostProcessAnalyses(t *testing.T) {
 					TabletType:            topodatapb.TabletType_PRIMARY,
 					QuorumDetail:          upgradedQuorumDetail,
 				},
-				replicaAnalysis(101),
-				replicaAnalysis(102),
 			},
 		},
 		{
-			// Regression for the cold-start minority hole: the shard has three eligible observers
-			// (topo-visible replicas) but only one fresh down report. Because CountReplicas is 0 for
-			// an InvalidPrimary, the expected count must come from the replica analysis rows, so the
-			// single report is a minority (1 of 3) and must NOT upgrade to a quorum failover.
+			// Regression for the cold-start minority hole: the shard has three eligible observers but
+			// only one fresh down report. The expected count must come from the unfiltered scan
+			// (clusters.eligibleObservers), NOT from the analysis result — the healthy replicas are
+			// NoProblem and dropped before postProcessAnalyses, so a result-derived count would be 0
+			// and let this single report become a 1/1 quorum. With the real count of 3, one report is
+			// a minority (1 of 3) and must NOT upgrade to a quorum failover.
 			name: "InvalidPrimary stays when only a minority of the shard's observers report down",
 			prep: func(t *testing.T) {
 				enableERSOnTabletUnreachable(t)
@@ -1652,8 +1649,11 @@ func TestPostProcessAnalyses(t *testing.T) {
 				primary := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
 				RecordShardPeerHealth(&topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, topodatapb.TabletType_REPLICA, keyspace, shard0, reportFor(primary, 5, 0, now), now)
 			},
-			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(), replicaAnalysis(101), replicaAnalysis(102), replicaAnalysis(103)},
-			want:     []*DetectionAnalysis{invalidPrimaryAnalysis(), replicaAnalysis(101), replicaAnalysis(102), replicaAnalysis(103)},
+			clusters: map[string]*clusterAnalysis{
+				getKeyspaceShardName(keyspace, shard0): {totalTablets: 4, eligibleObservers: 3},
+			},
+			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis()},
+			want:     []*DetectionAnalysis{invalidPrimaryAnalysis()},
 		},
 		{
 			name: "InvalidPrimary stays without quorum data (fail closed)",
@@ -1681,7 +1681,11 @@ func TestPostProcessAnalyses(t *testing.T) {
 			if tt.want == nil {
 				tt.want = tt.analyses
 			}
-			result := postProcessAnalyses(tt.analyses, clusters)
+			caseClusters := clusters
+			if tt.clusters != nil {
+				caseClusters = tt.clusters
+			}
+			result := postProcessAnalyses(tt.analyses, caseClusters)
 			// The quorum upgrade evaluates at time.Now(); zero the timestamp so expected
 			// QuorumResult fixtures compare deterministically.
 			for _, analysis := range result {

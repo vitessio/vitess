@@ -71,7 +71,13 @@ type clusterAnalysis struct {
 	shardWideAnalysisCode AnalysisCode
 	shardWideProblem      *DetectionAnalysisProblem
 	totalTablets          int
-	primaryAlias          *topodatapb.TabletAlias
+	// eligibleObservers is the number of REPLICA/RDONLY tablets in the shard, counted from the
+	// unfiltered tablet scan (before NoProblem analyses are dropped). It is the expected shard-peer
+	// observer population used by the quorum gate when upgrading an InvalidPrimary, where the
+	// healthy replicas — the very rows that disappear from the analysis result — are what we must
+	// still count against.
+	eligibleObservers int
+	primaryAlias      *topodatapb.TabletAlias
 
 	// primaryTimestamp is the most recent primary term start time observed for the shard.
 	primaryTimestamp time.Time
@@ -434,6 +440,12 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		ca := clusters[keyspaceShard]
 		// Increment the total number of tablets.
 		ca.totalTablets += 1
+		// Count REPLICA/RDONLY tablets here, in the unfiltered scan, so the quorum gate has the
+		// real shard observer population even after NoProblem (healthy) replicas are dropped from
+		// the analysis result. Uses the same predicate as EvaluatePrimaryQuorum's eligible voters.
+		if topo.IsReplicaType(tablet.Type) {
+			ca.eligibleObservers += 1
+		}
 		// Note: when ca.hasShardWideAction is true, we still run matching
 		// below to check if this tablet's problem declares it must run
 		// before the shard-wide action (via BeforeAnalyses).
@@ -689,9 +701,13 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 		// Do NOT use analysis.CountReplicas here: it is derived through a join on the primary's
 		// database_instance row, which is exactly what is missing for an InvalidPrimary (VTOrc has
 		// never reached the primary), so it collapses to 0 and would let a single fresh down report
-		// form a 1/1 quorum in a larger shard. Count the shard's REPLICA/RDONLY tablets from the
-		// topo-backed analysis rows instead — the true expected eligible observer population.
-		expectedObservers := shardEligibleObserverCount(result, analysis.AnalyzedKeyspace, analysis.AnalyzedShard)
+		// form a 1/1 quorum in a larger shard. Use the shard's REPLICA/RDONLY count from the
+		// unfiltered tablet scan instead — the true expected observer population, which survives the
+		// dropping of the healthy (NoProblem) replicas from result.
+		var expectedObservers int
+		if ca := clusters[getKeyspaceShardName(analysis.AnalyzedKeyspace, analysis.AnalyzedShard)]; ca != nil {
+			expectedObservers = ca.eligibleObservers
+		}
 		quorum := evaluateAndLogPrimaryQuorum(analysis.AnalyzedInstanceAlias, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, expectedObservers, time.Now())
 		if !quorum.Down {
 			continue
@@ -714,20 +730,6 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 		}
 	}
 	return result
-}
-
-// shardEligibleObserverCount returns the number of REPLICA/RDONLY tablets in the keyspace/shard,
-// counted from the topo-backed analysis rows. Unlike DetectionAnalysis.CountReplicas (joined
-// through the primary's database_instance row), this is available even when VTOrc has never
-// reached the primary, so it gives the quorum gate the true expected observer population.
-func shardEligibleObserverCount(result []*DetectionAnalysis, keyspace, shard string) int {
-	count := 0
-	for _, a := range result {
-		if a.AnalyzedKeyspace == keyspace && a.AnalyzedShard == shard && topo.IsReplicaType(a.TabletType) {
-			count++
-		}
-	}
-	return count
 }
 
 // auditInstanceAnalysisInChangelog will write down an instance's analysis in the database_instance_analysis_changelog table.
