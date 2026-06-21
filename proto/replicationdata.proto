@@ -88,9 +88,10 @@ message PrimaryStatus {
   string server_uuid = 3;
 }
 
-// ShardPeerHealth is one tablet's most recent liveness observation of a single shard peer,
-// produced by the shard-peer ping monitor. It carries raw signals; consumers (VTOrc) apply
-// their own threshold/freshness policy.
+// ShardPeerHealth is one tablet's most recent liveness observation of a single shard peer —
+// currently its shard's primary (see the FullStatus shard_peer_health field) — produced by the
+// shard-tablet-health ping monitor. It carries raw signals; consumers (VTOrc) apply their own
+// threshold/freshness policy.
 message ShardPeerHealth {
   topodata.TabletAlias tablet_alias = 1;
   int64 consecutive_ping_failures = 2;
@@ -129,5 +130,8 @@ message FullStatus {
   bool disk_stalled = 23;
   bool semi_sync_blocked = 24;
   topodata.TabletType tablet_type = 25;
+  // shard_peer_health, when --track-shard-tablet-health is set, carries this tablet's most recent
+  // liveness observation of its shard's current primary's vttablet (not of all shard peers). VTOrc
+  // uses it to form a quorum before failing over an unreachable primary vttablet.
   repeated ShardPeerHealth shard_peer_health = 26;
 }

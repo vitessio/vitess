@@ -512,9 +512,10 @@ func (x *PrimaryStatus) GetServerUuid() string {
 	return ""
 }
 
-// ShardPeerHealth is one tablet's most recent liveness observation of a single shard peer,
-// produced by the shard-peer ping monitor. It carries raw signals; consumers (VTOrc) apply
-// their own threshold/freshness policy.
+// ShardPeerHealth is one tablet's most recent liveness observation of a single shard peer —
+// currently its shard's primary (see the FullStatus shard_peer_health field) — produced by the
+// shard-tablet-health ping monitor. It carries raw signals; consumers (VTOrc) apply their own
+// threshold/freshness policy.
 type ShardPeerHealth struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	TabletAlias             *topodata.TabletAlias  `protobuf:"bytes,1,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
@@ -622,9 +623,12 @@ type FullStatus struct {
 	DiskStalled                 bool                   `protobuf:"varint,23,opt,name=disk_stalled,json=diskStalled,proto3" json:"disk_stalled,omitempty"`
 	SemiSyncBlocked             bool                   `protobuf:"varint,24,opt,name=semi_sync_blocked,json=semiSyncBlocked,proto3" json:"semi_sync_blocked,omitempty"`
 	TabletType                  topodata.TabletType    `protobuf:"varint,25,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	ShardPeerHealth             []*ShardPeerHealth     `protobuf:"bytes,26,rep,name=shard_peer_health,json=shardPeerHealth,proto3" json:"shard_peer_health,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// shard_peer_health, when --track-shard-tablet-health is set, carries this tablet's most recent
+	// liveness observation of its shard's current primary's vttablet (not of all shard peers). VTOrc
+	// uses it to form a quorum before failing over an unreachable primary vttablet.
+	ShardPeerHealth []*ShardPeerHealth `protobuf:"bytes,26,rep,name=shard_peer_health,json=shardPeerHealth,proto3" json:"shard_peer_health,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *FullStatus) Reset() {

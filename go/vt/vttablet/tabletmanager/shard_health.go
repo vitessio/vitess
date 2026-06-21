@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -51,9 +52,9 @@ func init() {
 
 func registerShardHealthFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &trackShardTabletHealth, "track-shard-tablet-health", trackShardTabletHealth,
-		"If set, this tablet periodically pings the other tablets in its shard and reports their liveness in the FullStatus RPC. Used by VTOrc to form a quorum before failing over an unreachable primary vttablet.")
+		"If set, this tablet periodically pings its shard's current primary and reports the primary's vttablet liveness in the FullStatus RPC. Used by VTOrc to form a quorum before failing over an unreachable primary vttablet.")
 	utils.SetFlagDurationVar(fs, &shardTabletHealthInterval, "shard-tablet-health-interval", shardTabletHealthInterval,
-		"Interval at which this tablet pings its shard peers when --track-shard-tablet-health is set. Also used as the per-ping timeout.")
+		"Interval at which this tablet pings its shard's current primary when --track-shard-tablet-health is set. Also used as the per-ping timeout.")
 }
 
 // tabletPinger is the minimal slice of tmclient.TabletManagerClient the monitor needs.
@@ -75,9 +76,9 @@ func (f pingerFunc) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return f(ctx, tablet)
 }
 
-// monitorPinger prefers a pooled ping when the tmclient offers one: the monitor pings every
-// shard peer each interval, and dialing a fresh connection per probe would be needless
-// TCP/TLS churn. Plain Ping keeps its dial-per-call semantics for all other callers.
+// monitorPinger prefers a pooled ping when the tmclient offers one: the monitor pings the shard
+// primary each interval, and dialing a fresh connection per probe would be needless TCP/TLS churn.
+// Plain Ping keeps its dial-per-call semantics for all other callers.
 func monitorPinger(tmc tabletPinger) tabletPinger {
 	if pooled, ok := tmc.(pooledPinger); ok {
 		return pingerFunc(pooled.PingPooled)
@@ -92,15 +93,20 @@ type peerPingHealth struct {
 	lastAttemptedPing   time.Time
 }
 
-// shardHealthMonitor pings the other tablets in this tablet's shard and exposes the
-// latest raw liveness signals via snapshot(). It is safe for concurrent use.
+// shardHealthMonitor pings this tablet's shard primary and exposes the primary's latest raw
+// liveness signals via snapshot(). It is safe for concurrent use.
 type shardHealthMonitor struct {
-	pinger      tabletPinger
-	listPeers   func(ctx context.Context) (map[string]*topo.TabletInfo, error)
-	selfAlias   string
-	interval    time.Duration
-	pingTimeout time.Duration
-	now         func() time.Time
+	pinger    tabletPinger
+	listPeers func(ctx context.Context) (map[string]*topo.TabletInfo, error)
+	// shardPrimaryAlias returns the shard record's authoritative PrimaryAlias (nil when the shard
+	// has no primary). The monitor probes exactly this tablet — the one VTOrc evaluates quorum for
+	// — rather than whichever tablet record's Type currently says PRIMARY, which can lag or disagree
+	// during promotion/demotion.
+	shardPrimaryAlias func(ctx context.Context) (*topodatapb.TabletAlias, error)
+	selfAlias         string
+	interval          time.Duration
+	pingTimeout       time.Duration
+	now               func() time.Time
 
 	mu       sync.Mutex
 	health   map[string]*peerPingHealth
@@ -120,19 +126,21 @@ type shardHealthMonitor struct {
 func newShardHealthMonitor(
 	pinger tabletPinger,
 	listPeers func(ctx context.Context) (map[string]*topo.TabletInfo, error),
+	shardPrimaryAlias func(ctx context.Context) (*topodatapb.TabletAlias, error),
 	selfAlias string,
 	interval, pingTimeout time.Duration,
 ) *shardHealthMonitor {
 	return &shardHealthMonitor{
-		pinger:      pinger,
-		listPeers:   listPeers,
-		selfAlias:   selfAlias,
-		interval:    interval,
-		pingTimeout: pingTimeout,
-		now:         time.Now,
-		health:      make(map[string]*peerPingHealth),
-		peers:       make(map[string]*topodatapb.Tablet),
-		inflight:    make(map[string]bool),
+		pinger:            pinger,
+		listPeers:         listPeers,
+		shardPrimaryAlias: shardPrimaryAlias,
+		selfAlias:         selfAlias,
+		interval:          interval,
+		pingTimeout:       pingTimeout,
+		now:               time.Now,
+		health:            make(map[string]*peerPingHealth),
+		peers:             make(map[string]*topodatapb.Tablet),
+		inflight:          make(map[string]bool),
 	}
 }
 
@@ -240,13 +248,31 @@ func (m *shardHealthMonitor) refreshPeers(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	primaryAlias, err := m.shardPrimaryAlias(refreshCtx)
+	if err != nil {
+		return err
+	}
 
-	peers := make(map[string]*topodatapb.Tablet, len(tablets))
-	for alias, ti := range tablets {
-		if alias == m.selfAlias {
-			continue
+	// Track only the current shard primary, not every peer. VTOrc's quorum recovery decision
+	// consumes solely each observer's report about the primary (see EvaluatePrimaryQuorum), so
+	// pinging and reporting all peers would be all-to-all O(N^2) work per shard for no benefit.
+	// Restricting to the primary keeps it O(1) pings per tablet (O(N) per shard) and a single-entry
+	// FullStatus payload.
+	//
+	// Select that primary by the shard record's authoritative PrimaryAlias — the same alias VTOrc
+	// evaluates quorum for — and look it up in the tablet map for its address. Selecting by the
+	// tablet record's Type instead would diverge from VTOrc whenever a record's type lags during
+	// promotion/demotion, so observers would report an alias VTOrc never queries and quorum would
+	// silently fail closed. A replica/rdonly probes the primary; the primary itself (self) and any
+	// tablet that currently sees no shard primary probe nothing. Broader peer-health probing, if
+	// ever needed, should be a separately justified opt-in mode rather than the ERS default.
+	peers := make(map[string]*topodatapb.Tablet, 1)
+	if primaryAlias != nil {
+		if pa := topoproto.TabletAliasString(primaryAlias); pa != m.selfAlias {
+			if ti, ok := tablets[pa]; ok {
+				peers[pa] = ti.Tablet
+			}
 		}
-		peers[alias] = ti.Tablet
 	}
 
 	m.mu.Lock()

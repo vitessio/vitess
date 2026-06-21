@@ -733,11 +733,12 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	tm := &TabletManager{}
 	assert.Nil(t, tm.shardPeerHealthSnapshot(), "no monitor configured -> nil snapshot, no panic")
 
-	// With a monitor, the latest per-peer signals are surfaced.
+	// With a monitor, the primary's latest liveness signals are surfaced. The monitor tracks only
+	// the shard primary, so the observed peer must be PRIMARY-typed.
 	self := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
-	peer := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "ks", Shard: "0"}
+	peer := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY}
 	pinger := &fakePinger{fail: true}
-	m := newShardHealthMonitor(pinger, staticLister(self, peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
 	require.NoError(t, m.refreshPeers(t.Context()))
 	m.runPingRound(t.Context())
 	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)

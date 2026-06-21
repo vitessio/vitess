@@ -175,8 +175,8 @@ type TabletManager struct {
 	// tmc is used to run an RPC against other vttablets.
 	tmc tmclient.TabletManagerClient
 
-	// shardHealthMonitor pings shard peers and reports their liveness in FullStatus.
-	// It is nil unless --track-shard-tablet-health is set.
+	// shardHealthMonitor pings the shard's current primary and reports its vttablet liveness in
+	// FullStatus. It is nil unless --track-shard-tablet-health is set.
 	shardHealthMonitor *shardHealthMonitor
 
 	// tmState manages the TabletManager state.
@@ -476,9 +476,20 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		listPeers := func(ctx context.Context) (map[string]*topo.TabletInfo, error) {
 			return tm.TopoServer.GetTabletMapForShard(ctx, keyspace, shard)
 		}
+		// The shard record's PrimaryAlias is the authoritative current primary (the alias VTOrc
+		// evaluates quorum for), so the monitor probes exactly that tablet rather than relying on
+		// the possibly-lagging tablet-record Type.
+		shardPrimaryAlias := func(ctx context.Context) (*topodatapb.TabletAlias, error) {
+			si, err := tm.TopoServer.GetShard(ctx, keyspace, shard)
+			if err != nil {
+				return nil, err
+			}
+			return si.PrimaryAlias, nil
+		}
 		tm.shardHealthMonitor = newShardHealthMonitor(
 			monitorPinger(tm.tmc),
 			listPeers,
+			shardPrimaryAlias,
 			topoproto.TabletAliasString(tablet.Alias),
 			shardTabletHealthInterval,
 			shardTabletHealthInterval,

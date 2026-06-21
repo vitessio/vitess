@@ -78,6 +78,15 @@ func peerTablet(cell string, uid uint32) *topodatapb.Tablet {
 	return &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: cell, Uid: uid}, Keyspace: "ks", Shard: "0"}
 }
 
+// primaryTablet is a tablet with a PRIMARY record type, for realistic shard-primary fixtures. Note
+// that the monitor selects the probe target by the shard record's PrimaryAlias (see
+// staticPrimaryAlias), not by this record type — so a target's type is incidental, not the selector.
+func primaryTablet(cell string, uid uint32) *topodatapb.Tablet {
+	t := peerTablet(cell, uid)
+	t.Type = topodatapb.TabletType_PRIMARY
+	return t
+}
+
 func staticLister(tablets ...*topodatapb.Tablet) func(context.Context) (map[string]*topo.TabletInfo, error) {
 	return func(context.Context) (map[string]*topo.TabletInfo, error) {
 		m := make(map[string]*topo.TabletInfo, len(tablets))
@@ -88,11 +97,22 @@ func staticLister(tablets ...*topodatapb.Tablet) func(context.Context) (map[stri
 	}
 }
 
+// staticPrimaryAlias returns a shardPrimaryAlias func reporting the given tablet's alias (or nil)
+// as the shard record's authoritative primary.
+func staticPrimaryAlias(primary *topodatapb.Tablet) func(context.Context) (*topodatapb.TabletAlias, error) {
+	return func(context.Context) (*topodatapb.TabletAlias, error) {
+		if primary == nil {
+			return nil, nil
+		}
+		return primary.Alias, nil
+	}
+}
+
 func TestShardHealthMonitor_PingHealthAccounting(t *testing.T) {
 	self := peerTablet("zone1", 100)
-	peer := peerTablet("zone1", 101)
+	peer := primaryTablet("zone1", 101)
 	pinger := &fakePinger{fail: true}
-	m := newShardHealthMonitor(pinger, staticLister(self, peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
 
 	fixed := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	m.now = func() time.Time { return fixed }
@@ -140,9 +160,9 @@ func TestShardHealthMonitor_PingHealthAccounting(t *testing.T) {
 
 func TestShardHealthMonitor_BackPressureSingleFlight(t *testing.T) {
 	self := peerTablet("zone1", 100)
-	peer := peerTablet("zone1", 101)
+	peer := primaryTablet("zone1", 101)
 	pinger := &fakePinger{block: make(chan struct{})}
-	m := newShardHealthMonitor(pinger, staticLister(self, peer), topoproto.TabletAliasString(self.Alias), time.Second, 30*time.Second)
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), time.Second, 30*time.Second)
 	require.NoError(t, m.refreshPeers(t.Context()))
 
 	// Fire several rounds while the first ping is still blocked.
@@ -160,9 +180,9 @@ func TestShardHealthMonitor_BackPressureSingleFlight(t *testing.T) {
 
 func TestShardHealthMonitor_CancelUnblocksInflight(t *testing.T) {
 	self := peerTablet("zone1", 100)
-	peer := peerTablet("zone1", 101)
+	peer := primaryTablet("zone1", 101)
 	pinger := &fakePinger{block: make(chan struct{})} // never closed
-	m := newShardHealthMonitor(pinger, staticLister(self, peer), topoproto.TabletAliasString(self.Alias), time.Second, 30*time.Second)
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), time.Second, 30*time.Second)
 	require.NoError(t, m.refreshPeers(t.Context()))
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -175,39 +195,101 @@ func TestShardHealthMonitor_CancelUnblocksInflight(t *testing.T) {
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures, "cancelled ping counts as a failure")
 }
 
-func TestShardHealthMonitor_RefreshPrunesRemovedPeers(t *testing.T) {
+func TestShardHealthMonitor_RefreshPrunesDepartedPrimary(t *testing.T) {
 	self := peerTablet("zone1", 100)
-	peer1 := peerTablet("zone1", 101)
-	peer2 := peerTablet("zone1", 102)
+	oldPrimary := primaryTablet("zone1", 101)
+	// After a reparent the old primary (101) is a replica and 102 is the new primary.
+	demotedOld := peerTablet("zone1", 101)
+	newPrimary := primaryTablet("zone1", 102)
 	pinger := &fakePinger{fail: true}
 	lister := func() func(context.Context) (map[string]*topo.TabletInfo, error) {
-		full := staticLister(self, peer1, peer2)
-		shrunk := staticLister(self, peer1)
+		before := staticLister(self, oldPrimary)
+		after := staticLister(self, demotedOld, newPrimary)
 		first := true
 		return func(ctx context.Context) (map[string]*topo.TabletInfo, error) {
 			if first {
 				first = false
-				return full(ctx)
+				return before(ctx)
 			}
-			return shrunk(ctx)
+			return after(ctx)
 		}
 	}()
-	m := newShardHealthMonitor(pinger, lister, topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	// The shard record's primary moves from 101 to 102 on the second refresh, mirroring the lister.
+	primaryAlias := func() func(context.Context) (*topodatapb.TabletAlias, error) {
+		first := true
+		return func(context.Context) (*topodatapb.TabletAlias, error) {
+			if first {
+				first = false
+				return oldPrimary.Alias, nil
+			}
+			return newPrimary.Alias, nil
+		}
+	}()
+	m := newShardHealthMonitor(pinger, lister, primaryAlias, topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+
+	// Only the primary (101) is tracked and pinged.
+	require.NoError(t, m.refreshPeers(t.Context()))
+	m.runPingRound(t.Context())
+	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+	snap := m.snapshot()
+	require.Len(t, snap, 1)
+	assert.Equal(t, "zone1-0000000101", topoproto.TabletAliasString(snap[0].TabletAlias))
+
+	// The primary moves to 102; the old primary's health must be pruned (it is no longer tracked).
+	// 102 has not been pinged yet, so the snapshot is empty rather than carrying stale 101 health.
+	require.NoError(t, m.refreshPeers(t.Context()))
+	assert.Empty(t, m.snapshot(), "health for the departed primary must be pruned")
+}
+
+// TestShardHealthMonitor_PingsOnlyThePrimary pins that the monitor probes and reports only the
+// current shard primary — the single tablet the quorum recovery observes — and not other
+// replica/rdonly peers. This keeps the feature O(N) per shard instead of all-to-all O(N^2).
+func TestShardHealthMonitor_PingsOnlyThePrimary(t *testing.T) {
+	self := peerTablet("zone1", 100)         // this observer (a replica)
+	primary := primaryTablet("zone1", 101)   // the primary — must be pinged
+	otherReplica := peerTablet("zone1", 102) // another replica — must NOT be pinged
+	pinger := &fakePinger{}
+	m := newShardHealthMonitor(pinger, staticLister(self, primary, otherReplica), staticPrimaryAlias(primary), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
 
 	require.NoError(t, m.refreshPeers(t.Context()))
 	m.runPingRound(t.Context())
 	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
-	require.Len(t, m.snapshot(), 2)
 
-	require.NoError(t, m.refreshPeers(t.Context())) // peer2 disappears
-	assert.Len(t, m.snapshot(), 1, "health for removed peer must be pruned")
+	assert.Equal(t, int64(1), pinger.calls.Load(), "only the primary is pinged, not the other replica or self")
+	snap := m.snapshot()
+	require.Len(t, snap, 1, "only the primary's health is reported")
+	assert.Equal(t, "zone1-0000000101", topoproto.TabletAliasString(snap[0].TabletAlias))
+}
+
+// TestShardHealthMonitor_SelectsByShardPrimaryAliasNotType pins that the probed tablet is chosen by
+// the shard record's authoritative PrimaryAlias — the alias VTOrc evaluates quorum for — not by the
+// tablet record's Type. Here the shard primary (101) still has a stale REPLICA record type (type
+// lags during a promotion) while a different tablet (102) momentarily has a PRIMARY record type.
+// The monitor must probe 101 (the shard PrimaryAlias), or observers would report an alias VTOrc
+// never queries and quorum would silently fail closed.
+func TestShardHealthMonitor_SelectsByShardPrimaryAliasNotType(t *testing.T) {
+	self := peerTablet("zone1", 100)
+	shardPrimary := peerTablet("zone1", 101)        // PrimaryAlias points here, but record type is REPLICA
+	staleTypePrimary := primaryTablet("zone1", 102) // record type PRIMARY, but NOT the shard primary
+	pinger := &fakePinger{}
+	m := newShardHealthMonitor(pinger, staticLister(self, shardPrimary, staleTypePrimary), staticPrimaryAlias(shardPrimary), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+
+	require.NoError(t, m.refreshPeers(t.Context()))
+	m.runPingRound(t.Context())
+	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+
+	assert.Equal(t, int64(1), pinger.calls.Load(), "exactly one tablet probed")
+	snap := m.snapshot()
+	require.Len(t, snap, 1)
+	assert.Equal(t, "zone1-0000000101", topoproto.TabletAliasString(snap[0].TabletAlias),
+		"must probe the shard PrimaryAlias (101), not the tablet whose record type is PRIMARY (102)")
 }
 
 func TestShardHealthMonitor_StartStopDrainsInflight(t *testing.T) {
 	self := peerTablet("zone1", 100)
-	peer := peerTablet("zone1", 101)
+	peer := primaryTablet("zone1", 101)
 	pinger := &fakePinger{block: make(chan struct{})} // pings block until closed
-	m := newShardHealthMonitor(pinger, staticLister(self, peer), topoproto.TabletAliasString(self.Alias), 10*time.Millisecond, 30*time.Second)
+	m := newShardHealthMonitor(pinger, staticLister(self, peer), staticPrimaryAlias(peer), topoproto.TabletAliasString(self.Alias), 10*time.Millisecond, 30*time.Second)
 
 	m.Start(t.Context())
 	// A ping should become inflight via the ticker.
@@ -244,7 +326,7 @@ func TestShardHealthMonitor_StartStopConcurrent(t *testing.T) {
 		}
 		return map[string]*topo.TabletInfo{}, nil
 	}
-	m := newShardHealthMonitor(&fakePinger{}, lister, topoproto.TabletAliasString(self.Alias), 10*time.Millisecond, 30*time.Second)
+	m := newShardHealthMonitor(&fakePinger{}, lister, staticPrimaryAlias(nil), topoproto.TabletAliasString(self.Alias), 10*time.Millisecond, 30*time.Second)
 
 	barrier := make(chan struct{})
 	var loops sync.WaitGroup
@@ -286,7 +368,7 @@ func TestShardHealthMonitor_StartRejectsNonPositiveTiming(t *testing.T) {
 				listCalls.Add(1)
 				return nil, nil
 			}
-			m := newShardHealthMonitor(&fakePinger{}, lister, "zone1-0000000100", tt.interval, tt.pingTimeout)
+			m := newShardHealthMonitor(&fakePinger{}, lister, staticPrimaryAlias(nil), "zone1-0000000100", tt.interval, tt.pingTimeout)
 
 			require.NotPanics(t, func() {
 				m.Start(t.Context())
@@ -316,7 +398,7 @@ func TestMonitorPinger(t *testing.T) {
 
 func TestTabletManagerStopShardHealthMonitor(t *testing.T) {
 	self := peerTablet("zone1", 100)
-	m := newShardHealthMonitor(&fakePinger{}, staticLister(self), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
+	m := newShardHealthMonitor(&fakePinger{}, staticLister(self), staticPrimaryAlias(nil), topoproto.TabletAliasString(self.Alias), time.Second, time.Second)
 	m.Start(t.Context())
 	tm := &TabletManager{shardHealthMonitor: m}
 

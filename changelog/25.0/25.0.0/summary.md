@@ -35,7 +35,7 @@ To avoid acting on VTOrc's own connectivity problems (for example, a network par
 
 The feature is opt-in and disabled by default:
 
-- On `vttablet`, set `--track-shard-tablet-health` so the tablet periodically pings its shard peers and reports their liveness in `FullStatus`.
+- On `vttablet`, set `--track-shard-tablet-health` so the tablet periodically pings its shard's current primary and reports the primary's `vttablet` liveness in `FullStatus`.
 - On VTOrc, set `--emergency-reparent-on-tablet-unreachable` to act on the quorum. The strictness is tunable via `--shard-quorum-fraction` (default `1.0`, i.e. unanimous), `--shard-quorum-min-observers`, `--shard-tablet-health-failure-threshold`, and `--shard-tablet-health-freshness`.
 
 The quorum decision is observable: VTOrc logs why it did or did not fail over an unreachable primary, records the per-observer vote tally in the recovery audit message, and exposes the live per-shard quorum state — the primary, the verdict, and each observer's vote — at the read-only `/api/shard-quorum` endpoint.
