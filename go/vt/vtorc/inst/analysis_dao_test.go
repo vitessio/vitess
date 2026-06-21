@@ -1276,7 +1276,9 @@ func TestGetDetectionAnalysis(t *testing.T) {
 // REPLICA/RDONLY tablets (the shard-peer health voters). A SPARE (or any non-REPLICA/RDONLY) tablet
 // in the shard must not inflate it: topo.IsReplicaType(SPARE) is true, so an IsReplicaType-based
 // count would include it and could wrongly block an ERS even when every actual observer agrees the
-// primary is down.
+// primary is down. The count is also gated on the quorum-ERS feature: with it disabled (the default)
+// the query selects a constant 0 and skips the observer-count scan entirely; only when enabled does
+// it compute the real count.
 func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 	defer resetPrimaryHealthState()
 	defer db.ClearVTOrcDatabase()
@@ -1298,18 +1300,33 @@ func TestGetDetectionAnalysisShardEligibleObservers(t *testing.T) {
 		MysqlPort:     6799,
 	}))
 
-	got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
-	require.NoError(t, err)
-
-	var primaryAnalysis *DetectionAnalysis
-	for _, a := range got {
-		if a.AnalyzedKeyspace == "ks" && a.AnalyzedShard == "0" && a.TabletType == topodatapb.TabletType_PRIMARY {
-			primaryAnalysis = a
-			break
+	// primaryEligibleObservers runs the real analysis query and returns the ks/0 primary row's
+	// ShardEligibleObservers count.
+	primaryEligibleObservers := func(t *testing.T) uint {
+		t.Helper()
+		got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+		require.NoError(t, err)
+		var primaryAnalysis *DetectionAnalysis
+		for _, a := range got {
+			if a.AnalyzedKeyspace == "ks" && a.AnalyzedShard == "0" && a.TabletType == topodatapb.TabletType_PRIMARY {
+				primaryAnalysis = a
+				break
+			}
 		}
+		require.NotNil(t, primaryAnalysis, "expected an analysis row for the ks/0 primary")
+		return primaryAnalysis.ShardEligibleObservers
 	}
-	require.NotNil(t, primaryAnalysis, "expected an analysis row for the ks/0 primary")
-	assert.Equal(t, uint(3), primaryAnalysis.ShardEligibleObservers,
+
+	// With quorum ERS disabled (the default) the count is gated off: the query selects a constant 0
+	// and omits the shard_observers join, so the default analysis poll does no observer-count work.
+	assert.Equal(t, uint(0), primaryEligibleObservers(t),
+		"with the feature disabled, shard_eligible_observers must be a constant 0 (no observer-count scan)")
+
+	// With quorum ERS enabled, only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers;
+	// the SPARE and PRIMARY must be excluded.
+	config.SetERSOnTabletUnreachable(true)
+	t.Cleanup(func() { config.SetERSOnTabletUnreachable(false) })
+	assert.Equal(t, uint(3), primaryEligibleObservers(t),
 		"only the shard's 2 REPLICA + 1 RDONLY tablets are eligible observers; the SPARE and PRIMARY must be excluded")
 }
 

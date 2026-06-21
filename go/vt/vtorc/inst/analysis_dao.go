@@ -97,7 +97,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_tablet.info AS tablet_info,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
-		IFNULL(MIN(shard_observers.observer_count), 0) AS shard_eligible_observers,
+		SHARD_OBSERVER_COLUMN AS shard_eligible_observers,
 		vitess_tablet.shard AS shard,
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
@@ -302,18 +302,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		LEFT JOIN database_instance_stale_binlog_coordinates ON (
 			vitess_tablet.alias = database_instance_stale_binlog_coordinates.alias
 		)
-		LEFT JOIN (
-			SELECT
-				keyspace,
-				shard,
-				COUNT(*) AS observer_count
-			FROM vitess_tablet
-			WHERE tablet_type IN (SHARD_OBSERVER_TABLET_TYPES)
-			GROUP BY keyspace, shard
-		) AS shard_observers ON (
-			shard_observers.keyspace = vitess_tablet.keyspace
-			AND shard_observers.shard = vitess_tablet.shard
-		)
+		SHARD_OBSERVER_JOIN
 	WHERE
 		? IN ('', vitess_keyspace.keyspace)
 		AND ? IN ('', vitess_tablet.shard)
@@ -327,12 +316,33 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	// the shard-peer health monitor and is eligible to vote on a primary's liveness (see
 	// IsShardHealthObserverType). The quorum gate uses it as the expected observer count for both
 	// the unreachable-primary matcher and the InvalidPrimary cold-start upgrade, so the denominator
-	// always matches the voters. The count is precomputed once per (keyspace, shard) in the
-	// shard_observers derived table and joined in — one row per shard, so it adds a column without
-	// fanning out rows — rather than re-scanning vitess_tablet for every analyzed row. The
-	// tablet-type list is derived from the proto enum so it cannot drift from IsShardHealthObserverType.
-	query = strings.Replace(query, "SHARD_OBSERVER_TABLET_TYPES",
-		fmt.Sprintf("%d, %d", int(topodatapb.TabletType_REPLICA), int(topodatapb.TabletType_RDONLY)), 1)
+	// always matches the voters. The count is only consumed when quorum ERS is enabled, so when the
+	// feature is off we select a constant 0 and omit the shard_observers join entirely — the default
+	// analysis query then does no extra observer-count work. When on, the count is precomputed once
+	// per (keyspace, shard) in the shard_observers derived table and joined in — one row per shard,
+	// so it adds a column without fanning out rows — rather than re-scanning vitess_tablet for every
+	// analyzed row. The tablet-type list is derived from the proto enum so it cannot drift from
+	// IsShardHealthObserverType.
+	shardObserverColumn := "0"
+	shardObserverJoin := ""
+	if config.ERSOnTabletUnreachableEnabled() {
+		shardObserverColumn = "IFNULL(MIN(shard_observers.observer_count), 0)"
+		shardObserverJoin = strings.Replace(`LEFT JOIN (
+			SELECT
+				keyspace,
+				shard,
+				COUNT(*) AS observer_count
+			FROM vitess_tablet
+			WHERE tablet_type IN (SHARD_OBSERVER_TABLET_TYPES)
+			GROUP BY keyspace, shard
+		) AS shard_observers ON (
+			shard_observers.keyspace = vitess_tablet.keyspace
+			AND shard_observers.shard = vitess_tablet.shard
+		)`, "SHARD_OBSERVER_TABLET_TYPES",
+			fmt.Sprintf("%d, %d", int(topodatapb.TabletType_REPLICA), int(topodatapb.TabletType_RDONLY)), 1)
+	}
+	query = strings.Replace(query, "SHARD_OBSERVER_COLUMN", shardObserverColumn, 1)
+	query = strings.Replace(query, "SHARD_OBSERVER_JOIN", shardObserverJoin, 1)
 
 	clusters := make(map[string]*clusterAnalysis)
 	err := db.Db.QueryVTOrc(query, args, func(m sqlutils.RowMap) error {
