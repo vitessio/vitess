@@ -505,6 +505,13 @@ func matchPrimaryTabletUnreachableByQuorum(a *DetectionAnalysis, now time.Time) 
 	if !a.IsClusterPrimary || a.LastCheckValid {
 		return false
 	}
+	// Fail closed for an intentionally shut down primary: a graceful vttablet shutdown stamps
+	// TabletShutdownTime, and its shard peers will correctly report the vttablet down, but the
+	// operator took it down deliberately so we must not fail it over. Only a crash (no shutdown
+	// time) should drive quorum ERS.
+	if a.IsTabletShutdown {
+		return false
+	}
 	// ShardEligibleObservers (REPLICA/RDONLY count from topo) is the expected observer population
 	// that matches the quorum voters. CountReplicas is derived from the database_instance
 	// replication join and can include non-voting tablet types, so it is not used here.

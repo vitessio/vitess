@@ -99,6 +99,12 @@ type DetectionAnalysis struct {
 	// TabletType is the tablet's type as seen in the topology.
 	TabletType topodatapb.TabletType
 
+	// IsTabletShutdown is true when the analyzed tablet's record carries a TabletShutdownTime,
+	// i.e. its vttablet was gracefully shut down (an intentional operator action) rather than
+	// crashing. The quorum-confirmed ERS path fails closed when this is set so an intentionally
+	// shut down primary is never failed over.
+	IsTabletShutdown bool
+
 	// CurrentTabletType is the type this tablet is currently running as.
 	CurrentTabletType topodatapb.TabletType
 

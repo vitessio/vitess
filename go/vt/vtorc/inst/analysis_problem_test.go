@@ -382,4 +382,18 @@ func TestPrimaryTabletUnreachableByQuorumMatch(t *testing.T) {
 	notFired := &DetectionAnalysis{IsClusterPrimary: true, LastCheckValid: true, AnalyzedInstanceAlias: primary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
 	assert.False(t, matchPrimaryTabletUnreachableByQuorum(notFired, now))
 	assert.Nil(t, notFired.QuorumDetail)
+
+	// An intentionally shut down primary must not fire ERS even though the same fresh quorum reports
+	// its vttablet down: a graceful shutdown stamps TabletShutdownTime and is an operator action.
+	shutdown := &DetectionAnalysis{
+		IsClusterPrimary:       true,
+		LastCheckValid:         false,
+		IsTabletShutdown:       true,
+		AnalyzedInstanceAlias:  primary,
+		AnalyzedKeyspace:       "ks",
+		AnalyzedShard:          "0",
+		ShardEligibleObservers: 2,
+	}
+	assert.False(t, matchPrimaryTabletUnreachableByQuorum(shutdown, now), "intentionally shut down primary must not be failed over")
+	assert.Nil(t, shutdown.QuorumDetail, "no quorum detail recorded when the matcher fails closed on shutdown")
 }

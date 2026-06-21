@@ -1429,6 +1429,13 @@ func TestPostProcessAnalyses(t *testing.T) {
 			ShardEligibleObservers: shardEligibleObservers,
 		}
 	}
+	// shutdownInvalidPrimaryAnalysis is an InvalidPrimary whose vttablet was gracefully shut down
+	// (TabletShutdownTime stamped), so the quorum path must fail closed and leave it InvalidPrimary.
+	shutdownInvalidPrimaryAnalysis := func(shardEligibleObservers uint) *DetectionAnalysis {
+		a := invalidPrimaryAnalysis(shardEligibleObservers)
+		a.IsTabletShutdown = true
+		return a
+	}
 	upgradedQuorumDetail := &QuorumResult{
 		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
 		Down: true, DownVotes: 2, TotalObservers: 2, EligibleObservers: 2, ExpectedObservers: 2, Fraction: 1, MinObservers: 1,
@@ -1705,6 +1712,19 @@ func TestPostProcessAnalyses(t *testing.T) {
 			},
 			analyses: []*DetectionAnalysis{invalidPrimaryAnalysis(2)},
 			want:     []*DetectionAnalysis{invalidPrimaryAnalysis(2)},
+		},
+		{
+			// A gracefully shut down primary must NOT be upgraded to a quorum failover even though a
+			// fresh quorum of its shard peers reports its vttablet down — the shutdown was an operator
+			// action, not a crash. Without the TabletShutdownTime guard this would become a
+			// PrimaryTabletUnreachableByQuorum and run ERS.
+			name: "InvalidPrimary stays when the primary was intentionally shut down",
+			prep: func(t *testing.T) {
+				enableERSOnTabletUnreachable(t)
+				seedQuorumDown(t)
+			},
+			analyses: []*DetectionAnalysis{shutdownInvalidPrimaryAnalysis(2)},
+			want:     []*DetectionAnalysis{shutdownInvalidPrimaryAnalysis(2)},
 		},
 	}
 	for _, tt := range tests {

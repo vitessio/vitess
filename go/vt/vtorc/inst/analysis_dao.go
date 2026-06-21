@@ -353,6 +353,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		}
 
 		a.TabletType = tablet.Type
+		// A graceful vttablet shutdown stamps TabletShutdownTime (tm_init.go Close). VTOrc treats
+		// such a tablet as intentionally taken down: it skips polling it (see ReadTopologyInstance),
+		// and the quorum path must likewise NOT fail it over, even though its shard peers correctly
+		// report its vttablet unreachable. The crash case this feature targets leaves no shutdown time.
+		a.IsTabletShutdown = tablet.TabletShutdownTime != nil
 		a.CurrentTabletType = topodatapb.TabletType(m.GetInt32("current_tablet_type"))
 		a.AnalyzedKeyspace = m.GetString("keyspace")
 		a.AnalyzedShard = m.GetString("shard")
@@ -701,6 +706,12 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 	// also stopped replicating (i.e. the MySQL is gone too).
 	for _, analysis := range result {
 		if analysis.Analysis != InvalidPrimary || !config.ERSOnTabletUnreachableEnabled() {
+			continue
+		}
+		// Fail closed for an intentionally shut down primary: a graceful vttablet shutdown stamps
+		// TabletShutdownTime and its shard peers will report the vttablet down, but the operator took
+		// it down deliberately, so it must not be failed over (only a crash should drive quorum ERS).
+		if analysis.IsTabletShutdown {
 			continue
 		}
 		// Do NOT use analysis.CountReplicas here: it is derived through a join on the primary's
