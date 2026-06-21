@@ -61,7 +61,7 @@ func TestFormatTaskError(t *testing.T) {
 	t.Run("dependent only directs operators to earlier rows", func(t *testing.T) {
 		err := formatTaskError([]error{dep, dep, dep, dep})
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "4 batches failed waiting on a sibling batch")
+		assert.ErrorContains(t, err, "4 batches failed waiting on a concurrent insert worker's batch")
 		assert.ErrorContains(t, err, "original failure not captured this retry")
 		assert.ErrorContains(t, err, "see earlier rows for the root cause")
 	})

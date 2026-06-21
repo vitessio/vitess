@@ -102,9 +102,9 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	var prevCh <-chan *vcopierCopyTaskResult
 	var gtid string
 
-	// Errors observed inside the VStreamTables callback. The callback
-	// returns io.EOF on the first Fail/Cancel; drainAndAggregateErrors
-	// reports them alongside any siblings that race in afterwards.
+	// Errors observed inside the VStreamTables callback. The callback returns
+	// io.EOF on the first Fail/Cancel; drainAndAggregateErrors reports them
+	// alongside any concurrent insert workers that race in afterwards.
 	var preTerrs []error
 
 	vstreamOptions := &binlogdatapb.VStreamOptions{
@@ -273,9 +273,9 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			}
 			switch result.state {
 			case vcopierCopyTaskCancel, vcopierCopyTaskFail:
-				// Defer the report to drainAndAggregateErrors so siblings
-				// that race in after this read are included. Log Cancel
-				// here as the forensic crumb that survives
+				// Defer the report to drainAndAggregateErrors so concurrent
+				// insert workers that race in after this read are included.
+				// Log Cancel here as the forensic crumb that survives
 				// filterCtxCancelErrs dropping the err.
 				if result.err != nil {
 					preTerrs = append(preTerrs, result.err)

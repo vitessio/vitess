@@ -423,7 +423,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	// Errors observed inside the VStreamRows callback. The callback returns
 	// io.EOF on the first Fail/Cancel; the post-loop drain reports them
-	// alongside any siblings that race in afterwards.
+	// alongside any concurrent insert workers that race in afterwards.
 	var preTerrs []error
 
 	// Use this for task sequencing.
@@ -593,11 +593,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 			switch result.state {
 			case vcopierCopyTaskCancel, vcopierCopyTaskFail:
-				// Defer the report to the post-loop drain so siblings that
-				// race in after this read are included. Log Cancel here as
-				// the forensic crumb that survives filterCtxCancelErrs
-				// dropping the err; the Fail aggregate is logged by the
-				// post-loop drain.
+				// Defer the report to the post-loop drain so concurrent
+				// insert workers that race in after this read are included.
+				// Log Cancel here as the forensic crumb that survives
+				// filterCtxCancelErrs dropping the err; the Fail aggregate
+				// is logged by the post-loop drain.
 				if result.err != nil {
 					preTerrs = append(preTerrs, result.err)
 				}
@@ -877,9 +877,9 @@ func (vtl *vcopierCopyTaskLifecycle) onResult() *vcopierCopyTaskResultHooks {
 }
 
 // dependentBatchFailure tags errors produced by awaitCompletion. They convey
-// only that a sibling batch did not reach Complete — never the root cause.
-// formatTaskError partitions these out so the real error becomes the message
-// and dependent-batch failures become a count (issue #20316).
+// only that a concurrent insert worker's batch did not reach Complete — never
+// the root cause. formatTaskError partitions these out so the real error
+// becomes the message and dependent-batch failures become a count (#20316).
 type dependentBatchFailure struct {
 	msg  string
 	code vtrpcpb.Code
@@ -898,8 +898,8 @@ func (e *dependentBatchFailure) ErrorCode() vtrpcpb.Code {
 }
 
 // partitionTaskErrors splits errors collected from a batch of copy tasks into
-// real root-cause errors and dependent-batch failures (sibling tasks that
-// merely stalled waiting on a failed batch).
+// real root-cause errors and dependent-batch failures (concurrent insert
+// worker tasks that merely stalled waiting on a failed batch).
 func partitionTaskErrors(errs []error) (root, dependent []error) {
 	for _, e := range errs {
 		if e == nil {
@@ -962,7 +962,7 @@ func formatTaskError(errs []error) error {
 		return vterrors.Wrapf(vterrors.Aggregate(root), "task error")
 	case len(dependent) > 0:
 		return vterrors.Errorf(vterrors.Code(dependent[0]),
-			"task error: %d batches failed waiting on a sibling batch to complete; "+
+			"task error: %d batches failed waiting on a concurrent insert worker's batch to complete; "+
 				"original failure not captured this retry (see earlier rows for the root cause)",
 			len(dependent))
 	default:

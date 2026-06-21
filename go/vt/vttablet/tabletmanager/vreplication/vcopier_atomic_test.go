@@ -130,7 +130,7 @@ func TestDrainAndAggregateErrors(t *testing.T) {
 				{state: vcopierCopyTaskCancel, err: &dependentBatchFailure{msg: "context has expired"}},
 				{state: vcopierCopyTaskCancel, err: &dependentBatchFailure{msg: "context has expired"}},
 			},
-			wantSubstr: []string{"task error", "2 batches failed waiting on a sibling batch"},
+			wantSubstr: []string{"task error", "2 batches failed waiting on a concurrent insert worker's batch"},
 		},
 		{
 			// A real Fail mixed with dependent-batch echoes: the real error
