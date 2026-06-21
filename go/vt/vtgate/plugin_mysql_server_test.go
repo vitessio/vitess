@@ -1871,3 +1871,34 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
+
+func TestMysqlSessionUsesStreaming(t *testing.T) {
+	defer func(orig bool) { mysqlServerUseStreaming = orig }(mysqlServerUseStreaming)
+
+	sessionWith := func(w querypb.ExecuteOptions_Workload) *vtgatepb.Session {
+		return &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: w}}
+	}
+
+	testCases := []struct {
+		name    string
+		flag    bool
+		session *vtgatepb.Session
+		want    bool
+	}{
+		{"flag off, OLTP buffers", false, sessionWith(querypb.ExecuteOptions_OLTP), false},
+		{"flag off, OLAP streams", false, sessionWith(querypb.ExecuteOptions_OLAP), true},
+		{"flag off, UNSPECIFIED buffers", false, sessionWith(querypb.ExecuteOptions_UNSPECIFIED), false},
+		{"flag off, DBA buffers", false, sessionWith(querypb.ExecuteOptions_DBA), false},
+		{"flag on, OLTP streams", true, sessionWith(querypb.ExecuteOptions_OLTP), true},
+		{"flag on, OLAP streams", true, sessionWith(querypb.ExecuteOptions_OLAP), true},
+		{"flag on, DBA streams", true, sessionWith(querypb.ExecuteOptions_DBA), true},
+		{"flag on, nil options streams", true, &vtgatepb.Session{}, true},
+		{"flag off, nil options buffers", false, &vtgatepb.Session{}, false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mysqlServerUseStreaming = tc.flag
+			assert.Equal(t, tc.want, mysqlSessionUsesStreaming(tc.session))
+		})
+	}
+}

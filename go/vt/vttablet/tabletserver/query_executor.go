@@ -1062,6 +1062,12 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 	defer func(start time.Time) {
 		qre.logStats.WaitingForConnection += time.Since(start)
 	}(time.Now())
+	// The connection pool follows the workload, not the delivery mode: an OLTP
+	// query streamed to the client still draws from the regular pool, while
+	// every other workload uses the dedicated stream pool.
+	if qre.options.GetWorkload() == querypb.ExecuteOptions_OLTP {
+		return qre.tsv.qe.conns.Get(ctx, qre.setting)
+	}
 	return qre.tsv.qe.streamConns.Get(ctx, qre.setting)
 }
 
@@ -1562,11 +1568,19 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 		defer qre.tsv.statefulql.Remove(qd)
 		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	} else {
-		err = qre.tsv.olapql.Add(qd)
+		// A streamed query's shutdown semantics follow its workload, not the
+		// delivery mode: an OLTP stream is tracked alongside buffered OLTP queries
+		// so it drains during the grace period, while every other workload is
+		// tracked as OLAP and killed immediately on shutdown.
+		ql := qre.tsv.olapql
+		if qre.options.GetWorkload() == querypb.ExecuteOptions_OLTP {
+			ql = qre.tsv.statelessql
+		}
+		err = ql.Add(qd)
 		if err != nil {
 			return err
 		}
-		defer qre.tsv.olapql.Remove(qd)
+		defer ql.Remove(qd)
 		err = conn.Conn.Stream(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
 

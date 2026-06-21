@@ -87,6 +87,8 @@ var (
 
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
+
+	mysqlServerUseStreaming = false
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
@@ -114,6 +116,7 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mysqlDefaultWorkloadName, "mysql-default-workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
 	fs.BoolVar(&mysqlDrainOnTerm, "mysql-server-drain-onterm", mysqlDrainOnTerm, "If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work")
 	utils.SetFlagBoolVar(fs, &mysqlServerMultiQuery, "mysql-server-multi-query-protocol", mysqlServerMultiQuery, "If set, the server will use the new implementation of handling queries where-in multiple queries are sent together.")
+	utils.SetFlagBoolVar(fs, &mysqlServerUseStreaming, "mysql-server-use-streaming", mysqlServerUseStreaming, "If set, the MySQL server uses streaming execution for all workloads, not just OLAP. Connection pools and limits still follow the session workload.")
 }
 
 // vtgateHandler implements the Listener interface.
@@ -284,6 +287,15 @@ func startSpanFromPrepare(ctx context.Context, prepare *mysql.PrepareData, label
 	return startSpanFromPrepareTestable(ctx, prepare, label, trace.NewSpan, trace.NewFromString)
 }
 
+// mysqlSessionUsesStreaming reports whether the MySQL server should deliver this
+// session's queries using streaming execution. The OLAP workload always streams;
+// when --mysql-server-use-streaming is set, every workload streams. The workload
+// still drives connection-pool selection and limits on the tablet side, so this
+// only decouples the delivery mode from the workload.
+func mysqlSessionUsesStreaming(session *vtgatepb.Session) bool {
+	return mysqlServerUseStreaming || session.GetOptions().GetWorkload() == querypb.ExecuteOptions_OLAP
+}
+
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	session := vh.session(c)
 	if c.IsShuttingDown() && !session.InTransaction {
@@ -329,7 +341,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		}
 	}()
 
-	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+	if mysqlSessionUsesStreaming(session) {
 		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
 		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, streamCallback)
 		if err != nil {
@@ -391,7 +403,7 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 		}
 	}()
 
-	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+	if mysqlSessionUsesStreaming(session) {
 		if c.Capabilities&mysql.CapabilityClientMultiStatements != 0 {
 			session, err = vh.streamExecuteMultiQuery(ctx, c, mysqlCtx, session, sql, callback)
 		} else {
@@ -618,7 +630,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		}
 	}()
 
-	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+	if mysqlSessionUsesStreaming(session) {
 		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
 		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true, streamCallback)
 		if err != nil {
