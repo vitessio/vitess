@@ -344,8 +344,9 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx context.Context, tab
 }
 
 // drainAndAggregateErrors combines preTerrs (errors stashed by the caller's
-// inner-loop), any late-arriving Fail/Cancel results on resultCh, and an
-// optional vstream error into a single aggregated workflow error.
+// VStreamTables callback), any late-arriving Fail/Cancel results on
+// resultCh, and an optional vstream error into a single aggregated workflow
+// error.
 // formatTaskError surfaces the root cause and collapses dependent-batch
 // failures to a count (issue #20316). When ctx is canceled (PRS /
 // CopyPhaseDuration), cancellation-derived errors are stripped so the

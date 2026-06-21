@@ -422,8 +422,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var pkfields []*querypb.Field
 
 	// Errors observed inside the VStreamRows callback. The callback returns
-	// io.EOF on the first Fail/Cancel; the post-loop drain reports them
-	// alongside any concurrent insert workers that race in afterwards.
+	// io.EOF on the first Fail/Cancel; the post-VStreamRows drain reports
+	// them alongside any concurrent insert workers that race in afterwards.
 	var preTerrs []error
 
 	// Use this for task sequencing.
@@ -593,11 +593,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 			switch result.state {
 			case vcopierCopyTaskCancel, vcopierCopyTaskFail:
-				// Defer the report to the post-loop drain so concurrent
-				// insert workers that race in after this read are included.
-				// Log Cancel here as the forensic crumb that survives
-				// filterCtxCancelErrs dropping the err; the Fail aggregate
-				// is logged by the post-loop drain.
+				// Defer the report to the post-VStreamRows drain so
+				// concurrent insert workers that race in after this read
+				// are included. Log Cancel here as the forensic crumb that
+				// survives filterCtxCancelErrs dropping the err; the Fail
+				// aggregate is logged by the post-VStreamRows drain.
 				if result.err != nil {
 					preTerrs = append(preTerrs, result.err)
 				}
@@ -620,9 +620,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	copyWorkQueue.close()
 
 	// Drain late-arriving task results (async tasks that finished after
-	// VStreamRows exited). Seed with preTerrs from the inner-loop. Cancel
-	// errors are included here (previously dropped); formatTaskError
-	// partitions sentinel dependent-batch failures out.
+	// VStreamRows exited). Seed with preTerrs from the VStreamRows
+	// callback. Cancel errors are included here (previously dropped);
+	// formatTaskError partitions sentinel dependent-batch failures out.
 	var empty bool
 	terrs := preTerrs
 	for !empty {
