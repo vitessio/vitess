@@ -338,8 +338,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		) AS shard_observers ON (
 			shard_observers.keyspace = vitess_tablet.keyspace
 			AND shard_observers.shard = vitess_tablet.shard
-		)`, "SHARD_OBSERVER_TABLET_TYPES",
-			fmt.Sprintf("%d, %d", int(topodatapb.TabletType_REPLICA), int(topodatapb.TabletType_RDONLY)), 1)
+		)`, "SHARD_OBSERVER_TABLET_TYPES", shardObserverTabletTypeList(), 1)
 	}
 	query = strings.Replace(query, "SHARD_OBSERVER_COLUMN", shardObserverColumn, 1)
 	query = strings.Replace(query, "SHARD_OBSERVER_JOIN", shardObserverJoin, 1)

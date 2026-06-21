@@ -189,6 +189,14 @@ func IsShardHealthObserverType(tt topodatapb.TabletType) bool {
 	return tt == topodatapb.TabletType_REPLICA || tt == topodatapb.TabletType_RDONLY
 }
 
+// shardObserverTabletTypeList renders the shard-health observer tablet types (the REPLICA/RDONLY set
+// behind IsShardHealthObserverType) as a SQL IN-list of proto enum values. Both the analysis query's
+// shard_eligible_observers count and ShardEligibleObserverCount build their tablet-type filter from
+// it, so the SQL population can never drift from the predicate.
+func shardObserverTabletTypeList() string {
+	return fmt.Sprintf("%d, %d", int(topodatapb.TabletType_REPLICA), int(topodatapb.TabletType_RDONLY))
+}
+
 // pruneStaleShardPeerRecordsLocked bounds records for deleted tablets without a background task.
 func pruneStaleShardPeerRecordsLocked(now time.Time) {
 	lastShardPeerPruneAt = now

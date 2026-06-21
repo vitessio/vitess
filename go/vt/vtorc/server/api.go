@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/viperutil/debug"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -219,10 +221,17 @@ func shardQuorumAPIHandler(response http.ResponseWriter) {
 		if err != nil {
 			primaryAlias = nil
 		}
-		// expectedObservers 0: this read-only endpoint has no analysis to source the shard's
-		// replica count from, so the majority gate falls back to the observers actually seen.
-		// The authoritative ERS verdict uses the topo replica count (see the analysis matcher).
-		results = append(results, inst.EvaluatePrimaryQuorum(primaryAlias, ks.Keyspace, ks.Shard, 0, opts, now))
+		// Source the expected observer count from topo exactly as the ERS analysis path does, so
+		// this endpoint's verdict matches the actionable recovery decision — a minority of fresh
+		// down reports must not read as Down in a larger shard. On a count error fall back to 0
+		// (the majority gate then uses only the observers actually seen) and log it.
+		expectedObservers, err := inst.ShardEligibleObserverCount(ks.Keyspace, ks.Shard)
+		if err != nil {
+			log.Warn("shard-quorum API: could not count eligible observers, using observed-only base",
+				slog.String("keyspace", ks.Keyspace), slog.String("shard", ks.Shard), slog.Any("error", err))
+			expectedObservers = 0
+		}
+		results = append(results, inst.EvaluatePrimaryQuorum(primaryAlias, ks.Keyspace, ks.Shard, expectedObservers, opts, now))
 	}
 	returnAsJSON(response, http.StatusOK, results)
 }
