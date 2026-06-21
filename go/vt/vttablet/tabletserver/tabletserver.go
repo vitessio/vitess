@@ -290,6 +290,23 @@ func (tsv *TabletServer) loadQueryTimeoutWithOptions(options *querypb.ExecuteOpt
 	return time.Duration(tsv.QueryTimeout.Load())
 }
 
+// streamTimeout returns the request timeout and the shutdown allowance for a
+// streaming query. An OLTP workload keeps the same timeout semantics as the
+// buffered Execute path, so that streaming an OLTP query does not silently drop
+// its query timeout. Other workloads retain the historical behavior of bounding
+// only transactional streams with the OLAP transaction timeout. Returning the
+// OLAP transaction timeout for an UNSPECIFIED workload is deliberate: it avoids
+// TxTimeoutForWorkload mapping UNSPECIFIED to the OLTP timeout.
+func (tsv *TabletServer) streamTimeout(transactionID int64, options *querypb.ExecuteOptions) (time.Duration, bool) {
+	if options.GetWorkload() == querypb.ExecuteOptions_OLTP {
+		return tsv.loadQueryTimeoutWithTxAndOptions(transactionID, options), transactionID != 0
+	}
+	if transactionID != 0 {
+		return getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLAP), true
+	}
+	return 0, false
+}
+
 // onlineDDLExecutorToggleTableBuffer is called by onlineDDLExecutor as a callback function. onlineDDLExecutor
 // uses it to start/stop query buffering for a given table.
 // It is onlineDDLExecutor's responsibility to make sure buffering is stopped after some definite amount of time.
@@ -1021,14 +1038,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, session queryservice
 }
 
 func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, settings []string, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
-	allowOnShutdown := false
-	var timeout time.Duration
-	if transactionID != 0 {
-		allowOnShutdown = true
-		// Use the transaction timeout. StreamExecute calls happen for OLAP only,
-		// so we can directly fetch the OLAP TX timeout.
-		timeout = getTransactionTimeout(options, tsv.config, querypb.ExecuteOptions_OLAP)
-	}
+	timeout, allowOnShutdown := tsv.streamTimeout(transactionID, options)
 
 	return tsv.execRequest(
 		ctx, timeout,
