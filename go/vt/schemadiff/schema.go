@@ -997,12 +997,14 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 
 	// checkForeignKeyShadowConflict detects "shadow table" foreign key corruption. A foreign key
 	// present in the source schema survives on the OnlineDDL held table (`_vt_hld_…`) for the duration
-	// of the child's migration (and until table GC). If the referenced parent table is concurrently
-	// altered in this same batch such that the surviving foreign key becomes invalid — an incompatible
-	// referenced column signature, a dropped or renamed referenced column, a dropped covering index, or
-	// a dropped parent table — the held table is corrupted. No ordering can resolve this, so we record
-	// an impossible-execution dependency. This is gated behind ForeignKeyShadowConflictStrategyReject,
-	// since it is specific to OnlineDDL's held-table mechanism and is safe under direct strategy.
+	// of the child's migration (and until table GC). If a parent table that *survives* this batch is
+	// concurrently altered such that the surviving foreign key becomes invalid — an incompatible
+	// referenced column signature, a dropped or renamed referenced column, or a dropped covering
+	// index — the held table is corrupted. No ordering can resolve this, so we record an
+	// impossible-execution dependency. A *dropped* parent is not a conflict: the table GC reclaims the
+	// held pair with foreign key checks disabled. This is gated behind
+	// ForeignKeyShadowConflictStrategyReject, since it is specific to OnlineDDL's held-table mechanism
+	// and is safe under direct strategy.
 	checkForeignKeyShadowConflict := func(childDiff EntityDiff, cFrom *CreateTableEntity, constraintName string, fk *sqlparser.ForeignKeyDefinition) {
 		referencedTableName := fk.ReferenceDefinition.ReferencedTable.Name.String()
 		if referencedTableName == cFrom.Name() {

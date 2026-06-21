@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"sort"
 	"strings"
@@ -594,7 +595,7 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 	defer func() {
 		if !conn.IsClosed() {
 			if _, err := conn.ExecuteFetch("SET SESSION foreign_key_checks = 1", 0, false); err != nil {
-				log.Error(fmt.Sprintf("TableGC: error setting foreign_key_checks = 1: %+v", err))
+				log.Error("TableGC: error setting foreign_key_checks = 1", slog.Any("error", err))
 			}
 		}
 	}()
@@ -648,7 +649,7 @@ func (collector *TableGC) dropTable(ctx context.Context, tableName string, isBas
 	defer func() {
 		if !conn.IsClosed() {
 			if _, err := conn.Conn.ExecuteFetch("SET SESSION foreign_key_checks = 1", 0, false); err != nil {
-				log.Error(fmt.Sprintf("TableGC: error setting foreign_key_checks = 1: %+v", err))
+				log.Error("TableGC: error setting foreign_key_checks = 1", slog.Any("error", err))
 			}
 		}
 	}()

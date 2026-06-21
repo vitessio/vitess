@@ -391,7 +391,7 @@ type ForeignKeyShadowConflictError struct {
 
 func (e *ForeignKeyShadowConflictError) Error() string {
 	return fmt.Sprintf(
-		"foreign key constraint %s in table %s references %s.%s, which is altered incompatibly in the same batch; the original table would survive with this foreign key while %s is altered, corrupting it. Split into separate migrations",
+		"foreign key constraint %s in table %s references %s.%s, which is altered incompatibly in the same batch; the original table would survive with this foreign key while %s is altered, corrupting it. These changes must be split into separate migrations",
 		sqlescape.EscapeID(e.Constraint),
 		sqlescape.EscapeID(e.Table),
 		sqlescape.EscapeID(e.ReferencedTable),
