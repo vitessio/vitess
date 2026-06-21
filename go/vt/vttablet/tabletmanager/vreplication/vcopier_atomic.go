@@ -103,7 +103,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	var gtid string
 
 	// Errors observed inside the VStreamTables callback. The callback returns
-	// io.EOF on the first Fail/Cancel; drainAndAggregateErrors reports them
+	// io.EOF on the first Fail; drainAndAggregateErrors reports them
 	// alongside any concurrent insert workers that race in afterwards.
 	var preTerrs []error
 
@@ -272,16 +272,14 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 				return io.EOF
 			}
 			switch result.state {
-			case vcopierCopyTaskCancel, vcopierCopyTaskFail:
+			case vcopierCopyTaskCancel:
+				log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+				return io.EOF
+			case vcopierCopyTaskFail:
 				// Defer the report to drainAndAggregateErrors so concurrent
 				// insert workers that race in after this read are included.
-				// Log Cancel here as the forensic crumb that survives
-				// filterCtxCancelErrs dropping the err.
 				if result.err != nil {
 					preTerrs = append(preTerrs, result.err)
-				}
-				if result.state == vcopierCopyTaskCancel {
-					log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
 				}
 				return io.EOF
 			case vcopierCopyTaskComplete:
@@ -297,10 +295,8 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		copyWorkQueue.close()
 	}
 
-	// Drain late-arriving task results and aggregate. ctx is passed so a
-	// normal PRS / CopyPhaseDuration cancellation can be stripped, letting
-	// the descriptive ctx-expiration handler below fire.
-	if terr := drainAndAggregateErrors(ctx, resultCh, serr, preTerrs); terr != nil {
+	// Drain late-arriving task results and aggregate.
+	if terr := drainAndAggregateErrors(resultCh, serr, preTerrs); terr != nil {
 		log.Warn(fmt.Sprintf("task errors in workflow %s: %v", vc.vr.WorkflowName, terr))
 		return terr
 	}
@@ -344,13 +340,11 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx context.Context, tab
 }
 
 // drainAndAggregateErrors combines preTerrs (errors stashed by the caller's
-// VStreamTables callback), any late-arriving Fail/Cancel results on resultCh,
-// and an optional vstream error into a single aggregated workflow error.
+// VStreamTables callback), any late-arriving Fail results on resultCh, and
+// an optional vstream error into a single aggregated workflow error.
 // formatTaskError surfaces the root cause and collapses dependent-batch
-// failures to a count (issue #20316). When ctx is canceled (PRS /
-// CopyPhaseDuration), cancellation-derived errors are stripped so the
-// caller's existing ctx-expiration handling can fire.
-func drainAndAggregateErrors(ctx context.Context, resultCh <-chan *vcopierCopyTaskResult, vstreamErr error, preTerrs []error) error {
+// failures to a count (issue #20316).
+func drainAndAggregateErrors(resultCh <-chan *vcopierCopyTaskResult, vstreamErr error, preTerrs []error) error {
 	terrs := preTerrs
 	for {
 		select {
@@ -358,7 +352,7 @@ func drainAndAggregateErrors(ctx context.Context, resultCh <-chan *vcopierCopyTa
 			if result == nil {
 				continue
 			}
-			if (result.state == vcopierCopyTaskFail || result.state == vcopierCopyTaskCancel) && result.err != nil {
+			if result.state == vcopierCopyTaskFail && result.err != nil {
 				terrs = append(terrs, result.err)
 			}
 		default:
@@ -367,13 +361,10 @@ func drainAndAggregateErrors(ctx context.Context, resultCh <-chan *vcopierCopyTa
 	}
 done:
 	// Skip vstreamErr if it is the synthetic io.EOF the callback returned
-	// after observing a task Fail/Cancel — it would just noise the real
-	// root cause.
+	// after observing a task Fail — it would just noise the real root
+	// cause.
 	if vstreamErr != nil && !(errors.Is(vstreamErr, io.EOF) && len(terrs) > 0) {
 		terrs = append(terrs, vstreamErr)
-	}
-	if ctx.Err() != nil {
-		terrs = filterCtxCancelErrs(terrs)
 	}
 	return formatTaskError(terrs)
 }

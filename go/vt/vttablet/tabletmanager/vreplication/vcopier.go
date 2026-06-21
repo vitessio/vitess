@@ -422,8 +422,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var pkfields []*querypb.Field
 
 	// Errors observed inside the VStreamRows callback. The callback returns
-	// io.EOF on the first Fail/Cancel; the post-VStreamRows drain reports
-	// them alongside any concurrent insert workers that race in afterwards.
+	// io.EOF on the first Fail; the post-VStreamRows drain reports them
+	// alongside any concurrent insert workers that race in afterwards.
 	var preTerrs []error
 
 	// Use this for task sequencing.
@@ -592,17 +592,16 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				return io.EOF
 			}
 			switch result.state {
-			case vcopierCopyTaskCancel, vcopierCopyTaskFail:
+			case vcopierCopyTaskCancel:
+				log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+				return io.EOF
+			case vcopierCopyTaskFail:
 				// Defer the report to the post-VStreamRows drain so
 				// concurrent insert workers that race in after this read
-				// are included. Log Cancel here as the forensic crumb that
-				// survives filterCtxCancelErrs dropping the err; the Fail
-				// aggregate is logged by the post-VStreamRows drain.
+				// are included. The Fail aggregate is logged by the
+				// post-VStreamRows drain.
 				if result.err != nil {
 					preTerrs = append(preTerrs, result.err)
-				}
-				if result.state == vcopierCopyTaskCancel {
-					log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
 				}
 				return io.EOF
 			case vcopierCopyTaskComplete:
@@ -621,32 +620,30 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	// Drain late-arriving task results (async tasks that finished after
 	// VStreamRows exited). Seed with preTerrs from the VStreamRows
-	// callback. Cancel errors are included here (previously dropped);
-	// formatTaskError partitions sentinel dependent-batch failures out.
+	// callback. formatTaskError partitions sentinel dependent-batch
+	// failures out from real root-cause errors.
 	var empty bool
 	terrs := preTerrs
 	for !empty {
 		select {
 		case result := <-resultCh:
 			switch result.state {
-			case vcopierCopyTaskCancel, vcopierCopyTaskFail:
-				if result.err != nil {
-					terrs = append(terrs, result.err)
-				}
+			case vcopierCopyTaskCancel:
+				// A task cancellation probably indicates an expired
+				// context due to a PlannedReparentShard or elapsed copy
+				// phase duration, neither of which are error conditions.
 			case vcopierCopyTaskComplete:
 				// Get the latest lastpk, purely for logging purposes.
 				lastpk = result.args.lastpk
+			case vcopierCopyTaskFail:
+				// Aggregate non-nil errors.
+				if result.err != nil {
+					terrs = append(terrs, result.err)
+				}
 			}
 		default:
 			empty = true
 		}
-	}
-	// If the copy context was canceled (PRS / CopyPhaseDuration), strip
-	// cancellation-derived errors so the `<-ctx.Done()` clean-stop path
-	// below can fire. Real Fail-state errors that raced the cancellation
-	// (non-cancel codes) are preserved.
-	if ctx.Err() != nil {
-		terrs = filterCtxCancelErrs(terrs)
 	}
 	if terr := formatTaskError(terrs); terr != nil {
 		log.Warn(fmt.Sprintf("task error in workflow %s: %v", vc.vr.WorkflowName, terr))
@@ -913,39 +910,6 @@ func partitionTaskErrors(errs []error) (root, dependent []error) {
 		}
 	}
 	return root, dependent
-}
-
-// filterCtxCancelErrs drops cancellation-derived errors so a normal PRS or
-// CopyPhaseDuration interruption is not reported as a workflow error.
-// Callers invoke this when ctx.Err() != nil. Real Fail-state errors that
-// race the cancellation carry a non-cancel code and are preserved.
-//
-// Three dropped categories, each caught by a different check because vterrors
-// wrapping does not implement stdlib Unwrap and stdlib %w wrapping does not
-// implement Vitess Cause():
-//
-//   - *dependentBatchFailure (any code).
-//   - stdlib %w-wrapped context.Canceled / DeadlineExceeded (errors.Is).
-//   - vterrors-coded or Cause()-chained context errors (vterrors.Code).
-func filterCtxCancelErrs(errs []error) []error {
-	out := make([]error, 0, len(errs))
-	for _, e := range errs {
-		if e == nil {
-			continue
-		}
-		var dbf *dependentBatchFailure
-		if errors.As(e, &dbf) {
-			continue
-		}
-		if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
-			continue
-		}
-		if code := vterrors.Code(e); code == vtrpcpb.Code_CANCELED || code == vtrpcpb.Code_DEADLINE_EXCEEDED {
-			continue
-		}
-		out = append(out, e)
-	}
-	return out
 }
 
 // formatTaskError combines a batch of copy-task errors into the single error

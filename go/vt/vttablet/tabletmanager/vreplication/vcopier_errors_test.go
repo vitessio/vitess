@@ -17,9 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,51 +84,4 @@ func TestFormatTaskError(t *testing.T) {
 		assert.ErrorContains(t, err, "error committing transaction: write conflict")
 		assert.ErrorContains(t, err, "+1 batches failed waiting on this to complete")
 	})
-}
-
-func TestFilterCtxCancelErrs(t *testing.T) {
-	// Callers invoke filterCtxCancelErrs when ctx.Err() != nil. Errors
-	// arising from that cancellation must be dropped so the clean-stop path
-	// can fire; non-cancel codes (real Fail-state errors that raced the
-	// cancellation) are preserved.
-	depPlain := &dependentBatchFailure{msg: "received result is not complete"}
-	depCanceled := &dependentBatchFailure{msg: "context has expired", code: vtrpcpb.Code_CANCELED}
-	rawCanceled := context.Canceled
-	rawDeadline := context.DeadlineExceeded
-	wrappedCanceled := vterrors.Wrap(context.Canceled, "ExecuteWithRetry failed")
-	stdWrappedCanceled := fmt.Errorf("row stream ended: %w", context.Canceled)
-	stdWrappedDeadline := fmt.Errorf("vstream deadline: %w", context.DeadlineExceeded)
-	codeCanceled := vterrors.New(vtrpcpb.Code_CANCELED, "tryAdvance canceled while running InsertRows")
-	codeDeadline := vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "tryAdvance deadline exceeded")
-	realFail := errors.New("failed inserting rows: duplicate key on customer.email")
-	realFailFP := vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "row JSON payload exceeds cap")
-
-	tests := []struct {
-		name string
-		in   []error
-		want []error
-	}{
-		{name: "nil entries are skipped", in: []error{nil, nil}, want: nil},
-		{name: "drops dependent-batch sentinels regardless of code", in: []error{depPlain, depCanceled}, want: nil},
-		{name: "drops raw context.Canceled and context.DeadlineExceeded", in: []error{rawCanceled, rawDeadline}, want: nil},
-		{name: "drops vterrors-wrapped context.Canceled", in: []error{wrappedCanceled}, want: nil},
-		{name: "drops stdlib fmt.Errorf %w-wrapped context errors", in: []error{stdWrappedCanceled, stdWrappedDeadline}, want: nil},
-		{name: "drops errors with Code_CANCELED or Code_DEADLINE_EXCEEDED", in: []error{codeCanceled, codeDeadline}, want: nil},
-		{
-			name: "preserves real Fail-state errors that race the cancellation",
-			in:   []error{realFail, depCanceled, realFailFP, rawCanceled},
-			want: []error{realFail, realFailFP},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := filterCtxCancelErrs(tt.in)
-			if len(tt.want) == 0 {
-				assert.Empty(t, got)
-				return
-			}
-			assert.Equal(t, tt.want, got)
-		})
-	}
 }
