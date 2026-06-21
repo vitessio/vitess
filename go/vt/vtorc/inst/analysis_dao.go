@@ -97,13 +97,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		vitess_tablet.info AS tablet_info,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
-		(
-			SELECT COUNT(*)
-			FROM vitess_tablet AS shard_observer
-			WHERE shard_observer.keyspace = vitess_tablet.keyspace
-				AND shard_observer.shard = vitess_tablet.shard
-				AND shard_observer.tablet_type IN (SHARD_OBSERVER_TABLET_TYPES)
-		) AS shard_eligible_observers,
+		IFNULL(MIN(shard_observers.observer_count), 0) AS shard_eligible_observers,
 		vitess_tablet.shard AS shard,
 		vitess_keyspace.keyspace AS keyspace,
 		vitess_keyspace.keyspace_type AS keyspace_type,
@@ -308,6 +302,18 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		LEFT JOIN database_instance_stale_binlog_coordinates ON (
 			vitess_tablet.alias = database_instance_stale_binlog_coordinates.alias
 		)
+		LEFT JOIN (
+			SELECT
+				keyspace,
+				shard,
+				COUNT(*) AS observer_count
+			FROM vitess_tablet
+			WHERE tablet_type IN (SHARD_OBSERVER_TABLET_TYPES)
+			GROUP BY keyspace, shard
+		) AS shard_observers ON (
+			shard_observers.keyspace = vitess_tablet.keyspace
+			AND shard_observers.shard = vitess_tablet.shard
+		)
 	WHERE
 		? IN ('', vitess_keyspace.keyspace)
 		AND ? IN ('', vitess_tablet.shard)
@@ -321,8 +327,10 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	// the shard-peer health monitor and is eligible to vote on a primary's liveness (see
 	// IsShardHealthObserverType). The quorum gate uses it as the expected observer count for both
 	// the unreachable-primary matcher and the InvalidPrimary cold-start upgrade, so the denominator
-	// always matches the voters. The tablet-type list is derived from the proto enum so it cannot
-	// drift from IsShardHealthObserverType.
+	// always matches the voters. The count is precomputed once per (keyspace, shard) in the
+	// shard_observers derived table and joined in — one row per shard, so it adds a column without
+	// fanning out rows — rather than re-scanning vitess_tablet for every analyzed row. The
+	// tablet-type list is derived from the proto enum so it cannot drift from IsShardHealthObserverType.
 	query = strings.Replace(query, "SHARD_OBSERVER_TABLET_TYPES",
 		fmt.Sprintf("%d, %d", int(topodatapb.TabletType_REPLICA), int(topodatapb.TabletType_RDONLY)), 1)
 
