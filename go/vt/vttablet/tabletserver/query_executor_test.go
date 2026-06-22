@@ -1472,7 +1472,8 @@ func TestReplaceSchemaName(t *testing.T) {
 	// Test streaming execute.
 	{
 		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, 0)
-		// Stream only replaces schema name when plan is PlanSelect.
+		// Stream replaces the schema name for read plans like PlanSelect
+		// (PlanShow and PlanSelectImpossible are covered separately).
 		assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 		// Any value other than nil should cause QueryExecutor to replace the
 		// schema name.
@@ -1483,6 +1484,70 @@ func TestReplaceSchemaName(t *testing.T) {
 			return nil
 		})
 		require.NoError(t, err)
+	}
+}
+
+// Stream must apply the schema-name rewrite for the same read plan types as
+// Execute -- PlanShow, PlanSelectImpossible and PlanSelectLockFunc as well as
+// PlanSelect. In the merged base every streaming query was PlanSelectStream and
+// always rewritten; once BuildStreaming returns real plan types, a streaming SHOW
+// or impossible SELECT would skip the rewrite (a regression) and run scoped to the
+// wrong schema name or fail with a missing bind variable. PlanSelectLockFunc is
+// included for parity with Execute even though it never carries the bind variable
+// in practice, so its rewrite is a no-op.
+func TestStreamReplaceSchemaNameByPlanType(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	testcases := []struct {
+		name     string
+		query    string
+		dbQuery  string
+		planWant planbuilder.PlanType
+	}{
+		{
+			name:     "PlanShow",
+			query:    "show tables",
+			dbQuery:  "show tables",
+			planWant: planbuilder.PlanShow,
+		},
+		{
+			name:     "PlanSelectImpossible",
+			query:    "select * from test_table where 1 != 1",
+			dbQuery:  "select * from test_table where 1 != 1",
+			planWant: planbuilder.PlanSelectImpossible,
+		},
+		{
+			name:     "PlanSelectLockFunc",
+			query:    "select get_lock('foo', 10) from dual",
+			dbQuery:  "select get_lock('foo', 10) from dual",
+			planWant: planbuilder.PlanSelectLockFunc,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			db.AddQuery(tc.dbQuery, &sqltypes.Result{Fields: getTestTableFields()})
+
+			// Without BvReplaceSchemaName the rewrite is a no-op: BvSchemaName
+			// stays unset, matching Execute.
+			qreNoop := newTestQueryExecutorStreaming(ctx, tsv, tc.query, 0)
+			require.Equal(t, tc.planWant, qreNoop.plan.PlanID)
+			require.NoError(t, qreNoop.Stream(func(_ *sqltypes.Result) error { return nil }))
+			_, ok := qreNoop.bindVars[sqltypes.BvSchemaName]
+			require.False(t, ok, "Stream must not set the schema name for %s without BvReplaceSchemaName", tc.planWant)
+
+			// With BvReplaceSchemaName set the rewrite fires, matching Execute.
+			qre := newTestQueryExecutorStreaming(ctx, tsv, tc.query, 0)
+			qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+			require.NoError(t, qre.Stream(func(_ *sqltypes.Result) error { return nil }))
+			_, ok = qre.bindVars[sqltypes.BvSchemaName]
+			require.True(t, ok, "Stream must replace the schema name for %s, like Execute", tc.planWant)
+		})
 	}
 }
 

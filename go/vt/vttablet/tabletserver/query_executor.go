@@ -397,8 +397,12 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		}
 	}
 
+	// Match Execute's schema-name rewrite. PlanSelectLockFunc is included for parity
+	// even though only information_schema reads carry BvReplaceSchemaName, so the
+	// rewrite is a no-op for it; PlanSelectNoLimit is Build-only and never reaches
+	// the streaming path.
 	switch qre.plan.PlanID {
-	case p.PlanSelect:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
