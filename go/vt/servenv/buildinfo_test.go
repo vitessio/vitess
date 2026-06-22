@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestVersionString(t *testing.T) {
@@ -51,6 +52,40 @@ func TestVersionString(t *testing.T) {
 	assert.Equal(t, "Version: v1.2.3-SNAPSHOT (GHA build 422) (Git revision d54b87ca0be09b678bb4490060e8f23f890ddb92 branch 'gitBranch') built on time is now by user@host using 1.20.2 amiga/amd64", v.String())
 
 	assert.Equal(t, "8.4.6-Vitess", v.MySQLVersion())
+}
+
+func TestResolveGitRev(t *testing.T) {
+	// VCS revision present and clean: used verbatim, ldflag fallback ignored.
+	assert.Equal(t, "abc123", resolveGitRev("abc123", false, "fallback"))
+
+	// VCS revision present and dirty: "-dirty" suffix appended.
+	assert.Equal(t, "abc123-dirty", resolveGitRev("abc123", true, "fallback"))
+
+	// No VCS revision (e.g. tarball build): the ldflag fallback is used as-is,
+	// regardless of the modified flag.
+	assert.Equal(t, "fallback", resolveGitRev("", false, "fallback"))
+	assert.Equal(t, "fallback", resolveGitRev("", true, "fallback"))
+
+	// No VCS revision and no fallback: empty.
+	assert.Empty(t, resolveGitRev("", false, ""))
+}
+
+func TestParseBuildTime(t *testing.T) {
+	// No commit time available yields zero values.
+	pretty, unix := parseBuildTime("")
+	assert.Empty(t, pretty)
+	assert.Equal(t, int64(0), unix)
+
+	// RFC3339 commit time (as stamped by the Go toolchain) is parsed.
+	const commitTime = "2020-09-15T12:04:10Z"
+	expected, err := time.Parse(time.RFC3339, commitTime)
+	require.NoError(t, err)
+	pretty, unix = parseBuildTime(commitTime)
+	assert.Equal(t, commitTime, pretty)
+	assert.Equal(t, expected.Unix(), unix)
+
+	// A non-RFC3339 value is unexpected from the toolchain and panics.
+	assert.Panics(t, func() { parseBuildTime("Tue Sep 15 12:04:10 UTC 2020") })
 }
 
 func TestBuildVersionStats(t *testing.T) {

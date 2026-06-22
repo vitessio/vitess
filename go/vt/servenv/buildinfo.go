@@ -19,6 +19,7 @@ package servenv
 import (
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 var (
 	buildHost         = ""
 	buildUser         = ""
-	buildTime         = ""
 	buildGitRev       = ""
 	buildGitBranch    = ""
 	statsBuildVersion *stats.String
@@ -101,11 +101,58 @@ func (v *versionInfo) MySQLVersion() string {
 	return mySQLServerVersion
 }
 
-func init() {
-	t, err := time.Parse(time.UnixDate, buildTime)
-	if buildTime != "" && err != nil {
-		panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", buildTime, err))
+// readVCSInfo returns the VCS revision, commit time, and dirty state that the Go
+// toolchain stamps into the binary. The values are empty/false when the binary
+// was built without VCS metadata (for example from a release tarball).
+func readVCSInfo() (revision, revisionTime string, modified bool) {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "", "", false
 	}
+	for _, setting := range bi.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.time":
+			revisionTime = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		}
+	}
+	return revision, revisionTime, modified
+}
+
+// resolveGitRev prefers the VCS-stamped revision, falling back to the value
+// injected via ldflags when no VCS metadata is available. A dirty working tree
+// is reflected with a "-dirty" suffix.
+func resolveGitRev(vcsRevision string, modified bool, fallback string) string {
+	if vcsRevision == "" {
+		return fallback
+	}
+	if modified {
+		return vcsRevision + "-dirty"
+	}
+	return vcsRevision
+}
+
+// parseBuildTime converts the VCS-stamped commit time (RFC3339) into the pretty
+// string and Unix timestamp used by AppVersion. It returns zero values when no
+// commit time is available.
+func parseBuildTime(vcsTime string) (pretty string, unix int64) {
+	if vcsTime == "" {
+		return "", 0
+	}
+	t, err := time.Parse(time.RFC3339, vcsTime)
+	if err != nil {
+		panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", vcsTime, err))
+	}
+	return vcsTime, t.Unix()
+}
+
+func init() {
+	revision, revisionTime, modified := readVCSInfo()
+	gitRev := resolveGitRev(revision, modified, buildGitRev)
+	buildTimePretty, buildTime := parseBuildTime(revisionTime)
 
 	buildNumber, err := strconv.ParseInt(buildNumberStr, 10, 64)
 	if err != nil {
@@ -115,9 +162,9 @@ func init() {
 	AppVersion = versionInfo{
 		buildHost:       buildHost,
 		buildUser:       buildUser,
-		buildTime:       t.Unix(),
-		buildTimePretty: buildTime,
-		buildGitRev:     buildGitRev,
+		buildTime:       buildTime,
+		buildTimePretty: buildTimePretty,
+		buildGitRev:     gitRev,
 		buildGitBranch:  buildGitBranch,
 		buildNumber:     buildNumber,
 		buildSystem:     buildSystem,
