@@ -320,6 +320,7 @@ func (e *Executor) StreamExecute(
 	safeSession *econtext.SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
+	prepared bool,
 	callback func(*sqltypes.Result) error,
 ) error {
 	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
@@ -422,7 +423,7 @@ func (e *Executor) StreamExecute(
 		return err
 	}
 
-	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, false, logStats, resultHandler, srr.storeResultStats)
+	err = e.newExecute(ctx, mysqlCtx, safeSession, sql, bindVars, prepared, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)

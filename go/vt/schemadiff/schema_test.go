@@ -925,7 +925,7 @@ func TestViewReferences(t *testing.T) {
 			queries: []string{
 				"create table t1(id int primary key, c char(5))",
 				"create view v1 as select id+1, c as ch from t1 where id > 0",
-				"create view v2 as select ch from v1 where `id + 1` > 0",
+				"create view v2 as select ch from v1 where `id+1` > 0",
 			},
 		},
 		{
