@@ -139,6 +139,9 @@ func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerI
 func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest) (response *vtgatepb.ExecuteResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
+	// The RPC handler does not have the exact inbound framed byte count. Use SizeVT
+	// as a stable approximation of the protobuf request body; it includes query text
+	// and bind variables, but excludes gRPC/HTTP2 framing overhead.
 	ctx = vtgateservice.ContextWithIngressBytes(ctx, uint64(request.SizeVT()))
 
 	// Handle backward compatibility.
@@ -216,13 +219,11 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	ctx = withCallerIDContext(ctx, request.CallerId)
 	sqlQueries := make([]string, len(request.Queries))
 	bindVars := make([]map[string]*querypb.BindVariable, len(request.Queries))
-	queryWeights := make([]int, len(request.Queries))
 	for queryNum, query := range request.Queries {
 		sqlQueries[queryNum] = query.Sql
 		bindVars[queryNum] = query.BindVariables
-		queryWeights[queryNum] = query.SizeVT()
 	}
-	ctx = vtgateservice.ContextWithIngressBytesByQuery(ctx, vtgateservice.AllocateQueryIngressBytes(uint64(request.SizeVT()), queryWeights))
+	ctx = vtgateservice.ContextWithIngressBytesByQuery(ctx, allocateBatchIngressBytes(uint64(request.SizeVT()), request.Queries))
 
 	// Handle backward compatibility.
 	session := request.Session
@@ -235,6 +236,17 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 		Session: session,
 		Error:   vterrors.ToVTRPC(err),
 	}, nil
+}
+
+// allocateBatchIngressBytes splits ExecuteBatch request ingress across queries
+// by each BoundQuery's serialized protobuf size. This keeps larger queries and
+// bind variable sets from being under-attributed in per-query log stats.
+func allocateBatchIngressBytes(total uint64, queries []*querypb.BoundQuery) []uint64 {
+	weights := make([]int, len(queries))
+	for i, query := range queries {
+		weights[i] = query.SizeVT()
+	}
+	return vtgateservice.SplitIngressBytes(total, weights)
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method

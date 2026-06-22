@@ -630,11 +630,18 @@ func queryIngressBytesForStatements(ctx context.Context, mysqlCtx vtgateservice.
 		ingressBytes = mysqlCtx.IngressBytes()
 	}
 
+	return allocateStatementIngressBytes(ingressBytes, queries)
+}
+
+// allocateStatementIngressBytes splits request-level ingress across statements
+// by SQL text length. Multi-statement requests enter VTGate with one ingress
+// byte count, but query log stats are emitted per statement.
+func allocateStatementIngressBytes(total uint64, queries []string) []uint64 {
 	weights := make([]int, len(queries))
 	for i, query := range queries {
 		weights[i] = len(query)
 	}
-	return vtgateservice.AllocateQueryIngressBytes(ingressBytes, weights)
+	return vtgateservice.SplitIngressBytes(total, weights)
 }
 
 // ExecuteMulti executes multiple non-streaming queries.

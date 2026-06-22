@@ -40,6 +40,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 const (
@@ -1315,6 +1316,9 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
+	// COM_STMT_SEND_LONG_DATA is preparatory state for a later COM_STMT_EXECUTE,
+	// not a separately logged query. Hold its ingress bytes so COM_STMT_EXECUTE
+	// accounts for the full client payload used to run the statement.
 	if c.pendingLongDataIngressBytes == nil {
 		c.pendingLongDataIngressBytes = make(map[uint32]uint64)
 	}
@@ -1677,42 +1681,15 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 
 var errEmptyStatement = sqlerror.NewSQLError(sqlerror.EREmptyQuery, sqlerror.SSClientError, "Query was empty")
 
+// allocateQueryIngressBytes splits COM_QUERY ingress bytes across statements by
+// SQL text length. COM_QUERY ingress is measured once for the whole command
+// packet, but query log stats are emitted per statement.
 func allocateQueryIngressBytes(total uint64, queries []string) []uint64 {
-	allocations := make([]uint64, len(queries))
-	if len(queries) == 0 || total == 0 {
-		return allocations
-	}
-	var totalWeight uint64
-	for _, query := range queries {
-		totalWeight += uint64(len(query))
-	}
-	if totalWeight == 0 {
-		base := total / uint64(len(allocations))
-		remainder := total % uint64(len(allocations))
-		for i := range allocations {
-			allocations[i] = base
-			if uint64(i) < remainder {
-				allocations[i]++
-			}
-		}
-		return allocations
-	}
-	lastNonEmptyQuery := -1
+	weights := make([]int, len(queries))
 	for i, query := range queries {
-		if len(query) > 0 {
-			lastNonEmptyQuery = i
-		}
+		weights[i] = len(query)
 	}
-	var allocated uint64
-	for i, query := range queries {
-		if i == lastNonEmptyQuery {
-			allocations[i] = total - allocated
-			break
-		}
-		allocations[i] = total * uint64(len(query)) / totalWeight
-		allocated += allocations[i]
-	}
-	return allocations
+	return vtgateservice.SplitIngressBytes(total, weights)
 }
 
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {

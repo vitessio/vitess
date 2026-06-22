@@ -22,8 +22,50 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAllocateQueryIngressBytesDoesNotAllocateToZeroWeight(t *testing.T) {
-	allocations := AllocateQueryIngressBytes(3, []int{1, 1, 0})
+// TestSplitIngressBytes verifies request ingress bytes are attributed by
+// positive weights while preserving the original total.
+func TestSplitIngressBytes(t *testing.T) {
+	tests := []struct {
+		name        string
+		total       uint64
+		weights     []int
+		allocations []uint64
+	}{
+		{
+			name:        "empty",
+			total:       10,
+			weights:     nil,
+			allocations: []uint64{},
+		},
+		{
+			name:        "zero total",
+			total:       0,
+			weights:     []int{1, 2},
+			allocations: []uint64{0, 0},
+		},
+		{
+			name:        "positive weights",
+			total:       30,
+			weights:     []int{1, 2},
+			allocations: []uint64{10, 20},
+		},
+		{
+			name:        "remainder goes to last positive weight",
+			total:       3,
+			weights:     []int{1, 1, 0},
+			allocations: []uint64{1, 2, 0},
+		},
+		{
+			name:        "all non-positive weights",
+			total:       5,
+			weights:     []int{0, -1, 0},
+			allocations: []uint64{2, 2, 1},
+		},
+	}
 
-	assert.Equal(t, []uint64{1, 2, 0}, allocations)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.allocations, SplitIngressBytes(tt.total, tt.weights))
+		})
+	}
 }

@@ -1872,6 +1872,8 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
 
+// TestComQueryIngressBytes verifies that MySQL protocol query ingress bytes are
+// attached to VTGate query log stats.
 func TestComQueryIngressBytes(t *testing.T) {
 	vtgate, sbc, _ := createVtgateEnv(t)
 	query := "SELECT id FROM user WHERE id = 1"

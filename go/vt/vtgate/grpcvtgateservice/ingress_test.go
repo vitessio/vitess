@@ -142,6 +142,8 @@ func (s *fakeStreamExecuteServer) RecvMsg(any) error {
 	return nil
 }
 
+// TestGRPCExecuteSetsIngressBytes verifies that unary Execute stores the request
+// size estimate in the forwarded context.
 func TestGRPCExecuteSetsIngressBytes(t *testing.T) {
 	mockService := &mockVTGateService{
 		executeResult: &sqltypes.Result{},
@@ -160,6 +162,8 @@ func TestGRPCExecuteSetsIngressBytes(t *testing.T) {
 	assert.Equal(t, []uint64{uint64(request.SizeVT())}, mockService.executeIngressBytes)
 }
 
+// TestGRPCStreamExecuteSetsIngressBytes verifies that streaming Execute stores
+// the request size estimate in the forwarded context.
 func TestGRPCStreamExecuteSetsIngressBytes(t *testing.T) {
 	mockService := &mockVTGateService{
 		streamResults: []*sqltypes.Result{{}},
@@ -179,6 +183,8 @@ func TestGRPCStreamExecuteSetsIngressBytes(t *testing.T) {
 	assert.Equal(t, []uint64{uint64(request.SizeVT())}, mockService.streamExecuteIngressBytes)
 }
 
+// TestGRPCExecuteMultiSetsIngressBytes verifies that ExecuteMulti carries the
+// whole request size estimate into VTGate.
 func TestGRPCExecuteMultiSetsIngressBytes(t *testing.T) {
 	mockService := &mockVTGateService{
 		executeMultiResults: []*sqltypes.Result{{}, {}},
@@ -195,6 +201,8 @@ func TestGRPCExecuteMultiSetsIngressBytes(t *testing.T) {
 	assert.Equal(t, []uint64{uint64(request.SizeVT())}, mockService.executeMultiIngressBytes)
 }
 
+// TestGRPCExecuteBatchSetsIngressBytesByQuery verifies that ExecuteBatch
+// attributes a larger share of request ingress to larger BoundQuery messages.
 func TestGRPCExecuteBatchSetsIngressBytesByQuery(t *testing.T) {
 	mockService := &mockVTGateService{}
 	grpcVTGate := &VTGate{server: mockService}

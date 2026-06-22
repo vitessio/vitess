@@ -49,8 +49,13 @@ func IngressBytesForQuery(ctx context.Context, index int) (uint64, bool) {
 	return ingressBytes[index], true
 }
 
-// AllocateQueryIngressBytes distributes ingress bytes across queries by weight.
-func AllocateQueryIngressBytes(total uint64, weights []int) []uint64 {
+// SplitIngressBytes distributes request-level ingress bytes across per-query
+// log stats using caller-provided weights. Zero-weight entries receive no bytes
+// unless all entries have zero weight, in which case the bytes are split evenly.
+//
+// The result always sums to total; any rounding remainder is assigned to the
+// last positive-weight entry.
+func SplitIngressBytes(total uint64, weights []int) []uint64 {
 	allocations := make([]uint64, len(weights))
 	if len(weights) == 0 || total == 0 {
 		return allocations
@@ -63,7 +68,7 @@ func AllocateQueryIngressBytes(total uint64, weights []int) []uint64 {
 		}
 	}
 	if totalWeight == 0 {
-		allocateEvenly(total, allocations)
+		splitIngressBytesEvenly(total, allocations)
 		return allocations
 	}
 
@@ -87,7 +92,7 @@ func AllocateQueryIngressBytes(total uint64, weights []int) []uint64 {
 	return allocations
 }
 
-func allocateEvenly(total uint64, allocations []uint64) {
+func splitIngressBytesEvenly(total uint64, allocations []uint64) {
 	base := total / uint64(len(allocations))
 	remainder := total % uint64(len(allocations))
 	for i := range allocations {
