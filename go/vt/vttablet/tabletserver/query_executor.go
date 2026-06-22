@@ -448,6 +448,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 	var reply *sqltypes.Result
 
+	// Apply the query timeout to autocommit DML, just like Execute does for a
+	// query without a transaction.
+	if qre.connID == 0 {
+		var cancel context.CancelFunc
+		qre.ctx, cancel = withTimeout(qre.ctx, qre.tsv.loadQueryTimeoutWithTxAndOptions(0, qre.options), qre.options)
+		defer cancel()
+	}
+
 	// Record the per-table and per-plan query stats, just like Execute's deferred
 	// block. Stream's own defer already records QueryTimings, QueryTimingsByTabletType
 	// and the user-query stats, so here we only add the stats the streaming path would

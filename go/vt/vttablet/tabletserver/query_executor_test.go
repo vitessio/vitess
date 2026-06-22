@@ -1609,6 +1609,41 @@ func TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied(t *testing.T) {
 		"streamed DML rejected by checkPermissions must record per-table error stats like Execute")
 }
 
+// TestQueryExecutorStreamDMLAppliesQueryTimeout verifies that autocommit DML on
+// the streaming path runs under the query timeout, like the non-streaming
+// Execute path. StreamExecute leaves the request timeout unset when there is no
+// transaction (transactionID == 0), so without applying it for DML a stuck
+// INSERT/UPDATE/DELETE would run without a query deadline.
+func TestQueryExecutorStreamDMLAppliesQueryTimeout(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "insert into test_table(a) values(1)"
+	db.AddQuery("insert into test_table(a) values (1)", &sqltypes.Result{RowsAffected: 1})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanInsert, qre.plan.PlanID)
+
+	// Precondition: the executor context starts without a deadline. The unit test
+	// bypasses StreamExecute, which is where a transaction's timeout is set.
+	_, ok := qre.ctx.Deadline()
+	require.False(t, ok)
+
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+
+	// streamDML must have bounded the autocommit DML with the query timeout,
+	// mirroring Execute's loadQueryTimeoutWithTxAndOptions(0, options).
+	deadline, ok := qre.ctx.Deadline()
+	require.True(t, ok, "autocommit streamed DML must run under the query timeout, like Execute")
+	assert.LessOrEqual(t, time.Until(deadline), tsv.loadQueryTimeout(),
+		"the deadline must come from the query timeout")
+}
+
 func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	testCases := []struct {
 		// whether or not the consolidator is enabled by default on the tablet
