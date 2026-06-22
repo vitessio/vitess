@@ -402,6 +402,17 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 			return err
 		}
 		return countingCallback(result)
+	case p.PlanSet:
+		// Mirror Execute: without a reserved connection the SET is not executed,
+		// it is applied to the pooled connection of subsequent queries via
+		// qre.setting. With a reserved connection (connID != 0) the SET runs on
+		// it, so fall through to the generic path below.
+		if qre.connID == 0 {
+			if qre.setting == nil {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
+			}
+			return countingCallback(&sqltypes.Result{})
+		}
 	}
 
 	switch qre.plan.PlanID {

@@ -435,6 +435,50 @@ func TestStreamExecuteCompat_SetViaStreamExecute(t *testing.T) {
 		"ReserveStreamExecute should handle SET statements")
 }
 
+// A PlanSet carrying system settings but no reserved connection (connID == 0)
+// must behave the same on both paths: Execute short-circuits the SET to an empty
+// result without sending it to MySQL (the setting is applied to the pooled
+// connection of later queries), and Stream must do likewise instead of executing
+// the SET text against a stream connection.
+func TestStreamExecuteCompat_SetWithSysSettingsNotExecuted(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	setSQL := "set @my_var = 42"
+	settings := []string{"set sql_mode = ''"}
+	db.AddQuery(setSQL, &sqltypes.Result{})
+	db.AddQuery("set sql_mode = ''", &sqltypes.Result{})
+
+	// Execute short-circuits PlanSet: empty result, SET never sent to MySQL.
+	db.ResetQueryLog()
+	execResult, err := tsv.execute(ctx, &target, setSQL, nil, 0, 0, settings, nil)
+	require.NoError(t, err)
+	require.NotNil(t, execResult)
+	assert.Empty(t, execResult.Rows)
+	assert.Zero(t, execResult.RowsAffected)
+	assert.NotContains(t, db.QueryLog(), "my_var",
+		"Execute must not send the SET statement to MySQL")
+
+	// StreamExecute must match Execute: empty result, SET never sent to MySQL.
+	db.ResetQueryLog()
+	var streamRows int
+	var streamAffected uint64
+	err = tsv.streamExecute(ctx, &target, setSQL, nil, 0, 0, settings, nil, func(r *sqltypes.Result) error {
+		streamRows += len(r.Rows)
+		streamAffected += r.RowsAffected
+		return nil
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, db.QueryLog(), "my_var",
+		"StreamExecute must not send the SET statement to MySQL")
+	assert.Zero(t, streamRows, "streamed SET should return no rows")
+	assert.Zero(t, streamAffected, "streamed SET should affect no rows")
+}
+
 // Stream() records to ResultHistogram like Execute does.
 func TestStreamExecuteCompat_ResultStatsRecording(t *testing.T) {
 	ctx := t.Context()
