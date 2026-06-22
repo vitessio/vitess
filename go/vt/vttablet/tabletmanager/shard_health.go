@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
 	"sync"
@@ -83,6 +84,11 @@ func monitorPinger(tmc tabletPinger) tabletPinger {
 	if pooled, ok := tmc.(pooledPinger); ok {
 		return pingerFunc(pooled.PingPooled)
 	}
+	// No pooled ping available: the monitor falls back to a fresh dial per probe. Log it once at
+	// wiring time so the resulting connection churn (a handshake per interval) is visible rather
+	// than silent — e.g. a grpc-cached tmclient does not implement PingPooled.
+	log.Warn("shard health monitor: tmclient does not support pooled pings; falling back to dial-per-probe",
+		slog.String("tmclient_type", fmt.Sprintf("%T", tmc)))
 	return tmc
 }
 
@@ -320,6 +326,12 @@ func (m *shardHealthMonitor) pingPeer(ctx context.Context, alias string, tablet 
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// If a refresh pruned this peer while the ping was in flight (e.g. the primary moved), drop the
+	// result instead of resurrecting a health entry for a tablet that is no longer a tracked peer —
+	// otherwise a departed primary would linger in this observer's snapshot until the next refresh.
+	if _, ok := m.peers[alias]; !ok {
+		return
+	}
 	h := m.health[alias]
 	if h == nil {
 		h = &peerPingHealth{alias: tablet.Alias}

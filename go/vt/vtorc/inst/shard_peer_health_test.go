@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vtorc/config"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -448,4 +449,63 @@ func TestIsShardHealthObserverType(t *testing.T) {
 	for _, tt := range nonObservers {
 		assert.Falsef(t, IsShardHealthObserverType(tt), "%s must not be a shard-health observer", tt)
 	}
+}
+
+// TestQuorumOptionsFromConfig pins that each config getter is wired to the right QuorumOptions field.
+// Elsewhere only hand-built QuorumOptions literals are tested, so a getter swap (e.g. FailureThreshold
+// <-> MinObservers, both int) would otherwise ship silently. Asserting each field against its own
+// getter catches such a swap as long as the two int getters return distinct values (they do by
+// default); the Duration and float64 fields cannot be swapped without a compile error.
+func TestQuorumOptionsFromConfig(t *testing.T) {
+	opts := QuorumOptionsFromConfig()
+	assert.Equal(t, config.GetShardTabletHealthFailureThreshold(), opts.FailureThreshold, "FailureThreshold")
+	assert.Equal(t, config.GetShardTabletHealthFreshness(), opts.Freshness, "Freshness")
+	assert.Equal(t, config.GetShardQuorumFraction(), opts.Fraction, "Fraction")
+	assert.Equal(t, config.GetShardQuorumMinObservers(), opts.MinObservers, "MinObservers")
+	// Sanity: the two same-typed fields differ by default, so the swap above is actually detectable.
+	require.NotEqual(t, opts.FailureThreshold, opts.MinObservers)
+}
+
+// TestQuorumOptionsValid is the direct unit test of the fail-closed validity gate (the quorum
+// behavior tests exercise it only indirectly). It covers the boundaries, including Fraction>1 and
+// MinObservers<1, which were otherwise untested.
+func TestQuorumOptionsValid(t *testing.T) {
+	base := QuorumOptions{FailureThreshold: 3, Freshness: 5 * time.Second, Fraction: 1.0, MinObservers: 1}
+	require.True(t, base.valid(), "the baseline options must be valid")
+
+	tests := []struct {
+		name string
+		mut  func(*QuorumOptions)
+	}{
+		{"fraction above 1", func(o *QuorumOptions) { o.Fraction = 1.5 }},
+		{"fraction zero", func(o *QuorumOptions) { o.Fraction = 0 }},
+		{"min observers below 1", func(o *QuorumOptions) { o.MinObservers = 0 }},
+		{"failure threshold below 1", func(o *QuorumOptions) { o.FailureThreshold = 0 }},
+		{"non-positive freshness", func(o *QuorumOptions) { o.Freshness = 0 }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := base
+			tt.mut(&o)
+			assert.False(t, o.valid(), "%s must be rejected (fail closed)", tt.name)
+		})
+	}
+}
+
+// TestEvaluatePrimaryQuorumZeroExpectedObservers covers the degenerate floor: with no topo observer
+// count supplied (expectedObservers=0) the majority gate falls back to the observers actually seen
+// (2*fresh > eligible), so a lone fresh down report suffices. Callers that must match the ERS
+// verdict pass the real topo count instead (see ShardEligibleObserverCount / the analysis matcher).
+func TestEvaluatePrimaryQuorumZeroExpectedObservers(t *testing.T) {
+	defer resetShardPeerHealth()
+	resetShardPeerHealth()
+	now := time.Now()
+	primary := alias(100)
+	RecordShardPeerHealth(alias(101), topodatapb.TabletType_REPLICA, "ks", "0", reportFor(primary, 5, 0, now), now)
+
+	r := EvaluatePrimaryQuorum(primary, "ks", "0", 0, defaultOpts(), now)
+	assert.True(t, r.Down, "with expectedObservers=0 the gate uses the single seen observer as the base")
+	assert.Equal(t, 0, r.ExpectedObservers)
+	assert.Equal(t, 1, r.EligibleObservers)
+	assert.Equal(t, 1, r.TotalObservers)
 }

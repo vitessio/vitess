@@ -299,7 +299,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Int("shard-tablet-health-failure-threshold", shardTabletHealthFailureThreshold.Default(), "Consecutive shard-peer ping failures before an observer considers a peer down")
 	fs.Duration("shard-tablet-health-freshness", shardTabletHealthFreshness.Default(), "Maximum age of an observer's shard-peer report for it to count toward quorum. Must exceed --instance-poll-time (ideally 2-3x), since reports only refresh when VTOrc polls each observer")
 	fs.Float64("shard-quorum-fraction", shardQuorumFraction.Default(), "Required fraction of 'down' votes among eligible observers to declare the primary unreachable (1.0 = unanimous)")
-	fs.Int("shard-quorum-min-observers", shardQuorumMinObservers.Default(), "Minimum number of eligible observers required before a quorum-based emergency reparent may run")
+	fs.Int("shard-quorum-min-observers", shardQuorumMinObservers.Default(), "Minimum number of eligible observers required before a quorum-based emergency reparent may run; at 1, a single-observer shard relies on that observer plus VTOrc's own check")
 
 	viperutil.BindFlags(
 		fs,

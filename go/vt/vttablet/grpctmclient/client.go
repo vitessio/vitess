@@ -25,6 +25,8 @@ import (
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/callerid"
@@ -317,7 +319,10 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 			entry.tmc.cc.Close()
 		}
 
-		if poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]; ok {
+		// Only delete THIS entry: a concurrent caller may already have installed a fresh entry for
+		// the same addr, and deleting that one here would orphan its still-open connection (we only
+		// closed ours). Mirrors the identity-guarded eviction on the failed-dial path above.
+		if poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]; ok && poolEntries[addr] == entry {
 			delete(poolEntries, addr)
 		}
 	}
@@ -399,13 +404,17 @@ func (client *Client) PingPooled(ctx context.Context, tablet *topodatapb.Tablet)
 }
 
 // ping runs the Ping RPC on an already-dialed connection, invalidating the pooled connection
-// (when an invalidator is provided) on failure.
+// (when an invalidator is provided) on a connection-level failure.
 func (client *Client) ping(ctx context.Context, c tabletmanagerservicepb.TabletManagerClient, invalidator invalidatorFunc) error {
 	result, err := c.Ping(ctx, &tabletmanagerdatapb.PingRequest{
 		Payload: "payload",
 	})
 	if err != nil {
-		if invalidator != nil {
+		// Only invalidate (close + redial) the pooled connection when the failure indicates the
+		// connection itself is broken. A DeadlineExceeded/Canceled means the RPC did not finish in
+		// time, not that the conn is bad — invalidating then would close + redial the pool on a
+		// momentarily slow but alive peer, adding churn exactly when it is already stressed.
+		if invalidator != nil && shouldInvalidatePooledConn(err) {
 			invalidator()
 		}
 		return vterrors.FromGRPC(err)
@@ -414,6 +423,18 @@ func (client *Client) ping(ctx context.Context, c tabletmanagerservicepb.TabletM
 		return fmt.Errorf("bad ping result: %v", result.Payload)
 	}
 	return nil
+}
+
+// shouldInvalidatePooledConn reports whether a failed pooled RPC indicates the connection itself is
+// likely broken (so it should be closed and redialed) rather than a transient timeout or
+// cancellation. A dead/unreachable peer surfaces as Unavailable and still invalidates.
+func shouldInvalidatePooledConn(err error) bool {
+	switch status.Code(err) {
+	case codes.DeadlineExceeded, codes.Canceled:
+		return false
+	default:
+		return true
+	}
 }
 
 // Sleep is part of the tmclient.TabletManagerClient interface.

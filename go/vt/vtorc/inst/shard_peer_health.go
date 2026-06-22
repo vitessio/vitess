@@ -158,7 +158,8 @@ func RecordShardPeerHealth(
 			// derive the age once at ingest from the tablet-stamped absolute time. This crosses
 			// host clocks, so it is only as accurate as the clock sync between the tablet and
 			// VTOrc, but deriving it once at ingest (when the report is freshest) beats
-			// re-deriving it at every evaluation.
+			// re-deriving it at every evaluation. This path only runs for not-yet-upgraded tablets,
+			// so the cross-host skew self-resolves once the fleet sends time_since_last_attempted_ping.
 			report.pingAge = now.Sub(t)
 			report.hasPingAge = true
 		}
@@ -244,7 +245,9 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 
 	shardPeerHealthMu.Lock()
 	defer shardPeerHealthMu.Unlock()
-	pruneStaleShardPeerRecordsLocked(now)
+	// Rate-limited prune: the verdict below freshness-gates every observer, so stale records cannot
+	// affect it — pruning here is only memory hygiene and need not run on every evaluation.
+	maybePruneStaleShardPeerRecordsLocked(now)
 
 	for observerAlias, rec := range shardPeerHealthByObserver {
 		if rec.keyspace != keyspace || rec.shard != shard {
@@ -257,12 +260,18 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 		if !ok {
 			continue // this observer has not pinged the primary
 		}
+		// recordAge is how long ago we ingested the report. recordedAt and now are two same-process,
+		// never-serialized time.Now() values, so Go's monotonic clock makes this immune to NTP steps
+		// and it cannot go negative — hence no >=0 guard here, unlike pingAge below. (It would need
+		// one if recordedAt ever round-tripped through proto/DB.)
 		recordAge := now.Sub(rec.recordedAt)
 		recordFresh := recordAge <= opts.Freshness
 		// Ping freshness: the age of the observer's last ping attempt against the primary is the
 		// age it reported (measured with its own clock) plus how long ago we ingested the report.
 		// Observers with no ping, a negative age (clock anomaly), or an age beyond the freshness
-		// window are discounted — their report is not current evidence.
+		// window are discounted — their report is not current evidence. This omits the
+		// report-production-to-ingest latency (network + VTOrc poll backlog), so the effective
+		// window is freshness plus that (bounded) latency rather than freshness exactly.
 		pingFresh := report.hasPingAge && report.pingAge >= 0 && report.pingAge+recordAge <= opts.Freshness
 		fresh := recordFresh && pingFresh
 		vote := voteStale
@@ -332,7 +341,8 @@ func (r QuorumResult) Summary() string {
 func ObservedShards() []KeyspaceShard {
 	shardPeerHealthMu.Lock()
 	defer shardPeerHealthMu.Unlock()
-	pruneStaleShardPeerRecordsLocked(time.Now())
+	// Rate-limited prune (memory hygiene only; callers freshness-gate their own use of the data).
+	maybePruneStaleShardPeerRecordsLocked(time.Now())
 	seen := make(map[KeyspaceShard]bool)
 	for _, rec := range shardPeerHealthByObserver {
 		seen[KeyspaceShard{Keyspace: rec.keyspace, Shard: rec.shard}] = true

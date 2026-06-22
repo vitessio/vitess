@@ -242,6 +242,44 @@ func TestShardHealthMonitor_RefreshPrunesDepartedPrimary(t *testing.T) {
 	assert.Empty(t, m.snapshot(), "health for the departed primary must be pruned")
 }
 
+// TestShardHealthMonitor_InFlightPingDoesNotResurrectPrunedPeer covers the race the prune test
+// above does not: a ping still in flight when a refresh prunes its target (the primary moved) must
+// not re-insert a health entry for that departed peer when it finally completes.
+func TestShardHealthMonitor_InFlightPingDoesNotResurrectPrunedPeer(t *testing.T) {
+	self := peerTablet("zone1", 100)
+	oldPrimary := primaryTablet("zone1", 101)
+	newPrimary := primaryTablet("zone1", 102)
+
+	block := make(chan struct{})
+	pinger := &fakePinger{block: block}
+	lister := staticLister(self, oldPrimary, newPrimary)
+
+	current := oldPrimary.Alias
+	var primaryMu sync.Mutex
+	primaryAlias := func(context.Context) (*topodatapb.TabletAlias, error) {
+		primaryMu.Lock()
+		defer primaryMu.Unlock()
+		return current, nil
+	}
+	m := newShardHealthMonitor(pinger, lister, primaryAlias, topoproto.TabletAliasString(self.Alias), time.Second, 30*time.Second)
+
+	// Track only the old primary (101), then dispatch a ping that blocks while in flight.
+	require.NoError(t, m.refreshPeers(t.Context()))
+	go m.runPingRound(t.Context())
+	require.Eventually(t, func() bool { return pinger.inflight.Load() == 1 }, 30*time.Second, time.Millisecond)
+
+	// While 101's ping is in flight, the primary moves to 102; the refresh prunes 101 from peers.
+	primaryMu.Lock()
+	current = newPrimary.Alias
+	primaryMu.Unlock()
+	require.NoError(t, m.refreshPeers(t.Context()))
+
+	// Let the in-flight ping complete. It must not resurrect health for the pruned 101.
+	close(block)
+	assert.Eventually(t, func() bool { return m.inflightCount() == 0 }, 30*time.Second, 5*time.Millisecond)
+	assert.Empty(t, m.snapshot(), "an in-flight ping must not re-insert health for a peer pruned during the refresh")
+}
+
 // TestShardHealthMonitor_PingsOnlyThePrimary pins that the monitor probes and reports only the
 // current shard primary — the single tablet the quorum recovery observes — and not other
 // replica/rdonly peers. This keeps the feature O(N) per shard instead of all-to-all O(N^2).

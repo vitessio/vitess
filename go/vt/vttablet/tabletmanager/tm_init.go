@@ -492,7 +492,10 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 			shardPrimaryAlias,
 			topoproto.TabletAliasString(tablet.Alias),
 			shardTabletHealthInterval,
-			shardTabletHealthInterval,
+			// Ping timeout is decoupled from (and larger than) the interval: a momentarily slow but
+			// alive primary should not accrue failures from a too-tight deadline, while a genuinely
+			// dead vttablet fails fast (connection refused) regardless of the timeout.
+			2*shardTabletHealthInterval,
 		)
 		tm.shardHealthMonitor.Start(tm.BatchCtx)
 	}

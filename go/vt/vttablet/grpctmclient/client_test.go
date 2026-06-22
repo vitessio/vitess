@@ -24,7 +24,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
@@ -147,6 +149,66 @@ func TestDialDedicatedPoolEvictsFailedEntry(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, cli)
 	assert.NotNil(t, invalidator)
+}
+
+// TestShouldInvalidatePooledConn verifies that only connection-level failures invalidate a pooled
+// conn. A DeadlineExceeded/Canceled (a slow but alive peer, or a cancelled probe) must keep the
+// conn so a momentary stall does not close + redial the pool; an Unavailable (or any other error)
+// still invalidates so a genuinely dead peer redials.
+func TestShouldInvalidatePooledConn(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"deadline exceeded keeps the conn", status.Error(codes.DeadlineExceeded, "timed out"), false},
+		{"canceled keeps the conn", status.Error(codes.Canceled, "canceled"), false},
+		{"unavailable invalidates", status.Error(codes.Unavailable, "connection refused"), true},
+		{"non-status error invalidates", errors.New("boom"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, shouldInvalidatePooledConn(tt.err))
+		})
+	}
+}
+
+// TestDialDedicatedPoolInvalidatorOnlyDeletesOwnEntry verifies a pooled-conn invalidator deletes
+// only the entry it was created for. If a concurrent caller has already replaced that addr's entry
+// with a fresh one, the stale invalidator must leave the new entry in place — otherwise it removes
+// a pooled connection it never owned, orphaning that conn (only its own was closed).
+func TestDialDedicatedPoolInvalidatorOnlyDeletesOwnEntry(t *testing.T) {
+	ctx := t.Context()
+	client := NewClient()
+	tablet := &topodatapb.Tablet{
+		Hostname: "localhost",
+		PortMap:  map[string]int32{"grpc": 15993},
+	}
+	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
+
+	rpcClient, ok := client.dialer.(*grpcClient)
+	require.True(t, ok)
+	poolDialer, ok := client.dialer.(poolDialer)
+	require.True(t, ok)
+
+	// Dial entry A and grab its invalidator.
+	_, invalidatorA, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, tablet)
+	require.NoError(t, err)
+	require.NotNil(t, invalidatorA)
+
+	// Simulate a concurrent caller having replaced the addr's entry with a fresh entry B.
+	entryB := &tmcEntry{}
+	rpcClient.rpcDialPoolMapMu.Lock()
+	rpcClient.rpcDialPoolMap[dialPoolGroupPing][addr] = entryB
+	rpcClient.rpcDialPoolMapMu.Unlock()
+
+	// A's invalidator must NOT delete B — different identity.
+	invalidatorA()
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	got := rpcClient.rpcDialPoolMap[dialPoolGroupPing][addr]
+	rpcClient.rpcDialPoolMapMu.Unlock()
+	assert.Same(t, entryB, got, "invalidator must not delete a concurrently-installed entry it does not own")
 }
 
 func TestDialPool(t *testing.T) {
