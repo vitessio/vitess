@@ -1551,6 +1551,42 @@ func TestStreamReplaceSchemaNameByPlanType(t *testing.T) {
 	}
 }
 
+// A statement that runs through the buffered dispatch on the streaming path and
+// reports affected rows -- e.g. ALTER TABLE -- must record QueryRowsAffected like
+// Execute. Its single reply reaches the streaming callback with RowsAffected set,
+// but the stats defer previously discarded it (recorded 0).
+func TestStreamRecordsBufferedRowsAffected(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv.config.DB.DBName = "ks"
+	defer tsv.StopService()
+
+	const ddl = "alter table test_table add zipcode int"
+	db.AddQuery("alter table test_table add column zipcode int", &sqltypes.Result{RowsAffected: 7})
+
+	// DDL has no single table, so its stats bucket under "Join".
+	const key = "Join.DDL"
+
+	// Execute records the affected rows.
+	qreExec := newTestQueryExecutor(ctx, tsv, ddl, 0)
+	require.Equal(t, planbuilder.PlanDDL, qreExec.plan.PlanID)
+	execBefore := tsv.qe.queryRowsAffected.Counts()[key]
+	_, err := qreExec.Execute()
+	require.NoError(t, err)
+	require.Equal(t, execBefore+7, tsv.qe.queryRowsAffected.Counts()[key])
+
+	// Stream must record the same.
+	streamBefore := tsv.qe.queryRowsAffected.Counts()[key]
+	qreStream := newTestQueryExecutorStreaming(ctx, tsv, ddl, 0)
+	require.Equal(t, planbuilder.PlanDDL, qreStream.plan.PlanID)
+	require.NoError(t, qreStream.Stream(func(*sqltypes.Result) error { return nil }))
+	assert.Equal(t, streamBefore+7, tsv.qe.queryRowsAffected.Counts()[key],
+		"streamed DDL must record QueryRowsAffected like Execute")
+}
+
 // TestQueryExecutorStreamDML verifies that DML executed on the streaming path
 // (StreamExecute) runs through the same transactional machinery as Execute and
 // delivers its single result through the callback. Before the fix for #19561

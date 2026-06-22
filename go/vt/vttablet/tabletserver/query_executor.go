@@ -356,27 +356,28 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	// streamDML, so reads on the streaming path match Execute. Registered after
 	// the DML dispatch above so DML statements are not double-counted.
 	var totalRows int64
+	var totalRowsAffected uint64
 	defer func(start time.Time) {
 		duration := time.Since(start)
 		var errorCount int64
 		if err != nil {
 			errorCount = 1
 		}
-		// TODO: rowsAffected is hardcoded to 0, which is a parity gap with Execute.
-		// Execute records reply.RowsAffected, which captures reads that report
-		// affected rows but no result set (e.g. SELECT ... INTO OUTFILE). The
-		// streaming path cannot observe this today: ExecuteStreamFetch in
-		// go/mysql/streaming_query.go drops the OK packet's affectedRows in its
-		// `colNumber == 0` branch. Fixing this means surfacing affectedRows there
-		// and threading it through connpool's Conn.Stream/StreamOnce
-		// (go/vt/vttablet/tabletserver/connpool/dbconn.go) so the callback below
-		// can accumulate it, like totalRows.
-		qre.recordQueryStats(err, duration, 0, uint64(totalRows), errorCount)
+		qre.recordQueryStats(err, duration, totalRowsAffected, uint64(totalRows), errorCount)
 	}(time.Now())
 
-	// Wrap the callback to track total rows for the stats recorded above.
+	// Wrap the callback to track the totals for the stats recorded above.
+	// totalRowsAffected covers statements run through executeBuffered (DDL, LOAD,
+	// ...) whose single reply carries the affected-rows count.
+	//
+	// TODO: a streaming read that returns an OK packet with affected rows
+	// (SELECT ... INTO OUTFILE) is still missed: ExecuteStreamFetch in
+	// go/mysql/streaming_query.go drops the OK packet's affectedRows in its
+	// `colNumber == 0` branch, so the callback never sees it. Closing that needs a
+	// protocol-level change there, threaded through connpool's Conn.Stream.
 	countingCallback := func(result *sqltypes.Result) error {
 		totalRows += int64(len(result.Rows))
+		totalRowsAffected += result.RowsAffected
 		return callback(result)
 	}
 
@@ -487,11 +488,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
 
-		totalRows += int64(len(result.Rows))
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 		}
-		return callback(result)
+		return countingCallback(result)
 	})
 }
 
