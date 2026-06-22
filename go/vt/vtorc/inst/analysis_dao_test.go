@@ -1431,7 +1431,7 @@ func TestPostProcessAnalyses(t *testing.T) {
 	quorumDetail := &QuorumResult{
 		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
 		Down: true, DownVotes: 1, TotalObservers: 1, Fraction: 1, MinObservers: 1,
-		Observers: []ObserverVote{{Alias: "zone1-0000000101", Vote: "down", ConsecutiveFailures: 5, Fresh: true}},
+		Observers: []ObserverVote{{Alias: "zone1-0000000101", Vote: voteDown, ConsecutiveFailures: 5, Fresh: true}},
 	}
 
 	// Cold-start fixtures: VTOrc has never reached the primary's vttablet (no instance row), so
@@ -1465,8 +1465,8 @@ func TestPostProcessAnalyses(t *testing.T) {
 		PrimaryAlias: "zone1-0000000100", Keyspace: keyspace, Shard: shard0,
 		Down: true, DownVotes: 2, TotalObservers: 2, EligibleObservers: 2, ExpectedObservers: 2, Fraction: 1, MinObservers: 1,
 		Observers: []ObserverVote{
-			{Alias: "zone1-0000000101", TabletType: "REPLICA", Vote: "down", ConsecutiveFailures: 5, Fresh: true},
-			{Alias: "zone1-0000000102", TabletType: "REPLICA", Vote: "down", ConsecutiveFailures: 5, Fresh: true},
+			{Alias: "zone1-0000000101", TabletType: "REPLICA", Vote: voteDown, ConsecutiveFailures: 5, Fresh: true},
+			{Alias: "zone1-0000000102", TabletType: "REPLICA", Vote: voteDown, ConsecutiveFailures: 5, Fresh: true},
 		},
 	}
 	seedQuorumDown := func(t *testing.T) {

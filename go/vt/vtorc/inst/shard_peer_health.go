@@ -56,13 +56,23 @@ func (opts QuorumOptions) valid() bool {
 	return opts.FailureThreshold >= 1 && opts.Freshness > 0 && opts.Fraction > 0 && opts.Fraction <= 1 && opts.MinObservers >= 1
 }
 
+// voteType is an observer's vote on the primary's liveness, derived from its report against the
+// quorum policy. It is serialized as a string in the /api/shard-quorum output.
+type voteType string
+
+const (
+	voteStale voteType = "stale" // the observer's report is not fresh enough to count
+	voteDown  voteType = "down"  // fresh report, consecutive ping failures at or above the threshold
+	voteUp    voteType = "up"    // fresh report, primary still reachable
+)
+
 // ObserverVote is one observer's reported view of the primary, as evaluated against the quorum policy.
 type ObserverVote struct {
-	Alias               string // observer tablet alias, e.g. "zone1-0000000101"
-	TabletType          string // "REPLICA" | "RDONLY"
-	Fresh               bool   // the observer's record is within the freshness window
-	ConsecutiveFailures int64  // observer's consecutive ping failures against the primary
-	Vote                string // "down" | "up" | "stale"
+	Alias               string   // observer tablet alias, e.g. "zone1-0000000101"
+	TabletType          string   // "REPLICA" | "RDONLY"
+	Fresh               bool     // the observer's record is within the freshness window
+	ConsecutiveFailures int64    // observer's consecutive ping failures against the primary
+	Vote                voteType // voteDown | voteUp | voteStale
 }
 
 // QuorumResult is the full evaluation of whether a shard's primary is down by quorum, including
@@ -255,12 +265,12 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 		// window are discounted — their report is not current evidence.
 		pingFresh := report.hasPingAge && report.pingAge >= 0 && report.pingAge+recordAge <= opts.Freshness
 		fresh := recordFresh && pingFresh
-		vote := "stale"
+		vote := voteStale
 		if fresh {
 			if report.consecutiveFailures >= int64(opts.FailureThreshold) {
-				vote = "down"
+				vote = voteDown
 			} else {
-				vote = "up"
+				vote = voteUp
 			}
 		}
 		result.Observers = append(result.Observers, ObserverVote{
@@ -272,7 +282,7 @@ func EvaluatePrimaryQuorum(primaryAlias *topodatapb.TabletAlias, keyspace, shard
 		})
 		if fresh {
 			result.TotalObservers++
-			if vote == "down" {
+			if vote == voteDown {
 				result.DownVotes++
 			}
 		}
@@ -307,8 +317,8 @@ func (r QuorumResult) Summary() string {
 	}
 	parts := make([]string, 0, len(r.Observers))
 	for _, o := range r.Observers {
-		if o.Vote == "stale" {
-			parts = append(parts, o.Alias+"=stale")
+		if o.Vote == voteStale {
+			parts = append(parts, o.Alias+"="+string(voteStale))
 			continue
 		}
 		parts = append(parts, fmt.Sprintf("%s=%s(%d)", o.Alias, o.Vote, o.ConsecutiveFailures))

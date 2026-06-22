@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -345,11 +346,11 @@ func TestEvaluatePrimaryQuorum(t *testing.T) {
 	require.Len(t, r.Observers, 3)          // all three are reported, incl. the stale one
 	// sorted by alias: 101, 102, 103
 	assert.Equal(t, "zone1-0000000101", r.Observers[0].Alias)
-	assert.Equal(t, "down", r.Observers[0].Vote)
+	assert.Equal(t, voteDown, r.Observers[0].Vote)
 	assert.True(t, r.Observers[0].Fresh)
 	assert.Equal(t, int64(5), r.Observers[0].ConsecutiveFailures)
-	assert.Equal(t, "up", r.Observers[1].Vote)
-	assert.Equal(t, "stale", r.Observers[2].Vote)
+	assert.Equal(t, voteUp, r.Observers[1].Vote)
+	assert.Equal(t, voteStale, r.Observers[2].Vote)
 	assert.False(t, r.Observers[2].Fresh)
 
 	// Summary renders this same evaluation for the decision log and the audit.

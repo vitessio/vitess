@@ -28,9 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // fakePinger is a test tabletPinger whose behavior is controlled per call.

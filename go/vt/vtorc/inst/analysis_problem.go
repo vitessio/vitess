@@ -24,12 +24,13 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/util"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
