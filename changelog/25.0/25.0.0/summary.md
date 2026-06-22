@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[Query Serving](#bug-fixes-query-serving)**
+        - [Query hints preserved in field/impossible queries](#field-query-hints-preserved)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,17 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-query-serving"/>Query Serving</a>
+
+#### <a id="field-query-hints-preserved"/>Query hints preserved in field/impossible queries</a>
+
+To fetch column metadata for a query, VTGate sends a *field query* (an "impossible query" of the form `select ... where 1 != 1`) to the tablet. Previously this field query dropped the original statement's leading comments, including the `SET_VAR(...)` query hints VTGate uses to propagate session system variables such as `sql_mode`. The field query therefore ran under the tablet's default session settings rather than the caller's.
+
+The clearest symptom involved `sql_mode`. When an aggregation is pushed through a join, a leg's validity under `only_full_group_by` can depend on a relaxed `sql_mode`. The main query carried the `SET_VAR(sql_mode = ...)` hint and succeeded, but the field query lost it and failed with errno 1055 under the tablet's strict default. This occurred in plain buffered execution whenever a join's left-hand side returned no rows, and also affected prepared-statement field fetches.
+
+The fix renders the statement's comments in the field query, so it carries the same query hints as the main query and runs under the same session settings.
+
+See [#20366](https://github.com/vitessio/vitess/pull/20366) for details.
