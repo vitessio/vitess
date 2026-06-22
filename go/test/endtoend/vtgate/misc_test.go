@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
@@ -310,6 +311,96 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	utils.Exec(t, conn, `set workload='olap'`)
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]`)
+}
+
+// TestShardTargetedDMLInOLAP covers https://github.com/vitessio/vitess/issues/19561.
+// When a session targets a specific shard, DML is planned as a Send primitive whose
+// streaming path (used in OLAP mode) issues a StreamExecute RPC to the tablet. DML
+// must succeed on that path and run in an implicit transaction, just like the
+// non-streaming path.
+func TestShardTargetedDMLInOLAP(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	qr := utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+	utils.AssertMatches(t, conn, `select id1, id2 from t1`, `[[INT64(1) INT64(1)]]`)
+}
+
+// TestShardTargetedDMLInOLAPRecordsTabletStats verifies that DML executed on the
+// streaming path (StreamExecute, used for shard-targeted DML in OLAP mode) records
+// the same per-table query stats on the tablet as the non-streaming Execute path.
+// Before the fix, streamed DML returned the correct result but recorded no
+// QueryRowsAffected, leaving these DMLs invisible to per-table tablet metrics.
+func TestShardTargetedDMLInOLAPRecordsTabletStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The DML below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Insert"
+	rowsAffectedBefore := tabletQueryStat(t, primary, "QueryRowsAffected", statKey)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	qr := utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	rowsAffectedAfter := tabletQueryStat(t, primary, "QueryRowsAffected", statKey)
+	require.Equal(t, rowsAffectedBefore+1, rowsAffectedAfter,
+		"streamed DML must record QueryRowsAffected on the tablet like the non-streaming path")
+}
+
+// TestShardTargetedFailedDMLInOLAPRecordsErrorStats verifies that a DML that fails
+// on the streaming path records error stats on the tablet, just like the
+// non-streaming Execute path. Before the fix, a failed streamed DML returned the
+// error to the client but incremented no QueryErrorCounts.
+func TestShardTargetedFailedDMLInOLAPRecordsErrorStats(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+
+	// The DML below is shard-targeted to -80, so it runs on that shard's primary.
+	primary := shardPrimaryTablet(t, "-80")
+	const statKey = "t1.Insert"
+	errCountBefore := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+
+	utils.Exec(t, conn, `set workload='olap'`)
+	utils.Exec(t, conn, "use `ks:-80`")
+	// The first insert succeeds; the duplicate primary key makes the second fail
+	// on the tablet, exercising streamDML's error path.
+	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	_, err := utils.ExecAllowError(t, conn, `insert into t1(id1, id2) values (1, 1)`)
+	require.ErrorContains(t, err, "errno 1062")
+
+	errCountAfter := tabletQueryStat(t, primary, "QueryErrorCounts", statKey)
+	require.Equal(t, errCountBefore+1, errCountAfter,
+		"failed streamed DML must record QueryErrorCounts on the tablet like the non-streaming path")
+}
+
+func shardPrimaryTablet(t *testing.T, shardName string) *cluster.Vttablet {
+	t.Helper()
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		if shard.Name == shardName {
+			primary := shard.FindPrimaryTablet()
+			require.NotNilf(t, primary, "no primary tablet for shard %q", shardName)
+			return primary
+		}
+	}
+	require.Failf(t, "shard not found", "no shard %q in keyspace %s", shardName, KeyspaceName)
+	return nil
+}
+
+func tabletQueryStat(t *testing.T, tablet *cluster.Vttablet, varName, key string) float64 {
+	t.Helper()
+	vars := tablet.VttabletProcess.GetVars()
+	counter, ok := vars[varName].(map[string]any)
+	if !ok {
+		return 0
+	}
+	val, _ := counter[key].(float64)
+	return val
 }
 
 func TestCreateIndex(t *testing.T) {
