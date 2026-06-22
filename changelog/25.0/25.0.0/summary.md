@@ -148,7 +148,7 @@ See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
 
 Previously, running an INSERT, UPDATE, or DELETE in a shard-targeted session (for example, after `USE ks:-80`) failed with `INSERT not allowed for streaming` when the session was in OLAP mode. VTGate plans such DML as a `Send` primitive and dispatches it to the tablet over the `StreamExecute` RPC, which rejected every DML statement.
 
-These statements now succeed. The client receives the correct `RowsAffected`, and the DML appears in the tablet's per-table query stats just like the equivalent statement on the non-streaming `Execute` path. Since a DML returns only a rows-affected result with no rows to stream, this is a correctness fix rather than a streaming improvement.
+These statements now succeed. The client receives the correct `RowsAffected`, and the DML appears in the tablet's per-table query stats just like the equivalent statement on the non-streaming `Execute` path. Streamed DML now also runs under the same query timeout and, when executed inside a transaction, the same hot-row (same-row) serialization that the `Execute` path applies. Since a DML returns only a rows-affected result with no rows to stream, this is a correctness fix rather than a streaming improvement.
 
 Vindex-routed DML still delegates to the non-streaming path and is unchanged. DDL, SET, migrations, and `LOAD` on the streaming path remain rejected.
 
