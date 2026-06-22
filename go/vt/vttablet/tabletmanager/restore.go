@@ -99,23 +99,28 @@ func (tm *TabletManager) RestoreData(
 	restoreToPos string,
 	allowedBackupEngines []string,
 	mysqlShutdownTimeout time.Duration) error {
-	if err := tm.lock(ctx); err != nil {
-		return err
-	}
-	defer tm.unlock()
-	if tm.Cnf == nil {
-		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
-	}
-
 	var (
 		err          error
 		startTime    time.Time
 		backupEngine string
 	)
 
+	// Declare the hook defer before the lock so it runs after unlock (LIFO).
 	defer func() {
+		if startTime.IsZero() {
+			return
+		}
 		tm.invokeRestoreDoneHook(startTime, err, backupEngine)
 	}()
+
+	if lockErr := tm.lock(ctx); lockErr != nil {
+		return lockErr
+	}
+	defer tm.unlock()
+
+	if tm.Cnf == nil {
+		return fmt.Errorf("cannot perform restore without my.cnf, please restart vttablet with a my.cnf file specified")
+	}
 
 	startTime = time.Now()
 
@@ -149,19 +154,25 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error, b
 		h.ExtraEnv["TM_RESTORE_DATA_ERROR"] = err.Error()
 	}
 
-	// vttablet_restore_done is best-effort (for now?).
-	go func() {
-		// Package vthook already logs the stdout/stderr of hooks when they
-		// are run, so we don't duplicate that here.
-		hr := h.Execute()
-		switch hr.ExitStatus {
-		case hook.HOOK_SUCCESS:
-		case hook.HOOK_DOES_NOT_EXIST:
-			log.Info("No vttablet_restore_done hook.")
-		default:
-			log.Warning("vttablet_restore_done hook failed")
-		}
-	}()
+	// Run the hook synchronously so it completes before either (a) the process
+	// exits on restore failure — tm_init.go calls os.Exit immediately, which
+	// would kill a background goroutine — or (b) the tablet finishes startup on
+	// the success path, where a background goroutine could race with serving.
+	//
+	// 30s is generous for typical hooks (write a file, emit a metric) while
+	// short enough to avoid meaningfully delaying tablet startup.
+	hookCtx, hookCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer hookCancel()
+	hr := h.ExecuteContext(hookCtx)
+	switch hr.ExitStatus {
+	case hook.HOOK_SUCCESS:
+	case hook.HOOK_DOES_NOT_EXIST:
+		log.Info("No vttablet_restore_done hook.")
+	case hook.HOOK_TIMEOUT_ERROR:
+		log.Warningf("vttablet_restore_done hook timed out (exit status %d), stderr: %s", hr.ExitStatus, hr.Stderr)
+	default:
+		log.Warningf("vttablet_restore_done hook failed with exit status %d, stderr: %s", hr.ExitStatus, hr.Stderr)
+	}
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool, request *tabletmanagerdatapb.RestoreFromBackupRequest, mysqlShutdownTimeout time.Duration) (string, error) {
@@ -248,7 +259,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	var backupManifest *mysqlctl.BackupManifest
 	for {
 		backupManifest, err = mysqlctl.Restore(ctx, params)
-		if backupManifest != nil {
+		if backupManifest != nil && err == nil {
 			statsRestoreBackupPosition.Set(replication.EncodePosition(backupManifest.Position))
 			statsRestoreBackupTime.Set(backupManifest.BackupTime)
 		}
@@ -309,7 +320,11 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		if err := tm.tmState.ChangeTabletType(bgCtx, originalType, DBActionNone); err != nil {
 			log.Errorf("Could not change back to original tablet type %v: %v", originalType, err)
 		}
-		return "", vterrors.Wrap(err, "Can't restore backup")
+		var engine string
+		if backupManifest != nil {
+			engine = backupManifest.BackupMethod
+		}
+		return engine, vterrors.Wrap(err, "can't restore backup")
 	}
 
 	// If we had type BACKUP or RESTORE it's better to set our type to the init_tablet_type to make result of the restore

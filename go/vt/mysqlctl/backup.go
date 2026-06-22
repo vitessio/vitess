@@ -430,7 +430,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "empty restore path")
 	}
 	bh := restorePath.FullBackupHandle()
-	re, err := GetRestoreEngine(ctx, bh)
+	re, backupManifest, err := GetRestoreEngineAndManifest(ctx, bh)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "Failed to find restore engine")
 	}
@@ -444,9 +444,10 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		backupstats.Component(backupstats.BackupEngine),
 		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
+
 	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	if re.ShouldStartMySQLAfterRestore() { // all engines except mysqlshell since MySQL is always running there
@@ -460,26 +461,26 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
 		// Note Start will use dba user for waiting, this is fine, it will be allowed.
 		if err := params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking"); err != nil {
-			return nil, err
+			return backupManifest, err
 		}
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")
 	if err := params.Mysqld.RunMysqlUpgrade(ctx); err != nil {
-		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
+		return backupManifest, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
 	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
 	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 	if err = ensureRestoredGTIDPurgedMatchesManifest(ctx, manifest, &params); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
@@ -490,7 +491,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		for _, bh := range handles {
 			manifest, err := builtInRE.ExecuteRestore(ctx, params, bh)
 			if err != nil {
-				return nil, err
+				return backupManifest, err
 			}
 			params.Logger.Infof("Restore: applied incremental backup: %v", manifest.Position)
 		}
@@ -499,7 +500,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	params.Logger.Infof("Restore: removing state file")
 	if err = removeStateFile(params.Cnf); err != nil {
-		return nil, err
+		return backupManifest, err
 	}
 
 	backupstats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
