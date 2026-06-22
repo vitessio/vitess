@@ -1526,8 +1526,7 @@ func TestQueryExecutorStreamDML(t *testing.T) {
 			tsv := newTestTabletServer(ctx, noFlags, db)
 			defer tsv.StopService()
 
-			// Outside a transaction: Stream must start an implicit transaction
-			// for the DML (the gap described in #19564).
+			// Run the DML outside a transaction (autocommit).
 			qre := newTestQueryExecutorStreaming(ctx, tsv, tcase.input, 0)
 			require.Equal(t, tcase.planWant, qre.plan.PlanID)
 
@@ -1542,8 +1541,7 @@ func TestQueryExecutorStreamDML(t *testing.T) {
 			// just like the non-streaming Execute path.
 			assert.Equal(t, int(dmlResult.RowsAffected), qre.logStats.RowsAffected)
 
-			// Inside an existing transaction: the DML must run on that
-			// connection, like Execute's connID != 0 branch.
+			// Run the DML inside an existing transaction.
 			target := tsv.sm.Target()
 			state, err := tsv.Begin(ctx, nil, target, nil)
 			require.NoError(t, err)

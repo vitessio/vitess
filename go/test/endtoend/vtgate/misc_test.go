@@ -320,7 +320,7 @@ func TestInsertStmtInOLAP(t *testing.T) {
 // non-streaming path.
 func TestShardTargetedDMLInOLAP(t *testing.T) {
 	conn, closer := start(t)
-	defer closer()
+	t.Cleanup(closer)
 
 	utils.Exec(t, conn, `set workload='olap'`)
 	utils.Exec(t, conn, "use `ks:-80`")
@@ -336,7 +336,7 @@ func TestShardTargetedDMLInOLAP(t *testing.T) {
 // QueryRowsAffected, leaving these DMLs invisible to per-table tablet metrics.
 func TestShardTargetedDMLInOLAPRecordsTabletStats(t *testing.T) {
 	conn, closer := start(t)
-	defer closer()
+	t.Cleanup(closer)
 
 	// The DML below is shard-targeted to -80, so it runs on that shard's primary.
 	primary := shardPrimaryTablet(t, "-80")
@@ -359,7 +359,7 @@ func TestShardTargetedDMLInOLAPRecordsTabletStats(t *testing.T) {
 // error to the client but incremented no QueryErrorCounts.
 func TestShardTargetedFailedDMLInOLAPRecordsErrorStats(t *testing.T) {
 	conn, closer := start(t)
-	defer closer()
+	t.Cleanup(closer)
 
 	// The DML below is shard-targeted to -80, so it runs on that shard's primary.
 	primary := shardPrimaryTablet(t, "-80")

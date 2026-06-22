@@ -464,6 +464,8 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 	defer func(start time.Time) {
 		duration := time.Since(start)
 		mysqlTime := qre.logStats.MysqlResponseTime
+		// Plans without a single table (e.g. multi-table statements) have an
+		// empty TableName; bucket their stats under "Join", like Execute.
 		tableName := qre.plan.TableName().String()
 		if tableName == "" {
 			tableName = "Join"
