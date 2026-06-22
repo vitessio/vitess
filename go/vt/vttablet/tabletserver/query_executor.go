@@ -131,27 +131,13 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.tsv.stats.QueryTimingsByTabletType.Add(qre.targetTabletType.String(), duration)
 		qre.recordUserQuery("Execute", int64(duration))
 
-		mysqlTime := qre.logStats.MysqlResponseTime
-		tableName := qre.plan.TableName().String()
-		if tableName == "" {
-			tableName = "Join"
-		}
-
-		var errCode string
-		vtErrorCode := vterrors.Code(err)
-		errCode = vtErrorCode.String()
-
 		if reply == nil {
-			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
-			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
+			qre.recordQueryStats(err, duration, 0, 0, 1)
 			return
 		}
-
-		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
-		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
-		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
+		qre.recordQueryStats(err, duration, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 	}(time.Now())
 
 	if err = qre.checkPermissions(); err != nil {
@@ -363,19 +349,11 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	var totalRows int64
 	defer func(start time.Time) {
 		duration := time.Since(start)
-		mysqlTime := qre.logStats.MysqlResponseTime
-		tableName := qre.plan.TableName().String()
-		if tableName == "" {
-			tableName = "Join"
-		}
-		errCode := vterrors.Code(err).String()
 		var errorCount int64
 		if err != nil {
 			errorCount = 1
 		}
-		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, totalRows, errorCount, errCode)
-		qre.plan.AddStats(1, duration, mysqlTime, 0, uint64(totalRows), uint64(errorCount))
-		qre.tsv.Stats().ResultHistogram.Add(totalRows)
+		qre.recordQueryStats(err, duration, 0, uint64(totalRows), errorCount)
 	}(time.Now())
 
 	// Wrap the callback to track total rows for the stats recorded above.
@@ -526,26 +504,13 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 	// the failure path), the query-log fields and the result histogram.
 	defer func(start time.Time) {
 		duration := time.Since(start)
-		mysqlTime := qre.logStats.MysqlResponseTime
-		// Plans without a single table (e.g. multi-table statements) have an
-		// empty TableName; bucket their stats under "Join", like Execute.
-		tableName := qre.plan.TableName().String()
-		if tableName == "" {
-			tableName = "Join"
-		}
-		errCode := vterrors.Code(err).String()
-
 		if reply == nil {
-			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
-			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
+			qre.recordQueryStats(err, duration, 0, 0, 1)
 			return
 		}
-
-		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
-		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
-		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
+		qre.recordQueryStats(err, duration, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 	}(time.Now())
 
 	if err = qre.checkPermissions(); err != nil {
@@ -590,6 +555,27 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 	}
 	err = callback(reply)
 	return err
+}
+
+// recordQueryStats records the per-table/per-plan QueryEngine stats and plan
+// counters for a finished query, plus the result histogram on success. It is the
+// shared tail of Execute, streamDML and the streaming read path. errorCount is 1
+// on failure; the caller decides what counts as a failure (a nil reply for the
+// single-reply paths, a non-nil error for streaming reads). The histogram is
+// recorded only when errorCount is 0, matching Execute, which skips it when no
+// result was produced.
+func (qre *QueryExecutor) recordQueryStats(err error, duration time.Duration, rowsAffected, rowsReturned uint64, errorCount int64) {
+	tableName := qre.plan.TableName().String()
+	if tableName == "" {
+		tableName = "Join"
+	}
+	mysqlTime := qre.logStats.MysqlResponseTime
+	errCode := vterrors.Code(err).String()
+	qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(rowsAffected), int64(rowsReturned), errorCount, errCode)
+	qre.plan.AddStats(1, duration, mysqlTime, rowsAffected, rowsReturned, uint64(errorCount))
+	if errorCount == 0 {
+		qre.tsv.Stats().ResultHistogram.Add(int64(rowsReturned))
+	}
 }
 
 // MessageStream streams messages from a message table.
