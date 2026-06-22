@@ -353,6 +353,15 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		if err != nil {
 			errorCount = 1
 		}
+		// TODO: rowsAffected is hardcoded to 0, which is a parity gap with Execute.
+		// Execute records reply.RowsAffected, which captures reads that report
+		// affected rows but no result set (e.g. SELECT ... INTO OUTFILE). The
+		// streaming path cannot observe this today: ExecuteStreamFetch in
+		// go/mysql/streaming_query.go drops the OK packet's affectedRows in its
+		// `colNumber == 0` branch. Fixing this means surfacing affectedRows there
+		// and threading it through connpool's Conn.Stream/StreamOnce
+		// (go/vt/vttablet/tabletserver/connpool/dbconn.go) so the callback below
+		// can accumulate it, like totalRows.
 		qre.recordQueryStats(err, duration, 0, uint64(totalRows), errorCount)
 	}(time.Now())
 
