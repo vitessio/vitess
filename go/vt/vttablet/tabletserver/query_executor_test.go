@@ -1607,6 +1607,64 @@ func TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied(t *testing.T) {
 		"streamed DML rejected by checkPermissions must record per-table error stats like Execute")
 }
 
+// A streaming read that fails must record per-table and per-plan error stats,
+// matching the non-streaming Execute path. The read-path stats defer records the
+// error counters from the named return, so a failed streaming read has to bump
+// QueryErrorCounts, QueryErrorCountsWithCode and the per-plan ErrorCount, not just
+// leave them flat.
+func TestQueryExecutorStreamReadErrorStatsOnPermissionDenied(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+
+	bannedAddr := "127.0.0.1"
+	bannedUser := "u2"
+
+	denyRule := rules.NewQueryRule("disable select", "disable select", rules.QRFail)
+	denyRule.SetIPCond(bannedAddr)
+	denyRule.SetUserCond(bannedUser)
+	denyRule.AddPlanCond(planbuilder.PlanSelect)
+	denyRule.AddTableCond("test_table")
+
+	rulesName := "denyListStreamReadQRFail"
+	qrs := rules.New()
+	qrs.Add(denyRule)
+
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
+	}
+	ctx := callinfo.NewContext(t.Context(), callInfo)
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	require.NoError(t, tsv.qe.queryRuleSources.SetRules(rulesName, qrs))
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
+
+	errCountBefore := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	errCodeCountBefore := tsv.qe.queryErrorCountsWithCode.Counts()["test_table.Select.INVALID_ARGUMENT"]
+	planErrBefore := qre.plan.ErrorCount
+
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+
+	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	errCodeCountAfter := tsv.qe.queryErrorCountsWithCode.Counts()["test_table.Select.INVALID_ARGUMENT"]
+	planErrAfter := qre.plan.ErrorCount
+
+	assert.Equal(t, errCountBefore+1, errCountAfter,
+		"failed streamed read must record per-table QueryErrorCounts like Execute")
+	assert.Equal(t, errCodeCountBefore+1, errCodeCountAfter,
+		"failed streamed read must record QueryErrorCountsWithCode like Execute")
+	assert.Equal(t, planErrBefore+1, planErrAfter,
+		"failed streamed read must record the per-plan ErrorCount like Execute")
+}
+
 // TestQueryExecutorStreamDMLAppliesQueryTimeout verifies that autocommit DML on
 // the streaming path runs under the query timeout, like the non-streaming
 // Execute path. StreamExecute leaves the request timeout unset when there is no

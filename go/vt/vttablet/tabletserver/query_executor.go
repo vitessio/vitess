@@ -369,8 +369,12 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 			tableName = "Join"
 		}
 		errCode := vterrors.Code(err).String()
-		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, totalRows, 0, errCode)
-		qre.plan.AddStats(1, duration, mysqlTime, 0, uint64(totalRows), 0)
+		var errorCount int64
+		if err != nil {
+			errorCount = 1
+		}
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, totalRows, errorCount, errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, 0, uint64(totalRows), uint64(errorCount))
 		qre.tsv.Stats().ResultHistogram.Add(totalRows)
 	}(time.Now())
 
