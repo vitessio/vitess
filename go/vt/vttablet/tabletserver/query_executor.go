@@ -148,14 +148,23 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, reqThrottledErr
 	}
 
+	return qre.executeBuffered()
+}
+
+// executeBuffered runs the plan to completion and returns a single buffered
+// result. It is the shared dispatch used by Execute for non-streaming queries
+// and by Stream for every plan type that is not a streaming read, so both paths
+// handle DDL, migrations, savepoints, SET and the other non-read statements the
+// same way. Callers run checkPermissions and the request throttler before
+// calling this.
+func (qre *QueryExecutor) executeBuffered() (*sqltypes.Result, error) {
 	if qre.plan.PlanID == p.PlanNextval {
 		return qre.execNextval()
 	}
 
 	if qre.connID != 0 {
-		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
 		if err != nil {
 			return nil, err
 		}
@@ -379,37 +388,29 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return reqThrottledErr
 	}
 
-	// Handle plans that don't use generic SQL execution.
+	// Streaming reads stream their results from MySQL through the generic path
+	// below. Every other plan type produces a single buffered result: run it
+	// through the same dispatch Execute uses (executeBuffered) and deliver that
+	// result through the callback, so the streaming path matches Execute for
+	// every statement BuildStreaming accepts (DDL, migrations, savepoints, SET,
+	// ...). executeBuffered's default also fails fast on any unhandled plan type.
 	switch qre.plan.PlanID {
-	case p.PlanNextval:
-		result, err := qre.execNextval()
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc, p.PlanOtherRead, p.PlanCallProc:
+		// Streaming reads: handled by the generic streaming path below.
+	default:
+		reply, err := qre.executeBuffered()
 		if err != nil {
 			return err
 		}
-		return countingCallback(result)
-	case p.PlanShowMigrations:
-		result, err := qre.execShowMigrations(nil)
-		if err != nil {
-			return err
+		if reply == nil {
+			reply = &sqltypes.Result{}
 		}
-		return countingCallback(result)
-	case p.PlanSet:
-		// Mirror Execute: without a reserved connection the SET is not executed,
-		// it is applied to the pooled connection of subsequent queries via
-		// qre.setting. With a reserved connection (connID != 0) the SET runs on
-		// it, so fall through to the generic path below.
-		if qre.connID == 0 {
-			if qre.setting == nil {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
-			}
-			return countingCallback(&sqltypes.Result{})
-		}
+		return countingCallback(reply)
 	}
 
 	// Match Execute's schema-name rewrite. PlanSelectLockFunc is included for parity
 	// even though only information_schema reads carry BvReplaceSchemaName, so the
-	// rewrite is a no-op for it; PlanSelectNoLimit is Build-only and never reaches
-	// the streaming path.
+	// rewrite is a no-op for it.
 	switch qre.plan.PlanID {
 	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {

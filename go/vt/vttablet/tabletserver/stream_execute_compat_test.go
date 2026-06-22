@@ -700,3 +700,112 @@ func TestStreamExecuteCompat_LoadDataViaStreamExecute(t *testing.T) {
 	assert.NoError(t, err,
 		"BuildStreaming should accept LOAD DATA statements")
 }
+
+// A DDL inside a transaction must be rejected on the streaming path the same way
+// Execute rejects it. The pre-unification streaming path ran the DDL raw on the
+// transaction connection, bypassing execDDL's "DDL inside a transaction" guard.
+func TestStreamExecuteCompat_DDLInTransactionRejected(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv.config.DB.DBName = "ks"
+	defer tsv.StopService()
+
+	const ddl = "alter table test_table add zipcode int"
+	// Add the rewritten DDL so that on the raw path MySQL would accept it and the
+	// only thing that can produce an error is the transaction guard itself.
+	db.AddQuery("alter table test_table add column zipcode int", &sqltypes.Result{})
+
+	const wantErr = "DDL statement executed inside a transaction"
+	target := tsv.sm.Target()
+
+	// Execute rejects DDL inside a transaction.
+	execState, err := tsv.Begin(ctx, nil, target, nil)
+	require.NoError(t, err)
+	defer tsv.Commit(ctx, target, execState.TransactionID)
+	_, execErr := newTestQueryExecutor(ctx, tsv, ddl, execState.TransactionID).Execute()
+	require.ErrorContains(t, execErr, wantErr)
+
+	// Stream must reject it identically.
+	streamState, err := tsv.Begin(ctx, nil, target, nil)
+	require.NoError(t, err)
+	defer tsv.Commit(ctx, target, streamState.TransactionID)
+	streamErr := newTestQueryExecutorStreaming(ctx, tsv, ddl, streamState.TransactionID).
+		Stream(func(*sqltypes.Result) error { return nil })
+	require.ErrorContains(t, streamErr, wantErr)
+}
+
+// A savepoint on the streaming path must be recorded in the transaction's query
+// log (via execSavepointQuery), just like Execute, so transaction redo can
+// replay it. The pre-unification raw streaming path skipped this bookkeeping.
+func TestStreamExecuteCompat_SavepointRecordsTxProperty(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	db.AddQuery("savepoint sp1", &sqltypes.Result{})
+
+	target := tsv.sm.Target()
+	state, err := tsv.Begin(ctx, nil, target, nil)
+	require.NoError(t, err)
+	defer tsv.Commit(ctx, target, state.TransactionID)
+
+	streamErr := newTestQueryExecutorStreaming(ctx, tsv, "savepoint sp1", state.TransactionID).
+		Stream(func(*sqltypes.Result) error { return nil })
+	require.NoError(t, streamErr)
+
+	conn, err := tsv.te.txPool.GetAndLock(state.TransactionID, "inspect savepoint bookkeeping")
+	require.NoError(t, err)
+	defer conn.Unlock()
+
+	var found bool
+	for _, q := range conn.TxProperties().Queries {
+		if q.Savepoint == "sp1" {
+			found = true
+		}
+	}
+	assert.True(t, found, "streamed savepoint should be recorded in TxProperties.Queries")
+}
+
+// UNLOCK TABLES without an existing connection must fail fast on the streaming
+// path exactly like Execute, rather than being sent to MySQL on a pooled
+// connection. The statement is deliberately not registered with the fake db, so
+// reaching MySQL would surface as a different "query not found" error.
+func TestStreamExecuteCompat_UnlockTablesRequiresConn(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	const wantErr = "unlock tables should be executed with an existing connection"
+
+	_, execErr := newTestQueryExecutor(ctx, tsv, "unlock tables", 0).Execute()
+	require.ErrorContains(t, execErr, wantErr)
+
+	streamErr := newTestQueryExecutorStreaming(ctx, tsv, "unlock tables", 0).
+		Stream(func(*sqltypes.Result) error { return nil })
+	require.ErrorContains(t, streamErr, wantErr)
+}
+
+// A Vitess migration statement is not MySQL SQL: the streaming path must route
+// it to the migration executor (execAlterMigration) and never send the raw
+// statement to MySQL, as the pre-unification raw path did.
+func TestStreamExecuteCompat_MigrationNotSentToMySQL(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	// We don't assert on the executor's outcome here, only that the raw statement
+	// was not handed to MySQL.
+	_ = newTestQueryExecutorStreaming(ctx, tsv, "alter vitess_migration 'abc' cancel", 0).
+		Stream(func(*sqltypes.Result) error { return nil })
+
+	assert.NotContains(t, db.QueryLog(), "vitess_migration",
+		"migration statement must not be sent to MySQL on the streaming path")
+}
