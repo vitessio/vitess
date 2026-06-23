@@ -382,20 +382,29 @@ func (e *Executor) StreamExecute(
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
 
-		updateLogStats := func() {
+		updateLogStats := func(err error) {
 			logStats.StmtType = plan.QueryType.String()
 			logStats.PlanType = plan.Type.String()
-			logStats.TablesUsed = plan.TablesUsed
-			executedRoot := vc.ExecutedPrimitive()
-			if executedRoot == nil {
-				executedRoot = plan.Instructions
-			}
-			logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 			logStats.TabletType = vc.TabletType().String()
 			logStats.ExecuteTime = time.Since(execStart)
 			logStats.ActiveKeyspace = vc.GetKeyspace()
 
-			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+			// On error, leave the tables and routing indexes unset so the per-table
+			// counters are not incremented, matching the buffered Execute path.
+			var tablesUsed []string
+			if err != nil {
+				logStats.Error = err
+			} else {
+				logStats.TablesUsed = plan.TablesUsed
+				tablesUsed = plan.TablesUsed
+				executedRoot := vc.ExecutedPrimitive()
+				if executedRoot == nil {
+					executedRoot = plan.Instructions
+				}
+				logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+			}
+
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
 		}
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
@@ -406,11 +415,14 @@ func (e *Executor) StreamExecute(
 			if !canReturnRows(plan.QueryType) {
 				return e.rollbackExecIfNeeded(ctx, safeSession, bindVars, logStats, err)
 			}
+			// Record query stats for a failed row-returning query, matching the
+			// buffered Execute path which always records them.
+			updateLogStats(err)
 			return err
 		}
 
 		if !canReturnRows(plan.QueryType) {
-			updateLogStats()
+			updateLogStats(nil)
 			return nil
 		}
 
@@ -422,7 +434,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 5: Log and add statistics
-		updateLogStats()
+		updateLogStats(nil)
 
 		return err
 	}
