@@ -1317,6 +1317,25 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		assert.ErrorContains(t, err, "row 1")
 		assert.Empty(t, executed, "no query should run once a nil row is detected")
 	})
+
+	t.Run("too many Lengths in Before returns error instead of panicking", func(t *testing.T) {
+		// MakeRowTrusted indexes fields[i] for each i in row.Lengths, so a Before
+		// image with more Lengths entries than tp.Fields panics inside MakeRowTrusted
+		// before any in-loop guard fires. The pre-MakeRowTrusted != guard catches
+		// this symmetric malformation alongside the empty-Lengths case.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{Before: &querypb.Row{Lengths: []int64{1, 1, 1}, Values: []byte("xyz")}},
+		}
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed Before image")
+		assert.ErrorContains(t, err, "got 3 values, expected 2")
+		assert.ErrorContains(t, err, "row 1")
+	})
 }
 
 func TestApplyChangeMalformedRowImage(t *testing.T) {
@@ -1361,6 +1380,27 @@ func TestApplyChangeMalformedRowImage(t *testing.T) {
 		assert.ErrorContains(t, err, "malformed After image")
 		assert.ErrorContains(t, err, "table t")
 		assert.ErrorContains(t, err, "expected 2")
+	})
+
+	t.Run("too many Lengths in Before returns error instead of panicking", func(t *testing.T) {
+		// MakeRowTrusted indexes fields[i] for each row.Lengths[i], so a Before
+		// with more Lengths than tp.Fields panics inside MakeRowTrusted (flagged
+		// by Copilot review). The pre-MakeRowTrusted != guard catches it.
+		tp := newTablePlan()
+		row := &querypb.Row{Lengths: []int64{1, 1, 1}, Values: []byte("abc")}
+		_, err := tp.applyChange(&binlogdatapb.RowChange{Before: row}, noopExec)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed Before image")
+		assert.ErrorContains(t, err, "got 3 values, expected 2")
+	})
+
+	t.Run("too many Lengths in After returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		row := &querypb.Row{Lengths: []int64{1, 1, 1}, Values: []byte("abc")}
+		_, err := tp.applyChange(&binlogdatapb.RowChange{After: row}, noopExec)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed After image")
+		assert.ErrorContains(t, err, "got 3 values, expected 2")
 	})
 }
 
