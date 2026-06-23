@@ -447,6 +447,12 @@ func TestKillMethods(t *testing.T) {
 }
 
 func TestComQueryMulti(t *testing.T) {
+	// This test validates the workload -> delivery-mode mapping: OLTP buffers,
+	// OLAP streams. Pin the flag off so it does not depend on the (mutable) global
+	// default; the streaming delivery of OLTP queries is covered by the olap cases.
+	defer func(orig bool) { mysqlServerUseStreaming = orig }(mysqlServerUseStreaming)
+	mysqlServerUseStreaming = false
+
 	testcases := []struct {
 		name           string
 		sql            string
