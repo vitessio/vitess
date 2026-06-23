@@ -21,6 +21,9 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTGate](#bug-fixes-vtgate)**
+        - [Replaced tablet no longer drops its healthy replacement from routing](#vtgate-healthcheck-stale-update-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -136,3 +139,17 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-healthcheck-stale-update-fix"/>Replaced tablet no longer drops its healthy replacement from routing</a>
+
+VTGate's healthcheck could permanently drop a healthy, streaming replica from the routing list after that tablet had been replaced. When `ReplaceTablet` canceled a tablet's health-check goroutine, the goroutine's error path could still send one final `Serving: false` update. If that stale update arrived after the replacement connection for the same tablet alias had already reported `Serving: true`, it was misattributed to the new connection and the tablet was removed from the healthy (routing) list. Subsequent updates on the live stream were treated as trivial, so the tablet was never re-added and stayed out of routing indefinitely even while it continued serving over a healthy stream.
+
+The healthcheck now records which health-check instance each update came from and ignores updates from a tablet that has since been replaced or removed. A canceled goroutine can therefore no longer poison the routing entry belonging to its replacement.
+
+No configuration change is required.
+
+See [#20328](https://github.com/vitessio/vitess/pull/20328) for details.
