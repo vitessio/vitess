@@ -341,7 +341,7 @@ Flags:
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --serving-state-grace-period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard-sync-retry-delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
-      --shard-tablet-health-interval duration                            Interval at which this tablet pings its shard's current primary when --track-shard-tablet-health is set. Also used as the per-ping timeout. (default 1s)
+      --shard-tablet-health-interval duration                            Interval at which this tablet pings its shard's current primary when --track-shard-tablet-health is set. The per-ping timeout is twice this interval. (default 1s)
       --shutdown-grace-period duration                                   how long to wait for queries and transactions to complete during graceful shutdown. (default 3s)
       --skip-user-metrics                                                If true, user based stats are not recorded.
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)

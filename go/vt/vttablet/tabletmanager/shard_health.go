@@ -55,7 +55,7 @@ func registerShardHealthFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &trackShardTabletHealth, "track-shard-tablet-health", trackShardTabletHealth,
 		"If set, this tablet periodically pings its shard's current primary and reports the primary's vttablet liveness in the FullStatus RPC. Used by VTOrc to form a quorum before failing over an unreachable primary vttablet.")
 	utils.SetFlagDurationVar(fs, &shardTabletHealthInterval, "shard-tablet-health-interval", shardTabletHealthInterval,
-		"Interval at which this tablet pings its shard's current primary when --track-shard-tablet-health is set. Also used as the per-ping timeout.")
+		"Interval at which this tablet pings its shard's current primary when --track-shard-tablet-health is set. The per-ping timeout is twice this interval.")
 }
 
 // tabletPinger is the minimal slice of tmclient.TabletManagerClient the monitor needs.
