@@ -179,6 +179,25 @@ func TestCallProcedureStreamingMultiResultsetTxLeakClosesConnection(t *testing.T
 	assert.Empty(t, qr.Rows)
 }
 
+func TestCallProcedureStreamingMultiResultsetCleanConnectionReused(t *testing.T) {
+	setStreamPoolSize(t, 1)
+
+	client := framework.NewClient()
+
+	qr, err := client.StreamExecute("select connection_id()", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	beforeConnID := qr.Rows[0][0].ToString()
+
+	_, err = client.StreamExecute("call proc_select4()", nil)
+	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+
+	qr, err = client.StreamExecute("select connection_id()", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	assert.Equal(t, beforeConnID, qr.Rows[0][0].ToString())
+}
+
 func TestCallProcedureStreamingCallbackErrorClosesConnection(t *testing.T) {
 	setStreamPoolSize(t, 1)
 

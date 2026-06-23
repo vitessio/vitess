@@ -1153,17 +1153,24 @@ func (qre *QueryExecutor) verifyStreamedCallProc(conn *connpool.Conn, txConn *St
 			return err
 		}
 		if trailing.IsMoreResultsExists() {
-			// More than one resultset: drain the rest, close the connection, then
-			// reject like the buffered path does.
-			if err := qre.drainStreamedResultSets(conn); err != nil {
+			// More than one resultset: drain the rest, then reject like the
+			// buffered path does. Preserve the multi-resultset error for callers,
+			// but still close the connection if the final status shows that the
+			// procedure changed transaction state.
+			trailing, err = qre.drainStreamedResultSets(conn)
+			if err != nil {
 				conn.Close()
 				return err
 			}
-			conn.Close()
+			_ = qre.verifyStreamedCallProcTransactionState(conn, txConn, trailing)
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 		}
 	}
 
+	return qre.verifyStreamedCallProcTransactionState(conn, txConn, trailing)
+}
+
+func (qre *QueryExecutor) verifyStreamedCallProcTransactionState(conn *connpool.Conn, txConn *StatefulConnection, trailing *sqltypes.Result) error {
 	if txConn == nil {
 		// No transaction was active before the call (a stream pool connection); a
 		// procedure that leaves one open leaks it onto a pooled connection.
@@ -1184,16 +1191,16 @@ func (qre *QueryExecutor) verifyStreamedCallProc(conn *connpool.Conn, txConn *St
 }
 
 // drainStreamedResultSets discards any remaining resultsets on a streaming
-// connection without buffering their rows, leaving the connection clean for
-// reuse.
-func (qre *QueryExecutor) drainStreamedResultSets(conn *connpool.Conn) error {
+// connection without buffering their rows and returns the final result, whose
+// status flags describe the connection state after the stored procedure.
+func (qre *QueryExecutor) drainStreamedResultSets(conn *connpool.Conn) (*sqltypes.Result, error) {
 	for {
 		qr, err := conn.FetchNext(qre.ctx, mysql.FETCH_NO_ROWS, false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !qr.IsMoreResultsExists() {
-			return nil
+			return qr, nil
 		}
 	}
 }
