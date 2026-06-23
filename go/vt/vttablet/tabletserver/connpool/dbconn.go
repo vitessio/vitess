@@ -242,6 +242,12 @@ func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*
 	return res, err
 }
 
+// StreamResultStatus reports, for the most recent streaming query, whether it
+// returned a resultset and—when it did not—the status flags from its OK packet.
+func (dbc *Conn) StreamResultStatus() (hadResultset bool, statusFlags uint16) {
+	return dbc.conn.StreamResultStatus()
+}
+
 // Stream executes the query and streams the results.
 func (dbc *Conn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")

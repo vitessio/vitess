@@ -43,6 +43,10 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		return sqlerror.NewSQLError(sqlerror.CRCommandsOutOfSync, sqlerror.SSUnknownSQLState, "streaming query already in progress")
 	}
 
+	// Reset the status captured from the previous streaming query.
+	c.streamHadResultset = false
+	c.streamStatusFlags = 0
+
 	// Send the query as a COM_QUERY packet.
 	if err := c.WriteComQuery(query); err != nil {
 		return err
@@ -55,10 +59,13 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 		return err
 	}
 	if colNumber == 0 {
-		// OK packet, means no results. Save an empty Fields array.
+		// OK packet, means no results. Save an empty Fields array. The status
+		// flags only appear on this OK packet, so capture them for the caller.
+		c.streamStatusFlags = packetOk.statusFlags
 		c.fields = make([]*querypb.Field, 0)
 		return nil
 	}
+	c.streamHadResultset = true
 
 	// Read the fields, save them.
 	fields := make([]querypb.Field, colNumber)
@@ -137,6 +144,14 @@ func (c *Conn) FetchNext(in []sqltypes.Value) ([]sqltypes.Value, error) {
 
 	// Regular row.
 	return c.parseRow(data, c.fields, readLenEncStringAsBytes, in)
+}
+
+// StreamResultStatus reports, for the streaming query started by the most
+// recent ExecuteStreamFetch, whether it returned a resultset and—when it did
+// not—the status flags from that query's OK packet. It is meant to be consulted
+// after the resultset (if any) has been fully fetched.
+func (c *Conn) StreamResultStatus() (hadResultset bool, statusFlags uint16) {
+	return c.streamHadResultset, c.streamStatusFlags
 }
 
 // CloseResult can be used to terminate a streaming query

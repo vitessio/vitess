@@ -407,8 +407,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 
 	// if we have a transaction id, let's use the txPool for this query
 	var conn *connpool.PooledConn
+	var txConn *StatefulConnection
 	if qre.connID != 0 {
-		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
+		txConn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
 		if err != nil {
 			return err
 		}
@@ -428,7 +429,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		conn = dbConn
 	}
 
-	return qre.execStreamSQL(conn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
+	err = qre.execStreamSQL(conn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
 		// this stream result is only used by the calling client, so it can be
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
@@ -438,6 +439,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 		return callback(result)
 	})
+	if err != nil {
+		return err
+	}
+
+	if qre.plan.PlanID == p.PlanCallProc {
+		return qre.verifyStreamedCallProc(conn.Conn, txConn)
+	}
+	return nil
 }
 
 // streamDML executes a DML statement on the streaming path. A DML produces a
@@ -1117,6 +1126,71 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		return nil, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+}
+
+// verifyStreamedCallProc enforces, after a stored procedure call has been
+// streamed, the same safety checks the buffered execCallProc/execProc apply: a
+// procedure must not return more than one resultset, nor leak or change the
+// transaction state. Unlike the buffered path, a single-resultset procedure is
+// allowed here, since streaming such a result is the whole point of the
+// streaming path. txConn is non-nil only when the call ran inside an existing
+// transaction or reserved connection.
+func (qre *QueryExecutor) verifyStreamedCallProc(conn *connpool.Conn, txConn *StatefulConnection) error {
+	hadResultset, statusFlags := conn.StreamResultStatus()
+	trailing := &sqltypes.Result{StatusFlags: statusFlags}
+
+	if hadResultset {
+		// A streamed resultset's terminating EOF always reports more results, as a
+		// stored procedure call is followed by a trailing status packet. Read one
+		// more result, discarding its rows, to tell a single-resultset call (only
+		// the trailing packet remains) from a multi-resultset one.
+		var err error
+		trailing, err = conn.FetchNext(qre.ctx, mysql.FETCH_NO_ROWS, false)
+		if err != nil {
+			return err
+		}
+		if trailing.IsMoreResultsExists() {
+			// More than one resultset: drain the rest so the connection stays clean
+			// for reuse, then reject like the buffered path does.
+			if err := qre.drainStreamedResultSets(conn); err != nil {
+				return err
+			}
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+		}
+	}
+
+	if txConn == nil {
+		// No transaction was active before the call (a stream pool connection); a
+		// procedure that leaves one open leaks it onto a pooled connection.
+		if trailing.IsInTransaction() {
+			conn.Close()
+			return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
+		}
+		return nil
+	}
+
+	// A transaction or reserved connection was already active; the procedure must
+	// not change the transaction state.
+	if txConn.IsInTransaction() != trailing.IsInTransaction() {
+		txConn.Close()
+		return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
+	}
+	return nil
+}
+
+// drainStreamedResultSets discards any remaining resultsets on a streaming
+// connection without buffering their rows, leaving the connection clean for
+// reuse.
+func (qre *QueryExecutor) drainStreamedResultSets(conn *connpool.Conn) error {
+	for {
+		qr, err := conn.FetchNext(qre.ctx, mysql.FETCH_NO_ROWS, false)
+		if err != nil {
+			return err
+		}
+		if !qr.IsMoreResultsExists() {
+			return nil
+		}
+	}
 }
 
 func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
