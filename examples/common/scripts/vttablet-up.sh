@@ -57,6 +57,7 @@ vttablet \
    --shard-tablet-health-interval=1s \
    --pprof-http \
    --log-format text \
+   ${VTTABLET_EXTRA_FLAGS:-} \
    >$VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening

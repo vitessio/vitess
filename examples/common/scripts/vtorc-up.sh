@@ -21,6 +21,7 @@ vtorc \
   --emergency-reparent-on-tablet-unreachable \
   --shard-quorum-fraction=1.0 \
   --shard-quorum-min-observers=1 \
+  ${VTORC_EXTRA_FLAGS:-} \
   > "${log_dir}/vtorc.out" 2>&1 &
 
 vtorc_pid=$!
