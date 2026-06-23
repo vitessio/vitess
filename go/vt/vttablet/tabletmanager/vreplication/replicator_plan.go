@@ -989,7 +989,21 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 
 	limit := tp.maxRowJSONBytes()
 	newStmt := true
-	for _, rowInsert := range rowInserts {
+	for i, rowInsert := range rowInserts {
+		if rowInsert.After == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-insert row %d for table %s has nil After image", i, tp.TargetName)
+		}
+		if len(rowInsert.After.Lengths) != len(tp.Fields) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-insert row %d for table %s has malformed After image (got %d values, expected %d)",
+				i, tp.TargetName, len(rowInsert.After.Lengths), len(tp.Fields))
+		}
+		if !rowImageByteLengthMatches(rowInsert.After.Lengths, len(rowInsert.After.Values)) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-insert row %d for table %s has malformed After image (Values byte-length %d does not match Lengths)",
+				i, tp.TargetName, len(rowInsert.After.Values))
+		}
 		if limit > 0 {
 			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
 				return nil, err
@@ -1100,6 +1114,11 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 	if len(row.Lengths) < len(tp.Fields) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of lengths: got %d lengths for %d fields",
 			len(row.Lengths), len(tp.Fields))
+	}
+	if !rowImageByteLengthMatches(row.Lengths, len(row.Values)) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"row for table %s has malformed image (Values byte-length %d does not match Lengths)",
+			tp.TargetName, len(row.Values))
 	}
 
 	// Bind field values to locations.

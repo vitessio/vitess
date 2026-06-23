@@ -983,6 +983,28 @@ func TestAppendFromRow(t *testing.T) {
 	}
 }
 
+func TestAppendFromRowMalformedImage(t *testing.T) {
+	// appendFromRow indexes row.Values[offset:offset+length] for each non-NULL
+	// Lengths entry. If the encoded byte total exceeds len(Values), the slice
+	// op panics. The byte-length guard added alongside #20360 catches it.
+	tp := &TablePlan{
+		TargetName: "t",
+		BulkInsertValues: sqlparser.BuildParsedQuery("values (%a, %a)",
+			":c1", ":c2",
+		),
+		Fields: []*querypb.Field{
+			{Name: "c1", Type: querypb.Type_VARCHAR},
+			{Name: "c2", Type: querypb.Type_VARCHAR},
+		},
+	}
+	// Lengths declare 1 + 5 = 6 bytes but Values only holds 2.
+	row := &querypb.Row{Lengths: []int64{1, 5}, Values: []byte("xx")}
+	err := tp.appendFromRow(&bytes2.Buffer{}, row)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "row for table t has malformed image")
+	assert.ErrorContains(t, err, "Values byte-length 2 does not match Lengths")
+}
+
 func TestApplyBulkInsertMaxQuerySize(t *testing.T) {
 	tp := &TablePlan{
 		BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(c1, c2)"),
@@ -1220,6 +1242,83 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 		require.Len(t, executed, 1)
 		assert.Contains(t, executed[0], "insert into t(j) values")
 		assert.NotContains(t, executed[0], "not-json")
+	})
+}
+
+func TestApplyBulkInsertChangesMalformedRowImage(t *testing.T) {
+	// Same shape of guards as applyBulkDeleteChanges / applyChange: before each
+	// MakeRowTrusted call on rowInsert.After, reject nil image, mismatched
+	// Lengths count, and Values byte-length that does not match the sum of
+	// non-NULL Lengths. Without these, vttablet would panic on a malformed
+	// bulk-insert RowChange instead of returning a clean Code_INTERNAL error.
+	newTablePlan := func() *TablePlan {
+		return &TablePlan{
+			TargetName:      "t",
+			BulkInsertFront: sqlparser.BuildParsedQuery("insert into t(id, v)"),
+			BulkInsertValues: sqlparser.BuildParsedQuery("(%a, %a)",
+				":a_id", ":a_v",
+			),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "v", Type: querypb.Type_VARCHAR},
+			},
+			FieldsToSkip:     map[string]bool{},
+			TablePlanBuilder: &tablePlanBuilder{stats: binlogplayer.NewStats()},
+		}
+	}
+	makeRowInsert := func(id int64, v string) *binlogdatapb.RowChange {
+		return &binlogdatapb.RowChange{
+			After: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(id),
+				sqltypes.NewVarChar(v),
+			}),
+		}
+	}
+	noopExec := func(string) (*sqltypes.Result, error) {
+		return &sqltypes.Result{}, nil
+	}
+
+	t.Run("nil After in later row returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		rowInserts := []*binlogdatapb.RowChange{makeRowInsert(1, "a"), {After: nil}}
+		_, err := tp.applyBulkInsertChanges(rowInserts, noopExec, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "nil After image")
+		assert.ErrorContains(t, err, "row 1")
+	})
+
+	t.Run("empty After image returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		rowInserts := []*binlogdatapb.RowChange{makeRowInsert(1, "a"), {After: &querypb.Row{}}}
+		_, err := tp.applyBulkInsertChanges(rowInserts, noopExec, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed After image")
+		assert.ErrorContains(t, err, "row 1")
+	})
+
+	t.Run("too many Lengths in After returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		rowInserts := []*binlogdatapb.RowChange{
+			makeRowInsert(1, "a"),
+			{After: &querypb.Row{Lengths: []int64{1, 1, 1}, Values: []byte("xyz")}},
+		}
+		_, err := tp.applyBulkInsertChanges(rowInserts, noopExec, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed After image")
+		assert.ErrorContains(t, err, "got 3 values, expected 2")
+	})
+
+	t.Run("Values byte-length mismatch in After returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		// Lengths declare 1 + 5 = 6 bytes but Values only holds 2.
+		rowInserts := []*binlogdatapb.RowChange{
+			makeRowInsert(1, "a"),
+			{After: &querypb.Row{Lengths: []int64{1, 5}, Values: []byte("xx")}},
+		}
+		_, err := tp.applyBulkInsertChanges(rowInserts, noopExec, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed After image")
+		assert.ErrorContains(t, err, "Values byte-length 2 does not match Lengths")
 	})
 }
 
