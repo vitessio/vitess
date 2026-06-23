@@ -1155,6 +1155,103 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	require.Truef(t, ok && got == want, "only tx2 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
 }
 
+func TestSerializeTransactionsSameRow_StreamExecute(t *testing.T) {
+	ctx := t.Context()
+	// Same scenario as TestSerializeTransactionsSameRow, but the transactions
+	// run through BeginStreamExecute (the OLAP/streaming entry point) instead of
+	// BeginExecute. Hot row protection must serialize them identically: tx1 and
+	// tx2 target the same row, so tx2 cannot start until tx1's query finishes,
+	// while tx3 (a different row) runs concurrently.
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.HotRowProtection.Mode = tabletenv.Enable
+	cfg.HotRowProtection.MaxConcurrency = 1
+	// Reduce the txpool to 2 because we should never consume more than two slots.
+	cfg.TxPool.Size = 2
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
+	defer tsv.StopService()
+	defer db.Close()
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	countStart := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
+
+	// Fake data.
+	q1 := "update test_table set name_string = 'tx1' where pk = :pk and `name` = :name"
+	q2 := "update test_table set name_string = 'tx2' where pk = :pk and `name` = :name"
+	q3 := "update test_table set name_string = 'tx3' where pk = :pk and `name` = :name"
+	// Every request needs their own bind variables to avoid data races.
+	bvTx1 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+	bvTx2 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(1),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+	bvTx3 := map[string]*querypb.BindVariable{
+		"pk":   sqltypes.Int64BindVariable(2),
+		"name": sqltypes.Int64BindVariable(1),
+	}
+
+	noop := func(*sqltypes.Result) error { return nil }
+
+	// Make sure that tx2 and tx3 start only after tx1 is running its Execute().
+	tx1Started := make(chan struct{})
+	// Make sure that tx3 could finish while tx2 could not.
+	tx3Finished := make(chan struct{})
+
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and `name` = 1 limit 10001",
+		func() {
+			close(tx1Started)
+			if !assert.NoError(t, waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2)) {
+				return
+			}
+		})
+
+	// Run all three transactions.
+	wg := sync.WaitGroup{}
+
+	// tx1.
+	wg.Go(func() {
+		state1, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil, noop)
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
+		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
+			assert.NoError(t, err)
+		}
+	})
+
+	// tx2.
+	wg.Go(func() {
+		<-tx1Started
+		state2, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil, noop)
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q2, err)
+		// TODO(mberlin): This should actually be in the BeforeFunc() of tx1 but
+		// then the test is hanging. It looks like the MySQL C client library cannot
+		// open a second connection while the request of the first connection is
+		// still pending.
+		<-tx3Finished
+		if _, err := tsv.Commit(ctx, &target, state2.TransactionID); err != nil {
+			assert.NoError(t, err)
+		}
+	})
+
+	// tx3.
+	wg.Go(func() {
+		<-tx1Started
+		state3, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil, noop)
+		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
+		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
+			assert.NoError(t, err)
+		}
+		close(tx3Finished)
+	})
+
+	wg.Wait()
+
+	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
+	want := countStart + 1
+	require.Truef(t, ok && got == want, "only tx2 should have been serialized: ok? %v got: %v want: %v", ok, got, want)
+}
+
 func TestDMLQueryWithoutWhereClause(t *testing.T) {
 	ctx := t.Context()
 	cfg := tabletenv.NewDefaultConfig()

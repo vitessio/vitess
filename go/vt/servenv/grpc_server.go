@@ -27,7 +27,6 @@ import (
 	"strconv"
 	"time"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
@@ -462,8 +461,8 @@ func (collector *serverInterceptorBuilder) Build() []grpc.ServerOption {
 		return []grpc.ServerOption{}
 	default:
 		return []grpc.ServerOption{
-			grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(collector.unaryInterceptors...)),
-			grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(collector.streamInterceptors...)),
+			grpc.ChainUnaryInterceptor(collector.unaryInterceptors...),
+			grpc.ChainStreamInterceptor(collector.streamInterceptors...),
 		}
 	}
 }
