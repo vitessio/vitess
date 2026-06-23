@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reservedconn
+package vttabletdown
 
 import (
 	"flag"
@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestMysqlDownServingChange(t *testing.T) {
+func TestVttabletDownServingChange(t *testing.T) {
 	conn, err := mysql.Connect(t.Context(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -91,6 +91,8 @@ func TestMysqlDownServingChange(t *testing.T) {
 	primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet()
 	require.NoError(t,
 		primaryTablet.MysqlctlProcess.Stop())
+	// kill vttablet process
+	_ = primaryTablet.VttabletProcess.TearDown()
 	require.NoError(t,
 		clusterInstance.VtctldClientProcess.ExecuteCommand("EmergencyReparentShard", "ks/0"))
 
