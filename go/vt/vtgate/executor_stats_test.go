@@ -105,6 +105,30 @@ func TestQueryExecutions_StreamOnError(t *testing.T) {
 		"per-table QueryExecutionsByTable must not be incremented on a failed streamed query")
 }
 
+// TestQueryExecutions_StreamDMLOnError verifies that the streaming path records
+// the per-plan QueryExecutions counter when a non-row-returning query (DML) fails,
+// while leaving the per-table QueryExecutionsByTable counter untouched — matching
+// the buffered Execute path, which records stats before any rollback handling.
+func TestQueryExecutions_StreamDMLOnError(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	initialExec := getTotalQueryExecutionsCount()
+	initialByTable := getTotalQueryExecutionsByTableCount()
+
+	// Make the next execution fail.
+	sbclookup.MustFailCodes[vtrpcpb.Code_INTERNAL] = 1
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	err := executor.StreamExecute(ctx, nil, "TestQueryExecutions_StreamDMLOnError", session,
+		"insert into main1(id) values (1)", nil, false, func(*sqltypes.Result) error { return nil })
+	require.Error(t, err, "Expected streamed DML execution to fail")
+
+	assert.Equal(t, initialExec+1, getTotalQueryExecutionsCount(),
+		"per-plan QueryExecutions must be recorded even when a streamed DML fails")
+	assert.Equal(t, initialByTable, getTotalQueryExecutionsByTableCount(),
+		"per-table QueryExecutionsByTable must not be incremented on a failed streamed DML")
+}
+
 func TestSlowQueriesCounter(t *testing.T) {
 	executor, sbc1, _, _, ctx := createExecutorEnv(t)
 
