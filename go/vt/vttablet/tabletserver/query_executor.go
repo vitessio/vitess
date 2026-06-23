@@ -404,7 +404,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 			return err
 		}
 		if reply == nil {
-			reply = &sqltypes.Result{}
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s produced no result on the streaming path", qre.plan.PlanID.String())
 		}
 		return countingCallback(reply)
 	}
