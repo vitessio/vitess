@@ -88,7 +88,7 @@ var (
 	mysqlServerFlushDelay = 100 * time.Millisecond
 	mysqlServerMultiQuery = false
 
-	mysqlServerUseStreaming = false
+	mysqlServerUseStreaming = true
 )
 
 func registerPluginFlags(fs *pflag.FlagSet) {
