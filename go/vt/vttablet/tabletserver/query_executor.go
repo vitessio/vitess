@@ -440,6 +440,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return callback(result)
 	})
 	if err != nil {
+		if qre.plan.PlanID == p.PlanCallProc {
+			conn.Close()
+		}
 		return err
 	}
 
@@ -1150,11 +1153,13 @@ func (qre *QueryExecutor) verifyStreamedCallProc(conn *connpool.Conn, txConn *St
 			return err
 		}
 		if trailing.IsMoreResultsExists() {
-			// More than one resultset: drain the rest so the connection stays clean
-			// for reuse, then reject like the buffered path does.
+			// More than one resultset: drain the rest, close the connection, then
+			// reject like the buffered path does.
 			if err := qre.drainStreamedResultSets(conn); err != nil {
+				conn.Close()
 				return err
 			}
+			conn.Close()
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
 		}
 	}

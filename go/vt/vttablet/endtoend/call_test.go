@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -38,6 +39,13 @@ var procSQL = []string{
 		select intval from vitess_test;
 		select intval from vitess_test;
 		select intval from vitess_test;
+	END;`,
+	`create procedure proc_select2_tx_insert()
+	BEGIN
+		select intval from vitess_test;
+		select intval from vitess_test;
+		start transaction;
+		insert into vitess_test(intval) values(8675309);
 	END;`,
 	`create procedure proc_dml()
 	BEGIN
@@ -137,6 +145,70 @@ func TestCallProcedureStreaming(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestCallProcedureStreamingMultiResultsetTxLeakClosesConnection(t *testing.T) {
+	setStreamPoolSize(t, 1)
+
+	client := framework.NewClient()
+	checkClient := framework.NewClient()
+	_, _ = checkClient.Execute("delete from vitess_test where intval = 8675309", nil)
+	t.Cleanup(func() {
+		_, _ = checkClient.Execute("delete from vitess_test where intval = 8675309", nil)
+	})
+
+	qr, err := client.StreamExecute("select connection_id()", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	beforeConnID := qr.Rows[0][0].ToString()
+
+	_, err = client.StreamExecute("call proc_select2_tx_insert()", nil)
+	require.EqualError(t, err, "Multi-Resultset not supported in stored procedure (CallerID: dev)")
+
+	qr, err = client.StreamExecute("select connection_id()", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	afterConnID := qr.Rows[0][0].ToString()
+
+	_, err = client.StreamExecute("call proc_tx_commit()", nil)
+	require.NoError(t, err)
+
+	qr, err = checkClient.Execute("select intval from vitess_test where intval = 8675309", nil)
+	require.NoError(t, err)
+	assert.NotEqual(t, beforeConnID, afterConnID)
+	assert.Empty(t, qr.Rows)
+}
+
+func TestCallProcedureStreamingCallbackErrorClosesConnection(t *testing.T) {
+	setStreamPoolSize(t, 1)
+
+	client := framework.NewClient()
+
+	qr, err := client.StreamExecute("select connection_id()", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	beforeConnID := qr.Rows[0][0].ToString()
+
+	err = client.Stream("call proc_select1()", nil, func(*sqltypes.Result) error {
+		return assert.AnError
+	})
+	require.ErrorContains(t, err, assert.AnError.Error())
+
+	qr, err = client.StreamExecute("select connection_id(), intval from vitess_test where intval = 1", nil)
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	assert.NotEqual(t, beforeConnID, qr.Rows[0][0].ToString())
+	assert.Equal(t, "1", qr.Rows[0][1].ToString())
+}
+
+func setStreamPoolSize(t *testing.T, size int) {
+	t.Helper()
+
+	defaultPoolSize := framework.Server.StreamPoolSize()
+	require.NoError(t, framework.Server.SetStreamPoolSize(t.Context(), size))
+	t.Cleanup(func() {
+		require.NoError(t, framework.Server.SetStreamPoolSize(t.Context(), defaultPoolSize))
+	})
 }
 
 func TestCallProcedureLeakTxStreaming(t *testing.T) {
