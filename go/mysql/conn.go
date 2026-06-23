@@ -1721,6 +1721,16 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 		return c.writeErrorPacketFromErrorAndLog(errEmptyStatement)
 	}
 
+	if len(queries) == 1 {
+		// handleNextCommand already recorded the whole command's ingress bytes.
+		res := c.execQuery(queries[0], handler, false)
+		if res != execSuccess {
+			return res != connErr
+		}
+		timings.Record(queryTimingKey, queryStart)
+		return true
+	}
+
 	commandIngressBytes := c.currentCommandIngressBytes
 	queryIngressBytes := allocateQueryIngressBytes(commandIngressBytes, queries)
 	defer func() {
