@@ -32,6 +32,7 @@ import (
 	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/internal/ingress"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -641,7 +642,7 @@ func allocateStatementIngressBytes(total uint64, queries []string) []uint64 {
 	for i, query := range queries {
 		weights[i] = len(query)
 	}
-	return vtgateservice.SplitIngressBytes(total, weights)
+	return ingress.SplitBytesByWeight(total, weights)
 }
 
 // ExecuteMulti executes multiple non-streaming queries.

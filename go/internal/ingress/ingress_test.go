@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgateservice
+package ingress
 
 import (
 	"testing"
@@ -22,9 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestSplitIngressBytes verifies request ingress bytes are attributed by
+// TestSplitBytesByWeight verifies request ingress bytes are attributed by
 // positive weights while preserving the original total.
-func TestSplitIngressBytes(t *testing.T) {
+func TestSplitBytesByWeight(t *testing.T) {
 	tests := []struct {
 		name        string
 		total       uint64
@@ -65,7 +65,7 @@ func TestSplitIngressBytes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.allocations, SplitIngressBytes(tt.total, tt.weights))
+			assert.Equal(t, tt.allocations, SplitBytesByWeight(tt.total, tt.weights))
 		})
 	}
 }

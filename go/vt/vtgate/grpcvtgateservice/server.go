@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 
+	"vitess.io/vitess/go/internal/ingress"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -246,7 +247,7 @@ func allocateBatchIngressBytes(total uint64, queries []*querypb.BoundQuery) []ui
 	for i, query := range queries {
 		weights[i] = query.SizeVT()
 	}
-	return vtgateservice.SplitIngressBytes(total, weights)
+	return ingress.SplitBytesByWeight(total, weights)
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method

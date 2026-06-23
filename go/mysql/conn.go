@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/bucketpool"
+	"vitess.io/vitess/go/internal/ingress"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
@@ -40,7 +41,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 )
 
 const (
@@ -1689,7 +1689,7 @@ func allocateQueryIngressBytes(total uint64, queries []string) []uint64 {
 	for i, query := range queries {
 		weights[i] = len(query)
 	}
-	return vtgateservice.SplitIngressBytes(total, weights)
+	return ingress.SplitBytesByWeight(total, weights)
 }
 
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
