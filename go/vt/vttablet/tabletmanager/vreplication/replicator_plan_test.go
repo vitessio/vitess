@@ -1222,6 +1222,148 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 	})
 }
 
+func TestApplyBulkDeleteChanges(t *testing.T) {
+	newTablePlan := func() *TablePlan {
+		return &TablePlan{
+			TargetName:  "t",
+			MultiDelete: sqlparser.BuildParsedQuery("delete from t where id in %a", "::bulk_pks"),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "v", Type: querypb.Type_VARCHAR},
+			},
+			PKIndices: []bool{true, false},
+			TablePlanBuilder: &tablePlanBuilder{
+				pkCols: []*colExpr{{}},
+				stats:  binlogplayer.NewStats(),
+			},
+		}
+	}
+	makeRowDelete := func(id int64, v string) *binlogdatapb.RowChange {
+		return &binlogdatapb.RowChange{
+			Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewInt64(id),
+				sqltypes.NewVarChar(v),
+			}),
+		}
+	}
+
+	t.Run("happy path batches into single query", func(t *testing.T) {
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			makeRowDelete(2, "b"),
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.NoError(t, err)
+		require.Len(t, executed, 1)
+		assert.Equal(t, "delete from t where id in (1, 2)", executed[0])
+	})
+
+	t.Run("empty Before image returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		// The second row's Before deserialises to an empty vals slice (Lengths=[]).
+		// Pre-fix this panicked at vals[pkIndex]; post-fix it must surface a clean error.
+		rowDeletes := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{Before: &querypb.Row{}},
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed Before image")
+		assert.ErrorContains(t, err, "table t")
+		assert.ErrorContains(t, err, "row 1")
+		assert.Empty(t, executed, "no query should run once a malformed row is detected")
+	})
+
+	t.Run("first-row empty Before image returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{
+			{Before: &querypb.Row{}},
+			makeRowDelete(2, "b"),
+		}
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed Before image")
+		assert.ErrorContains(t, err, "row 0")
+	})
+
+	t.Run("nil Before in later row returns error instead of panicking", func(t *testing.T) {
+		// MakeRowTrusted dereferences row.Lengths on a nil row, so a nil Before
+		// in a non-first row would panic before reaching the malformed-image
+		// guard. This subtest pins the explicit nil check at the top of the loop.
+		tp := newTablePlan()
+		rowDeletes := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{Before: nil},
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			executed = append(executed, sql)
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "nil Before image")
+		assert.ErrorContains(t, err, "table t")
+		assert.ErrorContains(t, err, "row 1")
+		assert.Empty(t, executed, "no query should run once a nil row is detected")
+	})
+}
+
+func TestApplyChangeMalformedRowImage(t *testing.T) {
+	// Guards against the relocated panic from #20360: when a RowChange.Before
+	// (or After) is non-nil but has empty Lengths, MakeRowTrusted returns an
+	// empty slice and the subsequent for i := range tp.Fields { ... vals[i] }
+	// loop panics. applyChange now returns a clean Code_INTERNAL error instead.
+	newTablePlan := func() *TablePlan {
+		return &TablePlan{
+			TargetName: "t",
+			Delete:     sqlparser.BuildParsedQuery("delete from t where id = %a", ":b_id"),
+			Insert:     sqlparser.BuildParsedQuery("insert into t(id, v) values (%a, %a)", ":a_id", ":a_v"),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "v", Type: querypb.Type_VARCHAR},
+			},
+			PKIndices: []bool{true, false},
+			Stats:     binlogplayer.NewStats(),
+			TablePlanBuilder: &tablePlanBuilder{
+				pkCols: []*colExpr{{}},
+				stats:  binlogplayer.NewStats(),
+			},
+		}
+	}
+	noopExec := func(string) (*sqltypes.Result, error) {
+		return &sqltypes.Result{}, nil
+	}
+
+	t.Run("empty Before image returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		_, err := tp.applyChange(&binlogdatapb.RowChange{Before: &querypb.Row{}}, noopExec)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed Before image")
+		assert.ErrorContains(t, err, "table t")
+		assert.ErrorContains(t, err, "expected 2")
+	})
+
+	t.Run("empty After image returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		_, err := tp.applyChange(&binlogdatapb.RowChange{After: &querypb.Row{}}, noopExec)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed After image")
+		assert.ErrorContains(t, err, "table t")
+		assert.ErrorContains(t, err, "expected 2")
+	})
+}
+
 func TestMarshalJSONForSQL(t *testing.T) {
 	testCases := []struct {
 		name  string

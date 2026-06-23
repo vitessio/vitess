@@ -672,6 +672,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	if rowChange.Before != nil {
 		before = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
+		if len(vals) < len(tp.Fields) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: row change for table %s has malformed Before image (got %d values, expected %d)",
+				tp.TargetName, len(vals), len(tp.Fields))
+		}
 		for i, field := range tp.Fields {
 			bindVar, err := tp.bindFieldVal(field, &vals[i])
 			if err != nil {
@@ -683,6 +688,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	if rowChange.After != nil {
 		after = true
 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
+		if len(afterVals) < len(tp.Fields) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: row change for table %s has malformed After image (got %d values, expected %d)",
+				tp.TargetName, len(afterVals), len(tp.Fields))
+		}
 		for i, field := range tp.Fields {
 			bindVar, err := tp.bindFieldVal(field, &afterVals[i])
 			if err != nil {
@@ -866,17 +876,36 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		return executor(query)
 	}
 
+	// Derive pkIndex once from the plan, not from per-row vals. PKIndices is sized to
+	// the column count and is populated by the plan builder before this runs, so it
+	// has no dependency on the shape of any individual row's Before image. This avoids
+	// a panic when a later row's Before deserialises to an empty vals slice (see #20360).
 	pkIndex := -1
+	for i, isPK := range tp.PKIndices {
+		if isPK {
+			pkIndex = i
+			break
+		}
+	}
+	// Defensive: the length check above ensures pkCols+extraSourcePkCols == 1, but
+	// PKIndices reflects only pkCols. If the single PK column came from
+	// extraSourcePkCols, PKIndices has no true entries and we cannot index into vals.
+	if pkIndex < 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"vreplication: bulk-delete plan for table %s has no primary key column in PKIndices", tp.TargetName)
+	}
+
 	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
-	for _, rowDelete := range rowDeletes {
+	for i, rowDelete := range rowDeletes {
+		if rowDelete.Before == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-delete row %d for table %s has nil Before image", i, tp.TargetName)
+		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
-		if pkIndex == -1 {
-			for i := range vals {
-				if tp.PKIndices[i] {
-					pkIndex = i
-					break
-				}
-			}
+		if len(vals) <= pkIndex {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-delete row %d for table %s has malformed Before image (got %d values, need PK at index %d)",
+				i, tp.TargetName, len(vals), pkIndex)
 		}
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
