@@ -676,6 +676,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 				"vreplication: row change for table %s has malformed Before image (got %d values, expected %d)",
 				tp.TargetName, len(rowChange.Before.Lengths), len(tp.Fields))
 		}
+		if !rowImageByteLengthMatches(rowChange.Before.Lengths, len(rowChange.Before.Values)) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: row change for table %s has malformed Before image (Values byte-length %d does not match Lengths)",
+				tp.TargetName, len(rowChange.Before.Values))
+		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
 		for i, field := range tp.Fields {
 			bindVar, err := tp.bindFieldVal(field, &vals[i])
@@ -691,6 +696,11 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"vreplication: row change for table %s has malformed After image (got %d values, expected %d)",
 				tp.TargetName, len(rowChange.After.Lengths), len(tp.Fields))
+		}
+		if !rowImageByteLengthMatches(rowChange.After.Lengths, len(rowChange.After.Values)) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: row change for table %s has malformed After image (Values byte-length %d does not match Lengths)",
+				tp.TargetName, len(rowChange.After.Values))
 		}
 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
@@ -840,6 +850,27 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	return nil, nil
 }
 
+// rowImageByteLengthMatches reports whether the byte-count of row.Values equals
+// the sum of non-negative entries in lengths. The comparison is incremental
+// against valuesLen so a malformed Lengths array whose entries would overflow
+// int64 cannot accidentally pass equality (cf. #20360, codex review). A
+// negative entry indicates a NULL value and contributes no bytes. MakeRowTrusted
+// slices row.Values up to this total; a mismatch would panic at the slice op.
+func rowImageByteLengthMatches(lengths []int64, valuesLen int) bool {
+	var sum int64
+	target := int64(valuesLen)
+	for _, l := range lengths {
+		if l < 0 {
+			continue
+		}
+		if l > target-sum {
+			return false
+		}
+		sum += l
+	}
+	return sum == target
+}
+
 // applyBulkDeleteChanges applies a bulk DELETE statement from the row changes
 // to the target table -- which resulted from a DELETE statement executed on the
 // source that deleted N rows -- using an IN clause with the primary key values
@@ -906,6 +937,11 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
 				"vreplication: bulk-delete row %d for table %s has malformed Before image (got %d values, expected %d)",
 				i, tp.TargetName, len(rowDelete.Before.Lengths), len(tp.Fields))
+		}
+		if !rowImageByteLengthMatches(rowDelete.Before.Lengths, len(rowDelete.Before.Values)) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"vreplication: bulk-delete row %d for table %s has malformed Before image (Values byte-length %d does not match Lengths)",
+				i, tp.TargetName, len(rowDelete.Before.Values))
 		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space

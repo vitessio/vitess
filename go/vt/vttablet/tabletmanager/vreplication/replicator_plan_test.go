@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 
@@ -1336,6 +1337,25 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		assert.ErrorContains(t, err, "got 3 values, expected 2")
 		assert.ErrorContains(t, err, "row 1")
 	})
+
+	t.Run("Values byte-length mismatch in Before returns error instead of panicking", func(t *testing.T) {
+		// Even when Lengths matches tp.Fields, MakeRowTrusted slices
+		// row.Values[offset:offset+length] per non-NULL entry. If the encoded
+		// byte total exceeds len(Values) the slice op panics. Flagged by Copilot.
+		tp := newTablePlan()
+		// Lengths declare 1 + 5 = 6 bytes but Values only holds 2.
+		rowDeletes := []*binlogdatapb.RowChange{
+			makeRowDelete(1, "a"),
+			{Before: &querypb.Row{Lengths: []int64{1, 5}, Values: []byte("xx")}},
+		}
+		_, err := tp.applyBulkDeleteChanges(rowDeletes, func(sql string) (*sqltypes.Result, error) {
+			return &sqltypes.Result{RowsAffected: 1}, nil
+		}, 1024)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed Before image")
+		assert.ErrorContains(t, err, "Values byte-length 2 does not match Lengths")
+		assert.ErrorContains(t, err, "row 1")
+	})
 }
 
 func TestApplyChangeMalformedRowImage(t *testing.T) {
@@ -1401,6 +1421,54 @@ func TestApplyChangeMalformedRowImage(t *testing.T) {
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "malformed After image")
 		assert.ErrorContains(t, err, "got 3 values, expected 2")
+	})
+
+	t.Run("Values byte-length mismatch in Before returns error instead of panicking", func(t *testing.T) {
+		// Lengths matches len(tp.Fields) but encoded Values is too short — the
+		// MakeRowTrusted slice op row.Values[offset:offset+length] would panic.
+		tp := newTablePlan()
+		row := &querypb.Row{Lengths: []int64{1, 5}, Values: []byte("xx")}
+		_, err := tp.applyChange(&binlogdatapb.RowChange{Before: row}, noopExec)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed Before image")
+		assert.ErrorContains(t, err, "Values byte-length 2 does not match Lengths")
+	})
+
+	t.Run("Values byte-length mismatch in After returns error instead of panicking", func(t *testing.T) {
+		tp := newTablePlan()
+		row := &querypb.Row{Lengths: []int64{1, 5}, Values: []byte("xx")}
+		_, err := tp.applyChange(&binlogdatapb.RowChange{After: row}, noopExec)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed After image")
+		assert.ErrorContains(t, err, "Values byte-length 2 does not match Lengths")
+	})
+
+	t.Run("overflowing Lengths sum is rejected even when wrapped value matches Values byte count", func(t *testing.T) {
+		// codex review: Lengths = [MaxInt64, MaxInt64, 2] sums to 0 under int64
+		// wrap (MaxInt64 + MaxInt64 = -2; -2 + 2 = 0). With Values also empty,
+		// a naive sum-then-compare equality check would pass and MakeRowTrusted
+		// would still panic slicing Values[0:MaxInt64]. The incremental check
+		// in rowImageByteLengthMatches catches the first oversized entry before
+		// any wrap can occur.
+		tp := &TablePlan{
+			TargetName: "t",
+			Insert:     sqlparser.BuildParsedQuery("insert into t(id, v, w) values (%a, %a, %a)", ":a_id", ":a_v", ":a_w"),
+			Fields: []*querypb.Field{
+				{Name: "id", Type: querypb.Type_INT64},
+				{Name: "v", Type: querypb.Type_VARCHAR},
+				{Name: "w", Type: querypb.Type_VARCHAR},
+			},
+			PKIndices: []bool{true, false, false},
+			Stats:     binlogplayer.NewStats(),
+			TablePlanBuilder: &tablePlanBuilder{
+				pkCols: []*colExpr{{}},
+				stats:  binlogplayer.NewStats(),
+			},
+		}
+		row := &querypb.Row{Lengths: []int64{math.MaxInt64, math.MaxInt64, 2}, Values: []byte{}}
+		_, err := tp.applyChange(&binlogdatapb.RowChange{Before: row}, noopExec)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "malformed Before image")
 	})
 }
 
