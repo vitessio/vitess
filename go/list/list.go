@@ -130,9 +130,9 @@ func (l *List[T]) move(e, at *Element[T]) {
 	e.next.prev = e
 }
 
-// Remove removes e from l if e is an element of list l.
-// It returns the element value e.Value.
-// The element must not be nil.
+// Remove removes e from l. The element must not be nil and must be an
+// element of list l; Remove panics otherwise. Use RemoveIfPresent when the
+// element may have been removed already.
 func (l *List[T]) Remove(e *Element[T]) {
 	if e.list != l {
 		panic("removing from wrong List")
@@ -140,6 +140,19 @@ func (l *List[T]) Remove(e *Element[T]) {
 	// if e.list == l, l must have been initialized when e was inserted
 	// in l or l == nil (e is a zero Element) and l.remove will crash
 	l.remove(e)
+}
+
+// RemoveIfPresent removes e from l if e is currently an element of list l
+// and reports whether it did so. Unlike Remove, it is a no-op rather than a
+// panic when e is not in l, which makes membership checks O(1) for callers
+// that would otherwise have to scan the list before removing.
+// The element must not be nil.
+func (l *List[T]) RemoveIfPresent(e *Element[T]) bool {
+	if e.list != l {
+		return false
+	}
+	l.remove(e)
+	return true
 }
 
 // PushFront inserts a new element e with value v at the front of list l and returns e.

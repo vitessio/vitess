@@ -57,7 +57,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(k)",
+        "Aggregates": "sum(0) AS SUM(k)",
         "Inputs": [
           {
             "OperatorType": "Route",
