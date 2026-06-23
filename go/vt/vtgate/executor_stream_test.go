@@ -91,6 +91,28 @@ func TestStreamSQLSharded(t *testing.T) {
 	assert.Truef(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
 }
 
+// TestStreamExecutePropagatesRowsAffected verifies that the streaming path reports
+// the affected-row count to the client for row-returning statements that carry an
+// OK packet (e.g. a CALL of a procedure that performs DML), matching the buffered
+// Execute path.
+func TestStreamExecutePropagatesRowsAffected(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	// An OK packet with affected rows but no fields or rows, like a CALL that
+	// performs an INSERT.
+	sbclookup.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	var rowsAffected uint64
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecutePropagatesRowsAffected", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			rowsAffected += qr.RowsAffected
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, rowsAffected, "streamed result must carry RowsAffected to the client")
+}
+
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)

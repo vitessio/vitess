@@ -340,6 +340,10 @@ func (e *Executor) StreamExecute(
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
+				// Carry over the affected-row count so statements that return an OK
+				// packet (e.g. CALL of a procedure that performs DML) report it to the
+				// client, matching the buffered Execute path.
+				result.RowsAffected += qr.RowsAffected
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
