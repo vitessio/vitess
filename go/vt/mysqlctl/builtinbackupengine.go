@@ -714,7 +714,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	}
 
 	// Backup all work items concurrently.
-	_ = be.backupWorkItems(ctx, workItems, fes, bh, params)
+	backupErr := be.backupWorkItems(ctx, workItems, fes, bh, params)
 
 	// BackupHandle supports the BackupErrorRecorder interface for tracking errors
 	// across any goroutines that fan out to take the backup. This means that we
@@ -742,6 +742,10 @@ func (be *BuiltinBackupEngine) backupFiles(
 		if err := be.backupWorkItems(ctx, retryItems, fes, bh, params); err != nil {
 			return err
 		}
+	} else if backupErr != nil {
+		// EndBackup returned an error not represented in per-file failures.
+		// Bail before MANIFEST upload to avoid reporting a successful backup.
+		return backupErr
 	}
 
 	// Backup the MANIFEST file and apply retry logic.
