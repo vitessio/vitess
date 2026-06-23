@@ -32,6 +32,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -111,6 +112,36 @@ func TestStreamExecutePropagatesRowsAffected(t *testing.T) {
 		})
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, rowsAffected, "streamed result must carry RowsAffected to the client")
+}
+
+// TestStreamExecuteRecordsPlanStats verifies that the streaming path records
+// per-plan execution statistics (exec count, rows returned) on the engine.Plan,
+// matching the buffered Execute path.
+func TestStreamExecuteRecordsPlanStats(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2")})
+
+	sql := "select id from main1"
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecuteRecordsPlanStats", session,
+		sql, nil, false, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+
+	var plan *engine.Plan
+	executor.ForEachPlan(func(p *engine.Plan) bool {
+		if p.Original == sql {
+			plan = p
+			return false
+		}
+		return true
+	})
+	require.NotNil(t, plan, "plan not found in cache")
+
+	execCount, _, _, _, rowsReturned, errCount := plan.Stats()
+	assert.EqualValues(t, 1, execCount, "streamed query must record an execution in plan stats")
+	assert.EqualValues(t, 2, rowsReturned, "streamed query must record rows returned in plan stats")
+	assert.EqualValues(t, 0, errCount, "successful streamed query must not record an error in plan stats")
 }
 
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {

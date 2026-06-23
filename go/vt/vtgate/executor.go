@@ -389,12 +389,18 @@ func (e *Executor) StreamExecute(
 			logStats.ExecuteTime = time.Since(execStart)
 			logStats.ActiveKeyspace = vc.GetKeyspace()
 
-			// On error, leave the tables and routing indexes unset so the per-table
-			// counters are not incremented, matching the buffered Execute path.
+			// On error, leave the tables, routing indexes and row counts unset so the
+			// per-table counters are not incremented, matching the buffered Execute path.
 			var tablesUsed []string
+			var errCount uint64
 			if err != nil {
 				logStats.Error = err
+				errCount = 1
 			} else {
+				srr.mu.Lock()
+				logStats.RowsAffected = srr.rowsAffected
+				logStats.RowsReturned = uint64(srr.rowsReturned)
+				srr.mu.Unlock()
 				logStats.TablesUsed = plan.TablesUsed
 				tablesUsed = plan.TablesUsed
 				executedRoot := vc.ExecutedPrimitive()
@@ -405,6 +411,7 @@ func (e *Executor) StreamExecute(
 			}
 
 			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
+			plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
 		}
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
