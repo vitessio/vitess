@@ -18,6 +18,7 @@ package servenv
 
 import (
 	"fmt"
+	"log/slog"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -26,11 +27,13 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
 	buildHost         = ""
 	buildUser         = ""
+	buildTimeOverride = ""
 	buildGitRev       = ""
 	buildGitBranch    = ""
 	statsBuildVersion *stats.String
@@ -135,24 +138,35 @@ func resolveGitRev(vcsRevision string, modified bool, fallback string) string {
 	return vcsRevision
 }
 
-// parseBuildTime converts the VCS-stamped commit time (RFC3339) into the pretty
-// string and Unix timestamp used by AppVersion. It returns zero values when no
-// commit time is available.
-func parseBuildTime(vcsTime string) (pretty string, unix int64) {
-	if vcsTime == "" {
-		return "", 0
+// parseBuildTime resolves the build timestamp into the pretty string and Unix
+// timestamp used by AppVersion. An explicitly injected BUILD_TIME (via ldflags,
+// in time.UnixDate format) takes precedence so that package/tarball builds can set
+// it deliberately; otherwise it uses the VCS-stamped commit time (RFC3339), which
+// the Go toolchain records for normal git builds. An unparseable override is logged
+// and ignored so it falls through to the VCS time. It returns zero values when no
+// usable timestamp is available.
+func parseBuildTime(override, vcsTime string) (pretty string, unix int64) {
+	if override != "" {
+		t, err := time.Parse(time.UnixDate, override)
+		if err == nil {
+			return override, t.Unix()
+		}
+		log.Warn("Ignoring unparseable BUILD_TIME override", slog.String("build_time", override), slog.Any("error", err))
 	}
-	t, err := time.Parse(time.RFC3339, vcsTime)
-	if err != nil {
-		panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", vcsTime, err))
+	if vcsTime != "" {
+		t, err := time.Parse(time.RFC3339, vcsTime)
+		if err != nil {
+			panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", vcsTime, err))
+		}
+		return vcsTime, t.Unix()
 	}
-	return vcsTime, t.Unix()
+	return "", 0
 }
 
 func init() {
 	revision, revisionTime, modified := readVCSInfo()
 	gitRev := resolveGitRev(revision, modified, buildGitRev)
-	buildTimePretty, buildTime := parseBuildTime(revisionTime)
+	buildTimePretty, buildTime := parseBuildTime(buildTimeOverride, revisionTime)
 
 	buildNumber, err := strconv.ParseInt(buildNumberStr, 10, 64)
 	if err != nil {

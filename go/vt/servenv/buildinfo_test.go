@@ -71,21 +71,46 @@ func TestResolveGitRev(t *testing.T) {
 }
 
 func TestParseBuildTime(t *testing.T) {
-	// No commit time available yields zero values.
-	pretty, unix := parseBuildTime("")
+	// No override and no commit time yields zero values.
+	pretty, unix := parseBuildTime("", "")
 	assert.Empty(t, pretty)
 	assert.Equal(t, int64(0), unix)
 
-	// RFC3339 commit time (as stamped by the Go toolchain) is parsed.
+	// RFC3339 commit time (as stamped by the Go toolchain) is parsed when no
+	// override is set.
 	const commitTime = "2020-09-15T12:04:10Z"
-	expected, err := time.Parse(time.RFC3339, commitTime)
+	expectedVCS, err := time.Parse(time.RFC3339, commitTime)
 	require.NoError(t, err)
-	pretty, unix = parseBuildTime(commitTime)
+	pretty, unix = parseBuildTime("", commitTime)
 	assert.Equal(t, commitTime, pretty)
-	assert.Equal(t, expected.Unix(), unix)
+	assert.Equal(t, expectedVCS.Unix(), unix)
 
-	// A non-RFC3339 value is unexpected from the toolchain and panics.
-	assert.Panics(t, func() { parseBuildTime("Tue Sep 15 12:04:10 UTC 2020") })
+	// An explicit BUILD_TIME override (UnixDate format, as emitted by `date`) is
+	// used as-is. This covers package/tarball builds.
+	const override = "Tue Sep 15 12:04:10 UTC 2020"
+	expectedOverride, err := time.Parse(time.UnixDate, override)
+	require.NoError(t, err)
+	pretty, unix = parseBuildTime(override, "")
+	assert.Equal(t, override, pretty)
+	assert.Equal(t, expectedOverride.Unix(), unix)
+
+	// The override takes precedence over the VCS commit time.
+	pretty, unix = parseBuildTime(override, commitTime)
+	assert.Equal(t, override, pretty)
+	assert.Equal(t, expectedOverride.Unix(), unix)
+
+	// An unparseable override is ignored and falls through to the VCS time.
+	pretty, unix = parseBuildTime("not a date", commitTime)
+	assert.Equal(t, commitTime, pretty)
+	assert.Equal(t, expectedVCS.Unix(), unix)
+
+	// An unparseable override with no VCS time yields zero values.
+	pretty, unix = parseBuildTime("not a date", "")
+	assert.Empty(t, pretty)
+	assert.Equal(t, int64(0), unix)
+
+	// A non-RFC3339 VCS time is unexpected from the toolchain and panics.
+	assert.Panics(t, func() { parseBuildTime("", "Tue Sep 15 12:04:10 UTC 2020") })
 }
 
 func TestBuildVersionStats(t *testing.T) {
