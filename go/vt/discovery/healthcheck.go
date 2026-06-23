@@ -530,7 +530,7 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 	defer hc.mu.Unlock()
 	// Verify that this update came from the tabletHealthCheck currently registered for this alias.
 	if !hc.isRegisteredHealthCheckLocked(tabletAlias, thc) {
-		hc.logger().Infof("Tablet %v has been deleted or replaced, skipping health update", thc.Tablet)
+		hc.logger().Infof("Tablet %v has been deleted or replaced, skipping health update", tabletAlias)
 		return
 	}
 
