@@ -1198,9 +1198,12 @@ func TestHandleComStmtExecuteSurfacesMidStreamError(t *testing.T) {
 	res := sConn.handleNextCommand(handler)
 	require.True(t, res, "mid-stream error must not tear down the connection")
 
-	// Drain packets until we see the ERR packet; assert it carries the real error.
+	// Drain packets until we see the ERR packet; assert it carries the real
+	// error. Bounded by a read deadline and packet count so a regression that
+	// fails to emit ERR fails the test fast instead of stalling CI.
+	require.NoError(t, cConn.conn.SetReadDeadline(time.Now().Add(30*time.Second)))
 	var sawErr bool
-	for {
+	for range 16 {
 		data, err := cConn.ReadPacket()
 		require.NoError(t, err)
 		require.NotEmpty(t, data)
