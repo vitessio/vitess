@@ -144,6 +144,38 @@ func TestStreamExecuteRecordsPlanStats(t *testing.T) {
 	assert.EqualValues(t, 0, errCount, "successful streamed query must not record an error in plan stats")
 }
 
+// TestStreamExecutePropagatesInsertIDAndInfo verifies that the streaming path
+// reports the OK-packet InsertID and Info fields to the client for row-returning
+// statements that carry them (e.g. a CALL of a procedure that performs DML),
+// matching the buffered Execute path.
+func TestStreamExecutePropagatesInsertIDAndInfo(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	// An OK packet like a CALL that performs an INSERT with an auto-increment
+	// column and an informational message.
+	sbclookup.SetResults([]*sqltypes.Result{{
+		RowsAffected: 1,
+		InsertID:     42,
+		Info:         "Records: 1  Duplicates: 0  Warnings: 0",
+	}})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	var got sqltypes.Result
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecutePropagatesInsertIDAndInfo", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			if qr.InsertIDUpdated() {
+				got.InsertID = qr.InsertID
+			}
+			if qr.Info != "" {
+				got.Info = qr.Info
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 42, got.InsertID, "streamed result must carry InsertID to the client")
+	assert.Equal(t, "Records: 1  Duplicates: 0  Warnings: 0", got.Info, "streamed result must carry Info to the client")
+}
+
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
