@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package inst
 
 import (
@@ -1130,4 +1146,64 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	err = detectErrantGTIDs(instance, tablet)
 	require.NoError(t, err)
 	require.EqualValues(t, "", instance.GtidErrant)
+}
+
+// TestErrantGTIDCountGaugeIsResetWhenResolved verifies that the per-tablet
+// CurrentErrantGTIDCount gauge is reset to 0 when errant GTIDs are reconciled
+// on a subsequent poll. Previously, the gauge was only ever written when
+// errant GTIDs were detected, so it stuck at the last positive value forever
+// (https://github.com/vitessio/vitess/issues/20258).
+func TestErrantGTIDCountGaugeIsResetWhenResolved(t *testing.T) {
+	defer func() {
+		db.ClearVTOrcDatabase()
+		currentErrantGTIDCount.ResetAll()
+	}()
+	db.ClearVTOrcDatabase()
+	currentErrantGTIDCount.ResetAll()
+
+	keyspaceName := "ks"
+	shardName := "0"
+	primaryUUID := "230ea8ea-81e3-11e4-972a-e25ec4bd140a"
+	replicaUUID := "316d193c-70e5-11e5-adb2-ecf4bb2262ff"
+
+	primaryTablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone-1", Uid: 101},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	replicaTablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone-1", Uid: 100},
+		Keyspace: keyspaceName,
+		Shard:    shardName,
+	}
+	replicaAlias := topoproto.TabletAliasString(replicaTablet.Alias)
+
+	require.NoError(t, SaveShard(topo.NewShardInfo(keyspaceName, shardName, &topodatapb.Shard{
+		PrimaryAlias: primaryTablet.Alias,
+	}, nil)))
+
+	// First poll: the replica has an errant GTID under its own UUID.
+	replicaInstance := &Instance{
+		InstanceAlias:          replicaTablet.Alias,
+		ServerUUID:             replicaUUID,
+		SourceUUID:             primaryUUID,
+		AncestryUUID:           replicaUUID + "," + primaryUUID,
+		ExecutedGtidSet:        primaryUUID + ":1-100," + replicaUUID + ":1",
+		primaryExecutedGtidSet: primaryUUID + ":1-100",
+	}
+	require.NoError(t, detectErrantGTIDs(replicaInstance, replicaTablet))
+	require.Equal(t, replicaUUID+":1", replicaInstance.GtidErrant)
+	require.EqualValues(t, 1, currentErrantGTIDCount.Counts()[replicaAlias],
+		"gauge should be 1 after a single errant GTID is detected")
+
+	// Second poll: the errant GTID has been reconciled (e.g., via the
+	// empty-transaction injection technique on the primary), so the primary's
+	// executed GTID set now also includes the replica UUID range.
+	replicaInstance.primaryExecutedGtidSet = primaryUUID + ":1-100," + replicaUUID + ":1"
+	require.NoError(t, detectErrantGTIDs(replicaInstance, replicaTablet))
+	require.Empty(t, replicaInstance.GtidErrant,
+		"GtidErrant should be cleared on the no-errant path so callers reusing the Instance don't see stale state")
+	require.EqualValues(t, 0, currentErrantGTIDCount.Counts()[replicaAlias],
+		"gauge should be reset to 0 after errant GTIDs are resolved")
 }

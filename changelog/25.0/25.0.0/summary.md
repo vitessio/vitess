@@ -21,6 +21,8 @@
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[General](#minor-changes-general)**
+        - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 - **[Bug Fixes](#bug-fixes)**
     - **[VTGate](#bug-fixes-vtgate)**
         - [Prepared statements in OLAP mode now build specialized plans](#vtgate-olap-prepared-specialized-plan)
@@ -139,6 +141,19 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-general"/>General</a>
+
+#### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
+
+The build timestamp is no longer injected via linker flags. Because it changed on every `make build`, it forced every binary to be re-linked even when nothing else changed. Build metadata is now read from the VCS information the Go toolchain stamps into the binary (`runtime/debug.ReadBuildInfo`), which makes the linker flags stable across rebuilds and lets the build cache hit.
+
+User-visible consequences:
+
+- The `build_time` reported by `--version`, exposed via `/debug/vars` (`BuildTimestamp`), and set as a tablet tag (`build_time`) now defaults to the **commit time** of the built revision rather than the wall-clock time of the build.
+- Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
+
+The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
 
 ## <a id="bug-fixes"/>Bug Fixes</a>
 

@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -279,6 +280,60 @@ func TestStreamQueryPlanCache(t *testing.T) {
 	require.NotNil(t, firstPlan, "plan should not be nil")
 	assertPlanCacheSize(t, qe, 1)
 	qe.ClearQueryPlanCache()
+}
+
+// TestGetStreamPlanFiltersRulesByAllTables ensures the streaming plan path
+// filters query rules using every table the statement touches, matching the
+// non-streaming path. A multi-table DML/SELECT has plan.Table == nil, so
+// filtering by the single TableName() would silently skip table-scoped rules.
+func TestGetStreamPlanFiltersRulesByAllTables(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	schematest.AddDefaultQueries(db)
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	// A rule scoped to the second table of a multi-table statement. plan.Table
+	// is nil for multi-table queries, so a single-table-name filter would drop
+	// it.
+	const sourceName = "test stream rules"
+	qr := rules.NewQueryRule("deny test_table_02", "deny_t2", rules.QRFailRetry)
+	qr.AddTableCond("test_table_02")
+	qrs := rules.New()
+	qrs.Add(qr)
+	qe.queryRuleSources.UnRegisterSource(sourceName)
+	qe.queryRuleSources.RegisterSource(sourceName)
+	defer qe.queryRuleSources.UnRegisterSource(sourceName)
+	require.NoError(t, qe.queryRuleSources.SetRules(sourceName, qrs))
+
+	// getStreamPlan is exercised directly with a populated schema so the
+	// planbuilder resolves the referenced tables (the schema engine in this
+	// test harness does not populate the table map).
+	curSchema := &currentSchema{
+		tables: map[string]*schema.Table{
+			"test_table_01": {Name: sqlparser.NewIdentifierCS("test_table_01")},
+			"test_table_02": {Name: sqlparser.NewIdentifierCS("test_table_02")},
+		},
+	}
+
+	testcases := []struct {
+		name string
+		sql  string
+	}{
+		{"multi-table DML", "update test_table_01, test_table_02 set test_table_01.pk = 1"},
+		{"multi-table select", "select test_table_01.pk from test_table_01 join test_table_02 on test_table_01.pk = test_table_02.pk"},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			plan, err := qe.getStreamPlan(curSchema, tcase.sql)
+			require.NoError(t, err)
+			require.Nil(t, plan.Table, "expected a multi-table plan with no single table")
+			require.NotNil(t, plan.Rules.Find("deny_t2"), "table-scoped query rule must apply to multi-table streamed query")
+		})
+	}
 }
 
 func TestNoStreamQueryPlanCache(t *testing.T) {

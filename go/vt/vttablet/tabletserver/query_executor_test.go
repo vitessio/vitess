@@ -1486,6 +1486,162 @@ func TestReplaceSchemaName(t *testing.T) {
 	}
 }
 
+// TestQueryExecutorStreamDML verifies that DML executed on the streaming path
+// (StreamExecute) runs through the same transactional machinery as Execute and
+// delivers its single result through the callback. Before the fix for #19561
+// and #19564, BuildStreaming rejected DML outright and Stream had no DML
+// handling, so DML in OLAP mode could not start an implicit transaction.
+func TestQueryExecutorStreamDML(t *testing.T) {
+	dmlResult := &sqltypes.Result{RowsAffected: 1}
+
+	testcases := []struct {
+		input     string
+		dbQuery   string
+		planWant  planbuilder.PlanType
+		inTxQuery string
+	}{
+		{
+			input:    "insert into test_table(a) values(1)",
+			dbQuery:  "insert into test_table(a) values (1)",
+			planWant: planbuilder.PlanInsert,
+		},
+		{
+			input:    "update test_table set a=1",
+			dbQuery:  "update test_table set a = 1 limit 10001",
+			planWant: planbuilder.PlanUpdateLimit,
+		},
+		{
+			input:    "delete from test_table where pk = 1",
+			dbQuery:  "delete from test_table where pk = 1 limit 10001",
+			planWant: planbuilder.PlanDeleteLimit,
+		},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			db.AddQuery(tcase.dbQuery, dmlResult)
+			ctx := t.Context()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
+
+			// Run the DML outside a transaction (autocommit).
+			qre := newTestQueryExecutorStreaming(ctx, tsv, tcase.input, 0)
+			require.Equal(t, tcase.planWant, qre.plan.PlanID)
+
+			var got *sqltypes.Result
+			err := qre.Stream(func(result *sqltypes.Result) error {
+				got = result
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, dmlResult, got)
+			// The streamed DML result must be reflected in the query log,
+			// just like the non-streaming Execute path.
+			assert.Equal(t, int(dmlResult.RowsAffected), qre.logStats.RowsAffected)
+
+			// Run the DML inside an existing transaction.
+			target := tsv.sm.Target()
+			state, err := tsv.Begin(ctx, nil, target, nil)
+			require.NoError(t, err)
+			defer tsv.Commit(ctx, target, state.TransactionID)
+
+			qre = newTestQueryExecutorStreaming(ctx, tsv, tcase.input, state.TransactionID)
+			got = nil
+			err = qre.Stream(func(result *sqltypes.Result) error {
+				got = result
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, dmlResult, got)
+		})
+	}
+}
+
+// TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied verifies that a streamed
+// DML rejected by checkPermissions (a QRFail query rule) still records per-table
+// error stats, matching the non-streaming Execute path. The permission and request
+// throttler checks run early, before the DML reaches the database, so streamDML's
+// stats defer must be registered ahead of them to record these rejections.
+func TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "insert into test_table(a) values(1)"
+
+	bannedAddr := "127.0.0.1"
+	bannedUser := "u2"
+
+	denyRule := rules.NewQueryRule("disable insert", "disable insert", rules.QRFail)
+	denyRule.SetIPCond(bannedAddr)
+	denyRule.SetUserCond(bannedUser)
+	denyRule.AddPlanCond(planbuilder.PlanInsert)
+	denyRule.AddTableCond("test_table")
+
+	rulesName := "denyListStreamDMLQRFail"
+	qrs := rules.New()
+	qrs.Add(denyRule)
+
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
+	}
+	ctx := callinfo.NewContext(t.Context(), callInfo)
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	require.NoError(t, tsv.qe.queryRuleSources.SetRules(rulesName, qrs))
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanInsert, qre.plan.PlanID)
+
+	errCountBefore := tsv.qe.queryErrorCounts.Counts()["test_table.Insert"]
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+
+	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Insert"]
+	assert.Equal(t, errCountBefore+1, errCountAfter,
+		"streamed DML rejected by checkPermissions must record per-table error stats like Execute")
+}
+
+// TestQueryExecutorStreamDMLAppliesQueryTimeout verifies that autocommit DML on
+// the streaming path runs under the query timeout, like the non-streaming
+// Execute path. StreamExecute leaves the request timeout unset when there is no
+// transaction (transactionID == 0), so without applying it for DML a stuck
+// INSERT/UPDATE/DELETE would run without a query deadline.
+func TestQueryExecutorStreamDMLAppliesQueryTimeout(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "insert into test_table(a) values(1)"
+	db.AddQuery("insert into test_table(a) values (1)", &sqltypes.Result{RowsAffected: 1})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanInsert, qre.plan.PlanID)
+
+	// Precondition: the executor context starts without a deadline. The unit test
+	// bypasses StreamExecute, which is where a transaction's timeout is set.
+	_, ok := qre.ctx.Deadline()
+	require.False(t, ok)
+
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+
+	// streamDML must have bounded the autocommit DML with the query timeout,
+	// mirroring Execute's loadQueryTimeoutWithTxAndOptions(0, options).
+	deadline, ok := qre.ctx.Deadline()
+	require.True(t, ok, "autocommit streamed DML must run under the query timeout, like Execute")
+	assert.LessOrEqual(t, time.Until(deadline), tsv.loadQueryTimeout(),
+		"the deadline must come from the query timeout")
+}
+
 func TestQueryExecutorShouldConsolidate(t *testing.T) {
 	testCases := []struct {
 		// whether or not the consolidator is enabled by default on the tablet
