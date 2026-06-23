@@ -147,7 +147,7 @@ The build timestamp is no longer injected via linker flags. Because it changed o
 
 User-visible consequences:
 
-- The `build_time` reported by `--version`, exposed via `/debug/vars` (`BuildTimestamp`), and set as a tablet tag (`build_time`) is now the **commit time** of the built revision rather than the wall-clock time of the build.
+- The `build_time` reported by `--version`, exposed via `/debug/vars` (`BuildTimestamp`), and set as a tablet tag (`build_time`) now defaults to the **commit time** of the built revision rather than the wall-clock time of the build.
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
-The `BUILD_GIT_REV` and `BUILD_GIT_BRANCH` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball).
+The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
