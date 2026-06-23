@@ -432,7 +432,7 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 	}
 
 	plan := &TabletPlan{Plan: splan, Original: sql}
-	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
+	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableNames()...)
 	plan.buildAuthorized()
 
 	if sqlparser.CachePlan(statement) {
