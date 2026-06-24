@@ -803,6 +803,7 @@ func TestLockShardWithRetryEventuallySucceeds(t *testing.T) {
 	lockCtx, unlock, err := lockShardWithRetry(context.Background(), "ks", "0", "retry-lock", log.NewPrefixedLogger("test"))
 	require.NoError(t, err)
 	require.NotNil(t, lockCtx)
+	require.NoError(t, lockCtx.Err())
 	require.NotNil(t, unlock)
 
 	var unlockErr error

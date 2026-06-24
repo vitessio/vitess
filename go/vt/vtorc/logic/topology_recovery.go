@@ -285,10 +285,11 @@ func lockShardWithRetry(ctx context.Context, keyspace, shard, lockAction string,
 		}
 
 		lockCtx, unlock, err := LockShard(attemptCtx, keyspace, shard, lockAction)
-		cancel()
 		if err == nil {
-			return lockCtx, unlock, nil
+			cancel()
+			return context.WithoutCancel(lockCtx), unlock, nil
 		}
+		cancel()
 
 		lastErr = err
 		if ctx.Err() != nil {
