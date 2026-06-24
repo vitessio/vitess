@@ -137,7 +137,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	// one for the fields, and one for the actual aggregation result
-	require.Equal(t, 2, len(results), "number of results")
+	require.Len(t, results, 2, "number of results")
 
 	got := fmt.Sprintf("%v", results[1].Rows)
 	assert.Equal(t, "[[DECIMAL(4)]]", got)

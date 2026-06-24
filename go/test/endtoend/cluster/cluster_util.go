@@ -157,7 +157,7 @@ func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, er
 func (cluster LocalProcessCluster) VerifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := cluster.ListBackups(shardKsName)
 	require.NoError(t, err)
-	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	assert.Lenf(t, backups, expected, "invalid number of backups")
 	return backups
 }
 

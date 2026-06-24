@@ -222,9 +222,9 @@ func TestMain(m *testing.M) {
 
 func TestVreplSchemaChanges(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 2, len(shards))
+	require.Len(t, shards, 2)
 	for _, shard := range shards {
-		require.Equal(t, 2, len(shard.Vttablets))
+		require.Len(t, shard.Vttablets, 2)
 	}
 
 	providedUUID := ""
@@ -840,7 +840,7 @@ func TestVreplSchemaChanges(t *testing.T) {
 			// This validates that the shards are reflected correctly in output of SHOW VITESS_MIGRATIONS
 			rs := onlineddl.ReadMigrations(t, &vtParams, revertUUID)
 			require.NotNil(t, rs)
-			require.Equal(t, 2, len(rs.Rows))
+			require.Len(t, rs.Rows, 2)
 			for _, row := range rs.Named().Rows {
 				shard := row["shard"].ToString()
 				status := row["migration_status"].ToString()
@@ -878,7 +878,7 @@ func TestVreplSchemaChanges(t *testing.T) {
 		t.Run("validate both shards show complete in SHOW VITESS_MIGRATIONS", func(t *testing.T) {
 			rs := onlineddl.ReadMigrations(t, &vtParams, revertUUID)
 			require.NotNil(t, rs)
-			require.Equal(t, 2, len(rs.Rows))
+			require.Len(t, rs.Rows, 2)
 			for _, row := range rs.Named().Rows {
 				status := row["migration_status"].ToString()
 				assert.Equal(t, string(schema.OnlineDDLStatusComplete), status, "shard %s", row["shard"].ToString())
@@ -1004,7 +1004,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	assert.Len(t, queryResult.Rows, expectCount)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -1020,8 +1020,8 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, len(queryResult.Rows))
-	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement
+	assert.Len(t, queryResult.Rows, 1)
+	assert.Len(t, queryResult.Rows[0], 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }

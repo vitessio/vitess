@@ -181,7 +181,7 @@ func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn
 	res, err := cur.Execute(ctx, "select * from test_table where id >= :id_start", bindVariables, false)
 	require.NoError(t, err)
 
-	assert.Equal(t, rowCount, len(res.Rows))
+	assert.Len(t, res.Rows, rowCount)
 }
 
 func assertRouting(ctx context.Context, t *testing.T, db *sql.DB) {
@@ -308,7 +308,7 @@ func assertTransactionalityAndRollbackObeyed(ctx context.Context, t *testing.T, 
 	}
 	res, err := cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables, false)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Rows))
+	require.Len(t, res.Rows, 1)
 
 	_, err = cur.Execute(ctx, "begin", nil, false)
 	require.NoError(t, err)

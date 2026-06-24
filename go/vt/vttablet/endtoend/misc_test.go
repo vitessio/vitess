@@ -114,7 +114,7 @@ func TestNocacheListArgs(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 2, len(qr.Rows))
+	assert.Len(t, qr.Rows, 2)
 
 	qr, err = client.Execute(
 		query,
@@ -123,7 +123,7 @@ func TestNocacheListArgs(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 
 	qr, err = client.Execute(
 		query,
@@ -132,7 +132,7 @@ func TestNocacheListArgs(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 
 	// Error case
 	_, err = client.Execute(
@@ -497,11 +497,11 @@ func TestDBAStatements(t *testing.T) {
 
 	qr, err = client.Execute("describe vitess_a", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 
 	qr, err = client.Execute("explain vitess_a", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 }
 
 type testLogger struct {
@@ -734,7 +734,7 @@ func TestSysSchema(t *testing.T) {
 	WHERE table_schema = 'vttest' and table_name = 'a'
 	ORDER BY ordinal_position`, nil)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(qr.Rows))
+	require.Len(t, qr.Rows, 2)
 
 	// is_nullable
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[0][8].String())
@@ -833,7 +833,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 	assert.GreaterOrEqual(t, len(rs.Rows), len(expectedTables))
 
 	for _, row := range rs.Rows {
-		assert.Equal(t, 6, len(row))
+		assert.Len(t, row, 6)
 
 		tableName := row[0].ToString()
 		switch tableName {
@@ -925,7 +925,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, len(expectedTables), len(actualTables))
+	assert.Len(t, actualTables, len(expectedTables))
 	assert.ElementsMatch(t, expectedTables, actualTables)
 }
 

@@ -41,7 +41,7 @@ func getSidecarDBTables(t *testing.T, tabletID string) (numTablets int, tables [
 		require.True(t, row.IsArray())
 		rows2 := row.Array()
 		require.NotNil(t, rows2)
-		require.Equal(t, 1, len(rows2))
+		require.Len(t, rows2, 1)
 		table := rows2[0].String()
 		tables = append(tables, table)
 	}

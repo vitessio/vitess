@@ -750,7 +750,7 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 		res, err := tablet.QueryTablet(query, "", false)
 		require.NoError(t, err)
 		require.NotNil(t, res)
-		require.Equal(t, 1, len(res.Rows))
+		require.Len(t, res.Rows, 1)
 		dataFree, err = res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
 		autoIncrement, err = res.Rows[0][1].ToInt64()
@@ -808,7 +808,7 @@ func getPartialMetrics(t *testing.T, key string, tab *cluster.VttabletProcess) (
 func isBinlogRowImageNoBlob(t *testing.T, tablet *cluster.VttabletProcess) bool {
 	rs, err := tablet.QueryTablet("select @@global.binlog_row_image", "", false)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(rs.Rows))
+	require.Len(t, rs.Rows, 1)
 	mode := strings.ToLower(rs.Rows[0][0].ToString())
 	return mode == "noblob"
 }
@@ -1022,7 +1022,7 @@ func vexplain(t *testing.T, database, query string) *VExplainPlan {
 	qr, err := execVtgateQuery(vtgateConn, database, "vexplain "+query)
 	require.NoError(t, err)
 	require.NotNil(t, qr)
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 	json := qr.Rows[0][0].ToString()
 
 	var plan VExplainPlan
@@ -1058,7 +1058,7 @@ func getVReplicationConfig(t *testing.T, tab *cluster.VttabletProcess) map[strin
 	var config map[string]string
 	err = json2.Unmarshal([]byte(configJson), &config)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(config))
+	require.Len(t, config, 1)
 
 	configJson = config[maps.Keys(config)[0]]
 	config = nil

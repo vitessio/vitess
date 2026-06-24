@@ -93,7 +93,7 @@ func testGetTablets(t *testing.T) {
 			assert.Contains(t, tablets, strings.Split(line, " ")[0])
 		}
 	}
-	assert.Equal(t, tabletCountFromCMD, len(tablets))
+	assert.Len(t, tablets, tabletCountFromCMD)
 
 	// now filtering with the first keyspace and tablet type of primary, in
 	// addition to the cell

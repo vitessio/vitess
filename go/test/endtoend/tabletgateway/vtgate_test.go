@@ -48,7 +48,7 @@ func TestVtgateHealthCheck(t *testing.T) {
 	defer conn.Close()
 
 	qr := utils.Exec(t, conn, "show vitess_tablets")
-	assert.Equal(t, 3, len(qr.Rows), "wrong number of results from show")
+	assert.Len(t, qr.Rows, 3, "wrong number of results from show")
 }
 
 func TestVtgateReplicationStatusCheck(t *testing.T) {

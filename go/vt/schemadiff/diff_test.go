@@ -1297,7 +1297,7 @@ func TestDiffSchemas(t *testing.T) {
 				if ts.annotated == nil {
 					ts.annotated = []string{}
 				}
-				if assert.Equalf(t, len(diffs), len(ts.annotated), "%+v", cstatements) {
+				if assert.Lenf(t, ts.annotated, len(diffs), "%+v", cstatements) {
 					for i, d := range diffs {
 						_, _, unified := d.Annotated()
 						assert.Equal(t, ts.annotated[i], unified.Export())

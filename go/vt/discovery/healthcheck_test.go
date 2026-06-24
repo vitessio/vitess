@@ -1157,7 +1157,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	// wait for result
 	<-resultChan
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 2, len(a), "Wrong number of results")
+	assert.Len(t, a, 2, "Wrong number of results")
 	if a[0].Tablet.Alias.Uid == 11 {
 		a[0], a[1] = a[1], a[0]
 	}
@@ -1174,7 +1174,7 @@ func TestGetHealthyTablets(t *testing.T) {
 	// wait for result
 	<-resultChan
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	assert.Equal(t, 1, len(a), "Wrong number of results")
+	assert.Len(t, a, 1, "Wrong number of results")
 
 	// second tablet turns into a primary
 	shr2 = &querypb.StreamHealthResponse{
@@ -1585,12 +1585,12 @@ func TestHealthCheckImplSubscriberName(t *testing.T) {
 
 	subsNames := maps.Values(hc.subscribers)
 	slices.Sort(subsNames)
-	require.Equal(t, 2, len(subsNames), "expected 2 subscribers")
+	require.Len(t, subsNames, 2, "expected 2 subscribers")
 	require.Equal(t, []string{subsName, subsName2}, subsNames, "unexpected subscribers")
 
 	hc.Unsubscribe(ch)
 	subsNames = maps.Values(hc.subscribers)
-	require.Equal(t, 1, len(subsNames), "expected 1 subscriber")
+	require.Len(t, subsNames, 1, "expected 1 subscriber")
 	require.Equal(t, []string{subsName2}, subsNames, "unexpected subscribers")
 
 	hc.Unsubscribe(ch2)

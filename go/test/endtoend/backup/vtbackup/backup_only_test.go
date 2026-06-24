@@ -289,7 +289,7 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := listBackups(shardKsName)
 	require.NoError(t, err)
-	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	assert.Lenf(t, backups, expected, "invalid number of backups")
 	return backups
 }
 

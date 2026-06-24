@@ -228,7 +228,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	})
 	turnOnTxEngine()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Equal(c, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
+		require.Len(c, tsv.te.preparedPool.conns, 1, "len(tsv.te.preparedPool.conns)")
 	}, 5*time.Second, 10*time.Millisecond, "prepared transactions should be loaded from redo log")
 	got := tsv.te.preparedPool.conns["dtid0"].TxProperties().Queries
 	want := []tx.Query{{
@@ -273,7 +273,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	})
 	turnOnTxEngine()
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Equal(c, 1, len(tsv.te.preparedPool.conns), "len(tsv.te.preparedPool.conns)")
+		require.Len(c, tsv.te.preparedPool.conns, 1, "len(tsv.te.preparedPool.conns)")
 	}, 5*time.Second, 10*time.Millisecond, "only valid prepared transactions should be loaded from redo log")
 	got = tsv.te.preparedPool.conns["a:b:10"].TxProperties().Queries
 	want = []tx.Query{{

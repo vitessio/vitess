@@ -355,7 +355,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 		return nil
 	})
 
-	require.Equal(t, 1, len(results), "should get empty result from begin")
+	require.Len(t, results, 1, "should get empty result from begin")
 	assert.Empty(t, results[0].Rows, "should get empty result from begin")
 
 	require.NoError(t, err)
@@ -611,7 +611,7 @@ func TestExecutorShow(t *testing.T) {
 	qr, err := executorExecSession(ctx, executor, session, query, nil)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, len(sbclookup.Queries), "Tablet should have received one 'show' query. Instead received: %v", sbclookup.Queries)
+	assert.Len(t, sbclookup.Queries, 1, "Tablet should have received one 'show' query. Instead received: %v", sbclookup.Queries)
 	lastQuery := sbclookup.Queries[len(sbclookup.Queries)-1].Sql
 	want := "show tables"
 	assert.Equal(t, want, lastQuery, "Got: %v, want %v", lastQuery, want)

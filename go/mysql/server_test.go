@@ -1002,7 +1002,7 @@ func TestTLSServer(t *testing.T) {
 
 	assert.Equal(t, "nice name", results.Rows[0][1].ToString())
 	assert.Equal(t, "nicer name", results.Rows[1][1].ToString())
-	assert.Equal(t, 2, len(results.Rows))
+	assert.Len(t, results.Rows, 2)
 
 	// make sure this went through SSL
 	results, err = conn.ExecuteFetch("ssl echo", 1000, true)

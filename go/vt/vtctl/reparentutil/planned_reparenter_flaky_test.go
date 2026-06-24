@@ -4500,7 +4500,7 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 			innodbBufferPoolsData, err := pr.verifyAllTabletsReachable(t.Context(), tt.tabletMap)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
-				require.Equal(t, len(tt.wantBufferPoolsData), len(innodbBufferPoolsData))
+				require.Len(t, innodbBufferPoolsData, len(tt.wantBufferPoolsData))
 				for str, val := range tt.wantBufferPoolsData {
 					require.Equal(t, val, innodbBufferPoolsData[str])
 				}

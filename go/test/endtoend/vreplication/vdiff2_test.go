@@ -456,8 +456,8 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		qres, err := tablet.QueryTablet(query, targetKs, false)
 		require.NoError(t, err, "query %q failed: %v", query, err)
 		require.NotNil(t, qres, "query %q returned nil result", query) // Should never happen
-		require.Equal(t, 1, len(qres.Rows), "query %q returned %d rows, expected 1", query, len(qres.Rows))
-		require.Equal(t, 1, len(qres.Rows[0]), "query %q returned %d columns, expected 1", query, len(qres.Rows[0]))
+		require.Len(t, qres.Rows, 1, "query %q returned %d rows, expected 1", query, len(qres.Rows))
+		require.Len(t, qres.Rows[0], 1, "query %q returned %d columns, expected 1", query, len(qres.Rows[0]))
 		storedOptions := &tabletmanagerdatapb.VDiffOptions{}
 		bytes, err := qres.Rows[0][0].ToBytes()
 		require.NoError(t, err, "failed to convert result %+v to bytes: %v", qres.Rows[0], err)

@@ -156,7 +156,7 @@ func TestHealthCheckExternallyReparentNewTablet(t *testing.T) {
 
 	// verify that the vtgate will recognize the new primary tablet
 	qr, _ := vtgateConn.ExecuteFetch("show vitess_tablets", 100, true)
-	require.Equal(t, 3, len(qr.Rows), "wrong number of tablet records in healthcheck, expected %d but had %d. Got result=%v", 3, len(qr.Rows), qr)
+	require.Len(t, qr.Rows, 3, "wrong number of tablet records in healthcheck, expected %d but had %d. Got result=%v", 3, len(qr.Rows), qr)
 	require.Equal(t, "-80", qr.Rows[0][2].ToString())
 	require.Equal(t, "PRIMARY", qr.Rows[0][3].ToString())
 	require.Equal(t, "SERVING", qr.Rows[0][4].ToString())

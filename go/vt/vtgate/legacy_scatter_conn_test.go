@@ -571,7 +571,7 @@ func TestReservePrequeries(t *testing.T) {
 	destinations := []key.ShardDestination{key.DestinationShard("0")}
 
 	executeOnShards(t, ctx, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 1+1, len(sbc0.StringQueries()))
+	assert.Len(t, sbc0.StringQueries(), 1+1)
 }
 
 func newTestScatterConn(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string) *ScatterConn {

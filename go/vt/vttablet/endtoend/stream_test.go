@@ -39,7 +39,7 @@ func TestStreamUnion(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 }
 
 func populateStressQuery(client *framework.QueryClient, rowCount int, rowContent string) error {

@@ -412,7 +412,7 @@ func TestCloneRemote(t *testing.T) {
 	recipientData, err := recipientConn.ExecuteFetch("SELECT id, msg FROM test_clone.clone_test ORDER BY id", 100, false)
 	require.NoError(t, err)
 
-	require.Equal(t, len(donorData.Rows), len(recipientData.Rows), "Row counts should match")
+	require.Len(t, recipientData.Rows, len(donorData.Rows), "Row counts should match")
 	for i := range donorData.Rows {
 		assert.Equal(t, donorData.Rows[i][0].ToString(), recipientData.Rows[i][0].ToString(), "IDs should match at row %d", i)
 		assert.Equal(t, donorData.Rows[i][1].ToString(), recipientData.Rows[i][1].ToString(), "Messages should match at row %d", i)

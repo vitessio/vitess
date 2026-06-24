@@ -638,8 +638,8 @@ func TestCFCHashFunction(t *testing.T) {
 		{"abcdefghijklmnopqrst", 16, 8},
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.outMD5, len(md5hash([]byte(c.src))))
-		assert.Equal(t, c.outXXHash, len(xxhash64([]byte(c.src))))
+		assert.Len(t, md5hash([]byte(c.src)), c.outMD5)
+		assert.Len(t, xxhash64([]byte(c.src)), c.outXXHash)
 	}
 }
 

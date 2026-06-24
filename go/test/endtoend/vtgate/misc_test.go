@@ -231,7 +231,7 @@ func TestExplainPassthrough(t *testing.T) {
 	// but we are trying to make the test less fragile
 
 	result = utils.Exec(t, conn, "explain ks.t1")
-	require.EqualValues(t, 2, len(result.Rows))
+	require.Len(t, result.Rows, 2)
 }
 
 func TestXXHash(t *testing.T) {
@@ -496,13 +496,13 @@ func TestShowVGtid(t *testing.T) {
 
 	query := "show global vgtid_executed from ks"
 	qr := utils.Exec(t, conn, query)
-	require.Equal(t, 1, len(qr.Rows))
-	require.Equal(t, 2, len(qr.Rows[0]))
+	require.Len(t, qr.Rows, 1)
+	require.Len(t, qr.Rows[0], 2)
 
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	qr2 := utils.Exec(t, conn, query)
-	require.Equal(t, 1, len(qr2.Rows))
-	require.Equal(t, 2, len(qr2.Rows[0]))
+	require.Len(t, qr2.Rows, 1)
+	require.Len(t, qr2.Rows[0], 2)
 
 	require.Equal(t, qr.Rows[0][0], qr2.Rows[0][0], "keyspace should be same")
 	require.NotEqual(t, qr.Rows[0][1].ToString(), qr2.Rows[0][1].ToString(), "vgtid should have changed")
@@ -514,7 +514,7 @@ func TestShowGtid(t *testing.T) {
 
 	query := "show global gtid_executed from ks"
 	qr := utils.Exec(t, conn, query)
-	require.Equal(t, 2, len(qr.Rows))
+	require.Len(t, qr.Rows, 2)
 
 	res := make(map[string]string, 2)
 	for _, row := range qr.Rows {
@@ -524,7 +524,7 @@ func TestShowGtid(t *testing.T) {
 
 	utils.Exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	qr2 := utils.Exec(t, conn, query)
-	require.Equal(t, 2, len(qr2.Rows))
+	require.Len(t, qr2.Rows, 2)
 
 	for _, row := range qr2.Rows {
 		require.Equal(t, KeyspaceName, row[0].ToString())
@@ -590,7 +590,7 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	_ = utils.Exec(t, conn, "set workload = olap")
 
 	qr := utils.Exec(t, conn, "show tables")
-	require.Equal(t, 1, len(qr.Fields))
+	require.Len(t, qr.Fields, 1)
 	assert.Equal(t, `Tables_in_ks`, qr.Fields[0].Name)
 	_ = utils.Exec(t, conn, "use mysql")
 	qr = utils.Exec(t, conn, "select @@workload")
@@ -633,10 +633,10 @@ func TestSQLSelectLimit(t *testing.T) {
 
 		//	without order by the results are not deterministic for testing purpose. Checking row count only.
 		qr := utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
-		assert.Equal(t, 2, len(qr.Rows))
+		assert.Len(t, qr.Rows, 2)
 
 		qr = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
-		assert.Equal(t, 3, len(qr.Rows))
+		assert.Len(t, qr.Rows, 3)
 	}
 }
 

@@ -360,7 +360,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		require.NoError(t, err, "error using %s keyspace: %v", defaultTargetKs, err)
 		res, err := vtgateConn.ExecuteFetch("select count(*) from customer where name is not null", 1, false)
 		require.NoError(t, err, "error getting current row count in customer: %v", err)
-		require.Equal(t, 1, len(res.Rows), "expected 1 row in count(*) query, got %d", len(res.Rows))
+		require.Len(t, res.Rows, 1, "expected 1 row in count(*) query, got %d", len(res.Rows))
 		rows, _ := res.Rows[0][0].ToInt32()
 		// Insert a couple of rows with a NULL name to confirm that they
 		// are ignored.
@@ -2073,7 +2073,7 @@ func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, e
 		res, err := tablet.QueryTablet(historyLenQuery, tablet.Keyspace, false)
 		require.NoError(t, err)
 		require.NotNil(t, res)
-		require.Equal(t, 1, len(res.Rows))
+		require.Len(t, res.Rows, 1)
 		historyLen, err = res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
 		if historyLen >= expectedLength {

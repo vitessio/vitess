@@ -1606,7 +1606,7 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, 7, len(ranges))
+		require.Len(t, ranges, 7)
 		require.Equal(t, []string{"-2", "2-4", "4-6", "6-9", "9-b", "b-d", "d-"}, ranges)
 	}
 
@@ -1615,7 +1615,7 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, 7, len(ranges))
+		require.Len(t, ranges, 7)
 		require.Equal(t, []string{"-24", "24-49", "49-6d", "6d-92", "92-b6", "b6-db", "db-"}, ranges)
 	}
 
@@ -1624,7 +1624,7 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, 7, len(ranges))
+		require.Len(t, ranges, 7)
 		require.Equal(t, []string{"-249", "249-492", "492-6db", "6db-924", "924-b6d", "b6d-db6", "db6-"}, ranges)
 	}
 
@@ -1633,7 +1633,7 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, 7, len(ranges))
+		require.Len(t, ranges, 7)
 		require.Equal(t, []string{"-2492", "2492-4924", "4924-6db6", "6db6-9249", "9249-b6db", "b6db-db6d", "db6d-"}, ranges)
 	}
 
@@ -1642,7 +1642,7 @@ func TestGenerateShardRangesWithHexCharacterCount(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, 8, len(ranges))
+		require.Len(t, ranges, 8)
 		require.Equal(t, []string{"-2000", "2000-4000", "4000-6000", "6000-8000", "8000-a000", "a000-c000", "c000-e000", "e000-"}, ranges)
 	}
 

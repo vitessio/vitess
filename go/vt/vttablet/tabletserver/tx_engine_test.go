@@ -955,7 +955,7 @@ func TestPrepareTx(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, 1, len(te.preparedPool.conns))
+			require.Len(t, te.preparedPool.conns, 1)
 			require.Equal(t, tt.queryLogWanted, db.QueryLog())
 		})
 	}

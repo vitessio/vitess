@@ -568,11 +568,11 @@ func TestBuildStreamMigratorOneMaterialize(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sm)
 	require.NotNil(t, sm.streams)
-	require.Equal(t, 1, len(sm.streams))
+	require.Len(t, sm.streams, 1)
 
 	workflows, err := sm.StopStreams(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(workflows))
+	require.Len(t, workflows, 1)
 	require.NoError(t, sm.MigrateStreams(ctx))
 	require.Len(t, sm.templates, 1)
 	env.addTargetQueries([]string{

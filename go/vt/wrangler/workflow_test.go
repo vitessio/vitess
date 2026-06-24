@@ -486,7 +486,7 @@ func validateRoutingRuleCount(ctx context.Context, t *testing.T, ts *topo.Server
 	require.NoError(t, err)
 	require.NotNil(t, rr)
 	rules := rr.Rules
-	require.Equal(t, cnt, len(rules))
+	require.Len(t, rules, cnt)
 }
 
 func checkIfTableExistInVSchema(ctx context.Context, t *testing.T, ts *topo.Server, keyspace string, table string) bool {

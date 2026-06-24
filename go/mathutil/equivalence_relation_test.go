@@ -161,10 +161,10 @@ func TestEquivalenceRelation(t *testing.T) {
 			r.AddAll(initialElements)
 			trivialM := r.Map()
 			assert.Equal(t, trivialExpect, trivialM)
-			require.Equal(t, len(initialElements), len(trivialM))
+			require.Len(t, trivialM, len(initialElements))
 
 			for _, relation := range tc.relations {
-				require.Equal(t, 2, len(relation))
+				require.Len(t, relation, 2)
 				_, err := r.Relate(relation[0:1], relation[1:2])
 				assert.NoError(t, err)
 			}

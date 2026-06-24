@@ -446,7 +446,7 @@ func executeReplicaQueries(t *testing.T, conn *mysql.Conn, numQueries int) map[i
 	for range numQueries {
 		res, err := conn.ExecuteFetch("SELECT @@server_id, id FROM balancer_test LIMIT 1", 10, false)
 		require.NoError(t, err)
-		require.Equal(t, 1, len(res.Rows), "expected one row from balancer_test")
+		require.Len(t, res.Rows, 1, "expected one row from balancer_test")
 
 		serverID, err := res.Rows[0][0].ToInt64()
 		require.NoError(t, err)
@@ -462,14 +462,14 @@ func mapTabletAliasToMySQLServerID(t *testing.T, tablets []*cluster.Vttablet) ma
 	for _, tablet := range tablets {
 		id, err := tablet.VttabletProcess.QueryTablet("SELECT @@server_id", tablet.VttabletProcess.Keyspace, false)
 		require.NoError(t, err)
-		require.Equal(t, 1, len(id.Rows), "expected one row for server_id query")
+		require.Len(t, id.Rows, 1, "expected one row for server_id query")
 
 		serverID, err := id.Rows[0][0].ToInt64()
 		assert.NoError(t, err)
 		aliases[tablet.Alias] = serverID
 	}
 
-	assert.Equal(t, 6, len(aliases), "expected six tablet aliases, got: %d", len(aliases))
+	assert.Len(t, aliases, 6, "expected six tablet aliases, got: %d", len(aliases))
 
 	return aliases
 }

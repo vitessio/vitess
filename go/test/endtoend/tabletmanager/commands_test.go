@@ -141,7 +141,7 @@ func assertExcludeFields(t *testing.T, qr string) {
 	require.NoError(t, err)
 
 	rows := resultMap["rows"].([]any)
-	assert.Equal(t, 2, len(rows))
+	assert.Len(t, rows, 2)
 
 	fields := resultMap["fields"]
 	assert.NotContainsf(t, fields, "name", "name should not be in field list")

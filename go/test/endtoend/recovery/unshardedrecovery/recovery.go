@@ -207,7 +207,7 @@ func TestRecoveryImpl(t *testing.T) {
 	assert.NoError(t, err)
 
 	backups := listBackups(t)
-	require.Equal(t, 1, len(backups))
+	require.Len(t, backups, 1)
 	assert.Contains(t, backups[0], replica1.Alias)
 
 	err = localCluster.VtctldClientProcess.ApplyVSchema(keyspaceName, vSchema)

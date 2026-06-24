@@ -130,7 +130,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 			require.Error(t, uvs.init(), expectedError)
 			return
 		}
-		require.Equalf(t, len(expected), len(uvs.plans), "Plans: %+v", uvs.plans)
+		require.Lenf(t, uvs.plans, len(expected), "Plans: %+v", uvs.plans)
 		for _, tableName := range expected {
 			require.Equal(t, uvs.plans[tableName].tablePK.TableName, tableName)
 			if tablePKs == nil {

@@ -197,7 +197,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select /*+ SET_VAR(sql_mode = 'only_full_group_by') */ :vtg1 /* INT64 */ from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
-	require.Equal(t, len(wantQueries), len(sbc1.Queries))
+	require.Len(t, sbc1.Queries, len(wantQueries))
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
@@ -1790,7 +1790,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
-	assert.Equal(t, 7, len(results.Rows))
+	assert.Len(t, results.Rows, 7)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// If all shards fail, the operation should also fail
@@ -1859,19 +1859,19 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
-	assert.Equal(t, 7, len(results.Rows))
+	assert.Len(t, results.Rows, 7)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// order by
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
 	require.NoError(t, err)
-	assert.Equal(t, 7, len(results.Rows))
+	assert.Len(t, results.Rows, 7)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc", 8)
 
 	// order by and limit
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5")
 	require.NoError(t, err)
-	assert.Equal(t, 5, len(results.Rows))
+	assert.Len(t, results.Rows, 5)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc limit 5", 8)
 }
 
@@ -2941,8 +2941,8 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	exec(executor, econtext.NewSafeSession(&vtgatepb.Session{
 		TargetString: "@primary",
 	}), "select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100")
-	require.Equal(t, 2, len(sbc1.Queries))
-	require.Equal(t, 2, len(sbc2.Queries))
+	require.Len(t, sbc1.Queries, 2)
+	require.Len(t, sbc2.Queries, 2)
 
 	// sub query is evaluated first, and sees a limit of 1
 	assert.Equal(t, sqltypes.Int64BindVariable(1), sbc1.Queries[0].BindVariables["__upper_limit"])
@@ -3123,7 +3123,7 @@ func assertOptimizedPlanCondition(t *testing.T, executor *Executor, sql string, 
 	assert.NotNil(t, plan, "plan not found")
 	sp, ok := plan.Instructions.(*engine.PlanSwitcher)
 	require.True(t, ok, "specialized plan not created")
-	require.Equal(t, len(condition), len(sp.Conditions), "specialized plan conditions count mismatch")
+	require.Len(t, sp.Conditions, len(condition), "specialized plan conditions count mismatch")
 	for i, cond := range condition {
 		assert.Equal(t, cond.A, sp.Conditions[i].A)
 		assert.Equal(t, cond.B, sp.Conditions[i].B)
@@ -4653,7 +4653,7 @@ func TestStreamJoinQuery(t *testing.T) {
 	for range 64 {
 		wantResult.Rows = append(wantResult.Rows, wantRow)
 	}
-	require.Equal(t, len(wantResult.Rows), len(result.Rows))
+	require.Len(t, result.Rows, len(wantResult.Rows))
 	for idx := range 64 {
 		utils.MustMatch(t, wantResult.Rows[idx], result.Rows[idx], "mismatched on: ", strconv.Itoa(idx))
 	}

@@ -4549,7 +4549,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			require.Equal(t, len(tt.result), len(res))
+			require.Len(t, res, len(tt.result))
 			for idx, tablet := range res {
 				assert.Equal(t, topoproto.TabletAliasString(tt.result[idx].Alias), topoproto.TabletAliasString(tablet.Alias))
 			}

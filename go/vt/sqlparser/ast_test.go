@@ -664,7 +664,7 @@ func TestParseMultipleIgnoreEmpty(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tcase.stmts, len(statements))
+				assert.Len(t, statements, tcase.stmts)
 			}
 		})
 	}

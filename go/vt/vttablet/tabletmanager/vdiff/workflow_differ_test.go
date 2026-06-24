@@ -976,7 +976,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}
 			err = wd.buildPlan(dbc, filter, testSchema)
 			require.NoError(t, err, tcase.input)
-			require.Equal(t, 1, len(wd.tableDiffers), tcase.input)
+			require.Len(t, wd.tableDiffers, 1, tcase.input)
 			wd.tableDiffers[tcase.table].tablePlan.WorkflowConfig = nil
 			assert.Equal(t, tcase.tablePlan, wd.tableDiffers[tcase.table].tablePlan, tcase.input)
 
@@ -1054,7 +1054,7 @@ func TestBuildPlanInclude(t *testing.T) {
 		}
 		err = wd.buildPlan(dbc, filter, schm)
 		require.NoError(t, err)
-		require.Equal(t, len(tcase.tables), len(wd.tableDiffers))
+		require.Len(t, wd.tableDiffers, len(tcase.tables))
 	}
 }
 

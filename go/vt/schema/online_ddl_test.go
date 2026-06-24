@@ -62,7 +62,7 @@ func TestGetGCUUID(t *testing.T) {
 		assert.True(t, isCondensedUUID(gcUUID))
 		uuids[gcUUID] = true
 	}
-	assert.Equal(t, count, len(uuids))
+	assert.Len(t, uuids, count)
 }
 
 func TestGetActionStr(t *testing.T) {

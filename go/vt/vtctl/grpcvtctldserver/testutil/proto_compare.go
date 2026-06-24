@@ -69,7 +69,7 @@ func AssertLogutilEventsMatch(t testing.TB, expected []*logutilpb.Event, actual 
 		actualBytes = nil
 	}
 
-	if !assert.Equal(t, len(expected), len(actual), "differing number of events; expected %d, have %d\nexpected bytes: %s\nactual bytes: %s\n", len(expected), len(actual), expectedBytes, actualBytes) {
+	if !assert.Len(t, actual, len(expected), "differing number of events; expected %d, have %d\nexpected bytes: %s\nactual bytes: %s\n", len(expected), len(actual), expectedBytes, actualBytes) {
 		return
 	}
 

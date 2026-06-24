@@ -735,7 +735,7 @@ func TestBackup(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 			},
 		},
 		{
@@ -806,7 +806,7 @@ func TestBackup(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 			},
 		},
 		{
@@ -1012,7 +1012,7 @@ func TestBackupShard(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 				for _, resp := range responses {
 					assert.Equal(t, 101, int(resp.TabletAlias.Uid))
 				}
@@ -1119,7 +1119,7 @@ func TestBackupShard(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 			},
 		},
 		{
@@ -1185,7 +1185,7 @@ func TestBackupShard(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 			},
 		},
 		{
@@ -5848,7 +5848,7 @@ func TestGetBackups(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		assert.Equal(t, 1, len(limited.Backups), "expected limited backups to have length 1")
+		assert.Len(t, limited.Backups, 1, "expected limited backups to have length 1")
 		assert.Less(t, len(limited.Backups), len(unlimited.Backups), "expected limited backups to be less than unlimited")
 		utils.MustMatch(t, limited.Backups[0], unlimited.Backups[len(unlimited.Backups)-1], "expected limiting to keep N most recent")
 	})
@@ -9436,7 +9436,7 @@ func TestRefreshStateByShard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, len(tt.tablets), len(tt.refreshStateErrors), "Invalid test case: must have one refreshStateError for each tablet")
+			require.Len(t, tt.refreshStateErrors, len(tt.tablets), "Invalid test case: must have one refreshStateError for each tablet")
 
 			tmc := &testutil.TabletManagerClient{
 				RefreshStateResults: make(map[string]error, len(tt.tablets)),
@@ -10982,7 +10982,7 @@ func TestRestoreFromBackup(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.RestoreFromBackupResponse, err error) {
 				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from restorefrombackupclient stream")
+				assert.Len(t, responses, 3, "expected 3 messages from restorefrombackupclient stream")
 			},
 		},
 		{

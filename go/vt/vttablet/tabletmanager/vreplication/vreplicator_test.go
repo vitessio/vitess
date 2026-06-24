@@ -354,7 +354,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
 		sd, err := env.Mysqld.GetSchema(ctx, dbName, req)
 		require.NoError(t, err)
-		require.Equal(t, 1, len(sd.TableDefinitions))
+		require.Len(t, sd.TableDefinitions, 1)
 		return removeVersionDifferences(sd.TableDefinitions[0].Schema)
 	}
 	_, err = dbClient.ExecuteFetch("use "+dbName, 1)
@@ -647,7 +647,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			// that the stored DDL matches what we expect.
 			if tcase.actionDDL != "" {
 				res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, tcase.tableName), 1)
-				require.Equal(t, 1, len(res.Rows))
+				require.Len(t, res.Rows, 1)
 				require.NoError(t, err)
 				val, err := res.Rows[0][0].ToBytes()
 				require.NoError(t, err)
@@ -685,7 +685,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			// one.
 			res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, tcase.tableName), expectedPostCopyActionRecs)
 			require.NoError(t, err)
-			require.Equal(t, expectedPostCopyActionRecs, len(res.Rows),
+			require.Len(t, res.Rows, expectedPostCopyActionRecs,
 				"Expected %d post copy action records, got %d", expectedPostCopyActionRecs, len(res.Rows))
 		})
 	}
@@ -751,7 +751,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
 		sd, err := env.Mysqld.GetSchema(t.Context(), dbName, req)
 		require.NoError(t, err)
-		require.Equal(t, 1, len(sd.TableDefinitions))
+		require.Len(t, sd.TableDefinitions, 1)
 		return removeVersionDifferences(sd.TableDefinitions[0].Schema)
 	}
 	getActionsSQLf := "select action from _vt.post_copy_action where vrepl_id=%d and table_name='%s'"
@@ -803,7 +803,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	query = "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
 	res, err := dbaconn.ExecuteFetch(query, 1)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(res.Rows))
+	assert.Len(t, res.Rows, 1)
 	// TODO: figure out why the KILL never shows up...
 	// require.Equal(t, "1", res.Rows[0][0].ToString())
 
@@ -811,7 +811,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// so it will later be retried.
 	res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Rows))
+	require.Len(t, res.Rows, 1)
 }
 
 // TestResumingFromPreviousWorkflowKeepingRowsCopied tests that when you
@@ -917,7 +917,7 @@ func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val stri
 	for {
 		res, err := dbc.ExecuteFetch(query, 1)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(res.Rows))
+		assert.Len(t, res.Rows, 1)
 		if res.Rows[0][0].ToString() == val {
 			return
 		}

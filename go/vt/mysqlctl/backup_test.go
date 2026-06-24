@@ -58,7 +58,7 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 
 	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupEngine.ExecuteBackupCalls))
+	require.Len(t, env.backupEngine.ExecuteBackupCalls, 1)
 	executeBackupParams := env.backupEngine.ExecuteBackupCalls[0].BackupParams
 	var executeBackupStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
@@ -81,7 +81,7 @@ func TestBackupNoStats(t *testing.T) {
 	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	// It parameterizes the backup storage with nop stats.
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
 }
 
@@ -92,7 +92,7 @@ func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 
 	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	var storageStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == env.backupStorage.WithParamsCalls[0].Stats {
@@ -127,7 +127,7 @@ func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 
 	require.NoError(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
 	var scopedStats backupstats.Stats
 	for _, sr := range env.stats.ScopeReturns {
@@ -332,7 +332,7 @@ func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
 	_, err := Restore(env.ctx, env.restoreParams)
 	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupEngine.ExecuteRestoreCalls))
+	require.Len(t, env.backupEngine.ExecuteRestoreCalls, 1)
 	executeRestoreParams := env.backupEngine.ExecuteRestoreCalls[0].RestoreParams
 	var executeRestoreStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
@@ -356,7 +356,7 @@ func TestRestoreNoStats(t *testing.T) {
 	require.NoError(t, err, env.logger.Events)
 
 	// It parameterizes the backup storage with nop stats.
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
 }
 
@@ -368,7 +368,7 @@ func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	_, err := Restore(env.ctx, env.restoreParams)
 	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	var storageStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
 		if sr == env.backupStorage.WithParamsCalls[0].Stats {
@@ -390,7 +390,7 @@ func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
 	_, err := Restore(env.ctx, env.restoreParams)
 	require.NoError(t, err, env.logger.Events)
 
-	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Len(t, env.backupStorage.WithParamsCalls, 1)
 	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
 	var scopedStats backupstats.Stats
 	for _, sr := range env.stats.ScopeReturns {
@@ -724,7 +724,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	writer.Close()
 	wg.Wait()
 
-	require.Equal(t, 100, len(logger.Events))
+	require.Len(t, logger.Events, 100)
 
 	for i, event := range logger.Events {
 		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)

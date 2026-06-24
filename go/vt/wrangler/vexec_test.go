@@ -64,7 +64,7 @@ func TestVExec(t *testing.T) {
 	require.NoError(t, err)
 	primaries := vx.primaries
 	require.NotNil(t, primaries)
-	require.Equal(t, 2, len(primaries))
+	require.Len(t, primaries, 2)
 	var shards []string
 	for _, primary := range primaries {
 		shards = append(shards, primary.Shard)

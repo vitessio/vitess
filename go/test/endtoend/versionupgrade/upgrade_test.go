@@ -129,7 +129,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestShards(t *testing.T) {
-	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
+	assert.Len(t, clusterInstance.Keyspaces[0].Shards, 2)
 }
 
 func TestDeploySchema(t *testing.T) {
@@ -173,7 +173,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	assert.Len(t, queryResult.Rows, expectCount)
 }
 
 // TestTablesData checks the data in tables

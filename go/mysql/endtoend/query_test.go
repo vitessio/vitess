@@ -214,7 +214,7 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			// We're done.
 			break
 		}
-		require.Equal(t, 2, len(row), "Unexpected row found: %v", row)
+		require.Len(t, row, 2, "Unexpected row found: %v", row)
 
 		count++
 	}
@@ -289,7 +289,7 @@ func TestSysInfo(t *testing.T) {
 	WHERE table_schema = 'vttest' and table_name = 'a'
 	ORDER BY ordinal_position`, 1000, true)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(qr.Rows))
+	require.Len(t, qr.Rows, 2)
 
 	// is_nullable
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[0][8].String())

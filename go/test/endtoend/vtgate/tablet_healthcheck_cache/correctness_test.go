@@ -145,14 +145,14 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	// starting with two shards, each with 1 primary and 1 replica tablet)
 	// we'll be adding and removing a tablet of type churnTabletType with churnTabletUID
 	qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
-	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
+	assert.Len(t, qr.Rows, expectedTabletHCcacheEntries, "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
 	for range tries {
 		tablet := addTablet(t, churnTabletUID, churnTabletType)
 		expectedTabletHCcacheEntries++
 
 		qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
-		assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
+		assert.Len(t, qr.Rows, expectedTabletHCcacheEntries, "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
 		deleteTablet(t, tablet)
 		expectedTabletHCcacheEntries--
@@ -163,12 +163,12 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 		time.Sleep(tabletRefreshInterval)
 
 		qr, _ = vtgateConn.ExecuteFetch(query, 100, true)
-		assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
+		assert.Len(t, qr.Rows, expectedTabletHCcacheEntries, "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 	}
 
 	// one final time, w/o the churning tablet
 	qr, _ = vtgateConn.ExecuteFetch(query, 100, true)
-	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d", expectedTabletHCcacheEntries, len(qr.Rows))
+	assert.Len(t, qr.Rows, expectedTabletHCcacheEntries, "wrong number of tablet records in healthcheck cache, expected %d but had %d", expectedTabletHCcacheEntries, len(qr.Rows))
 }
 
 func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet {

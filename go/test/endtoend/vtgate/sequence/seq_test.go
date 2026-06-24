@@ -308,7 +308,7 @@ func TestInsertAllDefaults(t *testing.T) {
 	// inserting into a table that has default values for all columns works well
 	utils.Exec(t, conn, `insert into allDefaults () values ()`)
 	result := utils.Exec(t, conn, `select * from uks.id_seq`)
-	assert.Equal(t, 1, len(result.Rows))
+	assert.Len(t, result.Rows, 1)
 
 	// inserting into a table that does not have default values for all columns fails
 	_, err = conn.ExecuteFetch("insert into lookup_vindex () values ()", 0, false)

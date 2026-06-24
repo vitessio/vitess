@@ -52,14 +52,14 @@ func TestCommit(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	require.Equal(t, 4, len(qr.Rows), "rows affected")
+	require.Len(t, qr.Rows, 4, "rows affected")
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(qr.Rows), "rows affected")
+	require.Len(t, qr.Rows, 3, "rows affected")
 
 	expectedDiffs := []struct {
 		tag  string
@@ -110,7 +110,7 @@ func TestRollback(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(qr.Rows))
+	assert.Len(t, qr.Rows, 3)
 
 	expectedDiffs := []struct {
 		tag  string
@@ -149,14 +149,14 @@ func TestAutoCommit(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(qr.Rows))
+	assert.Len(t, qr.Rows, 3)
 
 	expectedDiffs := []struct {
 		tag  string
@@ -232,7 +232,7 @@ func TestPrepareRollback(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(qr.Rows))
+	assert.Len(t, qr.Rows, 3)
 }
 
 func TestPrepareCommit(t *testing.T) {
@@ -254,7 +254,7 @@ func TestPrepareCommit(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 }
 
 func TestPrepareReparentCommit(t *testing.T) {
@@ -282,7 +282,7 @@ func TestPrepareReparentCommit(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 4, len(qr.Rows))
+	assert.Len(t, qr.Rows, 4)
 }
 
 func TestShutdownGracePeriod(t *testing.T) {

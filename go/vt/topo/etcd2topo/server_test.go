@@ -254,7 +254,7 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 		{testfiles.GoVtTopoEtcd2topoCell1Port, testfiles.GoVtTopoEtcd2topoCell1PeerPort},
 		{testfiles.GoVtTopoEtcd2topoCell2Port, testfiles.GoVtTopoEtcd2topoCell2PeerPort},
 	}
-	require.Equal(t, len(cells), len(cellPorts))
+	require.Len(t, cellPorts, len(cells))
 	cellClientAddrs := make([]string, len(cells))
 	cellClientCmds := make([]*exec.Cmd, len(cells))
 	cellTSs := make([]*topo.Server, len(cells))

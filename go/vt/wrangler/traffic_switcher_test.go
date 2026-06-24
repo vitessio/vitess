@@ -2114,7 +2114,7 @@ func checkServedTypes(t *testing.T, ts *topo.Server, keyspaceShard string, want 
 
 	servedTypes, err := ts.GetShardServingTypes(ctx, si)
 	require.NoError(t, err)
-	require.Equal(t, want, len(servedTypes), "shard %v has wrong served types: got: %v, want: %v", keyspaceShard, len(servedTypes), want)
+	require.Len(t, servedTypes, want, "shard %v has wrong served types: got: %v, want: %v", keyspaceShard, len(servedTypes), want)
 }
 
 func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspaceShard, cell string, want int) {

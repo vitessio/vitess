@@ -577,7 +577,7 @@ func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []sandboxconn.Sc
 				expIndexes := tcase.expIdx[k]
 				if len(expIndexes) > 0 {
 					idxs := tracker.GetIndexes(keyspace, k)
-					require.Equal(t, len(expIndexes), len(idxs))
+					require.Len(t, idxs, len(expIndexes))
 					for i, idx := range idxs {
 						assert.Equal(t, expIndexes[i], sqlparser.String(idx), "mismatch index for table: ", k)
 					}

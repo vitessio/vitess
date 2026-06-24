@@ -682,7 +682,7 @@ func TestInvalidTableForeignKeyReference(t *testing.T) {
 		// Even though there's errors, we still expect the schema to have been created.
 		assert.NotNil(t, s)
 		// Even though t11 caused an error, we still expect the schema to have parsed all tables.
-		assert.Equalf(t, 3, len(s.Entities()), "found: %+v", s.EntityNames())
+		assert.Lenf(t, s.Entities(), 3, "found: %+v", s.EntityNames())
 		t11 := s.Table("t11")
 		assert.NotNil(t, t11)
 		// validate t11 table definition is complete, even though it was invalid.
@@ -766,7 +766,7 @@ func TestGetEntityColumnNames(t *testing.T) {
 		"vb": []string{"id", "state", "some", "now()"},
 	}
 	entities := schema.Entities()
-	require.Equal(t, len(expectedColNames), len(entities))
+	require.Len(t, entities, len(expectedColNames))
 
 	tcmap := newDeclarativeSchemaInformation(NewTestEnv())
 	// we test by order of dependency:
@@ -1126,7 +1126,7 @@ func TestMassiveSchema(t *testing.T) {
 	t.Run(fmt.Sprintf("validate loaded %d tables", numTables), func(t *testing.T) {
 		for _, schema := range []*Schema{schema0, schema1} {
 			entities := schema.Entities()
-			assert.Equal(t, numTables, len(entities)) // all tables are there
+			assert.Len(t, entities, numTables) // all tables are there
 			for _, e := range entities {
 				_, ok := tableNames[e.Name()]
 				assert.True(t, ok)

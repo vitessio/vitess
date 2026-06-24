@@ -1116,8 +1116,8 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 				return true, nil
 			}, createTable)
 			assert.NoError(t, err)
-			assert.Equal(t, tc.countConstraints, len(uniqueConstraintNames))
-			assert.Equalf(t, tc.countConstraints, len(constraintMap), "got contraints: %v", constraintMap)
+			assert.Len(t, uniqueConstraintNames, tc.countConstraints)
+			assert.Lenf(t, constraintMap, tc.countConstraints, "got contraints: %v", constraintMap)
 		})
 	}
 }
@@ -1348,7 +1348,7 @@ func TestDuplicateCreateTable(t *testing.T) {
 
 			newSQL := sqlparser.String(newCreateTable)
 			assert.Equal(t, tcase.expectSQL, newSQL)
-			assert.Equal(t, tcase.expectMapSize, len(constraintMap))
+			assert.Len(t, constraintMap, tcase.expectMapSize)
 		})
 	}
 }

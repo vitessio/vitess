@@ -142,6 +142,7 @@ linters:
         - expected-actual
         - equal-values
         - error-nil
+        - len
   exclusions:
     generated: lax
     presets:

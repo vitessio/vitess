@@ -511,5 +511,5 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 	tab, err := se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid2)
 	require.NoError(t, err)
 	require.EqualExportedValues(t, exp2, tab)
-	require.Equal(t, 1, len(se.historian.schemas))
+	require.Len(t, se.historian.schemas, 1)
 }

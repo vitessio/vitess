@@ -39,7 +39,7 @@ func TestGCStates(t *testing.T) {
 	require.False(t, ok)
 	_, ok = gcStates["vrp"]
 	require.False(t, ok)
-	require.Equal(t, 2*4, len(gcStates)) // 4 states, 2 forms each
+	require.Len(t, gcStates, 2*4) // 4 states, 2 forms each
 }
 
 func TestIsGCTableName(t *testing.T) {
@@ -266,5 +266,5 @@ func TestGenerateRenameStatementWithUUID(t *testing.T) {
 		require.NoError(t, err)
 		toTableNames[toTableName] = true
 	}
-	assert.Equal(t, countIterations, len(toTableNames))
+	assert.Len(t, toTableNames, countIterations)
 }

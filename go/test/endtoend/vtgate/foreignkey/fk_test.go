@@ -1566,7 +1566,7 @@ func TestRestrictFkOnNonStandardKey(t *testing.T) {
 
 	// First check MySQL version to ensure we're on 8.4+
 	versionResult := utils.Exec(t, mcmp.MySQLConn, `SELECT VERSION()`)
-	require.Equal(t, 1, len(versionResult.Rows), "Expected exactly one row for VERSION()")
+	require.Len(t, versionResult.Rows, 1, "Expected exactly one row for VERSION()")
 	version := versionResult.Rows[0][0].ToString()
 	t.Logf("MySQL version: %s", version)
 
@@ -1577,6 +1577,6 @@ func TestRestrictFkOnNonStandardKey(t *testing.T) {
 
 	// Check the setting on the MySQL side - this verifies that our extra_my.cnf is being applied
 	result := utils.Exec(t, mcmp.MySQLConn, `SHOW VARIABLES LIKE 'restrict_fk_on_non_standard_key'`)
-	require.Equal(t, 1, len(result.Rows), "Expected exactly one row for restrict_fk_on_non_standard_key variable")
+	require.Len(t, result.Rows, 1, "Expected exactly one row for restrict_fk_on_non_standard_key variable")
 	require.Equal(t, "OFF", result.Rows[0][1].ToString(), "Expected restrict_fk_on_non_standard_key to be OFF")
 }

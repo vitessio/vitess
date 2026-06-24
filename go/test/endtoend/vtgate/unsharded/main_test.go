@@ -406,7 +406,7 @@ func TestNumericPrecisionScale(t *testing.T) {
 	defer utils.Exec(t, conn, "drop table `a`")
 
 	qr := utils.Exec(t, conn, "select numeric_precision, numeric_scale from information_schema.columns where table_name = 'a'")
-	require.Equal(t, 1, len(qr.Rows))
+	require.Len(t, qr.Rows, 1)
 
 	/*
 		We expect UINT64 to be returned as type for field and rows from VTGate to client.

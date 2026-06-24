@@ -24,19 +24,19 @@ import (
 
 func TestRandomHash(t *testing.T) {
 	h := RandomHash()
-	assert.Equal(t, randomHashSize, len(h))
+	assert.Len(t, h, randomHashSize)
 }
 
 func TestUUIDv5(t *testing.T) {
 	assert.NotEmpty(t, UUIDv5("abc"))
 	u := UUIDv5("abc", "def")
-	assert.Equal(t, 36, len(u), "u=%v", u)
+	assert.Len(t, u, 36, "u=%v", u)
 }
 
 func TestUUIDv5Base36(t *testing.T) {
 	assert.NotEmpty(t, UUIDv5("abc"))
 	u := UUIDv5Base36("abc", "def")
-	assert.Equal(t, 25, len(u), "u=%v", u)
+	assert.Len(t, u, 25, "u=%v", u)
 
 	assert.Equal(t, UUIDv5Base36("abc", "def"), UUIDv5Base36("abc", "def"))     // verify deterministic
 	assert.NotEqual(t, UUIDv5Base36("abc", "defg"), UUIDv5Base36("abc", "def")) // verify deterministic

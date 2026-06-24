@@ -51,12 +51,12 @@ func TestAppendCompression(t *testing.T) {
 
 	dialOpts, err = appendCompression(dialOpts)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(dialOpts))
+	require.Len(t, dialOpts, 1)
 
 	// Change the compression to some unknown value
 	compression = "unknown"
 
 	dialOpts, err = appendCompression(dialOpts)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(dialOpts))
+	require.Len(t, dialOpts, 1)
 }

@@ -2384,7 +2384,7 @@ func TestHeartbeat(t *testing.T) {
 	wg, ch := startStream(ctx, t, nil, "", nil)
 	defer wg.Wait()
 	evs := <-ch
-	require.Equal(t, 1, len(evs))
+	require.Len(t, evs, 1)
 	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
 	cancel()
 }

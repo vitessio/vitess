@@ -981,7 +981,7 @@ func checkServedTypes(t *testing.T, ts *topo.Server, keyspace, shard string, wan
 	require.NoError(t, err)
 	servedTypes, err := ts.GetShardServingTypes(ctx, si)
 	require.NoError(t, err)
-	require.Equal(t, want, len(servedTypes), "shard %s/%s has wrong served types: got: %v, want: %v",
+	require.Len(t, servedTypes, want, "shard %s/%s has wrong served types: got: %v, want: %v",
 		keyspace, shard, len(servedTypes), want)
 }
 

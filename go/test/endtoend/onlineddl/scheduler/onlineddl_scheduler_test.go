@@ -317,7 +317,7 @@ func TestSchedulerSchemaChanges(t *testing.T) {
 
 func testScheduler(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	ddlStrategy := "vitess"
 
@@ -1600,7 +1600,7 @@ func testScheduler(t *testing.T) {
 
 			artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
 			assert.NotEmpty(t, artifacts)
-			assert.Equal(t, 1, len(artifacts))
+			assert.Len(t, artifacts, 1)
 			checkTable(t, artifacts[0], true)
 
 			retainArtifactsSeconds := row.AsInt64("retain_artifacts_seconds", 0)
@@ -2219,7 +2219,7 @@ func testScheduler(t *testing.T) {
 
 func testSingleton(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, migrationContext string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
 		return &testOnlineDDLStatementParams{
@@ -2389,7 +2389,7 @@ DROP TABLE IF EXISTS stress_test
 	t.Run("postponed migrations, singleton-context", func(t *testing.T) {
 		uuidList := testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "vitess --singleton-context --postpone-completion", "vtctl", "", "hint_col", "", false))
 		throttledUUIDs = strings.Split(uuidList, "\n")
-		assert.Equal(t, 3, len(throttledUUIDs))
+		assert.Len(t, throttledUUIDs, 3)
 		for _, uuid := range throttledUUIDs {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
 		}
@@ -2412,7 +2412,7 @@ DROP TABLE IF EXISTS stress_test
 	t.Run("successful multiple statement, singleton-context, vtctl", func(t *testing.T) {
 		uuidList := testOnlineDDLStatement(t, createParams(multiDropStatements, onlineSingletonContextDDLStrategy, "vtctl", "", "", "", false))
 		uuidSlice := strings.Split(uuidList, "\n")
-		assert.Equal(t, 3, len(uuidSlice))
+		assert.Len(t, uuidSlice, 3)
 		for _, uuid := range uuidSlice {
 			uuid = strings.TrimSpace(uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -2614,7 +2614,7 @@ DROP TABLE IF EXISTS stress_test
 
 func testDeclarative(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	var (
 		tableName         = `stress_test`
@@ -3492,7 +3492,7 @@ func testForeignKeys(t *testing.T) {
 				// There's a specific test where we drop said constraint. So speficially for that test (or any similar future tests), we need to dynamically
 				// evaluate the constraint name.
 				rs := onlineddl.VtgateExecQuery(t, &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'", "")
-				assert.Equal(t, 1, len(rs.Rows))
+				assert.Len(t, rs.Rows, 1)
 				row := rs.Named().Row()
 				assert.NotNil(t, row)
 				childTableConstraintName := row.AsString("CONSTRAINT_NAME", "")
@@ -3505,7 +3505,7 @@ func testForeignKeys(t *testing.T) {
 				if testcase.allowForeignKeys {
 					output := testStatement(t, testcase.sql, ddlStrategyAllowFK, testcase.expectHint, false)
 					uuids := strings.Split(output, "\n")
-					assert.Equal(t, testcase.expectCountUUIDs, len(uuids))
+					assert.Len(t, uuids, testcase.expectCountUUIDs)
 					uuid = uuids[0] // in case of multiple statements, we only check the first
 					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				} else {
@@ -3657,7 +3657,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
-	return assert.Equalf(t, expectCount, len(queryResult.Rows), "checkTablesCount cannot find table like '%%%s%%'", showTableName)
+	return assert.Lenf(t, queryResult.Rows, expectCount, "checkTablesCount cannot find table like '%%%s%%'", showTableName)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -3673,7 +3673,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, len(queryResult.Rows))
+	assert.Len(t, queryResult.Rows, 1)
 	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement, and if it's a view then additional columns
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
@@ -3720,7 +3720,7 @@ func TestMigrationMetrics(t *testing.T) {
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	// Helper function to get metric value from /debug/vars
 	getMetric := func(metricName string) int64 {

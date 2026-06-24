@@ -87,7 +87,7 @@ func TestPrimaryHealthStateEviction(t *testing.T) {
 	}
 
 	primaryHealthMu.Lock()
-	require.Equal(t, aliasCount, len(primaryHealthByAlias))
+	require.Len(t, primaryHealthByAlias, aliasCount)
 	primaryHealthMu.Unlock()
 
 	for i := range aliasCount {

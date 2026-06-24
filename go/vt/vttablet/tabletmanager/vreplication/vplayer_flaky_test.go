@@ -283,7 +283,7 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 		qr, err := env.Mysqld.FetchSuperQuery(ctx, "select time_updated, transaction_timestamp, time_heartbeat from _vt.vreplication")
 		require.NoError(t, err)
 		require.NotNil(t, qr)
-		require.Equal(t, 1, len(qr.Rows))
+		require.Len(t, qr.Rows, 1)
 		row := qr.Named().Row()
 		timeUpdated, err := row.ToInt64("time_updated")
 		require.NoError(t, err)
@@ -2166,7 +2166,7 @@ func TestGTIDCompress(t *testing.T) {
 			qr, err := env.Mysqld.FetchSuperQuery(ctx, "select pos from _vt.vreplication where id = 1")
 			require.NoError(t, err)
 			require.NotNil(t, qr)
-			require.Equal(t, 1, len(qr.Rows))
+			require.Len(t, qr.Rows, 1)
 			gotGTID := qr.Rows[0][0].ToString()
 			pos, err := replication.DecodePosition(gotGTID)
 			if tCase.compress {
@@ -3466,8 +3466,8 @@ func TestPlayerNoBlob(t *testing.T) {
 		}
 	}
 	stats := globalStats.controllers[int32(vrId)].blpStats
-	require.Equal(t, 2, len(stats.PartialQueryCount.Counts()))
-	require.Equal(t, 2, len(stats.PartialQueryCacheSize.Counts()))
+	require.Len(t, stats.PartialQueryCount.Counts(), 2)
+	require.Len(t, stats.PartialQueryCacheSize.Counts(), 2)
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["insert"])
 	require.Equal(t, int64(3), stats.PartialQueryCount.Counts()["insert"])
 	require.Equal(t, int64(2), stats.PartialQueryCacheSize.Counts()["update"])

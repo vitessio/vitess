@@ -100,7 +100,7 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 
 	// assert that there is indeed only 1 row in tablets[1
 	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
-	assert.Equal(t, 1, len(res.Rows))
+	assert.Len(t, res.Rows, 1)
 
 	// Perform a graceful reparent operation
 	utils.Prs(t, clusterInstance, tablets[2])

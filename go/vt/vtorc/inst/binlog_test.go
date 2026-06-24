@@ -130,7 +130,7 @@ func TestBinlogCoordinatesAsKey(t *testing.T) {
 	m[c3] = true
 	m[c4] = true
 
-	require.Equal(t, 3, len(m))
+	require.Len(t, m, 3)
 }
 
 func TestFileNumberDistance(t *testing.T) {

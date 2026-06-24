@@ -79,7 +79,7 @@ func TestLargeComment(t *testing.T) {
 
 	qr, err := conn.ExecuteFetch("select * from vt_insert_test where id = 1", 1, false)
 	require.NoErrorf(t, err, "select error: %v", err)
-	assert.Equal(t, 1, len(qr.Rows))
+	assert.Len(t, qr.Rows, 1)
 	assert.Equal(t, "BLOB(\"LLL\")", qr.Rows[0][3].String())
 }
 
@@ -146,7 +146,7 @@ func TestWarnings(t *testing.T) {
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS", 1, false)
 	require.NoError(t, err, "SHOW WARNINGS")
-	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
+	assert.Len(t, qr.Rows, 1, "number of rows")
 	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
 	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1235)", qr.Rows)
 	assert.Contains(t, qr.Rows[0][2].String(), "'CALL' not supported in sharded mode", qr.Rows)

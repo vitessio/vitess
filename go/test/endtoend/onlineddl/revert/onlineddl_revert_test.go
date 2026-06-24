@@ -202,7 +202,7 @@ func TestMain(m *testing.M) {
 
 func TestRevertSchemaChanges(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 	throttler.WaitForCheckThrottlerResult(t, &clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.TestingName, nil, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, time.Minute)
@@ -440,7 +440,7 @@ func testRevertible(t *testing.T) {
 					// The name of e.g. "some_fk_2_" might turn into "some_fk_2_518ubnm034rel35l1m0u1dc7m"
 					expectRemovedForeignKeyNames := strings.Split(testcase.removedForeignKeyNames, ",")
 					actualRemovedForeignKeyNames := strings.Split(removeBackticks(removedForeignKeyNames), ",")
-					assert.Equal(t, len(expectRemovedForeignKeyNames), len(actualRemovedForeignKeyNames))
+					assert.Len(t, actualRemovedForeignKeyNames, len(expectRemovedForeignKeyNames))
 					for _, actualRemovedForeignKeyName := range actualRemovedForeignKeyNames {
 						found := false
 						for _, expectRemovedForeignKeyName := range expectRemovedForeignKeyNames {
@@ -1261,7 +1261,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.NoError(t, err)
-	return assert.Equal(t, expectCount, len(queryResult.Rows))
+	return assert.Len(t, queryResult.Rows, expectCount)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -1277,7 +1277,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, len(queryResult.Rows))
+	assert.Len(t, queryResult.Rows, 1)
 	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement (for view, also more columns)
 	statement = queryResult.Rows[0][1].ToString()
 	return statement

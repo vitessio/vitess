@@ -110,7 +110,7 @@ func TestMigrateUnsharded(t *testing.T) {
 		require.NoError(t, err, "Mount List command failed with %s", output)
 
 		names := gjson.Get(output, "names")
-		require.Equal(t, 1, len(names.Array()))
+		require.Len(t, names.Array(), 1)
 		require.Equal(t, "ext1", names.Array()[0].String())
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Mount", "show", "--name=ext1")
 		require.NoError(t, err, "Mount command failed with %s\n", output)

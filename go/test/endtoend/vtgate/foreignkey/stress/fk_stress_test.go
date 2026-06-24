@@ -503,8 +503,8 @@ func validateMetrics(t *testing.T, tcase *testCase) {
 
 func TestInitialSetup(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
-	require.Equal(t, 3, len(shards[0].Vttablets)) // primary, no-fk replica, fk replica
+	require.Len(t, shards, 1)
+	require.Len(t, shards[0].Vttablets, 3) // primary, no-fk replica, fk replica
 	primary = shards[0].Vttablets[0]
 	require.NotNil(t, primary)
 	replicaNoFK = shards[0].Vttablets[1]
@@ -1000,9 +1000,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult := queryTablet(t, tablet, "show create table "+tableName, "")
 
-	require.Equal(t, 1, len(queryResult.Rows))
+	require.Len(t, queryResult.Rows, 1)
 	row := queryResult.Rows[0]
-	assert.Equal(t, 2, len(row)) // table name, create statement
+	assert.Len(t, row, 2) // table name, create statement
 	statement = row[1].ToString()
 	return statement
 }

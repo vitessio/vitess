@@ -244,7 +244,7 @@ func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int)
 
 // verifyDataMatches verifies that the two list of results are the same.
 func verifyDataMatches(t testing.TB, resOne []*sqltypes.Result, resTwo []*sqltypes.Result) {
-	require.EqualValues(t, len(resTwo), len(resOne), "Res 1 - %v, Res 2 - %v", resOne, resTwo)
+	require.Len(t, resOne, len(resTwo), "Res 1 - %v, Res 2 - %v", resOne, resTwo)
 	for idx, resultOne := range resOne {
 		resultTwo := resTwo[idx]
 		require.True(t, resultOne.Equal(resultTwo), "Data for %v doesn't match\nRows 1\n%v\nRows 2\n%v", fkTables[idx], resultOne.Rows, resultTwo.Rows)

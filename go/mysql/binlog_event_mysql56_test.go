@@ -708,7 +708,7 @@ func TestMySQL56PartialUpdateRowsEvent(t *testing.T) {
 			ev, err := mysql56PartialUpdateRowEvent.Rows(format, tm)
 			require.NoError(t, err)
 
-			assert.Equal(t, tc.numRows, len(ev.Rows))
+			assert.Len(t, ev.Rows, tc.numRows)
 			require.NoError(t, err)
 
 			for i := range ev.Rows {

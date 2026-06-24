@@ -572,7 +572,7 @@ func TestDTPrepareFailOnRM(t *testing.T) {
 }
 
 func compareMaps(t *testing.T, expected, actual map[string][]string, flexibleExp map[string][2][]string) {
-	assert.Equal(t, len(expected), len(actual), "mismatch in number of keys: expected: %d, got: %d", len(expected), len(actual))
+	assert.Len(t, actual, len(expected), "mismatch in number of keys: expected: %d, got: %d", len(expected), len(actual))
 
 	for key, expectedValue := range expected {
 		actualValue, ok := actual[key]

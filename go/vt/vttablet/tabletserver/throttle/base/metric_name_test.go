@@ -89,7 +89,7 @@ func TestAggregateName(t *testing.T) {
 			metricName:     LoadAvgMetricName,
 		},
 	}
-	assert.Equal(t, 3*len(KnownMetricNames), len(aggregatedMetricNames))
+	assert.Len(t, aggregatedMetricNames, 3*len(KnownMetricNames))
 	for _, tcase := range tcases {
 		t.Run(tcase.aggregatedName, func(t *testing.T) {
 			scope, metricName, err := DisaggregateMetricName(tcase.aggregatedName)

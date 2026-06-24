@@ -120,7 +120,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 	// select data with id 1 and validate the data accordingly
 	// validate row count
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 1, len(data))
+	assert.Len(t, data, 1)
 
 	// validate value of msg column in data
 	assert.Equal(t, fmt.Sprintf("%d21", testingID), data[0].Msg)
@@ -226,7 +226,7 @@ func updateRecord(t *testing.T, dbo *sql.DB) {
 	// validate the updated value
 	// validate row count
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 1, len(data))
+	assert.Len(t, data, 1)
 
 	// validate value of msg column in data
 	assert.Equal(t, updateData, data[0].Data)

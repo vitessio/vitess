@@ -78,7 +78,7 @@ func TestAppendStaticAuth(t *testing.T) {
 			dialOpts, err := AppendStaticAuth(opts)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedLen, len(dialOpts))
+				require.Len(t, dialOpts, tt.expectedLen)
 			} else {
 				require.ErrorContains(t, err, tt.expectedErr)
 			}

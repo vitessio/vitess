@@ -28,13 +28,13 @@ import (
 func TestEnsureCapacity(t *testing.T) {
 	sketch := NewCountMinSketch()
 	sketch.EnsureCapacity(1)
-	require.Equal(t, 16, len(sketch.Table))
+	require.Len(t, sketch.Table, 16)
 }
 
 func TestSketch(t *testing.T) {
 	sketch := NewCountMinSketch()
 	sketch.EnsureCapacity(100)
-	require.Equal(t, 128, len(sketch.Table))
+	require.Len(t, sketch.Table, 128)
 	require.Equal(t, uint(1000), sketch.SampleSize)
 	// override sampleSize so test won't reset
 	sketch.SampleSize = 5120

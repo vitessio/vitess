@@ -117,7 +117,7 @@ func TestOpen(t *testing.T) {
 	}
 	<-ch
 	assert.EqualValues(t, 5, p.WaitCount())
-	assert.Equal(t, 5, len(waitStarts))
+	assert.Len(t, waitStarts, 5)
 	// verify start times are monotonic increasing
 	for i := 1; i < len(waitStarts); i++ {
 		assert.False(t, waitStarts[i].Before(waitStarts[i-1]), "Expecting monotonic increasing start times")
@@ -250,7 +250,7 @@ func TestShrinking(t *testing.T) {
 	assert.EqualValues(t, 2, p.Capacity())
 	assert.EqualValues(t, 2, p.Available())
 	assert.EqualValues(t, 1, p.WaitCount())
-	assert.EqualValues(t, p.WaitCount(), len(waitStarts))
+	assert.Len(t, waitStarts, int(p.WaitCount()))
 	assert.EqualValues(t, 2, count.Load())
 
 	// Test race condition of SetCapacity with itself

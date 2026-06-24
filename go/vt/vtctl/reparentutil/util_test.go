@@ -1789,7 +1789,7 @@ func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 			tabletRes, posRes, err := getValidCandidatesAndPositionsAsList(test.validCandidates, test.tabletMap)
 			assert.NoError(t, err)
 			assert.ElementsMatch(t, test.tabletRes, tabletRes)
-			assert.Equal(t, len(tabletRes), len(posRes))
+			assert.Len(t, posRes, len(tabletRes))
 			for i, tablet := range tabletRes {
 				assert.Equal(t, test.validCandidates[topoproto.TabletAliasString(tablet.Alias)], posRes[i])
 			}

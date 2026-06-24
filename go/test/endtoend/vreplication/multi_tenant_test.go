@@ -388,10 +388,10 @@ func TestMultiTenantSharded(t *testing.T) {
 	var workflowState vtctldata.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(mt.lastOutput), &workflowState)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(workflowState.Workflows))
+	require.Len(t, workflowState.Workflows, 1)
 	wf := workflowState.Workflows[0]
 	// Verifies that only one stream is created for the tenant on the shard to which this tenant id will be routed.
-	require.Equal(t, 1, len(wf.ShardStreams))
+	require.Len(t, wf.ShardStreams, 1)
 
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)

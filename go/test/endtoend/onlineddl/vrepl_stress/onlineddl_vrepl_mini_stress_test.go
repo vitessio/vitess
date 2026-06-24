@@ -224,12 +224,12 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 	ctx := t.Context()
 
 	shards = clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	t.Run("create schema", func(t *testing.T) {
-		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
+		assert.Len(t, clusterInstance.Keyspaces[0].Shards, 1)
 		testWithInitialSchema(t)
 	})
 	for i := range countIterations {
@@ -406,8 +406,8 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, len(queryResult.Rows))
-	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement
+	assert.Len(t, queryResult.Rows, 1)
+	assert.Len(t, queryResult.Rows[0], 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }

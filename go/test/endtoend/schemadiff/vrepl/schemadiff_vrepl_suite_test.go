@@ -129,7 +129,7 @@ func TestMain(m *testing.M) {
 
 func TestSchemadiffSchemaChanges(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
-	require.Equal(t, 1, len(shards))
+	require.Len(t, shards, 1)
 
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
@@ -460,8 +460,8 @@ func getCreateTableStatement(t *testing.T, tableName string) (statement string) 
 	queryResult, err := getTablet().VttabletProcess.QueryTablet("show create table "+tableName, keyspaceName, true)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, len(queryResult.Rows))
-	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement
+	assert.Len(t, queryResult.Rows, 1)
+	assert.Len(t, queryResult.Rows[0], 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }

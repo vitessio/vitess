@@ -492,7 +492,7 @@ func WaitForMigrationReviewedTimestamp(t *testing.T, vtParams *mysql.ConnParams,
 func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectArtifacts bool) {
 	r := ReadMigrations(t, vtParams, uuid)
 
-	assert.Equal(t, len(shards), len(r.Named().Rows))
+	assert.Len(t, r.Named().Rows, len(shards))
 	for _, row := range r.Named().Rows {
 		hasArtifacts := (row["artifacts"].ToString() != "")
 		assert.Equal(t, expectArtifacts, hasArtifacts)
@@ -633,9 +633,9 @@ func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, sh
 		shardCount[shard]++
 	}
 	require.NotEmpty(t, shards)
-	assert.Equal(t, len(shards), len(shardMin))
-	assert.Equal(t, len(shards), len(shardMax))
-	assert.Equal(t, len(shards), len(shardCount))
+	assert.Len(t, shardMin, len(shards))
+	assert.Len(t, shardMax, len(shards))
+	assert.Len(t, shardCount, len(shards))
 	for shard, count := range shardCount {
 		assert.NotZero(t, count)
 		assert.Equalf(t, count, shardMax[shard]-shardMin[shard]+1, "mismatch: shared=%v, count=%v, min=%v, max=%v", shard, count, shardMin[shard], shardMax[shard])

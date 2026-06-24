@@ -454,7 +454,7 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			df := &vdiff{env: vtenv.NewTestEnv(), sourceTimeZone: tcase.sourceTimeZone, targetTimeZone: "UTC"}
 			err := df.buildVDiffPlan(filter, schm, nil)
 			require.NoError(t, err, tcase.input)
-			require.Equal(t, 1, len(df.differs), tcase.input)
+			require.Len(t, df.differs, 1, tcase.input)
 			assert.Equal(t, tcase.td, df.differs[tcase.table], tcase.input)
 		})
 	}
@@ -1150,16 +1150,16 @@ func TestVDiffPlanInclude(t *testing.T) {
 	var err error
 	err = df.buildVDiffPlan(filter, schm, []string{"t2"})
 	require.NoError(t, err)
-	require.Equal(t, 1, len(df.differs))
+	require.Len(t, df.differs, 1)
 	err = df.buildVDiffPlan(filter, schm, []string{"t2", "t3"})
 	require.NoError(t, err)
-	require.Equal(t, 2, len(df.differs))
+	require.Len(t, df.differs, 2)
 	err = df.buildVDiffPlan(filter, schm, []string{"t1", "t2", "t3"})
 	require.NoError(t, err)
-	require.Equal(t, 3, len(df.differs))
+	require.Len(t, df.differs, 3)
 	err = df.buildVDiffPlan(filter, schm, []string{"t1", "t2", "t3", "t4"})
 	require.NoError(t, err)
-	require.Equal(t, 4, len(df.differs))
+	require.Len(t, df.differs, 4)
 	err = df.buildVDiffPlan(filter, schm, []string{"t1", "t2", "t3", "t5"})
 	require.Error(t, err)
 }

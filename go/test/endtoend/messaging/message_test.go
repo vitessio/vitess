@@ -504,7 +504,7 @@ func testMessaging(t *testing.T, name, ks string) {
 	// validate fields
 	res, err := stream.MessageStream(ks, "", nil, name)
 	require.NoError(t, err)
-	require.Equal(t, 3, len(res.Fields))
+	require.Len(t, res.Fields, 3)
 	validateField(t, res.Fields[0], "id", querypb.Type_INT64)
 	validateField(t, res.Fields[1], "tenant_id", querypb.Type_INT64)
 	validateField(t, res.Fields[2], "message", querypb.Type_JSON)
