@@ -1919,3 +1919,74 @@ func TestComQueryIngressBytes(t *testing.T) {
 		require.FailNow(t, "LogStats should have been sent to queryLogger")
 	}
 }
+
+// TestComQueryMultiOLAPIngressBytes verifies that streaming multi-statement
+// queries attribute MySQL protocol ingress bytes to each logged statement.
+func TestComQueryMultiOLAPIngressBytes(t *testing.T) {
+	vtgate, sbc, _ := createVtgateEnv(t)
+	query := "SELECT id FROM user WHERE id = 1; SELECT id FROM user WHERE id = 1234567890"
+
+	oldDefaultWorkload := mysqlDefaultWorkload
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	t.Cleanup(func() {
+		mysqlDefaultWorkload = oldDefaultWorkload
+	})
+
+	sbc.SetResults([]*sqltypes.Result{
+		{
+			Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
+			Rows:   []sqltypes.Row{{sqltypes.NewInt32(1)}},
+		},
+		{
+			Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
+			Rows:   []sqltypes.Row{{sqltypes.NewInt32(2)}},
+		},
+	})
+
+	vh := newVtgateHandler(vtgate)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, true)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+		Flags: mysql.CapabilityClientMultiStatements,
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	subscriber := vtgate.executor.queryLogger.Subscribe("test")
+	defer vtgate.executor.queryLogger.Unsubscribe(subscriber)
+
+	result, more, err := conn.ExecuteFetchMulti(query, 100, true)
+	require.NoError(t, err)
+	require.True(t, more)
+	require.Len(t, result.Rows, 1)
+
+	result, more, _, err = conn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.False(t, more)
+	require.Len(t, result.Rows, 1)
+
+	queries, err := vtgate.executor.Environment().Parser().SplitStatementToPieces(query)
+	require.NoError(t, err)
+	expectedIngressBytes := allocateStatementIngressBytes(uint64(mysql.PacketHeaderSize+1+len(query)), queries)
+
+	for i, expectedIngressBytes := range expectedIngressBytes {
+		select {
+		case sentStats := <-subscriber:
+			require.NotNil(t, sentStats)
+			assert.Equal(t, expectedIngressBytes, sentStats.IngressBytes, "query %d", i)
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "LogStats should have been sent to queryLogger")
+		}
+	}
+}

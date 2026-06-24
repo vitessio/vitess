@@ -55,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
+	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -457,15 +458,19 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 	if len(queries) == 0 {
 		return session, sqlparser.ErrEmpty
 	}
+	queryIngressBytes := queryIngressBytesForStatements(ctx, mysqlCtx, queries)
 	for idx, query := range queries {
 		firstPacket := true
 		more := idx < len(queries)-1
 		var deferredResult *sqltypes.Result
 		func() {
 			queryCtx := ctx
+			if queryIngressBytes != nil {
+				queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[idx])
+			}
 			var cancel context.CancelFunc
 			if mysqlQueryTimeout != 0 {
-				queryCtx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
+				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
 				defer cancel()
 			}
 			session, err = vh.vtg.StreamExecute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
