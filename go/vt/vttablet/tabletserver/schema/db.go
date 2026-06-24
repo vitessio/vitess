@@ -118,25 +118,25 @@ SELECT f.name, i.UDF_RETURN_TYPE, f.type FROM mysql.func f left join performance
 	fetchAggregateUdfs = `select function_name, function_return_type, function_type from %s.udfs`
 )
 
-// schemaReloadTxCleanupTimeout bounds the rollback that runs after the
-// caller's context is canceled. A rollback after a killed query is normally
-// near-instant; this is only a safety net so a hung connection can't hold the
-// engine mutex (and re-wedge reloads) for long. Kept short for that reason —
-// well under the 30s schema-change-reload-timeout this cleanup runs within.
+// schemaReloadTxCleanupTimeout is a safety net so a hung connection can't hold
+// the engine mutex (and re-wedge reloads) indefinitely. The cleanup rollback
+// runs on a non-cancelable context, so it falls outside the
+// schema-change-reload-timeout and adds to the mutex hold on top of it — hence
+// kept short, as the rollback is otherwise near-instant.
 const schemaReloadTxCleanupTimeout = 10 * time.Second
 
-// reloadInTransaction runs f inside a transaction on conn, then commits. A
-// rollback is always deferred (it is a no-op after a successful commit, which
-// matches the prior behavior of these reload functions). The rollback runs on
-// a fresh, non-cancelable context so it still reaches MySQL even when ctx is
-// already canceled — otherwise the connection is recycled with an open
-// transaction, holding locks on _vt.tables and wedging future reloads. If the
-// rollback itself fails, the connection is closed so the pool discards it
-// rather than reusing a session whose transaction state is unknown.
+// reloadInTransaction runs f inside a transaction on conn, then commits.
+//
+// The deferred rollback is what keeps a canceled reload from poisoning the
+// pool: it runs on a non-cancelable context so it still reaches MySQL after
+// ctx is gone, otherwise the connection is recycled mid-transaction, holding
+// locks on _vt.tables and wedging every future reload. It is deferred before
+// `begin` is even checked because a canceled `begin` can open the transaction
+// on MySQL while still returning an error; with no transaction open the
+// rollback is a harmless no-op — including on the success path, where it
+// trails a commit. If the rollback itself fails the connection's transaction
+// state is unknown, so it is closed for the pool to discard.
 func reloadInTransaction(ctx context.Context, conn *connpool.Conn, f func() error) error {
-	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
-		return err
-	}
 	defer func() {
 		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), schemaReloadTxCleanupTimeout)
 		defer cancel()
@@ -145,6 +145,10 @@ func reloadInTransaction(ctx context.Context, conn *connpool.Conn, f func() erro
 			conn.Close()
 		}
 	}()
+
+	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
+		return err
+	}
 
 	if err := f(); err != nil {
 		return err

@@ -565,6 +565,50 @@ func TestReloadTablesInDBClosesConnectionOnRollbackFailure(t *testing.T) {
 	require.True(t, conn.IsClosed())
 }
 
+// TestReloadTablesInDBRollsBackWhenBeginIsCanceled guards the same wedge as
+// TestReloadTablesInDBRollsBackOnCanceledContext, but for the narrow window
+// where the context is canceled while the `begin` itself is in flight. The
+// `begin` reaches MySQL and opens the transaction, but the killed query makes
+// Exec report an error — the cleanup rollback must still run so the connection
+// is not recycled holding an open transaction.
+func TestReloadTablesInDBRollsBackWhenBeginIsCanceled(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadRollbackBegin")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	killed := make(chan struct{})
+	db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) {
+		close(killed)
+	})
+
+	db.AddQuery("rollback", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+
+	// Cancel while `begin` is in flight, then block until the cancellation
+	// handler has killed the query. The transaction is opened on MySQL but
+	// Exec returns an error, so the reload never reaches the delete/insert.
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.SetBeforeFunc("begin", func() {
+		cancel()
+		<-killed
+	})
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	err := reloadTablesDataInDB(ctx, conn, tables, nil, sqlparser.NewTestParser())
+	require.Error(t, err)
+
+	// The transaction opened by `begin` must have been rolled back on MySQL.
+	// Without the fix the rollback is only deferred after `begin` succeeds, so
+	// a canceled `begin` leaves the transaction open and the connection is
+	// recycled poisoned.
+	require.Contains(t, db.QueryLog(), "rollback")
+}
+
 func TestReloadViewsInDB(t *testing.T) {
 	showCreateTableFields := sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar")
 	getViewDefinitionsFields := sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar")
