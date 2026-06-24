@@ -129,7 +129,7 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 
 	qr2 := utils.Exec(t, conn, `select c2.keyspace_id, c3.keyspace_id from lookup_t1 c2, lookup_t2 c3`)
 	// To ensure lookup vindex is not updated.
-	assert.Equal(t, qr1.Rows, qr2.Rows, "")
+	assert.Equal(t, qr1.Rows, qr2.Rows)
 }
 
 func TestOpenTxBlocksInSerial(t *testing.T) {

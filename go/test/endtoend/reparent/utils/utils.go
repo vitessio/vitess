@@ -214,7 +214,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
 			clusterInstance.PrintMysqlctlLogFiles()
-			require.FailNow(t, "Error starting mysql: %s", err.Error())
+			require.FailNowf(t, "Error starting mysql", "%s", err.Error())
 		}
 	}
 	clusterInstance.VtctldClientProcess = *cluster.VtctldClientProcessInstance(clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TopoPort, "localhost", clusterInstance.TmpDirectory)
@@ -289,7 +289,7 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	require.NoError(t, err, "Error starting start mysql")
 	if err := proc.Wait(); err != nil {
 		clusterInstance.PrintMysqlctlLogFiles()
-		require.FailNow(t, "Error starting mysql: %s", err.Error())
+		require.FailNowf(t, "Error starting mysql", "%s", err.Error())
 	}
 
 	// The tablet should come up as serving since the primary for the shard already exists

@@ -621,7 +621,7 @@ func TestExecutorShow(t *testing.T) {
 
 	wantErrNoTable := "table unknown_table not found"
 	_, err = executorExecSession(ctx, executor, session, "show create table unknown_table", nil)
-	assert.EqualErrorf(t, err, wantErrNoTable, "Got: %v. Want: %v", wantErrNoTable)
+	assert.EqualErrorf(t, err, wantErrNoTable, "Got: %v. Want: %v", err, wantErrNoTable)
 
 	// SHOW CREATE table using vschema to find keyspace.
 	_, err = executorExecSession(ctx, executor, session, "show create table user_seq", nil)

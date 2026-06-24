@@ -448,7 +448,7 @@ func testRevertible(t *testing.T) {
 								found = true
 							}
 						}
-						assert.Truef(t, found, "unexpected FK name", "%s", actualRemovedForeignKeyName)
+						assert.Truef(t, found, "unexpected FK name %s", actualRemovedForeignKeyName)
 					}
 					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
 					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))

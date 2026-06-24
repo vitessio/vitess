@@ -64,7 +64,7 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows := 2
 	numRows := len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows)
 
 	// Disable VTOrc(s) recoveries so that it doesn't immediately repair/restart replication.
 	for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
@@ -94,7 +94,7 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	require.NoError(t, err)
 	expectNumRows = 2
 	numRows = len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status, expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status, expected %d, got %d", expectNumRows, numRows)
 	rawLag := res.Named().Rows[0]["ReplicationLag"] // Let's just look at the first row
 	lagInt, _ := rawLag.ToInt64()                   // Don't check the error as the value could be "NULL"
 	assert.True(t, rawLag.IsNull() || lagInt > 0, "replication lag should be NULL or greater than 0 but was: %s", rawLag.ToString())
@@ -113,7 +113,7 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 	qr := utils.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows := 2
 	numRows := len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows)
 
 	// change the RDONLY tablet to SPARE
 	rdOnlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
@@ -129,7 +129,7 @@ func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {
 	qr = utils.Exec(t, conn, "show vitess_replication_status like '%'")
 	expectNumRows = 1
 	numRows = len(qr.Rows)
-	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+	assert.Equal(t, expectNumRows, numRows, "wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows)
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {

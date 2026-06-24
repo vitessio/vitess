@@ -992,9 +992,9 @@ func TestVDiffDefaults(t *testing.T) {
 	_, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 1*time.Nanosecond, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.Error(t, err)
 	err = topo.CheckKeyspaceLocked(t.Context(), "target")
-	require.EqualErrorf(t, err, "keyspace target is not locked (no locksInfo)", "")
+	require.EqualError(t, err, "keyspace target is not locked (no locksInfo)")
 	err = topo.CheckKeyspaceLocked(t.Context(), "source")
-	require.EqualErrorf(t, err, "keyspace source is not locked (no locksInfo)", "")
+	require.EqualError(t, err, "keyspace source is not locked (no locksInfo)")
 }
 
 func TestVDiffReplicationWait(t *testing.T) {

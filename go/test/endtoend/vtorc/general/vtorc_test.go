@@ -534,7 +534,7 @@ func TestSemiSync(t *testing.T) {
 		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", replica1, "")
 		require.NoError(t, err)
 	default:
-		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
+		require.Failf(t, "unexpected semi-sync type", "%v", semisyncType)
 	}
 
 	semisyncType, err = utils.SemiSyncExtensionLoaded(t, rdonly)
@@ -547,7 +547,7 @@ func TestSemiSync(t *testing.T) {
 		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_slave_enabled = 0", rdonly, "")
 		require.NoError(t, err)
 	default:
-		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
+		require.Failf(t, "unexpected semi-sync type", "%v", semisyncType)
 	}
 
 	semisyncType, err = utils.SemiSyncExtensionLoaded(t, primary)
@@ -560,7 +560,7 @@ func TestSemiSync(t *testing.T) {
 		_, err := utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_master_enabled = 0", primary, "")
 		require.NoError(t, err)
 	default:
-		require.Fail(t, "unexpected semi-sync type %v", semisyncType)
+		require.Failf(t, "unexpected semi-sync type", "%v", semisyncType)
 	}
 
 	timeout := time.After(20 * time.Second)

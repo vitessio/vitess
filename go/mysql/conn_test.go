@@ -1305,7 +1305,7 @@ func startGoRoutine(ctx context.Context, t *testing.T, s string) {
 			data := sConn.PrepareData[sConn.StatementID]
 			assert.NotNil(t, data)
 			variable := data.BindVars["v1"]
-			assert.NotNil(t, variable, fmt.Sprintf("%#v", data.BindVars))
+			assert.NotNil(t, variable, "%#v", data.BindVars)
 			assert.Equalf(t, []byte(longData), variable.Value[len(longData)*count:], "failed at: %d", count)
 		}
 	}(s)

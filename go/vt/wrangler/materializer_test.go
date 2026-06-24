@@ -130,8 +130,8 @@ func requireExpectedVSchema(t *testing.T, vschema *vschemapb.SrvVSchema, sourceK
 			foundB = true
 		}
 	}
-	require.True(t, foundA, fmt.Sprintf("expected routing rule: t1 → %s.t1", sourceKeyspace))
-	require.True(t, foundB, fmt.Sprintf("expected routing rule: %s.t1 → %s.t1", targetKeyspace, sourceKeyspace))
+	require.True(t, foundA, "expected routing rule: t1 → %s.t1", sourceKeyspace)
+	require.True(t, foundB, "expected routing rule: %s.t1 → %s.t1", targetKeyspace, sourceKeyspace)
 }
 
 func TestMissingTables(t *testing.T) {

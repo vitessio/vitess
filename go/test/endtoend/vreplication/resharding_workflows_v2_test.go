@@ -321,7 +321,7 @@ func revert(t *testing.T, workflowType string) {
 
 	// cancel the workflow to cleanup
 	_, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--target-keyspace", defaultTargetKs, "--workflow", defaultWorkflowName, "cancel")
-	require.NoError(t, err, fmt.Sprintf("%s Cancel error: %v", workflowType, err))
+	require.NoError(t, err, "%s Cancel error: %v", workflowType, err)
 }
 
 func checkStates(t *testing.T, startState, endState string) {
@@ -885,7 +885,7 @@ func switchReadsNew(t *testing.T, workflowType, cells, ksWorkflow string, revers
 	ks, wf := parts[0], parts[1]
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command,
 		"--cells", cells, "--tablet-types=rdonly,replica")
-	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
+	require.NoError(t, err, "SwitchReads Error: %s: %s", err, output)
 	if output != "" {
 		fmt.Printf("SwitchReads output: %s\n", output)
 	}
@@ -999,7 +999,7 @@ func createAdditionalTargetShards(t *testing.T, shards string) {
 func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
 	err := vc.VtctldClient.ExecuteCommand("ApplySchema", "--ddl-strategy"+"=online",
 		"--sql", sql, keyspace)
-	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
+	require.NoError(t, err, "ApplySchema Error: %s", err)
 }
 
 func validateTableRoutingRule(t *testing.T, table, tabletType, fromKeyspace, toKeyspace string) {

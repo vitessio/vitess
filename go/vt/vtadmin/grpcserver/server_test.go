@@ -141,6 +141,6 @@ func TestError(t *testing.T) {
 	case err := <-errCh:
 		assert.Error(t, err)
 	case ti := <-time.After(time.Millisecond * 10):
-		assert.Fail(t, "timed out waiting for error after %s", ti.Sub(start))
+		assert.Failf(t, "timed out waiting for error after", "%s", ti.Sub(start))
 	}
 }

@@ -1256,7 +1256,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 	ticker := time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1281,7 +1281,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case got := <-resultChan:
 		// check that we DO receive health check update for PRIMARY in other cell
 		mustMatch(t, want, got, "Wrong TabletHealth data")
@@ -1291,7 +1291,7 @@ func TestPrimaryInOtherCell(t *testing.T) {
 
 	// check that PRIMARY tablet from other cell IS in healthy tablet list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
-	require.Len(t, a, 1, "")
+	require.Len(t, a, 1)
 	mustMatch(t, want, a[0], "Expecting healthy primary")
 }
 
@@ -1372,7 +1372,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	ticker := time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1397,7 +1397,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case got := <-resultChan:
 		// check that we DO receive health check update for REPLICA in other cell
 		mustMatch(t, want, got, "Wrong TabletHealth data")
@@ -1418,7 +1418,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc2.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan2:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1443,7 +1443,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case got := <-resultChan2:
 		// check that we DO receive health check update for REPLICA in other cell
 		mustMatch(t, want2, got, "Wrong TabletHealth data")
@@ -1453,7 +1453,7 @@ func TestReplicaInOtherCell(t *testing.T) {
 
 	// check that only REPLICA tablet from cell1 is in healthy tablet list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
-	require.Len(t, a, 1, "")
+	require.Len(t, a, 1)
 	mustMatch(t, want, a[0], "Expecting healthy local replica")
 }
 
@@ -1484,7 +1484,7 @@ func TestCellAliases(t *testing.T) {
 	ticker := time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")
@@ -1509,7 +1509,7 @@ func TestCellAliases(t *testing.T) {
 	ticker = time.NewTicker(1 * time.Second)
 	select {
 	case err := <-fc.cbErrCh:
-		require.Fail(t, "Unexpected error: %v", err)
+		require.Failf(t, "Unexpected error", "%v", err)
 	case <-resultChan:
 	case <-ticker.C:
 		require.Fail(t, "Timed out waiting for HealthCheck update")

@@ -219,7 +219,7 @@ func TestTxConnCommitFailureAfterNonAtomicCommitMaxShards(t *testing.T) {
 
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	for i := range 17 {
-		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
+		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), "sbc%d.CommitCount", i)
 	}
 
 	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])
@@ -273,7 +273,7 @@ func TestTxConnCommitFailureBeforeNonAtomicCommitMaxShards(t *testing.T) {
 
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 	for i := range 16 {
-		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), fmt.Sprintf("sbc%d.CommitCount", i))
+		assert.EqualValues(t, 1, sbcs[i].CommitCount.Load(), "sbc%d.CommitCount", i)
 	}
 
 	require.Equal(t, nonAtomicCommitCount+1, warnings.Counts()["NonAtomicCommit"])

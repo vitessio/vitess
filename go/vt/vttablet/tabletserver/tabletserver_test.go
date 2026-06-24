@@ -700,7 +700,7 @@ func TestSmallerTimeout(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		got := smallerTimeout(tcase.t1, tcase.t2)
-		assert.Equal(t, tcase.want, got, tcase.t1, tcase.t2)
+		assert.Equal(t, tcase.want, got, "smallerTimeout(%v, %v)", tcase.t1, tcase.t2)
 	}
 }
 

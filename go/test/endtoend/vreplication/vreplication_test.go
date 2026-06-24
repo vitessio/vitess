@@ -1694,7 +1694,7 @@ func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dry
 	require.True(t, ok)
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, "SwitchTraffic",
 		"--cells="+cells, "--tablet-types=rdonly,replica", "--dry-run")
-	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
+	require.NoError(t, err, "Switching Reads DryRun Error: %s: %s", err, output)
 	if dryRunResults != nil {
 		validateDryRunResults(t, output, dryRunResults)
 	}
@@ -1737,10 +1737,10 @@ func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse b
 	require.True(t, ok)
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command,
 		"--cells="+cells, "--tablet-types=rdonly")
-	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
+	require.NoError(t, err, "%s Error: %s: %s", command, err, output)
 	output, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks, command,
 		"--cells="+cells, "--tablet-types=replica")
-	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
+	require.NoError(t, err, "%s Error: %s: %s", command, err, output)
 }
 
 func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
@@ -1768,7 +1768,7 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	}
 	// printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
 	_ = printSwitchWritesExtraDebug
-	require.NoError(t, err, fmt.Sprintf("Switch writes Error: %s: %s", err, output))
+	require.NoError(t, err, "Switch writes Error: %s: %s", err, output)
 }
 
 func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunResults []string) {
@@ -1781,7 +1781,7 @@ func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunRes
 	require.True(t, ok)
 	output, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", wf, "--target-keyspace", ks,
 		"SwitchTraffic", "--tablet-types=primary", "--dry-run")
-	require.NoError(t, err, fmt.Sprintf("Switch writes DryRun Error: %s: %s", err, output))
+	require.NoError(t, err, "Switch writes DryRun Error: %s: %s", err, output)
 	validateDryRunResults(t, output, dryRunResults)
 }
 
@@ -2081,7 +2081,7 @@ func waitForInnoDBHistoryLength(t *testing.T, tablet *cluster.VttabletProcess, e
 		}
 		select {
 		case <-timer.C:
-			require.FailNow(t, "Did not reach the minimum expected InnoDB history length of %d before the timeout of %s; last seen value: %d", expectedLength, defaultTimeout, historyLen)
+			require.FailNowf(t, "Did not reach the minimum expected InnoDB history length of", "%d before the timeout of %s; last seen value: %d", expectedLength, defaultTimeout, historyLen)
 		default:
 			time.Sleep(defaultTick)
 		}

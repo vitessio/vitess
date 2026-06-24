@@ -73,7 +73,7 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 		for _, buffering := tg.kev.ShouldStartBufferingForTarget(ctx, target); buffering != enabled; _, buffering = tg.kev.ShouldStartBufferingForTarget(ctx, target) {
 			select {
 			case <-timer.C:
-				require.Fail(t, "timed out waiting for buffering of enabled: %t", enabled)
+				require.Failf(t, "timed out waiting for buffering of enabled", "%t", enabled)
 			default:
 			}
 			time.Sleep(10 * time.Millisecond)

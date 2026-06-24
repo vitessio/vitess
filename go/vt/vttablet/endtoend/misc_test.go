@@ -683,7 +683,7 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 		)
 		require.NoError(t, err)
 		require.NotEmpty(t, qr.Fields, "fields should not be empty")
-		require.Equal(t, tc.Type, qr.Fields[0].Type, fmt.Sprintf("invalid type, wants: %+v, but got: %+v\n", tc.Type, qr.Fields[0].Type))
+		require.Equal(t, tc.Type, qr.Fields[0].Type, "invalid type, wants: %+v, but got: %+v\n", tc.Type, qr.Fields[0].Type)
 	}
 }
 

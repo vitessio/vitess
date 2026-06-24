@@ -2114,8 +2114,7 @@ func checkServedTypes(t *testing.T, ts *topo.Server, keyspaceShard string, want 
 
 	servedTypes, err := ts.GetShardServingTypes(ctx, si)
 	require.NoError(t, err)
-	require.Equal(t, want, len(servedTypes), fmt.Sprintf("shard %v has wrong served types: got: %v, want: %v",
-		keyspaceShard, len(servedTypes), want))
+	require.Equal(t, want, len(servedTypes), "shard %v has wrong served types: got: %v, want: %v", keyspaceShard, len(servedTypes), want)
 }
 
 func checkCellServedTypes(t *testing.T, ts *topo.Server, keyspaceShard, cell string, want int) {
@@ -2134,8 +2133,7 @@ outer:
 			}
 		}
 	}
-	require.Equal(t, want, count, fmt.Sprintf("serving types for keyspaceShard %s, cell %s: %d, want %d",
-		keyspaceShard, cell, count, want))
+	require.Equal(t, want, count, "serving types for keyspaceShard %s, cell %s: %d, want %d", keyspaceShard, cell, count, want)
 }
 
 func checkIfPrimaryServing(t *testing.T, ts *topo.Server, keyspaceShard string, want bool) {

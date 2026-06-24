@@ -857,7 +857,7 @@ func TestClearTextServer(t *testing.T) {
 		if isMariaDB {
 			t.Logf("mysql should have failed but returned: %v\nbut letting it go on MariaDB", output)
 		} else {
-			require.Fail(t, "mysql should have failed but returned: %v", output)
+			require.Failf(t, "mysql should have failed but returned", "%v", output)
 		}
 	} else {
 		if strings.Contains(output, "No such file or directory") {

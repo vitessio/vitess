@@ -63,7 +63,7 @@ func TestRegisterService(t *testing.T) {
 	closer := StartTracing(serviceName)
 	tracer := closer.(*fakeTracer)
 
-	require.Equal(t, serviceName, tracer.name, fmt.Sprintf("tracer name mismatch: expected %s, got %s", serviceName, tracer.name))
+	require.Equal(t, serviceName, tracer.name, "tracer name mismatch: expected %s, got %s", serviceName, tracer.name)
 }
 
 func TestNewFromString(t *testing.T) {

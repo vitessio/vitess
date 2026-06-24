@@ -201,10 +201,10 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 
 	assert.NotNil(t, streamHealthRes2.GetPrimaryTermStartTimestamp())
 	assert.Equal(t, streamHealthRes2.GetPrimaryTermStartTimestamp(), streamHealthRes1.GetPrimaryTermStartTimestamp(),
-		fmt.Sprintf("When the PRIMARY vttablet was restarted, "+
+		"When the PRIMARY vttablet was restarted, "+
 			"the PTS timestamp must be set by reading the old value from the tablet record. Old: %d, New: %d",
-			streamHealthRes1.GetPrimaryTermStartTimestamp(),
-			streamHealthRes2.GetPrimaryTermStartTimestamp()))
+		streamHealthRes1.GetPrimaryTermStartTimestamp(),
+		streamHealthRes2.GetPrimaryTermStartTimestamp())
 
 	// Reset primary
 	err = clusterInstance.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primaryTablet.TabletUID)

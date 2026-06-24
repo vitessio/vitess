@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -391,7 +390,7 @@ func TestIgnoreMaxPayloadSizeDirective(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			stmt, _ := parser.Parse(test.query)
 			got := IgnoreMaxPayloadSizeDirective(stmt)
-			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+			assert.Equalf(t, test.expected, got, "IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected)
 		})
 	}
 }
@@ -418,7 +417,7 @@ func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
 		t.Run(test.query, func(t *testing.T) {
 			stmt, _ := parser.Parse(test.query)
 			got := IgnoreMaxMaxMemoryRowsDirective(stmt)
-			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+			assert.Equalf(t, test.expected, got, "IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected)
 		})
 	}
 }

@@ -1049,7 +1049,7 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 				require.EqualValues(t, wantRules, gotRules)
 			}
 		default:
-			require.FailNow(t, "Unknown type %s", typ)
+			require.FailNowf(t, "Unknown type", "%s", typ)
 		}
 		testOneRoutingRulesCommand(t, typ, string(rulesBytes), validateRules)
 	}
