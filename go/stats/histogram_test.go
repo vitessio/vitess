@@ -110,7 +110,7 @@ func TestHistogramHook(t *testing.T) {
 	})
 
 	v.Add(42)
-	assert.Equal(t, hookCalled, true)
+	assert.True(t, hookCalled)
 	assert.Equal(t, addedValue, int64(42))
 
 	// Check the results of RegisterHistogramHook function
@@ -126,6 +126,6 @@ func TestHistogramHook(t *testing.T) {
 
 	v.Add(10)
 	assert.Equal(t, gotName, "hist2")
-	assert.Equal(t, hookCalled, true)
+	assert.True(t, hookCalled)
 	assert.Equal(t, addedValue, int64(10))
 }

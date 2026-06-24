@@ -212,7 +212,7 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 	require.Nil(t, err)
 
 	serving := tablet.VttabletProcess.WaitForStatus("SERVING", time.Duration(60*time.Second))
-	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
+	assert.True(t, serving, "Tablet did not become ready within a reasonable time")
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.%s",
 		tablet.VttabletProcess.Keyspace, tablet.VttabletProcess.Shard, tablet.Type), 1, 30*time.Second)
 	require.Nil(t, err)

@@ -563,7 +563,7 @@ func testTracker(t *testing.T, enableUDFs bool, schemaDefResult []sandboxconn.Sc
 			require.EqualValues(t, count+initialLoadCount, sbc.GetSchemaCount.Load())
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
-			require.Equal(t, true, keyspacePresent)
+			require.True(t, keyspacePresent)
 
 			for k, expectedCols := range tcase.expTbl {
 				actualCols := tracker.GetColumns(keyspace, k)

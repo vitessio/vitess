@@ -1499,11 +1499,11 @@ func TestStopAfterCopyFlag(t *testing.T) {
 
 	ms1, _, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 	require.NoError(t, err)
-	require.Equal(t, ms1.StopAfterCopy, true)
+	require.True(t, ms1.StopAfterCopy)
 
 	ms2, _, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, true)
 	require.NoError(t, err)
-	require.Equal(t, ms2.StopAfterCopy, false)
+	require.False(t, ms2.StopAfterCopy)
 }
 
 func TestCreateLookupVindexFailures(t *testing.T) {

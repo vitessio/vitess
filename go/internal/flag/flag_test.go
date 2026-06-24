@@ -173,7 +173,7 @@ func TestParseFlagsForTest(t *testing.T) {
 	}
 
 	assert.Equal(t, expectedOsArgs, os.Args)
-	assert.Equal(t, true, pflag.Parsed())
+	assert.True(t, pflag.Parsed())
 }
 
 func TestParsed(t *testing.T) {

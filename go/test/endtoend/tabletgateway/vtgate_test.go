@@ -269,7 +269,7 @@ func TestReplicaTransactions(t *testing.T) {
 	err = replicaTablet.VttabletProcess.Setup()
 	require.NoError(t, err)
 	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", 60*time.Second)
-	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
+	assert.True(t, serving, "Tablet did not become ready within a reasonable time")
 	utils.AssertContainsError(t, readConn, fetchAllCustomers, "VT09032")
 	utils.Exec(t, readConn, "rollback")
 

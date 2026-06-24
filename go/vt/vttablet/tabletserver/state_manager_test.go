@@ -75,7 +75,7 @@ func TestStateManagerServePrimary(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
-	assert.Equal(t, false, sm.lameduck)
+	assert.False(t, sm.lameduck)
 	assert.Equal(t, testNow, sm.ptsTimestamp)
 
 	verifySubcomponent(t, 1, sm.se, testStateOpen)

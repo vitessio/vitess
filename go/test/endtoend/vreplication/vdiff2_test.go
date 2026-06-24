@@ -676,7 +676,7 @@ func testCLICreateWait(t *testing.T, ksWorkflow string, cells string) {
 		defer tmr.Stop()
 		select {
 		case completed := <-chCompleted:
-			require.Equal(t, true, completed)
+			require.True(t, completed)
 		case <-tmr.C:
 			require.Fail(t, "timeout waiting for vdiff to complete")
 		}

@@ -53,7 +53,7 @@ func TestGetFuncForType(t *testing.T) {
 	assert := assert.New(t)
 
 	// Bool types
-	assert.Equal(true, get[bool](t, v, "foo.bool"), "GetFuncForType[bool](foo.bool)")
+	assert.True(get[bool](t, v, "foo.bool"), "GetFuncForType[bool](foo.bool)")
 
 	// Int types
 	assert.Equal(5, get[int](t, v, "foo.int"), "GetFuncForType[int](foo.int)")

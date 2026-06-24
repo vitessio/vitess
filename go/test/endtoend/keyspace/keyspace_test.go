@@ -195,7 +195,7 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 			otherShardRefFound = true
 		}
 	}
-	assert.True(t, !otherShardRefFound)
+	assert.False(t, otherShardRefFound)
 
 	unShardedSrvKeyspace := getSrvKeyspace(t, cell, keyspaceUnshardedName)
 	otherShardRefFound = false
@@ -208,7 +208,7 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 			otherShardRefFound = true
 		}
 	}
-	assert.True(t, !otherShardRefFound)
+	assert.False(t, otherShardRefFound)
 }
 
 func TestShardNames(t *testing.T) {

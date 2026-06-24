@@ -130,6 +130,7 @@ linters:
         - suite-extra-assert-call
         - suite-broken-parallel
         - suite-method-signature
+        - bool-compare
   exclusions:
     generated: lax
     presets:

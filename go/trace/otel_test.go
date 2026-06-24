@@ -156,7 +156,7 @@ func TestKeyValue(t *testing.T) {
 
 	kv = keyValue("bool", true)
 	assert.Equal(t, "bool", string(kv.Key))
-	assert.Equal(t, true, kv.Value.AsBool())
+	assert.True(t, kv.Value.AsBool())
 
 	kv = keyValue("int", 42)
 	assert.Equal(t, "int", string(kv.Key))

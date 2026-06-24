@@ -879,7 +879,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				dec80Replicated = true
 			}
 		}
-		require.Equal(t, true, dec80Replicated)
+		require.True(t, dec80Replicated)
 
 		// Insert multiple rows in the loadtest table and immediately delete them to confirm that bulk delete
 		// works the same way with the vplayer optimization enabled and disabled. Currently this optimization
