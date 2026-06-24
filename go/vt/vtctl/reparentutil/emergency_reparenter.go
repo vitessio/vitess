@@ -288,6 +288,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 	}
 
+	// If we have any candidates that were discovered via PrimaryStatus (i.e. they
+	// previously reported "not a replica"), prefer true replicas from statusMap.
+	// This avoids promoting a recently demoted/stuck primary when replica candidates
+	// are available.
+	validCandidates = erp.preferReplicaStatusCandidates(validCandidates, stoppedReplicationSnapshot.statusMap, stoppedReplicationSnapshot.primaryStatusMap)
+
 	// Find the intermediate source for replication that we want other tablets to replicate from.
 	// This step chooses the most advanced tablet. Further ties are broken by using the promotion rule.
 	// In case the user has specified a tablet specifically, then it is selected, as long as it is the most advanced.
@@ -376,6 +382,42 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 	ev.NewPrimary = newPrimary.CloneVT()
 	return err
+}
+
+// preferReplicaStatusCandidates drops candidates that were only present in primaryStatusMap
+// when at least one true replica candidate (from statusMap) exists.
+func (erp *EmergencyReparenter) preferReplicaStatusCandidates(
+	validCandidates map[string]*RelayLogPositions,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus,
+	primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
+) map[string]*RelayLogPositions {
+	if len(validCandidates) == 0 || len(primaryStatusMap) == 0 || len(statusMap) == 0 {
+		return validCandidates
+	}
+
+	filtered := make(map[string]*RelayLogPositions, len(validCandidates))
+	excluded := make([]string, 0, len(primaryStatusMap))
+	for alias, position := range validCandidates {
+		if _, ok := statusMap[alias]; ok {
+			filtered[alias] = position
+			continue
+		}
+		if _, ok := primaryStatusMap[alias]; ok {
+			excluded = append(excluded, alias)
+			continue
+		}
+		// Keep unexpected aliases to avoid over-filtering.
+		filtered[alias] = position
+	}
+
+	// If filtering would remove all candidates, keep the original set.
+	if len(filtered) == 0 {
+		return validCandidates
+	}
+	if len(excluded) > 0 {
+		erp.logger.Warningf("excluding %d former-primary candidate(s) from ERS candidate set because replica candidates are available: %v", len(excluded), excluded)
+	}
+	return filtered
 }
 
 // restartReplicationOnStoppedReplicas restarts replication on replicas whose IO threads were
