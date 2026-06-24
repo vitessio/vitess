@@ -119,10 +119,11 @@ SELECT f.name, i.UDF_RETURN_TYPE, f.type FROM mysql.func f left join performance
 )
 
 // schemaReloadTxCleanupTimeout bounds the rollback that runs after the
-// caller's context is canceled. It must stay bounded because schema reloads
-// hold the engine mutex while running; an unbounded rollback could re-wedge
-// reloads instead of fixing the wedge.
-const schemaReloadTxCleanupTimeout = 30 * time.Second
+// caller's context is canceled. A rollback after a killed query is normally
+// near-instant; this is only a safety net so a hung connection can't hold the
+// engine mutex (and re-wedge reloads) for long. Kept short for that reason —
+// well under the 30s schema-change-reload-timeout this cleanup runs within.
+const schemaReloadTxCleanupTimeout = 10 * time.Second
 
 // reloadInTransaction runs f inside a transaction on conn, then commits. A
 // rollback is always deferred (it is a no-op after a successful commit, which
