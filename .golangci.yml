@@ -131,6 +131,7 @@ linters:
         - suite-broken-parallel
         - suite-method-signature
         - bool-compare
+        - nil-compare
   exclusions:
     generated: lax
     presets:

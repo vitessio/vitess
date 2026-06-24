@@ -1622,7 +1622,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 		h := buildPlanKey(t.Context(), vc, sql, "")
 		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
-	assert.Truef(t, plan != nil, "plan not found for query: %s", sql)
+	assert.NotNilf(t, plan, "plan not found for query: %s", sql)
 	return plan
 }
 
