@@ -1472,8 +1472,9 @@ func TestReplaceSchemaName(t *testing.T) {
 	// Test streaming execute.
 	{
 		qre := newTestQueryExecutorStreaming(ctx, tsv, inQuery, 0)
-		// Stream only replaces schema name when plan is PlanSelectStream.
-		assert.Equal(t, planbuilder.PlanSelectStream, qre.plan.PlanID)
+		// Stream replaces the schema name for read plans like PlanSelect
+		// (PlanShow and PlanSelectImpossible are covered separately).
+		assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 		// Any value other than nil should cause QueryExecutor to replace the
 		// schema name.
 		qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
@@ -1484,6 +1485,106 @@ func TestReplaceSchemaName(t *testing.T) {
 		})
 		require.NoError(t, err)
 	}
+}
+
+// Stream must apply the schema-name rewrite for the same read plan types as
+// Execute -- PlanShow, PlanSelectImpossible and PlanSelectLockFunc as well as
+// PlanSelect. In the merged base every streaming query was PlanSelectStream and
+// always rewritten; once BuildStreaming returns real plan types, a streaming SHOW
+// or impossible SELECT would skip the rewrite (a regression) and run scoped to the
+// wrong schema name or fail with a missing bind variable. PlanSelectLockFunc is
+// included for parity with Execute even though it never carries the bind variable
+// in practice, so its rewrite is a no-op.
+func TestStreamReplaceSchemaNameByPlanType(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	testcases := []struct {
+		name     string
+		query    string
+		dbQuery  string
+		planWant planbuilder.PlanType
+	}{
+		{
+			name:     "PlanShow",
+			query:    "show tables",
+			dbQuery:  "show tables",
+			planWant: planbuilder.PlanShow,
+		},
+		{
+			name:     "PlanSelectImpossible",
+			query:    "select * from test_table where 1 != 1",
+			dbQuery:  "select * from test_table where 1 != 1",
+			planWant: planbuilder.PlanSelectImpossible,
+		},
+		{
+			name:     "PlanSelectLockFunc",
+			query:    "select get_lock('foo', 10) from dual",
+			dbQuery:  "select get_lock('foo', 10) from dual",
+			planWant: planbuilder.PlanSelectLockFunc,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			db.AddQuery(tc.dbQuery, &sqltypes.Result{Fields: getTestTableFields()})
+
+			// Without BvReplaceSchemaName the rewrite is a no-op: BvSchemaName
+			// stays unset, matching Execute.
+			qreNoop := newTestQueryExecutorStreaming(ctx, tsv, tc.query, 0)
+			require.Equal(t, tc.planWant, qreNoop.plan.PlanID)
+			require.NoError(t, qreNoop.Stream(func(_ *sqltypes.Result) error { return nil }))
+			_, ok := qreNoop.bindVars[sqltypes.BvSchemaName]
+			require.False(t, ok, "Stream must not set the schema name for %s without BvReplaceSchemaName", tc.planWant)
+
+			// With BvReplaceSchemaName set the rewrite fires, matching Execute.
+			qre := newTestQueryExecutorStreaming(ctx, tsv, tc.query, 0)
+			qre.bindVars[sqltypes.BvReplaceSchemaName] = sqltypes.NullBindVariable
+			require.NoError(t, qre.Stream(func(_ *sqltypes.Result) error { return nil }))
+			_, ok = qre.bindVars[sqltypes.BvSchemaName]
+			require.True(t, ok, "Stream must replace the schema name for %s, like Execute", tc.planWant)
+		})
+	}
+}
+
+// A statement that runs through the buffered dispatch on the streaming path and
+// reports affected rows -- e.g. ALTER TABLE -- must record QueryRowsAffected like
+// Execute. Its single reply reaches the streaming callback with RowsAffected set,
+// but the stats defer previously discarded it (recorded 0).
+func TestStreamRecordsBufferedRowsAffected(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	tsv.config.DB.DBName = "ks"
+	defer tsv.StopService()
+
+	const ddl = "alter table test_table add zipcode int"
+	db.AddQuery("alter table test_table add column zipcode int", &sqltypes.Result{RowsAffected: 7})
+
+	// DDL has no single table, so its stats bucket under "Join".
+	const key = "Join.DDL"
+
+	// Execute records the affected rows.
+	qreExec := newTestQueryExecutor(ctx, tsv, ddl, 0)
+	require.Equal(t, planbuilder.PlanDDL, qreExec.plan.PlanID)
+	execBefore := tsv.qe.queryRowsAffected.Counts()[key]
+	_, err := qreExec.Execute()
+	require.NoError(t, err)
+	require.Equal(t, execBefore+7, tsv.qe.queryRowsAffected.Counts()[key])
+
+	// Stream must record the same.
+	streamBefore := tsv.qe.queryRowsAffected.Counts()[key]
+	qreStream := newTestQueryExecutorStreaming(ctx, tsv, ddl, 0)
+	require.Equal(t, planbuilder.PlanDDL, qreStream.plan.PlanID)
+	require.NoError(t, qreStream.Stream(func(*sqltypes.Result) error { return nil }))
+	assert.Equal(t, streamBefore+7, tsv.qe.queryRowsAffected.Counts()[key],
+		"streamed DDL must record QueryRowsAffected like Execute")
 }
 
 // TestQueryExecutorStreamDML verifies that DML executed on the streaming path
@@ -1605,6 +1706,64 @@ func TestQueryExecutorStreamDMLErrorStatsOnPermissionDenied(t *testing.T) {
 	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Insert"]
 	assert.Equal(t, errCountBefore+1, errCountAfter,
 		"streamed DML rejected by checkPermissions must record per-table error stats like Execute")
+}
+
+// A streaming read that fails must record per-table and per-plan error stats,
+// matching the non-streaming Execute path. The read-path stats defer records the
+// error counters from the named return, so a failed streaming read has to bump
+// QueryErrorCounts, QueryErrorCountsWithCode and the per-plan ErrorCount, not just
+// leave them flat.
+func TestQueryExecutorStreamReadErrorStatsOnPermissionDenied(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	query := "select * from test_table"
+
+	bannedAddr := "127.0.0.1"
+	bannedUser := "u2"
+
+	denyRule := rules.NewQueryRule("disable select", "disable select", rules.QRFail)
+	denyRule.SetIPCond(bannedAddr)
+	denyRule.SetUserCond(bannedUser)
+	denyRule.AddPlanCond(planbuilder.PlanSelect)
+	denyRule.AddTableCond("test_table")
+
+	rulesName := "denyListStreamReadQRFail"
+	qrs := rules.New()
+	qrs.Add(denyRule)
+
+	callInfo := &fakecallinfo.FakeCallInfo{
+		Remote: bannedAddr,
+		User:   bannedUser,
+	}
+	ctx := callinfo.NewContext(t.Context(), callInfo)
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+	tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	tsv.qe.queryRuleSources.RegisterSource(rulesName)
+	defer tsv.qe.queryRuleSources.UnRegisterSource(rulesName)
+	require.NoError(t, tsv.qe.queryRuleSources.SetRules(rulesName, qrs))
+
+	qre := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	require.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
+
+	errCountBefore := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	errCodeCountBefore := tsv.qe.queryErrorCountsWithCode.Counts()["test_table.Select.INVALID_ARGUMENT"]
+	planErrBefore := qre.plan.ErrorCount
+
+	err := qre.Stream(func(*sqltypes.Result) error { return nil })
+	require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+
+	errCountAfter := tsv.qe.queryErrorCounts.Counts()["test_table.Select"]
+	errCodeCountAfter := tsv.qe.queryErrorCountsWithCode.Counts()["test_table.Select.INVALID_ARGUMENT"]
+	planErrAfter := qre.plan.ErrorCount
+
+	assert.Equal(t, errCountBefore+1, errCountAfter,
+		"failed streamed read must record per-table QueryErrorCounts like Execute")
+	assert.Equal(t, errCodeCountBefore+1, errCodeCountAfter,
+		"failed streamed read must record QueryErrorCountsWithCode like Execute")
+	assert.Equal(t, planErrBefore+1, planErrAfter,
+		"failed streamed read must record the per-plan ErrorCount like Execute")
 }
 
 // TestQueryExecutorStreamDMLAppliesQueryTimeout verifies that autocommit DML on

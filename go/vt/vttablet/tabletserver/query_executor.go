@@ -131,27 +131,13 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.tsv.stats.QueryTimingsByTabletType.Add(qre.targetTabletType.String(), duration)
 		qre.recordUserQuery("Execute", int64(duration))
 
-		mysqlTime := qre.logStats.MysqlResponseTime
-		tableName := qre.plan.TableName().String()
-		if tableName == "" {
-			tableName = "Join"
-		}
-
-		var errCode string
-		vtErrorCode := vterrors.Code(err)
-		errCode = vtErrorCode.String()
-
 		if reply == nil {
-			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
-			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
+			qre.recordQueryStats(err, duration, 0, 0, 1)
 			return
 		}
-
-		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
-		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
-		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
+		qre.recordQueryStats(err, duration, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 	}(time.Now())
 
 	if err = qre.checkPermissions(); err != nil {
@@ -162,14 +148,23 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, reqThrottledErr
 	}
 
+	return qre.executeBuffered()
+}
+
+// executeBuffered runs the plan to completion and returns a single buffered
+// result. It is the shared dispatch used by Execute for non-streaming queries
+// and by Stream for every plan type that is not a streaming read, so both paths
+// handle DDL, migrations, savepoints, SET and the other non-read statements the
+// same way. Callers run checkPermissions and the request throttler before
+// calling this.
+func (qre *QueryExecutor) executeBuffered() (*sqltypes.Result, error) {
 	if qre.plan.PlanID == p.PlanNextval {
 		return qre.execNextval()
 	}
 
 	if qre.connID != 0 {
-		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
 		if err != nil {
 			return nil, err
 		}
@@ -340,7 +335,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(callback StreamCallback) error {
+func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
@@ -357,6 +352,35 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return qre.streamDML(callback)
 	}
 
+	// Record the per-table and per-plan stats that the DML path records in
+	// streamDML, so reads on the streaming path match Execute. Registered after
+	// the DML dispatch above so DML statements are not double-counted.
+	var totalRows int64
+	var totalRowsAffected uint64
+	defer func(start time.Time) {
+		duration := time.Since(start)
+		var errorCount int64
+		if err != nil {
+			errorCount = 1
+		}
+		qre.recordQueryStats(err, duration, totalRowsAffected, uint64(totalRows), errorCount)
+	}(time.Now())
+
+	// Wrap the callback to track the totals for the stats recorded above.
+	// totalRowsAffected covers statements run through executeBuffered (DDL, LOAD,
+	// ...) whose single reply carries the affected-rows count.
+	//
+	// TODO: a streaming read that returns an OK packet with affected rows
+	// (SELECT ... INTO OUTFILE) is still missed: ExecuteStreamFetch in
+	// go/mysql/streaming_query.go drops the OK packet's affectedRows in its
+	// `colNumber == 0` branch, so the callback never sees it. Closing that needs a
+	// protocol-level change there, threaded through connpool's Conn.Stream.
+	countingCallback := func(result *sqltypes.Result) error {
+		totalRows += int64(len(result.Rows))
+		totalRowsAffected += result.RowsAffected
+		return callback(result)
+	}
+
 	if err := qre.checkPermissions(); err != nil {
 		return err
 	}
@@ -365,16 +389,47 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return reqThrottledErr
 	}
 
+	// Streaming reads stream their results from MySQL through the generic path
+	// below. Every other plan type produces a single buffered result: run it
+	// through the same dispatch Execute uses (executeBuffered) and deliver that
+	// result through the callback, so the streaming path matches Execute for
+	// every statement BuildStreaming accepts (DDL, migrations, savepoints, SET,
+	// ...). executeBuffered's default also fails fast on any unhandled plan type.
 	switch qre.plan.PlanID {
-	case p.PlanSelectStream:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc, p.PlanOtherRead, p.PlanCallProc:
+		// Streaming reads: handled by the generic streaming path below.
+	default:
+		reply, err := qre.executeBuffered()
+		if err != nil {
+			return err
+		}
+		if reply == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s produced no result on the streaming path", qre.plan.PlanID.String())
+		}
+		return countingCallback(reply)
+	}
+
+	// Match Execute's schema-name rewrite. PlanSelectLockFunc is included for parity
+	// even though only information_schema reads carry BvReplaceSchemaName, so the
+	// rewrite is a no-op for it.
+	switch qre.plan.PlanID {
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
 	}
 
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
+	var sql string
+	var sqlWithoutComments string
+	if qre.plan.FullQuery != nil {
+		var err error
+		sql, sqlWithoutComments, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return err
+		}
+	} else {
+		sql = qre.query
+		sqlWithoutComments, _ = sqlparser.SplitMarginComments(qre.query)
 	}
 
 	var replaceKeyspace string
@@ -383,8 +438,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
-		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
-			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, callback,
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelect && qre.shouldConsolidate() {
+			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, countingCallback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()
 					if err != nil {
@@ -436,7 +491,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 		}
-		return callback(result)
+		return countingCallback(result)
 	})
 }
 
@@ -463,26 +518,13 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 	// the failure path), the query-log fields and the result histogram.
 	defer func(start time.Time) {
 		duration := time.Since(start)
-		mysqlTime := qre.logStats.MysqlResponseTime
-		// Plans without a single table (e.g. multi-table statements) have an
-		// empty TableName; bucket their stats under "Join", like Execute.
-		tableName := qre.plan.TableName().String()
-		if tableName == "" {
-			tableName = "Join"
-		}
-		errCode := vterrors.Code(err).String()
-
 		if reply == nil {
-			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
-			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
+			qre.recordQueryStats(err, duration, 0, 0, 1)
 			return
 		}
-
-		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
-		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
-		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
+		qre.recordQueryStats(err, duration, reply.RowsAffected, uint64(len(reply.Rows)), 0)
 	}(time.Now())
 
 	if err = qre.checkPermissions(); err != nil {
@@ -527,6 +569,27 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 	}
 	err = callback(reply)
 	return err
+}
+
+// recordQueryStats records the per-table/per-plan QueryEngine stats and plan
+// counters for a finished query, plus the result histogram on success. It is the
+// shared tail of Execute, streamDML and the streaming read path. errorCount is 1
+// on failure; the caller decides what counts as a failure (a nil reply for the
+// single-reply paths, a non-nil error for streaming reads). The histogram is
+// recorded only when errorCount is 0, matching Execute, which skips it when no
+// result was produced.
+func (qre *QueryExecutor) recordQueryStats(err error, duration time.Duration, rowsAffected, rowsReturned uint64, errorCount int64) {
+	tableName := qre.plan.TableName().String()
+	if tableName == "" {
+		tableName = "Join"
+	}
+	mysqlTime := qre.logStats.MysqlResponseTime
+	errCode := vterrors.Code(err).String()
+	qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(rowsAffected), int64(rowsReturned), errorCount, errCode)
+	qre.plan.AddStats(1, duration, mysqlTime, rowsAffected, rowsReturned, uint64(errorCount))
+	if errorCount == 0 {
+		qre.tsv.Stats().ResultHistogram.Add(int64(rowsReturned))
+	}
 }
 
 // MessageStream streams messages from a message table.
