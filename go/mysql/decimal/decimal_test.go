@@ -715,8 +715,8 @@ func TestSizeAndScaleFromString(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.value, func(t *testing.T) {
 			siz, scale := SizeAndScaleFromString(testcase.value)
-			assert.EqualValues(t, testcase.sizeExpected, siz)
-			assert.EqualValues(t, testcase.scaleExpected, scale)
+			assert.Equal(t, testcase.sizeExpected, siz)
+			assert.Equal(t, testcase.scaleExpected, scale)
 		})
 	}
 }

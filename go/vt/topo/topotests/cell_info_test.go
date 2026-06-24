@@ -49,7 +49,7 @@ func TestCellInfo(t *testing.T) {
 	var cells []string
 	cells, err = ts.ExpandCells(ctx, cell)
 	require.NoError(t, err)
-	require.EqualValues(t, []string{"cell1"}, cells)
+	require.Equal(t, []string{"cell1"}, cells)
 
 	// Update the Server Address.
 	if err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
@@ -154,7 +154,7 @@ func TestExpandCells(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.EqualValues(t, tCase.cellsOut, cells)
+			require.Equal(t, tCase.cellsOut, cells)
 		})
 	}
 

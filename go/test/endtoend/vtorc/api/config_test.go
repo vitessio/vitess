@@ -188,5 +188,5 @@ func waitForConfig(t *testing.T, vtorc *cluster.VTOrcProcess, expectedConfig str
 	status, _ := utils.MakeAPICallRetry(t, vtorc, "/api/config", func(_ int, response string) bool {
 		return !strings.Contains(response, expectedConfig)
 	})
-	require.EqualValues(t, 200, status)
+	require.Equal(t, 200, status)
 }

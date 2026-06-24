@@ -812,7 +812,7 @@ func TestSidecarDBTables(t *testing.T) {
 		return nil
 	}, options)
 	require.NoError(t, err)
-	require.EqualValues(t, wantRowEvents, gotRowEvents)
+	require.Equal(t, wantRowEvents, gotRowEvents)
 	for k, v := range gotFieldEvents {
 		require.Equal(t, 1, v, "gotFieldEvents[%s] = %d", k, v)
 	}

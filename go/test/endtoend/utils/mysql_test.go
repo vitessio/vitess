@@ -315,7 +315,7 @@ func TestSetAndResetReplication(t *testing.T) {
 
 	replConfig, err := mysqld.ReplicationConfiguration(t.Context())
 	require.NoError(t, err)
-	assert.EqualValues(t, heartbeatInterval, replConfig.HeartbeatInterval)
+	assert.Equal(t, heartbeatInterval, replConfig.HeartbeatInterval)
 
 	err = mysqld.ResetReplication(t.Context())
 	assert.NoError(t, err)

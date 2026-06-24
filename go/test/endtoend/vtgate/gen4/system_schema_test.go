@@ -190,7 +190,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", shardedKs, shardedKs, shardedKs, shardedKs)
 	qr1 := utils.Exec(t, conn, query)
-	require.EqualValues(t, 4, len(qr1.Fields))
+	require.Equal(t, 4, len(qr1.Fields))
 
 	// test a query with two keyspace names
 	query = fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+

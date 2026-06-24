@@ -949,14 +949,14 @@ func TestPrepareTx(t *testing.T) {
 			te.AcceptReadWrite()
 			db.ResetQueryLog()
 			failed, err := te.prepareTx(t.Context(), tt.preparedTx)
-			require.EqualValues(t, tt.requireFailure, failed)
+			require.Equal(t, tt.requireFailure, failed)
 			if tt.errWanted != "" {
 				require.ErrorContains(t, err, tt.errWanted)
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, 1, len(te.preparedPool.conns))
-			require.EqualValues(t, tt.queryLogWanted, db.QueryLog())
+			require.Equal(t, 1, len(te.preparedPool.conns))
+			require.Equal(t, tt.queryLogWanted, db.QueryLog())
 		})
 	}
 }

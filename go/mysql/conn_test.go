@@ -308,9 +308,9 @@ func TestBasicPackets(t *testing.T) {
 	require.NoError(err)
 	assert.EqualValues(23, packetOk.affectedRows)
 	assert.EqualValues(45, packetOk.lastInsertID)
-	assert.EqualValues(ServerSessionStateChanged, packetOk.statusFlags&ServerSessionStateChanged)
+	assert.Equal(ServerSessionStateChanged, packetOk.statusFlags&ServerSessionStateChanged)
 	assert.EqualValues(89, packetOk.warnings)
-	assert.EqualValues("foo-bar", packetOk.sessionStateData)
+	assert.Equal("foo-bar", packetOk.sessionStateData)
 
 	// Write OK packet with EOF header, read it, compare.
 	ok = PacketOK{

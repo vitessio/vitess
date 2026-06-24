@@ -133,7 +133,7 @@ func TestSidecarDB(t *testing.T) {
 
 func validateSidecarDBTables(t *testing.T, tabletID string, tables []string) {
 	_, tables2 := getSidecarDBTables(t, tabletID)
-	require.EqualValues(t, tables, tables2)
+	require.Equal(t, tables, tables2)
 }
 
 func modifySidecarDBSchema(t *testing.T, vc *VitessCluster, tabletID string, ddls []string) (numChanges int) {

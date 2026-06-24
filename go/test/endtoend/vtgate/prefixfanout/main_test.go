@@ -178,12 +178,12 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 	qr := utils.Exec(t, conn, "select c2 from t1 where c1 like 'A%' order by c2")
 	assert.Equal(t, 2, len(qr.Rows))
 	// should only target a subset of shards serving rows starting with 'A'.
-	assert.EqualValues(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
 	// should only target a subset of shards serving rows starting with 'AA',
 	// the shards to which 'AA' maps to.
 	qr = utils.Exec(t, conn, "select c2 from t1 where c1 like 'AA'")
 	assert.Equal(t, 1, len(qr.Rows))
-	assert.EqualValues(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
+	assert.Equal(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
 	// fan out to all when there is no prefix
 	qr = utils.Exec(t, conn, "select c2 from t1 where c1 like '%A' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))

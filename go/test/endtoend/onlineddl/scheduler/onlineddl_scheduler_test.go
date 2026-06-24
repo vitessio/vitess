@@ -1189,7 +1189,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
-				assert.EqualValues(t, 1.0, userThrotteRatio)
+				assert.Equal(t, 1.0, userThrotteRatio)
 			}
 			// t2uuid migration is not in 'running' state, hence 'user_throttle_ratio' is not updated
 			rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
@@ -1234,7 +1234,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
-				assert.EqualValues(t, 1.0, userThrotteRatio)
+				assert.Equal(t, 1.0, userThrotteRatio)
 			}
 		})
 		t.Run("unthrottle t2", func(t *testing.T) {
@@ -2187,12 +2187,12 @@ func testScheduler(t *testing.T) {
 		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
-			assert.EqualValues(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
+			assert.Equal(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
 		}
 		rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
-			assert.EqualValues(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
+			assert.Equal(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
 		}
 
 		// Unthrottle by context.

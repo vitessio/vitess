@@ -747,8 +747,8 @@ func TestRemoveNonRequiredForeignKeys(t *testing.T) {
 				require.EqualError(t, err, tt.expectedErr)
 				return
 			}
-			require.EqualValues(t, tt.childFkWanted, tt.semTable.childForeignKeysInvolved)
-			require.EqualValues(t, tt.parentFkWanted, tt.semTable.parentForeignKeysInvolved)
+			require.Equal(t, tt.childFkWanted, tt.semTable.childForeignKeysInvolved)
+			require.Equal(t, tt.parentFkWanted, tt.semTable.parentForeignKeysInvolved)
 		})
 	}
 }
@@ -978,7 +978,7 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 			semTable, err := Analyze(stmt, keyspaceName, tt.fakeSi)
 			require.NoError(t, err)
 			got := semTable.HasNonLiteralForeignKeyUpdate(stmt.(*sqlparser.Update).Exprs)
-			require.EqualValues(t, tt.hasNonLiteral, got)
+			require.Equal(t, tt.hasNonLiteral, got)
 		})
 	}
 }

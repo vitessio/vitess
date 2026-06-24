@@ -1181,7 +1181,7 @@ func TestLookupErrorMetric(t *testing.T) {
 	require.ErrorContains(t, err, `(errno 1062) (sqlstate 23000)`)
 
 	newErrCount := getVtgateApiErrorCounts(t)
-	require.EqualValues(t, oldErrCount+1, newErrCount)
+	require.Equal(t, oldErrCount+1, newErrCount)
 }
 
 func getVtgateApiErrorCounts(t *testing.T) float64 {

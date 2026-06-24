@@ -66,7 +66,7 @@ func TestVitessCluster(t *testing.T) {
 		clusters, err := ts.GetExternalVitessClusters(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(clusters))
-		require.EqualValues(t, []string{"c1", "c2"}, clusters)
+		require.Equal(t, []string{"c1", "c2"}, clusters)
 	})
 	t.Run("Unmount first cluster", func(t *testing.T) {
 		err := wr.UnmountExternalVitessCluster(ctx, name)
@@ -79,6 +79,6 @@ func TestVitessCluster(t *testing.T) {
 		clusters, err := ts.GetExternalVitessClusters(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(clusters))
-		require.EqualValues(t, []string{"c2"}, clusters)
+		require.Equal(t, []string{"c2"}, clusters)
 	})
 }

@@ -1018,7 +1018,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		NoRoutingRules: true,
 	})
 	require.NoError(t, err)
-	require.EqualValues(t, want, res, "got: %+v, want: %+v", res, want)
+	require.Equal(t, want, res, "got: %+v, want: %+v", res, want)
 	rr, err := env.ws.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
 	require.Emptyf(t, rr.Rules, "routing rules should be empty, found %+v", rr.Rules)

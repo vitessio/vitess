@@ -1346,8 +1346,8 @@ func TestLoadTabletsTrigger(t *testing.T) {
 	for range numTriggers {
 		// Read from the channel and verify we indeed have the right values.
 		kss := <-ch
-		require.EqualValues(t, ks, kss.Keyspace)
-		require.EqualValues(t, shard, kss.Shard)
+		require.Equal(t, ks, kss.Keyspace)
+		require.Equal(t, shard, kss.Shard)
 	}
 	require.Empty(t, ch)
 }
@@ -1586,12 +1586,12 @@ func TestHealthCheckImplSubscriberName(t *testing.T) {
 	subsNames := maps.Values(hc.subscribers)
 	slices.Sort(subsNames)
 	require.Equal(t, 2, len(subsNames), "expected 2 subscribers")
-	require.EqualValues(t, []string{subsName, subsName2}, subsNames, "unexpected subscribers")
+	require.Equal(t, []string{subsName, subsName2}, subsNames, "unexpected subscribers")
 
 	hc.Unsubscribe(ch)
 	subsNames = maps.Values(hc.subscribers)
 	require.Equal(t, 1, len(subsNames), "expected 1 subscriber")
-	require.EqualValues(t, []string{subsName2}, subsNames, "unexpected subscribers")
+	require.Equal(t, []string{subsName2}, subsNames, "unexpected subscribers")
 
 	hc.Unsubscribe(ch2)
 	subsNames = maps.Values(hc.subscribers)

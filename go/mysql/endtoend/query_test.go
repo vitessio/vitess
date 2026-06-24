@@ -302,8 +302,8 @@ func TestSysInfo(t *testing.T) {
 	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[0][10].String())
 	assert.Contains(t, []string{`VARBINARY("a")`, `VARCHAR("a")`}, qr.Rows[1][10].String())
 
-	assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type)
-	assert.EqualValues(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
+	assert.Equal(t, sqltypes.Uint64, qr.Fields[4].Type)
+	assert.Equal(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
 }
 
 func getDefaultCollationID() collations.ID {

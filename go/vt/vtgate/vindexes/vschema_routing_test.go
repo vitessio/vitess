@@ -217,8 +217,8 @@ func TestAutoGlobalRoutingExtended(t *testing.T) {
 			sort.Strings(ambiguousTables)
 			sort.Strings(tc.expGlobalTables)
 			sort.Strings(tc.expAmbiguousTables)
-			require.EqualValuesf(t, tc.expGlobalTables, globalTables, "global tables mismatch")
-			require.EqualValuesf(t, tc.expAmbiguousTables, ambiguousTables, "ambiguous tables mismatch")
+			require.Equalf(t, tc.expGlobalTables, globalTables, "global tables mismatch")
+			require.Equalf(t, tc.expAmbiguousTables, ambiguousTables, "ambiguous tables mismatch")
 		})
 	}
 }
@@ -308,7 +308,7 @@ func TestAutoGlobalRoutingBasic(t *testing.T) {
 
 	// Verify the global tables
 	ks := vschema.Keyspaces["sharded1"]
-	require.EqualValues(t, map[string]Table{
+	require.Equal(t, map[string]Table{
 		"table5":   ks.Tables["table5"],
 		"scommon1": ks.Tables["scommon1"],
 		"scommon2": ks.Tables["scommon2"],

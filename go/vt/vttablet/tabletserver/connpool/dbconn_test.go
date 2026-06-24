@@ -447,7 +447,7 @@ func TestDBNoPoolConnKill(t *testing.T) {
 	var sqlErr *sqlerror.SQLError
 	isSqlErr := errors.As(sqlerror.NewSQLErrorFromError(err), &sqlErr)
 	require.True(t, isSqlErr)
-	require.EqualValues(t, sqlerror.CRServerLost, sqlErr.Number())
+	require.Equal(t, sqlerror.CRServerLost, sqlErr.Number())
 	db.DisableConnFail()
 
 	// Kill succeed

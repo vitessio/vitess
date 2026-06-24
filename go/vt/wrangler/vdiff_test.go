@@ -1108,7 +1108,7 @@ func TestVDiffFindPKs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := findPKs(env, tc.table, tc.targetSelect, tc.tdIn)
 			require.NoError(t, err)
-			require.EqualValues(t, tc.tdOut, tc.tdIn)
+			require.Equal(t, tc.tdOut, tc.tdIn)
 		})
 	}
 }

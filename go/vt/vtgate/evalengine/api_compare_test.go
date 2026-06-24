@@ -88,9 +88,9 @@ func (tc testCase) run(t *testing.T) {
 	if tc.err == "" {
 		require.NoError(t, err)
 		if tc.out != nil && *tc.out {
-			require.EqualValues(t, uint64(1), evalToInt64(v).toUint64().u)
+			require.Equal(t, uint64(1), evalToInt64(v).toUint64().u)
 		} else if tc.out != nil && !*tc.out {
-			require.EqualValues(t, uint64(0), evalToInt64(v).toUint64().u)
+			require.Equal(t, uint64(0), evalToInt64(v).toUint64().u)
 		} else {
 			require.Nil(t, v)
 		}

@@ -589,7 +589,7 @@ func TestMoveTablesComplete(t *testing.T) {
 				require.EqualError(t, err, tc.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, tc.want, got, "Server.MoveTablesComplete() = %v, want %v", got, tc.want)
+				require.Equal(t, tc.want, got, "Server.MoveTablesComplete() = %v, want %v", got, tc.want)
 			}
 			if tc.postFunc != nil {
 				tc.postFunc(t, env)
@@ -1219,7 +1219,7 @@ func TestWorkflowDelete(t *testing.T) {
 					require.NotNil(t, si)
 					tc := si.GetTabletControl(topodatapb.TabletType_PRIMARY)
 					require.NotNil(t, tc)
-					require.EqualValues(t, []string{"t2", "t3"}, tc.DeniedTables)
+					require.Equal(t, []string{"t2", "t3"}, tc.DeniedTables)
 				}
 			},
 		},
@@ -1484,7 +1484,7 @@ func TestWorkflowDelete(t *testing.T) {
 				require.EqualError(t, err, tc.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, tc.want, got, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
+				require.Equal(t, tc.want, got, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
 			}
 			if tc.postFunc != nil {
 				tc.postFunc(t, env)
@@ -2290,7 +2290,7 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			require.NoError(t, err)
 
-			require.EqualValues(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
+			require.Equal(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
 		})
 	}
 }

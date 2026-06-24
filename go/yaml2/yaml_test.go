@@ -41,7 +41,7 @@ func TestYamlVars(t *testing.T) {
 	t.Run("Marshal", func(t *testing.T) {
 		marshalData, err = Marshal(inputData)
 		assert.NoError(t, err)
-		require.EqualValues(t, `BoolField: true
+		require.Equal(t, `BoolField: true
 Float64Field: 3.141
 IntField: 32
 StringField: tricky text to test text

@@ -1790,7 +1790,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
-	assert.EqualValues(t, 7, len(results.Rows))
+	assert.Equal(t, 7, len(results.Rows))
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// If all shards fail, the operation should also fail
@@ -1859,19 +1859,19 @@ func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Fail 1 of N with the directive succeeds with 7 rows
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
 	require.NoError(t, err)
-	assert.EqualValues(t, 7, len(results.Rows))
+	assert.Equal(t, 7, len(results.Rows))
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user`", 8)
 
 	// order by
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
 	require.NoError(t, err)
-	assert.EqualValues(t, 7, len(results.Rows))
+	assert.Equal(t, 7, len(results.Rows))
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc", 8)
 
 	// order by and limit
 	results, err = executorStream(ctx, executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5")
 	require.NoError(t, err)
-	assert.EqualValues(t, 5, len(results.Rows))
+	assert.Equal(t, 5, len(results.Rows))
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from `user` order by id asc limit 5", 8)
 }
 
@@ -4692,7 +4692,7 @@ func TestSysVarGlobalAndSession(t *testing.T) {
 	_, err = executorExecSession(t.Context(), executor, session,
 		"set @@innodb_lock_wait_timeout = 40", nil)
 	require.NoError(t, err)
-	require.EqualValues(t, "40", session.SystemVariables["innodb_lock_wait_timeout"])
+	require.Equal(t, "40", session.SystemVariables["innodb_lock_wait_timeout"])
 
 	qr, err = executorExecSession(t.Context(), executor, session,
 		"select @@innodb_lock_wait_timeout", nil)

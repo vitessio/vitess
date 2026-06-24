@@ -691,7 +691,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	sm.demotePrimaryStalled = true
 	sm.Broadcast()
 	gotshr = <-ch
-	require.EqualValues(t, "VT09031: Primary demotion is stalled", gotshr.RealtimeStats.HealthError)
+	require.Equal(t, "VT09031: Primary demotion is stalled", gotshr.RealtimeStats.HealthError)
 	// Verify that we can't start a new request once we have a demote primary stalled.
 	err = sm.StartRequest(t.Context(), &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}, false)
 	require.ErrorContains(t, err, "operation not allowed in state NOT_SERVING")

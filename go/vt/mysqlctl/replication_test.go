@@ -301,7 +301,7 @@ func TestPrimaryStatus(t *testing.T) {
 	res, err := testMysqld.PrimaryStatus(ctx)
 	assert.NoError(t, err)
 	assert.NotNil(t, res)
-	assert.EqualValues(t, "test_uuid", res.ServerUUID)
+	assert.Equal(t, "test_uuid", res.ServerUUID)
 
 	db.AddQuery("SHOW MASTER STATUS", &sqltypes.Result{})
 	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})

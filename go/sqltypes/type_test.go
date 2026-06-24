@@ -133,7 +133,7 @@ func TestTypeValues(t *testing.T) {
 		expected: 34 | flagIsText,
 	}}
 	for _, tcase := range testcases {
-		assert.EqualValues(t, tcase.expected, int(tcase.defined))
+		assert.Equal(t, tcase.expected, int(tcase.defined))
 	}
 }
 

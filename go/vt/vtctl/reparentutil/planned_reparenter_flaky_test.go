@@ -4500,9 +4500,9 @@ func TestPlannedReparenter_verifyAllTabletsReachable(t *testing.T) {
 			innodbBufferPoolsData, err := pr.verifyAllTabletsReachable(t.Context(), tt.tabletMap)
 			if tt.wantErr == "" {
 				require.NoError(t, err)
-				require.EqualValues(t, len(tt.wantBufferPoolsData), len(innodbBufferPoolsData))
+				require.Equal(t, len(tt.wantBufferPoolsData), len(innodbBufferPoolsData))
 				for str, val := range tt.wantBufferPoolsData {
-					require.EqualValues(t, val, innodbBufferPoolsData[str])
+					require.Equal(t, val, innodbBufferPoolsData[str])
 				}
 				return
 			}
@@ -4601,8 +4601,8 @@ func TestPlannedReparenterStats(t *testing.T) {
 	require.NoError(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1}, prsCounter.Counts())
-	require.EqualValues(t, map[string]int64{"All": 1, "PlannedReparentShard": 1}, reparentShardOpTimings.Counts())
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1}, prsCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 1, "PlannedReparentShard": 1}, reparentShardOpTimings.Counts())
 
 	// set plannedReparentOps to request a non existent tablet
 	plannedReparentOps.NewPrimaryAlias = &topodatapb.TabletAlias{
@@ -4615,6 +4615,6 @@ func TestPlannedReparenterStats(t *testing.T) {
 	require.Error(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, prsCounter.Counts())
-	require.EqualValues(t, map[string]int64{"All": 2, "PlannedReparentShard": 2}, reparentShardOpTimings.Counts())
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, prsCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 2, "PlannedReparentShard": 2}, reparentShardOpTimings.Counts())
 }

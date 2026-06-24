@@ -1125,7 +1125,7 @@ func TestMaxIdleCount(t *testing.T) {
 				closedConn++
 			}
 		}
-		assert.EqualValues(t, expClosedConn, closedConn)
+		assert.Equal(t, expClosedConn, closedConn)
 		assert.EqualValues(t, expClosedConn, p.Metrics.IdleClosed())
 	}
 
@@ -2069,7 +2069,7 @@ func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
 	}()
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 1, p.wait.waiting())
+		assert.Equal(c, 1, p.wait.waiting())
 	}, time.Second, time.Millisecond)
 
 	closeDone := make(chan error, 1)
@@ -2339,7 +2339,7 @@ func TestTaintWakesWaiter(t *testing.T) {
 	}()
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 1, p.wait.waiting())
+		assert.Equal(c, 1, p.wait.waiting())
 	}, time.Second, time.Millisecond)
 
 	c.Taint()
@@ -2380,7 +2380,7 @@ func TestRecycleMaxLifetimeWakesWaiter(t *testing.T) {
 	}()
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.EqualValues(c, 1, p.wait.waiting())
+		assert.Equal(c, 1, p.wait.waiting())
 	}, time.Second, time.Millisecond)
 
 	c.Recycle()

@@ -151,7 +151,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	qr, more, err := conn.ExecuteFetchMulti("select 1 from dual; set autocommit=1; select 1 from dual", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(multi result)", more, true)
-	assert.EqualValues(t, 1, len(qr.Rows))
+	assert.Equal(t, 1, len(qr.Rows))
 
 	qr, more, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
@@ -161,12 +161,12 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	qr, more, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(2)", more, false)
-	assert.EqualValues(t, 1, len(qr.Rows))
+	assert.Equal(t, 1, len(qr.Rows))
 
 	qr, more, err = conn.ExecuteFetchMulti("select 1 from dual", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(single result)", more, false)
-	assert.EqualValues(t, 1, len(qr.Rows))
+	assert.Equal(t, 1, len(qr.Rows))
 
 	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
 	expectNoError(t, err)
@@ -207,12 +207,12 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	qr, more, _, err = conn.ReadQueryResult(300, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(1)", more, true)
-	assert.EqualValues(t, 255, len(qr.Rows), "ReadQueryResult(1)")
+	assert.Equal(t, 255, len(qr.Rows), "ReadQueryResult(1)")
 
 	qr, more, _, err = conn.ReadQueryResult(300, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(2)", more, false)
-	assert.EqualValues(t, 1, len(qr.Rows), "ReadQueryResult(1)")
+	assert.Equal(t, 1, len(qr.Rows), "ReadQueryResult(1)")
 
 	// Verify that a ExecuteFetchMultiDrain is happy to operate again after all the above.
 	err = conn.ExecuteFetchMultiDrain("update a set name = concat(name, ', multi drain 2'); select * from a; select count(*) from a")

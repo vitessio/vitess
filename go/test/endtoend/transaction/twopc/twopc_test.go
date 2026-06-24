@@ -1858,7 +1858,7 @@ func TestVindexes(t *testing.T) {
 			// Below check ensures that the transaction is resolved by the resolver on receiving unresolved transaction signal from MM.
 			logTable := retrieveTransitionsWithTimeout(t, ch, tableMap, dtMap, 2*time.Second)
 			for key, val := range tt.logExpected {
-				assert.EqualValues(t, val, logTable[key], key)
+				assert.Equal(t, val, logTable[key], key)
 			}
 		})
 	}

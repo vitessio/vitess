@@ -3104,8 +3104,8 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	require.NoError(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1}, ersCounter.Counts())
-	require.EqualValues(t, map[string]int64{"All": 1, "EmergencyReparentShard": 1}, reparentShardOpTimings.Counts())
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1}, ersCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 1, "EmergencyReparentShard": 1}, reparentShardOpTimings.Counts())
 
 	// set emergencyReparentOps to request a non existent tablet
 	emergencyReparentOps.NewPrimaryAlias = &topodatapb.TabletAlias{
@@ -3118,8 +3118,8 @@ func TestEmergencyReparenterStats(t *testing.T) {
 	require.Error(t, err)
 
 	// check the counter values
-	require.EqualValues(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, ersCounter.Counts())
-	require.EqualValues(t, map[string]int64{"All": 2, "EmergencyReparentShard": 2}, reparentShardOpTimings.Counts())
+	require.Equal(t, map[string]int64{"testkeyspace.-.success": 1, "testkeyspace.-.failure": 1}, ersCounter.Counts())
+	require.Equal(t, map[string]int64{"All": 2, "EmergencyReparentShard": 2}, reparentShardOpTimings.Counts())
 }
 
 func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
@@ -4551,7 +4551,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 			assert.NoError(t, err)
 			require.Equal(t, len(tt.result), len(res))
 			for idx, tablet := range res {
-				assert.EqualValues(t, topoproto.TabletAliasString(tt.result[idx].Alias), topoproto.TabletAliasString(tablet.Alias))
+				assert.Equal(t, topoproto.TabletAliasString(tt.result[idx].Alias), topoproto.TabletAliasString(tablet.Alias))
 			}
 		})
 	}
@@ -5002,7 +5002,7 @@ func TestEmergencyReparenter_filterValidCandidates(t *testing.T) {
 				require.Contains(t, err.Error(), tt.errShouldContain)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, tt.filteredTablets, tabletList)
+				require.Equal(t, tt.filteredTablets, tabletList)
 			}
 		})
 	}

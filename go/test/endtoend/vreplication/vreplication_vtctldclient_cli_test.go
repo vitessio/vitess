@@ -244,7 +244,7 @@ func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	workflowResponse := getWorkflow(targetKeyspace, defaultWorkflowName)
 
 	// also validates that MoveTables Show and Workflow Show return the same output.
-	require.EqualValues(t, moveTablesResponse.CloneVT(), workflowResponse)
+	require.Equal(t, moveTablesResponse.CloneVT(), workflowResponse)
 
 	// Validate that the flags are set correctly in the database.
 	validateMoveTablesWorkflow(t, workflowResponse.Workflows)
@@ -453,7 +453,7 @@ func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
 
 	defaultWorkflowNames := workflowList(targetKeyspace)
 	slices.Sort(defaultWorkflowNames)
-	require.EqualValues(t, wfNames, defaultWorkflowNames)
+	require.Equal(t, wfNames, defaultWorkflowNames)
 
 	workflows := getWorkflows(targetKeyspace)
 	defaultWorkflowNames = make([]string, len(workflows.Workflows))
@@ -461,7 +461,7 @@ func testWorkflowList(t *testing.T, sourceKeyspace, targetKeyspace string) {
 		defaultWorkflowNames[i] = workflows.Workflows[i].Name
 	}
 	slices.Sort(defaultWorkflowNames)
-	require.EqualValues(t, wfNames, defaultWorkflowNames)
+	require.Equal(t, wfNames, defaultWorkflowNames)
 }
 
 func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[string]*cluster.VttabletProcess, targetKeyspace, workflow string) {
@@ -544,7 +544,7 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 				expectedConfig, err = vttablet.NewVReplicationConfig(nil)
 				require.NoError(t, err)
 			}
-			require.EqualValues(t, expectedConfig.Map(), config)
+			require.Equal(t, expectedConfig.Map(), config)
 		})
 	}
 }
@@ -602,7 +602,7 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 	validateOverrides(t, targetTabs, overrides)
 	workflowResponse := getWorkflow(keyspace, defaultWorkflowName)
 	reshardShowResponse := getReshardShowResponse(&rs)
-	require.EqualValues(t, reshardShowResponse, workflowResponse)
+	require.Equal(t, reshardShowResponse, workflowResponse)
 	validateReshardWorkflow(t, workflowResponse.Workflows)
 	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	rs.Start()
@@ -1009,7 +1009,7 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
 				gotRules := &vschemapb.RoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
-				require.EqualValues(t, wantRules, gotRules)
+				require.Equal(t, wantRules, gotRules)
 			}
 		case "ShardRoutingRules":
 			srr := &vschemapb.ShardRoutingRules{
@@ -1028,7 +1028,7 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
 				gotRules := &vschemapb.ShardRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
-				require.EqualValues(t, wantRules, gotRules)
+				require.Equal(t, wantRules, gotRules)
 			}
 		case "KeyspaceRoutingRules":
 			krr := &vschemapb.KeyspaceRoutingRules{
@@ -1046,7 +1046,7 @@ func testRoutingRulesApplyCommands(t *testing.T) {
 				require.NoError(t, json2.UnmarshalPB([]byte(want), wantRules))
 				gotRules := &vschemapb.KeyspaceRoutingRules{}
 				require.NoError(t, json2.UnmarshalPB([]byte(got), gotRules))
-				require.EqualValues(t, wantRules, gotRules)
+				require.Equal(t, wantRules, gotRules)
 			}
 		default:
 			require.FailNowf(t, "Unknown type", "%s", typ)

@@ -628,7 +628,7 @@ func validateBaselineErrSpecializedPlan(t *testing.T, p map[string]any) {
 	require.EqualValues(t, "PlanSwitcher", pm["OperatorType"])
 	baselineErr := pm["BaselineErr"].(string)
 
-	require.EqualValues(t, "VT12001: unsupported: window functions are only supported for single-shard queries", baselineErr)
+	require.Equal(t, "VT12001: unsupported: window functions are only supported for single-shard queries", baselineErr)
 
 	pd, err := engine.PrimitiveDescriptionFromMap(plan.(map[string]any))
 	require.NoError(t, err)

@@ -218,14 +218,14 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	assert.EqualValues(t, 0, sbclookup.CommitCount.Load(), "commit count")
 	logStats := testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
 	_, err = executorExecSession(ctx, executor, session, "select id from main1", nil)
 	require.NoError(t, err)
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime, "logstats: expected zero CommitTime")
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	_, err = executorExecSession(t.Context(), executor, session, "commit", nil)
 	require.NoError(t, err)
@@ -234,7 +234,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	assert.EqualValues(t, 1, sbclookup.CommitCount.Load(), "commit count")
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotZero(t, logStats.CommitTime)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
 	_, err = executorExecSession(ctx, executor, session, "begin", nil)
@@ -250,7 +250,7 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
 	assert.NotZero(t, logStats.CommitTime)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// CloseSession doesn't log anything
 	err = executor.CloseSession(ctx, session)
@@ -298,7 +298,7 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	commitCount := sbclookup.CommitCount.Load()
 	assert.Equalf(t, int64(0), commitCount, "want 0, got %d", commitCount)
 	logStats := testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
 	_, err = executorExecSession(ctx, executor, session, "select id from main1", nil)
@@ -311,10 +311,10 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
 	_, err = executorExecSession(ctx, executor, session, "begin", nil)
@@ -330,7 +330,7 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	_ = testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
 	_ = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "ROLLBACK", "rollback", 1)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 }
 
 func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
@@ -355,7 +355,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 		return nil
 	})
 
-	require.EqualValues(t, 1, len(results), "should get empty result from begin")
+	require.Equal(t, 1, len(results), "should get empty result from begin")
 	assert.Empty(t, results[0].Rows, "should get empty result from begin")
 
 	require.NoError(t, err)
@@ -369,7 +369,7 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 	utils.MustMatch(t, wantSession, session.Session, "session")
 	assert.Zero(t, sbclookup.CommitCount.Load())
 	logStats := testQueryLog(t, executor, logChan, "TestExecute", "BEGIN", "begin", 0)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// commit.
 	_, err = executorExecSession(ctx, executor, session, "select id from main1", nil)
@@ -382,10 +382,10 @@ func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
 
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "SELECT", "select id from main1", 1)
 	assert.EqualValues(t, 0, logStats.CommitTime)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 	logStats = testQueryLog(t, executor, logChan, "TestExecute", "COMMIT", "commit", 1)
 	assert.NotEqual(t, 0, logStats.CommitTime)
-	assert.EqualValues(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
+	assert.Equal(t, "suuid", logStats.SessionUUID, "logstats: expected non-empty SessionUUID")
 
 	// rollback.
 	_, err = executorExecSession(ctx, executor, session, "begin", nil)
@@ -2844,10 +2844,10 @@ func TestExecutorSettingsInTwoPC(t *testing.T) {
 
 			queriesRecvd, err := sbc1.GetFinalQueries()
 			require.NoError(t, err)
-			assert.EqualValues(t, tcase.expectedQueries[0], queriesRecvd)
+			assert.Equal(t, tcase.expectedQueries[0], queriesRecvd)
 			queriesRecvd, err = sbc2.GetFinalQueries()
 			require.NoError(t, err)
-			assert.EqualValues(t, tcase.expectedQueries[1], queriesRecvd)
+			assert.Equal(t, tcase.expectedQueries[1], queriesRecvd)
 		})
 	}
 }

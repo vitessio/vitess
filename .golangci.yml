@@ -140,6 +140,7 @@ linters:
         - formatter
         - empty
         - expected-actual
+        - equal-values
   exclusions:
     generated: lax
     presets:

@@ -5701,7 +5701,7 @@ func TestGetTransactionInfo(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, tt.respWanted, resp)
+			require.Equal(t, tt.respWanted, resp)
 		})
 	}
 }

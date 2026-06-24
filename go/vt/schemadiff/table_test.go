@@ -3449,7 +3449,7 @@ func TestNormalize(t *testing.T) {
 
 			autoinc, err := from.AutoIncrementValue()
 			require.NoError(t, err)
-			assert.EqualValues(t, ts.autoinc, autoinc)
+			assert.Equal(t, ts.autoinc, autoinc)
 		})
 	}
 }

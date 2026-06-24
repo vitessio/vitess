@@ -166,15 +166,15 @@ func (fz *fuzzer) verifyTransactionsWereAtomic(t *testing.T) {
 		shard1Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[0])
 		shard2Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[1])
 		shard3Val := getColValueForIdFromFuzzUpdate(t, conn, updateSet[2])
-		require.EqualValues(t, shard1Val, shard2Val)
-		require.EqualValues(t, shard3Val, shard2Val)
+		require.Equal(t, shard1Val, shard2Val)
+		require.Equal(t, shard3Val, shard2Val)
 
 		// Next we get the IDs from all the three shards for the given update set index.
 		shard1IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 1)
 		shard2IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 2)
 		shard3IDs := getThreadIDsForUpdateSetFromFuzzInsert(t, conn, updateSetIdx, 3)
-		require.EqualValues(t, shard1IDs, shard2IDs)
-		require.EqualValues(t, shard3IDs, shard2IDs)
+		require.Equal(t, shard1IDs, shard2IDs)
+		require.Equal(t, shard3IDs, shard2IDs)
 	}
 }
 

@@ -141,7 +141,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, rules, len(tc.shards))
 			want := getExpectedRules(tc.sourceKeyspace, tc.targetKeyspace)
-			require.EqualValues(t, want, rules)
+			require.Equal(t, want, rules)
 		})
 	}
 }
@@ -159,7 +159,7 @@ func TestUpdateKeyspaceRoutingRule(t *testing.T) {
 	require.NoError(t, err)
 	rules, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	require.NoError(t, err)
-	require.EqualValues(t, routes, rules)
+	require.Equal(t, routes, rules)
 }
 
 // TestConcurrentKeyspaceRoutingRulesUpdates runs multiple keyspace routing rules updates concurrently to test

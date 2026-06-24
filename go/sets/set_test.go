@@ -81,5 +81,5 @@ func TestLen(t *testing.T) {
 func TestList(t *testing.T) {
 	testSet := New[string]("a string", "testing", "Capital", "34")
 	list := List(testSet)
-	require.EqualValues(t, []string{"34", "Capital", "a string", "testing"}, list)
+	require.Equal(t, []string{"34", "Capital", "a string", "testing"}, list)
 }

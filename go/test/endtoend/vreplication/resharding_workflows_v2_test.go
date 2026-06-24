@@ -550,7 +550,7 @@ func testReshardV2Workflow(t *testing.T) {
 	cnres, err := execVtgateQuery(dataGenConn, defaultTargetKs, "select count(*) from customer_name")
 	require.NoError(t, err)
 	require.Len(t, cnres.Rows, 1)
-	require.EqualValues(t, cres.Rows, cnres.Rows)
+	require.Equal(t, cres.Rows, cnres.Rows)
 	if debugMode {
 		// We expect the row count to differ in enterprise_customer because it is
 		// using a `where typ='enterprise'` filter. So the count is only for debug

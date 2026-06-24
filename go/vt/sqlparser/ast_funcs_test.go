@@ -168,7 +168,7 @@ func TestColumns_Indexes(t *testing.T) {
 				return
 			}
 			require.True(t, isSubset)
-			require.EqualValues(t, tt.indexesWanted, indexes)
+			require.Equal(t, tt.indexesWanted, indexes)
 		})
 	}
 }

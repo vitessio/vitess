@@ -6940,7 +6940,7 @@ func TestParseMultiple(t *testing.T) {
 			finalStmts = append(finalStmts, stmt)
 		}
 	}
-	require.EqualValues(t, totalCases, len(finalStmts))
+	require.Equal(t, totalCases, len(finalStmts))
 	idx := 0
 	for _, tcase := range validSQL {
 		if tcase.partialDDL {
@@ -7014,7 +7014,7 @@ func TestParseMultipleEdgeCases(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, len(test.want), len(stmts))
+			require.Equal(t, len(test.want), len(stmts))
 			for i, stmt := range stmts {
 				require.Equal(t, test.want[i], String(stmt))
 			}

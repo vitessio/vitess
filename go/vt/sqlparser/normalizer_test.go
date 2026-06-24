@@ -544,7 +544,7 @@ func TestNormalizeOneCasae(t *testing.T) {
 	out, err := Normalize(tree, NewReservedVars("vtg", known), bv, true, "ks", 0, "", map[string]string{}, nil, nil)
 	require.NoError(t, err)
 	normalizerOutput := String(out.AST)
-	require.EqualValues(t, testOne.output, normalizerOutput)
+	require.Equal(t, testOne.output, normalizerOutput)
 	if normalizerOutput == "otheradmin" || normalizerOutput == "otherread" {
 		return
 	}

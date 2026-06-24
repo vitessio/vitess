@@ -201,7 +201,7 @@ func TestConnPoolStateWhilePoolIsOpen(t *testing.T) {
 	assert.EqualValues(t, 100, connPool.Capacity(), "pool capacity should be 100")
 	assert.EqualValues(t, 0, connPool.Metrics.WaitTime(), "pool wait time should be 0")
 	assert.EqualValues(t, 0, connPool.Metrics.WaitCount(), "pool wait count should be 0")
-	assert.EqualValues(t, idleTimeout, connPool.IdleTimeout(), "pool idle timeout should be 0")
+	assert.Equal(t, idleTimeout, connPool.IdleTimeout(), "pool idle timeout should be 0")
 	assert.EqualValues(t, 100, connPool.Available(), "pool available connections should be 100")
 	assert.EqualValues(t, 0, connPool.Active(), "pool active connections should be 0")
 	assert.EqualValues(t, 0, connPool.InUse(), "pool inUse connections should be 0")

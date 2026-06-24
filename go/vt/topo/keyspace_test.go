@@ -57,8 +57,8 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				// Verify that getting srvKeyspaceNames now gives us this keyspace.
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
-				require.EqualValues(t, 1, len(keyspaces))
-				require.EqualValues(t, keyspace, keyspaces[0])
+				require.Equal(t, 1, len(keyspaces))
+				require.Equal(t, keyspace, keyspaces[0])
 				// Also verify that we can't get the SrvKeyspace.
 				_, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
 				require.Error(t, err)
@@ -129,8 +129,8 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				// Verify that getting srvKeyspaceNames now gives us this keyspace.
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
-				require.EqualValues(t, 1, len(keyspaces))
-				require.EqualValues(t, keyspace, keyspaces[0])
+				require.Equal(t, 1, len(keyspaces))
+				require.Equal(t, keyspace, keyspaces[0])
 				// Also verify that we can't get the SrvKeyspace.
 				_, err = ts.GetSrvKeyspace(ctx, cell, keyspace)
 				require.NoError(t, err)

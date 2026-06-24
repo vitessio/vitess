@@ -1090,7 +1090,7 @@ func validateOverrides(t *testing.T, tabs map[string]*cluster.VttabletProcess, w
 	for _, tab := range tabs {
 		config := getVReplicationConfig(t, tab)
 		for k, v := range want {
-			require.EqualValues(t, v, config[k])
+			require.Equal(t, v, config[k])
 		}
 	}
 }

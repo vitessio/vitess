@@ -417,7 +417,7 @@ func TestMonitorBindSideCarDBName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
 			m := &Monitor{}
-			require.EqualValues(t, tt.expected, m.bindSideCarDBName(tt.query))
+			require.Equal(t, tt.expected, m.bindSideCarDBName(tt.query))
 		})
 	}
 }
@@ -514,9 +514,9 @@ func TestMonitorIncrementWriteCount(t *testing.T) {
 			m.inProgressWriteCount = tt.initVal
 			m.mu.Unlock()
 			got := m.incrementWriteCount()
-			require.EqualValues(t, tt.want, got)
+			require.Equal(t, tt.want, got)
 			m.mu.Lock()
-			require.EqualValues(t, tt.finalVal, m.inProgressWriteCount)
+			require.Equal(t, tt.finalVal, m.inProgressWriteCount)
 			require.EqualValues(t, tt.finalVal, m.writesBlockedGauge.Get())
 			m.mu.Unlock()
 		})
@@ -553,7 +553,7 @@ func TestMonitorDecrementWriteCount(t *testing.T) {
 			m.mu.Unlock()
 			m.decrementWriteCount()
 			m.mu.Lock()
-			require.EqualValues(t, tt.finalVal, m.inProgressWriteCount)
+			require.Equal(t, tt.finalVal, m.inProgressWriteCount)
 			require.EqualValues(t, tt.finalVal, m.writesBlockedGauge.Get())
 			m.mu.Unlock()
 		})
@@ -591,7 +591,7 @@ func TestMonitorAllWritesBlocked(t *testing.T) {
 				m.isBlocked = true
 			}
 			m.mu.Unlock()
-			require.EqualValues(t, tt.expected, m.AllWritesBlocked())
+			require.Equal(t, tt.expected, m.AllWritesBlocked())
 		})
 	}
 }
@@ -634,7 +634,7 @@ func TestMonitorWrite(t *testing.T) {
 			m.mu.Unlock()
 			m.write()
 			m.mu.Lock()
-			require.EqualValues(t, tt.initVal, m.inProgressWriteCount)
+			require.Equal(t, tt.initVal, m.inProgressWriteCount)
 			require.EqualValues(t, tt.initVal, m.writesBlockedGauge.Get())
 			m.mu.Unlock()
 			queryLog := db.QueryLog()
@@ -662,7 +662,7 @@ func TestMonitorWriteBlocked(t *testing.T) {
 
 	// Check the initial value of the inProgressWriteCount.
 	m.mu.Lock()
-	require.EqualValues(t, 0, m.inProgressWriteCount)
+	require.Equal(t, 0, m.inProgressWriteCount)
 	m.mu.Unlock()
 
 	// ExecuteFetchMulti will execute each statement separately, so we need to add SET query and INSERT query.
@@ -706,7 +706,7 @@ func TestMonitorWriteBlocked(t *testing.T) {
 	// After write completes, count should be back to zero.
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	require.EqualValues(t, 0, m.inProgressWriteCount)
+	require.Equal(t, 0, m.inProgressWriteCount)
 }
 
 // TestIsWriting checks the transitions for the isWriting field.

@@ -1336,7 +1336,7 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 					continue
 				}
 				require.NoError(t, err)
-				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Get()-before)
+				require.Equal(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Get()-before)
 			}
 		})
 	}

@@ -189,6 +189,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, replicaInstance.HasReplicationFilters)
 	assert.LessOrEqual(t, int(replicaInstance.SecondsBehindPrimary.Int64), 1)
 	assert.False(t, replicaInstance.AllowTLS)
-	assert.EqualValues(t, 4.0, replicaInstance.HeartbeatInterval)
+	assert.Equal(t, 4.0, replicaInstance.HeartbeatInterval)
 	assert.EqualValues(t, 8, replicaInstance.ReplicaNetTimeout)
 }

@@ -2161,7 +2161,7 @@ func Test_getTabletsWithPromotionRules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res := getTabletsWithPromotionRules(durability, tt.tablets, tt.rule)
-			require.EqualValues(t, tt.filteredTablets, res)
+			require.Equal(t, tt.filteredTablets, res)
 		})
 	}
 }
@@ -2263,7 +2263,7 @@ func TestGetBackupCandidates(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res := GetBackupCandidates(tt.in, tt.status)
-			require.EqualValues(t, tt.expected, res)
+			require.Equal(t, tt.expected, res)
 		})
 	}
 }

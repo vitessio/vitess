@@ -726,7 +726,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.EqualValues(t, tc.want, got)
+			require.Equal(t, tc.want, got)
 		})
 	}
 }

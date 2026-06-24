@@ -1040,7 +1040,7 @@ func WaitForSuccessfulRecoveryCount(t *testing.T, vtorcInstance *cluster.VTOrcPr
 		successfulRecoveriesMap, ok := vars["SuccessfulRecoveries"].(map[string]any)
 		require.True(c, ok, "SuccessfulRecoveries metric not yet available")
 		successCount := GetIntFromValue(successfulRecoveriesMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful recovery count")
 }
 
@@ -1066,7 +1066,7 @@ func WaitForSuccessfulPRSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		vars := vtorcInstance.GetVars()
 		prsCountsMap := vars["PlannedReparentCounts"].(map[string]any)
 		successCount := GetIntFromValue(prsCountsMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful PRS count")
 }
 
@@ -1079,7 +1079,7 @@ func WaitForSuccessfulERSCount(t *testing.T, vtorcInstance *cluster.VTOrcProcess
 		vars := vtorcInstance.GetVars()
 		ersCountsMap := vars["EmergencyReparentCounts"].(map[string]any)
 		successCount := GetIntFromValue(ersCountsMap[mapKey])
-		assert.EqualValues(c, countExpected, successCount)
+		assert.Equal(c, countExpected, successCount)
 	}, timeout, time.Second, "timed out waiting for successful ERS count")
 }
 
@@ -1096,7 +1096,7 @@ func WaitForShardERSDisabledState(t *testing.T, vtorcInstance *cluster.VTOrcProc
 		vars := vtorcInstance.GetVars()
 		ersDisabledMap := vars["EmergencyReparentShardDisabled"].(map[string]any)
 		disabledValue := GetIntFromValue(ersDisabledMap[mapKey])
-		assert.EqualValues(c, expectedValue, disabledValue)
+		assert.Equal(c, expectedValue, disabledValue)
 	}, timeout, time.Second, "timed out waiting for shard ERS-disabled state")
 }
 
@@ -1167,7 +1167,7 @@ func WaitForInstancePollSecondsExceededCount(t *testing.T, vtorcInstance *cluste
 		vars := vtorcInstance.GetVars()
 		exceeded := GetIntFromValue(vars["DiscoveriesInstancePollSecondsExceeded"])
 		if enforceEquality {
-			ok := assert.EqualValues(c, minCountExpected, exceeded,
+			ok := assert.Equal(c, minCountExpected, exceeded,
 				"The metric DiscoveriesInstancePollSecondsExceeded should be %v but is %v",
 				minCountExpected, exceeded,
 			)

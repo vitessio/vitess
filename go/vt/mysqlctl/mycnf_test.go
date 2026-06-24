@@ -84,7 +84,7 @@ func TestMycnf(t *testing.T) {
 	// Tablet UID should be 11111, which determines tablet/data dir.
 	require.Contains(t, mycnf.DataDir, "/vt_0000011111/")
 	// MySQL server-id should be 22222, different from Tablet UID.
-	require.EqualValues(t, uint32(22222), mycnf.ServerID)
+	require.Equal(t, uint32(22222), mycnf.ServerID)
 }
 
 // Run this test if any changes are made to hook handling / make_mycnf hook

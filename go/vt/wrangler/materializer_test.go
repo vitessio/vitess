@@ -218,7 +218,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, false, "", defaultOnDDL, nil, false, false)
 			require.NoError(t, err)
-			require.EqualValues(t, tcase.want, targetTables(ctx, env))
+			require.Equal(t, tcase.want, targetTables(ctx, env))
 		})
 	}
 }

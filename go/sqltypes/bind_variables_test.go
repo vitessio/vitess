@@ -63,7 +63,7 @@ func TestProtoConversions(t *testing.T) {
 				require.True(t, proto.Equal(got, tcase.protoVal), "ValueToProto: %v, want %v", got, tcase.protoVal)
 			}
 			gotback := ProtoToValue(got)
-			require.EqualValues(t, tcase.val, gotback)
+			require.Equal(t, tcase.val, gotback)
 		})
 	}
 }
