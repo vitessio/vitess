@@ -2404,9 +2404,9 @@ func TestFullyThrottledTimeout(t *testing.T) {
 	waitTimer := time.NewTimer(HeartbeatTime)
 	defer waitTimer.Stop()
 	done := make(chan struct{})
+	wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
 	go func() {
 		defer close(done)
-		wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
 		wg.Wait()
 		if !assert.Zero(t, len(evs)) {
 			return

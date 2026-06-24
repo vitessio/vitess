@@ -1248,8 +1248,8 @@ func TestPrepareAndExecute(t *testing.T) {
 }
 
 func startGoRoutine(ctx context.Context, t *testing.T, s string) {
+	listener, sConn, cConn := createSocketPair(t)
 	go func(longData string) {
-		listener, sConn, cConn := createSocketPair(t)
 		defer func() {
 			listener.Close()
 			sConn.Close()

@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -156,12 +157,14 @@ func checkTryLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 			lockDescriptor, err := conn.TryLock(ctx, keyspacePath, "unblocks")
 			if err != nil {
 				if !topo.IsErrType(err, topo.NodeExists) {
-					require.Fail(t, "expected node exists during trylock", err.Error())
+					assert.Fail(t, "expected node exists during trylock", err.Error())
+					return
 				}
 				time.Sleep(1 * time.Second)
 			} else {
 				if err = lockDescriptor.Unlock(ctx); err != nil {
-					require.Fail(t, "Unlock(test_keyspace) failed", err.Error())
+					assert.Fail(t, "Unlock(test_keyspace) failed", err.Error())
+					return
 				}
 				close(finished)
 				break
