@@ -174,7 +174,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	want := strconv.Itoa(int(tabletType))
 	assert.Equal(t, want, got)
 	assert.NotNil(t, streamHealthRes1.GetPrimaryTermStartTimestamp())
-	assert.True(t, streamHealthRes1.GetPrimaryTermStartTimestamp() > 0,
+	assert.Greater(t, streamHealthRes1.GetPrimaryTermStartTimestamp(), 0,
 		"PTS on PRIMARY must be set after InitShardPrimary")
 
 	// Restart the PRIMARY vttablet and test again
@@ -200,7 +200,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	assert.Equal(t, want, got)
 
 	assert.NotNil(t, streamHealthRes2.GetPrimaryTermStartTimestamp())
-	assert.True(t, streamHealthRes2.GetPrimaryTermStartTimestamp() == streamHealthRes1.GetPrimaryTermStartTimestamp(),
+	assert.Equal(t, streamHealthRes2.GetPrimaryTermStartTimestamp(), streamHealthRes1.GetPrimaryTermStartTimestamp(),
 		fmt.Sprintf("When the PRIMARY vttablet was restarted, "+
 			"the PTS timestamp must be set by reading the old value from the tablet record. Old: %d, New: %d",
 			streamHealthRes1.GetPrimaryTermStartTimestamp(),
@@ -219,7 +219,7 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	if shouldError {
-		assert.True(t, resp.StatusCode > 400)
+		assert.Greater(t, resp.StatusCode, 400)
 	} else {
 		assert.Equal(t, 200, resp.StatusCode)
 	}

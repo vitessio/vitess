@@ -202,7 +202,7 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 	for _, partition := range unShardedSrvKeyspace.Partitions {
 		if servedTypes[partition.ServedType] {
 			for _, shardRef := range partition.ShardReferences {
-				assert.True(t, shardRef.Name == keyspaceUnshardedName)
+				assert.Equal(t, shardRef.Name, keyspaceUnshardedName)
 			}
 		} else {
 			otherShardRefFound = true

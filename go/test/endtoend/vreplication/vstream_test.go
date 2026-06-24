@@ -1082,7 +1082,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 							require.FailNow(t, "received event for unexpected shard: "+shard)
 						}
 					case binlogdatapb.VEventType_JOURNAL:
-						require.True(t, ev.Journal.MigrationType == binlogdatapb.MigrationType_SHARDS)
+						require.Equal(t, ev.Journal.MigrationType, binlogdatapb.MigrationType_SHARDS)
 						journalEvents++
 					}
 				}

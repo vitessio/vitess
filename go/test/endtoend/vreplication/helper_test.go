@@ -541,7 +541,7 @@ func validateDryRunResults(t *testing.T, output string, want []string) {
 	t.Helper()
 	require.NotEmpty(t, output)
 	gotDryRun := strings.Split(output, "\n")
-	require.True(t, len(gotDryRun) > 3)
+	require.Greater(t, len(gotDryRun), 3)
 	var startRow int
 	if strings.HasPrefix(gotDryRun[1], "Parameters:") { // vtctldclient
 		startRow = 3

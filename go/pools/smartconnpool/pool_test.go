@@ -1386,7 +1386,7 @@ func TestMultiSettingsWithReset(t *testing.T) {
 	for i := range 5 {
 		r, err = p.Get(ctx, settings[1]) // {foo}
 		require.NoError(t, err)
-		assert.Truef(t, r.Conn.setting == settings[1], "setting was not properly applied")
+		assert.Samef(t, r.Conn.setting, settings[1], "setting was not properly applied")
 		resources[i] = r
 	}
 	assert.EqualValues(t, 2, state.reset.Load()) // when setting was {bar} and getting for {foo}

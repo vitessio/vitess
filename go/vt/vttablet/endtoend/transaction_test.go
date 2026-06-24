@@ -309,7 +309,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	start := time.Now()
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 
 	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
@@ -333,7 +333,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	start = time.Now()
 	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 1*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -361,7 +361,7 @@ func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
 	start := time.Now()
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 
 	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
@@ -385,7 +385,7 @@ func TestShutdownGracePeriodWithStreamExecute(t *testing.T) {
 	start = time.Now()
 	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 1*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -413,7 +413,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	start := time.Now()
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 
 	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
@@ -437,7 +437,7 @@ func TestShutdownGracePeriodWithReserveExecute(t *testing.T) {
 	start = time.Now()
 	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
-	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 1*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -454,7 +454,7 @@ func TestShortTxTimeoutOltp(t *testing.T) {
 	start := time.Now()
 	_, err = client.Execute("select sleep(10) from dual", nil)
 	assert.Error(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 }
 
@@ -471,7 +471,7 @@ func TestShortTxTimeoutOlap(t *testing.T) {
 	start := time.Now()
 	_, err = client.StreamExecute("select sleep(10) from dual", nil)
 	assert.Error(t, err)
-	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 }
 

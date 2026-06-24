@@ -355,7 +355,7 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	if shouldError {
-		assert.True(t, resp.StatusCode > 400)
+		assert.Greater(t, resp.StatusCode, 400)
 	} else {
 		assert.Equal(t, 200, resp.StatusCode)
 	}
@@ -379,11 +379,11 @@ func verifyStreamHealth(t *testing.T, streamHealthResponse *querypb.StreamHealth
 	UID := streamHealthResponse.GetTabletAlias().GetUid()
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
 	replicationLagSeconds := realTimeStats.GetReplicationLagSeconds()
-	assert.True(t, UID > 0, "Tablet should contain uid")
+	assert.Greater(t, UID, 0, "Tablet should contain uid")
 	if expectHealthy {
 		assert.True(t, serving, "Tablet should be in serving state")
 		// replicationLagSeconds varies till 7200 so setting safe limit
-		assert.True(t, replicationLagSeconds < 10000, "replica should not be behind primary")
+		assert.Less(t, replicationLagSeconds, uint32(10000), "replica should not be behind primary")
 	} else {
 		assert.True(t, (!serving || replicationLagSeconds >= uint32(tabletUnhealthyThreshold.Seconds())), "Tablet should not be in serving and healthy state")
 	}

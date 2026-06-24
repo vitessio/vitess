@@ -251,7 +251,7 @@ func TestCopy(t *testing.T) {
 	schemaClone := schema.copy()
 	assert.Equal(t, schema, schemaClone)
 	assert.Equal(t, schema.ToSQL(), schemaClone.ToSQL())
-	assert.False(t, schema == schemaClone)
+	assert.NotSame(t, schema, schemaClone)
 }
 
 func TestGetViewDependentTableNames(t *testing.T) {

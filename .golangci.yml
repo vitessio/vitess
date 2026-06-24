@@ -135,6 +135,7 @@ linters:
         - regexp
         - suite-dont-use-pkg
         - contains
+        - compares
   exclusions:
     generated: lax
     presets:

@@ -2440,7 +2440,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 			require.NoError(t, err)
 			// withTable is a vschema that already contains the table and thus
 			// we don't make any vschema changes and there's nothing to cancel.
-			require.True(t, (cancelFunc != nil) == (tcase.targetVSchema != withTable))
+			require.Equal(t, (cancelFunc != nil), (tcase.targetVSchema != withTable))
 			utils.MustMatch(t, tcase.out, got.Keyspace, tcase.description)
 		})
 	}

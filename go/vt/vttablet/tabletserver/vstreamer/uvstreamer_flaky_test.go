@@ -132,7 +132,7 @@ func TestVStreamCopyFilterValidations(t *testing.T) {
 		}
 		require.Equalf(t, len(expected), len(uvs.plans), "Plans: %+v", uvs.plans)
 		for _, tableName := range expected {
-			require.True(t, uvs.plans[tableName].tablePK.TableName == tableName)
+			require.Equal(t, uvs.plans[tableName].tablePK.TableName, tableName)
 			if tablePKs == nil {
 				require.Nil(t, uvs.plans[tableName].tablePK.Lastpk)
 			}
