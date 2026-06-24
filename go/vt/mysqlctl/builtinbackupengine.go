@@ -1400,11 +1400,10 @@ func createChunkedDestinations(fes []FileEntry, cnf *Mycnf, createdDir string) e
 // restoreWorkItem represents a single unit of restore work: either a chunk of a
 // chunked file, or a whole non-chunked file.
 type restoreWorkItem struct {
-	fe         *FileEntry
-	chunk      *FileChunk // nil for non-chunked files
-	chunkIndex int        // -1 for non-chunked files
-	dest       *os.File   // shared dest for chunked files, nil for non-chunked
-	name       string     // storage name for error recording
+	fe    *FileEntry
+	chunk *FileChunk // nil for non-chunked files
+	dest  *os.File   // shared dest for chunked files, nil for non-chunked
+	name  string     // storage name for error recording
 }
 
 func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []FileEntry, bh backupstorage.BackupHandle, bm builtinBackupManifest, params RestoreParams, createdDir string) (finalErr error) {
@@ -1457,18 +1456,16 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 
 			for j := range fe.Chunks {
 				workItems = append(workItems, restoreWorkItem{
-					fe:         fe,
-					chunk:      &fe.Chunks[j],
-					chunkIndex: j,
-					dest:       dest,
-					name:       fe.Chunks[j].StorageName,
+					fe:    fe,
+					chunk: &fe.Chunks[j],
+					dest:  dest,
+					name:  fe.Chunks[j].StorageName,
 				})
 			}
 		} else {
 			workItems = append(workItems, restoreWorkItem{
-				fe:         fe,
-				chunkIndex: -1,
-				name:       strconv.Itoa(i),
+				fe:   fe,
+				name: strconv.Itoa(i),
 			})
 		}
 	}
@@ -1490,7 +1487,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 
 			var err error
 			if wi.chunk != nil {
-				params.Logger.Infof("Restoring chunk %d of file %v (offset=%d, size=%d)", wi.chunkIndex, wi.fe.Name, wi.chunk.Offset, wi.chunk.Size)
+				params.Logger.Infof("Restoring chunk %s of file %v (offset=%d, size=%d)", wi.name, wi.fe.Name, wi.chunk.Offset, wi.chunk.Size)
 				err = be.restoreFileChunk(ctx, params, bh, wi.chunk, bm, wi.dest)
 			} else {
 				params.Logger.Infof("Copying file %v: %v %s", wi.name, wi.fe.Name, retryToString(wi.fe.RetryCount))

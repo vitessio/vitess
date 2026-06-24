@@ -98,6 +98,17 @@ func TestBuiltinBackupNonChunked(t *testing.T) {
 	t.Run("TestNonChunkedBackup", nonChunkedBackup)
 }
 
+// TestBuiltinBackupChunkedRestoreNonChunked verifies that a tablet configured with
+// chunking can restore a non-chunked backup (forward compatibility).
+func TestBuiltinBackupChunkedRestoreNonChunked(t *testing.T) {
+	defer setDefaultCommonArgs()
+	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
+	require.Nilf(t, err, "setup failed with status code %d", code)
+	defer TearDownCluster()
+
+	t.Run("TestChunkedRestoreNonChunked", chunkedRestoreNonChunkedBackup)
+}
+
 func setDefaultCompressionFlag() {
 	mysqlctl.CompressionEngineName = "pgzip"
 	mysqlctl.ExternalCompressorCmd = ""

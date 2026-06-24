@@ -990,6 +990,59 @@ func nonChunkedBackup(t *testing.T) {
 	verifyBackupChunking(t, false)
 }
 
+func chunkedRestoreNonChunkedBackup(t *testing.T) {
+	verifyInitialReplication(t)
+
+	// Launch replica2 with chunking flags enabled but waiting for a backup.
+	// The backup itself will be non-chunked (taken by replica1 without chunking).
+	replica2.Type = "replica"
+	replica2.ValidateTabletRestart(t)
+	replicaTabletArgs := append(
+		commonTabletArg,
+		"--wait-for-backup-interval", "1s",
+		"--init-tablet-type", "replica",
+		"--builtinbackup-file-chunk-threshold", "4194304",
+		"--builtinbackup-file-chunk-size", "4194304",
+	)
+	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
+	replica2.VttabletProcess.ServingStatus = ""
+	err := replica2.VttabletProcess.Setup()
+	require.NoError(t, err)
+
+	// Take a non-chunked backup on replica1.
+	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
+	require.NoError(t, err)
+
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
+
+	// Verify the MANIFEST has no chunks (non-chunked backup).
+	backupLocation := path.Join(localCluster.CurrentVTDATAROOT, "backups", keyspaceName, shardName, backups[0])
+	manifestData, err := os.ReadFile(path.Join(backupLocation, "MANIFEST"))
+	require.NoError(t, err)
+	var manifest struct {
+		FileEntries []struct {
+			Chunks []struct{}
+		}
+	}
+	require.NoError(t, json.Unmarshal(manifestData, &manifest))
+	for _, fe := range manifest.FileEntries {
+		require.Empty(t, fe.Chunks, "expected non-chunked backup but found chunks in MANIFEST")
+	}
+
+	// Verify replica2 restores successfully from the non-chunked backup.
+	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
+	require.NoError(t, err)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+
+	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
+	err = replica2.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
+	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	require.NoError(t, err)
+}
+
 func verifyBackupChunking(t *testing.T, expectChunked bool) {
 	verifyInitialReplication(t)
 
