@@ -2809,12 +2809,12 @@ func testDeclarative(t *testing.T) {
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		defer conn.Close()
 
 		writeMetrics.Clear()
 		_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		for i := 0; i < maxTableRows/2; i++ {
 			generateInsert(t, conn)
@@ -2835,11 +2835,11 @@ func testDeclarative(t *testing.T) {
 
 		ctx := t.Context()
 		conn, err := mysql.Connect(ctx, &vtParams)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		defer conn.Close()
 
 		rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 
 		row := rs.Named().Row()
 		require.NotNil(t, row)
@@ -3656,7 +3656,7 @@ func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) bool {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	return assert.Equalf(t, expectCount, len(queryResult.Rows), "checkTablesCount cannot find table like '%%%s%%'", showTableName)
 }
 
@@ -3671,7 +3671,7 @@ func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, 1, len(queryResult.Rows))
 	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement, and if it's a view then additional columns

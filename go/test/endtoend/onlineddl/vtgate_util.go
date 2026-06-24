@@ -51,7 +51,7 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(query, -1, true)
@@ -70,7 +70,7 @@ func VtgateExecQueryInTransaction(t *testing.T, vtParams *mysql.ConnParams, quer
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("begin", -1, true)
@@ -93,7 +93,7 @@ func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string,
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)

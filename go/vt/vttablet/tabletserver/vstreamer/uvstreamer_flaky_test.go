@@ -488,7 +488,7 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 			}
 			return nil
 		}, nil)
-		if !assert.Nil(t, err) {
+		if !assert.NoError(t, err) {
 			return
 		}
 	}()

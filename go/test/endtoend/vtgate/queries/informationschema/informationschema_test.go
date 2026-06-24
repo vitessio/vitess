@@ -57,7 +57,7 @@ func TestDbNameOverride(t *testing.T) {
 
 	qr, err := mcmp.VtConn.ExecuteFetch("SELECT distinct database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
 
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
 	assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
 }

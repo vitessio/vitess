@@ -1751,7 +1751,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			// Execute query.
 
 			_, err := qre.Execute()
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			// Verify expectations.
 

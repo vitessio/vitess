@@ -792,7 +792,7 @@ func validateTableDefinitions(t *testing.T, afterOnlineDDL bool) {
 func createInitialSchema(t *testing.T, tcase *testCase) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	t.Run("dropping tables", func(t *testing.T) {
@@ -848,7 +848,7 @@ func createInitialSchema(t *testing.T, tcase *testCase) {
 	if tcase.preStatement != "" {
 		t.Run("pre-statement", func(t *testing.T) {
 			_, err = conn.ExecuteFetch(tcase.preStatement, 1, false)
-			require.Nil(t, err)
+			require.NoError(t, err)
 		})
 	}
 	t.Run("wait for replication", func(t *testing.T) {
@@ -981,7 +981,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	rowcount := 0
 	for {
 		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		rowcount = len(queryResult.Rows)
 		if rowcount > 0 {
 			break
@@ -1155,13 +1155,13 @@ func generateDelete(t *testing.T, tableName string, conn *mysql.Conn) error {
 func runSingleConnection(ctx context.Context, t *testing.T, tableName string, tcase *testCase, sleepInterval time.Duration) {
 	log.Info("Running single connection on " + tableName)
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	ticker := time.NewTicker(sleepInterval)
 	defer ticker.Stop()
@@ -1190,7 +1190,7 @@ func populateTables(t *testing.T, tcase *testCase) {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	t.Run("clearing", func(t *testing.T) {
@@ -1200,11 +1200,11 @@ func populateTables(t *testing.T, tcase *testCase) {
 				t.Run("deleting", func(t *testing.T) {
 					deleteQuery := fmt.Sprintf(deleteAllStatement, tableName)
 					_, err = conn.ExecuteFetch(deleteQuery, 1000, true)
-					require.Nil(t, err)
+					require.NoError(t, err)
 				})
 				t.Run("counting after delete", func(t *testing.T) {
 					rs, err := conn.ExecuteFetch(fmt.Sprintf(selectCountRowsStatement, tableName), 1000, true)
-					require.Nil(t, err)
+					require.NoError(t, err)
 					row := rs.Named().Row()
 					require.NotNil(t, row)
 					numRows := row.AsInt64("num_rows", -1)

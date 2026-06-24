@@ -173,7 +173,7 @@ func checkDurabilityPolicy(t *testing.T, durabilityPolicy string) {
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	data, err := clusterForKSTest.VtctldClientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	namesByCell := map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{}
 	err = json2.Unmarshal([]byte(data), &namesByCell)
@@ -219,7 +219,7 @@ func TestShardNames(t *testing.T) {
 
 func TestGetKeyspace(t *testing.T) {
 	_, err := clusterForKSTest.VtctldClientProcess.GetKeyspace(keyspaceUnshardedName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestDeleteKeyspace(t *testing.T) {

@@ -418,7 +418,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 
 	// setup cluster for the testing
 	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	// Teardown the cluster
 	defer TearDownCluster()
@@ -787,7 +787,7 @@ func restartPrimaryAndReplica(t *testing.T) {
 	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
 		if tablet.MysqlctldProcess.TabletUID > 0 {
 			err := tablet.MysqlctldProcess.Start()
-			require.Nilf(t, err, "error while starting mysqlctld, tabletUID %v", tablet.TabletUID)
+			require.NoErrorf(t, err, "error while starting mysqlctld, tabletUID %v", tablet.TabletUID)
 			continue
 		}
 		proc, _ := tablet.MysqlctlProcess.StartProcess()
@@ -1551,7 +1551,7 @@ func TestBackupEngineSelector(t *testing.T) {
 
 	// launch the custer with xtrabackup as the default engine
 	code, err := LaunchCluster(XtraBackup, "xbstream", 0, &CompressionDetails{CompressorEngineName: "pgzip"})
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()
 
@@ -1595,7 +1595,7 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 
 	// launch the custer with xtrabackup as the default engine
 	code, err := LaunchCluster(XtraBackup, "xbstream", 0, cDetails)
-	require.Nilf(t, err, "setup failed with status code %d", code)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
 
 	defer TearDownCluster()
 

@@ -30,8 +30,8 @@ func TestReadOnlyPolicy(t *testing.T) {
 	assert.Equalf(t, want, err, "got %v; want %v", err, want)
 
 	err = testReadOnlyPolicy.CheckAccessHTTP(nil, DEBUGGING)
-	assert.Equalf(t, nil, err, "got %v; want no error", err)
+	assert.NoErrorf(t, err, "got %v; want no error", err)
 
 	err = testReadOnlyPolicy.CheckAccessHTTP(nil, MONITORING)
-	assert.Equalf(t, nil, err, "got %v; want no error", err)
+	assert.NoErrorf(t, err, "got %v; want no error", err)
 }

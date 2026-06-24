@@ -231,7 +231,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	t.Skip()
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	defer utils.Exec(t, conn, `delete from t1`)
@@ -261,7 +261,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 func TestEmptyStatement(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 	defer utils.Exec(t, conn, `delete from t1`)
 	utils.AssertContainsError(t, conn, " \t; \n;", "Query was empty")
@@ -273,7 +273,7 @@ func TestEmptyStatement(t *testing.T) {
 func TestTopoDownServingQuery(t *testing.T) {
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	defer utils.Exec(t, conn, `delete from t1`)

@@ -583,7 +583,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	shr.PrimaryTermStartTimestamp = 11
 	// Close the healthcheck. Tablet connections are closed asynchronously and
 	// Close() will block until all Go routines (one per connection) are done.
-	assert.Nil(t, hc.Close(), "Close returned error")
+	assert.NoError(t, hc.Close(), "Close returned error")
 	// Try to send more updates. They should be ignored and nothing should change
 	input <- shr
 
@@ -642,14 +642,14 @@ func TestHealthCheckTimeout(t *testing.T) {
 	input <- shr
 	result = <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
-	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
+	assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
 
 	// wait for timeout period
 	time.Sleep(hc.healthCheckTimeout + 100*time.Millisecond)
 	t.Logf(`Sleep(1.1 * timeout)`)
 	result = <-resultChan
 	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
-	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
+	assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
 	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled after timeout, but is not")
 
 	// tablet should be removed from healthy list
@@ -662,7 +662,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 	result = <-resultChan
 	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
-	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2))
+	assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2))
 	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled again after timeout, but is not")
 
 	// send a healthcheck response, it should be serving again
@@ -704,7 +704,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	defer cancel()
 
 	err := hc.WaitForAllServingTablets(ctx, targets)
-	assert.NotNil(t, err, "error should not be nil")
+	assert.Error(t, err, "error should not be nil")
 
 	shr := &querypb.StreamHealthResponse{
 		TabletAlias:               tablet.Alias,
@@ -727,7 +727,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	}
 
 	err = hc.WaitForAllServingTablets(ctx, targets)
-	assert.Nil(t, err, "error should be nil. Targets are found")
+	assert.NoError(t, err, "error should be nil. Targets are found")
 
 	targets = []*querypb.Target{
 		{
@@ -743,7 +743,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	}
 
 	err = hc.WaitForAllServingTablets(ctx, targets)
-	assert.NotNil(t, err, "error should not be nil (there are no tablets on this keyspace")
+	assert.Error(t, err, "error should not be nil (there are no tablets on this keyspace")
 }
 
 // TestRemoveTablet tests the behavior when a tablet goes away.
@@ -1468,7 +1468,7 @@ func TestCellAliases(t *testing.T) {
 	cellsAlias := &topodatapb.CellsAlias{
 		Cells: []string{"cell1", "cell2"},
 	}
-	assert.Nil(t, ts.CreateCellsAlias(t.Context(), "region1", cellsAlias), "failed to create cell alias")
+	assert.NoError(t, ts.CreateCellsAlias(t.Context(), "region1", cellsAlias), "failed to create cell alias")
 	defer deleteCellsAlias(t, ts, "region1")
 
 	// add a tablet as replica in diff cell, same region
@@ -1565,10 +1565,10 @@ func TestTemplate(t *testing.T) {
 	}
 	templ := template.New("")
 	templ, err := templ.Parse(healthCheckTemplate)
-	require.Nil(t, err, "error parsing template: %v", err)
+	require.NoError(t, err, "error parsing template: %v", err)
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
-	require.Nil(t, err, "error executing template: %v", err)
+	require.NoError(t, err, "error executing template: %v", err)
 }
 
 // TestHealthCheckImplSubscriberName tests that we have the subscirber name in the healthcheck.
@@ -1620,10 +1620,10 @@ func TestDebugURLFormatting(t *testing.T) {
 	}
 	templ := template.New("")
 	templ, err := templ.Parse(healthCheckTemplate)
-	require.Nil(t, err, "error parsing template")
+	require.NoError(t, err, "error parsing template")
 	wr := &bytes.Buffer{}
 	err = templ.Execute(wr, []*TabletsCacheStatus{tcs})
-	require.Nil(t, err, "error executing template")
+	require.NoError(t, err, "error executing template")
 	expectedURL := `"https://host.bastion.cell.corp"`
 	require.Contains(t, wr.String(), expectedURL, "output missing formatted URL")
 }

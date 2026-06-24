@@ -795,7 +795,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	seen2 := waitForEntries(2)
 	assert.Len(t, seen2, 2)
 	assert.NotNil(t, seen2[1].keyspace)
-	assert.Nil(t, seen2[1].err)
+	assert.NoError(t, seen2[1].err)
 	assert.True(t, proto.Equal(want, seen2[1].keyspace))
 
 	// Now delete the SrvKeyspace, wait until we get the error.
@@ -837,7 +837,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 
 	for i := range 5 {
 		w := seen4[3+i]
-		assert.Nil(t, w.err)
+		assert.NoError(t, w.err)
 	}
 
 	// Now simulate a topo service error
@@ -853,7 +853,7 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 
 	seen6 := waitForEntries(10)
 	assert.Len(t, seen6, 10)
-	assert.Nil(t, seen6[9].err)
+	assert.NoError(t, seen6[9].err)
 	assert.NotNil(t, seen6[9].keyspace)
 }
 

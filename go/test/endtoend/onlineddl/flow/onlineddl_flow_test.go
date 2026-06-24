@@ -364,7 +364,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 func testWithInitialSchema(t *testing.T) {
 	// Create the stress table
 	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check if table is created
 	checkTable(t, tableName)
@@ -413,7 +413,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 	for {
 		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		rowcount = len(queryResult.Rows)
 		if rowcount > 0 {
 			break
@@ -443,7 +443,7 @@ func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, 1, len(queryResult.Rows))
 	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement
@@ -518,17 +518,17 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if !assert.Nil(t, err) {
+	if !assert.NoError(t, err) {
 		return
 	}
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	if !assert.Nil(t, err) {
+	if !assert.NoError(t, err) {
 		return
 	}
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	if !assert.Nil(t, err) {
+	if !assert.NoError(t, err) {
 		return
 	}
 
@@ -552,7 +552,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 			return
 		case <-ticker.C:
 		}
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 }
 
@@ -585,7 +585,7 @@ func initTable(t *testing.T) {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	appliedDMLStart := totalAppliedDML.Load()

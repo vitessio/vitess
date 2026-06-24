@@ -259,7 +259,7 @@ func TestUpsertCacheKey(t *testing.T) {
 	for _, tt := range inserts {
 		err := c.Add(tt.key, tt.val, tt.duration)
 		if !tt.shouldFail {
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 		}
 
 		val, exists := c.Get(tt.key)

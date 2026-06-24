@@ -134,7 +134,7 @@ func TestCFCCreateVindexOptions(t *testing.T) {
 		},
 	)
 	require.NotNil(t, vdx)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	unknownParams := vdx.(ParamValidating).UnknownParams()
 	require.Empty(t, unknownParams)
 	require.Equal(t, []int{3, 7}, vdx.(*CFC).offsets)

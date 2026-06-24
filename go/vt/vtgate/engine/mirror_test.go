@@ -129,7 +129,7 @@ func TestMirror(t *testing.T) {
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		require.NotNil(t, targetExecTime.Load())
-		require.Nil(t, *targetErr.Load())
+		require.NoError(t, *targetErr.Load())
 	})
 
 	t.Run("TryExecute return primitive error", func(t *testing.T) {
@@ -163,7 +163,7 @@ func TestMirror(t *testing.T) {
 			"ExecuteMultiShard ks2.-20: select f.bar from foo f where f.id = 1 {} false false",
 		})
 		require.NotNil(t, targetExecTime.Load())
-		require.Nil(t, *targetErr.Load())
+		require.NoError(t, *targetErr.Load())
 	})
 
 	t.Run("TryExecute ignore mirror target error", func(t *testing.T) {
@@ -283,7 +283,7 @@ func TestMirror(t *testing.T) {
 			time.Sleep(primitiveLatency + maxMirrorTargetLag + (5 * time.Millisecond))
 			select {
 			case <-ctx.Done():
-				require.NotNil(t, ctx.Err())
+				require.Error(t, ctx.Err())
 				require.ErrorContains(t, ctx.Err(), "context canceled")
 			default:
 				require.Fail(t, "mirror target context not done")
@@ -342,7 +342,7 @@ func TestMirror(t *testing.T) {
 		})
 
 		require.NotNil(t, targetExecTime.Load())
-		require.Nil(t, *targetErr.Load())
+		require.NoError(t, *targetErr.Load())
 	})
 
 	t.Run("TryStreamExecute return primitive error", func(t *testing.T) {
@@ -384,7 +384,7 @@ func TestMirror(t *testing.T) {
 		})
 
 		require.NotNil(t, targetExecTime.Load())
-		require.Nil(t, *targetErr.Load())
+		require.NoError(t, *targetErr.Load())
 	})
 
 	t.Run("TryStreamExecute ignore mirror target error", func(t *testing.T) {

@@ -141,6 +141,7 @@ linters:
         - empty
         - expected-actual
         - equal-values
+        - error-nil
   exclusions:
     generated: lax
     presets:

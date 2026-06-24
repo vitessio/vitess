@@ -138,7 +138,7 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 
 	// verify output of SHOW VITESS_TABLETS
 	vtgateConn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer vtgateConn.Close()
 	query := "show vitess_tablets"
 
@@ -182,10 +182,10 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 	}
 	// Start Mysqlctl process
 	mysqlctlProcess, err := cluster.MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory, !clusterInstance.ReusingVTDATAROOT)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	tablet.MysqlctlProcess = *mysqlctlProcess
 	proc, err := tablet.MysqlctlProcess.StartProcess()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Start vttablet process
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(
@@ -205,17 +205,17 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 
 	// wait for mysqld to be ready
 	err = proc.Wait()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	tablet.VttabletProcess.ServingStatus = ""
 	err = tablet.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	serving := tablet.VttabletProcess.WaitForStatus("SERVING", time.Duration(60*time.Second))
 	assert.True(t, serving, "Tablet did not become ready within a reasonable time")
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.%s",
 		tablet.VttabletProcess.Keyspace, tablet.VttabletProcess.Shard, tablet.Type), 1, 30*time.Second)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	t.Logf("Added tablet: %s", tablet.Alias)
 	return tablet
@@ -233,7 +233,7 @@ func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	wg.Wait()
 
 	err := clusterInstance.VtctldClientProcess.ExecuteCommand("DeleteTablets", tablet.Alias)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	t.Logf("Deleted tablet: %s", tablet.Alias)
 }

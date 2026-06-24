@@ -229,7 +229,7 @@ func TestFindPositionsOfAllCandidates_ErrorNotDuplicated(t *testing.T) {
 	require.Error(t, err)
 
 	cause := vterrors.Cause(err)
-	require.NotNil(t, cause)
+	require.Error(t, cause)
 	causeMsg := cause.Error()
 	assert.Equal(t, 1, strings.Count(err.Error(), causeMsg),
 		"cause message must appear exactly once in the wrapped error")

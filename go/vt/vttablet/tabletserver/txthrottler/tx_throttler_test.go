@@ -49,7 +49,7 @@ func TestDisabledThrottler(t *testing.T) {
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
-	assert.Nil(t, throttler.Open())
+	assert.NoError(t, throttler.Open())
 	assert.False(t, throttler.Throttle(0, "some-workload"))
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
@@ -136,7 +136,7 @@ func TestEnabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 
-	assert.Nil(t, throttlerImpl.Open())
+	assert.NoError(t, throttlerImpl.Open())
 	throttlerStateImpl, ok := throttlerImpl.state.(*txThrottlerStateImpl)
 	assert.True(t, ok)
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)

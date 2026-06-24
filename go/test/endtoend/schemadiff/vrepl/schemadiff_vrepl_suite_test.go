@@ -442,7 +442,7 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, mysqlParams())
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(sql, 100000, true)
@@ -458,7 +458,7 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tableName string) (statement string) {
 	queryResult, err := getTablet().VttabletProcess.QueryTablet("show create table "+tableName, keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, 1, len(queryResult.Rows))
 	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement

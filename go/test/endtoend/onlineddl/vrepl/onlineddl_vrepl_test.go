@@ -944,7 +944,7 @@ func testWithInitialSchema(t *testing.T) {
 	for i := range totalTableCount {
 		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, sqlQuery)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// Check if 4 tables are created
@@ -1003,7 +1003,7 @@ func checkTables(t *testing.T, showTableName string, expectCount int) {
 func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectCount, len(queryResult.Rows))
 }
 
@@ -1018,7 +1018,7 @@ func checkMigratedTable(t *testing.T, tableName, expectColumn string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, 1, len(queryResult.Rows))
 	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement

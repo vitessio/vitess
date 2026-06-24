@@ -315,11 +315,11 @@ func TestVreplMiniStressSchemaChanges(t *testing.T) {
 func testWithInitialSchema(t *testing.T) {
 	for _, statement := range cleanupStatements {
 		err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, statement)
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 	// Create the stress table
 	err := clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, createStatement)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check if table is created
 	checkTable(t, tableName)
@@ -374,7 +374,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 	for {
 		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		rowcount = len(queryResult.Rows)
 		if rowcount > 0 {
 			break
@@ -404,7 +404,7 @@ func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 // getCreateTableStatement returns the CREATE TABLE statement for a given table
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, 1, len(queryResult.Rows))
 	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement
@@ -487,13 +487,13 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	ticker := time.NewTicker(sleepInterval)
 	defer ticker.Stop()
@@ -513,7 +513,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 			return
 		case <-ticker.C:
 		}
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}
 }
 
@@ -554,13 +554,13 @@ func initTable(t *testing.T) {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	resetOpOrder()
 	writeMetrics.Clear()
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	for range maxTableRows / 2 {
 		generateInsert(t, conn)
@@ -590,11 +590,11 @@ func testSelectTableMetrics(t *testing.T) {
 
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	row := rs.Named().Row()
 	require.NotNil(t, row)

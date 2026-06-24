@@ -35,7 +35,7 @@ func TestErrorConditions(t *testing.T) {
 	// Bad init ; but we should just retry
 	a, err := newAuthServerVault("https://localhost:828", 1*time.Second, "", "/path/to/secret/in/vault", 10*time.Second, "", "", "", "")
 	assert.NotNil(t, a)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	// Test reload, should surface error, since we don't have a Vault
 	// instance on port 828

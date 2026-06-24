@@ -53,22 +53,22 @@ func TestSimplePolicy(t *testing.T) {
 	assert.Equalf(t, want, err.Error(), "got %v, want %s", err, want)
 
 	err = CheckAccessHTTP(nil, DEBUGGING)
-	assert.Equalf(t, nil, err, "got %v, want no error", err)
+	assert.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, MONITORING)
-	assert.Equalf(t, nil, err, "got %v, want no error", err)
+	assert.NoErrorf(t, err, "got %v, want no error", err)
 }
 
 func TestEmptyPolicy(t *testing.T) {
 	currentPolicy = nil
 	err := CheckAccessHTTP(nil, ADMIN)
-	assert.Equalf(t, nil, err, "got %v, want no error", err)
+	assert.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, DEBUGGING)
-	assert.Equalf(t, nil, err, "got %v, want no error", err)
+	assert.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, MONITORING)
-	assert.Equalf(t, nil, err, "got %v, want no error", err)
+	assert.NoErrorf(t, err, "got %v, want no error", err)
 }
 
 func TestValidSecurityPolicy(t *testing.T) {

@@ -47,7 +47,7 @@ func TestLookupUniqueWithAutocommit(t *testing.T) {
 
 	// conn2 is to check entries in the lookup table
 	conn2, err := mysql.Connect(t.Context(), &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	// Test that all vindex writes are autocommitted outside of any ongoing transactions.
@@ -107,7 +107,7 @@ func TestConsistentLookup(t *testing.T) {
 	defer closer()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(t.Context(), &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	// Simple insert.
@@ -414,7 +414,7 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 	defer closer()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(t.Context(), &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	utils.Exec(t, conn, "begin")
@@ -460,7 +460,7 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	defer closer()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(t.Context(), &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	utils.Exec(t, conn, "delete from t2")

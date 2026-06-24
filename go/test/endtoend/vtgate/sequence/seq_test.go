@@ -218,7 +218,7 @@ func TestSeq(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Initialize seq table if needed

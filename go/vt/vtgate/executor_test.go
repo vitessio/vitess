@@ -1975,7 +1975,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	}
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executorExecSession(t.Context(), executor, session, query, nil)
-		require.NotNil(t, err)
+		require.Error(t, err)
 		assert.EqualError(t, err, "query payload size above threshold")
 	}
 	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
@@ -1988,14 +1988,14 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	}
 	for _, query := range testMaxPayloadSizeOverride {
 		_, err := executorExecSession(t.Context(), executor, session, query, nil)
-		assert.Equal(t, nil, err, "err should be nil")
+		assert.NoError(t, err, "err should be nil")
 	}
 	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 
 	maxPayloadSize = 1000
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executorExecSession(t.Context(), executor, session, query, nil)
-		assert.Equal(t, nil, err, "err should be nil")
+		assert.NoError(t, err, "err should be nil")
 	}
 	assert.Equal(t, warningCount+4, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 }

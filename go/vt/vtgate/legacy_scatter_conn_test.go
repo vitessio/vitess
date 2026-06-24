@@ -331,7 +331,7 @@ func TestLegaceHealthCheckFailsOnReservedConnections(t *testing.T) {
 
 func executeOnShards(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.ShardDestination) {
 	t.Helper()
-	require.Empty(t, executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations))
+	require.NoError(t, executeOnShardsReturnsErr(t, ctx, res, keyspace, sc, session, destinations))
 }
 
 func executeOnShardsReturnsErr(t *testing.T, ctx context.Context, res *srvtopo.Resolver, keyspace string, sc *ScatterConn, session *econtext.SafeSession, destinations []key.ShardDestination) error {

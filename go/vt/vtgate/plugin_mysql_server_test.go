@@ -932,7 +932,7 @@ func TestComQueryMulti(t *testing.T) {
 				if tt.queryResponses[idx].QueryError != nil {
 					assert.Equal(t, tt.queryResponses[idx].QueryError.Error(), qr.QueryError.Error(), "Error Got: %v", qr.QueryError)
 				} else {
-					assert.Nil(t, qr.QueryError, "Error Got: %v", qr.QueryError)
+					assert.NoError(t, qr.QueryError, "Error Got: %v", qr.QueryError)
 				}
 				assert.Equal(t, tt.more[idx], more, idx)
 				assert.Equal(t, tt.firstPacket[idx], firstPacket, idx)

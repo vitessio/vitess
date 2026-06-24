@@ -114,7 +114,7 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 
 	// end-to-end test
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	defer utils.Exec(t, conn, `delete from t1`)
@@ -140,11 +140,11 @@ func TestOpenTxBlocksInSerial(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn1, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn1.Close()
 
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	defer utils.Exec(t, conn1, `delete from t1`)
@@ -171,11 +171,11 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn1, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn1.Close()
 
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	defer utils.Exec(t, conn1, `delete from t1`)
@@ -206,7 +206,7 @@ func TestUpdateLookupUniqueVindex(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	defer utils.Exec(t, conn, `delete from t1`)

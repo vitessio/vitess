@@ -594,7 +594,7 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// RunSQL
@@ -609,7 +609,7 @@ func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) e
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Run SQLs
@@ -1227,7 +1227,7 @@ func SemiSyncExtensionLoaded(t *testing.T, tablet *cluster.Vttablet) (mysql.Semi
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	return conn.SemiSyncExtensionLoaded()

@@ -158,12 +158,12 @@ func testReplica(t *testing.T) {
 // testcount validates inserted rows count with expected count.
 func testcount(t *testing.T, dbo *sql.DB, except int) {
 	r, err := dbo.Query("SELECT count(1) FROM vt_prepare_stmt_test")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	r.Next()
 	var i int
 	err = r.Scan(&i)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, except, i)
 }
 
@@ -265,7 +265,7 @@ func TestColumnParameter(t *testing.T) {
 	selectStmt := "SELECT COALESCE(?, id), msg FROM vt_prepare_stmt_test WHERE msg = ? LIMIT ?"
 
 	results1, err := dbo.Query(selectStmt, parameter1, message, 1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, results1.Next())
 
 	results1.Scan(&param, &msg)
@@ -273,7 +273,7 @@ func TestColumnParameter(t *testing.T) {
 	assert.Equal(t, message, msg)
 
 	results2, err := dbo.Query(selectStmt, nil, message, 1)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.True(t, results2.Next())
 
 	results2.Scan(&recID, &msg)

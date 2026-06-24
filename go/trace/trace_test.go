@@ -122,7 +122,7 @@ func TestNewFromString(t *testing.T) {
 
 func TestNilCloser(t *testing.T) {
 	nc := nilCloser{}
-	require.Nil(t, nc.Close())
+	require.NoError(t, nc.Close())
 }
 
 type fakeTracer struct {

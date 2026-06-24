@@ -705,7 +705,7 @@ func confirmWorkflowHasCopiedNoData(t *testing.T, defaultTargetKs, workflow stri
 func getShardRoutingRules(t *testing.T) string {
 	output, err := osExec(t, "vtctldclient", []string{"--server", getVtctldGRPCURL(), "GetShardRoutingRules"})
 	log.Info(fmt.Sprintf("GetShardRoutingRules err: %+v, output: %+v", err, output))
-	require.Nilf(t, err, output)
+	require.NoErrorf(t, err, output)
 	require.NotNil(t, output)
 
 	// Sort the rules by shard,to_keyspace

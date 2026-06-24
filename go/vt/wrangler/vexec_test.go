@@ -61,7 +61,7 @@ func TestVExec(t *testing.T) {
 
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 	err := vx.getPrimaries(nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	primaries := vx.primaries
 	require.NotNil(t, primaries)
 	require.Equal(t, 2, len(primaries))
@@ -241,7 +241,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	}
 
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, nil, nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// convert map to list and sort it for comparison
 	var gotResults []string
@@ -255,7 +255,7 @@ func TestWorkflowListStreams(t *testing.T) {
 
 	logger.Clear()
 	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, nil, nil)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
 	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
 will be run on the following streams in keyspace target for workflow wrWorkflow:
@@ -290,11 +290,11 @@ func TestWorkflowListAll(t *testing.T) {
 	wr := New(vtenv.NewTestEnv(), logger, env.topoServ, env.tmc)
 
 	workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, []string{workflow}, workflows)
 
 	workflows, err = wr.ListAllWorkflows(ctx, keyspace, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	require.Equal(t, []string{workflow, "wrWorkflow2"}, workflows)
 	logger.Clear()
 }

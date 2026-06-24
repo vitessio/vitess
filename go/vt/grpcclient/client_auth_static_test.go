@@ -95,7 +95,7 @@ func TestGetStaticAuthCreds(t *testing.T) {
 		credsFile = oldCredsFile
 	}()
 	tmp, err := os.CreateTemp("", t.Name())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	defer os.Remove(tmp.Name())
 	credsFile = tmp.Name()
 	ResetStaticAuth()
@@ -104,7 +104,7 @@ func TestGetStaticAuthCreds(t *testing.T) {
 	fmt.Fprint(tmp, `{"Username": "old", "Password": "123456"}`)
 	ResetStaticAuth()
 	creds, err := getStaticAuthCreds()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, &StaticAuthClientCreds{Username: "old", Password: "123456"}, creds)
 
 	// write new creds to the same file
@@ -114,7 +114,7 @@ func TestGetStaticAuthCreds(t *testing.T) {
 
 	// test the creds did not change yet
 	creds, err = getStaticAuthCreds()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, &StaticAuthClientCreds{Username: "old", Password: "123456"}, creds)
 
 	// test SIGHUP signal triggers reload
@@ -132,7 +132,7 @@ func TestGetStaticAuthCreds(t *testing.T) {
 			if reflect.DeepEqual(creds, credsOld) {
 				continue // not changed yet
 			}
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, &StaticAuthClientCreds{Username: "new", Password: "123456789"}, creds)
 			return
 		}
@@ -142,7 +142,7 @@ func TestGetStaticAuthCreds(t *testing.T) {
 func TestLoadStaticAuthCredsFromFile(t *testing.T) {
 	{
 		f, err := os.CreateTemp("", t.Name())
-		if !assert.Nil(t, err) {
+		if !assert.NoError(t, err) {
 			assert.FailNowf(t, "cannot create temp file: %s", err.Error())
 		}
 		defer os.Remove(f.Name())
@@ -150,17 +150,17 @@ func TestLoadStaticAuthCredsFromFile(t *testing.T) {
 			"Username": "test",
 			"Password": "correct horse battery staple"
 		}`)
-		if !assert.Nil(t, err) {
+		if !assert.NoError(t, err) {
 			assert.FailNowf(t, "cannot read auth file: %s", err.Error())
 		}
 
 		creds, err := loadStaticAuthCredsFromFile(f.Name())
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, "test", creds.Username)
 		assert.Equal(t, "correct horse battery staple", creds.Password)
 	}
 	{
 		_, err := loadStaticAuthCredsFromFile(`does-not-exist`)
-		assert.NotNil(t, err)
+		assert.Error(t, err)
 	}
 }

@@ -68,8 +68,8 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	})
 
 	wg.Wait()
-	require.Nil(t, clientErr, "Dial failed: %v", clientErr)
-	require.Nil(t, serverErr, "Accept failed: %v", serverErr)
+	require.NoError(t, clientErr, "Dial failed: %v", clientErr)
+	require.NoError(t, serverErr, "Accept failed: %v", serverErr)
 
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn, DefaultFlushDelay, 0)
