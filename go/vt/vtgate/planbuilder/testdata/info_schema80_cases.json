@@ -843,7 +843,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum(0) AS sum(`found`)",
+        "Aggregates": "sum(0) AS sum(found)",
         "Inputs": [
           {
             "OperatorType": "Concatenate",

@@ -23,6 +23,8 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
+    - **[General](#minor-changes-general)**
+        - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -153,3 +155,16 @@ Two new flags control chunking behavior:
 **Compatibility note:** Backups created with chunking enabled are **not restorable by older Vitess versions** that do not understand the `Chunks` field in the backup MANIFEST. Non-chunked backups (the default) remain fully compatible with older versions.
 
 See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
+
+### <a id="minor-changes-general"/>General</a>
+
+#### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
+
+The build timestamp is no longer injected via linker flags. Because it changed on every `make build`, it forced every binary to be re-linked even when nothing else changed. Build metadata is now read from the VCS information the Go toolchain stamps into the binary (`runtime/debug.ReadBuildInfo`), which makes the linker flags stable across rebuilds and lets the build cache hit.
+
+User-visible consequences:
+
+- The `build_time` reported by `--version`, exposed via `/debug/vars` (`BuildTimestamp`), and set as a tablet tag (`build_time`) now defaults to the **commit time** of the built revision rather than the wall-clock time of the build.
+- Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
+
+The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
