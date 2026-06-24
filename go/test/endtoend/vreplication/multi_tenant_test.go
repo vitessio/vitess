@@ -201,7 +201,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		},
 	}
 
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 
 	createFunc := func() {
 		mt.Create()
@@ -252,7 +252,7 @@ func TestMultiTenantSimple(t *testing.T) {
 	waitForRowCountInTablet(t, sourceTablet, sourceKeyspace, "t1", lastIndex)
 
 	mt.Complete()
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 	// Targeting to target keyspace should start working now. Upto this point we had to target the source keyspace.
 	lastIndex = insertRows(lastIndex, targetKeyspace)
 
@@ -402,7 +402,7 @@ func TestMultiTenantSharded(t *testing.T) {
 	// replicated to the source keyspace. The source keyspace is routed to the target keyspace at this point.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
 	mt.Complete()
-	require.Zero(t, len(getKeyspaceRoutingRules(t, vc).Rules))
+	require.Empty(t, getKeyspaceRoutingRules(t, vc).Rules)
 	actualRowsInserted := getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))
 	require.Equal(t, lastIndex, int64(actualRowsInserted))
 	require.Equal(t, lastIndex, int64(getRowCount(t, vtgateConn, fmt.Sprintf("%s.%s", targetKeyspace, "t1"))))

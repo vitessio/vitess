@@ -156,7 +156,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	qr, more, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ReadQueryResult(1)", more, true)
-	assert.EqualValues(t, 0, len(qr.Rows))
+	assert.Empty(t, qr.Rows)
 
 	qr, more, _, err = conn.ReadQueryResult(10, true)
 	expectNoError(t, err)
@@ -171,7 +171,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	qr, more, err = conn.ExecuteFetchMulti("set autocommit=1", 10, true)
 	expectNoError(t, err)
 	expectFlag(t, "ExecuteMultiFetch(no result)", more, false)
-	assert.EqualValues(t, 0, len(qr.Rows))
+	assert.Empty(t, qr.Rows)
 
 	// The ClientDeprecateEOF protocol change has a subtle twist in which an EOF or OK
 	// packet happens to have the status flags in the same position if the affected_rows

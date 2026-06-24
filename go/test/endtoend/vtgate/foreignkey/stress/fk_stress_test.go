@@ -1398,43 +1398,43 @@ func testFKIntegrity(
 	t.Run(testName, func(t *testing.T) {
 		t.Run("matching parent-child rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsChild, "")
-			assert.NotZero(t, len(rs.Rows))
+			assert.NotEmpty(t, rs.Rows)
 		})
 		t.Run("matching parent-child2 rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsChild2, "")
-			assert.NotZero(t, len(rs.Rows))
+			assert.NotEmpty(t, rs.Rows)
 		})
 		t.Run("matching child-grandchild rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsGrandchild, "")
-			assert.NotZero(t, len(rs.Rows))
+			assert.NotEmpty(t, rs.Rows)
 		})
 		t.Run("matching self rows", func(t *testing.T) {
 			rs := queryTablet(t, tablet, selectMatchingRowsSelf, "")
-			assert.NotZero(t, len(rs.Rows))
+			assert.NotEmpty(t, rs.Rows)
 		})
 		if tcase.onDeleteAction != sqlparser.SetNull && tcase.onUpdateAction != sqlparser.SetNull {
 			// Because with SET NULL there _are_ orphaned rows
 			t.Run("parent-child orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsChild, "")
-				assert.Zero(t, len(rs.Rows))
+				assert.Empty(t, rs.Rows)
 			})
 			t.Run("parent-child2 orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsChild2, "")
-				assert.Zero(t, len(rs.Rows))
+				assert.Empty(t, rs.Rows)
 			})
 			t.Run("child-grandchild orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsGrandchild, "")
-				assert.Zero(t, len(rs.Rows))
+				assert.Empty(t, rs.Rows)
 			})
 			t.Run("self orphaned rows", func(t *testing.T) {
 				rs := queryTablet(t, tablet, selectOrphanedRowsSelf, "")
-				assert.Zero(t, len(rs.Rows))
+				assert.Empty(t, rs.Rows)
 			})
 			if !tcase.skipNofkOrphanedRows {
 				t.Run("parent-nofk orphaned rows", func(t *testing.T) {
 					rs := queryTablet(t, tablet, selectOrphanedRowsNoFK, "")
 					// Expect orphaned rows!
-					assert.NotZero(t, len(rs.Rows))
+					assert.NotEmpty(t, rs.Rows)
 				})
 			}
 		}

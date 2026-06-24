@@ -754,7 +754,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 
 	wg.Wait()
-	require.Equal(t, "", fatalError, fatalError)
+	require.Empty(t, fatalError, fatalError)
 }
 
 func RowString(row []sqltypes.Value) string {

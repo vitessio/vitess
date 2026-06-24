@@ -95,7 +95,7 @@ func TestPrimaryHealthStateEviction(t *testing.T) {
 	}
 
 	primaryHealthMu.Lock()
-	require.Equal(t, 0, len(primaryHealthByAlias))
+	require.Empty(t, primaryHealthByAlias)
 	primaryHealthMu.Unlock()
 
 	require.Eventually(t, func() bool {

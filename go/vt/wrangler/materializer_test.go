@@ -83,7 +83,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	require.NoError(t, err)
 	rr, err := env.wr.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(rr.Rules))
+	require.Empty(t, rr.Rules)
 }
 
 func TestMigrateTables(t *testing.T) {

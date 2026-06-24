@@ -32,7 +32,7 @@ import (
 )
 
 func TestURLPrefix(t *testing.T) {
-	assert.Equal(t, "", NewExporter("", "").URLPrefix())
+	assert.Empty(t, NewExporter("", "").URLPrefix())
 	assert.Equal(t, "/a", NewExporter("a", "").URLPrefix())
 }
 

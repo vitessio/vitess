@@ -130,7 +130,7 @@ func TestResetReplicationParameters(t *testing.T) {
 	// Recheck the replica status and this time is should be empty
 	res, err = tablet.VttabletProcess.QueryTablet("show replica status", keyspaceName, false)
 	require.NoError(t, err)
-	require.Len(t, res.Rows, 0)
+	require.Empty(t, res.Rows)
 }
 
 // TestGetGlobalStatusVars tests the GetGlobalStatusVars RPC

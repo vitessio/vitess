@@ -174,7 +174,7 @@ func TestMessage(t *testing.T) {
 	// Within 3+1 seconds, the row should be deleted.
 	time.Sleep(4 * time.Second)
 	qr = utils.Exec(t, conn, "select time_acked, epoch from vitess_message where id = 1")
-	assert.Equal(t, 0, len(qr.Rows))
+	assert.Empty(t, qr.Rows)
 }
 
 var createThreeColMessage = `

@@ -3384,7 +3384,7 @@ func TestFinalizeMigrateWorkflow(t *testing.T) {
 				assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName1])
 				assert.NotNil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName2])
 			} else {
-				assert.Len(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables, 0)
+				assert.Empty(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables)
 				assert.Nil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName1])
 				assert.Nil(t, ks.Keyspaces[targetKeyspace.KeyspaceName].Tables[tableName2])
 			}

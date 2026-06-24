@@ -148,7 +148,7 @@ func TestOpen(t *testing.T) {
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
 		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
+		assert.Empty(t, state.waits)
 		assert.Zero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())
@@ -1308,7 +1308,7 @@ func TestMultiSettings(t *testing.T) {
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
 		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
+		assert.Empty(t, state.waits)
 		assert.Zero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())
@@ -1488,7 +1488,7 @@ func TestGetSpike(t *testing.T) {
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
 		assert.Zero(t, p.Metrics.WaitCount())
-		assert.Zero(t, len(state.waits))
+		assert.Empty(t, state.waits)
 		assert.Zero(t, p.Metrics.WaitTime())
 		assert.EqualValues(t, i+1, state.lastID.Load())
 		assert.EqualValues(t, i+1, state.open.Load())

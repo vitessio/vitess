@@ -347,7 +347,7 @@ func TestCloneRemote(t *testing.T) {
 	require.NoError(t, err, "Failed to connect to recipient for pre-clone check")
 	qr, err = recipientConnPreClone.ExecuteFetch("SHOW DATABASES LIKE 'test_clone'", 1, false)
 	require.NoError(t, err, "Failed to check for test_clone database on recipient")
-	require.Len(t, qr.Rows, 0, "Recipient should NOT have test_clone database before clone")
+	require.Empty(t, qr.Rows, "Recipient should NOT have test_clone database before clone")
 	recipientConnPreClone.Close()
 
 	// Create Mysqld instance for recipient (needed by CloneExecutor)

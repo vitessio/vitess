@@ -320,7 +320,7 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	})
 
 	// And no error message.
-	require.Len(t, stderr, 0, "Unexpected error message: %s", strings.Join(stderr, "\n"))
+	require.Empty(t, stderr, "Unexpected error message: %s", strings.Join(stderr, "\n"))
 
 	// Stop the last cell topo server.
 	cmd := cellClientCmds[len(cells)-1]
@@ -335,13 +335,13 @@ func TestEtcd2TopoGetTabletsPartialResults(t *testing.T) {
 	// We get partial results, missing the tablet from the last cell.
 	require.Len(t, stdout, len(cells)-1, "Unexpected output: %s", strings.Join(stdout, "\n"))
 	// We get an error message for the cell that was unreachable.
-	require.Greater(t, len(stderr), 0, "Unexpected error message: %s", strings.Join(stderr, "\n"))
+	require.NotEmpty(t, stderr, "Unexpected error message: %s", strings.Join(stderr, "\n"))
 
 	// Execute the vtctldclient command with strict enabled.
 	_, stderr, err = getTablets(true)
 	require.Error(t, err) // We get an error
 	// We still get an error message printed to the console for the cell that was unreachable.
-	require.Greater(t, len(stderr), 0, "Unexpected error message: %s", strings.Join(stderr, "\n"))
+	require.NotEmpty(t, stderr, "Unexpected error message: %s", strings.Join(stderr, "\n"))
 
 	globalTS.Close()
 	for _, cellTS := range cellTSs {

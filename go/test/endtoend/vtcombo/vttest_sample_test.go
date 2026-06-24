@@ -330,5 +330,5 @@ func assertTransactionalityAndRollbackObeyed(ctx context.Context, t *testing.T, 
 	}
 	res, err = cur.Execute(ctx, "select * from test_table where msg = :msg", bindVariables, false)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(res.Rows))
+	require.Empty(t, res.Rows)
 }

@@ -595,9 +595,9 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 		"_user_id_1": sqltypes.Int64BindVariable(3),
 	}
 	assertQueriesWithSavepoint(t, sbc2, wantQ)
-	assert.Len(t, sbc3.Queries, 0)
+	assert.Empty(t, sbc3.Queries)
 	// internal savepoint should be removed.
-	assert.Len(t, session.Savepoints, 0)
+	assert.Empty(t, session.Savepoints)
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 
@@ -615,7 +615,7 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	}}
 	assertQueriesWithSavepoint(t, sbc3, wantQ)
 	// internal savepoint should be removed.
-	assert.Len(t, session.Savepoints, 0)
+	assert.Empty(t, session.Savepoints)
 	sbc2.Queries = nil
 	sbc3.Queries = nil
 

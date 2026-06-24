@@ -130,7 +130,7 @@ func AssertLogutilEventsOccurred(t *testing.T, container interface{ GetEvents() 
 		return
 	}
 
-	assert.Greater(t, len(container.GetEvents()), 0, msgAndArgs...)
+	assert.NotEmpty(t, container.GetEvents(), msgAndArgs...)
 }
 
 // AssertNoLogutilEventsOccurred asserts that for something containing a slice
@@ -148,7 +148,7 @@ func AssertNoLogutilEventsOccurred(t *testing.T, container interface{ GetEvents(
 		return
 	}
 
-	assert.Equal(t, len(container.GetEvents()), 0, msgAndArgs...)
+	assert.Empty(t, container.GetEvents(), msgAndArgs...)
 }
 
 // EventValueSorter implements sort.Interface for slices of logutil.Event,

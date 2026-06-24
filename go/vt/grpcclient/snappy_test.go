@@ -44,7 +44,7 @@ func TestAppendCompression(t *testing.T) {
 	dialOpts := []grpc.DialOption{}
 	dialOpts, err := appendCompression(dialOpts)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(dialOpts))
+	require.Empty(t, dialOpts)
 
 	// Change the compression to snappy
 	compression = "snappy"

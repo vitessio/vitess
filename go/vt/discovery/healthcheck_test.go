@@ -1349,7 +1349,7 @@ func TestLoadTabletsTrigger(t *testing.T) {
 		require.EqualValues(t, ks, kss.Keyspace)
 		require.EqualValues(t, shard, kss.Shard)
 	}
-	require.Len(t, ch, 0)
+	require.Empty(t, ch)
 }
 
 func TestReplicaInOtherCell(t *testing.T) {

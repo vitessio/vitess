@@ -1766,7 +1766,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 					require.Equal(t, 0, fakePendingResult.WaitCalls)
 				}
 			} else {
-				require.Len(t, fakeConsolidator.CreateCalls, 0)
+				require.Empty(t, fakeConsolidator.CreateCalls)
 			}
 
 			if tcase.expectExec {

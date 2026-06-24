@@ -521,5 +521,5 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	config.DB.App.Password = ""
 	err = config.verifyUnmanagedTabletConfig()
 	assert.Nil(t, err)
-	assert.Equal(t, "", config.DB.App.Password)
+	assert.Empty(t, config.DB.App.Password)
 }

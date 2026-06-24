@@ -140,5 +140,5 @@ func NoTestMycnfHook(t *testing.T) {
 	assert.Equal(t, "11111", mycnf.lookup("TABLET_ID"))
 	assert.Equal(t, "/vt_0000011111", mycnf.lookup("TABLET_DIR"))
 	assert.Equal(t, "15306", mycnf.lookup("MYSQL_PORT"))
-	assert.Equal(t, "", mycnf.lookup("MY_VAR"))
+	assert.Empty(t, mycnf.lookup("MY_VAR"))
 }

@@ -231,7 +231,7 @@ func TestGetServerUUID(t *testing.T) {
 	db.AddQuery("SELECT @@global.server_uuid", &sqltypes.Result{})
 	res, err = testMysqld.GetServerUUID(ctx)
 	assert.Error(t, err)
-	assert.Equal(t, "", res)
+	assert.Empty(t, res)
 }
 
 func TestWaitSourcePos(t *testing.T) {

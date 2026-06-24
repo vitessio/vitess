@@ -2919,7 +2919,7 @@ func TestMultiInternalSavepoint(t *testing.T) {
 		},
 	}}
 	assertQueriesWithSavepoint(t, sbc1, wantQ)
-	require.Len(t, sbc2.Queries, 0)
+	require.Empty(t, sbc2.Queries)
 	sbc1.Queries = nil
 
 	_, err = executorExec(ctx, executor, session.Session, "insert into user_extra(user_id) values (3), (6)", nil)

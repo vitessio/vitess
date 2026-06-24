@@ -42,7 +42,7 @@ func TestStringSetFlag(t *testing.T) {
 
 func TestStringSetFlagWithEmptySet(t *testing.T) {
 	strSetFlag := StringSetFlag{}
-	require.Equal(t, "", strSetFlag.String())
+	require.Empty(t, strSetFlag.String())
 
 	err := strSetFlag.Set("tmp")
 	require.NoError(t, err)

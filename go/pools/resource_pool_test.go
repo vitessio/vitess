@@ -89,7 +89,7 @@ func TestOpen(t *testing.T) {
 		resources[i] = r
 		assert.EqualValues(t, 5-i-1, p.Available())
 		assert.Zero(t, p.WaitCount())
-		assert.Zero(t, len(waitStarts))
+		assert.Empty(t, waitStarts)
 		assert.Zero(t, p.WaitTime())
 		assert.EqualValues(t, i+1, lastID.Load())
 		assert.EqualValues(t, i+1, count.Load())

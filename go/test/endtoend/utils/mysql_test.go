@@ -322,7 +322,7 @@ func TestSetAndResetReplication(t *testing.T) {
 
 	r, err = mysqld.ReplicationStatus(t.Context())
 	assert.ErrorContains(t, err, "no replication status")
-	assert.Equal(t, "", r.SourceHost)
+	assert.Empty(t, r.SourceHost)
 	assert.Equal(t, int32(0), r.SourcePort)
 
 	err = mysqld.SetReplicationSource(t.Context(), host, port, 0, true, true)
@@ -338,7 +338,7 @@ func TestSetAndResetReplication(t *testing.T) {
 
 	r, err = mysqld.ReplicationStatus(t.Context())
 	assert.ErrorContains(t, err, "no replication status")
-	assert.Equal(t, "", r.SourceHost)
+	assert.Empty(t, r.SourceHost)
 	assert.Equal(t, int32(0), r.SourcePort)
 }
 

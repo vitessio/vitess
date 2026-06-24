@@ -46,5 +46,5 @@ func TestExecuteTemplateWithError(t *testing.T) {
 
 	result, err := ExecuteTemplate(tmpl, invalidInput)
 	assert.Error(t, err)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }

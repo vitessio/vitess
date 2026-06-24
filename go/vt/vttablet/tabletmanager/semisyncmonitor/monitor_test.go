@@ -642,7 +642,7 @@ func TestMonitorWrite(t *testing.T) {
 				require.Contains(t, queryLog, "set session lock_wait_timeout=5")
 				require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat (ts) values (now())")
 			} else {
-				require.Equal(t, "", queryLog)
+				require.Empty(t, queryLog)
 			}
 		})
 	}
@@ -776,7 +776,7 @@ func TestStartWrites(t *testing.T) {
 
 	// If we aren't blocked, then start writes doesn't do anything.
 	m.startWrites()
-	require.EqualValues(t, "", db.QueryLog())
+	require.Empty(t, db.QueryLog())
 
 	// Now we set the monitor to be blocked.
 	m.setIsBlocked(true)

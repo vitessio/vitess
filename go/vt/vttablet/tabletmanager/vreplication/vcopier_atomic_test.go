@@ -160,7 +160,7 @@ func TestDrainAndAggregateErrors(t *testing.T) {
 			err := drainAndAggregateErrors(ch, tt.vstreamErr, nil)
 
 			// Verify the channel was fully drained.
-			assert.Equal(t, 0, len(ch), "channel should be empty after draining")
+			assert.Empty(t, ch, "channel should be empty after draining")
 
 			if tt.wantNil {
 				assert.NoError(t, err)

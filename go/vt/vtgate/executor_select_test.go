@@ -2993,7 +2993,7 @@ func TestSelectUsingMultiEqualOnLookupColumn(t *testing.T) {
 
 	require.NoError(t, err)
 
-	require.Len(t, sbc1.Queries, 0)
+	require.Empty(t, sbc1.Queries)
 	require.Len(t, sbc2.Queries, 1)
 
 	require.Equal(t, []*querypb.BoundQuery{{

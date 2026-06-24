@@ -115,8 +115,8 @@ func TestBackupEmitsStats(t *testing.T) {
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	require.NotZero(t, backupstats.DeprecatedBackupDurationS.Get())
-	require.Equal(t, 0, len(env.stats.TimedIncrementCalls))
-	require.Equal(t, 0, len(env.stats.ScopeV))
+	require.Empty(t, env.stats.TimedIncrementCalls)
+	require.Empty(t, env.stats.ScopeV)
 }
 
 // TestBackupTriesToParameterizeBackupStorage tests that Backup tries to pass
@@ -320,8 +320,8 @@ func TestRestoreEmitsStats(t *testing.T) {
 	require.Nil(t, err, env.logger.Events)
 
 	require.NotZero(t, backupstats.DeprecatedRestoreDurationS.Get())
-	require.Equal(t, 0, len(env.stats.TimedIncrementCalls))
-	require.Equal(t, 0, len(env.stats.ScopeV))
+	require.Empty(t, env.stats.TimedIncrementCalls)
+	require.Empty(t, env.stats.ScopeV)
 }
 
 // TestRestoreExecutesRestoreWithScopedParams tests that Restore passes

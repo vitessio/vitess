@@ -1021,7 +1021,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 	require.EqualValues(t, want, res, "got: %+v, want: %+v", res, want)
 	rr, err := env.ws.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)
-	require.Zerof(t, len(rr.Rules), "routing rules should be empty, found %+v", rr.Rules)
+	require.Emptyf(t, rr.Rules, "routing rules should be empty, found %+v", rr.Rules)
 }
 
 func TestMoveTablesCreateShardedVSchemaRollback(t *testing.T) {

@@ -770,7 +770,7 @@ func TestBackup(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no backupclient messages")
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 		{
@@ -841,7 +841,7 @@ func TestBackup(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no backupclient messages")
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 		{
@@ -1058,7 +1058,7 @@ func TestBackupShard(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no backupclient messages")
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 		{
@@ -1237,7 +1237,7 @@ func TestBackupShard(t *testing.T) {
 			req: &vtctldatapb.BackupShardRequest{},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
 				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no backupclient messages")
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 	}
@@ -11019,7 +11019,7 @@ func TestRestoreFromBackup(t *testing.T) {
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.RestoreFromBackupResponse, err error) {
 				assert.NotErrorIs(t, err, io.EOF, "expected restorefrombackupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no restorefrombackupclient messages")
+				assert.Empty(t, responses, "expected no restorefrombackupclient messages")
 			},
 		},
 	}

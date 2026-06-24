@@ -489,9 +489,9 @@ func testRevertible(t *testing.T) {
 
 				// Online DDL renames constraint names, and keeps the original name as a prefix. The name will be e.g. some_fk_2_518ubnm034rel35l1m0u1dc7m
 				assert.Contains(t, removeBackticks(removedForeignKeyNames), "some_fk_2")
-				assert.Equal(t, "", removeBackticks(removedUniqueKeyNames))
-				assert.Equal(t, "", removeBackticks(droppedNoDefaultColumnNames))
-				assert.Equal(t, "", removeBackticks(expandedColumnNames))
+				assert.Empty(t, removeBackticks(removedUniqueKeyNames))
+				assert.Empty(t, removeBackticks(droppedNoDefaultColumnNames))
+				assert.Empty(t, removeBackticks(expandedColumnNames))
 			}
 		})
 	})

@@ -552,7 +552,7 @@ func TestClientFoundRows(t *testing.T) {
 	assert.NoError(t, client.Begin(false))
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(qr.Rows))
+	assert.Empty(t, qr.Rows)
 	assert.NoError(t, client.Rollback())
 
 	// CLIENT_FOUND_ROWS flag is on.
@@ -847,7 +847,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
-			assert.Equal(t, "", row[3].ToString())
+			assert.Empty(t, row[3].ToString())
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
@@ -886,7 +886,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
-			assert.Equal(t, "", row[3].ToString())
+			assert.Empty(t, row[3].ToString())
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
@@ -909,7 +909,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
-			assert.Equal(t, "", row[3].ToString())
+			assert.Empty(t, row[3].ToString())
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
@@ -1207,7 +1207,7 @@ func TestTuple(t *testing.T) {
 
 	res, err = client.Execute("select * from vitess_a where (eid, id) in ::__vals", bv)
 	require.NoError(t, err)
-	require.Zero(t, len(res.Rows))
+	require.Empty(t, res.Rows)
 }
 
 // TestMaxRows tests different scenarios with max rows.

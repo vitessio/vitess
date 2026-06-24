@@ -213,7 +213,7 @@ func verifyDataIsCorrect(t *testing.T, mcmp utils.MySQLCompare, concurrency int)
 			}
 			res, err := mcmp.VtConn.ExecuteFetch(query, 1000, false)
 			require.NoError(t, err)
-			require.Zerof(t, len(res.Rows), "Query %v gave non-empty results", query)
+			require.Emptyf(t, res.Rows, "Query %v gave non-empty results", query)
 		}
 	}
 	// We also verify that the results in Primary and Replica table match as is.

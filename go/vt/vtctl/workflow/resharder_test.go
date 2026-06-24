@@ -210,7 +210,7 @@ func TestReshardCreate(t *testing.T) {
 			// key from the map in the testTMC, once updateVReplicationWorklows()
 			// with the expected request is called.
 			if tc.autoStart {
-				assert.Len(t, env.tmc.updateVReplicationWorklowsRequests, 0)
+				assert.Empty(t, env.tmc.updateVReplicationWorklowsRequests)
 			}
 		})
 	}

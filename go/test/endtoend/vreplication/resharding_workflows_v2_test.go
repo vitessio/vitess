@@ -226,7 +226,7 @@ func testWorkflowUpdate(t *testing.T) {
 	require.NoError(t, err)
 	err = protojson.Unmarshal([]byte(resp), &ures)
 	require.NoError(t, err)
-	require.Positive(t, len(ures.Details))
+	require.NotEmpty(t, ures.Details)
 	require.True(t, ures.Details[0].Changed)
 	// Change tablet-types back to primary,replica,rdonly.
 	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", defaultWorkflowName, "--tablet-types", tabletTypes)
@@ -234,7 +234,7 @@ func testWorkflowUpdate(t *testing.T) {
 	// Confirm that we changed the workflow.
 	err = protojson.Unmarshal([]byte(resp), &ures)
 	require.NoError(t, err)
-	require.Positive(t, len(ures.Details))
+	require.NotEmpty(t, ures.Details)
 	require.True(t, ures.Details[0].Changed)
 	// Execute a no-op as tablet-types is already primary,replica,rdonly.
 	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", defaultTargetKs, "update", "--workflow", defaultWorkflowName, "--tablet-types", tabletTypes)
@@ -242,7 +242,7 @@ func testWorkflowUpdate(t *testing.T) {
 	// Confirm that we didn't change the workflow.
 	err = protojson.Unmarshal([]byte(resp), &ures)
 	require.NoError(t, err)
-	require.Positive(t, len(ures.Details))
+	require.NotEmpty(t, ures.Details)
 	require.False(t, ures.Details[0].Changed)
 }
 

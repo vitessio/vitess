@@ -1068,7 +1068,7 @@ func TestTabletTargeting(t *testing.T) {
 	for i := range 5 {
 		result1 := utils.Exec(t, conn, "SELECT @@server_uuid")
 		require.NotNil(t, result1)
-		require.Greater(t, len(result1.Rows), 0)
+		require.NotEmpty(t, result1.Rows)
 		if i > 0 {
 			// UUID should be the same across multiple queries to same tablet
 			require.Equal(t, uuid1, result1.Rows[0][0].ToString())
@@ -1083,7 +1083,7 @@ func TestTabletTargeting(t *testing.T) {
 	for i := range 5 {
 		result2 := utils.Exec(t, conn, "SELECT @@server_uuid")
 		require.NotNil(t, result2)
-		require.Greater(t, len(result2.Rows), 0)
+		require.NotEmpty(t, result2.Rows)
 		if i > 0 {
 			// UUID should be the same across multiple queries to same tablet
 			require.Equal(t, uuid2, result2.Rows[0][0].ToString())

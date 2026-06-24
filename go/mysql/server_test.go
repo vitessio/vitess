@@ -545,7 +545,7 @@ func TestConnAttrs(t *testing.T) {
 
 	serverConn = th.LastConn()
 	assert.Equal(t, uint32(0), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must not be set", th.LastConn().Capabilities)
-	assert.Equal(t, 0, len(serverConn.Attributes), "attributes should be empty")
+	assert.Empty(t, serverConn.Attributes, "attributes should be empty")
 
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")

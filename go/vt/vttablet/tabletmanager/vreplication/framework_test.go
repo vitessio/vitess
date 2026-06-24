@@ -1315,7 +1315,7 @@ func expectDBClientQueries(t *testing.T, expectations qh.ExpectationSequence, sk
 			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
-			require.Len(t, validator.Pending(), 0)
+			require.Empty(t, validator.Pending())
 			return
 		}
 	}
@@ -1365,7 +1365,7 @@ func expectNontxQueries(t *testing.T, expectations qh.ExpectationSequence, recvT
 			assert.Failf(t, "unexpected query", "unexpected query: %s", got)
 		default:
 			// Assert there are no pending expectations.
-			require.Len(t, validator.Pending(), 0)
+			require.Empty(t, validator.Pending())
 			return
 		}
 	}

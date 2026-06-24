@@ -252,7 +252,7 @@ func TestCFCInsert(t *testing.T) {
 	for _, s := range shards {
 		utils.Exec(t, conn, fmt.Sprintf("use `cfc_testing:%s`", s))
 		qr = utils.Exec(t, conn, "select * from t1")
-		assert.Equal(t, 0, len(qr.Rows))
+		assert.Empty(t, qr.Rows)
 	}
 	// 'AAA' belongs to 41-4180
 	utils.Exec(t, conn, "use `cfc_testing:41-4180`")

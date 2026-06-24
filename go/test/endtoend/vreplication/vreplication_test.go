@@ -167,14 +167,14 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	// Confirm that the routing rules were NOT cleared
 	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
-	require.Positive(t, len(gjson.Get(rr, "rules").Array()))
+	require.NotEmpty(t, gjson.Get(rr, "rules").Array())
 	// Manually clear the routing rules
 	err = vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules", "{}")
 	require.NoError(t, err)
 	// Confirm that the routing rules are gone
 	rr, err = vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
-	require.Equal(t, len(gjson.Get(rr, "rules").Array()), 0)
+	require.Empty(t, gjson.Get(rr, "rules").Array())
 	// Drop the column on source to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
@@ -345,7 +345,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	t.Run("Verify CopyState Is Optimized Afterwards", func(t *testing.T) {
 		tabletMap := vc.getVttabletsInKeyspace(t, defaultCell, defaultTargetKs, topodatapb.TabletType_PRIMARY.String())
 		require.NotNil(t, tabletMap)
-		require.Positive(t, len(tabletMap))
+		require.NotEmpty(t, tabletMap)
 		for _, tablet := range tabletMap {
 			verifyCopyStateIsOptimized(t, tablet)
 		}
@@ -462,7 +462,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 			res, err := sourceTab.QueryTablet("show binary logs", defaultSourceKs, false)
 			require.NoError(t, err)
 			require.NotNil(t, res)
-			require.Positive(t, len(res.Rows))
+			require.NotEmpty(t, res.Rows)
 			lastRow := res.Rows[len(res.Rows)-1]
 			size, err := lastRow[1].ToInt64()
 			require.NoError(t, err)
@@ -559,7 +559,7 @@ func TestMoveTablesIgnoreSourceKeyspace(t *testing.T) {
 		}
 
 		// Decommission the source keyspace.
-		require.NotZero(t, len(vc.Cells[defaultCellName].Keyspaces))
+		require.NotEmpty(t, vc.Cells[defaultCellName].Keyspaces)
 		require.NotNil(t, vc.Cells[defaultCellName].Keyspaces[defaultSourceKs])
 		err = vc.TearDownKeyspace(vc.Cells[defaultCellName].Keyspaces[defaultSourceKs])
 		require.NoError(t, err)
@@ -1862,8 +1862,8 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 	t.Run("validate switch writes error handling", func(t *testing.T) {
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
-		require.NotZero(t, len(sourceTablets), "no source tablets provided")
-		require.NotZero(t, len(targetTablets), "no target tablets provided")
+		require.NotEmpty(t, sourceTablets, "no source tablets provided")
+		require.NotEmpty(t, targetTablets, "no target tablets provided")
 		sourceKs := sourceTablets[0].Keyspace
 		targetKs := targetTablets[0].Keyspace
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
@@ -2114,7 +2114,7 @@ func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, k
 
 	val, err := getDebugVar(t, tab.Port, []string{"VReplicationThrottledCountTotal"})
 	require.NoError(t, err)
-	require.NotEqual(t, "", val)
+	require.NotEmpty(t, val)
 	throttledCountTotal, err := strconv.ParseInt(val, 10, 64)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, throttledCountTotal, throttledCount, "Value: %s", val)
@@ -2134,7 +2134,7 @@ func confirmVReplicationThrottling(t *testing.T, tab *cluster.VttabletProcess, k
 
 		val, err = getDebugVar(t, tab.Port, []string{"VReplicationLagSecondsMax"})
 		require.NoError(t, err)
-		require.NotEqual(t, "", val)
+		require.NotEmpty(t, val)
 		vreplLagSecondsMax, err := strconv.ParseInt(val, 10, 64)
 		require.NoError(t, err)
 		require.GreaterOrEqual(t, vreplLagSecondsMax, vreplLagSeconds, "Value: %s", val)

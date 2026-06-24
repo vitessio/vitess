@@ -898,12 +898,12 @@ func getMirrorRules(t *testing.T) *vschemapb.MirrorRules {
 
 func confirmNoMirrorRules(t *testing.T) {
 	mirrorRulesResponse := getMirrorRules(t)
-	require.Zero(t, len(mirrorRulesResponse.Rules))
+	require.Empty(t, mirrorRulesResponse.Rules)
 }
 
 func confirmMirrorRulesExist(t *testing.T) {
 	mirrorRulesResponse := getMirrorRules(t)
-	require.NotZero(t, len(mirrorRulesResponse.Rules))
+	require.NotEmpty(t, mirrorRulesResponse.Rules)
 }
 
 func expectMirrorRules(t *testing.T, sourceKeyspace, targetKeyspace string, tables []string, tabletTypes []topodatapb.TabletType, percent float32) {
@@ -940,14 +940,14 @@ func getRoutingRules(t *testing.T) *vschemapb.RoutingRules {
 
 func confirmNoRoutingRules(t *testing.T) {
 	rrRes := getRoutingRules(t)
-	require.Zero(t, len(rrRes.Rules))
+	require.Empty(t, rrRes.Rules)
 	krrRes := getKeyspaceRoutingRules(t, vc)
-	require.Zero(t, len(krrRes.Rules))
+	require.Empty(t, krrRes.Rules)
 }
 
 func confirmRoutingRulesExist(t *testing.T) {
 	routingRulesResponse := getRoutingRules(t)
-	require.NotZero(t, len(routingRulesResponse.Rules))
+	require.NotEmpty(t, routingRulesResponse.Rules)
 }
 
 // We only want to validate non-standard attributes that are set by the CLI. The other end-to-end tests validate the rest.

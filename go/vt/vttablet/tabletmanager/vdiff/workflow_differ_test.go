@@ -386,7 +386,7 @@ func TestReconcileReferenceTables(t *testing.T) {
 
 		// ExtraRowsSource should be cleared since it's a multiple of MatchingRows.
 		require.Equal(t, int64(0), dr.ExtraRowsSource)
-		require.Equal(t, 0, len(dr.ExtraRowsSourceDiffs))
+		require.Empty(t, dr.ExtraRowsSourceDiffs)
 	})
 
 	t.Run("mismatched rows - reconciliation skipped entirely", func(t *testing.T) {

@@ -211,7 +211,7 @@ func deleteRecord(t *testing.T, dbo *sql.DB) {
 	exec(t, dbo, "DELETE FROM vt_prepare_stmt_test WHERE id = ?;", testingID)
 
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 0, len(data))
+	assert.Empty(t, data)
 }
 
 // updateRecord test update operation corresponds to the testingID.
@@ -239,7 +239,7 @@ func reconnectAndTest(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	data := selectWhere(t, dbo, "id = ?", testingID)
-	assert.Equal(t, 0, len(data))
+	assert.Empty(t, data)
 }
 
 // TestColumnParameter query database using column
@@ -385,7 +385,7 @@ func TestSelectDBA(t *testing.T) {
 		assert.False(t, rec.datetimePrecision.Valid)
 		assert.False(t, rec.columnDefault.Valid)
 		assert.Equal(t, "NO", rec.isNullable)
-		assert.Equal(t, "", rec.extra)
+		assert.Empty(t, rec.extra)
 		assert.Equal(t, "a", rec.tableName)
 		rowCount++
 	}

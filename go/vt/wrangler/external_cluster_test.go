@@ -38,7 +38,7 @@ func TestVitessCluster(t *testing.T) {
 	t.Run("Zero clusters to start", func(t *testing.T) {
 		clusters, err := ts.GetExternalVitessClusters(ctx)
 		require.NoError(t, err)
-		require.Equal(t, 0, len(clusters))
+		require.Empty(t, clusters)
 	})
 	t.Run("Mount first cluster", func(t *testing.T) {
 		err := wr.MountExternalVitessCluster(ctx, name, topoType, topoServer, topoRoot)

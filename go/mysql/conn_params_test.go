@@ -37,7 +37,7 @@ func TestConnParams_EffectiveSslModeLegacyFlags(t *testing.T) {
 		Flags: CapabilityClientSSL,
 	}
 	assert := assert.New(t)
-	assert.EqualValues("", p.SslMode, "should enable strictest mode")
+	assert.Empty(p.SslMode, "should enable strictest mode")
 	assert.EqualValues(vttls.VerifyIdentity, p.EffectiveSslMode(), "should enable strictest mode")
 }
 
@@ -55,7 +55,7 @@ func TestConnParams_SslEnabledNotConfigured(t *testing.T) {
 	p := ConnParams{}
 	assert := assert.New(t)
 	assert.False(p.SslEnabled())
-	assert.EqualValues("", p.SslMode, "should be empty")
+	assert.Empty(p.SslMode, "should be empty")
 	assert.EqualValues(vttls.Disabled, p.EffectiveSslMode(), "should have ssl disabled")
 }
 

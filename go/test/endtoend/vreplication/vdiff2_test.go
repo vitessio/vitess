@@ -451,7 +451,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		query := sqlparser.BuildParsedQuery("select options from %s.vdiff where vdiff_uuid = %s",
 			sidecarDBIdentifier, encodeString(vduuid.String())).Query
 		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
-		require.Positive(t, len(tablets), "no primary tablets found in keyspace %s", targetKs)
+		require.NotEmpty(t, tablets, "no primary tablets found in keyspace %s", targetKs)
 		tablet := maps.Values(tablets)[0]
 		qres, err := tablet.QueryTablet(query, targetKs, false)
 		require.NoError(t, err, "query %q failed: %v", query, err)
@@ -534,7 +534,7 @@ func testNoOrphanedData(t *testing.T, keyspace, workflow string, shards []string
 		for _, shard := range shards {
 			res, err := vc.getPrimaryTablet(t, keyspace, shard).QueryTablet(query, keyspace, false)
 			require.NoError(t, err)
-			require.Equal(t, 0, len(res.Rows))
+			require.Empty(t, res.Rows)
 		}
 	})
 }

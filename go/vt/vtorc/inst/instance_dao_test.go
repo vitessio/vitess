@@ -70,8 +70,8 @@ func TestMkInsertSingle(t *testing.T) {
 
 	sql, args, err := mkInsertForInstances(nil, true, true)
 	require.NoError(t, err)
-	require.Equal(t, sql, "")
-	require.Equal(t, len(args), 0)
+	require.Empty(t, sql)
+	require.Empty(t, args)
 
 	// one instance
 	s1 := `INSERT OR IGNORE INTO database_instance
@@ -1145,7 +1145,7 @@ func TestPrimaryErrantGTIDs(t *testing.T) {
 	instance.ExecutedGtidSet = "230ea8ea-81e3-11e4-972a-e25ec4bd140a:1-10589,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-34,316d193c-70e5-11e5-adb2-ecf4bb2262ff:1-351"
 	err = detectErrantGTIDs(instance, tablet)
 	require.NoError(t, err)
-	require.EqualValues(t, "", instance.GtidErrant)
+	require.Empty(t, instance.GtidErrant)
 }
 
 // TestErrantGTIDCountGaugeIsResetWhenResolved verifies that the per-tablet

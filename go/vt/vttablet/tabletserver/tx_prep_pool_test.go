@@ -100,7 +100,7 @@ func TestPrepFetchAll(t *testing.T) {
 	pp.Put(conn2, "bb")
 	got := pp.FetchAllForRollback()
 	require.Len(t, got, 2)
-	require.Len(t, pp.conns, 0)
+	require.Empty(t, pp.conns)
 	_, err := pp.FetchForCommit("aa")
 	require.ErrorContains(t, err, "pool is shutdown")
 }

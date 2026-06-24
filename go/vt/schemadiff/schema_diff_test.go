@@ -235,7 +235,7 @@ func TestPermutations(t *testing.T) {
 				} else {
 					// no diffs means no permutations, and no call to the callback function
 					assert.False(t, earlyBreak)
-					assert.Equal(t, 0, len(allPerms))
+					assert.Empty(t, allPerms)
 				}
 			})
 		})

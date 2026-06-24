@@ -699,7 +699,7 @@ func (tmc *testTMClient) confirmVDiffRequests(t *testing.T) {
 		return str.String()
 	}
 
-	require.Len(t, tmc.vdiffRequests, 0, "expected VDiff requests not made: %s", reqString(maps.Values(tmc.vdiffRequests)))
+	require.Empty(t, tmc.vdiffRequests, "expected VDiff requests not made: %s", reqString(maps.Values(tmc.vdiffRequests)))
 }
 
 func (tmc *testTMClient) HasVReplicationWorkflows(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.HasVReplicationWorkflowsRequest) (*tabletmanagerdatapb.HasVReplicationWorkflowsResponse, error) {

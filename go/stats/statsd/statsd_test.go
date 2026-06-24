@@ -425,7 +425,7 @@ func TestStatsdHistogram(t *testing.T) {
 
 func TestMakeCommonTags(t *testing.T) {
 	res1 := makeCommonTags(map[string]string{})
-	assert.Equal(t, 0, len(res1))
+	assert.Empty(t, res1)
 	expected2 := []string{"a:b", "c:d"}
 	res2 := makeCommonTags(map[string]string{"a": "b", "c": "d"})
 	assert.ElementsMatch(t, expected2, res2)

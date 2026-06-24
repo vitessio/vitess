@@ -245,7 +245,7 @@ func doTestWarnings(t *testing.T, disableClientDeprecateEOF bool) {
 	require.NoError(t, err, "insert failed: %v", err)
 
 	assert.Equal(t, uint64(1), result.RowsAffected, "unexpected rows affected by insert; result: %v", result)
-	assert.Equal(t, 0, len(result.Rows), "unexpected row count in result for insert: %v", result)
+	assert.Empty(t, result.Rows, "unexpected row count in result for insert: %v", result)
 	assert.Equal(t, uint16(1), warnings, "unexpected result for warnings: %v", warnings)
 
 	_, err = conn.ExecuteFetch("drop table a", 0, false)

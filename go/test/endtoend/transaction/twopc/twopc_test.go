@@ -245,7 +245,7 @@ func TestDTRollback(t *testing.T) {
 
 	tableMap := make(map[string][]*querypb.Field)
 	logTable := retrieveTransitions(t, ch, tableMap, nil)
-	assert.Zero(t, len(logTable),
+	assert.Empty(t, logTable,
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 
 	// Update from multiple shard
@@ -255,7 +255,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 
 	logTable = retrieveTransitions(t, ch, tableMap, nil)
-	assert.Zero(t, len(logTable),
+	assert.Empty(t, logTable,
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 
 	// DELETE from multiple shard
@@ -265,7 +265,7 @@ func TestDTRollback(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 
 	logTable = retrieveTransitions(t, ch, tableMap, nil)
-	assert.Zero(t, len(logTable),
+	assert.Empty(t, logTable,
 		"no change in binlog expected: got: %s", prettyPrint(logTable))
 }
 
@@ -1506,7 +1506,7 @@ func TestReadTransactionStatus(t *testing.T) {
 	res, err := tmc.GetTransactionInfo(ctx, primaryTablet, unresTransaction.Dtid)
 	require.NoError(t, err)
 	assert.Equal(t, "PREPARED", res.State)
-	assert.Equal(t, "", res.Message)
+	assert.Empty(t, res.Message)
 	assert.Equal(t, []string{"insert into twopc_t1(id, col) values (9, 4)"}, res.Statements)
 
 	// Also try running the RPC from vtctld and verify we see the same values.

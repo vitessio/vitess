@@ -77,7 +77,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				// Verify that getting srvKeyspaceNames is now empty.
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
-				require.Len(t, keyspaces, 0)
+				require.Empty(t, keyspaces)
 			},
 		}, {
 			name: "Ensure we don't delete extra files",
@@ -149,7 +149,7 @@ func TestDeleteOrphanedKeyspaceFiles(t *testing.T) {
 				// Verify that getting srvKeyspaceNames is now empty.
 				keyspaces, err := ts.GetSrvKeyspaceNames(ctx, cell)
 				require.NoError(t, err)
-				require.Len(t, keyspaces, 0)
+				require.Empty(t, keyspaces)
 				// Since we only clear orphaned files for one cell, we should still see
 				// they srvKeyspace in the other cell.
 				keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell2)

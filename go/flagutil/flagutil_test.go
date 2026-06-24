@@ -50,7 +50,7 @@ func TestEmptyStringList(t *testing.T) {
 
 	err := p.Set("")
 	require.NoError(t, err)
-	require.Len(t, p, 0)
+	require.Empty(t, p)
 }
 
 type pair struct {

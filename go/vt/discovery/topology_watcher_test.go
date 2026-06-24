@@ -312,7 +312,7 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	checkChecksum(t, tw, 0)
 
 	allTablets = fhc.GetAllTablets()
-	assert.Len(t, allTablets, 0)
+	assert.Empty(t, allTablets)
 	key = TabletToMapKey(tablet)
 	assert.NotContains(t, allTablets, key)
 	key = TabletToMapKey(tablet2)

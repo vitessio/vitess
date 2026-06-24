@@ -218,7 +218,7 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		hc.Broadcast(primaryTablet)
 		hc.Broadcast(primaryTablet)
 
-		require.Len(t, tg.hc.GetHealthyTabletStats(target), 0, "GetHealthyTabletStats has tablets even though it shouldn't")
+		require.Empty(t, tg.hc.GetHealthyTabletStats(target), "GetHealthyTabletStats has tablets even though it shouldn't")
 		_, shouldStartBuffering := tg.kev.ShouldStartBufferingForTarget(ctx, target)
 		require.True(t, shouldStartBuffering)
 

@@ -64,7 +64,7 @@ func TestFindAllTargetsAndKeyspaces(t *testing.T) {
 	// No keyspace / shards.
 	targets, ksList, err := FindAllTargetsAndKeyspaces(ctx, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
 	assert.NoError(t, err)
-	assert.Len(t, targets, 0)
+	assert.Empty(t, targets)
 	assert.EqualValues(t, []string{"test_keyspace"}, ksList)
 
 	// Add one.
@@ -192,6 +192,6 @@ func TestFindAllTargetsAndKeyspaces(t *testing.T) {
 	// Get non-existent keyspace.
 	targets, ksList, err = FindAllTargetsAndKeyspaces(ctx, rs, "cell1", []string{"doesnt-exist"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA})
 	assert.NoError(t, err)
-	assert.Len(t, targets, 0)
+	assert.Empty(t, targets)
 	assert.EqualValues(t, []string{"doesnt-exist"}, ksList)
 }

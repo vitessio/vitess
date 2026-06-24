@@ -164,5 +164,5 @@ func TestInsertRecoveryDetection(t *testing.T) {
 	require.EqualValues(t, keyspace, rows[0]["keyspace"].String)
 	require.EqualValues(t, shard, rows[0]["shard"].String)
 	require.EqualValues(t, strconv.Itoa(int(da.RecoveryId)), rows[0]["detection_id"].String)
-	require.NotEqual(t, "", rows[0]["detection_timestamp"].String)
+	require.NotEmpty(t, rows[0]["detection_timestamp"].String)
 }

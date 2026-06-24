@@ -480,7 +480,7 @@ func TestHistorianPurgeOldSchemas(t *testing.T) {
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	// validate the old schema has been purged
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
-	require.Equal(t, 0, len(se.historian.schemas))
+	require.Empty(t, se.historian.schemas)
 
 	// add a second schema record row with a time_updated that won't be purged
 	gtid2 := gtidPrefix + "1-20"

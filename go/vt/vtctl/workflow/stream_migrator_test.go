@@ -591,13 +591,13 @@ func TestBuildStreamMigratorNoStreams(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sm)
 	require.NotNil(t, sm.streams)
-	require.Equal(t, 0, len(sm.streams))
+	require.Empty(t, sm.streams)
 
 	workflows, err := sm.StopStreams(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(workflows))
+	require.Empty(t, workflows)
 	require.NoError(t, sm.MigrateStreams(ctx))
-	require.Len(t, sm.templates, 0)
+	require.Empty(t, sm.templates)
 }
 
 func TestBuildStreamMigratorRefStream(t *testing.T) {
@@ -611,11 +611,11 @@ func TestBuildStreamMigratorRefStream(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, sm)
 	require.NotNil(t, sm.streams)
-	require.Equal(t, 0, len(sm.streams))
+	require.Empty(t, sm.streams)
 
 	workflows, err := sm.StopStreams(ctx)
 	require.NoError(t, err)
-	require.Equal(t, 0, len(workflows))
+	require.Empty(t, workflows)
 	require.NoError(t, sm.MigrateStreams(ctx))
-	require.Len(t, sm.templates, 0)
+	require.Empty(t, sm.templates)
 }
