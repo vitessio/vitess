@@ -23,6 +23,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTOrc](#bug-fixes-vtorc)**
+        - [Recovery convergence under shard-lock contention and former-primary ERS candidates](#vtorc-recovery-convergence)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -151,3 +154,17 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vtorc"/>VTOrc</a>
+
+#### <a id="vtorc-recovery-convergence"/>Recovery convergence under shard-lock contention and former-primary ERS candidates</a>
+
+VTOrc recoveries no longer deadlock when MySQL's `read_only` state fails to converge with the topology under shard-lock contention. Previously, a recovery such as `PrimaryIsReadOnly` or `ReplicaIsWritable` that raced another in-flight operation for the shard lock aborted on the first collision. A following `EmergencyReparentShard` could then fail repeatedly with a split-brain error because it still treated a recently demoted or stuck former primary as a promotion candidate. Together these could leave a shard stuck and unable to repair itself without operator intervention.
+
+Two changes address this. VTOrc now retries shard-lock acquisition for a bounded period when it detects transient contention, so an actionable recovery proceeds once the competing operation releases the lock instead of failing outright. And when `EmergencyReparentShard` has at least one true replica candidate available, it now prefers those over candidates discovered only as former primaries, avoiding the dead-end promotion path. The split-brain safety checks themselves are unchanged.
+
+No configuration change is required.
+
+See [#20384](https://github.com/vitessio/vitess/pull/20384) for details.
