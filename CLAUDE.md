@@ -197,6 +197,11 @@ return user.NeedsMigration() && migrate(user) || user
 - **Copyright header** - New Go files must include the project copyright header with the current year
 - **Always run `gofumpt -w`** on changed Go files before committing - this is mandatory
 - **Always run `goimports -local "vitess.io/vitess" -w`** on changed Go files before committing
+- **Always run `golangci-lint run --path-mode=abs --timeout 10m`** (from the `go/` directory, scoped to the changed package(s)) before reporting work complete. CI runs it and will surface modernize/style issues that `go vet`, `gofumpt`, and `goimports` do not — for example:
+  - `waitgroup`: prefer `WaitGroup.Go(func() { ... })` over `wg.Add(1); go func() { defer wg.Done(); ... }()`
+  - `rangeint`: prefer `for range N` over `for i := 0; i < N; i++` when the index is unused
+  - `bloop`: prefer `b.Loop()` over `for i := 0; i < b.N; i++` in benchmarks
+  - `unusedparams`, `unusedwrite`, `unusedfunc`: clean these in code you touch
 - **Use format verbs precisely** - Use `%s` for strings and `%d` for integers, not `%v` for everything
 - **Structured logging** - New log messages should use structured logging with `slog`-style fields (e.g., `log.Warn("message", slog.Any("error", err))`) rather than printf-style logging with format strings
 - **Reuse existing helpers** - Before writing new parsing/validation code, check for existing utilities (e.g., `sqlerror` package for MySQL error codes, `mysqlctl.ParseVersionString()`, `strings.Split()`, `topoproto.TabletAliasString()` for formatting tablet aliases)

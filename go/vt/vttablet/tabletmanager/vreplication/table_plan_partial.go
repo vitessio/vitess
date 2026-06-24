@@ -178,6 +178,8 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 
 func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	key := hex.EncodeToString(dataColumns.Cols)
+	tp.partialMu.Lock()
+	defer tp.partialMu.Unlock()
 	ins, ok := tp.PartialInserts[key]
 	if ok {
 		return ins, nil
@@ -193,6 +195,8 @@ func (tp *TablePlan) getPartialInsertQuery(dataColumns *binlogdatapb.RowChange_B
 
 func (tp *TablePlan) getPartialUpdateQuery(dataColumns *binlogdatapb.RowChange_Bitmap) (*sqlparser.ParsedQuery, error) {
 	key := hex.EncodeToString(dataColumns.Cols)
+	tp.partialMu.Lock()
+	defer tp.partialMu.Unlock()
 	upd, ok := tp.PartialUpdates[key]
 	if ok {
 		return upd, nil

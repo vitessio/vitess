@@ -39,11 +39,114 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/schemadiff"
+	"vitess.io/vitess/go/vt/sqlparser"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
+
+// TestWritesetUniqueKeysFromSpec pins the spec-analysis rules the parallel
+// applier relies on. Plain-column unique secondaries that aren't covered by
+// the identity now emit writeset unique keys (uniqueKeys set, mustSerialize
+// false) instead of force-serializing; only uniqueness the hasher cannot
+// reason about (prefix/expression indexes, PK/identity mismatch, no usable
+// identity) still forces serialization.
+func TestWritesetUniqueKeysFromSpec(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+	specFor := func(t *testing.T, ddl string) *sqlparser.TableSpec {
+		t.Helper()
+		parsedDDL, err := parser.ParseStrictDDL(ddl)
+		require.NoError(t, err)
+		createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+		require.True(t, ok)
+		tableSpec := createTable.GetTableSpec()
+		require.NotNil(t, tableSpec)
+		return tableSpec
+	}
+
+	tests := []struct {
+		name              string
+		ddl               string
+		identityCols      []string
+		wantUniqueKeys    [][]string
+		wantMustSerialize bool
+	}{
+		{
+			// No usable identity but a unique-not-null secondary the
+			// PK-based writeset can't reason about: force serialization.
+			name:              "no identity with unique secondary",
+			ddl:               "create table t1 (id int, email varchar(64) not null, unique key uk_email(email))",
+			identityCols:      nil,
+			wantMustSerialize: true,
+		},
+		{
+			// Plain single-column unique secondary not covered by the
+			// identity: emit a writeset unique key, don't serialize.
+			name:           "plain unique secondary emits key",
+			ddl:            "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
+			identityCols:   []string{"id"},
+			wantUniqueKeys: [][]string{{"email"}},
+		},
+		{
+			// Multi-column plain unique secondary: ordered column list.
+			name:           "composite unique secondary emits ordered key",
+			ddl:            "create table t1 (id int not null, a int not null, b int not null, primary key(id), unique key uk_ab(a, b))",
+			identityCols:   []string{"id"},
+			wantUniqueKeys: [][]string{{"a", "b"}},
+		},
+		{
+			// Unique secondary whose column set contains the identity can't
+			// create cross-identity conflicts: skip it (no key, no serialize).
+			name:         "unique secondary covering identity is skipped",
+			ddl:          "create table t1 (id int not null, b int not null, primary key(id), unique key uk_idb(id, b))",
+			identityCols: []string{"id"},
+		},
+		{
+			// Prefix index on the unique secondary: uniqueness is over a
+			// derived value, force serialization.
+			name:              "prefix unique secondary serializes",
+			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email(8)))",
+			identityCols:      []string{"id"},
+			wantMustSerialize: true,
+		},
+		{
+			// Expression/functional unique index: force serialization.
+			name:              "expression unique secondary serializes",
+			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email((lower(email))))",
+			identityCols:      []string{"id"},
+			wantMustSerialize: true,
+		},
+		{
+			// PK does not match the chosen replication identity: the
+			// PK-based writeset key is unreliable, force serialization.
+			name:              "pk identity mismatch serializes",
+			ddl:               "create table t1 (id int not null, email varchar(64) not null, primary key(id), unique key uk_email(email))",
+			identityCols:      []string{"email"},
+			wantMustSerialize: true,
+		},
+		{
+			// A mix: one hashable key plus one covered-by-identity key.
+			name:           "mixed hashable and covered keys",
+			ddl:            "create table t1 (id int not null, email varchar(64) not null, b int not null, primary key(id), unique key uk_email(email), unique key uk_idb(id, b))",
+			identityCols:   []string{"id"},
+			wantUniqueKeys: [][]string{{"email"}},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tableSpec := specFor(t, tc.ddl)
+			plan := &TablePlan{
+				TargetName:      "t1",
+				IdentityColumns: tc.identityCols,
+			}
+			uniqueKeys, mustSerialize := writesetUniqueKeysFromSpec(plan, tableSpec)
+			assert.Equal(t, tc.wantMustSerialize, mustSerialize)
+			assert.Equal(t, tc.wantUniqueKeys, uniqueKeys)
+		})
+	}
+}
 
 func TestMaxQuerySize(t *testing.T) {
 	makeVR := func(dbClient binlogplayer.DBClient, relayLogMaxSize int) *vreplicator {
@@ -983,4 +1086,78 @@ func TestThrottlerAppNames(t *testing.T) {
 	assert.Contains(t, vc.throttlerAppName, "vreplication")
 	assert.Contains(t, vc.throttlerAppName, "vcopier")
 	assert.NotContains(t, vc.throttlerAppName, "vplayer")
+}
+
+// TestFKCheckHelpersUpdateSessionCache pins that clearFKCheck and
+// resetFKCheckAfterCopy keep the vdbClient's cached foreign_key_checks
+// session state coherent. updateFKCheck skips the SET when the cache says
+// the session already matches, so any helper that mutates the session
+// out-of-band MUST update the cache — otherwise an atomic-copy workflow's
+// catchup -> clearFKCheck -> copy -> resetFKCheckAfterCopy -> catchup cycle
+// leaves the session FK state out of sync with what the applier believes,
+// silently applying with the wrong foreign_key_checks setting.
+func TestFKCheckHelpersUpdateSessionCache(t *testing.T) {
+	dbc := binlogplayer.NewMockDBClient(t)
+	vdbc := newVDBClient(dbc, binlogplayer.NewStats(), 0)
+	vr := &vreplicator{originalFKCheckSetting: 1}
+
+	// Simulate updateFKCheck having initialized the cache with FK checks ON.
+	vdbc.foreignKeyChecksEnabled = true
+	vdbc.foreignKeyChecksStateInitialized = true
+
+	// The mock treats "set @@session.foreign_key_checks..." as an invariant,
+	// so no per-query expectations are needed.
+	require.NoError(t, vr.clearFKCheck(vdbc))
+	assert.False(t, vdbc.foreignKeyChecksEnabled, "clearFKCheck must record FK checks as disabled in the session cache")
+	assert.True(t, vdbc.foreignKeyChecksStateInitialized)
+
+	require.NoError(t, vr.resetFKCheckAfterCopy(vdbc))
+	assert.True(t, vdbc.foreignKeyChecksEnabled, "resetFKCheckAfterCopy must record the restored FK state in the session cache")
+	assert.True(t, vdbc.foreignKeyChecksStateInitialized)
+}
+
+// copyPhaseDBClient serves loadSettings like failingDBClient but reports a
+// non-empty _vt.copy_state, simulating a workflow restarted mid-copy.
+type copyPhaseDBClient struct {
+	failingDBClient
+}
+
+func (c *copyPhaseDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	if strings.Contains(query, "from _vt.copy_state where vrepl_id=") {
+		return sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+			"2",
+		), nil
+	}
+	return c.failingDBClient.ExecuteFetch(query, maxrows)
+}
+
+// TestLoadSettingsTracksCopyPhase is a restart-style regression test: a fresh
+// vreplicator (in-memory state at its zero value, as after a tablet or
+// controller restart) whose durable _vt.copy_state still has rows must report
+// that it is in the copy phase. The controller's AtomicCopy terminal-error
+// guard needs this durable-evidence signal because the AtomicCopy copy path
+// (copyAll) never calls setState(Copying) — only initTablesForCopy does, on
+// first start — so after a restart the entire remaining copy phase would
+// otherwise run with vr.state at zero and copy-phase errors would be
+// misclassified as retryable.
+func TestLoadSettingsTracksCopyPhase(t *testing.T) {
+	vr := &vreplicator{
+		id:       1,
+		dbClient: newVDBClient(&copyPhaseDBClient{}, binlogplayer.NewStats(), 0),
+	}
+	require.False(t, vr.isInCopyPhase(), "zero value must preserve existing (retryable) behavior")
+
+	_, numTablesToCopy, err := vr.loadSettings(t.Context(), vr.dbClient)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), numTablesToCopy)
+	require.True(t, vr.isInCopyPhase(), "loadSettings must record that tables remain to be copied")
+
+	// Once the copy completes (no copy_state rows), the next loadSettings
+	// clears the flag so post-copy errors are classified as before.
+	vr.dbClient = newVDBClient(&failingDBClient{}, binlogplayer.NewStats(), 0)
+	_, numTablesToCopy, err = vr.loadSettings(t.Context(), vr.dbClient)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), numTablesToCopy)
+	require.False(t, vr.isInCopyPhase())
 }
