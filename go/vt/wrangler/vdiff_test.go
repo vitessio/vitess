@@ -17,7 +17,6 @@ limitations under the License.
 package wrangler
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -1031,7 +1030,7 @@ func TestVDiffReplicationWait(t *testing.T) {
 
 	_, err := env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.Error(t, err)
-	require.True(t, strings.Contains(err.Error(), "context deadline exceeded"))
+	require.Contains(t, err.Error(), "context deadline exceeded")
 }
 
 func TestVDiffFindPKs(t *testing.T) {

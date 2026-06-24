@@ -134,6 +134,7 @@ linters:
         - nil-compare
         - regexp
         - suite-dont-use-pkg
+        - contains
   exclusions:
     generated: lax
     presets:

@@ -1956,10 +1956,10 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	}
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	require.Error(t, err)
-	require.True(t, strings.Contains(err.Error(), "no tablet found"))
-	require.True(t, strings.Contains(err.Error(), "-80"))
-	require.True(t, strings.Contains(err.Error(), "80-"))
-	require.False(t, strings.Contains(err.Error(), "40"))
+	require.Contains(t, err.Error(), "no tablet found")
+	require.Contains(t, err.Error(), "-80")
+	require.Contains(t, err.Error(), "80-")
+	require.NotContains(t, err.Error(), "40")
 	for i := range tme.targetShards {
 		tme.dbTargetClients[i].addInvariant(streamInfoKs, invariants[fmt.Sprintf("%s-%d", streamInfoKs, i)])
 	}

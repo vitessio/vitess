@@ -24,7 +24,6 @@ import (
 	"path"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -202,7 +201,7 @@ func testDropNonExistentTables(t *testing.T) {
 	dropNonExistentTable := "DROP TABLE nonexistent_table;"
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--sql", dropNonExistentTable, keyspaceName)
 	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "Unknown table"))
+	assert.Contains(t, output, "Unknown table")
 
 	dropIfExists := "DROP TABLE IF EXISTS nonexistent_table;"
 	err = clusterInstance.VtctldClientProcess.ApplySchema(keyspaceName, dropIfExists)
@@ -317,7 +316,7 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	err = json.Unmarshal([]byte(schema), &resultMap)
 	require.Nil(t, err)
 	dbSchema := reflect.ValueOf(resultMap["database_schema"])
-	assert.True(t, strings.Contains(dbSchema.String(), "utf8"))
+	assert.Contains(t, dbSchema.String(), "utf8")
 
 	// Change the db charset on the destination shard from utf8 to latin1.
 	// This will make CopySchemaShard fail during its final diff.
@@ -329,7 +328,7 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 
 	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "schemas are different"))
+	assert.Contains(t, output, "schemas are different")
 
 	// shard2 primary should have the same number of tables. Only the db
 	// character set is different.

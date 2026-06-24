@@ -605,7 +605,7 @@ func testStop(t *testing.T, ksWorkflow, cells string) {
 		// to diff). There's no way to avoid this potential race so don't consider that a failure.
 		require.True(t, (jsonOutput.State == "stopped" || jsonOutput.State == "completed"), "expected vdiff state to be stopped or completed but it was %s", jsonOutput.State)
 		// Confirm that the context cancelled error was also cleared.
-		require.False(t, strings.Contains(output, `"Errors":`))
+		require.NotContains(t, output, `"Errors":`)
 	})
 }
 

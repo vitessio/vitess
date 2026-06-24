@@ -190,7 +190,7 @@ func TestComparisonSemantics(t *testing.T) {
 					resultRemote, errRemote := conn.ExecuteFetch(query, 1, false)
 					env := collations.MySQL8()
 					if errRemote != nil {
-						require.True(t, strings.Contains(errRemote.Error(), "Illegal mix of collations"), "query %s failed: %v", query, errRemote)
+						require.Contains(t, errRemote.Error(), "Illegal mix of collations", "query %s failed: %v", query, errRemote)
 
 						if errLocal == nil {
 							assert.Failf(t, "expected coercion to fail", "expected %s vs %s to fail coercion: %v", env.LookupName(collA.Collation), env.LookupName(collB.Collation), errRemote)

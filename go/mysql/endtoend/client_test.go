@@ -251,7 +251,7 @@ func TestTLS(t *testing.T) {
 	// First make sure the official 'mysql' client can connect.
 	output, ok := runMysql(t, &params, "status")
 	require.True(t, ok, "'mysql -e status' failed: %v", output)
-	require.True(t, strings.Contains(output, "Cipher in use is"), "cannot connect via SSL: %v", output)
+	require.Contains(t, output, "Cipher in use is", "cannot connect via SSL: %v", output)
 
 	// Now connect with our client.
 	ctx := t.Context()

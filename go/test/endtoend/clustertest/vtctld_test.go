@@ -120,8 +120,8 @@ func testTabletStatus(t *testing.T) {
 	require.NoError(t, err)
 	result := string(respByte)
 	log.Info(fmt.Sprintf("Tablet status response: %v", result))
-	assert.True(t, strings.Contains(result, `/debug/health`))
-	assert.True(t, strings.Contains(result, `</html>`))
+	assert.Contains(t, result, `/debug/health`)
+	assert.Contains(t, result, `</html>`)
 }
 
 func testExecuteAsDba(t *testing.T) {
