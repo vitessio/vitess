@@ -526,7 +526,11 @@ func TestReloadTablesInDBRollsBackOnCanceledContext(t *testing.T) {
 	db.AddQuery(reloadDeleteQuery, &sqltypes.Result{})
 	db.SetBeforeFunc(reloadDeleteQuery, func() {
 		cancel()
-		<-killed
+		select {
+		case <-killed:
+		case <-time.After(10 * time.Second):
+			require.FailNow(t, "cancellation handler never issued `kill query`")
+		}
 	})
 
 	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
@@ -595,7 +599,11 @@ func TestReloadTablesInDBRollsBackWhenBeginIsCanceled(t *testing.T) {
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.SetBeforeFunc("begin", func() {
 		cancel()
-		<-killed
+		select {
+		case <-killed:
+		case <-time.After(10 * time.Second):
+			require.FailNow(t, "cancellation handler never issued `kill query`")
+		}
 	})
 
 	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
