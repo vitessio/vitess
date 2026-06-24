@@ -1080,6 +1080,47 @@ func TestExecQueryMultiStreamSurfacesMidStreamError(t *testing.T) {
 	require.True(t, result.Equal(selectRowsResult))
 }
 
+// TestExecQueryMultiStreamErrorAfterFirstResultSet exercises execQueryMulti with
+// multiple result sets: the first statement streams a full result set successfully
+// (with the more-results flag set), and the second statement streams rows and then
+// fails mid-stream. The client must read the first result set cleanly, then receive
+// the real SQL error for the second, and the connection must survive.
+func TestExecQueryMultiStreamErrorAfterFirstResultSet(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	sConn.multiQuery = true
+	sConn.Capabilities |= CapabilityClientMultiStatements
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	require.NoError(t, cConn.WriteComQuery("select rows; rows then error"))
+
+	handler := &testRun{err: sqlerror.NewSQLError(sqlerror.ERQueryInterrupted, sqlerror.SSQueryInterrupted, "context canceled")}
+	res := sConn.handleNextCommand(handler)
+	require.True(t, res, "mid-stream error must not tear down the connection")
+
+	// First result set arrives cleanly with the more-results flag set.
+	result, more, _, err := cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.True(t, result.Equal(selectRowsResult))
+	require.True(t, more, "more results must follow the first result set")
+
+	// Second result set streams rows and then fails: client sees the real error.
+	_, more, _, err = cConn.ReadQueryResult(100, true)
+	require.ErrorContains(t, err, "context canceled")
+	require.False(t, more, "no further results after an error packet")
+
+	// Connection must still be usable for the next query.
+	require.NoError(t, cConn.WriteComQuery("select rows"))
+	res = sConn.handleNextCommand(handler)
+	require.True(t, res, "subsequent query must be handled on a still-alive connection")
+	result, _, _, err = cConn.ReadQueryResult(100, true)
+	require.NoError(t, err)
+	require.True(t, result.Equal(selectRowsResult))
+}
+
 // TestExecQueryErrorAfterOKDoesNotDesyncProtocol guards against writing an ERR
 // packet after an OK packet has already terminated the result set. Appending a
 // second packet would leave a stale ERR queued for the next command. The
@@ -1222,6 +1263,28 @@ func TestHandleComStmtExecuteSurfacesMidStreamError(t *testing.T) {
 	sConn.PrepareData[stmtID].PrepareStmt = "select rows"
 	res = sConn.handleNextCommand(handler)
 	require.True(t, res, "subsequent COM_STMT_EXECUTE must be handled on a still-alive connection")
+
+	// Read the full binary result of the follow-up execution and assert it is a
+	// real (non-error) response: every packet up to the result terminator must
+	// arrive without an ERR packet. The result set ends after two EOF packets
+	// (columns then rows, since CapabilityClientDeprecateEOF is off here).
+	// Bounded by a read deadline and packet count so a regression fails fast
+	// instead of stalling CI.
+	require.NoError(t, cConn.conn.SetReadDeadline(time.Now().Add(30*time.Second)))
+	var eofCount int
+	for range 16 {
+		data, err := cConn.ReadPacket()
+		require.NoError(t, err)
+		require.NotEmpty(t, data)
+		require.NotEqualf(t, byte(ErrPacket), data[0], "follow-up execution must return a result, not an error packet")
+		if cConn.isEOFPacket(data) {
+			eofCount++
+			if eofCount == 2 {
+				break
+			}
+		}
+	}
+	require.EqualValues(t, 2, eofCount, "follow-up binary result must terminate cleanly")
 }
 
 func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
