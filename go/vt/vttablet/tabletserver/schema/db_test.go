@@ -617,6 +617,28 @@ func TestReloadTablesInDBRollsBackWhenBeginIsCanceled(t *testing.T) {
 	require.Contains(t, db.QueryLog(), "rollback")
 }
 
+// TestReloadTablesInDBSkipsRollbackOnSuccess verifies that a reload that
+// commits successfully does not issue the cleanup rollback, so the success
+// path doesn't pay for a redundant round-trip while holding the engine mutex.
+func TestReloadTablesInDBSkipsRollbackOnSuccess(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadNoRollback")
+
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+	db.AddQuery(reloadDeleteQuery, &sqltypes.Result{})
+	db.AddQuery(reloadInsertQuery, &sqltypes.Result{})
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	require.NoError(t, reloadTablesDataInDB(t.Context(), conn, tables, nil, sqlparser.NewTestParser()))
+
+	require.NotContains(t, db.QueryLog(), "rollback")
+}
+
 func TestReloadViewsInDB(t *testing.T) {
 	showCreateTableFields := sqltypes.MakeTestFields(" View | Create View | character_set_client | collation_connection", "varchar|varchar|varchar|varchar")
 	getViewDefinitionsFields := sqltypes.MakeTestFields("table_name|view_definition", "varchar|varchar")

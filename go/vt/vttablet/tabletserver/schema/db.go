@@ -133,11 +133,16 @@ const schemaReloadTxCleanupTimeout = 10 * time.Second
 // locks on _vt.tables and wedging every future reload. It is deferred before
 // `begin` is even checked because a canceled `begin` can open the transaction
 // on MySQL while still returning an error; with no transaction open the
-// rollback is a harmless no-op — including on the success path, where it
-// trails a commit. If the rollback itself fails the connection's transaction
-// state is unknown, so it is closed for the pool to discard.
+// rollback is a harmless no-op. A successful commit skips the rollback, so the
+// success path doesn't pay for a redundant round-trip. If the rollback itself
+// fails the connection's transaction state is unknown, so it is closed for the
+// pool to discard.
 func reloadInTransaction(ctx context.Context, conn *connpool.Conn, f func() error) error {
+	committed := false
 	defer func() {
+		if committed {
+			return
+		}
 		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), schemaReloadTxCleanupTimeout)
 		defer cancel()
 		if _, err := conn.Exec(rollbackCtx, "rollback", 1, false); err != nil {
@@ -154,8 +159,11 @@ func reloadInTransaction(ctx context.Context, conn *connpool.Conn, f func() erro
 		return err
 	}
 
-	_, err := conn.Exec(ctx, "commit", 1, false)
-	return err
+	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.
