@@ -133,6 +133,7 @@ linters:
         - bool-compare
         - nil-compare
         - regexp
+        - suite-dont-use-pkg
   exclusions:
     generated: lax
     presets:
