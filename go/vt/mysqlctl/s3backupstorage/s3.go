@@ -353,6 +353,13 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 		return out.Body, nil
 	}
 
+	if downloadPartSize < 0 {
+		return nil, fmt.Errorf("--s3-backup-download-part-size must be non-negative, got %d", downloadPartSize)
+	}
+	if downloadConcurrency < 0 {
+		return nil, fmt.Errorf("--s3-backup-download-concurrency must be non-negative, got %d", downloadConcurrency)
+	}
+
 	tmClient := transfermanager.New(timedClient, func(o *transfermanager.Options) {
 		// GetObjectRanges uses byte-range GETs sized by PartSizeBytes.
 		// The default (GetObjectParts) reuses original multipart part numbers
@@ -373,6 +380,8 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	if err != nil {
 		return nil, err
 	}
+	// Transfer manager's GetObjectOutput.Body is an io.Reader (concurrentReader),
+	// not an io.ReadCloser — wrap so callers can call Close() uniformly.
 	return io.NopCloser(out.Body), nil
 }
 
