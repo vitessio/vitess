@@ -145,6 +145,153 @@ func TestTxEngineClose(t *testing.T) {
 	assert.EqualValues(t, 1, te.txPool.env.Stats().KillCounters.Counts()["ReservedConnection"])
 }
 
+// TestActiveCommits verifies that TxEngine can interrupt an active COMMIT during shutdown.
+func TestActiveCommits(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	db.ResetQueryLog()
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	ctx := t.Context()
+
+	commitStarted := make(chan struct{})
+	releaseCommit := make(chan struct{})
+
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.SetBeforeFunc("commit", func() {
+		close(commitStarted)
+
+		// Block the commit so the active commit list has a real connection to terminate. This emulates
+		// the commit stuck on semi-sync in MySQL.
+		<-releaseCommit
+	})
+
+	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	errc := make(chan error, 1)
+	go func() {
+		_, _, err := txEngine.Commit(ctx, txID)
+		errc <- err
+	}()
+
+	// Make sure the commit has started.
+	<-commitStarted
+
+	// Try to terminate active commits.
+	txEngine.TerminateActiveCommits()
+
+	// Allow the BeforeFunc to continue.
+	close(releaseCommit)
+
+	// We expect the commit to be terminated.
+	err = <-errc
+	require.ErrorContains(t, err, "QueryList.TerminateAll()")
+}
+
+// TestCommitRejectedByClusterActionRecordsKill verifies that COMMIT requests rejected
+// during shutdown are accounted as killed transactions rather than successful commits.
+func TestCommitRejectedByClusterActionRecordsKill(t *testing.T) {
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	t.Cleanup(func() { db.Close() })
+
+	txEngine := setupTxEngine(db)
+	txEngine.AcceptReadWrite()
+	t.Cleanup(func() { txEngine.Close() })
+
+	ctx := t.Context()
+
+	txID, _, _, err := txEngine.Begin(ctx, 0, nil, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+
+	txStats := txEngine.txPool.txStats.Counts()
+	initialCommits := txStats["TabletServerTest.commit"]
+	initialKills := txStats["TabletServerTest.kill"]
+
+	db.ResetQueryLog()
+
+	txEngine.SetClusterAction(ClusterActionInProgress)
+	txEngine.SetClusterAction(ClusterActionNoQueries)
+
+	_, _, err = txEngine.Commit(ctx, txID)
+	require.ErrorContains(t, err, vterrors.ShuttingDown)
+
+	require.NotContains(t, db.QueryLog(), "commit")
+
+	txStats = txEngine.txPool.txStats.Counts()
+	require.Equal(t, initialCommits, txStats["TabletServerTest.commit"])
+	require.Equal(t, initialKills+1, txStats["TabletServerTest.kill"])
+
+	_, err = txEngine.txPool.GetAndLock(txID, "after aborted commit")
+	require.ErrorContains(t, err, "kill")
+	require.NotContains(t, err.Error(), "transaction committed")
+}
+
+// TestActiveCommitsIncludesDTExecutorInternalTransactions verifies that internal 2PC metadata
+// commits can be interrupted during shutdown.
+func TestActiveCommitsIncludesDTExecutorInternalTransactions(t *testing.T) {
+	ctx := t.Context()
+	txe, _, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	commitStarted := make(chan struct{})
+	releaseCommit := make(chan struct{})
+
+	db.SetBeforeFunc("commit", func() {
+		close(commitStarted)
+
+		// Hold COMMIT in MySQL so termination has to find the active statement
+		// instead of racing with a completed transaction.
+		<-releaseCommit
+	})
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- txe.inTransaction(func(*StatefulConnection) error {
+			return nil
+		})
+	}()
+
+	<-commitStarted
+
+	txe.te.TerminateActiveCommits()
+	close(releaseCommit)
+
+	err := <-errc
+	require.ErrorContains(t, err, "QueryList.TerminateAll()")
+}
+
+// TestRollbackPreparedKeepsRedoStartedTransactionInDoubt verifies that forced
+// shutdown cleanup does not let a dtid with durable redo look committed.
+func TestRollbackPreparedKeepsRedoStartedTransactionInDoubt(t *testing.T) {
+	ctx := t.Context()
+	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
+	defer closer()
+
+	txid := newTxForPrep(ctx, tsv)
+
+	err := txe.Prepare(txid, "aa")
+	require.NoError(t, err)
+
+	db.ResetQueryLog()
+
+	txe.te.RollbackPrepared()
+
+	requireLogs(
+		t,
+		db.QueryLog(),
+		"rollback",
+	)
+	require.Empty(t, txe.te.preparedPool.conns)
+	require.Equal(t, errPrepRolledBackForShutdown, txe.te.preparedPool.reserved["aa"])
+	require.True(t, txe.te.preparedPool.RedoCommitStarted("aa"))
+}
+
 func TestTxEngineBegin(t *testing.T) {
 	ctx := t.Context()
 	db := setUpQueryExecutorTest(t)
@@ -795,6 +942,18 @@ func TestCheckReceivedError(t *testing.T) {
 		receivedErr: context.Canceled,
 		retryable:   true,
 		expQuery:    `update _vt.redo_state set state = 1, message = 'context canceled' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'operation not allowed in state SHUTTING_DOWN' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing),
+		retryable:   true,
+		expQuery:    `update _vt.redo_state set state = 1, message = 'operation not allowed in state NOT_SERVING' where dtid = _binary'aa'`,
+	}, {
+		receivedErr: vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.ShuttingDown+" after cleanup failed"),
+		retryable:   false,
+		expQuery:    `update _vt.redo_state set state = 0, message = 'operation not allowed in state SHUTTING_DOWN after cleanup failed' where dtid = _binary'aa'`,
 	}, {
 		receivedErr: sqlerror.NewSQLError(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "Lost connection to MySQL server during query"),
 		retryable:   true,
