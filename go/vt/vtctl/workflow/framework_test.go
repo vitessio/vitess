@@ -938,7 +938,7 @@ func checkRouting(t *testing.T, ws *Server, want map[string][]string) {
 	ctx := t.Context()
 	got, err := topotools.GetRoutingRules(ctx, ws.ts)
 	require.NoError(t, err)
-	require.EqualValues(t, got, want, "routing rules don't match: got: %v, want: %v", got, want)
+	require.EqualValues(t, want, got, "routing rules don't match: got: %v, want: %v", got, want)
 	cells, err := ws.ts.GetCellInfoNames(ctx)
 	require.NoError(t, err)
 	for _, cell := range cells {
@@ -955,7 +955,7 @@ func checkCellRouting(t *testing.T, ws *Server, cell string, want map[string][]s
 	for _, rr := range svs.RoutingRules.Rules {
 		got[rr.FromTable] = append(got[rr.FromTable], rr.ToTables...)
 	}
-	require.EqualValues(t, got, want, "routing rules don't match for cell %s: got: %v, want: %v", cell, got, want)
+	require.EqualValues(t, want, got, "routing rules don't match for cell %s: got: %v, want: %v", cell, got, want)
 }
 
 func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, wantDeniedTables []string, wantAllowReadsFromDeniedTables bool) {
@@ -968,9 +968,9 @@ func checkDenyList(t *testing.T, ts *topo.Server, keyspace, shard string, wantDe
 	if tc != nil {
 		got = tc.DeniedTables
 	}
-	require.EqualValues(t, got, wantDeniedTables, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, wantDeniedTables)
+	require.EqualValues(t, wantDeniedTables, got, "denied tables for %s/%s: got: %v, want: %v", keyspace, shard, got, wantDeniedTables)
 	if tc != nil {
-		require.Equal(t, tc.AllowReads, wantAllowReadsFromDeniedTables, "allow reads for %s/%s: got: %v, want: %v", keyspace, shard, tc.AllowReads, wantAllowReadsFromDeniedTables)
+		require.Equal(t, wantAllowReadsFromDeniedTables, tc.AllowReads, "allow reads for %s/%s: got: %v, want: %v", keyspace, shard, tc.AllowReads, wantAllowReadsFromDeniedTables)
 	}
 }
 

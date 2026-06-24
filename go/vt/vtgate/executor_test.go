@@ -1381,7 +1381,7 @@ func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	_, vindex := waitForVindex(t, "TestExecutor", "test_vindex", vschemaUpdates, executor)
-	assert.Equal(t, vindex.Type, "hash")
+	assert.Equal(t, "hash", vindex.Type)
 }
 
 func TestExecutorCreateVindexDDL(t *testing.T) {
@@ -2971,7 +2971,7 @@ func TestExecutorKillStmt(t *testing.T) {
 				require.ErrorContains(t, err, tc.errStr)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, mysqlCtx.Log[0], tc.expectedLog)
+				require.Equal(t, tc.expectedLog, mysqlCtx.Log[0])
 			}
 		})
 		t.Run("stream:"+tc.query+tc.errStr, func(t *testing.T) {

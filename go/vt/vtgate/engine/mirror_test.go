@@ -184,7 +184,7 @@ func TestMirror(t *testing.T) {
 
 		want := vc.results[0]
 		res, err := mirror.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
-		require.Equal(t, res, want)
+		require.Equal(t, want, res)
 		require.NoError(t, err)
 
 		vc.ExpectLog(t, []string{
@@ -237,7 +237,7 @@ func TestMirror(t *testing.T) {
 
 		want := vc.results[0]
 		res, err := mirror.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
-		require.Equal(t, res, want)
+		require.Equal(t, want, res)
 		require.NoError(t, err)
 
 		vc.ExpectLog(t, []string{
@@ -292,7 +292,7 @@ func TestMirror(t *testing.T) {
 
 		want := vc.results[0]
 		res, err := mirror.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, true)
-		require.Equal(t, res, want)
+		require.Equal(t, want, res)
 		require.NoError(t, err)
 
 		vc.ExpectLog(t, []string{

@@ -981,13 +981,13 @@ func TestVDiffDefaults(t *testing.T) {
 	var df map[string]*DiffReport
 	df, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	require.Equal(t, df["t1"].ProcessedRows, 3)
+	require.Equal(t, 3, df["t1"].ProcessedRows)
 	df, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 1, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	require.Equal(t, df["t1"].ProcessedRows, 1)
+	require.Equal(t, 1, df["t1"].ProcessedRows)
 	df, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, "", 0, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.NoError(t, err)
-	require.Equal(t, df["t1"].ProcessedRows, 0)
+	require.Equal(t, 0, df["t1"].ProcessedRows)
 
 	_, err = env.wr.VDiff(t.Context(), "target", env.workflow, env.cell, "", "replica", 1*time.Nanosecond, "", 100, "", false /*debug*/, false /*onlyPks*/, 100)
 	require.Error(t, err)

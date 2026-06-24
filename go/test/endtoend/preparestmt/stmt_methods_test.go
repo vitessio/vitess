@@ -77,7 +77,7 @@ func TestSelectDatabase(t *testing.T) {
 	require.True(t, rows.Next(), "no rows found")
 	err = rows.Scan(&resultBytes)
 	require.NoError(t, err)
-	assert.Equal(t, string(resultBytes), "uks")
+	assert.Equal(t, "uks", string(resultBytes))
 }
 
 // TestInsertUpdateDelete validates all insert, update and

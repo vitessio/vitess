@@ -53,8 +53,8 @@ func TestErrHandlingWithCgroups(t *testing.T) {
 
 	cpu, err = getCgroupCpuUsage()
 	require.ErrorContains(t, err, errCgroupMetricsNotAvailable.Error())
-	require.Equal(t, int(cpu), -1)
+	require.Equal(t, -1, int(cpu))
 	mem, err = getCgroupMemoryUsage()
 	require.ErrorContains(t, err, errCgroupMetricsNotAvailable.Error())
-	require.Equal(t, int(mem), -1)
+	require.Equal(t, -1, int(mem))
 }

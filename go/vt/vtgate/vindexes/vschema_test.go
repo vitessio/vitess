@@ -3258,10 +3258,10 @@ func TestSourceTableHasReferencedBy(t *testing.T) {
 	require.NoError(t, err)
 	src, err := vs.FindTable("unsharded", "src")
 	require.NoError(t, err)
-	require.Equal(t, src.ReferencedBy, map[string]*BaseTable{
+	require.Equal(t, map[string]*BaseTable{
 		"sharded1": ref1,
 		"sharded2": ref2,
-	})
+	}, src.ReferencedBy)
 }
 
 func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {

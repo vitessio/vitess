@@ -1973,7 +1973,7 @@ func TestVStreamIdleHeartbeat(t *testing.T) {
 			require.Error(t, err)
 			require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
 
-			require.Equalf(t, heartbeatCount, tcase.want, "got %d, want %d", heartbeatCount, tcase.want)
+			require.Equalf(t, tcase.want, heartbeatCount, "got %d, want %d", heartbeatCount, tcase.want)
 		})
 	}
 }

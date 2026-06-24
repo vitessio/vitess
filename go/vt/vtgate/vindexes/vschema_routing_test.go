@@ -308,11 +308,11 @@ func TestAutoGlobalRoutingBasic(t *testing.T) {
 
 	// Verify the global tables
 	ks := vschema.Keyspaces["sharded1"]
-	require.EqualValues(t, vschema.globalTables, map[string]Table{
+	require.EqualValues(t, map[string]Table{
 		"table5":   ks.Tables["table5"],
 		"scommon1": ks.Tables["scommon1"],
 		"scommon2": ks.Tables["scommon2"],
-	})
+	}, vschema.globalTables)
 	mustRouteGlobally(t, "table5", "sharded1")
 	mustRouteGlobally(t, "scommon1", "sharded1")
 	mustRouteGlobally(t, "scommon2", "sharded1")

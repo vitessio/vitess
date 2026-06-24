@@ -766,7 +766,7 @@ func TestGetEntityColumnNames(t *testing.T) {
 		"vb": []string{"id", "state", "some", "now()"},
 	}
 	entities := schema.Entities()
-	require.Equal(t, len(entities), len(expectedColNames))
+	require.Equal(t, len(expectedColNames), len(entities))
 
 	tcmap := newDeclarativeSchemaInformation(NewTestEnv())
 	// we test by order of dependency:

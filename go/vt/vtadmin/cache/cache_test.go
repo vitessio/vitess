@@ -264,6 +264,6 @@ func TestUpsertCacheKey(t *testing.T) {
 
 		val, exists := c.Get(tt.key)
 		assert.True(t, exists)
-		assert.Equal(t, val, tt.expectedVal)
+		assert.Equal(t, tt.expectedVal, val)
 	}
 }

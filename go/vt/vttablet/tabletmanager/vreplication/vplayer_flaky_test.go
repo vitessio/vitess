@@ -4061,7 +4061,7 @@ func expectJSON(t *testing.T, table string, values [][]string, id int, exec func
 		require.Equal(t, qr.Rows[i][0].ToString(), row[0], "Id mismatch: want %s, got %s", qr.Rows[i][0].ToString(), row[0])
 		opts := jsondiff.DefaultConsoleOptions()
 		compare, s := jsondiff.Compare(qr.Rows[i][1].Raw(), []byte(row[1]), &opts)
-		require.Equal(t, compare, jsondiff.FullMatch, "Diff:\n%s\n", s)
+		require.Equal(t, jsondiff.FullMatch, compare, "Diff:\n%s\n", s)
 	}
 }
 

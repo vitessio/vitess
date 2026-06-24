@@ -192,7 +192,7 @@ func TestFindOrCreateVindex(t *testing.T) {
 		assert.NoError(t, err, tcase.name)
 		splits := strings.Split(tcase.name, ".")
 		want := splits[len(splits)-1]
-		assert.Equal(t, vindex.String(), want, tcase.name)
+		assert.Equal(t, want, vindex.String(), tcase.name)
 	}
 }
 

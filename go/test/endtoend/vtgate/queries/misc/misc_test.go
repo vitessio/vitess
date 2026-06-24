@@ -297,7 +297,7 @@ func TestVindexHints(t *testing.T) {
 	// We make sure the query still works.
 	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
-	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	require.EqualValues(t, "[[INT64(2) INT64(10) INT64(10)]]", fmt.Sprintf("%v", res.Rows))
 	// Verify that we are using the unq_vdx, that we requested explicitly.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestVindexHints(t *testing.T) {
 	// We make sure the query still works.
 	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
-	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	require.EqualValues(t, "[[INT64(2) INT64(10) INT64(10)]]", fmt.Sprintf("%v", res.Rows))
 	// Verify that we are using the nonunq_vdx, which is the only one left to be used.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)

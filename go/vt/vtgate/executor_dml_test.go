@@ -1943,7 +1943,7 @@ func TestInsertAutoincUnsharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	assertQueries(t, sbclookup, wantQueries)
-	assert.Equal(t, result, wantResult)
+	assert.Equal(t, wantResult, result)
 
 	testQueryLog(t, router, logChan, "TestExecute", "INSERT", "insert into `simple`(val) values ('val')", 1)
 }

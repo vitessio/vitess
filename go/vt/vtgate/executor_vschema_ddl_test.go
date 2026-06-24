@@ -151,7 +151,7 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	_, vindex := waitForVindex(t, "TestExecutor", "test_vindex", vschemaUpdates, executor)
-	assert.Equal(t, vindex.Type, "hash")
+	assert.Equal(t, "hash", vindex.Type)
 }
 
 func TestPlanExecutorCreateVindexDDL(t *testing.T) {

@@ -94,7 +94,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err, "sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)
 		require.NotEmpty(t, data)
-		require.EqualValues(t, data[0], ComBinlogDumpGTID)
+		require.EqualValues(t, ComBinlogDumpGTID, data[0])
 
 		expectedData := []byte{
 			ComBinlogDumpGTID,
@@ -130,7 +130,7 @@ func TestComBinlogDumpGTID(t *testing.T) {
 		data, err := sConn.ReadPacket()
 		require.NoError(t, err, "sConn.ReadPacket - ComBinlogDumpGTID failed: %v", err)
 		require.NotEmpty(t, data)
-		require.EqualValues(t, data[0], ComBinlogDumpGTID)
+		require.EqualValues(t, ComBinlogDumpGTID, data[0])
 
 		expectedData := []byte{
 			ComBinlogDumpGTID,

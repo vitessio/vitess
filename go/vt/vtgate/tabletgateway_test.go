@@ -149,8 +149,8 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 	for range 10 {
 		tg.shuffleTablets("cell1", sameCellTablets)
 		assert.Len(t, sameCellTablets, 2, "Wrong number of TabletHealth")
-		assert.Equal(t, sameCellTablets[0].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")
-		assert.Equal(t, sameCellTablets[1].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")
+		assert.Equal(t, "cell1", sameCellTablets[0].Tablet.Alias.Cell, "Wrong tablet cell")
+		assert.Equal(t, "cell1", sameCellTablets[1].Tablet.Alias.Cell, "Wrong tablet cell")
 
 		tg.shuffleTablets("cell1", diffCellTablets)
 		assert.Len(t, diffCellTablets, 2, "should shuffle in only diff cell tablets")
@@ -341,7 +341,7 @@ func verifyShardErrors(t *testing.T, err error, wantErrors []string, wantCode vt
 	for _, wantErr := range wantErrors {
 		require.Contains(t, err.Error(), wantErr, "wanted error: \n%s\n, got error: \n%v\n", wantErr, err)
 	}
-	require.Equal(t, vterrors.Code(err), wantCode, "wanted error code: %s, got: %v", wantCode, vterrors.Code(err))
+	require.Equal(t, wantCode, vterrors.Code(err), "wanted error code: %s, got: %v", wantCode, vterrors.Code(err))
 }
 
 // TestWithRetry tests the functionality of withRetry function in different circumstances.

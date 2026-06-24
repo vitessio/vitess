@@ -237,5 +237,5 @@ func TestProperTypesOfPullOutValue(t *testing.T) {
 	mcmp.Exec("INSERT INTO user_extra (user_id, extra_info) VALUES (1, 'info1'), (2, 'info1'), (3, 'info1'), (3, 'info2'), (4, 'info1'), (5, 'info1'), (6, 'info1'), (7, 'info1'), (8, 'info1')")
 
 	r := mcmp.Exec(query)
-	require.Equal(t, r.Fields[0].Type, sqltypes.Decimal)
+	require.Equal(t, sqltypes.Decimal, r.Fields[0].Type)
 }

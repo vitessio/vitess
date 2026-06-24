@@ -275,7 +275,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err := cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.EqualValues(data[0], OKPacket, "OKPacket")
+	assert.EqualValues(OKPacket, data[0], "OKPacket")
 
 	var packetOk PacketOK
 	err = cConn.parseOKPacket(&packetOk, data)
@@ -302,7 +302,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.EqualValues(data[0], OKPacket, "OKPacket")
+	assert.EqualValues(OKPacket, data[0], "OKPacket")
 
 	err = cConn.parseOKPacket(&packetOk, data)
 	require.NoError(err)
@@ -340,7 +340,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
+	assert.EqualValues(ErrPacket, data[0], "ErrPacket")
 
 	err = ParseErrorPacket(data)
 	utils.MustMatch(t, err, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied: reason"), "")
@@ -352,7 +352,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
+	assert.EqualValues(ErrPacket, data[0], "ErrPacket")
 
 	err = ParseErrorPacket(data)
 	utils.MustMatch(t, err, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied"), "")
@@ -858,7 +858,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 			data, err := cConn.ReadPacket()
 			require.NoError(t, err)
 			require.NotEmpty(t, data)
-			require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+			require.EqualValues(t, ErrPacket, data[0]) // we should see the error here
 		})
 	}
 }
@@ -1014,7 +1014,7 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 			data, err := cConn.ReadPacket()
 			require.NoError(t, err)
 			require.NotEmpty(t, data)
-			require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+			require.EqualValues(t, ErrPacket, data[0]) // we should see the error here
 		})
 	}
 }
@@ -1040,7 +1040,7 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 	data, err := cConn.ReadPacket()
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
-	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+	require.EqualValues(t, ErrPacket, data[0]) // we should see the error here
 }
 
 func TestConnectionErrorWhileWritingComQuery(t *testing.T) {

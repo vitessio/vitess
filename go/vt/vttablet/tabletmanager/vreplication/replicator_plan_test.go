@@ -845,7 +845,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 
 	gotPlan, _ := json.Marshal(plan)
 	wantPlan, _ := json.Marshal(want)
-	assert.Equal(t, string(gotPlan), string(wantPlan))
+	assert.Equal(t, string(wantPlan), string(gotPlan))
 }
 
 func TestAppendFromRow(t *testing.T) {

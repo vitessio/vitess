@@ -198,7 +198,7 @@ func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
 
 	vh.NewConnection(c)
 
-	assert.NotEqual(t, c.StatusFlags&mysql.ServerStatusAutocommit, uint16(0),
+	assert.NotEqual(t, uint16(0), c.StatusFlags&mysql.ServerStatusAutocommit,
 		"NewConnection should set ServerStatusAutocommit flag to match VTGate's default session state")
 }
 

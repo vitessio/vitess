@@ -210,7 +210,7 @@ func TestPermutations(t *testing.T) {
 				})
 				assert.NoError(t, err)
 				if len(allDiffs) > 0 {
-					assert.Equal(t, numEquals, 1)
+					assert.Equal(t, 1, numEquals)
 				}
 
 				assert.False(t, earlyBreak)

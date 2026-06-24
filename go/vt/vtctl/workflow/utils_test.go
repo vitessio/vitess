@@ -396,17 +396,17 @@ func TestLegacyBuildTargets(t *testing.T) {
 	assert.Len(t, t2.Sources, 2)
 	assert.Len(t, t1.Sources[1].Filter.Rules, 2)
 
-	assert.Equal(t, t1.Sources[1].Filter.Rules[0].Match, "t1")
-	assert.Equal(t, t1.Sources[1].Filter.Rules[1].Match, "t2")
-	assert.Equal(t, t1.Sources[1].Shard, "-80")
+	assert.Equal(t, "t1", t1.Sources[1].Filter.Rules[0].Match)
+	assert.Equal(t, "t2", t1.Sources[1].Filter.Rules[1].Match)
+	assert.Equal(t, "-80", t1.Sources[1].Shard)
 
 	assert.Len(t, t2.Sources[1].Filter.Rules, 2)
 	assert.Len(t, t2.Sources[2].Filter.Rules, 2)
 
-	assert.Equal(t, t2.Sources[1].Shard, "80-")
-	assert.Equal(t, t2.Sources[2].Shard, "80-")
-	assert.Equal(t, t2.Sources[1].Filter.Rules[0].Match, "t1")
-	assert.Equal(t, t2.Sources[1].Filter.Rules[1].Match, "t2")
-	assert.Equal(t, t2.Sources[2].Filter.Rules[0].Match, "t3")
-	assert.Equal(t, t2.Sources[2].Filter.Rules[1].Match, "t4")
+	assert.Equal(t, "80-", t2.Sources[1].Shard)
+	assert.Equal(t, "80-", t2.Sources[2].Shard)
+	assert.Equal(t, "t1", t2.Sources[1].Filter.Rules[0].Match)
+	assert.Equal(t, "t2", t2.Sources[1].Filter.Rules[1].Match)
+	assert.Equal(t, "t3", t2.Sources[2].Filter.Rules[0].Match)
+	assert.Equal(t, "t4", t2.Sources[2].Filter.Rules[1].Match)
 }

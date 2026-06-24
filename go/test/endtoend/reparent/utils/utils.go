@@ -670,8 +670,8 @@ func CheckReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttab
 	qr := RunSQL(ctx, t, "show replica status", tablet)
 	IOThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
 	SQLThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
-	assert.Equal(t, IOThreadRunning, "VARCHAR(\"No\")")
-	assert.Equal(t, SQLThreadRunning, "VARCHAR(\"No\")")
+	assert.Equal(t, "VARCHAR(\"No\")", IOThreadRunning)
+	assert.Equal(t, "VARCHAR(\"No\")", SQLThreadRunning)
 }
 
 // CheckReparentFromOutside checks that cluster was reparented from outside
@@ -698,7 +698,7 @@ func CheckReparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProces
 	require.NoError(t, err)
 	streamHealthResponse := shrs[0]
 
-	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, streamHealthResponse.Target.TabletType)
 	assert.GreaterOrEqual(t, streamHealthResponse.PrimaryTermStartTimestamp, baseTime)
 }
 

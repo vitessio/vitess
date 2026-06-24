@@ -678,8 +678,7 @@ func TestTypeConversion(t *testing.T) {
 
 func TestDefaultStatus(t *testing.T) {
 	assert.Equal(t,
-		String(&Default{ColName: "status"}),
-		"default(`status`)")
+		"default(`status`)", String(&Default{ColName: "status"}))
 }
 
 func TestShowTableStatus(t *testing.T) {

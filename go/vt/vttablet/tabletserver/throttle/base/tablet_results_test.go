@@ -63,37 +63,37 @@ func TestAggregateTabletMetricResultsNoErrors(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 0, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 1.7)
+		assert.Equal(t, 1.7, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 1, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 1.2)
+		assert.Equal(t, 1.2, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 1.1)
+		assert.Equal(t, 1.1, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 3, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 0.6)
+		assert.Equal(t, 0.6, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 4, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 0.3)
+		assert.Equal(t, 0.3, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 5, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 0.3)
+		assert.Equal(t, 0.3, value)
 	}
 }
 
@@ -110,37 +110,37 @@ func TestAggregateTabletMetricResultsNoErrorsIgnoreHostsThreshold(t *testing.T) 
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 0, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 1.7)
+		assert.Equal(t, 1.7, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 1, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 1.2)
+		assert.Equal(t, 1.2, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 2, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 1.1)
+		assert.Equal(t, 1.1, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 3, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 0.6)
+		assert.Equal(t, 0.6, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 4, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 0.6)
+		assert.Equal(t, 0.6, value)
 	}
 	{
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 5, false, 1.0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 0.6)
+		assert.Equal(t, 0.6, value)
 	}
 }
 
@@ -195,6 +195,6 @@ func TestAggregateTabletMetricResultsWithErrors(t *testing.T) {
 		worstMetric := AggregateTabletMetricResults(DefaultMetricName, tabletResultsMap, 2, false, 0)
 		value, err := worstMetric.Get()
 		assert.NoError(t, err)
-		assert.Equal(t, value, 1.7)
+		assert.Equal(t, 1.7, value)
 	})
 }

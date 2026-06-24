@@ -213,7 +213,7 @@ func BenchmarkCachedConnClientSteadyStateEvictions(b *testing.B) {
 		require.NoError(b, err)
 	}
 
-	assert.Equal(b, len(client.dialer.(*cachedConnDialer).conns), 100)
+	assert.Equal(b, 100, len(client.dialer.(*cachedConnDialer).conns))
 
 	procs := runtime.GOMAXPROCS(0) / 4
 	if procs == 0 {

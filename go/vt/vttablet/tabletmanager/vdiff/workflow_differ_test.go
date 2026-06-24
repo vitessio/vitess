@@ -211,8 +211,8 @@ func TestReconcileExtraRows(t *testing.T) {
 			require.Equal(t, int64(len(tc.wantExtraTarget)), dr.ExtraRowsTarget)
 
 			// check actual extra rows
-			require.EqualValues(t, dr.ExtraRowsSourceDiffs, tc.wantExtraSource)
-			require.EqualValues(t, dr.ExtraRowsTargetDiffs, tc.wantExtraTarget)
+			require.EqualValues(t, tc.wantExtraSource, dr.ExtraRowsSourceDiffs)
+			require.EqualValues(t, tc.wantExtraTarget, dr.ExtraRowsTargetDiffs)
 		})
 	}
 

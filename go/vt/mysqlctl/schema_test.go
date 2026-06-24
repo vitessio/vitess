@@ -223,7 +223,7 @@ func TestGetSchemaAndSchemaChange(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, res, want)
+	assert.Equal(t, want, res)
 
 	// Test ApplySchemaChange
 	db.AddQuery("\nSET sql_log_bin = 0", &sqltypes.Result{})

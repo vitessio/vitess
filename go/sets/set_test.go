@@ -75,7 +75,7 @@ func TestEqual(t *testing.T) {
 
 func TestLen(t *testing.T) {
 	testSet := New[int](1, 2, 3)
-	assert.Equal(t, testSet.Len(), 3)
+	assert.Equal(t, 3, testSet.Len())
 }
 
 func TestList(t *testing.T) {

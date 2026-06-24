@@ -305,8 +305,8 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			defer conn.Close()
 			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
 			assert.NoError(t, err)
-			require.Equalf(t, cols, tt.wantCols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
-			require.Equalf(t, indexName, tt.wantIndex, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
+			require.Equalf(t, tt.wantCols, cols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
+			require.Equalf(t, tt.wantIndex, indexName, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
 		})
 	}
 }

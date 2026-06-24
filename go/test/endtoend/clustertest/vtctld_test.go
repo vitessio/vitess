@@ -59,7 +59,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	assert.Equal(t, resp.StatusCode, 200)
+	assert.Equal(t, 200, resp.StatusCode)
 
 	resultMap := make(map[string]any)
 	respByte, err := io.ReadAll(resp.Body)

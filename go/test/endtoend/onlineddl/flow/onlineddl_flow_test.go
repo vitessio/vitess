@@ -445,8 +445,8 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
 	require.Nil(t, err)
 
-	assert.Equal(t, len(queryResult.Rows), 1)
-	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	assert.Equal(t, 1, len(queryResult.Rows))
+	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }

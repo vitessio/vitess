@@ -187,7 +187,7 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 			checkLastOption := func(expected bool) {
 				require.Equal(t, 1, len(sbc0.Options))
 				options := sbc0.Options[0]
-				assert.Equal(t, options.FetchLastInsertId, expected)
+				assert.Equal(t, expected, options.FetchLastInsertId)
 				sbc0.Options = nil
 			}
 			checkLastOptionNil := func() {

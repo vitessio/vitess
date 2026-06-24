@@ -443,7 +443,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 
 	// So far, we should not have rotated any binlogs
 	flushCount := int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
-	require.Equal(t, flushCount, int64(0), "VStreamerFlushedBinlogs should be 0")
+	require.Equal(t, int64(0), flushCount, "VStreamerFlushedBinlogs should be 0")
 
 	// Generate a lot of binlog event bytes
 	targetBinlogSize := vstreamer.GetBinlogRotationThreshold() + 1024
@@ -477,13 +477,13 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	runVDiffsSideBySide = false
 	vdiff(t, defaultTargetKs, workflow, defaultCellName, nil)
 	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
-	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should now be 1")
+	require.Equal(t, int64(1), flushCount, "VStreamerFlushedBinlogs should now be 1")
 
 	// Now if we do another vdiff, we should NOT rotate the binlogs again
 	// as we haven't been generating a lot of new binlog events.
 	vdiff(t, defaultTargetKs, workflow, defaultCellName, nil)
 	flushCount = int64(sourceTab.GetVars()["VStreamerFlushedBinlogs"].(float64))
-	require.Equal(t, flushCount, int64(1), "VStreamerFlushedBinlogs should still be 1")
+	require.Equal(t, int64(1), flushCount, "VStreamerFlushedBinlogs should still be 1")
 }
 
 // TestMoveTablesIgnoreSourceKeyspace confirms that we are able to
@@ -591,7 +591,7 @@ func TestMoveTablesIgnoreSourceKeyspace(t *testing.T) {
 		srrMap := topotools.GetShardRoutingRulesMap(&srr)
 		for _, shard := range targetShardNames {
 			ksShard := fmt.Sprintf("%s.%s", defaultTargetKs, shard)
-			require.NotEqual(t, srrMap[ksShard], defaultTargetKs)
+			require.NotEqual(t, defaultTargetKs, srrMap[ksShard])
 		}
 
 		confirmNoWorkflows(t, defaultTargetKs)

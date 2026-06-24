@@ -64,13 +64,13 @@ func TestVExec(t *testing.T) {
 	require.Nil(t, err)
 	primaries := vx.primaries
 	require.NotNil(t, primaries)
-	require.Equal(t, len(primaries), 2)
+	require.Equal(t, 2, len(primaries))
 	var shards []string
 	for _, primary := range primaries {
 		shards = append(shards, primary.Shard)
 	}
 	sort.Strings(shards)
-	require.Equal(t, fmt.Sprintf("%v", shards), "[-80 80-]")
+	require.Equal(t, "[-80 80-]", fmt.Sprintf("%v", shards))
 
 	plan, err := vx.parseAndPlan(ctx)
 	require.NoError(t, err)
@@ -448,7 +448,7 @@ func TestWorkflowUpdate(t *testing.T) {
 			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, rpcReq, nil)
 			if tcase.wantErr != "" {
 				require.Error(t, err)
-				require.Equal(t, err.Error(), tcase.wantErr)
+				require.Equal(t, tcase.wantErr, err.Error())
 			} else {
 				// Logger.String() adds additional newlines to each log line.
 				output := strings.ReplaceAll(logger.String(), "\n\n", "\n")

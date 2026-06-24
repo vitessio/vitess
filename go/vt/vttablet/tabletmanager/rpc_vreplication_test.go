@@ -3937,8 +3937,8 @@ func TestMaterializerNoDDL(t *testing.T) {
 
 	err := ws.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
-	require.Equal(t, tenv.tmc.getSchemaRequestCount(100), 0)
-	require.Equal(t, tenv.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 0, tenv.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, tenv.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {

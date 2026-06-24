@@ -460,8 +460,8 @@ func getCreateTableStatement(t *testing.T, tableName string) (statement string) 
 	queryResult, err := getTablet().VttabletProcess.QueryTablet("show create table "+tableName, keyspaceName, true)
 	require.Nil(t, err)
 
-	assert.Equal(t, len(queryResult.Rows), 1)
-	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	assert.Equal(t, 1, len(queryResult.Rows))
+	assert.Equal(t, 2, len(queryResult.Rows[0])) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }

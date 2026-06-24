@@ -589,7 +589,7 @@ func TestMoveTablesComplete(t *testing.T) {
 				require.EqualError(t, err, tc.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, got, tc.want, "Server.MoveTablesComplete() = %v, want %v", got, tc.want)
+				require.EqualValues(t, tc.want, got, "Server.MoveTablesComplete() = %v, want %v", got, tc.want)
 			}
 			if tc.postFunc != nil {
 				tc.postFunc(t, env)
@@ -1484,7 +1484,7 @@ func TestWorkflowDelete(t *testing.T) {
 				require.EqualError(t, err, tc.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.EqualValues(t, got, tc.want, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
+				require.EqualValues(t, tc.want, got, "Server.WorkflowDelete() = %v, want %v", got, tc.want)
 			}
 			if tc.postFunc != nil {
 				tc.postFunc(t, env)
@@ -2973,9 +2973,9 @@ func TestGetWorkflowsStreamLogs(t *testing.T) {
 
 	// The non-existent stream logs shouldn't be part of the result
 	assert.Len(t, gotLogs, 1)
-	assert.Equal(t, gotLogs[0].Message, "log message")
-	assert.Equal(t, gotLogs[0].State, "Running")
-	assert.Equal(t, gotLogs[0].Id, int64(3))
+	assert.Equal(t, "log message", gotLogs[0].Message)
+	assert.Equal(t, "Running", gotLogs[0].State)
+	assert.Equal(t, int64(3), gotLogs[0].Id)
 }
 
 func TestWorkflowStatus(t *testing.T) {

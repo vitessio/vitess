@@ -350,7 +350,7 @@ func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int
 		require.Error(t, err)
 		return
 	}
-	assert.Equal(t, len(qr.Rows), 3)
+	assert.Equal(t, 3, len(qr.Rows))
 }
 
 func insertInitialValues(t *testing.T) {

@@ -182,7 +182,7 @@ func TestVtctldclientCLI(t *testing.T) {
 		resp := getReshardResponse(rs)
 		require.NotNil(vc.t, resp)
 		require.NotNil(vc.t, resp.ShardStreams)
-		require.Equal(vc.t, len(resp.ShardStreams), 2)
+		require.Equal(vc.t, 2, len(resp.ShardStreams))
 		keyspace := defaultTargetKs
 		for _, shard := range []string{"80-c0", "c0-"} {
 			streams := resp.ShardStreams[fmt.Sprintf("%s/%s", keyspace, shard)]
@@ -799,7 +799,7 @@ func validateReshardResponse(rs iReshard) {
 	resp := getReshardResponse(rs)
 	require.NotNil(vc.t, resp)
 	require.NotNil(vc.t, resp.ShardStreams)
-	require.Equal(vc.t, len(resp.ShardStreams), 2)
+	require.Equal(vc.t, 2, len(resp.ShardStreams))
 	keyspace := defaultTargetKs
 	for _, shard := range []string{"-40", "40-80"} {
 		streams := resp.ShardStreams[fmt.Sprintf("%s/%s", keyspace, shard)]
@@ -826,7 +826,7 @@ func validateReshardWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow) {
 
 	stream := oneStream.Streams[0]
 	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Stopped.String(), stream.State)
-	require.Equal(t, stream.TabletSelectionPreference, tabletmanagerdatapb.TabletSelectionPreference_INORDER)
+	require.Equal(t, tabletmanagerdatapb.TabletSelectionPreference_INORDER, stream.TabletSelectionPreference)
 	require.True(t, slices.Equal([]topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RDONLY}, stream.TabletTypes))
 	require.True(t, slices.Equal([]string{"zone1", "zone2"}, stream.Cells))
 
@@ -970,7 +970,7 @@ func validateMoveTablesWorkflow(t *testing.T, workflows []*vtctldatapb.Workflow)
 
 	stream := oneStream.Streams[0]
 	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Stopped.String(), stream.State)
-	require.Equal(t, stream.TabletSelectionPreference, tabletmanagerdatapb.TabletSelectionPreference_INORDER)
+	require.Equal(t, tabletmanagerdatapb.TabletSelectionPreference_INORDER, stream.TabletSelectionPreference)
 	require.True(t, slices.Equal([]topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_RDONLY}, stream.TabletTypes))
 	require.True(t, slices.Equal([]string{"zone1", "zone2"}, stream.Cells))
 

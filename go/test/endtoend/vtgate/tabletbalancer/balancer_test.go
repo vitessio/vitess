@@ -346,7 +346,7 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, cell1Count, 200, "Expected cell1 to receive all queries")
+	assert.Equal(t, 200, cell1Count, "Expected cell1 to receive all queries")
 	assert.Equal(t, 0, cell2Count, "Expected cell2 to receive NO queries (filtered out)")
 	assert.Equal(t, numQueries, cell1Count, "Expected all queries to go to cell1")
 }
@@ -469,7 +469,7 @@ func mapTabletAliasToMySQLServerID(t *testing.T, tablets []*cluster.Vttablet) ma
 		aliases[tablet.Alias] = serverID
 	}
 
-	assert.Equal(t, len(aliases), 6, "expected six tablet aliases, got: %d", len(aliases))
+	assert.Equal(t, 6, len(aliases), "expected six tablet aliases, got: %d", len(aliases))
 
 	return aliases
 }

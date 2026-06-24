@@ -2057,7 +2057,7 @@ func TestTruncateErrorLen(t *testing.T) {
 	)
 	want := "Looooooooooooooooooo [TRUNCATED]"
 	require.Error(t, err)
-	assert.Equal(t, err.Error(), want)
+	assert.Equal(t, want, err.Error())
 	want = "Sql: \"select 42 from dual\", BindVars: {}"
 	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
 }

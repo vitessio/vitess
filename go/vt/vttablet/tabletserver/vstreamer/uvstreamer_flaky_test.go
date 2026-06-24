@@ -341,12 +341,12 @@ func resetMetrics(t *testing.T) {
 
 func validateMetrics(t *testing.T) {
 	require.Equal(t, engine.vstreamerEventsStreamed.Get(), int64(len(allEvents)))
-	require.Equal(t, engine.resultStreamerNumRows.Get(), int64(0))
-	require.Equal(t, engine.rowStreamerNumRows.Get(), int64(31))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"], int64(3))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"], int64(2))
-	require.Equal(t, engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"], int64(2))
-	require.Equal(t, engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"], int64(0))
+	require.Equal(t, int64(0), engine.resultStreamerNumRows.Get())
+	require.Equal(t, int64(31), engine.rowStreamerNumRows.Get())
+	require.Equal(t, int64(3), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.copy"])
+	require.Equal(t, int64(2), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.catchup"])
+	require.Equal(t, int64(2), engine.vstreamerPhaseTimings.Counts()["VStreamerTest.fastforward"])
+	require.Equal(t, int64(0), engine.rowStreamerWaits.Counts()["VStreamerTest.waitForMySQL"])
 }
 
 func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {

@@ -125,7 +125,7 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 	assert.Zero(t, qr.RowsAffected)
 
 	qr = utils.Exec(t, conn, `select c1, c2, c3 from t1 order by c1`)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[INT64(300) INT64(100) INT64(300)]]`)
+	assert.Equal(t, `[[INT64(300) INT64(100) INT64(300)]]`, fmt.Sprintf("%v", qr.Rows))
 
 	qr2 := utils.Exec(t, conn, `select c2.keyspace_id, c3.keyspace_id from lookup_t1 c2, lookup_t2 c3`)
 	// To ensure lookup vindex is not updated.
@@ -160,7 +160,7 @@ func TestOpenTxBlocksInSerial(t *testing.T) {
 	utils.Exec(t, conn1, `commit`)
 
 	qr = utils.Exec(t, conn1, `select c1, c2, c3 from t1 order by c1`)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[INT64(300) INT64(100) INT64(400)]]`)
+	assert.Equal(t, `[[INT64(300) INT64(100) INT64(400)]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestOpenTxBlocksInConcurrent(t *testing.T) {
@@ -195,7 +195,7 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 	utils.Exec(t, conn1, `commit`)
 
 	qr = utils.Exec(t, conn1, `select c1, c2, c3 from t1 order by c1`)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows), `[[INT64(300) INT64(100) INT64(400)]]`)
+	assert.Equal(t, `[[INT64(300) INT64(100) INT64(400)]]`, fmt.Sprintf("%v", qr.Rows))
 	wg.Wait()
 }
 

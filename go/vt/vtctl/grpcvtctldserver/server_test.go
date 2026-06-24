@@ -5848,7 +5848,7 @@ func TestGetBackups(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		assert.Equal(t, len(limited.Backups), 1, "expected limited backups to have length 1")
+		assert.Equal(t, 1, len(limited.Backups), "expected limited backups to have length 1")
 		assert.Less(t, len(limited.Backups), len(unlimited.Backups), "expected limited backups to be less than unlimited")
 		utils.MustMatch(t, limited.Backups[0], unlimited.Backups[len(unlimited.Backups)-1], "expected limiting to keep N most recent")
 	})
@@ -6248,8 +6248,8 @@ func TestGetPermissions(t *testing.T) {
 				return
 			}
 			// we should expect same user and DB permissions as assigned
-			assert.Equal(t, resp.Permissions.DbPermissions[0].Host, "host2")
-			assert.Equal(t, resp.Permissions.UserPermissions[0].Host, "host1")
+			assert.Equal(t, "host2", resp.Permissions.DbPermissions[0].Host)
+			assert.Equal(t, "host1", resp.Permissions.UserPermissions[0].Host)
 
 			require.NoError(t, err)
 		})

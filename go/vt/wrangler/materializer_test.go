@@ -114,12 +114,12 @@ func TestMigrateTables(t *testing.T) {
 func requireExpectedVSchema(t *testing.T, vschema *vschemapb.SrvVSchema, sourceKeyspace, targetKeyspace string) {
 	t.Helper()
 
-	require.Equal(t, vschema.Keyspaces[sourceKeyspace], &vschemapb.Keyspace{})
-	require.Equal(t, vschema.Keyspaces[targetKeyspace], &vschemapb.Keyspace{
+	require.Equal(t, &vschemapb.Keyspace{}, vschema.Keyspaces[sourceKeyspace])
+	require.Equal(t, &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"t1": {},
 		},
-	})
+	}, vschema.Keyspaces[targetKeyspace])
 
 	foundA, foundB := false, false
 	for _, r := range vschema.RoutingRules.Rules {
@@ -2217,8 +2217,8 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerCopySchema(t *testing.T) {
@@ -2255,8 +2255,8 @@ func TestMaterializerCopySchema(t *testing.T) {
 	err := env.wr.Materialize(ctx, ms)
 	require.NoError(t, err)
 	env.tmc.verifyQueries(t)
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 1)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerExplicitColumns(t *testing.T) {
@@ -2456,8 +2456,8 @@ func TestMaterializerNoDDL(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
 	err := env.wr.Materialize(ctx, ms)
 	require.EqualError(t, err, "target table t1 does not exist and there is no create ddl defined")
-	require.Equal(t, env.tmc.getSchemaRequestCount(100), 0)
-	require.Equal(t, env.tmc.getSchemaRequestCount(200), 1)
+	require.Equal(t, 0, env.tmc.getSchemaRequestCount(100))
+	require.Equal(t, 1, env.tmc.getSchemaRequestCount(200))
 }
 
 func TestMaterializerNoSourcePrimary(t *testing.T) {

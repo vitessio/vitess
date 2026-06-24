@@ -150,7 +150,7 @@ func TestMysqlRetrieveMasterServerId(t *testing.T) {
 	want := ReplicationStatus{SourceServerID: 1}
 	got, err := ParseMysqlReplicationStatus(resultMap, false)
 	require.NoError(t, err)
-	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
+	assert.Equalf(t, want.SourceServerID, got.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestMysqlRetrieveSourceServerId(t *testing.T) {
@@ -161,7 +161,7 @@ func TestMysqlRetrieveSourceServerId(t *testing.T) {
 	want := ReplicationStatus{SourceServerID: 1}
 	got, err := ParseMysqlReplicationStatus(resultMap, true)
 	require.NoError(t, err)
-	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
+	assert.Equalf(t, want.SourceServerID, got.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
@@ -235,7 +235,7 @@ func TestMariadbRetrieveSourceServerId(t *testing.T) {
 	want := ReplicationStatus{SourceServerID: 1}
 	got, err := ParseMariadbReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equal(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
+	assert.Equal(t, want.SourceServerID, got.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestMariadbRetrieveFileBasedPositions(t *testing.T) {
@@ -282,7 +282,7 @@ func TestFilePosRetrieveSourceServerId(t *testing.T) {
 	want := ReplicationStatus{SourceServerID: 1}
 	got, err := ParseFilePosReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
+	assert.Equalf(t, want.SourceServerID, got.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestFilePosRetrieveExecutedPosition(t *testing.T) {

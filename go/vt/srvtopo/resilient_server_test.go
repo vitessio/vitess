@@ -717,7 +717,7 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 
 	// All requests should have succeeded
 	assert.Positivef(t, successCount, "Expected successful requests after service recovery, got %d errors out of %d requests", errorCount, numGoroutines)
-	assert.EqualValuesf(t, successCount, numGoroutines, "Not all requests succeeded after service recovery: %d/%d", successCount, numGoroutines)
+	assert.EqualValuesf(t, numGoroutines, successCount, "Not all requests succeeded after service recovery: %d/%d", successCount, numGoroutines)
 }
 
 type watched struct {

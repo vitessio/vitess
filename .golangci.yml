@@ -139,6 +139,7 @@ linters:
         - negative-positive
         - formatter
         - empty
+        - expected-actual
   exclusions:
     generated: lax
     presets:

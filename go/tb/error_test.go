@@ -74,12 +74,12 @@ func TestErrorf(t *testing.T) {
 
 	expectedMsg := fmt.Sprintf("test msg %v %v", s1, s2)
 	expectedErr := fmt.Sprintf("%v\n%v", expectedMsg, "stackTrace1")
-	assert.Equal(t, err.Error(), expectedErr)
+	assert.Equal(t, expectedErr, err.Error())
 
 	err = Errorf("test msg")
 	s := string(Stack(4))
 	expectedErr = fmt.Sprintf("%v\n%v", "test msg", s)
-	assert.Equal(t, err.Error(), expectedErr)
+	assert.Equal(t, expectedErr, err.Error())
 }
 
 func TestSource(t *testing.T) {

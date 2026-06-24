@@ -1082,7 +1082,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 							require.FailNow(t, "received event for unexpected shard: "+shard)
 						}
 					case binlogdatapb.VEventType_JOURNAL:
-						require.Equal(t, ev.Journal.MigrationType, binlogdatapb.MigrationType_SHARDS)
+						require.Equal(t, binlogdatapb.MigrationType_SHARDS, ev.Journal.MigrationType)
 						journalEvents++
 					}
 				}
@@ -1402,7 +1402,7 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 				case binlogdatapb.VEventType_ROW:
 					rowEvent := ev.RowEvent
 					arr := strings.Split(rowEvent.TableName, ".")
-					require.Equal(t, len(arr), 2)
+					require.Equal(t, 2, len(arr))
 					tableName := arr[1]
 					require.Equal(t, defaultSourceKs, rowEvent.Keyspace)
 					require.Equal(t, "0", rowEvent.Shard)
@@ -1411,7 +1411,7 @@ func doVStream(t *testing.T, vc *VitessCluster, flags *vtgatepb.VStreamFlags) (n
 				case binlogdatapb.VEventType_FIELD:
 					fieldEvent := ev.FieldEvent
 					arr := strings.Split(fieldEvent.TableName, ".")
-					require.Equal(t, len(arr), 2)
+					require.Equal(t, 2, len(arr))
 					tableName := arr[1]
 					require.Equal(t, defaultSourceKs, fieldEvent.Keyspace)
 					require.Equal(t, "0", fieldEvent.Shard)

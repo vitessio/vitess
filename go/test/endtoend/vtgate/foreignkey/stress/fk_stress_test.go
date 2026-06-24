@@ -1000,9 +1000,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
 	queryResult := queryTablet(t, tablet, "show create table "+tableName, "")
 
-	require.Equal(t, len(queryResult.Rows), 1)
+	require.Equal(t, 1, len(queryResult.Rows))
 	row := queryResult.Rows[0]
-	assert.Equal(t, len(row), 2) // table name, create statement
+	assert.Equal(t, 2, len(row)) // table name, create statement
 	statement = row[1].ToString()
 	return statement
 }

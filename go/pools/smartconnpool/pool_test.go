@@ -1216,8 +1216,8 @@ func TestSlowCreateFail(t *testing.T) {
 		}
 		assert.Nil(t, <-ch)
 		assert.Nil(t, <-ch)
-		assert.Equalf(t, p.Capacity(), int64(2), "pool should not be out of capacity")
-		assert.Equalf(t, p.Available(), int64(2), "pool should not be out of availability")
+		assert.Equalf(t, int64(2), p.Capacity(), "pool should not be out of capacity")
+		assert.Equalf(t, int64(2), p.Available(), "pool should not be out of availability")
 
 		select {
 		case <-ch:

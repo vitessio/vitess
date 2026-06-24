@@ -1076,17 +1076,17 @@ func verifySemiSyncStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStat
 	case mysql.SemiSyncTypeSource:
 		status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_replica_enabled", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 		status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_replica_status", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 	case mysql.SemiSyncTypeMaster:
 		status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 		status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
 		require.NoError(t, err)
-		assert.Equal(t, status, expectedStatus)
+		assert.Equal(t, expectedStatus, status)
 	}
 }
 

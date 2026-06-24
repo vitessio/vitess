@@ -1572,7 +1572,7 @@ func TestGenerateShardRanges(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, got, tt.want)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
