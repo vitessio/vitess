@@ -671,16 +671,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	if rowChange.Before != nil {
 		before = true
-		if len(rowChange.Before.Lengths) != len(tp.Fields) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: row change for table %s has malformed Before image (got %d values, expected %d)",
-				tp.TargetName, len(rowChange.Before.Lengths), len(tp.Fields))
-		}
-		if !rowImageByteLengthMatches(rowChange.Before.Lengths, len(rowChange.Before.Values)) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: row change for table %s has malformed Before image (Values byte-length %d does not match Lengths)",
-				tp.TargetName, len(rowChange.Before.Values))
-		}
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
 		for i, field := range tp.Fields {
 			bindVar, err := tp.bindFieldVal(field, &vals[i])
@@ -692,16 +682,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	if rowChange.After != nil {
 		after = true
-		if len(rowChange.After.Lengths) != len(tp.Fields) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: row change for table %s has malformed After image (got %d values, expected %d)",
-				tp.TargetName, len(rowChange.After.Lengths), len(tp.Fields))
-		}
-		if !rowImageByteLengthMatches(rowChange.After.Lengths, len(rowChange.After.Values)) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: row change for table %s has malformed After image (Values byte-length %d does not match Lengths)",
-				tp.TargetName, len(rowChange.After.Values))
-		}
 		afterVals = sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
 			bindVar, err := tp.bindFieldVal(field, &afterVals[i])
@@ -850,27 +830,6 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	return nil, nil
 }
 
-// rowImageByteLengthMatches reports whether the byte-count of row.Values equals
-// the sum of non-negative entries in lengths. The comparison is incremental
-// against valuesLen so a malformed Lengths array whose entries would overflow
-// int64 cannot accidentally pass equality (cf. #20360, codex review). A
-// negative entry indicates a NULL value and contributes no bytes. MakeRowTrusted
-// slices row.Values up to this total; a mismatch would panic at the slice op.
-func rowImageByteLengthMatches(lengths []int64, valuesLen int) bool {
-	var sum int64
-	target := int64(valuesLen)
-	for _, l := range lengths {
-		if l < 0 {
-			continue
-		}
-		if l > target-sum {
-			return false
-		}
-		sum += l
-	}
-	return sum == target
-}
-
 // applyBulkDeleteChanges applies a bulk DELETE statement from the row changes
 // to the target table -- which resulted from a DELETE statement executed on the
 // source that deleted N rows -- using an IN clause with the primary key values
@@ -908,9 +867,13 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	}
 
 	// Derive pkIndex once from the plan, not from per-row vals. PKIndices is sized to
-	// the column count and is populated by the plan builder before this runs, so it
-	// has no dependency on the shape of any individual row's Before image. This avoids
-	// a panic when a later row's Before deserialises to an empty vals slice (see #20360).
+	// the column count and is populated by the plan builder before this runs, so the
+	// index has no dependency on the shape of any individual row's Before image. The
+	// original per-row search ran the inner `range vals` on iteration 0; an empty
+	// first-row vals (see #20360) left pkIndex at -1 and the subsequent vals[-1]
+	// access panicked. Hoisting the search removes that data dependency. Other panic
+	// surfaces in this loop (e.g. vals[pkIndex] on a short later row) are caught by
+	// the defer/recover wrapper on vp.fetchAndApply's applyEvents goroutine.
 	pkIndex := -1
 	for i, isPK := range tp.PKIndices {
 		if isPK {
@@ -928,21 +891,7 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 	}
 
 	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
-	for i, rowDelete := range rowDeletes {
-		if rowDelete.Before == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: bulk-delete row %d for table %s has nil Before image", i, tp.TargetName)
-		}
-		if len(rowDelete.Before.Lengths) != len(tp.Fields) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: bulk-delete row %d for table %s has malformed Before image (got %d values, expected %d)",
-				i, tp.TargetName, len(rowDelete.Before.Lengths), len(tp.Fields))
-		}
-		if !rowImageByteLengthMatches(rowDelete.Before.Lengths, len(rowDelete.Before.Values)) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: bulk-delete row %d for table %s has malformed Before image (Values byte-length %d does not match Lengths)",
-				i, tp.TargetName, len(rowDelete.Before.Values))
-		}
+	for _, rowDelete := range rowDeletes {
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
@@ -989,21 +938,7 @@ func (tp *TablePlan) applyBulkInsertChanges(rowInserts []*binlogdatapb.RowChange
 
 	limit := tp.maxRowJSONBytes()
 	newStmt := true
-	for i, rowInsert := range rowInserts {
-		if rowInsert.After == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: bulk-insert row %d for table %s has nil After image", i, tp.TargetName)
-		}
-		if len(rowInsert.After.Lengths) != len(tp.Fields) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: bulk-insert row %d for table %s has malformed After image (got %d values, expected %d)",
-				i, tp.TargetName, len(rowInsert.After.Lengths), len(tp.Fields))
-		}
-		if !rowImageByteLengthMatches(rowInsert.After.Lengths, len(rowInsert.After.Values)) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-				"vreplication: bulk-insert row %d for table %s has malformed After image (Values byte-length %d does not match Lengths)",
-				i, tp.TargetName, len(rowInsert.After.Values))
-		}
+	for _, rowInsert := range rowInserts {
 		if limit > 0 {
 			if err := tp.checkInsertJSONRowSize(rowInsert.After, nil, nil, limit); err != nil {
 				return nil, err
@@ -1114,11 +1049,6 @@ func (tp *TablePlan) appendFromRow(buf *bytes2.Buffer, row *querypb.Row) error {
 	if len(row.Lengths) < len(tp.Fields) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of lengths: got %d lengths for %d fields",
 			len(row.Lengths), len(tp.Fields))
-	}
-	if !rowImageByteLengthMatches(row.Lengths, len(row.Values)) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-			"row for table %s has malformed image (Values byte-length %d does not match Lengths)",
-			tp.TargetName, len(row.Values))
 	}
 
 	// Bind field values to locations.

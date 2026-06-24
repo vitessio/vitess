@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -254,6 +256,19 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
+		defer func() {
+			// Catch panics in the vstream goroutine so a malformed binlog event
+			// (#20360) or any other unexpected runtime error stops the workflow
+			// cleanly instead of crashing the entire vttablet process.
+			if x := recover(); x != nil {
+				log.Error("caught panic in vstream",
+					slog.String("workflow", vp.vr.WorkflowName),
+					slog.Any("panic", x),
+					slog.String("stack", string(tb.Stack(4))),
+				)
+				streamErr <- fmt.Errorf("panic in vstream: %v", x)
+			}
+		}()
 		vstreamOptions := &binlogdatapb.VStreamOptions{
 			ConfigOverrides: vp.vr.workflowConfig.Overrides,
 		}
@@ -265,6 +280,21 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	applyErr := make(chan error, 1)
 	go func() {
+		defer func() {
+			// Catch panics in the apply goroutine. Without this, a panic in
+			// applyRowEvent / applyBulkDeleteChanges / applyChange (e.g. the
+			// malformed RowChange image reported in #20360) crashes vttablet
+			// because the goroutine is not covered by controller.runBlp's
+			// recover, which runs on a different goroutine.
+			if x := recover(); x != nil {
+				log.Error("caught panic in applyEvents",
+					slog.String("workflow", vp.vr.WorkflowName),
+					slog.Any("panic", x),
+					slog.String("stack", string(tb.Stack(4))),
+				)
+				applyErr <- fmt.Errorf("panic in applyEvents: %v", x)
+			}
+		}()
 		applyErr <- vp.applyEvents(ctx, relay)
 	}()
 
