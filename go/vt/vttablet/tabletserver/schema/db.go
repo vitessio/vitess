@@ -18,6 +18,8 @@ package schema
 
 import (
 	"context"
+	"log/slog"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -116,6 +118,41 @@ SELECT f.name, i.UDF_RETURN_TYPE, f.type FROM mysql.func f left join performance
 	fetchAggregateUdfs = `select function_name, function_return_type, function_type from %s.udfs`
 )
 
+// schemaReloadTxCleanupTimeout bounds the rollback that runs after the
+// caller's context is canceled. It must stay bounded because schema reloads
+// hold the engine mutex while running; an unbounded rollback could re-wedge
+// reloads instead of fixing the wedge.
+const schemaReloadTxCleanupTimeout = 30 * time.Second
+
+// reloadInTransaction runs f inside a transaction on conn, then commits. A
+// rollback is always deferred (it is a no-op after a successful commit, which
+// matches the prior behavior of these reload functions). The rollback runs on
+// a fresh, non-cancelable context so it still reaches MySQL even when ctx is
+// already canceled — otherwise the connection is recycled with an open
+// transaction, holding locks on _vt.tables and wedging future reloads. If the
+// rollback itself fails, the connection is closed so the pool discards it
+// rather than reusing a session whose transaction state is unknown.
+func reloadInTransaction(ctx context.Context, conn *connpool.Conn, f func() error) error {
+	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
+		return err
+	}
+	defer func() {
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), schemaReloadTxCleanupTimeout)
+		defer cancel()
+		if _, err := conn.Exec(rollbackCtx, "rollback", 1, false); err != nil {
+			log.Warn("schema reload: rollback after canceled/failed reload failed; discarding connection", slog.Any("error", err))
+			conn.Close()
+		}
+	}()
+
+	if err := f(); err != nil {
+		return err
+	}
+
+	_, err := conn.Exec(ctx, "commit", 1, false)
+	return err
+}
+
 // reloadTablesDataInDB reloads teh tables information we have stored in our database we use for schema-tracking.
 func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Table, droppedTables []string, parser *sqlparser.Parser) error {
 	// No need to do anything if we have no tables to refresh or drop.
@@ -160,33 +197,25 @@ func reloadTablesDataInDB(ctx context.Context, conn *connpool.Conn, tables []*Ta
 	}
 
 	// Reload the tables in a transaction.
-	_, err = conn.Exec(ctx, "begin", 1, false)
-	if err != nil {
-		return err
-	}
-	defer conn.Exec(ctx, "rollback", 1, false)
-
-	_, err = conn.Exec(ctx, clearTableQuery, 1, false)
-	if err != nil {
-		return err
-	}
-
-	for idx, table := range tables {
-		bv["table_name"] = sqltypes.StringBindVariable(table.Name.String())
-		bv["create_statement"] = sqltypes.StringBindVariable(createStatements[idx])
-		bv["create_time"] = sqltypes.Int64BindVariable(table.CreateTime)
-		insertTableQuery, err := insertTablesParsedQuery.GenerateQuery(bv, nil)
-		if err != nil {
+	return reloadInTransaction(ctx, conn, func() error {
+		if _, err := conn.Exec(ctx, clearTableQuery, 1, false); err != nil {
 			return err
 		}
-		_, err = conn.Exec(ctx, insertTableQuery, 1, false)
-		if err != nil {
-			return err
-		}
-	}
 
-	_, err = conn.Exec(ctx, "commit", 1, false)
-	return err
+		for idx, table := range tables {
+			bv["table_name"] = sqltypes.StringBindVariable(table.Name.String())
+			bv["create_statement"] = sqltypes.StringBindVariable(createStatements[idx])
+			bv["create_time"] = sqltypes.Int64BindVariable(table.CreateTime)
+			insertTableQuery, err := insertTablesParsedQuery.GenerateQuery(bv, nil)
+			if err != nil {
+				return err
+			}
+			if _, err = conn.Exec(ctx, insertTableQuery, 1, false); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // generateFullQuery generates the full query from the query as a string.
@@ -264,33 +293,25 @@ func reloadViewsDataInDB(ctx context.Context, conn *connpool.Conn, views []*Tabl
 	}
 
 	// Reload the views in a transaction.
-	_, err = conn.Exec(ctx, "begin", 1, false)
-	if err != nil {
-		return err
-	}
-	defer conn.Exec(ctx, "rollback", 1, false)
-
-	_, err = conn.Exec(ctx, clearViewQuery, 1, false)
-	if err != nil {
-		return err
-	}
-
-	for idx, view := range views {
-		bv["view_name"] = sqltypes.StringBindVariable(view.Name.String())
-		bv["create_statement"] = sqltypes.StringBindVariable(createStatements[idx])
-		bv["view_definition"] = sqltypes.StringBindVariable(viewDefinitions[view.Name.String()])
-		insertViewQuery, err := insertViewsParsedQuery.GenerateQuery(bv, nil)
-		if err != nil {
+	return reloadInTransaction(ctx, conn, func() error {
+		if _, err := conn.Exec(ctx, clearViewQuery, 1, false); err != nil {
 			return err
 		}
-		_, err = conn.Exec(ctx, insertViewQuery, 1, false)
-		if err != nil {
-			return err
-		}
-	}
 
-	_, err = conn.Exec(ctx, "commit", 1, false)
-	return err
+		for idx, view := range views {
+			bv["view_name"] = sqltypes.StringBindVariable(view.Name.String())
+			bv["create_statement"] = sqltypes.StringBindVariable(createStatements[idx])
+			bv["view_definition"] = sqltypes.StringBindVariable(viewDefinitions[view.Name.String()])
+			insertViewQuery, err := insertViewsParsedQuery.GenerateQuery(bv, nil)
+			if err != nil {
+				return err
+			}
+			if _, err = conn.Exec(ctx, insertViewQuery, 1, false); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // getViewDefinition gets the viewDefinition for the given views.
@@ -455,28 +476,16 @@ func reloadUdfsInDB(ctx context.Context, conn *connpool.Conn, udfsChanged bool, 
 	copyUdfQuery := sqlparser.BuildParsedQuery(copyUdfs, sidecar.GetIdentifier()).Query
 
 	// Reload the udfs in a transaction.
-	_, err := conn.Exec(ctx, "begin", 1, false)
-	if err != nil {
-		return err
-	}
-	defer conn.Exec(ctx, "rollback", 1, false)
+	return reloadInTransaction(ctx, conn, func() error {
+		if _, err := conn.Exec(ctx, clearUdfQuery, 1, false); err != nil {
+			return err
+		}
 
-	_, err = conn.Exec(ctx, clearUdfQuery, 1, false)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Exec(ctx, copyUdfQuery, 1, false)
-	if err != nil {
-		return err
-	}
-
-	_, err = conn.Exec(ctx, "commit", 1, false)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		if _, err := conn.Exec(ctx, copyUdfQuery, 1, false); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // GetFetchViewQuery gets the fetch query to run for getting the listed views. If no views are provided, then all the views are fetched.
