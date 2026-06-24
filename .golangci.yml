@@ -132,6 +132,7 @@ linters:
         - suite-method-signature
         - bool-compare
         - nil-compare
+        - regexp
   exclusions:
     generated: lax
     presets:
