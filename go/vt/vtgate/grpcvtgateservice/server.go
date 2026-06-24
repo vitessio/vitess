@@ -292,6 +292,7 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 func (vtg *VTGate) Prepare(ctx context.Context, request *vtgatepb.PrepareRequest) (response *vtgatepb.PrepareResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
+	ctx = vtgateservice.ContextWithIngressBytes(ctx, uint64(request.SizeVT()))
 
 	session := request.Session
 	if session == nil {

@@ -1990,3 +1990,52 @@ func TestComQueryMultiOLAPIngressBytes(t *testing.T) {
 		}
 	}
 }
+
+// TestComPrepareIngressBytes verifies that MySQL protocol prepare ingress bytes
+// are attached to VTGate query log stats.
+func TestComPrepareIngressBytes(t *testing.T) {
+	vtgate, _, _ := createVtgateEnv(t)
+	query := "SELECT id FROM user WHERE id = ?"
+
+	vh := newVtgateHandler(vtgate)
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	params := &mysql.ConnParams{
+		Host:  addr.IP.String(),
+		Port:  addr.Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+
+	conn, err := mysql.Connect(t.Context(), params)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	subscriber := vtgate.executor.queryLogger.Subscribe("test")
+	defer vtgate.executor.queryLogger.Unsubscribe(subscriber)
+
+	packet := make([]byte, mysql.PacketHeaderSize+1+len(query))
+	payloadLength := 1 + len(query)
+	packet[0] = byte(payloadLength)
+	packet[1] = byte(payloadLength >> 8)
+	packet[2] = byte(payloadLength >> 16)
+	packet[3] = 0
+	packet[mysql.PacketHeaderSize] = mysql.ComPrepare
+	copy(packet[mysql.PacketHeaderSize+1:], query)
+	written, err := conn.GetRawConn().Write(packet)
+	require.NoError(t, err)
+	require.Equal(t, len(packet), written)
+
+	select {
+	case sentStats := <-subscriber:
+		require.NotNil(t, sentStats)
+		assert.Equal(t, uint64(mysql.PacketHeaderSize+1+len(query)), sentStats.IngressBytes)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "LogStats should have been sent to queryLogger")
+	}
+}

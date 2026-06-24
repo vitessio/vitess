@@ -40,6 +40,7 @@ type mockVTGateService struct {
 	streamResults             []*sqltypes.Result
 	executeIngressBytes       []uint64
 	executeBatchIngressBytes  []uint64
+	prepareIngressBytes       []uint64
 	streamExecuteIngressBytes []uint64
 }
 
@@ -72,6 +73,9 @@ func (m *mockVTGateService) StreamExecute(ctx context.Context, mysqlCtx vtgatese
 }
 
 func (m *mockVTGateService) Prepare(ctx context.Context, session *vtgatepb.Session, sql string) (*vtgatepb.Session, []*querypb.Field, uint16, error) {
+	if ingressBytes, ok := vtgateservice.IngressBytesFromContext(ctx); ok {
+		m.prepareIngressBytes = append(m.prepareIngressBytes, ingressBytes)
+	}
 	return session, nil, 0, nil
 }
 
@@ -222,4 +226,22 @@ func TestGRPCExecuteBatchSetsIngressBytesByQuery(t *testing.T) {
 	secondWeight := uint64(request.Queries[1].SizeVT())
 	firstIngressBytes := totalIngressBytes * firstWeight / (firstWeight + secondWeight)
 	assert.Equal(t, []uint64{firstIngressBytes, totalIngressBytes - firstIngressBytes}, mockService.executeBatchIngressBytes)
+}
+
+// TestGRPCPrepareSetsIngressBytes verifies that Prepare stores the request
+// size estimate in the forwarded context.
+func TestGRPCPrepareSetsIngressBytes(t *testing.T) {
+	mockService := &mockVTGateService{}
+	grpcVTGate := &VTGate{server: mockService}
+	request := &vtgatepb.PrepareRequest{
+		Query: &querypb.BoundQuery{
+			Sql: "SELECT id FROM test WHERE id = ?",
+		},
+		Session: &vtgatepb.Session{Autocommit: true},
+	}
+
+	_, err := grpcVTGate.Prepare(context.Background(), request)
+
+	require.NoError(t, err)
+	assert.Equal(t, []uint64{uint64(request.SizeVT())}, mockService.prepareIngressBytes)
 }

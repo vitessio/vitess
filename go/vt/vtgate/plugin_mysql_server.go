@@ -568,6 +568,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 		c.RemoteAddr().String(), /* component: running client process */
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
+	ctx = vtgateservice.ContextWithIngressBytes(ctx, c.IngressBytes())
 
 	session := vh.session(c)
 	if !session.InTransaction {
