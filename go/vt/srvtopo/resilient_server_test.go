@@ -716,7 +716,7 @@ func TestGetSrvKeyspaceNamesCachedErrorRecovery(t *testing.T) {
 	}
 
 	// All requests should have succeeded
-	assert.Greaterf(t, successCount, int32(0), "Expected successful requests after service recovery, got %d errors out of %d requests", errorCount, numGoroutines)
+	assert.Positivef(t, successCount, "Expected successful requests after service recovery, got %d errors out of %d requests", errorCount, numGoroutines)
 	assert.EqualValuesf(t, successCount, numGoroutines, "Not all requests succeeded after service recovery: %d/%d", successCount, numGoroutines)
 }
 

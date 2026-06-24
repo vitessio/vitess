@@ -104,7 +104,7 @@ func TestReaderCloseSetsCurrentLagToZero(t *testing.T) {
 	tr.Open()
 	time.Sleep(2 * time.Second)
 
-	assert.Greater(t, currentLagNs.Get(), int64(0), "lag should be greater than zero")
+	assert.Positive(t, currentLagNs.Get(), "lag should be greater than zero")
 
 	tr.Close()
 

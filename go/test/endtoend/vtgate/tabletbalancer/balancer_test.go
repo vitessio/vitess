@@ -98,7 +98,7 @@ func TestCellModeBalancer(t *testing.T) {
 
 		switch tablet.Cell {
 		case cell1:
-			assert.Greater(t, count, 0, "Expected local cell tablet %s to receive queries", tablet.Alias)
+			assert.Positive(t, count, "Expected local cell tablet %s to receive queries", tablet.Alias)
 			cell1Count += count
 		case cell2:
 			assert.Equal(t, 0, count, "Expected remote cell tablet %s to receive NO queries in cell mode", tablet.Alias)
@@ -106,7 +106,7 @@ func TestCellModeBalancer(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, cell1Count, 0, "Expected cell1 (local) to receive queries")
+	assert.Positive(t, cell1Count, "Expected cell1 (local) to receive queries")
 	assert.Equal(t, 0, cell2Count, "Expected cell2 (remote) to receive NO queries in cell mode")
 }
 
@@ -182,8 +182,8 @@ func TestPreferCell(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries in prefer-cell mode")
-	assert.Greater(t, cell2Count, 0, "Expected cell2 to receive queries in prefer-cell mode")
+	assert.Positive(t, cell1Count, "Expected cell1 to receive queries in prefer-cell mode")
+	assert.Positive(t, cell2Count, "Expected cell2 to receive queries in prefer-cell mode")
 }
 
 // TestRandomModeBalancer tests the "random" mode which uniformly distributes load
@@ -253,7 +253,7 @@ func TestRandomModeBalancer(t *testing.T) {
 	// Verify each replica got roughly equal queries
 	for _, tablet := range replicaTablets {
 		count := counts[aliases[tablet.Alias]]
-		assert.Greater(t, count, 0, "Expected replica %s to receive queries", tablet.Alias)
+		assert.Positive(t, count, "Expected replica %s to receive queries", tablet.Alias)
 		assert.InDelta(t, expectedPerReplica, count, float64(tolerance),
 			"Expected replica %s to receive ~%d queries (±%d), got %d",
 			tablet.Alias, expectedPerReplica, tolerance, count)
@@ -267,8 +267,8 @@ func TestRandomModeBalancer(t *testing.T) {
 	}
 
 	// Verify both cells received queries
-	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries")
-	assert.Greater(t, cell2Count, 0, "Expected cell2 to receive queries")
+	assert.Positive(t, cell1Count, "Expected cell1 to receive queries")
+	assert.Positive(t, cell2Count, "Expected cell2 to receive queries")
 }
 
 // TestRandomModeWithCellFiltering tests random mode with cell filtering via balancer-vtgate-cells
@@ -338,7 +338,7 @@ func TestRandomModeWithCellFiltering(t *testing.T) {
 		count := counts[aliases[tablet.Alias]]
 		switch tablet.Cell {
 		case cell1:
-			assert.Greater(t, count, 0, "Expected cell1 replica %s to receive queries", tablet.Alias)
+			assert.Positive(t, count, "Expected cell1 replica %s to receive queries", tablet.Alias)
 			cell1Count += count
 		case cell2:
 			assert.Equal(t, 0, count, "Expected cell2 replica %s to receive NO queries (filtered out)", tablet.Alias)
@@ -422,8 +422,8 @@ func TestDeprecatedEnableBalancerFlag(t *testing.T) {
 		}
 	}
 
-	assert.Greater(t, cell1Count, 0, "Expected cell1 to receive queries (flow mode behavior)")
-	assert.Greater(t, cell2Count, 0, "Expected cell2 to receive queries (flow mode behavior)")
+	assert.Positive(t, cell1Count, "Expected cell1 to receive queries (flow mode behavior)")
+	assert.Positive(t, cell2Count, "Expected cell2 to receive queries (flow mode behavior)")
 }
 
 // Helper functions for e2e testing of balancer modes

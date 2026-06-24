@@ -222,7 +222,7 @@ func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 		},
 	}
 	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
-	require.Greaterf(t, totalSize, int64(0), "backup size should be > 0, got %v", totalSize)
+	require.Positivef(t, totalSize, "backup size should be > 0, got %v", totalSize)
 }
 
 func TestFindFilesToBackupWithRedoLog(t *testing.T) {
@@ -306,7 +306,7 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 		},
 	}
 	require.Equalf(t, expected, result, "got wrong list of FileEntry %v, expected %v", result, expected)
-	require.Greaterf(t, totalSize, int64(0), "backup size should be > 0, got %v", totalSize)
+	require.Positivef(t, totalSize, "backup size should be > 0, got %v", totalSize)
 }
 
 // TestRestoreEmitsStats tests that Restore emits stats.

@@ -136,6 +136,7 @@ linters:
         - suite-dont-use-pkg
         - contains
         - compares
+        - negative-positive
   exclusions:
     generated: lax
     presets:

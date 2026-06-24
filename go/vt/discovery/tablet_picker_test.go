@@ -545,7 +545,7 @@ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
 	// if local preference is selected, tp cells include's the local cell's alias
-	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell_cella.ks.0.replica"], int64(0))
+	require.Positive(t, globalTPStats.noTabletFoundError.Counts()["cell_cella.ks.0.replica"])
 }
 
 func TestPickErrorOnlySpecified(t *testing.T) {
@@ -573,7 +573,7 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
 
-	require.Greater(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"], int64(0))
+	require.Positive(t, globalTPStats.noTabletFoundError.Counts()["cell.ks.0.replica"])
 }
 
 // TestPickFallbackType tests that when providing a list of tablet types to

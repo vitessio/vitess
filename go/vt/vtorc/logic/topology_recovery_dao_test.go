@@ -55,7 +55,7 @@ func TestTopologyRecovery(t *testing.T) {
 		topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
 		require.NoError(t, err)
 		// The ID field should be populated after the insert
-		require.Greater(t, topologyRecovery.ID, int64(0))
+		require.Positive(t, topologyRecovery.ID)
 	})
 
 	t.Run("read recoveries", func(t *testing.T) {

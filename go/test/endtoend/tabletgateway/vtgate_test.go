@@ -149,7 +149,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	assert.Contains(t, vschemaCountMap, "Reload", "Reload count should be present in vschemacount")
 
 	object := reflect.ValueOf(vschemaCountMap["Reload"])
-	assert.Greater(t, object.NumField(), 0, "Reload count should be greater than 0")
+	assert.Positive(t, object.NumField(), "Reload count should be greater than 0")
 	assert.NotContains(t, vschemaCountMap, "WatchError", "There should not be any WatchError in VschemaCount")
 	assert.NotContains(t, vschemaCountMap, "Parsing", "There should not be any Parsing in VschemaCount")
 	assert.Contains(t, resultMap, "HealthcheckConnections", "HealthcheckConnections count should be present in variables")

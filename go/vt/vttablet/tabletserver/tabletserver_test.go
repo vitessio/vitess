@@ -2297,7 +2297,7 @@ func TestReserveBeginExecute(t *testing.T) {
 	state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, nil, nil, "set @@sql_mode = ''", nil, nil)
 	require.NoError(t, err)
 
-	assert.Greater(t, state.TransactionID, int64(0), "transactionID")
+	assert.Positive(t, state.TransactionID, "transactionID")
 	assert.Equal(t, state.TransactionID, state.ReservedID, "reservedID should equal transactionID")
 	expected := []string{
 		"begin",

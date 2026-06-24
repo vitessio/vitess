@@ -1509,7 +1509,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				retries := row.AsInt64("retries", 0)
-				assert.Greater(t, retries, int64(0))
+				assert.Positive(t, retries)
 
 				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
 				// No explicit cut-over threshold given. Expect the default 10s
@@ -1556,7 +1556,7 @@ func testScheduler(t *testing.T) {
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				retries := row.AsInt64("retries", 0)
-				assert.Greater(t, retries, int64(0))
+				assert.Positive(t, retries)
 
 				cutOverThresholdSeconds := row.AsInt64("cutover_threshold_seconds", 0)
 				// Teh default remains unchanged.

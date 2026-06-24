@@ -96,7 +96,7 @@ func TestDoDupSuppress(t *testing.T) {
 	c <- "bar"
 	wg2.Wait()
 	got := calls.Load()
-	assert.Greater(t, got, int32(0))
+	assert.Positive(t, got)
 	assert.Less(t, got, int32(n))
 }
 

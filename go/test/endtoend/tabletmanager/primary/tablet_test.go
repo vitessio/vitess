@@ -174,7 +174,7 @@ func TestPrimaryRestartSetsPTSTimestamp(t *testing.T) {
 	want := strconv.Itoa(int(tabletType))
 	assert.Equal(t, want, got)
 	assert.NotNil(t, streamHealthRes1.GetPrimaryTermStartTimestamp())
-	assert.Greater(t, streamHealthRes1.GetPrimaryTermStartTimestamp(), 0,
+	assert.Positive(t, streamHealthRes1.GetPrimaryTermStartTimestamp(),
 		"PTS on PRIMARY must be set after InitShardPrimary")
 
 	// Restart the PRIMARY vttablet and test again

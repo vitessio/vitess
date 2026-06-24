@@ -1961,14 +1961,14 @@ func TestGetConnectionLogStats(t *testing.T) {
 	conn, err := qre.getConn()
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// getStreamConn() happy path
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	conn, err = qre.getStreamConn()
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// Close the db connection to induce connection errors
 	db.Close()
@@ -1977,13 +1977,13 @@ func TestGetConnectionLogStats(t *testing.T) {
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	_, err = qre.getConn()
 	assert.Error(t, err)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 
 	// getStreamConn() error path
 	qre = newTestQueryExecutor(ctx, tsv, input, 0)
 	_, err = qre.getStreamConn()
 	assert.Error(t, err)
-	assert.True(t, qre.logStats.WaitingForConnection > 0)
+	assert.Positive(t, qre.logStats.WaitingForConnection)
 }
 
 type executorFlags int64

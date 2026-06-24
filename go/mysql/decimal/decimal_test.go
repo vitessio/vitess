@@ -572,7 +572,7 @@ func TestDecimal_QuoRem(t *testing.T) {
 		assert.Truef(t, q.Equal(expectedQ) && r.Equal(expectedR), "bad QuoRem division %s , %s , %d got %v, %v expected %s , %s", inp4.d, inp4.d2, prec, q, r, inp4.q, inp4.r)
 		assert.True(t, d.Equal(d2.mul(q).Add(r)))
 		assert.True(t, q.Equal(q.Truncate(prec)))
-		assert.Lessf(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), 0, "remainder too large: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
+		assert.Negativef(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), "remainder too large: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 		assert.GreaterOrEqualf(t, r.value.Sign()*d.value.Sign(), 0, "signum of divisor and rest do not match: d=%v, d2= %v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 	}
 }
@@ -625,7 +625,7 @@ func TestDecimal_QuoRem2(t *testing.T) {
 		assert.True(t, q.Equal(q.Truncate(prec)))
 
 		// rule 3: abs(r)<abs(d) * 10^(-prec)
-		assert.Lessf(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), 0, "remainder too large, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
+		assert.Negativef(t, r.Abs().Cmp(d2.Abs().mul(New(1, -prec))), "remainder too large, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 		// rule 4: r and d have the same sign
 		assert.GreaterOrEqualf(t, r.value.Sign()*d.value.Sign(), 0, "signum of divisor and rest do not match, d=%v, d2=%v, prec=%d, q=%v, r=%v", d, d2, prec, q, r)
 	}

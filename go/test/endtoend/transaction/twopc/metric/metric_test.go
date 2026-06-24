@@ -371,7 +371,7 @@ func getDTIDFromWarnings(ctx context.Context, t *testing.T, conn *vtgateconn.VTG
 
 	// extract transaction ID
 	indx := strings.Index(w.Msg, " ")
-	require.Greater(t, indx, 0)
+	require.Positive(t, indx)
 	return w.Msg[:indx]
 }
 

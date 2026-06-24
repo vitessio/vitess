@@ -291,7 +291,7 @@ func TestCloseWithRetryContextCancellation(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, context.Canceled, err)
 	// Should have called Close at least once but not maxFileCloseRetries times.
-	assert.Greater(t, closer.getCloseCalled(), 0)
+	assert.Positive(t, closer.getCloseCalled())
 	assert.Less(t, closer.getCloseCalled(), maxFileCloseRetries+1)
 }
 

@@ -248,7 +248,7 @@ func TestVStreamWithTablesToSkipCopyFlag(t *testing.T) {
 	require.NoError(t, err)
 	totalCount, err := strconv.Atoi(strings.TrimSpace(string(totalOut)))
 	require.NoError(t, err)
-	require.Greater(t, totalCount, 0, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
+	require.Positive(t, totalCount, "expected at least one rowstreamer 'Streaming rows for query:' log line during copy phase")
 
 	withHintCmd := fmt.Sprintf("grep -h 'Streaming rows for query:' %s | grep -c MAX_EXECUTION_TIME || true", logFiles)
 	withHintOut, err := exec.Command("bash", "-c", withHintCmd).Output()
@@ -1098,10 +1098,10 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	}()
 
 	// We should have a mix of events across the old and new shards.
-	require.Greater(t, oldShardRowEvents, 0)
-	require.Greater(t, newShardRowEvents, 0)
+	require.Positive(t, oldShardRowEvents)
+	require.Positive(t, newShardRowEvents)
 	// We should have seen a reshard journal event.
-	require.Greater(t, journalEvents, 0)
+	require.Positive(t, journalEvents)
 
 	// The number of row events streamed by the VStream API should match the number of rows inserted.
 	customerResult, err := execVtgateQuery(vtgateConn, ks, "select count(*) from customer")
@@ -1319,7 +1319,7 @@ func TestVStreamFailover(t *testing.T) {
 
 func TestVStreamStopOnReshardTrue(t *testing.T) {
 	ne := testVStreamStopOnReshardFlag(t, true, 1000)
-	require.Greater(t, ne.numJournalEvents, int64(0))
+	require.Positive(t, ne.numJournalEvents)
 	require.NotZero(t, ne.numRowEvents)
 	require.NotZero(t, ne.numDash80Events)
 	require.NotZero(t, ne.num80DashEvents)

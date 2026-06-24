@@ -1012,7 +1012,7 @@ func testWarningAndTransactionStatus(t *testing.T, conn *vtgateconn.VTGateSessio
 
 	// extract transaction ID
 	indx := strings.Index(w.Msg, " ")
-	require.Greater(t, indx, 0)
+	require.Positive(t, indx)
 	dtid := w.Msg[:indx]
 
 	qr, err = conn.Execute(context.Background(), fmt.Sprintf(`show transaction status for '%v'`, dtid), nil, false)

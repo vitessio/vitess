@@ -202,5 +202,5 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 func checkValueGreaterZero(t *testing.T, statusValues map[string]string, val string) {
 	valInMap, err := strconv.Atoi(statusValues[val])
 	require.NoError(t, err)
-	require.Greater(t, valInMap, 0)
+	require.Positive(t, valInMap)
 }

@@ -85,7 +85,7 @@ func TestGaugesFunc(t *testing.T) {
 
 	// Verify String() calls the function.
 	result := f.String()
-	require.Greater(t, callCount, 0)
+	require.Positive(t, callCount)
 	require.NotEmpty(t, result)
 
 	// Verify Help().

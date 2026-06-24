@@ -877,8 +877,8 @@ func TestSemiSyncRecoveryOrdering(t *testing.T) {
 			}
 		}
 
-		assert.Greater(c, replicaCount, 0, "should have ReplicaSemiSyncMustBeSet recoveries")
-		assert.Greater(c, primaryCount, 0, "should have PrimarySemiSyncMustBeSet recoveries")
+		assert.Positive(c, replicaCount, "should have ReplicaSemiSyncMustBeSet recoveries")
+		assert.Positive(c, primaryCount, "should have PrimarySemiSyncMustBeSet recoveries")
 		if replicaCount > 0 && primaryCount > 0 {
 			assert.Less(c, maxReplicaRecoveryID, minPrimaryRecoveryID,
 				"all ReplicaSemiSyncMustBeSet recoveries should have lower recovery_id than PrimarySemiSyncMustBeSet")

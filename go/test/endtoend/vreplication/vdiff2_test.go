@@ -204,7 +204,7 @@ func TestVDiff2(t *testing.T) {
 	require.NoError(t, err, "failed to get VDiffRowsComparedTotal stat from %s-%d tablet: %v", statsTablet.Cell, statsTablet.TabletUID, err)
 	count, err := strconv.Atoi(countStr)
 	require.NoError(t, err, "failed to convert VDiffRowsComparedTotal stat string to int: %v", err)
-	require.Greater(t, count, 0, "expected VDiffRowsComparedTotal stat to be greater than 0 but got %d", count)
+	require.Positive(t, count, "expected VDiffRowsComparedTotal stat to be greater than 0 but got %d", count)
 
 	// The VDiffs should all be cleaned up so the VDiffRowsCompared value, which
 	// is produced from controller info, should be empty. Controller cleanup on
@@ -283,7 +283,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 		stat, err := getDebugVar(t, tablet.Port, []string{"VDiffRestartedTableDiffsCount"})
 		require.NoError(t, err, "failed to get VDiffRestartedTableDiffsCount stat: %v", err)
 		customerRestarts := gjson.Parse(stat).Get("customer").Int()
-		require.Greater(t, customerRestarts, int64(0), "expected VDiffRestartedTableDiffsCount stat to be greater than 0 for the customer table, got %d", customerRestarts)
+		require.Positive(t, customerRestarts, "expected VDiffRestartedTableDiffsCount stat to be greater than 0 for the customer table, got %d", customerRestarts)
 		leadRestarts := gjson.Parse(stat).Get("lead").Int()
 		require.Equal(t, int64(0), leadRestarts, "expected VDiffRestartedTableDiffsCount stat to be 0 for the Lead table, got %d", leadRestarts)
 
@@ -371,7 +371,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 	require.NoError(t, err)
 	logcnt, err := strconv.Atoi(strings.TrimSpace(string(out)))
 	require.NoError(t, err)
-	require.Greater(t, logcnt, 0)
+	require.Positive(t, logcnt)
 }
 
 func testCLIErrors(t *testing.T, ksWorkflow, cells string) {
@@ -451,7 +451,7 @@ func testCLIFlagHandling(t *testing.T, targetKs, workflowName string, cell *Cell
 		query := sqlparser.BuildParsedQuery("select options from %s.vdiff where vdiff_uuid = %s",
 			sidecarDBIdentifier, encodeString(vduuid.String())).Query
 		tablets := vc.getVttabletsInKeyspace(t, cell, targetKs, "PRIMARY")
-		require.Greater(t, len(tablets), 0, "no primary tablets found in keyspace %s", targetKs)
+		require.Positive(t, len(tablets), "no primary tablets found in keyspace %s", targetKs)
 		tablet := maps.Values(tablets)[0]
 		qres, err := tablet.QueryTablet(query, targetKs, false)
 		require.NoError(t, err, "query %q failed: %v", query, err)

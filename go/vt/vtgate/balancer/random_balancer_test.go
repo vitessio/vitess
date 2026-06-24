@@ -139,8 +139,8 @@ func TestRandomBalancerCellFiltering(t *testing.T) {
 	}
 
 	// Should only pick from cell1 and cell2, never cell3
-	assert.Greater(t, pickCounts["cell1"], 0, "should pick from cell1")
-	assert.Greater(t, pickCounts["cell2"], 0, "should pick from cell2")
+	assert.Positive(t, pickCounts["cell1"], "should pick from cell1")
+	assert.Positive(t, pickCounts["cell2"], "should pick from cell2")
 	assert.Equal(t, 0, pickCounts["cell3"], "should never pick from cell3")
 
 	// Each filtered cell should get approximately half the picks

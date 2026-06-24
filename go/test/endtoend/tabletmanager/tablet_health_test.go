@@ -379,7 +379,7 @@ func verifyStreamHealth(t *testing.T, streamHealthResponse *querypb.StreamHealth
 	UID := streamHealthResponse.GetTabletAlias().GetUid()
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
 	replicationLagSeconds := realTimeStats.GetReplicationLagSeconds()
-	assert.Greater(t, UID, 0, "Tablet should contain uid")
+	assert.Positive(t, UID, "Tablet should contain uid")
 	if expectHealthy {
 		assert.True(t, serving, "Tablet should be in serving state")
 		// replicationLagSeconds varies till 7200 so setting safe limit

@@ -167,7 +167,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	// Confirm that the routing rules were NOT cleared
 	rr, err := vc.VtctldClient.ExecuteCommandWithOutput("GetRoutingRules")
 	require.NoError(t, err)
-	require.Greater(t, len(gjson.Get(rr, "rules").Array()), 0)
+	require.Positive(t, len(gjson.Get(rr, "rules").Array()))
 	// Manually clear the routing rules
 	err = vc.VtctldClient.ExecuteCommand("ApplyRoutingRules", "--rules", "{}")
 	require.NoError(t, err)
@@ -345,7 +345,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 	t.Run("Verify CopyState Is Optimized Afterwards", func(t *testing.T) {
 		tabletMap := vc.getVttabletsInKeyspace(t, defaultCell, defaultTargetKs, topodatapb.TabletType_PRIMARY.String())
 		require.NotNil(t, tabletMap)
-		require.Greater(t, len(tabletMap), 0)
+		require.Positive(t, len(tabletMap))
 		for _, tablet := range tabletMap {
 			verifyCopyStateIsOptimized(t, tablet)
 		}
@@ -456,13 +456,13 @@ func TestVStreamFlushBinlog(t *testing.T) {
 		require.NoError(t, err)
 		res, err := vtgateConn.ExecuteFetch(fmt.Sprintf(queryF, i, randStr), -1, false)
 		require.NoError(t, err)
-		require.Greater(t, res.RowsAffected, uint64(0))
+		require.Positive(t, res.RowsAffected)
 
 		if i%100 == 0 {
 			res, err := sourceTab.QueryTablet("show binary logs", defaultSourceKs, false)
 			require.NoError(t, err)
 			require.NotNil(t, res)
-			require.Greater(t, len(res.Rows), 0)
+			require.Positive(t, len(res.Rows))
 			lastRow := res.Rows[len(res.Rows)-1]
 			size, err := lastRow[1].ToInt64()
 			require.NoError(t, err)
