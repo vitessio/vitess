@@ -71,12 +71,12 @@ func init() {
 }
 
 func initializeInstanceDao() {
-	config.WaitForConfigurationToBeLoaded()
 	initForgetAliasesCache()
 }
 
 func initForgetAliasesCache() {
 	forgetAliasesOnce.Do(func() {
+		config.WaitForConfigurationToBeLoaded()
 		forgetAliases = cache.New(config.GetInstancePollTime()*3, time.Second)
 	})
 }
