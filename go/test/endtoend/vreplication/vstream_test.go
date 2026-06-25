@@ -1489,9 +1489,9 @@ func TestVStreamPushdownFilters(t *testing.T) {
 	defer vtgateConn.Close()
 
 	// Make sure that we get at least one paul row event in the copy phase.
-	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.customer (name) values ('PAUĹ')", ks), 1, false)
+	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("insert into `%s`.customer (name) values ('PAUĹ')", ks), 1, false)
 	require.NoError(t, err)
-	res, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select count(*) from %s.customer where name = 'pauĺ'", ks), 1, false)
+	res, err := vtgateConn.ExecuteFetch(fmt.Sprintf("select count(*) from `%s`.customer where name = 'pauĺ'", ks), 1, false)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, 1)
 	startingPauls, err := res.Rows[0][0].ToInt()
@@ -1520,7 +1520,7 @@ func TestVStreamPushdownFilters(t *testing.T) {
 				return
 			default:
 				if id%10 == 0 {
-					_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into %s.customer (name) values ('paÜl')", ks), 1, false)
+					_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("insert into `%s`.customer (name) values ('paÜl')", ks), 1, false)
 					if !assert.NoError(t, err) {
 						return
 					}
