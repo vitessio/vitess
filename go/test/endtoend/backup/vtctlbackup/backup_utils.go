@@ -77,7 +77,8 @@ var (
 	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
 	dbCredentialFile string
 	shardName        = "0"
-	commonTabletArg  = getDefaultCommonArgs()
+	commonTabletArg      = getDefaultCommonArgs()
+	backupChunkSizeBytes int64
 
 	vtInsertTest = `
 		create table vt_insert_test (
@@ -1064,23 +1065,60 @@ func verifyBackupChunking(t *testing.T, expectChunked bool) {
 			Name   string
 			Chunks []struct {
 				StorageName string
+				Offset      int64
+				Size        int64
+				Hash        string
 			}
 		}
 	}
 	require.NoError(t, json.Unmarshal(manifestData, &manifest))
 
 	totalChunks := 0
+	chunkedFileCount := 0
+	nonChunkedFileCount := 0
 	for _, fe := range manifest.FileEntries {
 		if len(fe.Chunks) > 0 {
-			t.Logf("File %s: %d chunks", fe.Name, len(fe.Chunks))
+			chunkedFileCount++
 			totalChunks += len(fe.Chunks)
+
+			// We want to make sure the chunk count matches what we are expecting in terms of the file size.
+			lastChunk := fe.Chunks[len(fe.Chunks)-1]
+			fileSize := lastChunk.Offset + lastChunk.Size
+			expectedChunks := int(fileSize / backupChunkSizeBytes)
+			if fileSize%backupChunkSizeBytes != 0 {
+				expectedChunks++
+			}
+			assert.Equal(t, expectedChunks, len(fe.Chunks), "file %s: expected %d chunks for size %d with chunk size %d", fe.Name, expectedChunks, fileSize, backupChunkSizeBytes)
+			t.Logf("File %s: size=%d, chunks=%d (expected %d)", fe.Name, fileSize, len(fe.Chunks), expectedChunks)
+
+			for _, chunk := range fe.Chunks {
+				assert.NotEmpty(t, chunk.StorageName, "chunk StorageName must not be empty for file %s", fe.Name)
+				assert.NotEmpty(t, chunk.Hash, "chunk Hash must not be empty for file %s", fe.Name)
+				assert.Contains(t, chunk.StorageName, "-", "chunk StorageName must follow fileIndex-chunkIndex format, got %s", chunk.StorageName)
+				assert.Greater(t, chunk.Size, int64(0), "chunk Size must be positive for file %s chunk %s", fe.Name, chunk.StorageName)
+			}
+		} else {
+			nonChunkedFileCount++
 		}
 	}
-	t.Logf("Total chunks in manifest: %d", totalChunks)
+	t.Logf("Total chunks: %d, chunked files: %d, non-chunked files: %d", totalChunks, chunkedFileCount, nonChunkedFileCount)
 
 	if expectChunked {
-		assert.Greater(t, totalChunks, 0, "expected at least one file to be chunked")
+		assert.Greater(t, chunkedFileCount, 0, "expected at least one file to be chunked")
+		assert.Greater(t, nonChunkedFileCount, 0, "expected at least one file to NOT be chunked (mixed scenario)")
+
+		// Verify that our small test table (well under chunk threshold) was NOT chunked.
+		foundSmallFile := false
+		for _, fe := range manifest.FileEntries {
+			if strings.Contains(fe.Name, "vt_insert_test") {
+				foundSmallFile = true
+				t.Logf("File %s: not chunked", fe.Name)
+				assert.Empty(t, fe.Chunks, "small file %s should not be chunked", fe.Name)
+			}
+		}
+		assert.True(t, foundSmallFile, "expected vt_insert_test table file in manifest")
 	} else {
+		assert.Equal(t, 0, chunkedFileCount, "expected no chunked files with threshold=0")
 		assert.Equal(t, 0, totalChunks, "expected no chunking with threshold=0")
 	}
 

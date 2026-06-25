@@ -74,6 +74,8 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 // This verifies that MySQL can start successfully and read back rows after a chunked restore.
 func TestBuiltinBackupChunked(t *testing.T) {
 	defer setDefaultCommonArgs()
+	backupChunkSizeBytes = 4194304 // 4MiB
+	defer func() { backupChunkSizeBytes = 0 }()
 	commonTabletArg = append(
 		getDefaultCommonArgs(),
 		"--builtinbackup-file-chunk-threshold", "4194304",
