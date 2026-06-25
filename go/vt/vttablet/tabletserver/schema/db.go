@@ -18,7 +18,6 @@ package schema
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -147,7 +146,7 @@ func reloadInTransaction(ctx context.Context, conn *connpool.Conn, f func() erro
 		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), schemaReloadTxCleanupTimeout)
 		defer cancel()
 		if _, err := conn.Exec(rollbackCtx, "rollback", 1, false); err != nil {
-			log.Warn("schema reload: rollback after canceled/failed reload failed; discarding connection", slog.Any("error", err))
+			log.Warningf("schema reload: rollback after canceled/failed reload failed; discarding connection: %v", err)
 			conn.Close()
 		}
 	}()
