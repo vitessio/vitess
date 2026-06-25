@@ -623,6 +623,9 @@ func (vtg *VTGate) Execute(
 }
 
 func queryIngressBytesForStatements(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, queries []string) []uint64 {
+	if len(queries) <= 1 {
+		return nil
+	}
 	ingressBytes, ok := vtgateservice.IngressBytesFromContext(ctx)
 	if !ok {
 		if mysqlCtx == nil {

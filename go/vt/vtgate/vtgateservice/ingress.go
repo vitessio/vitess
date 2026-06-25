@@ -36,8 +36,7 @@ func IngressBytesFromContext(ctx context.Context) (uint64, bool) {
 
 // ContextWithIngressBytesByQuery stores ingress bytes by query index.
 func ContextWithIngressBytesByQuery(ctx context.Context, ingressBytes []uint64) context.Context {
-	values := append([]uint64(nil), ingressBytes...)
-	return context.WithValue(ctx, ingressBytesByQueryKey{}, values)
+	return context.WithValue(ctx, ingressBytesByQueryKey{}, ingressBytes)
 }
 
 // IngressBytesForQuery returns ingress bytes for a query index.

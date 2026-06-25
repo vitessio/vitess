@@ -35,7 +35,7 @@ func TestSplitBytesByWeight(t *testing.T) {
 			name:        "empty",
 			total:       10,
 			weights:     nil,
-			allocations: []uint64{},
+			allocations: nil,
 		},
 		{
 			name:        "zero total",

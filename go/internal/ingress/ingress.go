@@ -23,8 +23,11 @@ package ingress
 // The result always sums to total; any rounding remainder is assigned to the
 // last positive-weight entry.
 func SplitBytesByWeight(total uint64, weights []int) []uint64 {
+	if len(weights) == 0 {
+		return nil
+	}
 	allocations := make([]uint64, len(weights))
-	if len(weights) == 0 || total == 0 {
+	if total == 0 {
 		return allocations
 	}
 
