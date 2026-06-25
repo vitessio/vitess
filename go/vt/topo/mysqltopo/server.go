@@ -19,7 +19,8 @@ Package mysqltopo implements topo.Server with MySQL as the backend.
 
 We expect the following behavior from the MySQL database:
 
-  - Tables are created automatically if they don't exist.
+  - The topo schema is created explicitly via CreateSchema (during cluster
+    bootstrap); opening a server with NewServer never creates tables.
   - Transactions are used to ensure consistency.
   - MySQL replication is used for change notifications (no polling).
   - Clients connect as MySQL replicas to receive real-time changes.
@@ -173,7 +174,15 @@ func initRDSTLS() error {
 	return err
 }
 
-// NewServer returns a new MySQL topo.Server.
+// NewServer returns a new MySQL topo.Server for an already-initialized topology.
+//
+// If the DSN points at a cluster member that is not itself the node hosting the
+// topology, NewServer resolves the real topo server from the member's
+// topo_config table and transparently reconnects there (see connectResolved).
+// NewServer never creates the topo schema: a node whose schema is missing is
+// reported as an error rather than silently initialized, since creating tables
+// on a mistargeted member would turn it into an empty phantom topo. Use
+// CreateSchema to initialize a topology.
 func NewServer(serverAddr, root string) (*Server, error) {
 	// Parse the server address to get MySQL DSN
 	cfg, err := mysql.ParseDSN(serverAddr)
@@ -196,24 +205,12 @@ func NewServer(serverAddr, root string) (*Server, error) {
 		}, nil
 	}
 
-	// If connecting to RDS, configure TLS
-	if isRDSHost(cfg.Addr) {
-		if err := initRDSTLS(); err != nil {
-			return nil, fmt.Errorf("failed to initialize RDS TLS: %v", err)
-		}
-		cfg.TLSConfig = "rds-topo"
-	}
-
-	// Connect to MySQL
-	db, err := sql.Open("mysql", cfg.FormatDSN())
+	// Connect, transparently redirecting to the real topo server when this DSN
+	// points at a non-topo cluster member. cfg is rewritten to the node we
+	// actually connected to.
+	db, cfg, err := connectResolved(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MySQL: %v", err)
-	}
-
-	// Test the connection
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping MySQL: %v", err)
+		return nil, err
 	}
 
 	// Create server context for graceful shutdown
@@ -222,48 +219,153 @@ func NewServer(serverAddr, root string) (*Server, error) {
 	server := &Server{
 		db:         db,
 		root:       root,
-		serverAddr: serverAddr,
+		serverAddr: cfg.FormatDSN(),
 		schemaName: cfg.DBName,
 		ctx:        ctx,
 		cancel:     cancel,
 	}
 
-	// Check if tables already exist (read-only mode check)
-	var tableExists int
-	err = db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'topo_data'", cfg.DBName).Scan(&tableExists)
+	// Require the topo schema to already exist. Unlike a bootstrap, opening a
+	// server never creates tables: doing so against a node that is not actually
+	// a topo server (for example a mistargeted member) would silently turn that
+	// node into an empty phantom topo. Initialization is the explicit job of
+	// CreateSchema.
+	exists, err := topoDataTableExists(db, cfg.DBName)
 	if err != nil {
 		cancel()
 		db.Close()
 		return nil, fmt.Errorf("failed to check for existing tables: %v", err)
 	}
-
-	// If tables don't exist, we need write permissions to create them
-	if tableExists == 0 {
-		// Check MySQL configuration requirements for binlog replication (only needed for write mode)
-		if err := checkMySQLConfiguration(db); err != nil {
-			cancel()
-			db.Close()
-			return nil, fmt.Errorf("MySQL configuration check failed: %v", err)
-		}
-
-		// Create the required tables
-		if err := server.createTablesIfNotExist(); err != nil {
-			cancel()
-			db.Close()
-			return nil, fmt.Errorf("failed to create tables: %v", err)
-		}
-
-		// Clean up expired data on startup (after tables are created)
-		server.cleanupExpiredData()
-	} else {
-		log.Info("MySQL topo tables already exist, operating in read-only mode (skipping table creation and binlog checks)")
+	if !exists {
+		cancel()
+		db.Close()
+		return nil, fmt.Errorf("MySQL topo schema not found in database %q on %s: the topology has not been initialized (tables are not auto-created; run a cluster bootstrap)", cfg.DBName, cfg.Addr)
 	}
 
+	log.Info("MySQL topo opened", slog.String("addr", cfg.Addr), slog.String("schema", cfg.DBName))
 	return server, nil
 }
 
-// createTablesIfNotExist creates the required tables if they don't exist.
-func (s *Server) createTablesIfNotExist() error {
+// connect opens and verifies a MySQL connection for the given config, applying
+// RDS TLS when the address is an RDS endpoint.
+func connect(cfg *mysql.Config) (*sql.DB, error) {
+	if isRDSHost(cfg.Addr) {
+		if err := initRDSTLS(); err != nil {
+			return nil, fmt.Errorf("failed to initialize RDS TLS: %v", err)
+		}
+		cfg.TLSConfig = "rds-topo"
+	}
+
+	db, err := sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to MySQL: %v", err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to ping MySQL: %v", err)
+	}
+	return db, nil
+}
+
+// connectResolved opens a connection to the MySQL topo described by cfg. If the
+// node it connects to records a different topo server in its topo_config table,
+// connectResolved closes that connection and reopens against the real topo
+// server, returning the connection and the (possibly rewritten) config. This
+// mirrors the "connect to any member, get routed to the authority" behavior of
+// clustered topologies like etcd, so callers never need to know which node
+// currently hosts the topology.
+//
+// Resolution is best-effort: when topo_config is absent (for example a non-strata
+// MySQL topo), the original connection is returned unchanged.
+func connectResolved(cfg *mysql.Config) (*sql.DB, *mysql.Config, error) {
+	db, err := connect(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	topoAddr, ok := lookupTopoServer(db)
+	if !ok || topoAddr == "" || topoAddr == cfg.Addr {
+		// Already the topo server, or no topo_config to resolve from.
+		return db, cfg, nil
+	}
+
+	// Redirect to the real topo server, keeping the same credentials and schema.
+	log.Info("MySQL topo: resolved topo server from topo_config",
+		slog.String("from", cfg.Addr), slog.String("to", topoAddr))
+	if err := db.Close(); err != nil {
+		log.Warn("MySQL topo: error closing pre-resolution connection", slog.Any("error", err))
+	}
+	resolved := cfg.Clone()
+	resolved.Addr = topoAddr
+	db, err = connect(resolved)
+	if err != nil {
+		return nil, nil, err
+	}
+	return db, resolved, nil
+}
+
+// lookupTopoServer reads the topo server address recorded in the topo_config
+// table (the strata bootstrap convention) of the connection's current schema.
+// The bool result is false when topo_config does not exist or has no
+// topo_server row, in which case the caller treats the connected node as the
+// topo server itself. The query is unqualified: topo_config lives in the same
+// schema as the topo tables, which is already the connection's default database,
+// so the schema name need not be interpolated into the SQL.
+func lookupTopoServer(db *sql.DB) (string, bool) {
+	var addr string
+	if err := db.QueryRow("SELECT `value` FROM topo_config WHERE `key` = 'topo_server'").Scan(&addr); err != nil {
+		return "", false
+	}
+	return addr, true
+}
+
+// topoDataTableExists reports whether the topo_data table exists in the schema.
+func topoDataTableExists(db *sql.DB, schema string) (bool, error) {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = 'topo_data'", schema).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// CreateSchema initializes the MySQL topo schema (topo_data, topo_locks,
+// topo_elections) in the database named by serverAddr's DSN. It connects
+// directly to that node without topo_config resolution and is the only entry
+// point that creates topo tables — NewServer never does — so it must be invoked
+// explicitly against the node chosen to host the topology (i.e. from a cluster
+// bootstrap). It first verifies the GTID/binlog configuration required for
+// change notifications. Table creation is idempotent.
+func CreateSchema(serverAddr string) error {
+	cfg, err := mysql.ParseDSN(serverAddr)
+	if err != nil {
+		return fmt.Errorf("failed to parse MySQL DSN: %v", err)
+	}
+	if cfg.DBName == "" {
+		cfg.DBName = DefaultSchema
+	}
+
+	db, err := connect(cfg)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Binlog replication is required for change notifications and is only
+	// meaningful on the node that hosts the topology, so it is checked here at
+	// creation time rather than on every open.
+	if err := checkMySQLConfiguration(db); err != nil {
+		return fmt.Errorf("MySQL configuration check failed: %v", err)
+	}
+	if err := createTables(db); err != nil {
+		return fmt.Errorf("failed to create tables: %v", err)
+	}
+	cleanupExpiredData(db)
+	return nil
+}
+
+// createTables creates the required topo tables if they don't already exist.
+func createTables(db *sql.DB) error {
 	queries := []string{
 		// topo_data table stores the topology data
 		`CREATE TABLE IF NOT EXISTS topo_data (
@@ -296,7 +398,7 @@ func (s *Server) createTablesIfNotExist() error {
 	}
 
 	for _, query := range queries {
-		if _, err := s.db.Exec(query); err != nil {
+		if _, err := db.Exec(query); err != nil {
 			return fmt.Errorf("failed to create table: %v", err)
 		}
 	}
@@ -416,16 +518,16 @@ func convertError(err error, path string) error {
 }
 
 // cleanupExpiredData removes expired locks and elections.
-func (s *Server) cleanupExpiredData() {
+func cleanupExpiredData(db *sql.DB) {
 	now := time.Now()
 
 	// Clean up expired locks - ignore errors if table doesn't exist yet
-	if _, err := s.db.Exec("DELETE FROM topo_locks WHERE expires_at < ?", now); err != nil {
+	if _, err := db.Exec("DELETE FROM topo_locks WHERE expires_at < ?", now); err != nil {
 		log.Info("Skipping lock cleanup (table may not exist yet)", slog.Any("error", err))
 	}
 
 	// Clean up expired elections - ignore errors if table doesn't exist yet
-	if _, err := s.db.Exec("DELETE FROM topo_elections WHERE expires_at < ?", now); err != nil {
+	if _, err := db.Exec("DELETE FROM topo_elections WHERE expires_at < ?", now); err != nil {
 		log.Info("Skipping election cleanup (table may not exist yet)", slog.Any("error", err))
 	}
 }

@@ -131,9 +131,11 @@ func createTestServer(t *testing.T, schemaName string) (*Server, string, func())
 	_, err = baseDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", schemaName))
 	require.NoError(t, err)
 
-	// Create the server with the new schema
+	// Create the server with the new schema. NewServer no longer auto-creates
+	// the topo schema, so initialize it explicitly first (as a bootstrap would).
 	cfg.DBName = schemaName
 	testAddr := cfg.FormatDSN()
+	require.NoError(t, CreateSchema(testAddr))
 	server, err := NewServer(testAddr, "/test")
 	require.NoError(t, err)
 
