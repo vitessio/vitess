@@ -981,7 +981,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 
 	// Create the Reshard workflow and wait for it to finish the copy phase.
 	reshardAction(t, "Create", wf, ks, oldShards, newShards, defaultCellName, tabletType)
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -1053,7 +1053,7 @@ func TestMultiVStreamsKeyspaceReshard(t *testing.T) {
 	// Confirm that we have shard GTIDs for the global shard and the old/original shards.
 	require.Len(t, newVGTID.GetShardGtids(), 3)
 
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	// Switch the traffic to the new shards.
 	reshardAction(t, "SwitchTraffic", wf, ks, oldShards, newShards, defaultCellName, tabletType)
@@ -1180,7 +1180,7 @@ func TestMultiVStreamsKeyspaceStopOnReshard(t *testing.T) {
 
 	// Create the Reshard workflow and wait for it to finish the copy phase.
 	reshardAction(t, "Create", wf, ks, oldShards, newShards, defaultCellName, tabletType)
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", ks, wf), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{

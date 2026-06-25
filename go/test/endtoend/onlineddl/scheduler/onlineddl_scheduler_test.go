@@ -3681,14 +3681,20 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 
 func runInTransaction(t *testing.T, ctx context.Context, tablet *cluster.Vttablet, query string, commitTransactionChan chan any, transactionErrorChan chan error) error {
 	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return err
+	}
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("begin", 0, false)
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return err
+	}
 
 	_, err = conn.ExecuteFetch(query, 10000, false)
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return err
+	}
 
 	if commitTransactionChan != nil {
 		// Wait for instruction to commit

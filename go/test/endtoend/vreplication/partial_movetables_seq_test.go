@@ -277,7 +277,7 @@ func (wf *workflow) create() {
 		panic("unknown workflow type: " + wf.typ)
 	}
 	require.NoError(t, err)
-	waitForWorkflowState(t, wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(wf.tc.vc, fmt.Sprintf("%s.%s", wf.toKeyspace, wf.name), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	ks2 := wf.tc.vc.Cells[cell].Keyspaces[wf.toKeyspace]
 	var i int64
 	for _, shardName := range wf.tc.keyspaces[wf.toKeyspace].shards {

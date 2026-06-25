@@ -76,7 +76,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	err := tstWorkflowExec(t, defaultCellName, defaultWorkflowName, defaultTargetKs, defaultTargetKs,
 		"", workflowActionCreate, "", sourceShards, targetShards, defaultWorkflowExecOptions)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, defaultTargetKs, "")
 	catchup(t, targetTab1, defaultWorkflowName, "Reshard")
 	catchup(t, targetTab2, defaultWorkflowName, "Reshard")
@@ -91,7 +91,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 	err := tstWorkflowExec(t, defaultCellName, defaultWorkflowName, defaultSourceKs, defaultTargetKs,
 		tables, workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, defaultTargetKs, tables)
 	catchup(t, targetTab1, defaultWorkflowName, "MoveTables")
 	catchup(t, targetTab2, defaultWorkflowName, "MoveTables")
@@ -391,7 +391,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 		"customer2", workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
 
-	waitForWorkflowState(t, vc, defaultTargetKs+".wf2", binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultTargetKs+".wf2", binlogdatapb.VReplicationWorkflowState_Running.String()))
 	waitForLowLag(t, defaultTargetKs, "wf2")
 
 	err = tstWorkflowExec(t, defaultCellName, "wf2", defaultSourceKs, defaultTargetKs,
@@ -428,7 +428,7 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	err = tstWorkflowExec(t, defaultCellName, "wf3", defaultTargetKs, defaultSourceKs,
 		"customer2", workflowActionCreate, "", "", "", defaultWorkflowExecOptions)
 	require.NoError(t, err)
-	waitForWorkflowState(t, vc, defaultSourceKs+".wf3", binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultSourceKs+".wf3", binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	waitForLowLag(t, defaultSourceKs, "wf3")
 	err = tstWorkflowExec(t, defaultCellName, "wf3", defaultTargetKs, defaultSourceKs,
@@ -603,7 +603,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// The purge table should get skipped/ignored
 	// If it's not then we'll get an error as the table doesn't exist in the vschema
 	createMoveTablesWorkflow(t, "customer,loadtest,vdiff_order,reftable,_vt_prg_4f9194b43b2011eb8a0104ed332e05c2_20221210194431_")
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	validateReadsRouteToSource(t, "replica,rdonly")
 	validateWritesRouteToSource(t)
 

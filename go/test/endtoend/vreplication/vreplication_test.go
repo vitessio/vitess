@@ -155,7 +155,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm workflow is still running fine
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	// Confirm new col does not exist on target
 	waitForQueryResult(t, vtgateConn, defaultTargetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
@@ -187,7 +187,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(addColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", addColDDL, err)
 	// Confirm that the worfklow stopped because of the DDL
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), "Message==Stopped at DDL "+addColDDL)
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String(), "Message==Stopped at DDL "+addColDDL))
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, defaultTargetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm that we updated the stats on the target tablet as expected.
@@ -204,7 +204,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
 	// Confirm workflow is still running fine
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	// Confirm new col was dropped on target
 	waitForQueryResult(t, vtgateConn, defaultTargetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm that we updated the stats on the target tablet as expected.
@@ -255,7 +255,7 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// because of the InnoDB History List length.
 	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, defaultSourceKs, defaultTargetKs, table, "primary", true)
 	// Wait for the copy phase to start
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", defaultTargetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", defaultTargetKs, workflow), binlogdatapb.VReplicationWorkflowState_Copying.String()))
 	// The initial copy phase should be blocking on the history list.
 	confirmWorkflowHasCopiedNoData(t, defaultTargetKs, workflow)
 	releaseInnoDBRowHistory(t, trxConn)
@@ -372,7 +372,7 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 		err = vc.VtctldClient.ExecuteCommand("LookupVindex", "--name", vindexName, "--table-keyspace", defaultSourceKs, "create", "--keyspace", defaultTargetKs,
 			"--type=consistent_lookup", "--table-owner=customer", "--table-owner-columns=name,cid", "--ignore-nulls", "--tablet-types=PRIMARY")
 		require.NoError(t, err, "error executing LookupVindex create: %v", err)
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", defaultSourceKs, vindexName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", defaultSourceKs, vindexName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 		waitForRowCount(t, vtgateConn, defaultSourceKs, vindexName, int(rows))
 		customerVSchema, err = vc.VtctldClient.ExecuteCommandWithOutput("GetVSchema", defaultTargetKs)
 		require.NoError(t, err, "error executing GetVSchema: %v", err)
@@ -1340,7 +1340,7 @@ func testMaterializeWithNonExistentTable(t *testing.T) {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--workflow=tablenogood", "--target-keyspace=source",
 			"create", "--source-keyspace=source", "--table-settings", tableSettings)
 		require.NoError(t, err, "Materialize create failed, err: %v, output: %s", err, output)
-		waitForWorkflowState(t, vc, "source.tablenogood", binlogdatapb.VReplicationWorkflowState_Stopped.String())
+		require.NoError(t, waitForWorkflowState(vc, "source.tablenogood", binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("materialize", "--workflow=tablenogood", "--target-keyspace=source", "cancel")
 		require.NoError(t, err, "Materialize cancel failed, err: %v, output: %s", err, output)
 	})
@@ -1923,7 +1923,7 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 			require.NoError(t, err, "failed to start workflow: %v", err)
 		}
 		waitForTargetToCatchup := func() {
-			waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+			require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 			waitForNoWorkflowLag(t, vc, targetKs, workflow)
 		}
 
@@ -1995,10 +1995,10 @@ func restartWorkflow(t *testing.T, ksWorkflow string) {
 	require.True(t, found, "unexpected ksWorkflow value: %s", ksWorkflow)
 	err := vc.VtctldClient.ExecuteCommand("workflow", "--keyspace", keyspace, "stop", "--workflow", workflow)
 	require.NoError(t, err, "failed to stop workflow: %v", err)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	err = vc.VtctldClient.ExecuteCommand("workflow", "--keyspace", keyspace, "start", "--workflow", workflow)
 	require.NoError(t, err, "failed to start workflow: %v", err)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 }
 
 func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {

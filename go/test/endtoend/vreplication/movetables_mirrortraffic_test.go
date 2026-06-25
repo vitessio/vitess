@@ -60,7 +60,7 @@ func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
 	mt.Create()
 	confirmNoMirrorRules(t)
 
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	// Mirror rules can be created after a MoveTables workflow is created.
 	mt.MirrorTraffic()
@@ -156,7 +156,7 @@ func TestMoveTablesMirrorTraffic_AllowReads(t *testing.T) {
 	mt := newMoveTables(vc, mtwf, workflowFlavorVtctld)
 
 	mt.Create()
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	// Before mirroring: verify tables are in the deny list on target
 	validateTableInDenyList(t, vc, defaultTargetKs+":-80", "customer", true)

@@ -310,10 +310,14 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 	ctx, cancel := context.WithTimeout(t.Context(), vtgateQueryTimeout)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	defer conn.Close()
 	_, err = conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false)
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	// randomly generate an update set to use and the value to increment it by.
 	updateSetVal := rand.IntN(fz.updateSets)
 	incrementVal := rand.Int32()
@@ -340,7 +344,7 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 	// We don't care about the following case of errors here as the transaction is aborted, which is what we ultimately wanted:
 	// target: ks.80-.primary: vttablet: rpc error: code = Aborted desc = transaction 1771351525769549550: in use: for query (CallerID: userData1) (errno 1317) (sqlstate 70100) during query: rollback
 	if finalCommand != "rollback" {
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	}
 }
 

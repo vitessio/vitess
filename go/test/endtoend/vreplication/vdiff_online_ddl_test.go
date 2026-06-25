@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -69,7 +70,7 @@ func TestOnlineDDLVDiff(t *testing.T) {
 		waitForAdditionalRows(t, keyspace, "temp", 100)
 		output = execOnlineDDL(t, "vitess --postpone-completion", keyspace, alterQuery)
 		uuid := strings.TrimSpace(output)
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, uuid), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, uuid), binlogdatapb.VReplicationWorkflowState_Running.String()))
 		waitForAdditionalRows(t, keyspace, "temp", 200)
 
 		require.NoError(t, waitForCondition("online ddl migration to be ready to complete", func() bool {
@@ -184,10 +185,14 @@ func populate(ctx context.Context, t *testing.T, done chan bool, insertTemplate,
 		default:
 			query := fmt.Sprintf(insertTemplate, id, id, id)
 			_, err := vtgateConn.ExecuteFetch(query, 1, false)
-			require.NoErrorf(t, err, "error in insert")
+			if !assert.NoErrorf(t, err, "error in insert") {
+				return
+			}
 			query = fmt.Sprintf(updateTemplate, id, id)
 			_, err = vtgateConn.ExecuteFetch(query, 1, false)
-			require.NoErrorf(t, err, "error in update")
+			if !assert.NoErrorf(t, err, "error in update") {
+				return
+			}
 			id++
 			time.Sleep(10 * time.Millisecond)
 		}

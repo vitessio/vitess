@@ -367,15 +367,20 @@ func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow stri
 // key value pairs of the form "key==value" to also wait for
 // additional stream sub-state such as "message==for vdiff".
 // Invalid checks are ignored.
-func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) {
-	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
+func waitForWorkflowState(vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) error {
+	keyspace, workflow, ok := strings.Cut(ksWorkflow, ".")
+	if !ok {
+		return fmt.Errorf("invalid keyspace.workflow value: %s", ksWorkflow)
+	}
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	defer timer.Stop()
 	log.Info(fmt.Sprintf("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState))
 	for {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
-		require.NoError(t, err, output)
+		if err != nil {
+			return fmt.Errorf("failed to get workflow state for %s: %w (output: %s)", ksWorkflow, err, output)
+		}
 		done = true
 		state := ""
 		shardStreams := gjson.Get(output, "workflows.0.shard_streams")
@@ -409,7 +414,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 		})
 		if done {
 			log.Info(fmt.Sprintf("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState))
-			return
+			return nil
 		}
 		select {
 		case <-timer.C:
@@ -417,8 +422,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			if len(fieldEqualityChecks) > 0 {
 				extraRequirements = fmt.Sprintf(" with the additional requirements of \"%v\"", fieldEqualityChecks)
 			}
-			require.FailNowf(t, "workflow state not reached",
-				"Workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
+			return fmt.Errorf("workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
 				ksWorkflow, wantState, extraRequirements, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)

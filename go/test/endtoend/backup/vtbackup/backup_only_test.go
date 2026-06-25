@@ -456,7 +456,9 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 
 			// Check if server supports disable/enable redo log.
 			qr, err := conn.ExecuteFetch("SELECT 1 FROM performance_schema.global_status WHERE variable_name = 'innodb_redo_log_enabled'", 1, false)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			// If not, there's nothing to test.
 			if len(qr.Rows) == 0 {
 				return
@@ -465,7 +467,9 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			// MY-013600
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_disabled
 			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is disabled%'", 1, false)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
 				continue
@@ -474,7 +478,9 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			// MY-013601
 			// https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html#error_er_ib_wrn_redo_enabled
 			qr, err = conn.ExecuteFetch("SELECT 1 FROM performance_schema.error_log WHERE data like '%InnoDB redo logging is enabled%'", 1, false)
-			require.NoError(t, err)
+			if !assert.NoError(t, err) {
+				return
+			}
 			if len(qr.Rows) != 1 {
 				// Keep trying, possible we haven't disabled yet.
 				continue
@@ -483,7 +489,8 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			// Success
 			return
 		case <-ctx.Done():
-			require.Fail(t, "Failed to verify disable/enable redo log.")
+			assert.Fail(t, "Failed to verify disable/enable redo log.")
+			return
 		}
 	}
 }

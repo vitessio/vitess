@@ -127,7 +127,7 @@ func TestMigrateUnsharded(t *testing.T) {
 			"--target-keyspace", defaultSourceKs, "--workflow", "e1",
 			"create", "--source-keyspace", "rating", "--mount-name", "ext1", "--all-tables", "--cells=extcell1", "--tablet-types=primary,replica")
 		require.NoError(t, err, "Migrate command failed with output: %s", output)
-		waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", defaultSourceKs+":0", 1)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "rating", 2)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "review", 3)
@@ -257,7 +257,7 @@ func TestMigrateSharded(t *testing.T) {
 		"--tablet-types=primary"); err != nil {
 		require.FailNow(t, "Migrate command failed with %+v : %s\n", err, output)
 	}
-	waitForWorkflowState(t, extVc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(extVc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	// this is because currently doVtctldclientVDiff is using the global vc :-( and we want to run a diff on the extVc cluster
 	vc = extVc
 	doVtctldclientVDiff(t, "rating", "e1", "zone1", nil)

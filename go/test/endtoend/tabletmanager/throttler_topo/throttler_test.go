@@ -211,14 +211,18 @@ func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result
 	// returned, leaving the goroutines to call require.* on a completed *testing.T.
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	if !assert.Nil(t, err) {
+		return nil
+	}
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	} else {
-		require.Error(t, err, "error should not be nil")
+		if !assert.Error(t, err, "error should not be nil") {
+			return qr
+		}
 		assert.Contains(t, err.Error(), expectError, "Unexpected error")
 	}
 	return qr
