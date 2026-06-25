@@ -23,6 +23,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VReplication](#bug-fixes-vreplication)**
+        - [Malformed `RowChange` no longer crashes `vttablet`](#vreplication-rowchange-panic-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -151,3 +154,17 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-rowchange-panic-fix"/>Malformed `RowChange` no longer crashes `vttablet`</a>
+
+A malformed `RowChange` event could crash the entire `vttablet` process during VReplication. When a `RowChange.Before` image deserialized to an empty value slice, the `applyEvents` goroutine in `vplayer` panicked with an index-out-of-range error. Because that goroutine runs outside the `defer/recover` guard on `controller.runBlp`, the panic brought down the whole `vttablet` process instead of failing only the affected workflow. On restart the same event was re-fetched and the panic recurred, leaving the workflow permanently stuck.
+
+VReplication now installs `defer/recover` on both child goroutines in `vplayer.fetchAndApply` (`applyEvents` and `vstream`). A panic is converted into a normal workflow error, surfaced on the existing error channels and logged with the workflow name and stack trace, rather than crashing the process. The bulk-delete apply path now derives its primary-key index once from the table plan instead of from each row's `Before` image, removing the data dependency that caused the out-of-range access on an empty first row.
+
+No configuration change is required.
+
+See [#20377](https://github.com/vitessio/vitess/pull/20377) for details.
