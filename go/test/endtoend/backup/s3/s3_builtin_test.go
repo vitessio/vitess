@@ -208,7 +208,7 @@ func runBackupTest(t *testing.T, cfg backupTestConfig) {
 	// (e.g., bh.AbortBackup(ctx)). t.Context() is cancelled before t.Cleanup runs,
 	// which would cause the cleanup S3 calls to fail with "context canceled".
 	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2, 13)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 
@@ -340,7 +340,7 @@ func runRestoreTest(t *testing.T, cfg restoreTestConfig) {
 	// (e.g., bh.AbortBackup(ctx)). t.Context() is cancelled before t.Cleanup runs,
 	// which would cause the cleanup S3 calls to fail with "context canceled".
 	ctx := context.Background()
-	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, 2, 2, 13)
 
 	fakeStats := backupstats.NewFakeStats()
 	logger := logutil.NewMemoryLogger()
@@ -471,4 +471,123 @@ func TestExecuteRestoreS3FailEachFileTwice(t *testing.T) {
 			SourceReadStats:       5,
 		},
 	})
+}
+
+func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
+	checkEnvForS3(t)
+	s3backupstorage.InitFlag(s3backupstorage.FakeConfig{
+		Region:    os.Getenv("AWS_REGION"),
+		Endpoint:  os.Getenv("AWS_ENDPOINT"),
+		Bucket:    os.Getenv("AWS_BUCKET"),
+		ForcePath: true,
+	})
+
+	const (
+		dirs        = 2
+		filesPerDir = 2
+		fileSize    = 256 * 1024 * 1024 // 256MiB
+		chunkSize   = 4 * 1024 * 1024   // 4MiB
+	)
+
+	oldThreshold := mysqlctl.SetBackupFileChunkThresholdForTest(chunkSize)
+	defer mysqlctl.SetBackupFileChunkThresholdForTest(oldThreshold)
+	oldSize := mysqlctl.SetBackupFileChunkSizeForTest(chunkSize)
+	defer mysqlctl.SetBackupFileChunkSizeForTest(oldSize)
+
+	ctx := context.Background()
+	backupRoot, keyspace, shard, ts := blackbox.SetupCluster(ctx, t, dirs, filesPerDir, fileSize)
+
+	be := &mysqlctl.BuiltinBackupEngine{}
+
+	oldDeadline := blackbox.SetBuiltinBackupMysqldDeadline(time.Second)
+	defer blackbox.SetBuiltinBackupMysqldDeadline(oldDeadline)
+
+	fakeStats := backupstats.NewFakeStats()
+	logger := logutil.NewMemoryLogger()
+
+	dirName := time.Now().Format(mysqlctl.BackupTimestampFormat)
+	name := t.Name() + "-" + strconv.Itoa(int(time.Now().Unix()))
+	bh, err := s3backupstorage.NewFakeS3BackupHandle(ctx, name, dirName, logger, fakeStats)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, bh.AbortBackup(ctx))
+	})
+
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logger,
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
+	}, bh)
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	ss := blackbox.GetStats(fakeStats)
+	totalFiles := dirs * filesPerDir
+	chunksPerFile := fileSize / chunkSize
+	totalChunks := totalFiles * chunksPerFile
+	t.Logf("Backup stats: %d files, %d chunks total (%d chunks per file)", totalFiles, ss.DestinationCloseStats, chunksPerFile)
+	assert.Equal(t, totalChunks, ss.DestinationCloseStats)
+	assert.Equal(t, totalChunks, ss.DestinationOpenStats)
+	assert.Equal(t, totalChunks, ss.DestinationWriteStats)
+	assert.Equal(t, totalChunks, ss.SourceCloseStats)
+	assert.Equal(t, totalChunks, ss.SourceOpenStats)
+	assert.Equal(t, totalChunks, ss.SourceReadStats)
+
+	// Restore the chunked backup
+	restoreBh, err := s3backupstorage.NewFakeS3RestoreHandle(ctx, name, logger, fakeStats)
+	require.NoError(t, err)
+
+	fakedb = fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld = mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	restoreParams := mysqlctl.RestoreParams{
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+			BinLogPath:            path.Join(backupRoot, "binlog"),
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logger,
+		Mysqld:               mysqld,
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:    time.Time{},
+		DryRun:               false,
+		Stats:                fakeStats,
+		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
+	}
+
+	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
+	assert.NoError(t, err)
+	assert.NotNil(t, bm)
 }

@@ -62,8 +62,8 @@ func TestExecuteBackup(t *testing.T) {
 	// Add some files under data directory to force backup to actually backup files.
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -208,8 +208,8 @@ func TestExecuteBackupWithSafeUpgrade(t *testing.T) {
 	// Add some files under data directory to force backup to actually backup files.
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -301,8 +301,8 @@ func TestExecuteBackupWithCanceledContext(t *testing.T) {
 	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -390,8 +390,8 @@ func TestExecuteRestoreWithTimedOutContext(t *testing.T) {
 	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
-	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd", 13))
+	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd", 13))
 	defer os.RemoveAll(backupRoot)
 
 	needIt, err := NeedInnoDBRedoLogSubdir()
@@ -589,7 +589,7 @@ func newWriteCloseFailFirstWrite(firstWriteDone bool) *rwCloseFailFirstCall {
 
 func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2, 13)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -660,7 +660,7 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 
 func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 1, 1)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 1, 1, 13)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
@@ -725,7 +725,7 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 
 func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2, 13)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
@@ -827,7 +827,7 @@ func TestExecuteRestoreFailToReadEachFileOnlyOnce(t *testing.T) {
 
 func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2, 13)
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
@@ -929,7 +929,7 @@ func TestExecuteRestoreFailToReadEachFileTwice(t *testing.T) {
 
 func TestBackupRetryPropagatesHashToManifest(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
-	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2)
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 2, 2, 13)
 
 	bufferPerFiles := make(map[string]*rwCloseFailFirstCall)
 	be := &mysqlctl.BuiltinBackupEngine{}
