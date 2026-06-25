@@ -30,11 +30,37 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 		if node.With != nil {
 			node.With.Format(buf)
 		}
+<<<<<<< HEAD
 		buf.Myprintf("select %v from ", node.SelectExprs)
 		var prefix string
 		for _, n := range node.From {
 			buf.Myprintf("%s%v", prefix, n)
 			prefix = ", "
+||||||| parent of 72a42a5c57 (Preserve query hints in field/impossible queries (#20366))
+		buf.Myprintf("select %v", node.SelectExprs)
+		if len(node.From) == 0 {
+			buf.Myprintf(" from dual")
+		} else {
+			buf.Myprintf(" from ")
+			var prefix string
+			for _, n := range node.From {
+				buf.Myprintf("%s%v", prefix, n)
+				prefix = ", "
+			}
+=======
+		// Preserve query hints (e.g. SET_VAR(sql_mode = ...)) so the field query is
+		// executed under the same session settings as the main query.
+		buf.Myprintf("select %v%v", node.Comments, node.SelectExprs)
+		if len(node.From) == 0 {
+			buf.Myprintf(" from dual")
+		} else {
+			buf.Myprintf(" from ")
+			var prefix string
+			for _, n := range node.From {
+				buf.Myprintf("%s%v", prefix, n)
+				prefix = ", "
+			}
+>>>>>>> 72a42a5c57 (Preserve query hints in field/impossible queries (#20366))
 		}
 		buf.Myprintf(" where 1 != 1")
 		if node.GroupBy != nil {
