@@ -307,10 +307,7 @@ func lockShardWithRetry(ctx context.Context, keyspace, shard, lockAction string,
 			return nil, nil, lastErr
 		}
 
-		backoffStep := attempt
-		if backoffStep > 5 {
-			backoffStep = 5
-		}
+		backoffStep := min(attempt, 5)
 		sleepFor := shardLockRetryBackoff * time.Duration(1<<backoffStep)
 		remaining := shardLockRetryTimeout - elapsed
 		if sleepFor > remaining {
