@@ -163,7 +163,8 @@ func waitForAdditionalRows(t *testing.T, keyspace, table string, count int) {
 }
 
 func getNumRows(t *testing.T, vtgateConn *mysql.Conn, keyspace, table string) int {
-	qr := execVtgateQuery(t, vtgateConn, keyspace, "SELECT COUNT(*) FROM "+table)
+	qr, err := execVtgateQuery(vtgateConn, keyspace, "SELECT COUNT(*) FROM "+table)
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	numRows, err := strconv.Atoi(qr.Rows[0][0].ToString())
 	require.NoError(t, err)

@@ -302,7 +302,8 @@ func generateMoreCustomers(t *testing.T, keyspace string, numCustomers int64) {
 	vtgateConn, closeConn := getVTGateConn()
 	defer closeConn()
 	log.Info(fmt.Sprintf("Generating more test data with an additional %d customers", numCustomers))
-	res := execVtgateQuery(t, vtgateConn, keyspace, "select max(cid) from customer")
+	res, err := execVtgateQuery(vtgateConn, keyspace, "select max(cid) from customer")
+	require.NoError(t, err)
 	startingID, _ := res.Rows[0][0].ToInt64()
 	insert := strings.Builder{}
 	insert.WriteString("insert into customer(cid, name, typ) values ")
@@ -314,5 +315,6 @@ func generateMoreCustomers(t *testing.T, keyspace string, numCustomers int64) {
 			insert.WriteString(", ")
 		}
 	}
-	execVtgateQuery(t, vtgateConn, keyspace, insert.String())
+	_, err = execVtgateQuery(vtgateConn, keyspace, insert.String())
+	require.NoError(t, err)
 }

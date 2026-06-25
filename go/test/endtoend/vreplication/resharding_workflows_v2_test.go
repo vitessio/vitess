@@ -297,7 +297,8 @@ func validateWritesRouteToSource(t *testing.T) {
 	insertQuery := "insert into customer(name, cid) values('tempCustomer2', 200)"
 	matchInsertQuery := "insert into customer(`name`, cid) values"
 	assertQueryExecutesOnTablet(t, vtgateConn, sourceTab, defaultTargetKs, insertQuery, matchInsertQuery)
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, "delete from customer where cid = 200")
+	_, err := execVtgateQuery(vtgateConn, defaultTargetKs, "delete from customer where cid = 200")
+	require.NoError(t, err)
 }
 
 func validateWritesRouteToTarget(t *testing.T) {
@@ -308,7 +309,8 @@ func validateWritesRouteToTarget(t *testing.T) {
 	assertQueryExecutesOnTablet(t, vtgateConn, targetTab2, defaultTargetKs, insertQuery, matchInsertQuery)
 	insertQuery = "insert into customer(name, cid) values('tempCustomer3', 102)"
 	assertQueryExecutesOnTablet(t, vtgateConn, targetTab1, defaultTargetKs, insertQuery, matchInsertQuery)
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, "delete from customer where cid in (101, 102)")
+	_, err := execVtgateQuery(vtgateConn, defaultTargetKs, "delete from customer where cid in (101, 102)")
+	require.NoError(t, err)
 }
 
 func revert(t *testing.T, workflowType string) {
@@ -415,7 +417,8 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 	// ensure sequence is available to vtgate
 	num := 5
 	for range num {
-		execVtgateQuery(t, vtgateConn, defaultTargetKs, "insert into customer2(name) values('a')")
+		_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "insert into customer2(name) values('a')")
+		require.NoError(t, err)
 	}
 	waitForRowCount(t, vtgateConn, defaultTargetKs, "customer2", 3+num)
 	want := fmt.Sprintf("[[INT32(%d)]]", 100+num-1)
@@ -447,10 +450,12 @@ func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
 
 	// ensure sequence is available to vtgate
 	for range num {
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "insert into customer2(name) values('a')")
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "insert into customer2(name) values('a')")
+		require.NoError(t, err)
 	}
 	waitForRowCount(t, vtgateConn, defaultSourceKs, "customer2", 3+num+num)
-	res := execVtgateQuery(t, vtgateConn, defaultSourceKs, "select max(cid) from customer2")
+	res, err := execVtgateQuery(vtgateConn, defaultSourceKs, "select max(cid) from customer2")
+	require.NoError(t, err)
 	cid, err := res.Rows[0][0].ToInt()
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, cid, 100+num+num-1)
@@ -472,10 +477,12 @@ func testReplicatingWithPKEnumCols(t *testing.T) {
 	// typ is an enum, with soho having a stored and binlogged value of 2
 	deleteQuery := "delete from customer where cid = 2 and typ = 'soho'"
 	insertQuery := "insert into customer(cid, name, typ, sport, meta) values(2, 'Paül','soho','cricket',convert(x'7b7d' using utf8mb4))"
-	execVtgateQuery(t, vtgateConn, defaultSourceKs, deleteQuery)
+	_, err := execVtgateQuery(vtgateConn, defaultSourceKs, deleteQuery)
+	require.NoError(t, err)
 	waitForNoWorkflowLag(t, vc, defaultTargetKs, defaultWorkflowName)
 	doVDiff(t, defaultKsWorkflow, "")
-	execVtgateQuery(t, vtgateConn, defaultSourceKs, insertQuery)
+	_, err = execVtgateQuery(vtgateConn, defaultSourceKs, insertQuery)
+	require.NoError(t, err)
 	waitForNoWorkflowLag(t, vc, defaultTargetKs, defaultWorkflowName)
 	doVDiff(t, defaultKsWorkflow, "")
 }
@@ -502,8 +509,11 @@ func testReshardV2Workflow(t *testing.T) {
 				return
 			default:
 				// Use a random customer type for each record.
-				_ = execVtgateQuery(t, dataGenConn, defaultTargetKs, fmt.Sprintf("insert into customer (cid, name, typ) values (%d, 'tempCustomer%d', %s)",
-					id, id, customerTypes[rand.IntN(len(customerTypes))]))
+				if _, err := execVtgateQuery(dataGenConn, defaultTargetKs, fmt.Sprintf("insert into customer (cid, name, typ) values (%d, 'tempCustomer%d', %s)",
+					id, id, customerTypes[rand.IntN(len(customerTypes))])); err != nil {
+					assert.NoError(t, err)
+					return
+				}
 			}
 			time.Sleep(1 * time.Millisecond)
 			id++
@@ -533,17 +543,20 @@ func testReshardV2Workflow(t *testing.T) {
 	// Confirm that we lost no customer related writes during the Reshard.
 	dataGenCancel()
 	dataGenWg.Wait()
-	cres := execVtgateQuery(t, dataGenConn, defaultTargetKs, "select count(*) from customer")
+	cres, err := execVtgateQuery(dataGenConn, defaultTargetKs, "select count(*) from customer")
+	require.NoError(t, err)
 	require.Len(t, cres.Rows, 1)
 	waitForNoWorkflowLag(t, vc, defaultTargetKs, "customer_name")
-	cnres := execVtgateQuery(t, dataGenConn, defaultTargetKs, "select count(*) from customer_name")
+	cnres, err := execVtgateQuery(dataGenConn, defaultTargetKs, "select count(*) from customer_name")
+	require.NoError(t, err)
 	require.Len(t, cnres.Rows, 1)
 	require.EqualValues(t, cres.Rows, cnres.Rows)
 	if debugMode {
 		// We expect the row count to differ in enterprise_customer because it is
 		// using a `where typ='enterprise'` filter. So the count is only for debug
 		// info.
-		ecres := execVtgateQuery(t, dataGenConn, defaultTargetKs, "select count(*) from enterprise_customer")
+		ecres, err := execVtgateQuery(dataGenConn, defaultTargetKs, "select count(*) from enterprise_customer")
+		require.NoError(t, err)
 		t.Logf("Done inserting customer data. Record counts in customer: %s, customer_name: %s, enterprise_customer: %s",
 			cres.Rows[0][0].ToString(), cnres.Rows[0][0].ToString(), ecres.Rows[0][0].ToString())
 	}

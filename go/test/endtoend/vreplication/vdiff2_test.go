@@ -161,13 +161,15 @@ func TestVDiff2(t *testing.T) {
 	// Insert null and empty enum values for testing vdiff comparisons for those values.
 	// If we add this to the initial data list, the counts in several other tests will need to change
 	query := `insert into customer(cid, name, typ, sport) values(1001, null, 'soho','')`
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", defaultSourceKs, sourceShards[0]), query)
+	_, err = execVtgateQuery(vtgateConn, fmt.Sprintf("%s:%s", defaultSourceKs, sourceShards[0]), query)
+	require.NoError(t, err)
 
 	generateMoreCustomers(t, defaultSourceKs, 1000)
 
 	// Create rows in the nopk table using the customer names and random ages between 20 and 100.
 	query = "insert into nopk(name, age) select name, floor(rand()*80)+20 from customer"
-	execVtgateQuery(t, vtgateConn, fmt.Sprintf("%s:%s", defaultSourceKs, sourceShards[0]), query)
+	_, err = execVtgateQuery(vtgateConn, fmt.Sprintf("%s:%s", defaultSourceKs, sourceShards[0]), query)
+	require.NoError(t, err)
 
 	// The primary tablet is only added in the first cell.
 	// We ONLY add primary tablets in this test.
@@ -179,10 +181,13 @@ func TestVDiff2(t *testing.T) {
 	// (cid) vs (cid,typ) on the source. This confirms that we are able to properly
 	// diff the table when the source and target have a different PK definition.
 	// Remove the 0 date restrictions as the customer table uses them in its DEFAULTs.
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, customerTableModifiedPK)
+	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
+	require.NoError(t, err)
+	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, customerTableModifiedPK)
+	require.NoError(t, err)
 	// Set the sql_mode back to the default.
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
+	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "set @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
+	require.NoError(t, err)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -531,7 +536,8 @@ func testResume(t *testing.T, tc *testCase, cells string) {
 
 		expectedNewRows := int64(0)
 		if tc.resumeInsert != "" {
-			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.resumeInsert)
+			res, err := execVtgateQuery(vtgateConn, tc.sourceKs, tc.resumeInsert)
+			require.NoError(t, err)
 			expectedNewRows = int64(res.RowsAffected)
 		}
 		expectedRows := rowsCompared + expectedNewRows
@@ -596,7 +602,8 @@ func testAutoRetryError(t *testing.T, tc *testCase, cells string) {
 		// compared is cumulative.
 		expectedNewRows := int64(0)
 		if tc.retryInsert != "" {
-			res := execVtgateQuery(t, vtgateConn, tc.sourceKs, tc.retryInsert)
+			res, err := execVtgateQuery(vtgateConn, tc.sourceKs, tc.retryInsert)
+			require.NoError(t, err)
 			expectedNewRows = int64(res.RowsAffected)
 		}
 		expectedRows := rowsCompared + expectedNewRows

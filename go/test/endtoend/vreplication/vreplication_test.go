@@ -311,7 +311,8 @@ func testVreplicationWorkflows(t *testing.T, limited bool, binlogRowImage string
 
 	// the Lead and Lead-1 tables tested a specific case with binary sharding keys. Drop it now so that we don't
 	// have to update the rest of the tests
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, "drop table `Lead`,`Lead-1`")
+	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "drop table `Lead`,`Lead-1`")
+	require.NoError(t, err)
 	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
@@ -839,20 +840,33 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 		defer vtgateConn.Close()
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update customer set dec80 = 0")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update customer set blb = \"new blob data\" where cid=3")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"' where id = 5")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update customer set dec80 = 0")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update customer set blb = \"new blob data\" where cid=3")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j1 = null, j2 = 'null', j3 = '\"null\"' where id = 5")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "insert into json_tbl(id, j1, j2, j3) values (7, null, 'null', '\"null\"')")
+		require.NoError(t, err)
 		// Test binlog-row-value-options=PARTIAL_JSON
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.role', 'manager')")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.color', 'red')")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.day', 'wednesday')")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_INSERT(JSON_REPLACE(j3, '$.day', 'friday'), '$.favorite_color', 'black')")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(JSON_REMOVE(JSON_REPLACE(j3, '$.day', 'monday'), '$.favorite_color'), '$.hobby', 'skiing') where id = 3")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(JSON_REMOVE(JSON_REPLACE(j3, '$.day', 'tuesday'), '$.favorite_color'), '$.hobby', 'skiing') where id = 4")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(JSON_SET(j3, '$.salary', 110), '$.role', 'IC') where id = 4")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.misc', '{\"address\":\"1012 S Park St\", \"town\":\"Hastings\", \"state\":\"MI\"}') where id = 1")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "update json_tbl set id=id+1000, j3=JSON_SET(j3, '$.day', 'friday')")
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.role', 'manager')")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.color', 'red')")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.day', 'wednesday')")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_INSERT(JSON_REPLACE(j3, '$.day', 'friday'), '$.favorite_color', 'black')")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(JSON_REMOVE(JSON_REPLACE(j3, '$.day', 'monday'), '$.favorite_color'), '$.hobby', 'skiing') where id = 3")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(JSON_REMOVE(JSON_REPLACE(j3, '$.day', 'tuesday'), '$.favorite_color'), '$.hobby', 'skiing') where id = 4")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(JSON_SET(j3, '$.salary', 110), '$.role', 'IC') where id = 4")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set j3 = JSON_SET(j3, '$.misc', '{\"address\":\"1012 S Park St\", \"town\":\"Hastings\", \"state\":\"MI\"}') where id = 1")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "update json_tbl set id=id+1000, j3=JSON_SET(j3, '$.day', 'friday')")
+		require.NoError(t, err)
 		waitForNoWorkflowLag(t, vc, defaultTargetKs, workflow)
 		dec80Replicated := false
 		for _, tablet := range []*cluster.VttabletProcess{customerTab1, customerTab2} {
@@ -870,8 +884,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// Insert multiple rows in the loadtest table and immediately delete them to confirm that bulk delete
 		// works the same way with the vplayer optimization enabled and disabled. Currently this optimization
 		// is disabled by default, but enabled in TestCellAliasVreplicationWorkflow.
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "insert into loadtest(id, name) values(10001, 'tempCustomer'), (10002, 'tempCustomer2'), (10003, 'tempCustomer3'), (10004, 'tempCustomer4')")
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "delete from loadtest where id > 10000")
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "insert into loadtest(id, name) values(10001, 'tempCustomer'), (10002, 'tempCustomer2'), (10003, 'tempCustomer3'), (10004, 'tempCustomer4')")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "delete from loadtest where id > 10000")
+		require.NoError(t, err)
 
 		// Confirm that all partial query metrics get updated when we are testing the noblob mode.
 		t.Run("validate partial query counts", func(t *testing.T) {
@@ -917,7 +933,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 				if err != nil {
 					require.FailNow(t, output)
 				}
-				execVtgateQuery(t, vtgateConn, defaultSourceKs, fmt.Sprintf("update `%s` set name='xyz'", tbl))
+				_, err = execVtgateQuery(vtgateConn, defaultSourceKs, fmt.Sprintf("update `%s` set name='xyz'", tbl))
+				require.NoError(t, err)
 			}
 		}
 		doVDiff(t, ksWorkflow, "")
@@ -948,7 +965,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		// The original unsharded customer data included an insert with the
 		// vindex column (cid) of 999999, so the backing sequence table should
 		// now have a next_id of 1000000 after SwitchTraffic.
-		res := execVtgateQuery(t, vtgateConn, defaultSourceKs, "select next_id from customer_seq where id = 0")
+		res, err := execVtgateQuery(vtgateConn, defaultSourceKs, "select next_id from customer_seq where id = 0")
+		require.NoError(t, err)
 		require.Equal(t, "1000000", res.Rows[0][0].ToString())
 
 		if withOpenTx && commit != nil {
@@ -959,7 +977,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		doVDiff(t, defaultSourceKs+".p2c_reverse", "")
 		if withOpenTx {
-			execVtgateQuery(t, vtgateConn, "", deleteOpenTxQuery)
+			_, err = execVtgateQuery(vtgateConn, "", deleteOpenTxQuery)
+			require.NoError(t, err)
 		}
 
 		ksShards := []string{defaultSourceKs + "/0", defaultTargetKs + "/-80", defaultTargetKs + "/80-"}
@@ -974,7 +993,8 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" // ID 102, hence due to reverse_bits in shard -80
 		assertQueryExecutesOnTablet(t, vtgateConn, customerTab1, defaultTargetKs, insertQuery2, matchInsertQuery2)
 
-		execVtgateQuery(t, vtgateConn, defaultTargetKs, "update customer set meta = convert(x'7b7d' using utf8mb4) where cid = 1")
+		_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "update customer set meta = convert(x'7b7d' using utf8mb4) where cid = 1")
+		require.NoError(t, err)
 		if testReverse {
 			// Reverse Replicate
 			switchReads(t, workflowType, cellNames, ksWorkflow, true)
@@ -1033,13 +1053,15 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			insertQuery2 = "insert into customer(name, cid) values('tempCustomer9', 105)" // ID 104, hence due to reverse_bits in shard 80-
 			assertQueryExecutesOnTablet(t, vtgateConn, customerTab2, defaultTargetKs, insertQuery2, matchInsertQuery2)
 
-			execVtgateQuery(t, vtgateConn, defaultTargetKs, "delete from customer where name like 'tempCustomer%'")
+			_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "delete from customer where name like 'tempCustomer%'")
+			require.NoError(t, err)
 			waitForRowCountInTablet(t, customerTab1, defaultTargetKs, "customer", 1)
 			waitForRowCountInTablet(t, customerTab2, defaultTargetKs, "customer", 2)
 			waitForRowCount(t, vtgateConn, defaultTargetKs, sqlescape.EscapeID(defaultTargetKs)+".customer", 3)
 
 			query = "insert into customer (name, cid) values('george', 5)"
-			execVtgateQuery(t, vtgateConn, defaultTargetKs, query)
+			_, err = execVtgateQuery(vtgateConn, defaultTargetKs, query)
+			require.NoError(t, err)
 			waitForRowCountInTablet(t, customerTab1, defaultTargetKs, "customer", 1)
 			waitForRowCountInTablet(t, customerTab2, defaultTargetKs, "customer", 3)
 			waitForRowCount(t, vtgateConn, defaultTargetKs, sqlescape.EscapeID(defaultTargetKs)+".customer", 4)
@@ -1067,7 +1089,8 @@ func reshardCustomer2to4Split(t *testing.T, cells []*Cell, sourceCellOrAlias str
 			600, counts, nil, nil, cells, sourceCellOrAlias, 1)
 		waitForRowCount(t, vtgateConn, defaultTargetKs, "customer", 20)
 		query := "insert into customer (name) values('yoko')"
-		execVtgateQuery(t, vtgateConn, defaultTargetKs, query)
+		_, err := execVtgateQuery(vtgateConn, defaultTargetKs, query)
+		require.NoError(t, err)
 		waitForRowCount(t, vtgateConn, defaultTargetKs, "customer", 21)
 	})
 }
@@ -1082,11 +1105,11 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 			1600, counts, dryRunResultsSwitchReadM2m3, dryRunResultsSwitchWritesM2m3, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 2)
 		query := "insert into merchant (mname, category) values('amazon', 'electronics')"
-		execVtgateQuery(t, vtgateConn, ksName, query)
+		_, err := execVtgateQuery(vtgateConn, ksName, query)
+		require.NoError(t, err)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 
 		var output string
-		var err error
 
 		for shard := range strings.SplitSeq("-80,80-", ",") {
 			output, err = vc.VtctldClient.ExecuteCommandWithOutput("GetShard", "merchant:"+shard)
@@ -1127,7 +1150,8 @@ func reshardMerchant3to1Merge(t *testing.T) {
 			2000, counts, nil, nil, nil, "", 1)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 3)
 		query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
-		execVtgateQuery(t, vtgateConn, ksName, query)
+		_, err := execVtgateQuery(vtgateConn, ksName, query)
+		require.NoError(t, err)
 		waitForRowCount(t, vtgateConn, ksName, "merchant", 4)
 	})
 }
@@ -1860,12 +1884,14 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 		numTestRows := 100
 		addTestRows := func() {
 			for i := range numTestRows {
-				execVtgateQuery(t, vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'laggingCustomer')",
+				_, err = execVtgateQuery(vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'laggingCustomer')",
 					startingTestRowID+i))
+				require.NoError(t, err)
 			}
 		}
 		deleteTestRows := func() {
-			execVtgateQuery(t, vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("delete from customer where cid >= %d", startingTestRowID))
+			_, err = execVtgateQuery(vtgateConn, sourceTablets[0].Keyspace, fmt.Sprintf("delete from customer where cid >= %d", startingTestRowID))
+			require.NoError(t, err)
 		}
 		addIndex := func() {
 			for _, targetConn := range targetConns {
@@ -1921,7 +1947,8 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 			workflow, lagDuration.String()), out)
 		require.NotContains(t, out, "cancel migration failed")
 		// Confirm that queries still work fine.
-		execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
+		_, err = execVtgateQuery(vtgateConn, sourceKs, "select * from customer limit 1")
+		require.NoError(t, err)
 		cleanupTestData()
 		// We have to restart the workflow again as the duplicate key error
 		// is a permanent/terminal one.
@@ -1954,7 +1981,8 @@ func testSwitchWritesErrorHandling(t *testing.T, sourceTablets, targetTablets []
 		require.Contains(t, out, "failed to sync up replication between the source and target")
 		require.NotContains(t, out, "cancel migration failed")
 		// Confirm that queries still work fine.
-		execVtgateQuery(t, vtgateConn, sourceKs, "select * from customer limit 1")
+		_, err = execVtgateQuery(vtgateConn, sourceKs, "select * from customer limit 1")
+		require.NoError(t, err)
 		deleteTestRows()
 		waitForTargetToCatchup()
 	})

@@ -186,7 +186,9 @@ func TestMoveTablesTZ(t *testing.T) {
 	}
 
 	// inserts to test date conversions in reverse replication
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
-	execVtgateQuery(t, vtgateConn, defaultTargetKs, "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
+	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "insert into datze(id, dt2) values (13, '2022-01-01 18:20:30')")
+	require.NoError(t, err)
+	_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "insert into datze(id, dt2) values (14, '2022-04-01 12:06:07')")
+	require.NoError(t, err)
 	doVDiff(t, ksReverseWorkflow, "")
 }

@@ -33,11 +33,16 @@ import (
 func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 	t.Run("insertInitialData", func(t *testing.T) {
 		fmt.Printf("Inserting initial data\n")
-		execVtgateQuery(t, conn, "rating:0", "insert into review(rid, pid, review) values(1, 1, 'review1');")
-		execVtgateQuery(t, conn, "rating:0", "insert into review(rid, pid, review) values(2, 1, 'review2');")
-		execVtgateQuery(t, conn, "rating:0", "insert into review(rid, pid, review) values(3, 2, 'review3');")
-		execVtgateQuery(t, conn, "rating:0", "insert into rating(gid, pid, rating) values(1, 1, 4);")
-		execVtgateQuery(t, conn, "rating:0", "insert into rating(gid, pid, rating) values(2, 2, 5);")
+		_, err := execVtgateQuery(conn, "rating:0", "insert into review(rid, pid, review) values(1, 1, 'review1');")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(conn, "rating:0", "insert into review(rid, pid, review) values(2, 1, 'review2');")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(conn, "rating:0", "insert into review(rid, pid, review) values(3, 2, 'review3');")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(conn, "rating:0", "insert into rating(gid, pid, rating) values(1, 1, 4);")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(conn, "rating:0", "insert into rating(gid, pid, rating) values(2, 2, 5);")
+		require.NoError(t, err)
 	})
 }
 
@@ -126,8 +131,10 @@ func TestMigrateUnsharded(t *testing.T) {
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", defaultSourceKs+":0", 1)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "rating", 2)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "review", 3)
-		execVtgateQuery(t, extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
-		execVtgateQuery(t, extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
+		_, err = execVtgateQuery(extVtgateConn, "rating", "insert into review(rid, pid, review) values(4, 1, 'review4');")
+		require.NoError(t, err)
+		_, err = execVtgateQuery(extVtgateConn, "rating", "insert into rating(gid, pid, rating) values(3, 1, 3);")
+		require.NoError(t, err)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "rating", 3)
 		waitForRowCountInTablet(t, targetPrimary, defaultSourceKs, "review", 4)
 		doVDiff(t, ksWorkflow, "extcell1")
@@ -153,7 +160,8 @@ func TestMigrateUnsharded(t *testing.T) {
 		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", defaultSourceKs+":0", 0)
 	})
 	t.Run("cancel migrate workflow", func(t *testing.T) {
-		execVtgateQuery(t, vtgateConn, defaultSourceKs, "drop table review,rating")
+		_, err = execVtgateQuery(vtgateConn, defaultSourceKs, "drop table review,rating")
+		require.NoError(t, err)
 		output, err = vc.VtctldClient.ExecuteCommandWithOutput("Migrate",
 			"--target-keyspace", defaultSourceKs, "--workflow", "e1", "Create", "--source-keyspace", "rating",
 			"--mount-name", "ext1", "--all-tables", "--auto-start=false", "--cells=extcell1")
