@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
@@ -529,7 +530,7 @@ func TestReloadTablesInDBRollsBackOnCanceledContext(t *testing.T) {
 		select {
 		case <-killed:
 		case <-time.After(10 * time.Second):
-			require.FailNow(t, "cancellation handler never issued `kill query`")
+			assert.Fail(t, "cancellation handler never issued `kill query`")
 		}
 	})
 
@@ -602,7 +603,7 @@ func TestReloadTablesInDBRollsBackWhenBeginIsCanceled(t *testing.T) {
 		select {
 		case <-killed:
 		case <-time.After(10 * time.Second):
-			require.FailNow(t, "cancellation handler never issued `kill query`")
+			assert.Fail(t, "cancellation handler never issued `kill query`")
 		}
 	})
 

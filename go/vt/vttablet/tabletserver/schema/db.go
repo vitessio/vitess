@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 )
 
@@ -152,7 +153,7 @@ func reloadInTransaction(ctx context.Context, conn *connpool.Conn, f func() erro
 	}()
 
 	if _, err := conn.Exec(ctx, "begin", 1, false); err != nil {
-		return err
+		return vterrors.Wrapf(err, "schema reload: begin transaction")
 	}
 
 	if err := f(); err != nil {
@@ -160,7 +161,7 @@ func reloadInTransaction(ctx context.Context, conn *connpool.Conn, f func() erro
 	}
 
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
-		return err
+		return vterrors.Wrapf(err, "schema reload: commit transaction")
 	}
 	committed = true
 	return nil
