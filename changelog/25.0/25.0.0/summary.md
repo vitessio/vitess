@@ -23,6 +23,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTTablet](#bug-fixes-vttablet)**
+        - [Canceled schema reload no longer wedges the schema engine](#vttablet-schema-reload-rollback-wedge)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -151,3 +154,15 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vttablet"/>VTTablet</a>
+
+#### <a id="vttablet-schema-reload-rollback-wedge"/>Canceled schema reload no longer wedges the schema engine</a>
+
+A schema reload on a vttablet whose context was canceled mid-transaction could leave the schema engine's connection with an open transaction still holding locks on `_vt.tables`. The reload does its work inside a transaction, but on cancellation the in-flight query was killed while the MySQL session and its open transaction stayed alive. The deferred `rollback` then reused the already-canceled context, so it short-circuited before reaching MySQL, and the connection was returned to the pool still inside that transaction. Because schema reloads hold the engine mutex for their full duration, every later reload blocked on those locks and timed out, wedging schema reloads on the primary until mysqld was restarted.
+
+The tables, views, and UDF reload paths now share a helper that performs the cleanup `rollback` on a fresh, time-bounded context derived with `context.WithoutCancel`, so the rollback reaches MySQL even when the caller's context is gone. If the rollback itself fails, the connection is closed and discarded from the pool rather than reused with unknown transaction state. Query traffic on the success path is unchanged.
+
+See [#20385](https://github.com/vitessio/vitess/pull/20385) for details.
