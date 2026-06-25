@@ -87,15 +87,13 @@ type Conn struct {
 	// fields, this is set to an empty array (but not nil).
 	fields []*querypb.Field
 
-	// streamHadResultset records whether the most recent streaming query
-	// (ExecuteStreamFetch) returned a resultset rather than a bare OK packet.
-	streamHadResultset bool
-
-	// streamStatusFlags holds the status flags of the OK packet for a streaming
-	// query that returned no resultset. For such a query the OK packet is the
-	// only place its status flags appear, and ExecuteStreamFetch consumes it, so
-	// they are captured here for the caller to inspect once streaming completes.
-	streamStatusFlags uint16
+	// streamOK holds the OK packet of a streaming query (ExecuteStreamFetch) that
+	// returned no resultset — e.g. a CALL of a procedure that performs DML. For
+	// such a query the OK packet is the only place its RowsAffected, InsertID,
+	// Info and status flags appear, and ExecuteStreamFetch consumes it, so they
+	// are captured here for the caller to inspect once streaming completes. It is
+	// nil when the query returned a resultset, exposed via StreamOKResult.
+	streamOK *sqltypes.Result
 
 	// salt is sent by the server during initial handshake to be used for authentication
 	salt []byte

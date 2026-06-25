@@ -1184,11 +1184,10 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 // tells a single-resultset call (only the trailing packet remains) from a
 // multi-resultset one.
 func (qre *QueryExecutor) streamedCallProcTrailingStatus(conn *connpool.Conn) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
-	hadResultset, statusFlags := conn.StreamResultStatus()
-	if !hadResultset {
+	if okResult := conn.StreamOKResult(); okResult != nil {
 		// No resultset was streamed, so the OK packet's status flags are all there
 		// is to inspect.
-		return &sqltypes.Result{StatusFlags: statusFlags}, false, nil
+		return &sqltypes.Result{StatusFlags: okResult.StatusFlags}, false, nil
 	}
 
 	trailing, err = conn.FetchNext(qre.ctx, mysql.FETCH_NO_ROWS, false)
