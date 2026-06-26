@@ -63,7 +63,7 @@ import (
 
 const (
 	// DefaultSchema is the default database schema name for MySQL topo
-	DefaultSchema = "vitess_topo"
+	DefaultSchema = "topo"
 
 	// DefaultLockTTL is the default TTL for locks in seconds
 	DefaultLockTTL = 30
@@ -258,11 +258,11 @@ func connect(cfg *mysql.Config) (*sql.DB, error) {
 
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to MySQL: %v", err)
+		return nil, fmt.Errorf("failed to connect to MySQL topo at %s (schema %q, user %q): %v", cfg.Addr, cfg.DBName, cfg.User, err)
 	}
 	if err := db.Ping(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to ping MySQL: %v", err)
+		return nil, fmt.Errorf("failed to ping MySQL topo at %s (schema %q, user %q): %v", cfg.Addr, cfg.DBName, cfg.User, err)
 	}
 	return db, nil
 }
