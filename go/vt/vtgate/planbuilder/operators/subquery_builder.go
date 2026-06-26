@@ -64,50 +64,102 @@ func (sqb *SubQueryBuilder) getRootOperator(op Operator, decorator func(operator
 	}
 }
 
-// handleSubquery extracts a subquery from the given expression and creates a SubQuery operator for it.
-// The outerID parameter specifies which tables are visible to the subquery from its outer context. Returns nil if expr contains no subquery.
+// handleSubquery extracts every subquery within the given predicate and creates
+// a SubQuery operator for each. When the predicate contains more than one
+// subquery (e.g. `EXISTS(s1) OR EXISTS(s2)`), the operators are linked via a
+// shared subqueryGroup so subsequent merge / settle stages can coordinate
+// substitutions and emit the predicate exactly once.
+//
+// outerID specifies which tables are visible to the subqueries from their outer
+// context. Returns true if at least one subquery was found and consumed.
 func (sqb *SubQueryBuilder) handleSubquery(
 	ctx *plancontext.PlanningContext,
 	expr sqlparser.Expr,
 	outerID semantics.TableSet,
-) *SubQuery {
-	subq, parentExpr, path := getSubQuery(expr)
-	if subq == nil {
-		return nil
+) bool {
+	found := getAllSubQueries(expr)
+	if len(found) == 0 {
+		return false
 	}
-	argName := ctx.ReservedVars.ReserveSubQuery()
-	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
-	sqb.Inner = append(sqb.Inner, sqInner)
 
-	return sqInner
+	created := make([]*SubQuery, 0, len(found))
+	for _, f := range found {
+		argName := ctx.ReservedVars.ReserveSubQuery()
+		sqInner := createSubqueryOp(ctx, f.parent, expr, f.subq, outerID, argName, f.path)
+		created = append(created, sqInner)
+	}
+
+	if len(created) > 1 {
+		// Multiple subqueries share one predicate. Tie them together with a
+		// single subqueryGroup so they read/write a shared Original and so
+		// settle / merge can identify which member owns which Subquery node
+		// by path.
+		group := &subqueryGroup{
+			Original: created[0].Original,
+			Members:  created,
+			merged:   make(map[*SubQuery]bool, len(created)),
+		}
+		for _, sq := range created {
+			sq.group = group
+			sq.Original = group.Original
+		}
+	}
+
+	sqb.Inner = append(sqb.Inner, created...)
+	return true
 }
 
-// getSubQuery searches for a subquery within the given expression and returns it along with its parent and path.
-// The parent is the immediate parent expression (e.g., ComparisonExpr for IN subqueries), or the subquery itself if at the top level.
-func getSubQuery(expr sqlparser.Expr) (subqueryExprExists *sqlparser.Subquery, parentExpr sqlparser.Expr, path sqlparser.ASTPath) {
-	flipped := false
+// foundSubquery describes a *sqlparser.Subquery node located within a predicate
+// during extraction. parent is the most-relevant enclosing expression (e.g. the
+// wrapping ExistsExpr or NotExpr-wrapping-ExistsExpr) used to determine the
+// pullout opcode; path locates the Subquery within the predicate tree.
+type foundSubquery struct {
+	subq   *sqlparser.Subquery
+	parent sqlparser.Expr
+	path   sqlparser.ASTPath
+}
+
+// getAllSubQueries walks the given expression in DFS order and returns every
+// *sqlparser.Subquery node found, paired with the parent expression that
+// determines its pullout opcode and the path locating it within the tree.
+//
+// For each found subquery, parent is the immediate parent expression in the
+// AST (e.g. *sqlparser.ExistsExpr, *sqlparser.ComparisonExpr). If the parent
+// is *sqlparser.ExistsExpr that is itself wrapped in *sqlparser.NotExpr, the
+// parent is reported as the NotExpr so callers can identify NOT EXISTS.
+//
+// Predicates like `A OR EXISTS(s1) OR EXISTS(s2)` produce two entries.
+func getAllSubQueries(expr sqlparser.Expr) []foundSubquery {
+	var results []foundSubquery
+	pendingIdx := -1
+
 	_ = sqlparser.RewriteWithPath(expr, func(cursor *sqlparser.Cursor) bool {
 		if subq, ok := cursor.Node().(*sqlparser.Subquery); ok {
-			subqueryExprExists = subq
-			path = cursor.Path()
-			parentExpr = subq
-			if expr, ok := cursor.Parent().(sqlparser.Expr); ok {
-				parentExpr = expr
+			info := foundSubquery{subq: subq, path: cursor.Path(), parent: subq}
+			if pe, ok := cursor.Parent().(sqlparser.Expr); ok {
+				info.parent = pe
 			}
-			flipped = true
+			results = append(results, info)
+			pendingIdx = len(results) - 1
+			// Don't descend into the subquery body — nested subqueries belong
+			// to a different inspection scope handled by the inner SQB.
 			return false
 		}
 		return true
 	}, func(cursor *sqlparser.Cursor) bool {
-		if !flipped {
+		if pendingIdx < 0 {
 			return true
 		}
+		// We're exiting a node above the most-recently-found subquery. If
+		// that node is wrapped in a NotExpr, promote the NotExpr to be the
+		// reported parent so the opcode dispatcher can detect NOT EXISTS.
 		if not, isNot := cursor.Parent().(*sqlparser.NotExpr); isNot {
-			parentExpr = not
+			results[pendingIdx].parent = not
 		}
-		return false
+		pendingIdx = -1
+		return true
 	})
-	return
+	return results
 }
 
 // createSubqueryOp creates a SubQuery operator by dispatching to the appropriate creation function based on the parent expression type.
@@ -212,6 +264,8 @@ func createSubquery(
 		TopLevel:         topLevel,
 		JoinColumns:      joinCols,
 		correlated:       correlated,
+		// path intentionally unset: this constructor is used by
+		// pullOutValueSubqueries (projection IsArgument), not by handleSubquery.
 	}
 }
 
@@ -250,6 +304,7 @@ func createSubqueryFromPath(
 		Original:         original,
 		ArgName:          argName,
 		originalSubquery: originalSq,
+		path:             path,
 		IsArgument:       isArg,
 		TopLevel:         topLevel,
 		JoinColumns:      joinCols,
@@ -273,8 +328,7 @@ func (sqb *SubQueryBuilder) inspectWhere(
 	}
 	for _, predicate := range sqlparser.SplitAndExpression(nil, in.Expr) {
 		sqlparser.RemoveKeyspaceInCol(predicate)
-		subq := sqb.handleSubquery(ctx, predicate, sqb.totalID)
-		if subq != nil {
+		if sqb.handleSubquery(ctx, predicate, sqb.totalID) {
 			continue
 		}
 		jpc.inspectPredicate(ctx, predicate)
@@ -309,8 +363,7 @@ func (sqb *SubQueryBuilder) inspectOnExpr(
 			}
 
 			for _, pred := range sqlparser.SplitAndExpression(nil, cond.On) {
-				subq := sqb.handleSubquery(ctx, pred, sqb.totalID)
-				if subq != nil {
+				if sqb.handleSubquery(ctx, pred, sqb.totalID) {
 					continue
 				}
 				jpc.inspectPredicate(ctx, pred)
@@ -339,24 +392,31 @@ func createComparisonSubQuery(
 	outerID semantics.TableSet,
 	name string,
 ) *SubQuery {
-	subq, outside := semantics.GetSubqueryAndOtherSide(parent)
-	if outside == nil || subq != subFromOutside {
+	var outside sqlparser.Expr
+	filterType := opcode.PulloutValue
+	switch {
+	case parent.Left == subFromOutside:
+		outside = parent.Right
+	case parent.Right == subFromOutside:
+		outside = parent.Left
+		switch parent.Operator {
+		case sqlparser.InOp:
+			filterType = opcode.PulloutIn
+		case sqlparser.NotInOp:
+			filterType = opcode.PulloutNotIn
+		}
+	default:
 		panic("uh oh")
 	}
 
-	filterType := opcode.PulloutValue
-	switch parent.Operator {
-	case sqlparser.InOp:
-		filterType = opcode.PulloutIn
-	case sqlparser.NotInOp:
-		filterType = opcode.PulloutNotIn
-	}
-
-	subquery := createSubqueryFromPath(ctx, original, subq, path, outerID, parent, name, filterType, false)
+	subquery := createSubqueryFromPath(ctx, original, subFromOutside, path, outerID, parent, name, filterType, false)
 
 	// if we are comparing with a column from the inner subquery,
 	// we add this extra predicate to check if the two sides are mergable or not
-	if ae, ok := subq.Select.GetColumns()[0].(*sqlparser.AliasedExpr); ok {
+	if _, ok := outside.(*sqlparser.Subquery); ok {
+		return subquery
+	}
+	if ae, ok := subFromOutside.Select.GetColumns()[0].(*sqlparser.AliasedExpr); ok {
 		subquery.OuterPredicate = &sqlparser.ComparisonExpr{
 			Operator: sqlparser.EqualOp,
 			Left:     outside,
