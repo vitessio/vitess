@@ -2390,37 +2390,35 @@ func TestHeartbeat(t *testing.T) {
 }
 
 func TestFullyThrottledTimeout(t *testing.T) {
-	ctx := t.Context()
 	origTimeout := fullyThrottledTimeout
 	origHeartbeatTime := HeartbeatTime
-	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
-	defer func() {
+	t.Cleanup(func() {
 		fullyThrottledTimeout = origTimeout
 		HeartbeatTime = origHeartbeatTime
-	}()
+	})
 
 	fullyThrottledTimeout = 100 * time.Millisecond
 	HeartbeatTime = fullyThrottledTimeout * 15
-	waitTimer := time.NewTimer(HeartbeatTime)
-	defer waitTimer.Stop()
+
+	startingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
+	ctx := t.Context()
+	wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
+
 	done := make(chan struct{})
 	go func() {
-		defer close(done)
-		wg, evs := startFullyThrottledStream(ctx, t, nil, "", nil) // Fully throttled
 		wg.Wait()
-		if !assert.Zero(t, len(evs)) {
-			return
-		}
+		close(done)
 	}()
 
 	select {
 	case <-done:
-		endingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
-		require.Equal(t, startingMetric+1, endingMetric)
-		return
-	case <-waitTimer.C:
+	case <-time.After(HeartbeatTime):
 		require.FailNow(t, "fully throttled stall handler did not fire as expected")
 	}
+
+	require.Empty(t, evs)
+	endingMetric := engine.errorCounts.Counts()[fullyThrottledMetricLabel]
+	require.Equal(t, startingMetric+1, endingMetric)
 }
 
 func TestVStreamerThrottledCounts(t *testing.T) {
@@ -2432,7 +2430,7 @@ func TestVStreamerThrottledCounts(t *testing.T) {
 	defer wg.Wait()
 	defer cancel()
 
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		return engine.throttledCounts.Get() > startingMetric
 	}, 30*time.Second, 50*time.Millisecond, "VStreamerThrottledCounts should increment while vstream is throttled")
 }

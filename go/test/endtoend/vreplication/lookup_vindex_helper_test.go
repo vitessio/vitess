@@ -65,7 +65,7 @@ func (lv *lookupVindex) create() {
 
 	err := vc.VtctldClient.ExecuteCommand(args...)
 	require.NoError(lv.t, err, "error executing LookupVindex create: %v", err)
-	waitForWorkflowState(lv.t, vc, fmt.Sprintf("%s.%s", lv.ownerTableKeyspace, lv.name), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(lv.t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", lv.ownerTableKeyspace, lv.name), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	lv.expectParamsAndOwner(true)
 }
 

@@ -518,13 +518,19 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	if !assert.Nil(t, err) {
+		return
+	}
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	require.Nil(t, err)
+	if !assert.Nil(t, err) {
+		return
+	}
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	require.Nil(t, err)
+	if !assert.Nil(t, err) {
+		return
+	}
 
 	ticker := time.NewTicker(sleepInterval)
 	defer ticker.Stop()

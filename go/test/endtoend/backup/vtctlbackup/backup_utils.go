@@ -885,16 +885,20 @@ func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType)
 	// for loop for 15 seconds to check if tablet type is correct
 	for range 15 {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		var tabletPB topodata.Tablet
 		err = json2.UnmarshalPB([]byte(output), &tabletPB)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		if tabletType == tabletPB.Type {
 			return
 		}
 		time.Sleep(1 * time.Second)
 	}
-	require.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
+	assert.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
 }
 
 func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
@@ -909,7 +913,9 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 
 		// now backup
 		err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 	}()
 
 	// Perform a graceful reparent operation
@@ -924,7 +930,9 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 			"--new-primary", replica1.Alias,
 			fmt.Sprintf("%s/%s", keyspaceName, shardName),
 		)
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 
 		// check that we reparented
 		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
