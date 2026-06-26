@@ -1,0 +1,14 @@
+{
+  "Tests": {
+    "dup_entry": {
+      "File": "unused.go",
+      "Packages": ["vitess.io/vitess/go/test/endtoend/pkga"],
+      "Args": ["-run", "TestFoo"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "b",
+      "Tags": [],
+      "Needs": []
+    }
+  }
+}
