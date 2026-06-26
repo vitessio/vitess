@@ -23,6 +23,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VReplication](#bug-fixes-vreplication)**
+        - [Multi-tenant `MoveTables` tenant filter escaping](#vreplication-tenant-clause-escape)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -151,3 +154,17 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-tenant-clause-escape"/>Multi-tenant `MoveTables` tenant filter escaping</a>
+
+Multi-tenant `MoveTables` builds its per-tenant filter in `getTenantClause` by interpolating the tenant id and tenant column name into SQL that is then parsed. For a `VARCHAR` tenant column, the id was wrapped in quotes without validation, and the tenant column name from the VSchema `MultiTenantSpec` was interpolated raw. A tenant id containing a single quote (for example `acme' or '1'='1`), or a column name containing a backtick, could break out of the literal or identifier and broaden the generated predicate. Because the same clause drives both the copy-phase filter and the batched `DELETE` that removes a tenant's rows on cancel, a broadened predicate could scope to — or delete — other tenants' rows.
+
+The tenant clause now encodes the `VARCHAR` id with `sqltypes.EncodeStringSQL` and the column name with `sqlescape.EscapeID`, so quotes and backticks are treated as literal text rather than altering the predicate. The `INT64` tenant-id path is unchanged, since it is already validated as an integer.
+
+Behavior changes only for tenant ids or tenant column names that contain a quote or backtick. Such values previously broke the generated filter or altered the predicate, and are now handled correctly. No configuration change is required.
+
+See [#20413](https://github.com/vitessio/vitess/pull/20413) for details.
