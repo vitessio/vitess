@@ -23,6 +23,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTAdmin](#bug-fixes-vtadmin)**
+        - [Tab navigation no longer corrupts URLs on detail pages](#vtadmin-tab-routing-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -151,3 +154,15 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vtadmin"/>VTAdmin</a>
+
+#### <a id="vtadmin-tab-routing-fix"/>Tab navigation no longer corrupts URLs on detail pages</a>
+
+VTAdmin produced corrupted URLs when navigating between tabs on detail pages. Following the react-router upgrade in v24.0.0 ([#19615](https://github.com/vitessio/vitess/pull/19615)), the tab links on the Keyspace, Tablet, Shard, Stream, and Workflow pages used paths relative to the current URL. Because these pages render under a splat (`/*`) route, react-router v7 resolved each relative link against the full matched URL rather than the route definition. As a result, clicking a tab appended its segment to the existing path instead of replacing it. For example, switching from a keyspace's Shards tab to its VSchema tab produced `/keyspace/cluster/ks/shards/vschema`, and each additional tab click compounded the problem.
+
+The tab links on all five pages now use absolute paths built from the route parameters, so each tab navigates to its intended URL regardless of which tab is currently active. No configuration change is required.
+
+See [#20410](https://github.com/vitessio/vitess/pull/20410) for details.
