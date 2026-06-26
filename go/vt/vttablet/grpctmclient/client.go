@@ -136,6 +136,7 @@ type dialer interface {
 type poolDialer interface {
 	dialPool(ctx context.Context, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, error)
 	dialDedicatedPool(ctx context.Context, dialPoolGroup DialPoolGroup, tablet *topodatapb.Tablet) (tabletmanagerservicepb.TabletManagerClient, invalidatorFunc, error)
+	closeDedicatedPool(dialPoolGroup DialPoolGroup)
 }
 
 // Client implements tmclient.TabletManagerClient.
@@ -329,6 +330,24 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 	return entry.tmc.client, invalidator, nil
 }
 
+// closeDedicatedPool closes and removes every pooled connection in the given dial-pool group,
+// leaving other groups (and the non-pooled connection cache) untouched. It lets a single feature
+// release the connections it opened without tearing down the whole client.
+func (client *grpcClient) closeDedicatedPool(dialPoolGroup DialPoolGroup) {
+	client.rpcDialPoolMapMu.Lock()
+	defer client.rpcDialPoolMapMu.Unlock()
+	poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]
+	if !ok {
+		return
+	}
+	for addr, entry := range poolEntries {
+		if entry != nil && entry.tmc != nil && entry.tmc.cc != nil {
+			entry.tmc.cc.Close()
+		}
+		delete(poolEntries, addr)
+	}
+}
+
 // Close is part of the tmclient.TabletManagerClient interface.
 func (client *grpcClient) Close() {
 	func() {
@@ -401,6 +420,16 @@ func (client *Client) PingPooled(ctx context.Context, tablet *topodatapb.Tablet)
 	}
 
 	return client.ping(ctx, c, invalidator)
+}
+
+// CloseShardHealthPool closes the pooled connections opened by PingPooled for shard-health probes,
+// without tearing down the rest of the client. The vttablet shard-health monitor calls this when it
+// stops so its pooled connection to the primary is released promptly instead of lingering until the
+// whole tmclient is closed. Not part of the tmclient.TabletManagerClient interface.
+func (client *Client) CloseShardHealthPool() {
+	if poolDialer, ok := client.dialer.(poolDialer); ok {
+		poolDialer.closeDedicatedPool(dialPoolGroupPing)
+	}
 }
 
 // ping runs the Ping RPC on an already-dialed connection, invalidating the pooled connection

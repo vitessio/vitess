@@ -607,8 +607,14 @@ func (tm *TabletManager) Stop() {
 // without synchronization and can run concurrently during lame-duck, so the field must be
 // write-once. Calling snapshot() on a stopped monitor is safe; Stop() is idempotent.
 func (tm *TabletManager) stopShardHealthMonitor() {
-	if tm.shardHealthMonitor != nil {
-		tm.shardHealthMonitor.Stop()
+	if tm.shardHealthMonitor == nil {
+		return
+	}
+	tm.shardHealthMonitor.Stop()
+	// Stop() drains the ping/refresh loops but leaves the monitor's pooled connection to the primary
+	// open in the tmclient; release it so it is not held until the whole tmclient is closed.
+	if closer, ok := tm.tmc.(interface{ CloseShardHealthPool() }); ok {
+		closer.CloseShardHealthPool()
 	}
 }
 

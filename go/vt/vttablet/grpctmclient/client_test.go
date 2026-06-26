@@ -151,6 +151,38 @@ func TestDialDedicatedPoolEvictsFailedEntry(t *testing.T) {
 	assert.NotNil(t, invalidator)
 }
 
+// TestCloseShardHealthPool verifies that CloseShardHealthPool releases the pooled ping connections
+// (so the shard-health monitor does not leak its connection to the primary on stop) while leaving
+// other dial-pool groups untouched.
+func TestCloseShardHealthPool(t *testing.T) {
+	ctx := t.Context()
+	client := NewClient()
+	pingTablet := &topodatapb.Tablet{Hostname: "localhost", PortMap: map[string]int32{"grpc": 15994}}
+	throttlerTablet := &topodatapb.Tablet{Hostname: "localhost", PortMap: map[string]int32{"grpc": 15995}}
+
+	poolDialer, ok := client.dialer.(poolDialer)
+	require.True(t, ok)
+	rpcClient, ok := client.dialer.(*grpcClient)
+	require.True(t, ok)
+
+	// Open a pooled connection in the ping group (what the monitor uses) and one in another group.
+	_, _, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupPing, pingTablet)
+	require.NoError(t, err)
+	_, _, err = poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, throttlerTablet)
+	require.NoError(t, err)
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	require.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing])
+	rpcClient.rpcDialPoolMapMu.Unlock()
+
+	client.CloseShardHealthPool()
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	defer rpcClient.rpcDialPoolMapMu.Unlock()
+	assert.Empty(t, rpcClient.rpcDialPoolMap[dialPoolGroupPing], "ping pool must be closed and emptied")
+	assert.NotEmpty(t, rpcClient.rpcDialPoolMap[dialPoolGroupThrottler], "other dial-pool groups must be left intact")
+}
+
 // TestShouldInvalidatePooledConn verifies that only connection-level failures invalidate a pooled
 // conn. A DeadlineExceeded/Canceled (a slow but alive peer, or a cancelled probe) must keep the
 // conn so a momentary stall does not close + redial the pool; an Unavailable (or any other error)

@@ -374,6 +374,9 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		// such a tablet as intentionally taken down: it skips polling it (see ReadTopologyInstance),
 		// and the quorum path must likewise NOT fail it over, even though its shard peers correctly
 		// report its vttablet unreachable. The crash case this feature targets leaves no shutdown time.
+		// The stamp is a best-effort topo write at shutdown: if that write fails the record carries no
+		// shutdown time, so a graceful shutdown can be misread as a crash here. The window is narrow and
+		// correlates with topo being unavailable — in which case VTOrc's own topo access is also degraded.
 		a.IsTabletShutdown = tablet.TabletShutdownTime != nil
 		a.CurrentTabletType = topodatapb.TabletType(m.GetInt32("current_tablet_type"))
 		a.AnalyzedKeyspace = m.GetString("keyspace")
