@@ -648,6 +648,35 @@ func allocateStatementIngressBytes(total uint64, queries []string) []uint64 {
 	return ingress.SplitBytesByWeight(total, weights)
 }
 
+func queryIngressBytesForBatch(ctx context.Context, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) []uint64 {
+	if len(sqlList) <= 1 {
+		return nil
+	}
+	ingressBytes, ok := vtgateservice.IngressBytesFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	return allocateBatchIngressBytes(ingressBytes, sqlList, bindVariablesList)
+}
+
+// allocateBatchIngressBytes splits ExecuteBatch request ingress across queries
+// by SQL text and bind-variable size.
+func allocateBatchIngressBytes(total uint64, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) []uint64 {
+	weights := make([]int, len(sqlList))
+	for i, sql := range sqlList {
+		weights[i] = len(sql)
+		if i >= len(bindVariablesList) {
+			continue
+		}
+		for _, bindVariable := range bindVariablesList[i] {
+			if bindVariable != nil {
+				weights[i] += bindVariable.SizeVT()
+			}
+		}
+	}
+	return ingress.SplitBytesByWeight(total, weights)
+}
+
 // ExecuteMulti executes multiple non-streaming queries.
 func (vtg *VTGate) ExecuteMulti(
 	ctx context.Context,
@@ -666,14 +695,15 @@ func (vtg *VTGate) ExecuteMulti(
 	var cancel context.CancelFunc
 	queryIngressBytes := queryIngressBytesForStatements(ctx, mysqlCtx, queries)
 	for index, query := range queries {
-		queryCtx := ctx
-		if queryIngressBytes != nil {
-			queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[index])
-		}
 		func() {
+			queryCtx := ctx
 			if mysqlQueryTimeout != 0 {
-				queryCtx, cancel = context.WithTimeout(queryCtx, mysqlQueryTimeout)
+				ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
 				defer cancel()
+				queryCtx = ctx
+			}
+			if queryIngressBytes != nil {
+				queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[index])
 			}
 			session, qr, err = vtg.Execute(queryCtx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false)
 		}()
@@ -699,14 +729,15 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 	}
 
 	qrl := make([]sqltypes.QueryResponse, len(sqlList))
+	queryIngressBytes := queryIngressBytesForBatch(ctx, sqlList, bindVariablesList)
 	for i, sql := range sqlList {
 		var bv map[string]*querypb.BindVariable
 		if len(bindVariablesList) != 0 {
 			bv = bindVariablesList[i]
 		}
 		queryCtx := ctx
-		if ingressBytes, ok := vtgateservice.IngressBytesForQuery(ctx, i); ok {
-			queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, ingressBytes)
+		if queryIngressBytes != nil {
+			queryCtx = vtgateservice.ContextWithIngressBytes(queryCtx, queryIngressBytes[i])
 		}
 		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(queryCtx, nil, session, sql, bv, false)
 		if qr := qrl[i].QueryResult; qr != nil {

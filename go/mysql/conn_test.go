@@ -1246,6 +1246,37 @@ func TestComStmtResetClearsPendingLongDataIngressBytes(t *testing.T) {
 	assert.Equal(t, uint64(len(executePacket)), sConn.IngressBytes())
 }
 
+// TestComStmtCloseClearsPendingLongDataIngressBytes verifies that closing a
+// prepared statement drops any long-data ingress bytes held for later execute.
+func TestComStmtCloseClearsPendingLongDataIngressBytes(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer listener.Close()
+	defer sConn.Close()
+	defer cConn.Close()
+	sConn.PrepareData = map[uint32]*PrepareData{
+		7: {
+			PrepareStmt: "insert into t(v) values (?)",
+			ParamsCount: 1,
+			BindVars:    map[string]*querypb.BindVariable{},
+		},
+	}
+
+	longDataPacket := createSendLongDataPacket(7, 0, []byte("large-bind-value"))
+	cConn.sequence = 0
+	require.NoError(t, cConn.writePacket(longDataPacket))
+	require.True(t, sConn.handleNextCommand(&ingressCaptureStmtHandler{}))
+
+	closePacket := createComStmtClosePacket(7)
+	cConn.sequence = 0
+	require.NoError(t, cConn.writePacket(closePacket))
+	require.True(t, sConn.handleNextCommand(&ingressCaptureStmtHandler{}))
+
+	_, ok := sConn.pendingLongDataIngressBytes[7]
+	assert.False(t, ok)
+	_, ok = sConn.PrepareData[7]
+	assert.False(t, ok)
+}
+
 func TestComPrepareBytesNotAttributedToExecute(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer listener.Close()
@@ -1879,6 +1910,12 @@ func createSendLongDataPacket(stmtID uint32, paramID uint16, data []byte) []byte
 
 func createComStmtResetPacket(stmtID uint32) []byte {
 	packet := []byte{0, 0, 0, 0, ComStmtReset, 0, 0, 0, 0}
+	binary.LittleEndian.PutUint32(packet[5:], stmtID)
+	return packet
+}
+
+func createComStmtClosePacket(stmtID uint32) []byte {
+	packet := []byte{0, 0, 0, 0, ComStmtClose, 0, 0, 0, 0}
 	binary.LittleEndian.PutUint32(packet[5:], stmtID)
 	return packet
 }

@@ -19,8 +19,7 @@ package vtgateservice
 import "context"
 
 type (
-	ingressBytesKey        struct{}
-	ingressBytesByQueryKey struct{}
+	ingressBytesKey struct{}
 )
 
 // ContextWithIngressBytes stores ingress bytes for the query represented by ctx.
@@ -32,18 +31,4 @@ func ContextWithIngressBytes(ctx context.Context, ingressBytes uint64) context.C
 func IngressBytesFromContext(ctx context.Context) (uint64, bool) {
 	ingressBytes, ok := ctx.Value(ingressBytesKey{}).(uint64)
 	return ingressBytes, ok
-}
-
-// ContextWithIngressBytesByQuery stores ingress bytes by query index.
-func ContextWithIngressBytesByQuery(ctx context.Context, ingressBytes []uint64) context.Context {
-	return context.WithValue(ctx, ingressBytesByQueryKey{}, ingressBytes)
-}
-
-// IngressBytesForQuery returns ingress bytes for a query index.
-func IngressBytesForQuery(ctx context.Context, index int) (uint64, bool) {
-	ingressBytes, ok := ctx.Value(ingressBytesByQueryKey{}).([]uint64)
-	if !ok || index < 0 || index >= len(ingressBytes) {
-		return 0, false
-	}
-	return ingressBytes[index], true
 }

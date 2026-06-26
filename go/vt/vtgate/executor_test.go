@@ -3070,6 +3070,23 @@ func TestQueryIngressBytesForStatementsUsesMySQLConnection(t *testing.T) {
 	assert.Equal(t, []uint64{10, 17}, ingressBytes)
 }
 
+// TestQueryIngressBytesForBatchUsesContext verifies that ExecuteBatch splits
+// request-level ingress across queries by SQL and bind-variable size.
+func TestQueryIngressBytesForBatchUsesContext(t *testing.T) {
+	ctx := vtgateservice.ContextWithIngressBytes(context.Background(), 100)
+	sqlList := []string{"select :v", "select :v"}
+	bindVariablesList := []map[string]*querypb.BindVariable{
+		{"v": sqltypes.StringBindVariable("small")},
+		{"v": sqltypes.StringBindVariable("larger bind variable payload")},
+	}
+
+	ingressBytes := queryIngressBytesForBatch(ctx, sqlList, bindVariablesList)
+
+	require.Len(t, ingressBytes, 2)
+	assert.Equal(t, uint64(100), ingressBytes[0]+ingressBytes[1])
+	assert.Greater(t, ingressBytes[1], ingressBytes[0])
+}
+
 func exec(executor *Executor, session *econtext.SafeSession, sql string) (*sqltypes.Result, error) {
 	return executorExecSession(context.Background(), executor, session, sql, nil)
 }

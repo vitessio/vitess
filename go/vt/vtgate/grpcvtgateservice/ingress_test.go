@@ -52,10 +52,8 @@ func (m *mockVTGateService) Execute(ctx context.Context, mysqlCtx vtgateservice.
 }
 
 func (m *mockVTGateService) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, sqlList []string, bindVariablesList []map[string]*querypb.BindVariable) (*vtgatepb.Session, []sqltypes.QueryResponse, error) {
-	for i := range sqlList {
-		if ingressBytes, ok := vtgateservice.IngressBytesForQuery(ctx, i); ok {
-			m.executeBatchIngressBytes = append(m.executeBatchIngressBytes, ingressBytes)
-		}
+	if ingressBytes, ok := vtgateservice.IngressBytesFromContext(ctx); ok {
+		m.executeBatchIngressBytes = append(m.executeBatchIngressBytes, ingressBytes)
 	}
 	return session, nil, nil
 }
@@ -205,9 +203,9 @@ func TestGRPCExecuteMultiSetsIngressBytes(t *testing.T) {
 	assert.Equal(t, []uint64{uint64(request.SizeVT())}, mockService.executeMultiIngressBytes)
 }
 
-// TestGRPCExecuteBatchSetsIngressBytesByQuery verifies that ExecuteBatch
-// attributes a larger share of request ingress to larger BoundQuery messages.
-func TestGRPCExecuteBatchSetsIngressBytesByQuery(t *testing.T) {
+// TestGRPCExecuteBatchSetsIngressBytes verifies that ExecuteBatch carries the
+// whole request size estimate into VTGate.
+func TestGRPCExecuteBatchSetsIngressBytes(t *testing.T) {
 	mockService := &mockVTGateService{}
 	grpcVTGate := &VTGate{server: mockService}
 	request := &vtgatepb.ExecuteBatchRequest{
@@ -221,11 +219,7 @@ func TestGRPCExecuteBatchSetsIngressBytesByQuery(t *testing.T) {
 	_, err := grpcVTGate.ExecuteBatch(context.Background(), request)
 
 	require.NoError(t, err)
-	totalIngressBytes := uint64(request.SizeVT())
-	firstWeight := uint64(request.Queries[0].SizeVT())
-	secondWeight := uint64(request.Queries[1].SizeVT())
-	firstIngressBytes := totalIngressBytes * firstWeight / (firstWeight + secondWeight)
-	assert.Equal(t, []uint64{firstIngressBytes, totalIngressBytes - firstIngressBytes}, mockService.executeBatchIngressBytes)
+	assert.Equal(t, []uint64{uint64(request.SizeVT())}, mockService.executeBatchIngressBytes)
 }
 
 // TestGRPCPrepareSetsIngressBytes verifies that Prepare stores the request

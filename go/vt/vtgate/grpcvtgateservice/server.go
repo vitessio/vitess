@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 
-	"vitess.io/vitess/go/internal/ingress"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -224,7 +223,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 		sqlQueries[queryNum] = query.Sql
 		bindVars[queryNum] = query.BindVariables
 	}
-	ctx = vtgateservice.ContextWithIngressBytesByQuery(ctx, allocateBatchIngressBytes(uint64(request.SizeVT()), request.Queries))
+	ctx = vtgateservice.ContextWithIngressBytes(ctx, uint64(request.SizeVT()))
 
 	// Handle backward compatibility.
 	session := request.Session
@@ -237,17 +236,6 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 		Session: session,
 		Error:   vterrors.ToVTRPC(err),
 	}, nil
-}
-
-// allocateBatchIngressBytes splits ExecuteBatch request ingress across queries
-// by each BoundQuery's serialized protobuf size. This keeps larger queries and
-// bind variable sets from being under-attributed in per-query log stats.
-func allocateBatchIngressBytes(total uint64, queries []*querypb.BoundQuery) []uint64 {
-	weights := make([]int, len(queries))
-	for i, query := range queries {
-		weights[i] = query.SizeVT()
-	}
-	return ingress.SplitBytesByWeight(total, weights)
 }
 
 // StreamExecute is the RPC version of vtgateservice.VTGateService method
