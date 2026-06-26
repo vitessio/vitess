@@ -983,3 +983,143 @@ func TestBackupRetryPropagatesHashToManifest(t *testing.T) {
 		assert.NotEmptyf(t, fe.Hash, "file %s should have a non-empty hash in the manifest", fe.Name)
 	}
 }
+
+func TestRestoreChunkedCorruptedBackup(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	const chunkSize = 4 * 1024 * 1024 // 4MiB (minimum allowed)
+	const fileSize = 12 * 1024 * 1024 // 12MiB → 3 chunks per file
+
+	oldThreshold := mysqlctl.SetBackupFileChunkThresholdForTest(chunkSize)
+	defer mysqlctl.SetBackupFileChunkThresholdForTest(oldThreshold)
+	oldSize := mysqlctl.SetBackupFileChunkSizeForTest(chunkSize)
+	defer mysqlctl.SetBackupFileChunkSizeForTest(oldSize)
+
+	backupRoot, keyspace, shard, ts := SetupCluster(ctx, t, 1, 1, fileSize)
+
+	be := &mysqlctl.BuiltinBackupEngine{}
+
+	oldDeadline := SetBuiltinBackupMysqldDeadline(time.Second)
+	defer SetBuiltinBackupMysqldDeadline(oldDeadline)
+
+	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
+
+	fakedb := fakesqldb.New(t)
+	defer fakedb.Close()
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+	defer mysqld.Close()
+	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+	backupResult, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
+		Logger: logutil.NewConsoleLogger(),
+		Mysqld: mysqld,
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+		},
+		Stats:                backupstats.NewFakeStats(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
+	}, bh)
+
+	require.NoError(t, err)
+	require.Equal(t, mysqlctl.BackupUsable, backupResult)
+
+	// Find a chunk file to tamper with.
+	tamperedChunkPath := path.Join(filebackupstorage.FileBackupStorageRoot, "0-1")
+	originalData, err := os.ReadFile(tamperedChunkPath)
+	require.NoError(t, err)
+	require.NotEmpty(t, originalData)
+
+	restoreParams := mysqlctl.RestoreParams{
+		Cnf: &mysqlctl.Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               path.Join(backupRoot, "datadir"),
+			BinLogPath:            path.Join(backupRoot, "binlog"),
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logutil.NewConsoleLogger(),
+		Concurrency:          1,
+		HookExtraEnv:         map[string]string{},
+		DeleteBeforeRestore:  false,
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		RestoreToPos:         replication.Position{},
+		RestoreToTimestamp:   time.Time{},
+		DryRun:               false,
+		Stats:                backupstats.NewFakeStats(),
+		MysqlShutdownTimeout: MysqlShutdownTimeout,
+	}
+
+	t.Run("TruncatedChunk", func(t *testing.T) {
+		// Truncate chunk to half its size — decompression encounters unexpected EOF.
+		truncated := originalData[:len(originalData)/2]
+		require.NoError(t, os.WriteFile(tamperedChunkPath, truncated, 0o644))
+		defer os.WriteFile(tamperedChunkPath, originalData, 0o644)
+
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+		mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+		restoreParams.Mysqld = mysqld
+		restoreParams.Stats = backupstats.NewFakeStats()
+
+		bh := filebackupstorage.NewBackupHandle(nil, "", "", true)
+		_, err := be.ExecuteRestore(ctx, restoreParams, bh)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to copy chunk 0-1: unexpected EOF")
+	})
+
+	t.Run("CorruptedData", func(t *testing.T) {
+		// Overwrite chunk with garbage at the original size — decompression fails.
+		garbage := bytes.Repeat([]byte("X"), len(originalData))
+		require.NoError(t, os.WriteFile(tamperedChunkPath, garbage, 0o644))
+		defer os.WriteFile(tamperedChunkPath, originalData, 0o644)
+
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+		mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+		restoreParams.Mysqld = mysqld
+		restoreParams.Stats = backupstats.NewFakeStats()
+
+		bh := filebackupstorage.NewBackupHandle(nil, "", "", true)
+		_, err := be.ExecuteRestore(ctx, restoreParams, bh)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "can't create decompressor: gzip: invalid header")
+	})
+
+	t.Run("MissingChunk", func(t *testing.T) {
+		// Delete the chunk file entirely.
+		require.NoError(t, os.Remove(tamperedChunkPath))
+		defer os.WriteFile(tamperedChunkPath, originalData, 0o644)
+
+		fakedb := fakesqldb.New(t)
+		defer fakedb.Close()
+		mysqld := mysqlctl.NewFakeMysqlDaemon(fakedb)
+		defer mysqld.Close()
+		mysqld.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "START REPLICA"}
+
+		restoreParams.Mysqld = mysqld
+		restoreParams.Stats = backupstats.NewFakeStats()
+
+		bh := filebackupstorage.NewBackupHandle(nil, "", "", true)
+		_, err := be.ExecuteRestore(ctx, restoreParams, bh)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "can't open source chunk 0-1 for reading")
+	})
+}
