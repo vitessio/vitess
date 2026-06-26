@@ -35,12 +35,16 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -73,6 +77,53 @@ func TestResolveWorkflowKeepData(t *testing.T) {
 		keepData, warnings := resolveWorkflowKeepData("wf1_reverse", &keepDataValue)
 		require.True(t, keepData)
 		require.Empty(t, warnings)
+	})
+}
+
+// TestGetTenantClause confirms that the tenant column name and a VARCHAR tenant
+// id are escaped before they are interpolated into the filter SQL, so that a
+// value containing a quote (or a column name containing a backtick) cannot break
+// out of the literal/identifier and inject additional predicate.
+func TestGetTenantClause(t *testing.T) {
+	parser := sqlparser.NewTestParser()
+
+	newSchema := func(colName string, colType querypb.Type) *vindexes.KeyspaceSchema {
+		return &vindexes.KeyspaceSchema{
+			MultiTenantSpec: &vschema.MultiTenantSpec{
+				TenantIdColumnName: colName,
+				TenantIdColumnType: colType,
+			},
+		}
+	}
+
+	t.Run("int64 tenant id is used verbatim", func(t *testing.T) {
+		expr, err := getTenantClause(&vtctldata.WorkflowOptions{TenantId: "123"}, newSchema("tenant_id", sqltypes.Int64), parser)
+		require.NoError(t, err)
+		require.NotNil(t, expr)
+		assert.Equal(t, "tenant_id = 123", sqlparser.String(*expr))
+	})
+
+	t.Run("varchar tenant id with a quote stays a single literal", func(t *testing.T) {
+		malicious := "acme' or '1'='1"
+		expr, err := getTenantClause(&vtctldata.WorkflowOptions{TenantId: malicious}, newSchema("tenant_id", sqltypes.VarChar), parser)
+		require.NoError(t, err)
+		require.NotNil(t, expr)
+		cmp, ok := (*expr).(*sqlparser.ComparisonExpr)
+		require.True(t, ok, "expected a single comparison, got %T: %s", *expr, sqlparser.String(*expr))
+		lit, ok := cmp.Right.(*sqlparser.Literal)
+		require.True(t, ok, "expected a string literal on the right, got %T", cmp.Right)
+		assert.Equal(t, malicious, lit.Val)
+	})
+
+	t.Run("column name with a backtick is escaped as an identifier", func(t *testing.T) {
+		expr, err := getTenantClause(&vtctldata.WorkflowOptions{TenantId: "acme"}, newSchema("tenant`id", sqltypes.VarChar), parser)
+		require.NoError(t, err)
+		require.NotNil(t, expr)
+		cmp, ok := (*expr).(*sqlparser.ComparisonExpr)
+		require.True(t, ok, "expected a single comparison, got %T: %s", *expr, sqlparser.String(*expr))
+		col, ok := cmp.Left.(*sqlparser.ColName)
+		require.True(t, ok, "expected a column on the left, got %T", cmp.Left)
+		assert.Equal(t, "tenant`id", col.Name.String())
 	})
 }
 
