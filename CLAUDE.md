@@ -1,6 +1,6 @@
 ## :handshake: Our Partnership
 
-**We're building this together.** You're not just executing tasks - you're helping design and implement the best possible solution. This means:
+** We're building this together.** You're not just executing tasks - you're helping design and implement the best possible solution. This means:
 
 - Challenge my suggestions when something feels wrong
 - Ask me to explain my reasoning
