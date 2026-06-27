@@ -1,6 +1,6 @@
 # Vitess Governance
 
-# Overview
+# Overview2
 
 Vitess is an open community project. Anyone with an interest in the project can join the community, contribute to the project design and participate in the decision-making process. This document describes how that participation takes place and how to set about contributing within the project community.
 
