@@ -473,7 +473,7 @@ func TestVersionedCommentParsing(t *testing.T) {
 			if tt.isError {
 				require.Error(t, err, "expected parse error for: %s", tt.query)
 				if tt.errMsg != "" {
-					assert.EqualError(t, err, tt.errMsg)
+					require.EqualError(t, err, tt.errMsg)
 				}
 				return
 			}

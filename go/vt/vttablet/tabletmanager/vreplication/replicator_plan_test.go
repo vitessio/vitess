@@ -825,7 +825,7 @@ func TestBuildPlayerPlanExclude(t *testing.T) {
 		workflowConfig: vttablet.DefaultVReplicationConfig,
 	}
 	plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := &TestReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{

@@ -91,7 +91,7 @@ func TestEmptyRows(outer *testing.T) {
 			}
 
 			result, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			wantResult := sqltypes.MakeTestResult(
 				sqltypes.MakeTestFields(
@@ -135,7 +135,7 @@ func TestScalarAggregateStreamExecute(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// one for the fields, and one for the actual aggregation result
 	require.Len(t, results, 2, "number of results")
 
@@ -169,7 +169,7 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 	}
 
 	qr, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "[[DECIMAL(4)]]", fmt.Sprintf("%v", qr.Rows))
 }
 

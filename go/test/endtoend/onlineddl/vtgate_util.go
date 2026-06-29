@@ -98,7 +98,7 @@ func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string,
 
 	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
 	_, err = conn.ExecuteFetch(setSession, 1000, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {
@@ -661,7 +661,7 @@ func ValidateCompletedTimestamp(t *testing.T, vtParams *mysql.ConnParams) {
 				// Also make sure the timestamp is "real", and that it is recent.
 				timestamp := row.AsString("completed_timestamp", "")
 				completedTime, err := time.Parse(sqltypes.TimestampFormat, timestamp)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Greater(t, completedTime.Unix(), testsStartupTime.Unix())
 				completedTimestampNumValidations++
 			}

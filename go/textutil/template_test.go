@@ -45,6 +45,6 @@ func TestExecuteTemplateWithError(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := ExecuteTemplate(tmpl, invalidInput)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Empty(t, result)
 }

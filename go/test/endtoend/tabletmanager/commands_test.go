@@ -86,7 +86,7 @@ func TestTabletCommands(t *testing.T) {
 	})
 	t.Run("ConcludeTransaction", func(t *testing.T) {
 		output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("DistributedTransaction", "conclude", "--dtid", "ks:0:1234")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, output, "Successfully concluded the distributed transaction")
 	})
 

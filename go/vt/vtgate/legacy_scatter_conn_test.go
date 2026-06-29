@@ -153,7 +153,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 // type, and error code.
 func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
 	t.Helper()
-	assert.EqualError(t, err, wantErr)
+	require.EqualError(t, err, wantErr)
 	assert.Equal(t, wantCode, vterrors.Code(err))
 }
 
@@ -177,7 +177,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(ctx context.Contex
 	_, err = f(ctx, sc, []string{"0"})
 	want := fmt.Sprintf("target: %v.0.replica: INVALID_ARGUMENT error", name)
 	// Verify server error string.
-	assert.EqualErrorf(t, err, want, "want %s, got %v", want, err)
+	require.EqualErrorf(t, err, want, "want %s, got %v", want, err)
 	// Ensure that we tried only once.
 	execCount := sbc.ExecCount.Load()
 	assert.Equalf(t, int64(1), execCount, "want 1, got %v", execCount)

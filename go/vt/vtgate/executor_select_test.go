@@ -1721,7 +1721,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(ctx, executor, session, "select id from `user`", nil)
 	wantErr := "TestExecutor.40-60.primary"
-	assert.ErrorContainsf(t, err, wantErr, "want error %v, got %v", wantErr, err)
+	require.ErrorContainsf(t, err, wantErr, "want error %v, got %v", wantErr, err)
 	if vterrors.Code(err) != vtrpcpb.Code_RESOURCE_EXHAUSTED {
 		assert.Failf(t, "wrong error code", "want error code Code_RESOURCE_EXHAUSTED, but got %v", vterrors.Code(err))
 	}
@@ -1782,7 +1782,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorStream(ctx, executor, "select id from `user`")
-	assert.EqualError(t, err, "target: TestExecutor.40-60.primary: RESOURCE_EXHAUSTED error")
+	require.EqualError(t, err, "target: TestExecutor.40-60.primary: RESOURCE_EXHAUSTED error")
 	assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 	assert.Nil(t, results)
 	testQueryLog(t, executor, logChan, "TestExecuteStream", "SELECT", "select id from `user`", 8)

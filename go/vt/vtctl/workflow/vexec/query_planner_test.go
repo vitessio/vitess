@@ -119,7 +119,7 @@ func TestVReplicationQueryPlanner_planSelect(t *testing.T) {
 			stmt := testutil.StatementFromString(t, tt.query)
 			qp, err := planner.PlanQuery(stmt)
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			fixedqp, ok := qp.(*FixedQueryPlan)
 			require.True(t, ok, "VReplicationQueryPlanner should always return a FixedQueryPlan from PlanQuery, got %T", qp)
 			assert.Equal(t, testutil.ParsedQueryFromString(t, tt.expectedPlannedQuery), fixedqp.ParsedQuery)

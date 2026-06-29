@@ -224,11 +224,11 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 		case <-ctx.Done():
 			{
 				resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.TestingName, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				fmt.Println("Throttler check response: ", resp)
 
 				output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				fmt.Println("Throttler status response: ", output)
 			}
 			require.Failf(t, "timeout waiting for message", "expected: %s. Last seen: %s", messageSubstring, lastMessage)
@@ -820,7 +820,7 @@ func testScheduler(t *testing.T) {
 				// the transaction's connection.
 				select {
 				case err := <-transactionErrorChan:
-					assert.ErrorContains(t, err, "broken pipe")
+					require.ErrorContains(t, err, "broken pipe")
 				case <-ctx.Done():
 					assert.Fail(t, ctx.Err().Error())
 				}
@@ -952,7 +952,7 @@ func testScheduler(t *testing.T) {
 				// the transaction's connection.
 				select {
 				case err := <-transactionErrorChan:
-					assert.ErrorContains(t, err, "broken pipe")
+					require.ErrorContains(t, err, "broken pipe")
 				case <-ctx.Done():
 					assert.Fail(t, ctx.Err().Error())
 				}
@@ -3582,10 +3582,10 @@ func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) 
 			}
 			uuid = output
 		case "":
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			uuid = output
 		default:
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, output, params.expectError)
 		}
 	}
@@ -3619,10 +3619,10 @@ func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid 
 	} else {
 		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.ApplySchemaParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext})
 		if params.expectError == "" {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			uuid = output
 		} else {
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, output, params.expectError)
 		}
 	}
@@ -3680,20 +3680,27 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 }
 
 func runInTransaction(t *testing.T, ctx context.Context, tablet *cluster.Vttablet, query string, commitTransactionChan chan any, transactionErrorChan chan error) error {
-	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
-	if !assert.NoError(t, err) {
+	// fail reports a setup error back to the caller through transactionErrorChan
+	// (the only signal the caller has, since this runs in a goroutine) instead of
+	// asserting here, where require's FailNow would not work.
+	fail := func(err error) error {
+		if transactionErrorChan != nil {
+			transactionErrorChan <- err
+		}
 		return err
+	}
+	conn, err := tablet.VttabletProcess.TabletConn(keyspaceName, true)
+	if err != nil {
+		return fail(err)
 	}
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("begin", 0, false)
-	if !assert.NoError(t, err) {
-		return err
+	if _, err := conn.ExecuteFetch("begin", 0, false); err != nil {
+		return fail(err)
 	}
 
-	_, err = conn.ExecuteFetch(query, 10000, false)
-	if !assert.NoError(t, err) {
-		return err
+	if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
+		return fail(err)
 	}
 
 	if commitTransactionChan != nil {

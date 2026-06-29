@@ -530,11 +530,11 @@ func TestPrepareStatements(t *testing.T) {
 	// Fail by providing wrong number of arguments
 	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`, utils.CompareOptions{})
 	incorrectCount := "VT03025: Incorrect arguments to EXECUTE"
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 
 	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
 	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999`)
@@ -554,7 +554,7 @@ func TestPrepareStatements(t *testing.T) {
 
 	mcmp.Exec("deallocate prepare prep_art")
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
+	require.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
 
 	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art", utils.CompareOptions{})
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")

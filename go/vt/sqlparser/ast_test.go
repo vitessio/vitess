@@ -663,7 +663,7 @@ func TestParseMultipleIgnoreEmpty(t *testing.T) {
 			if tcase.wantErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Len(t, statements, tcase.stmts)
 			}
 		})

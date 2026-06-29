@@ -266,7 +266,7 @@ func ExecTestIncrementalBackupAndRestoreToPos(t *testing.T, tcase *PITRTestCase)
 				expectFromPosition := lastBackupPos.GTIDSet
 				if tc.incrementalFrom == incrementalFromPosPosition {
 					pos, err := replication.DecodePosition(incrementalFromPos)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					expectFromPosition = pos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)
@@ -515,7 +515,7 @@ func ExecTestIncrementalBackupAndRestoreToTimestamp(t *testing.T, tcase *PITRTes
 				expectFromPosition := lastBackupPos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				if tc.incrementalFrom == incrementalFromPosPosition {
 					pos, err := replication.DecodePosition(incrementalFromPos)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					expectFromPosition = pos.GTIDSet.Union(gtidPurgedPos.GTIDSet)
 				}
 				require.Equalf(t, expectFromPosition, fromPositionIncludingPurged, "expected: %v, found: %v, gtid_purged: %v,  manifest.Position: %v", expectFromPosition, fromPositionIncludingPurged, gtidPurgedPos, manifest.Position)

@@ -3027,7 +3027,7 @@ func TestWorkflowStatus(t *testing.T) {
 		Shards:   targetShards,
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	require.NotNil(t, res.TableCopyState)
 
@@ -3068,15 +3068,15 @@ func TestDeleteShard(t *testing.T) {
 
 	// Expect to fail if recursive is false.
 	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], false, true)
-	assert.ErrorContains(t, err, "shard target_keyspace/- still has 1 tablets in cell")
+	require.ErrorContains(t, err, "shard target_keyspace/- still has 1 tablets in cell")
 
 	// Should not throw error if given keyspace or shard is invalid.
 	err = te.ws.DeleteShard(ctx, "invalid_keyspace", "-", false, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Successful shard delete.
 	err = te.ws.DeleteShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0], true, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Check if the shard was deleted.
 	_, err = te.ts.GetShard(ctx, targetKeyspace.KeyspaceName, targetKeyspace.ShardNames[0])
@@ -3128,7 +3128,7 @@ func TestCopySchemaShard(t *testing.T) {
 
 	sourceTablet := te.tablets[sourceKeyspace.KeyspaceName][100]
 	err := te.ws.CopySchemaShard(ctx, sourceTablet.Alias, []string{"/.*/"}, nil, false, targetKeyspace.KeyspaceName, "-", 1*time.Second, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, te.tmc.applySchemaRequests[200])
 }
 
@@ -3290,7 +3290,7 @@ func TestWorkflowUpdate(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for tabletID, changed := range tc.expectedResponse {
 				i := slices.IndexFunc(res.Details, func(det *vtctldatapb.WorkflowUpdateResponse_TabletInfo) bool {
 					return det.Tablet.Uid == tabletID
@@ -3372,7 +3372,7 @@ func TestFinalizeMigrateWorkflow(t *testing.T) {
 			}
 
 			_, err = te.ws.finalizeMigrateWorkflow(ctx, ts, "", tc.cancel, tc.keepData, false, false)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			ks, err := te.ts.GetSrvVSchema(ctx, "cell")
 			require.NoError(t, err)
@@ -3546,14 +3546,14 @@ func TestMaterializeAddTables(t *testing.T) {
 			}
 			err := te.ws.WorkflowAddTables(ctx, tc.request)
 			if tc.expectedErrContains == "" {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Empty(t, te.tmc.applySchemaRequests[200])
 				assert.Empty(t, te.tmc.applySchemaRequests[210])
 				assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[200])
 				assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[210])
 				return
 			}
-			assert.ErrorContains(t, err, tc.expectedErrContains)
+			require.ErrorContains(t, err, tc.expectedErrContains)
 			assert.Empty(t, te.tmc.applySchemaRequests[200])
 			assert.Empty(t, te.tmc.applySchemaRequests[210])
 			assert.Empty(t, te.tmc.updateVReplicationWorklowRequests[200])

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -240,7 +241,7 @@ func TestFlush(t *testing.T) {
 	tw := mockWriter{}
 
 	err := tl.Flush(&tw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []byte("{\"testKey\": \"testValue\"}\n"), calledValue)
 }
 

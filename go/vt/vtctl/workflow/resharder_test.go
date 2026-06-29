@@ -392,7 +392,7 @@ func TestReadRefStreams(t *testing.T) {
 				return
 			}
 
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.ErrorContains(t, err, tc.errContains)
 		})
 	}
@@ -498,7 +498,7 @@ func TestBlsIsReference(t *testing.T) {
 			if tc.wantErr {
 				assert.ErrorContains(t, err, tc.errContains)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tc.expected, result)
 			}
 		})

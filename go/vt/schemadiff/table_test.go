@@ -2374,7 +2374,7 @@ func TestCreateTableDiff(t *testing.T) {
 				return
 			}
 			if ts.diff == "" {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, alter.IsEmpty(), "expected empty diff, found changes")
 				if !alter.IsEmpty() {
 					t.Logf(" statements[0]: %v", alter.StatementString())
@@ -2388,7 +2388,7 @@ func TestCreateTableDiff(t *testing.T) {
 			}
 
 			// Expecting diff
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.NotNil(t, alter)
 			assert.False(t, alter.IsEmpty(), "expected changes, found empty diff")
 
@@ -2411,7 +2411,7 @@ func TestCreateTableDiff(t *testing.T) {
 				}
 				// validate we can parse back the statement
 				_, err := env.Parser().ParseStrictDDL(diff)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				// Validate "from/to" entities
 				eFrom, eTo := alter.Entities()
@@ -2424,7 +2424,7 @@ func TestCreateTableDiff(t *testing.T) {
 
 				{ // Validate "apply()" on "from" converges with "to"
 					applied, err := c.Apply(alter)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					require.NotNil(t, applied)
 					appliedDiff, err := eTo.Diff(applied, &hints)
 					require.NoError(t, err)
@@ -3086,10 +3086,10 @@ func TestValidate(t *testing.T) {
 				if applied != nil {
 					appliedCanonicalStatementString = applied.Create().CanonicalStatementString()
 				}
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.EqualErrorf(t, err, ts.expectErr.Error(), "applied: %v", appliedCanonicalStatementString)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, applied)
 
 				c, ok := applied.(*CreateTableEntity)

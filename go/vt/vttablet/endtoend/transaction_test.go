@@ -453,7 +453,7 @@ func TestShortTxTimeoutOltp(t *testing.T) {
 	require.NoError(t, err)
 	start := time.Now()
 	_, err = client.Execute("select sleep(10) from dual", nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 }
@@ -470,7 +470,7 @@ func TestShortTxTimeoutOlap(t *testing.T) {
 	require.NoError(t, err)
 	start := time.Now()
 	_, err = client.StreamExecute("select sleep(10) from dual", nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Less(t, time.Since(start), 5*time.Second, time.Since(start))
 	client.Rollback()
 }

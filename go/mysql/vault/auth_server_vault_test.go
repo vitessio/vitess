@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestErrorConditions(t *testing.T) {
@@ -35,7 +36,7 @@ func TestErrorConditions(t *testing.T) {
 	// Bad init ; but we should just retry
 	a, err := newAuthServerVault("https://localhost:828", 1*time.Second, "", "/path/to/secret/in/vault", 10*time.Second, "", "", "", "")
 	assert.NotNil(t, a)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test reload, should surface error, since we don't have a Vault
 	// instance on port 828

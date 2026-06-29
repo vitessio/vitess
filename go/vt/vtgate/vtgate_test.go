@@ -67,7 +67,7 @@ func TestVTGateExecute(t *testing.T) {
 		nil,
 		false,
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
@@ -193,7 +193,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	wantQr := *sandboxconn.SingleRowResult
 	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &wantQr, qr)
@@ -210,7 +210,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		false,
 	)
 	want := "VT05003: unknown database 'invalid_keyspace' in vschema"
-	assert.EqualError(t, err, want)
+	require.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
 	_, qr, err = vtg.Execute(
@@ -223,7 +223,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		nil,
 		false,
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace/shard.

@@ -223,6 +223,23 @@ type fuzzer struct {
 	clusterDisruptions []func(t *testing.T)
 	// disruptionProbability is the chance for the disruption to happen. We check this every 100 milliseconds.
 	disruptionProbability []int
+
+	// mu guards err, the first error encountered by a fuzzer thread. Threads
+	// run in goroutines, so they record errors here instead of asserting; stop(),
+	// which runs on the test goroutine, asserts on the recorded error.
+	mu  sync.Mutex
+	err error
+}
+
+// recordError stores the first error encountered by a fuzzer thread and signals
+// all threads to stop.
+func (fz *fuzzer) recordError(err error) {
+	fz.mu.Lock()
+	if fz.err == nil {
+		fz.err = err
+	}
+	fz.mu.Unlock()
+	fz.shouldStop.Store(true)
 }
 
 // newFuzzer creates a new fuzzer struct.
@@ -246,6 +263,8 @@ func (fz *fuzzer) stop() {
 	fz.shouldStop.Store(true)
 	// Wait for the fuzzer thread to stop.
 	fz.wg.Wait()
+	// Surface any error a fuzzer thread recorded while running in its goroutine.
+	require.NoError(fz.t, fz.err)
 }
 
 // start starts running the fuzzer.
@@ -277,7 +296,10 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, threadId int) {
 			return
 		}
 		// Run an atomic transaction
-		fz.generateAndExecuteTransaction(t, threadId)
+		if err := fz.generateAndExecuteTransaction(t, threadId); err != nil {
+			fz.recordError(err)
+			return
+		}
 	}
 }
 
@@ -305,18 +327,17 @@ func (fz *fuzzer) initialize(t *testing.T, conn *mysql.Conn) {
 }
 
 // generateAndExecuteTransaction generates the queries of the transaction and then executes them.
-func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
+func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) error {
 	// Create a connection to the vtgate to run transactions.
 	ctx, cancel := context.WithTimeout(t.Context(), vtgateQueryTimeout)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if !assert.NoError(t, err) {
-		return
+	if err != nil {
+		return err
 	}
 	defer conn.Close()
-	_, err = conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false)
-	if !assert.NoError(t, err) {
-		return
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@query_timeout = %d", vtgateQueryTimeout.Milliseconds()), 0, false); err != nil {
+		return err
 	}
 	// randomly generate an update set to use and the value to increment it by.
 	updateSetVal := rand.IntN(fz.updateSets)
@@ -346,6 +367,7 @@ func (fz *fuzzer) generateAndExecuteTransaction(t *testing.T, threadId int) {
 	if finalCommand != "rollback" {
 		assert.NoError(t, err)
 	}
+	return nil
 }
 
 func getUpdateQuery(incrementVal int32, id int) string {
@@ -563,7 +585,7 @@ func moveTablesFuzzer(t *testing.T) {
 	mtw.WaitForVreplCatchup(1 * time.Minute)
 	// SwitchTraffic
 	output, err = mtw.SwitchReadsAndWrites()
-	assert.NoError(t, err, output)
+	require.NoError(t, err, output)
 	output, err = mtw.Complete()
 	assert.NoError(t, err, output)
 }

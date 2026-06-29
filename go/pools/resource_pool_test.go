@@ -285,9 +285,9 @@ func TestShrinking(t *testing.T) {
 	<-done
 
 	err = p.SetCapacity(-1)
-	assert.Error(t, err, "Expecting error")
+	require.Error(t, err, "Expecting error")
 	err = p.SetCapacity(255555)
-	assert.Error(t, err, "Expecting error")
+	require.Error(t, err, "Expecting error")
 
 	assert.EqualValues(t, 4, p.Capacity())
 	assert.EqualValues(t, 4, p.Available())
@@ -533,7 +533,7 @@ func TestCreateFail(t *testing.T) {
 	defer p.Close()
 
 	_, err := p.Get(ctx)
-	assert.EqualError(t, err, "Failed", "Expecting Failed, received %v", err)
+	require.EqualError(t, err, "Failed", "Expecting Failed, received %v", err)
 
 	stats := p.StatsJSON()
 	expected := `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 0}`
@@ -592,7 +592,7 @@ func TestTimeout(t *testing.T) {
 	newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 	_, err = p.Get(newctx)
 	cancel()
-	assert.EqualError(t, err, "resource pool timed out")
+	require.EqualError(t, err, "resource pool timed out")
 
 	// put the connection take was taken initially.
 	p.Put(r)

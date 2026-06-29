@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -49,7 +50,7 @@ func TestDisabledThrottler(t *testing.T) {
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
-	assert.NoError(t, throttler.Open())
+	require.NoError(t, throttler.Open())
 	assert.False(t, throttler.Throttle(0, "some-workload"))
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
@@ -136,7 +137,7 @@ func TestEnabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 
-	assert.NoError(t, throttlerImpl.Open())
+	require.NoError(t, throttlerImpl.Open())
 	throttlerStateImpl, ok := throttlerImpl.state.(*txThrottlerStateImpl)
 	assert.True(t, ok)
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)

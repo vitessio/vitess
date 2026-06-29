@@ -166,7 +166,7 @@ func TestCFCComputeKsidNoHash(t *testing.T) {
 	cfc := makeCFC(t, nil)
 	id := []byte{3, 6, 20, 7, 60, 1}
 	ksid, err := cfc.computeKsid(id, true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, id, ksid)
 }
 
@@ -335,15 +335,15 @@ func TestCFCVerifyNoHash(t *testing.T) {
 	cfc := makeCFC(t, nil)
 	id := []byte{3, 10, 7, 200}
 	out, err := cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(id))}, [][]byte{id})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []bool{true}, out)
 
 	out, err = cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foobar")}, [][]byte{id})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []bool{false}, out)
 	pcfc := cfc.PrefixVindex()
 	out, err = pcfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foobar")}, [][]byte{id})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []bool{false}, out)
 }
 
@@ -353,29 +353,29 @@ func TestCFCVerifyWithHash(t *testing.T) {
 		{1, 234, 3}, {12, 32}, {7, 9},
 	}
 	out, err := cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))}, [][]byte{expectedHash(id)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []bool{true}, out)
 
 	_, err = cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("foo")}, [][]byte{expectedHash(id)})
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	pcfc := cfc.PrefixVindex()
 	out, err = pcfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))}, [][]byte{expectedHash(id)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []bool{true}, out)
 }
 
 func TestCFCMap(t *testing.T) {
 	cfc := makeCFC(t, map[string]string{"hash": "md5", "offsets": "[3,5]"})
 	_, err := cfc.Map(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("abc")})
-	assert.EqualError(t, err, "insufficient size for cfc vindex cfc. need 5, got 3")
+	require.EqualError(t, err, "insufficient size for cfc vindex cfc. need 5, got 3")
 
 	dests, err := cfc.Map(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("12345567")})
 	require.NoError(t, err)
 	ksid, ok := dests[0].(key.DestinationKeyspaceID)
 	require.True(t, ok)
 	out, err := cfc.Verify(t.Context(), nil, []sqltypes.Value{sqltypes.NewVarBinary("12345567")}, [][]byte{ksid})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []bool{true}, out)
 }
 

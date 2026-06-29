@@ -1258,7 +1258,7 @@ func TestTimeout(t *testing.T) {
 		newctx, cancel := context.WithTimeout(ctx, 10*time.Millisecond)
 		_, err = p.Get(newctx, setting)
 		cancel()
-		assert.EqualError(t, err, "connection pool timed out")
+		require.EqualError(t, err, "connection pool timed out")
 	}
 
 	// put the connection take was taken initially.
@@ -1444,7 +1444,7 @@ func TestApplySettingsFailure(t *testing.T) {
 		r, err = p.Get(ctx, settings[1])
 		if err != nil {
 			failCount++
-			assert.EqualError(t, err, "ApplySetting failed")
+			require.EqualError(t, err, "ApplySetting failed")
 			continue
 		}
 		resources = append(resources, r)

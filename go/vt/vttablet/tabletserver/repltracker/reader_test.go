@@ -130,7 +130,7 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	lag, err := tr.Status()
 
 	require.Error(t, err)
-	assert.EqualError(t, err, tr.lastKnownError.Error(), "expected error")
+	require.EqualError(t, err, tr.lastKnownError.Error(), "expected error")
 	assert.Equal(t, 0*time.Second, lag, "wrong lastKnownLag")
 	assert.Equal(t, int64(0), cumulativeLagNs.Get(), "wrong cumulative lag")
 	assert.Equal(t, int64(1), readErrors.Get(), "wrong read error count")

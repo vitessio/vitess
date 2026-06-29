@@ -36,9 +36,7 @@ import (
 
 func TestStreamUnion(t *testing.T) {
 	qr, err := framework.NewClient().StreamExecute("select 1 from dual union select 1 from dual", nil)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	assert.Len(t, qr.Rows, 1)
 }
 
@@ -132,15 +130,11 @@ func TestStreamConsolidation(t *testing.T) {
 func TestStreamBigData(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_big", nil)
 
 	qr, err := client.StreamExecute("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	row10 := framework.RowsToStrings(qr)[10]
 	want := []string{
 		"0",
@@ -175,17 +169,13 @@ func TestStreamBigDataInTx(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Release()
 	err := populateBigData(client)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	defer func() {
 		framework.NewClient().Execute("delete from vitess_big", nil)
 	}()
 
 	qr, err := client.StreamBeginExecuteWithOptions("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil, nil, nil)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	row10 := framework.RowsToStrings(qr)[10]
 	want := []string{
 		"0",
@@ -219,9 +209,7 @@ func TestStreamBigDataInTx(t *testing.T) {
 func TestStreamTerminate(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
-	if !assert.NoError(t, err) {
-		return
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_big", nil)
 
 	called := false

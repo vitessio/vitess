@@ -610,7 +610,7 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 
 		outms, _, _, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, tcase.specs, false)
 		if tcase.err != "" {
-			assert.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s)", tcase.description)
+			require.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s)", tcase.description)
 			continue
 		}
 		require.NoError(t, err)
@@ -1085,7 +1085,7 @@ func TestCreateLookupVindexTargetVSchema(t *testing.T) {
 
 		_, _, got, err := env.wr.prepareCreateLookup(t.Context(), ms.SourceKeyspace, specs, false)
 		if tcase.err != "" {
-			assert.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s)", tcase.description)
+			require.ErrorContainsf(t, err, tcase.err, "prepareCreateLookup(%s)", tcase.description)
 			continue
 		}
 		require.NoError(t, err)
@@ -1891,7 +1891,7 @@ func TestExternalizeVindex(t *testing.T) {
 
 		err := env.wr.ExternalizeVindex(t.Context(), tcase.input)
 		if tcase.err != "" {
-			assert.ErrorContainsf(t, err, tcase.err, "ExternalizeVindex(%s)", tcase.input)
+			require.ErrorContainsf(t, err, tcase.err, "ExternalizeVindex(%s)", tcase.input)
 			continue
 		}
 		require.NoError(t, err)

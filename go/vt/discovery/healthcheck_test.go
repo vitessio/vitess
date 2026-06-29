@@ -127,7 +127,7 @@ func TestNewVTGateHealthCheckFilters(t *testing.T) {
 
 			filters, err := NewVTGateHealthCheckFilters()
 			if testCase.expectedError != "" {
-				assert.EqualError(t, err, testCase.expectedError)
+				require.EqualError(t, err, testCase.expectedError)
 			}
 			assert.Len(t, filters, len(testCase.expectedFilterTypes))
 			for i, filter := range filters {
@@ -273,7 +273,7 @@ func TestHealthCheck(t *testing.T) {
 	result = <-resultChan
 	// Ignore LastError because we're going to check it separately.
 	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
-	assert.Error(t, result.LastError, "vttablet error: some error")
+	require.Error(t, result.LastError, "vttablet error: some error")
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
 	// remove tablet
@@ -338,7 +338,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 	result = <-resultChan
 	// Ignore LastError because we're going to check it separately.
 	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
-	assert.Error(t, result.LastError, "some stream error")
+	require.Error(t, result.LastError, "some stream error")
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "wrong result, expected empty list")
@@ -402,7 +402,7 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 	result = <-resultChan
 	// Ignore LastError because we're going to check it separately.
 	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
-	assert.Error(t, result.LastError, "some stream error")
+	require.Error(t, result.LastError, "some stream error")
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	assert.Empty(t, a, "wrong result, expected empty list")
@@ -583,7 +583,7 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 	shr.PrimaryTermStartTimestamp = 11
 	// Close the healthcheck. Tablet connections are closed asynchronously and
 	// Close() will block until all Go routines (one per connection) are done.
-	assert.NoError(t, hc.Close(), "Close returned error")
+	require.NoError(t, hc.Close(), "Close returned error")
 	// Try to send more updates. They should be ignored and nothing should change
 	input <- shr
 
@@ -642,14 +642,14 @@ func TestHealthCheckTimeout(t *testing.T) {
 	input <- shr
 	result = <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
-	assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
+	require.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
 
 	// wait for timeout period
 	time.Sleep(hc.healthCheckTimeout + 100*time.Millisecond)
 	t.Logf(`Sleep(1.1 * timeout)`)
 	result = <-resultChan
 	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
-	assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
+	require.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
 	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled after timeout, but is not")
 
 	// tablet should be removed from healthy list
@@ -662,7 +662,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 
 	result = <-resultChan
 	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
-	assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2))
+	require.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 2))
 	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled again after timeout, but is not")
 
 	// send a healthcheck response, it should be serving again
@@ -704,7 +704,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	defer cancel()
 
 	err := hc.WaitForAllServingTablets(ctx, targets)
-	assert.Error(t, err, "error should not be nil")
+	require.Error(t, err, "error should not be nil")
 
 	shr := &querypb.StreamHealthResponse{
 		TabletAlias:               tablet.Alias,
@@ -727,7 +727,7 @@ func TestWaitForAllServingTablets(t *testing.T) {
 	}
 
 	err = hc.WaitForAllServingTablets(ctx, targets)
-	assert.NoError(t, err, "error should be nil. Targets are found")
+	require.NoError(t, err, "error should be nil. Targets are found")
 
 	targets = []*querypb.Target{
 		{
@@ -1468,7 +1468,7 @@ func TestCellAliases(t *testing.T) {
 	cellsAlias := &topodatapb.CellsAlias{
 		Cells: []string{"cell1", "cell2"},
 	}
-	assert.NoError(t, ts.CreateCellsAlias(t.Context(), "region1", cellsAlias), "failed to create cell alias")
+	require.NoError(t, ts.CreateCellsAlias(t.Context(), "region1", cellsAlias), "failed to create cell alias")
 	defer deleteCellsAlias(t, ts, "region1")
 
 	// add a tablet as replica in diff cell, same region

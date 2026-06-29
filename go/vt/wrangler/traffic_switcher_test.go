@@ -267,7 +267,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
 	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
-	assert.EqualErrorf(t, err, want, "SwitchReads(primary) err: %v, want %v", err, want)
+	require.EqualErrorf(t, err, want, "SwitchReads(primary) err: %v, want %v", err, want)
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
@@ -332,7 +332,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false, true)
 	want = "DeadlineExceeded"
-	assert.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
+	require.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
 	verifyQueries(t, tme.allDBClients)
 	checkRouting(t, tme.wr, map[string][]string{
 		"t1":             {"ks1.t1"},
@@ -564,7 +564,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
 	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
-	assert.EqualErrorf(t, err, want, "SwitchReads(primary) err: %v, want %v", err, want)
+	require.EqualErrorf(t, err, want, "SwitchReads(primary) err: %v, want %v", err, want)
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
@@ -625,7 +625,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false, true)
 	want = "DeadlineExceeded"
-	assert.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
+	require.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
 
 	verifyQueries(t, tme.allDBClients)
 	checkServedTypes(t, tme.ts, "ks:-40", 1)
@@ -1140,7 +1140,7 @@ func TestMigrateFailJournal(t *testing.T) {
 	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	want := "journaling intentionally failed"
-	assert.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
+	require.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
 
 	// Verify that cancel didn't happen.
 	if tme.dbTargetClients[0].queries[cancel1].exhausted() {
@@ -1801,7 +1801,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	// Can't switch primary with SwitchReads.
 	_, err = tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_PRIMARY}, nil, workflow.DirectionForward, false)
 	want := "invalid tablet type: tablet type must be REPLICA or RDONLY: PRIMARY"
-	assert.EqualErrorf(t, err, want, "SwitchReads(primary) err: %v, want %v", err, want)
+	require.EqualErrorf(t, err, want, "SwitchReads(primary) err: %v, want %v", err, want)
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
@@ -1863,7 +1863,7 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	switchWrites(tme)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, false, true, false, true)
 	want = "DeadlineExceeded"
-	assert.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
+	require.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
 
 	verifyQueries(t, tme.allDBClients)
 	checkServedTypes(t, tme.ts, "ks:-40", 1)

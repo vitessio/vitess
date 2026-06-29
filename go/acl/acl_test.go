@@ -27,6 +27,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type TestPolicy struct{}
@@ -53,7 +54,7 @@ func TestSimplePolicy(t *testing.T) {
 	assert.Equalf(t, want, err.Error(), "got %v, want %s", err, want)
 
 	err = CheckAccessHTTP(nil, DEBUGGING)
-	assert.NoErrorf(t, err, "got %v, want no error", err)
+	require.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, MONITORING)
 	assert.NoErrorf(t, err, "got %v, want no error", err)
@@ -62,10 +63,10 @@ func TestSimplePolicy(t *testing.T) {
 func TestEmptyPolicy(t *testing.T) {
 	currentPolicy = nil
 	err := CheckAccessHTTP(nil, ADMIN)
-	assert.NoErrorf(t, err, "got %v, want no error", err)
+	require.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, DEBUGGING)
-	assert.NoErrorf(t, err, "got %v, want no error", err)
+	require.NoErrorf(t, err, "got %v, want no error", err)
 
 	err = CheckAccessHTTP(nil, MONITORING)
 	assert.NoErrorf(t, err, "got %v, want no error", err)

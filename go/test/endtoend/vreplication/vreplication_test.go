@@ -1039,11 +1039,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 			var found bool
 			found, err = checkIfTableExists(t, vc, "zone1-100", "customer")
-			assert.NoError(t, err, "Customer table not deleted from zone1-100")
+			require.NoError(t, err, "Customer table not deleted from zone1-100")
 			require.False(t, found)
 
 			found, err = checkIfTableExists(t, vc, "zone1-200", "customer")
-			assert.NoError(t, err, "Customer table not deleted from zone1-200")
+			require.NoError(t, err, "Customer table not deleted from zone1-200")
 			require.True(t, found)
 
 			insertQuery2 = "insert into customer(name, cid) values('tempCustomer8', 103)" // ID 103, hence due to reverse_bits in shard 80-
@@ -1132,10 +1132,10 @@ func reshardMerchant2to3SplitMerge(t *testing.T) {
 
 		var found bool
 		found, err = checkIfTableExists(t, vc, "zone1-1600", "customer")
-		assert.NoError(t, err, "Customer table found incorrectly in zone1-1600")
+		require.NoError(t, err, "Customer table found incorrectly in zone1-1600")
 		require.False(t, found)
 		found, err = checkIfTableExists(t, vc, "zone1-1600", "merchant")
-		assert.NoError(t, err, "Merchant table not found in zone1-1600")
+		require.NoError(t, err, "Merchant table not found in zone1-1600")
 		require.True(t, found)
 	})
 }
@@ -1364,10 +1364,10 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the source side component (vstreamer), and insert some rows.
 			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, defaultSourceKs, sourceThrottlerAppName)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for _, tab := range productTablets {
 				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Contains(t, status.ThrottledApps, sourceThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusThrottled) {
@@ -1376,7 +1376,7 @@ func materializeProduct(t *testing.T) {
 			}
 			for _, tab := range customerTablets {
 				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
 					t.Logf("Throttler status: %v", status)
 				}
@@ -1398,12 +1398,12 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// Unthrottle the vstreamer component, and expect the rows to show up.
 			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, defaultSourceKs, sourceThrottlerAppName)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for _, tab := range productTablets {
 				// Give time for unthrottling to take effect and for targets to fetch data.
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
 					status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.NotContains(t, status.ThrottledApps, sourceThrottlerAppName.String())
 					t.Logf("Throttler status: %v", status)
 				}
@@ -1417,10 +1417,10 @@ func materializeProduct(t *testing.T) {
 			// Now, throttle vreplication on the target side (vplayer), and insert some
 			// more rows.
 			err := throttler.ThrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for _, tab := range customerTablets {
 				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Contains(t, status.ThrottledApps, targetThrottlerAppName.String())
 				// Wait for throttling to take effect (caching will expire by this time):
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusThrottled) {
@@ -1430,7 +1430,7 @@ func materializeProduct(t *testing.T) {
 			for _, tab := range productTablets {
 				// Give time for unthrottling to take effect and for targets to fetch data.
 				status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if !waitForTabletThrottlingStatus(t, tab, sourceThrottlerAppName, throttlerStatusNotThrottled) {
 					t.Logf("Throttler status: %v", status)
 				}
@@ -1452,12 +1452,12 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on target tablets, and expect the rows to show up
 			err := throttler.UnthrottleKeyspaceApp(vc.VtctldClient, keyspace, targetThrottlerAppName)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			// give time for unthrottling to take effect and for target to fetch data
 			for _, tab := range customerTablets {
 				if !waitForTabletThrottlingStatus(t, tab, targetThrottlerAppName, throttlerStatusNotThrottled) {
 					status, err := throttler.GetThrottlerStatus(vc.VtctldClient, &cluster.Vttablet{Alias: tab.Name})
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.NotContains(t, status.ThrottledApps, targetThrottlerAppName.String())
 					t.Logf("Throttler status: %v", status)
 				}

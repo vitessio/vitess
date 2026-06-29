@@ -901,14 +901,14 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	} else {
 		var err error
 		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
 		t.Logf("===== waiting for migration %v to conclude", uuid)

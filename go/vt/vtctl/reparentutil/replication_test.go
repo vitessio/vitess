@@ -196,7 +196,7 @@ func TestFindPositionsOfAllCandidates(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			keys := make([]string, 0, len(actual))
 			for key := range actual {
@@ -1510,7 +1510,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatusMap, res.statusMap, "StopReplicationStatus mismatch")
 			assert.Equal(t, tt.expectedPrimaryStatusMap, res.primaryStatusMap, "PrimaryStatusMap mismatch")
 			require.Len(t, res.reachableTablets, len(tt.expectedTabletsReachable), "TabletsReached length mismatch")
@@ -1602,7 +1602,7 @@ func TestReplicaWasRunning(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

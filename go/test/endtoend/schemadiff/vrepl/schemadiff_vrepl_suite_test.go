@@ -350,7 +350,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, al
 
 	// The actual diff logic here!
 	diff, err := schemadiff.DiffTables(env, fromCreateTableStatement, toCreateTableStatement, hints)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// The diff can be empty or there can be an actual ALTER TABLE statement
 	diffedAlterQuery := ""
@@ -416,7 +416,7 @@ func validateDiff(t *testing.T, fromCreateTable string, toCreateTable string, al
 	require.True(t, ok)
 
 	resultDiff, err := schemadiff.DiffTables(env, toCreateTableStatement, resultCreateTableStatement, hints)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, resultDiff)
 }
 

@@ -346,13 +346,13 @@ func TestTxThrottlerConfigFlag(t *testing.T) {
 	defaultMaxReplicationLagModuleConfig := throttler.DefaultMaxReplicationLagModuleConfig().Configuration
 
 	{
-		assert.NoError(t, f.Set(defaultMaxReplicationLagModuleConfig.String()))
+		require.NoError(t, f.Set(defaultMaxReplicationLagModuleConfig.String()))
 		assert.Equal(t, defaultMaxReplicationLagModuleConfig.String(), f.String())
 		assert.Equal(t, "string", f.Type())
 	}
 	{
 		defaultMaxReplicationLagModuleConfig.TargetReplicationLagSec = 5
-		assert.NoError(t, f.Set(defaultMaxReplicationLagModuleConfig.String()))
+		require.NoError(t, f.Set(defaultMaxReplicationLagModuleConfig.String()))
 		assert.NotNil(t, f.Get())
 		assert.Equal(t, int64(5), f.Get().TargetReplicationLagSec)
 	}
@@ -457,7 +457,7 @@ func TestVerifyTxThrottlerConfig(t *testing.T) {
 			if test.ExpectedErrorCode == vtrpcpb.Code_OK {
 				assert.NoError(t, err)
 			} else {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Equal(t, test.ExpectedErrorCode, vterrors.Code(err))
 			}
 		})
@@ -480,23 +480,23 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 
 	// By default, unmanaged mode should be false
 	err := config.verifyUnmanagedTabletConfig()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	config.Unmanaged = true
 	err = config.verifyUnmanagedTabletConfig()
-	assert.EqualError(t, err, "no connection parameters specified but unmanaged mode specified")
+	require.EqualError(t, err, "no connection parameters specified but unmanaged mode specified")
 
 	config.DB.Socket = db.ConnParams().UnixSocket
 	err = config.verifyUnmanagedTabletConfig()
-	assert.EqualError(t, err, "database app user not specified")
+	require.EqualError(t, err, "database app user not specified")
 
 	config.DB.App.User = "testUser"
 	err = config.verifyUnmanagedTabletConfig()
-	assert.EqualError(t, err, "database app user password not specified")
+	require.EqualError(t, err, "database app user password not specified")
 
 	config.DB.App.Password = "testPassword"
 	err = config.verifyUnmanagedTabletConfig()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// creates a temporary credentials file.
 	tmpFile, err := os.CreateTemp("", "db_credentials.json")
@@ -513,13 +513,13 @@ func TestVerifyUnmanagedTabletConfig(t *testing.T) {
 	// verify password from credentials file is used
 	config.DB.App.Password = ""
 	err = config.verifyUnmanagedTabletConfig()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "testPassword", config.DB.App.Password)
 
 	// verify empty password from credentials file is accepted
 	config.DB.App.User = "testUserWithEmptyPassword"
 	config.DB.App.Password = ""
 	err = config.verifyUnmanagedTabletConfig()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, config.DB.App.Password)
 }

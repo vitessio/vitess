@@ -102,7 +102,7 @@ func TestInitShardPrimary(t *testing.T) {
 		PrimaryElectTabletAlias: tablet1.Tablet.Alias,
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 }
 
@@ -158,7 +158,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		PrimaryElectTabletAlias: tablet1.Tablet.Alias,
 	})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	resp, err := vtctld.InitShardPrimary(t.Context(), &vtctldatapb.InitShardPrimaryRequest{
 		Keyspace:                tablet1.Tablet.Keyspace,
@@ -166,7 +166,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		PrimaryElectTabletAlias: tablet1.Tablet.Alias,
 		Force:                   true,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	tablet1PostInit, err := ts.GetTablet(t.Context(), tablet1.Tablet.Alias)
 	require.NoError(t, err)

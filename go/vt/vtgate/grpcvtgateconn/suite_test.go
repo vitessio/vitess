@@ -494,7 +494,7 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 		packet, err := stream.Recv()
 		if err != nil {
 			if err != io.EOF {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			break
 		}
@@ -530,7 +530,7 @@ func testStreamExecuteMulti(t *testing.T, session *vtgateconn.VTGateSession) {
 		packet, newRes, err := stream.Recv()
 		if err != nil {
 			if err != io.EOF {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			break
 		}

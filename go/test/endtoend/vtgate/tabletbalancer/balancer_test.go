@@ -465,7 +465,7 @@ func mapTabletAliasToMySQLServerID(t *testing.T, tablets []*cluster.Vttablet) ma
 		require.Len(t, id.Rows, 1, "expected one row for server_id query")
 
 		serverID, err := id.Rows[0][0].ToInt64()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		aliases[tablet.Alias] = serverID
 	}
 

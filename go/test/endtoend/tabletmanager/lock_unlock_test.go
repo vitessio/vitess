@@ -60,7 +60,7 @@ func TestLockAndUnlock(t *testing.T) {
 	// Unlocking when we do not have a valid lock should lead to an exception being raised
 	err = tmcUnlockTables(ctx, replicaTablet.GrpcPort)
 	want := "tables were not locked"
-	assert.ErrorContains(t, err, want)
+	require.ErrorContains(t, err, want)
 
 	// Clean the table for further testing
 	utils.Exec(t, conn, "delete from t1")

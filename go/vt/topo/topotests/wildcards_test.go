@@ -57,7 +57,7 @@ func validateKeyspaceWildcard(t *testing.T, l *topoLayout, param string, expecte
 	r, err := ts.ResolveKeyspaceWildcard(ctx, param)
 	if err != nil {
 		if expected != nil {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return
 	}
@@ -92,7 +92,7 @@ func validateShardWildcard(t *testing.T, l *topoLayout, param string, expected [
 	r, err := ts.ResolveShardWildcard(ctx, param)
 	if err != nil {
 		if expected != nil {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return
 	}
@@ -187,7 +187,7 @@ func validateWildcards(t *testing.T, l *topoLayout, param string, expected []str
 	r, err := ts.ResolveWildcards(ctx, topo.GlobalCell, []string{param})
 	if err != nil {
 		if expected != nil {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return
 	}

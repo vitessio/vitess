@@ -479,7 +479,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 			ev, err := pr.ReparentShard(ctx, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				AssertReparentEventsEqual(t, tt.expectedEvent, ev)
 
 				if ev != nil {
@@ -489,7 +489,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			AssertReparentEventsEqual(t, tt.expectedEvent, ev)
 			assert.Contains(t, ev.Status, "finished PlannedReparentShard", "expected event status to indicate successful PRS")
 		})
@@ -1193,13 +1193,13 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			}
 			isNoop, err := pr.preflightChecks(ctx, tt.ev, tt.tabletMap, tt.innodbBufferPoolData, tt.opts)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Equal(t, tt.expectedIsNoop, isNoop, "preflightChecks returned wrong isNoop signal")
 
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedIsNoop, isNoop, "preflightChecks returned wrong isNoop signal")
 		})
 	}
@@ -1958,7 +1958,7 @@ func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedPos, pos)
 		})
 	}
@@ -2112,7 +2112,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedPos, rp, "performPartialPromotionRecovery gave unexpected reparent journal position")
 		})
 	}
@@ -3454,7 +3454,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 
 			err := pr.reparentShardLocked(ctx, tt.ev, tt.keyspace, tt.shard, tt.opts)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.ErrorContains(t, err, tt.errShouldContain)
 				return
 			}

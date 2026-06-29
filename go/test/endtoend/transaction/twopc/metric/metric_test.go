@@ -177,9 +177,9 @@ func TestVTTablet2PCMetrics(t *testing.T) {
 		// fail after mm commit.
 		_, err = conn.Execute(ctx, "commit", nil, false)
 		if multi {
-			assert.ErrorContains(t, err, "Fail After MM commit")
+			require.ErrorContains(t, err, "Fail After MM commit")
 		} else {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 	}
 

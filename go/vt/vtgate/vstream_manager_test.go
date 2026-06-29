@@ -1855,7 +1855,7 @@ func TestResolveVStreamParams(t *testing.T) {
 	for _, tcase := range testcases {
 		vgtid, filter, flags, err := vsm.resolveParams(t.Context(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
 		if tcase.err != "" {
-			assert.ErrorContainsf(t, err, tcase.err, "resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
+			require.ErrorContainsf(t, err, tcase.err, "resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
 			continue
 		}
 		require.NoError(t, err, tcase.input)
@@ -2181,7 +2181,7 @@ func TestVStreamMaxStreamAgeBlockedSend(t *testing.T) {
 			slog.Any("code", vterrors.Code(err)),
 		)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "vstream exceeded maximum age")
+		require.ErrorContains(t, err, "vstream exceeded maximum age")
 		assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 		assert.Falsef(t, callbackInFlight.Load(),
 			"callback is still in-flight after VStream() returned; lifecycle violation")

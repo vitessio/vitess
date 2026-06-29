@@ -230,7 +230,7 @@ func filterResultWhenRunsForCoverage(input string) string {
 func ValidateReplicationIsHealthy(t *testing.T, tablet *Vttablet) bool {
 	query := "show replica status"
 	rs, err := tablet.VttabletProcess.QueryTablet(query, "", true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	row := rs.Named().Row()
 	require.NotNil(t, row)
 

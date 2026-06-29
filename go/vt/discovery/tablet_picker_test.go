@@ -523,7 +523,7 @@ func TestPickErrorLocalPreferenceDefault(t *testing.T) {
 
 	te := newPickerTestEnv(t, ctx, []string{"cell"})
 	_, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
-	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
+	require.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
 	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)

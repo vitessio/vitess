@@ -23,6 +23,7 @@ import (
 
 	consul "github.com/hashicorp/consul/api/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -247,7 +248,7 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, gates)
 		})
 	}
@@ -356,7 +357,7 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, gate)
 		})
 	}
@@ -452,7 +453,7 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, addr)
 		})
 	}

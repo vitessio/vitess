@@ -504,12 +504,12 @@ func TestGetPriorityFromStatement(t *testing.T) {
 		t.Run(testCase.query, func(t *testing.T) {
 			t.Parallel()
 			stmt, err := parser.Parse(testCase.query)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			qh, err := BuildQueryHints(stmt)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, testCase.expectedPriority, qh.Priority)
 			}
 		})
@@ -698,7 +698,7 @@ func TestQueryTimeout(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.query, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.query)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			qh, _ := BuildQueryHints(stmt)
 			if tc.noTimeout {
 				assert.Nil(t, qh.Timeout)

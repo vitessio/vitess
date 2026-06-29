@@ -521,7 +521,7 @@ func TestVreplSchemaChanges(t *testing.T) {
 		t.Run(fmt.Sprintf("PlannedReparentShard via throttling %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
 			insertRows(t, 2)
 			_, err = throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.OnlineDDLName)
 
 			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
@@ -667,7 +667,7 @@ func TestVreplSchemaChanges(t *testing.T) {
 			t.Run("complete and expect completion", func(t *testing.T) {
 				query := fmt.Sprintf("select * from _vt.vreplication where workflow ='%s'", uuid)
 				rs, err := reparentTablet.VttabletProcess.QueryTablet(query, "", true)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				onlineddl.PrintQueryResult(os.Stdout, rs)
 
 				onlineddl.CheckCompleteAllMigrations(t, &vtParams, len(shards))
@@ -964,10 +964,10 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		params := cluster.ApplySchemaParams{DDLStrategy: ddlStrategy, UUIDs: providedUUIDList, MigrationContext: providedMigrationContext}
 		output, err := clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, params)
 		if expectError == "" {
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			uuid = output
 		} else {
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, output, expectError)
 		}
 	}
@@ -976,7 +976,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	fmt.Printf("<%s>\n", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if strategySetting.Strategy.IsDirect() {
 		skipWait = true

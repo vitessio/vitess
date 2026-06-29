@@ -103,7 +103,7 @@ func TestAnalyzeExecuteFetchAsDbaMultiQuery(t *testing.T) {
 			if tcase.expectErr {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Len(t, queries, tcase.count)
 				assert.Len(t, parsedStmts, len(queries))
 				assert.Equal(t, tcase.parseable, parseable)

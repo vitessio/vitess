@@ -241,14 +241,14 @@ func TestDeleteCellInfo(t *testing.T) {
 
 			err := ts.DeleteCellInfo(requestCtx, "unreachable", tt.force)
 			if tt.shouldErr {
-				assert.Error(t, err, "force=%t", tt.force)
+				require.Error(t, err, "force=%t", tt.force)
 			} else {
-				assert.NoError(t, err, "force=%t", tt.force)
+				require.NoError(t, err, "force=%t", tt.force)
 			}
 
 			ci, err := ts.GetCellInfo(ctx, "unreachable", true /* strongRead */)
 			if tt.shouldExist {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, ci)
 			} else {
 				assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell %q to not exist", "unreachable")

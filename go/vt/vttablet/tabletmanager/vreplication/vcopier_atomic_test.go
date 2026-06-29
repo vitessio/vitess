@@ -145,8 +145,8 @@ func TestDrainAndAggregateErrors(t *testing.T) {
 
 		err := drainAndAggregateErrors(ch, errors.New("vstream connection lost"), preTerrs)
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "failed inserting rows: EOF")
-		assert.ErrorContains(t, err, "vstream connection lost")
+		require.ErrorContains(t, err, "failed inserting rows: EOF")
+		require.ErrorContains(t, err, "vstream connection lost")
 		assert.ErrorContains(t, err, "+1 batches failed waiting on this to complete")
 	})
 

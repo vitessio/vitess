@@ -1384,7 +1384,7 @@ func runThrottler(t *testing.T, ctx context.Context, throttler *Throttler, timeo
 	}
 
 	<-ctx.Done()
-	assert.Error(t, ctx.Err())
+	require.Error(t, ctx.Err())
 
 	throttler.Disable()
 	wg.Wait()
@@ -1426,7 +1426,7 @@ func TestProbesWhileOperating(t *testing.T) {
 			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
 			for aggregatedMetricName, metricResult := range aggr {
 				val, err := metricResult.Get()
-				assert.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
+				require.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
 				assert.NotEmpty(t, aggregatedMetricName)
 				scope, metricName, err := base.DisaggregateMetricName(aggregatedMetricName)
 				assert.NotEmpty(t, metricName)
@@ -1532,7 +1532,7 @@ func TestProbesWhileOperating(t *testing.T) {
 			assert.Equal(t, 2*len(base.KnownMetricNames), throttler.aggregatedMetrics.ItemCount()) // flushed upon Disable()
 			for aggregatedMetricName, metricResult := range aggr {
 				val, err := metricResult.Get()
-				assert.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
+				require.NoErrorf(t, err, "aggregatedMetricName: %v", aggregatedMetricName)
 				assert.NotEmpty(t, aggregatedMetricName)
 				scope, metricName, err := base.DisaggregateMetricName(aggregatedMetricName)
 				assert.NotEmpty(t, metricName)
@@ -1919,7 +1919,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.Equal(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqual(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
-				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				require.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Len(t, checkResult.Metrics, 1)
 			})
@@ -1928,7 +1928,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.Equal(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqual(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
-				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				require.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Equal(t, testAppName.String(), checkResult.AppName)
 				assert.Len(t, checkResult.Metrics, len(base.KnownMetricNames))
 
@@ -1953,7 +1953,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.Equal(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqual(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
-				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				require.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Len(t, checkResult.Metrics, 1)
 			})
 			t.Run("explicit names", func(t *testing.T) {
@@ -1961,7 +1961,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.Equal(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqual(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
-				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				require.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Len(t, checkResult.Metrics, len(base.KnownMetricNames))
 
 				assert.Equal(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)                     // shard lag value, because "shard" is the default scope for lag
@@ -1999,7 +1999,7 @@ func TestChecks(t *testing.T) {
 				require.NotNil(t, checkResult)
 				assert.Equal(t, 0.9, checkResult.Value) // shard lag value
 				assert.NotEqual(t, tabletmanagerdatapb.CheckThrottlerResponseCode_OK, checkResult.ResponseCode)
-				assert.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
+				require.ErrorIs(t, checkResult.Error, base.ErrThresholdExceeded)
 				assert.Len(t, checkResult.Metrics, len(metricNames))
 
 				assert.Equal(t, 0.9, checkResult.Metrics[base.LagMetricName.String()].Value)                     // shard lag value, even though scope name is in metric name
@@ -2173,22 +2173,22 @@ func TestReplica(t *testing.T) {
 					scope := base.SelfScope
 					switch base.MetricName(metricName) {
 					case base.DefaultMetricName:
-						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						require.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
 						assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scope, metricName) // same value as "lag"
 						assert.Equalf(t, float64(0.75), threshold, "scope=%v, metricName=%v", scope, metricName)
 					case base.LagMetricName:
-						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						require.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
 						assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scope, metricName)
 						assert.Equalf(t, float64(0.75), threshold, "scope=%v, metricName=%v", scope, metricName) // default threshold
 					case base.ThreadsRunningMetricName:
-						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						require.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
 						assert.Equalf(t, float64(26), val, "scope=%v, metricName=%v", scope, metricName)
 						assert.Equalf(t, float64(100), threshold, "scope=%v, metricName=%v", scope, metricName)
 					case base.CustomMetricName:
-						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
+						require.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
 						assert.Equalf(t, float64(0), threshold, "scope=%v, metricName=%v", scope, metricName)
 					case base.LoadAvgMetricName:
-						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
+						require.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
 						assert.Equalf(t, float64(1), threshold, "scope=%v, metricName=%v", scope, metricName)
 					}
 				}
@@ -2206,7 +2206,7 @@ func TestReplica(t *testing.T) {
 					threshold := metricResult.Threshold
 					scope := base.SelfScope
 
-					assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+					require.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
 					assert.Equalf(t, float64(0.3), val, "scope=%v, metricName=%v", scope, metricName)
 					assert.Equalf(t, float64(0.75), threshold, "scope=%v, metricName=%v", scope, metricName) // default threshold
 				}
@@ -2247,7 +2247,7 @@ func TestReplica(t *testing.T) {
 			t.Run("custom query, metrics", func(t *testing.T) {
 				// For v20 backwards compatibility, we also report the standard metric/value in CheckResult:
 				checkResult := throttler.Check(ctx, testAppName.String(), nil, flags)
-				assert.NoError(t, checkResult.Error, "value=%v, threshold=%v", checkResult.Value, checkResult.Threshold)
+				require.NoError(t, checkResult.Error, "value=%v, threshold=%v", checkResult.Value, checkResult.Threshold)
 				assert.Equal(t, float64(0.3), checkResult.Value)
 				// Change custom threshold
 				throttler.MetricsThreshold.Store(math.Float64bits(0.1))
@@ -2268,13 +2268,13 @@ func TestReplica(t *testing.T) {
 						base.LagMetricName, // Lag metrics affected by the new low threshold
 						base.LoadAvgMetricName,
 						base.DefaultMetricName:
-						assert.Error(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
-						assert.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
+						require.Error(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						require.ErrorIs(t, metricResult.Error, base.ErrThresholdExceeded)
 					case base.ThreadsRunningMetricName,
 						base.HistoryListLengthMetricName,
 						base.MysqldLoadAvgMetricName,
 						base.MysqldDatadirUsedRatioMetricName:
-						assert.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
+						require.NoError(t, metricResult.Error, "metricName=%v, value=%v, threshold=%v", metricName, metricResult.Value, metricResult.Threshold)
 					default:
 						assert.Fail(t, "unexpected metric", "name=%v", metricName)
 					}

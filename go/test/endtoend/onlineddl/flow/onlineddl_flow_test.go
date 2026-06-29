@@ -247,6 +247,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 			})
 
 			var wg sync.WaitGroup
+			var workloadErr error
 			t.Run("generate workload", func(t *testing.T) {
 				// Create work for vplayer.
 				// This workload will consider throttling state and avoid generating DMLs if throttled.
@@ -255,7 +256,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 					defer cancel()
 					defer wg.Done()
 					defer fmt.Println("Terminating workload")
-					runMultipleConnections(workloadCtx, t)
+					workloadErr = runMultipleConnections(workloadCtx, t)
 				}()
 			})
 			appliedDMLStart := totalAppliedDML.Load()
@@ -281,7 +282,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 				onlineddl.UnthrottleAllMigrations(t, &vtParams)
 				if !onlineddl.CheckThrottledApps(t, &vtParams, throttlerapp.OnlineDDLName, false) {
 					status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, primaryTablet)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					t.Logf("Throttler status: %+v", status)
 				}
@@ -357,6 +358,7 @@ func TestOnlineDDLFlow(t *testing.T) {
 			cancelWorkload() // Early break
 			cancel()         // Early break
 			wg.Wait()
+			require.NoError(t, workloadErr)
 		})
 	})
 }
@@ -381,7 +383,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	t.Logf("<%s>", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() && !skipWait && uuid != "" {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -515,21 +517,19 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) {
+func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.Duration) error {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if !assert.NoError(t, err) {
-		return
+	if err != nil {
+		return err
 	}
 	defer conn.Close()
 
-	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	if !assert.NoError(t, err) {
-		return
+	if _, err := conn.ExecuteFetch("set autocommit=1", 1000, true); err != nil {
+		return err
 	}
-	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	if !assert.NoError(t, err) {
-		return
+	if _, err := conn.ExecuteFetch("set transaction isolation level read committed", 1000, true); err != nil {
+		return err
 	}
 
 	ticker := time.NewTicker(sleepInterval)
@@ -549,14 +549,16 @@ func runSingleConnection(ctx context.Context, t *testing.T, sleepInterval time.D
 		select {
 		case <-ctx.Done():
 			log.Info("Terminating single connection")
-			return
+			return nil
 		case <-ticker.C:
 		}
-		assert.NoError(t, err)
+		if err != nil {
+			return err
+		}
 	}
 }
 
-func runMultipleConnections(ctx context.Context, t *testing.T) {
+func runMultipleConnections(ctx context.Context, t *testing.T) error {
 	// The workload for a 16 vCPU machine is:
 	// - Concurrency of 16
 	// - 2ms interval between queries for each connection
@@ -569,14 +571,25 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	sleepInterval := time.Duration(int64(singleConnectionSleepIntervalNanoseconds))
 
 	log.Info(fmt.Sprintf("Running multiple connections: maxConcurrency=%v, sleep interval=%v", maxConcurrency, sleepInterval))
+	var (
+		mu       sync.Mutex
+		firstErr error
+	)
 	var wg sync.WaitGroup
 	for range maxConcurrency {
 		wg.Go(func() {
-			runSingleConnection(ctx, t, sleepInterval)
+			if err := runSingleConnection(ctx, t, sleepInterval); err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+			}
 		})
 	}
 	wg.Wait()
 	log.Info("Running multiple connections: done")
+	return firstErr
 }
 
 func initTable(t *testing.T) {

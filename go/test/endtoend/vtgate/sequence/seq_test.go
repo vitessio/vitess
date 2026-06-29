@@ -263,7 +263,7 @@ func TestSeq(t *testing.T) {
 	_, err = conn.ExecuteFetch("insert into sequence_test(val) values('g')", 1000, false)
 	utils.Exec(t, conn, "rollback")
 	want := "Duplicate entry"
-	assert.ErrorContainsf(t, err, want, "wrong insert: %v, must contain %s", err, want)
+	require.ErrorContainsf(t, err, want, "wrong insert: %v, must contain %s", err, want)
 
 	utils.Exec(t, conn, "DELETE FROM sequence_test_seq")
 	qr = utils.Exec(t, conn, "select * from sequence_test_seq")

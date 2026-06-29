@@ -836,15 +836,15 @@ func terminatedRestore(t *testing.T) {
 	// previous test to complete (suspicion: MySQL does not fully start)
 	time.Sleep(5 * time.Second)
 
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 	terminateBackup(t, replica1.Alias)
 	// If backup fails then the tablet type goes back to original type.
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 
 	// backup the replica
 	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.NoError(t, err)
-	checkTabletType(t, replica1.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 
 	verifyTabletBackupStats(t, replica1.VttabletProcess.GetVars())
 
@@ -861,14 +861,14 @@ func terminatedRestore(t *testing.T) {
 	_, err = replica1.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
 	require.NoError(t, err)
 
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 	terminateRestore(t)
 	// If restore fails then the tablet type goes back to original type.
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 
 	err = localCluster.VtctldClientProcess.ExecuteCommand("RestoreFromBackup", primary.Alias)
 	require.NoError(t, err)
-	checkTabletType(t, primary.Alias, topodata.TabletType_REPLICA)
+	require.NoError(t, checkTabletType(primary.Alias, topodata.TabletType_REPLICA))
 
 	_, err = os.Stat(path.Join(primary.VttabletProcess.Directory, "restore_in_progress"))
 	assert.True(t, os.IsNotExist(err))
@@ -880,36 +880,58 @@ func terminatedRestore(t *testing.T) {
 	stopAllTablets()
 }
 
-func checkTabletType(t *testing.T, alias string, tabletType topodata.TabletType) {
-	t.Helper()
+// checkTabletType returns an error instead of asserting, so callers running in
+// a goroutine can propagate the result back to the test goroutine. Callers on
+// the test goroutine should wrap it with require.NoError.
+func checkTabletType(alias string, tabletType topodata.TabletType) error {
 	// for loop for 15 seconds to check if tablet type is correct
 	for range 15 {
 		output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("GetTablet", alias)
-		if !assert.NoError(t, err) {
-			return
+		if err != nil {
+			return err
 		}
 		var tabletPB topodata.Tablet
-		err = json2.UnmarshalPB([]byte(output), &tabletPB)
-		if !assert.NoError(t, err) {
-			return
+		if err := json2.UnmarshalPB([]byte(output), &tabletPB); err != nil {
+			return err
 		}
 		if tabletType == tabletPB.Type {
-			return
+			return nil
 		}
 		time.Sleep(1 * time.Second)
 	}
-	assert.Failf(t, "checkTabletType failed.", "Tablet type is not correct. Expected: %v", tabletType)
+	return fmt.Errorf("tablet %s type is not %v", alias, tabletType)
 }
 
 func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	// checkType runs the tablet-type check in a goroutine and records the first
+	// error so the test goroutine can assert on it after wg.Wait().
+	var (
+		mu      sync.Mutex
+		typeErr error
+	)
+	checkType := func(alias string, tabletType topodata.TabletType) bool {
+		err := checkTabletType(alias, tabletType)
+		if err != nil {
+			mu.Lock()
+			if typeErr == nil {
+				typeErr = err
+			}
+			mu.Unlock()
+			return false
+		}
+		return true
+	}
+
 	// Start the backup on a replica
 	go func() {
 		defer wg.Done()
 		// ensure this is a primary first
-		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+		if !checkType(primary.Alias, topodata.TabletType_PRIMARY) {
+			return
+		}
 
 		// now backup
 		err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
@@ -922,7 +944,9 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// ensure this is a primary first
-		checkTabletType(t, primary.Alias, topodata.TabletType_PRIMARY)
+		if !checkType(primary.Alias, topodata.TabletType_PRIMARY) {
+			return
+		}
 
 		// now reparent
 		_, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput(
@@ -935,13 +959,14 @@ func doNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup(t *testing.T) {
 		}
 
 		// check that we reparented
-		checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
+		checkType(replica1.Alias, topodata.TabletType_PRIMARY)
 	}()
 
 	wg.Wait()
+	require.NoError(t, typeErr)
 
 	// check that this is still a primary
-	checkTabletType(t, replica1.Alias, topodata.TabletType_PRIMARY)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_PRIMARY))
 }
 
 // test_backup will:
@@ -1389,7 +1414,7 @@ func TestReplicaRestoreToPos(t *testing.T, replicaIndex int, restoreToPos replic
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 	verifyTabletRestoreStats(t, replica.VttabletProcess.GetVars())
-	checkTabletType(t, replica1.Alias, topodata.TabletType_DRAINED)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_DRAINED))
 }
 
 func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, expectError string) {
@@ -1403,7 +1428,7 @@ func TestReplicaRestoreToTimestamp(t *testing.T, restoreToTimestamp time.Time, e
 	}
 	require.NoErrorf(t, err, "output: %v", output)
 	verifyTabletRestoreStats(t, replica1.VttabletProcess.GetVars())
-	checkTabletType(t, replica1.Alias, topodata.TabletType_DRAINED)
+	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_DRAINED))
 }
 
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {

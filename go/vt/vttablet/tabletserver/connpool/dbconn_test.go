@@ -423,7 +423,7 @@ func testContextError(t *testing.T,
 	start := time.Now()
 	err = exec(ctx, query, dbConn)
 	end := time.Now()
-	assert.ErrorContains(t, err, expErrMsg)
+	require.ErrorContains(t, err, expErrMsg)
 	assert.WithinDuration(t, end, start, expDuration)
 }
 

@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
 
@@ -64,13 +65,13 @@ func TestServer(t *testing.T) {
 	close(readyCh)
 
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()) //nolint:staticcheck
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	defer conn.Close()
 
 	healthclient := healthpb.NewHealthClient(conn)
 	resp, err := healthclient.Check(t.Context(), &healthpb.HealthCheckRequest{Service: "grpc.health.v1.Health"})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 }
 
@@ -139,7 +140,7 @@ func TestError(t *testing.T) {
 	start := time.Now()
 	select {
 	case err := <-errCh:
-		assert.Error(t, err)
+		require.Error(t, err)
 	case ti := <-time.After(time.Millisecond * 10):
 		assert.Failf(t, "timed out waiting for error after", "%s", ti.Sub(start))
 	}

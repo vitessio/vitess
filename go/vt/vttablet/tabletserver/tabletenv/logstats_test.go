@@ -80,7 +80,7 @@ func TestLogStatsFormat(t *testing.T) {
 	got = testFormat(logStats, params)
 	var parsed map[string]any
 	err := json.Unmarshal([]byte(got), &parsed)
-	assert.NoErrorf(t, err, "logstats format: error unmarshaling json -- got:\n%v", got)
+	require.NoErrorf(t, err, "logstats format: error unmarshaling json -- got:\n%v", got)
 	formatted, err := json.MarshalIndent(parsed, "", "    ")
 	require.NoError(t, err)
 	want = "{\n    \"BindVars\": {\n        \"intVal\": {\n            \"type\": \"INT64\",\n            \"value\": 1\n        }\n    },\n    \"CallInfo\": \"\",\n    \"ConnWaitTime\": 0,\n    \"Effective Caller\": \"\",\n    \"EmitReason\": \"\",\n    \"End\": \"2017-01-01 01:02:04.000001\",\n    \"Error\": \"\",\n    \"ImmediateCaller\": \"\",\n    \"Method\": \"test\",\n    \"MysqlTime\": 0,\n    \"OriginalSQL\": \"sql\",\n    \"PlanType\": \"\",\n    \"Queries\": 1,\n    \"QuerySources\": \"mysql\",\n    \"ResponseSize\": 1,\n    \"RewrittenSQL\": \"sql with pii\",\n    \"RowsAffected\": 0,\n    \"Start\": \"2017-01-01 01:02:03.000000\",\n    \"TotalTime\": 1.000001,\n    \"TransactionID\": 12345,\n    \"Username\": \"\"\n}"

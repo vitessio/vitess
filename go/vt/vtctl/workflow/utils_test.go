@@ -203,6 +203,10 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	shortCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
 	log.Info(fmt.Sprintf("Starting %d concurrent updates", concurrency))
+	var (
+		updateMu  sync.Mutex
+		updateErr error
+	)
 	for i := range concurrency {
 		go func(id int) {
 			defer wg.Done()
@@ -211,12 +215,20 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 				case <-shortCtx.Done():
 					return
 				default:
-					update(t, shortCtx, ts, id)
+					if err := update(shortCtx, ts, id); err != nil {
+						updateMu.Lock()
+						if updateErr == nil {
+							updateErr = err
+						}
+						updateMu.Unlock()
+						return
+					}
 				}
 			}
 		}(i)
 	}
 	wg.Wait()
+	require.NoError(t, updateErr)
 	log.Info("All updates completed")
 	verifyCtx, verifyCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer verifyCancel()
@@ -225,7 +237,7 @@ func testConcurrentKeyspaceRoutingRulesUpdates(t *testing.T, ctx context.Context
 	require.LessOrEqual(t, concurrency, len(rules.Rules))
 }
 
-func update(t *testing.T, ctx context.Context, ts *topo.Server, id int) {
+func update(ctx context.Context, ts *topo.Server, id int) error {
 	s := fmt.Sprintf("%d_%d", id, rand.IntN(math.MaxInt))
 	routes := make(map[string]string)
 	for _, tabletType := range tabletTypeSuffixes {
@@ -234,22 +246,25 @@ func update(t *testing.T, ctx context.Context, ts *topo.Server, id int) {
 	}
 	err := updateKeyspaceRoutingRules(ctx, ts, "test", routes)
 	if ctx.Err() != nil {
-		return
+		return nil
 	}
-	if !assert.NoError(t, err) {
-		return
+	if err != nil {
+		return err
 	}
 	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	if ctx.Err() != nil {
-		return
+		return nil
 	}
-	if !assert.NoError(t, err) {
-		return
+	if err != nil {
+		return err
 	}
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
-		assert.Equal(t, s+tabletType, got[from])
+		if got[from] != s+tabletType {
+			return fmt.Errorf("routing rule %q = %q, want %q", from, got[from], s+tabletType)
+		}
 	}
+	return nil
 }
 
 // startEtcd starts an etcd subprocess, and waits for it to be ready.

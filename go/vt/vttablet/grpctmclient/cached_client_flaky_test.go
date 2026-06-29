@@ -404,10 +404,10 @@ func TestCachedConnClient_evictions(t *testing.T) {
 	defer dialCancel()
 
 	err := client.Ping(dialCtx, tablets[0]) // this should take the rlock_fast path
-	assert.NoError(t, err, "could not redial on inuse cached connection")
+	require.NoError(t, err, "could not redial on inuse cached connection")
 
 	err = client.Ping(dialCtx, tablets[4]) // this will enter the poll loop until context timeout
-	assert.Error(t, err, "should have timed out waiting for an eviction, while all conns were held")
+	require.Error(t, err, "should have timed out waiting for an eviction, while all conns were held")
 
 	// free up a connection
 	connHoldCancel()

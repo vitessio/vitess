@@ -1179,7 +1179,7 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false, nullResultsObserver{}, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	assert.Error(t,
+	require.Error(t,
 		sc.txConn.Rollback(ctx, session))
 
 	expectErr := NewShardError(vterrors.New(

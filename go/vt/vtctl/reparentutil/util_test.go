@@ -1292,12 +1292,12 @@ zone1-0000000100 is not a replica`,
 			actual, err := ElectNewPrimary(ctx, tt.tmc, tt.shardInfo, tt.tabletMap, tt.innodbBufferPoolData, options, logger)
 			if len(tt.errContains) > 0 {
 				for _, errC := range tt.errContains {
-					assert.ErrorContains(t, err, errC)
+					require.ErrorContains(t, err, errC)
 				}
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, actual)
 		})
 	}
@@ -1787,7 +1787,7 @@ func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			tabletRes, posRes, err := getValidCandidatesAndPositionsAsList(test.validCandidates, test.tabletMap)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, test.tabletRes, tabletRes)
 			assert.Len(t, posRes, len(tabletRes))
 			for i, tablet := range tabletRes {
@@ -1998,7 +1998,7 @@ func TestRestrictValidCandidates(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, res, test.result)
 		})
 	}

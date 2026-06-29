@@ -327,7 +327,7 @@ func TestTabletServerStartCommit(t *testing.T) {
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(ctx, tsv)
 	state, err = tsv.StartCommit(ctx, &target, txid, "aa")
-	assert.EqualError(t, err, "could not transition to COMMIT: aa", "Prepare err")
+	require.EqualError(t, err, "could not transition to COMMIT: aa", "Prepare err")
 	assert.Equal(t, querypb.StartCommitState_Fail, state, "StartCommit state")
 }
 
@@ -1110,13 +1110,19 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 			}
 		})
 
-	// Run all three transactions.
+	// Run all three transactions. require.* is unsafe inside WaitGroup.Go (it
+	// runs on a worker goroutine), so each goroutine records its error and the
+	// test goroutine asserts on them after wg.Wait().
 	wg := sync.WaitGroup{}
+	var tx1Err, tx2Err, tx3Err error
 
 	// tx1.
 	wg.Go(func() {
 		state1, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
+		if err != nil {
+			tx1Err = err
+			return
+		}
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
 			assert.NoError(t, err)
 		}
@@ -1126,7 +1132,10 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	wg.Go(func() {
 		<-tx1Started
 		state2, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q2, err)
+		if err != nil {
+			tx2Err = err
+			return
+		}
 		// TODO(mberlin): This should actually be in the BeforeFunc() of tx1 but
 		// then the test is hanging. It looks like the MySQL C client library cannot
 		// open a second connection while the request of the first connection is
@@ -1139,16 +1148,22 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 
 	// tx3.
 	wg.Go(func() {
+		defer close(tx3Finished)
 		<-tx1Started
 		state3, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
+		if err != nil {
+			tx3Err = err
+			return
+		}
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
 			assert.NoError(t, err)
 		}
-		close(tx3Finished)
 	})
 
 	wg.Wait()
+	require.NoError(t, tx1Err)
+	require.NoError(t, tx2Err)
+	require.NoError(t, tx3Err)
 
 	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 1
@@ -1207,13 +1222,19 @@ func TestSerializeTransactionsSameRow_StreamExecute(t *testing.T) {
 			}
 		})
 
-	// Run all three transactions.
+	// Run all three transactions. require.* is unsafe inside WaitGroup.Go (it
+	// runs on a worker goroutine), so each goroutine records its error and the
+	// test goroutine asserts on them after wg.Wait().
 	wg := sync.WaitGroup{}
+	var tx1Err, tx2Err, tx3Err error
 
 	// tx1.
 	wg.Go(func() {
 		state1, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil, noop)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
+		if err != nil {
+			tx1Err = err
+			return
+		}
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
 			assert.NoError(t, err)
 		}
@@ -1223,7 +1244,10 @@ func TestSerializeTransactionsSameRow_StreamExecute(t *testing.T) {
 	wg.Go(func() {
 		<-tx1Started
 		state2, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil, noop)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q2, err)
+		if err != nil {
+			tx2Err = err
+			return
+		}
 		// TODO(mberlin): This should actually be in the BeforeFunc() of tx1 but
 		// then the test is hanging. It looks like the MySQL C client library cannot
 		// open a second connection while the request of the first connection is
@@ -1236,16 +1260,22 @@ func TestSerializeTransactionsSameRow_StreamExecute(t *testing.T) {
 
 	// tx3.
 	wg.Go(func() {
+		defer close(tx3Finished)
 		<-tx1Started
 		state3, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil, noop)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
+		if err != nil {
+			tx3Err = err
+			return
+		}
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
 			assert.NoError(t, err)
 		}
-		close(tx3Finished)
 	})
 
 	wg.Wait()
+	require.NoError(t, tx1Err)
+	require.NoError(t, tx2Err)
+	require.NoError(t, tx3Err)
 
 	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 1
@@ -1332,13 +1362,19 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 			<-allQueriesPending
 		})
 
-	// Run all three transactions.
+	// Run all three transactions. require.* is unsafe inside WaitGroup.Go (it
+	// runs on a worker goroutine), so each goroutine records its error and the
+	// test goroutine asserts on them after wg.Wait().
 	wg := sync.WaitGroup{}
+	var tx1Err, tx2Err, tx3Err error
 
 	// tx1.
 	wg.Go(func() {
 		state1, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
+		if err != nil {
+			tx1Err = err
+			return
+		}
 
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
 			assert.NoError(t, err)
@@ -1352,7 +1388,10 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		<-tx1Started
 
 		state2, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q2, err)
+		if err != nil {
+			tx2Err = err
+			return
+		}
 
 		if _, err := tsv.Commit(ctx, &target, state2.TransactionID); err != nil {
 			assert.NoError(t, err)
@@ -1366,7 +1405,10 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 		<-tx1Started
 
 		state3, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
+		if err != nil {
+			tx3Err = err
+			return
+		}
 
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
 			assert.NoError(t, err)
@@ -1387,6 +1429,9 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 	close(allQueriesPending)
 
 	wg.Wait()
+	require.NoError(t, tx1Err)
+	require.NoError(t, tx2Err)
+	require.NoError(t, tx3Err)
 
 	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 1
@@ -1450,13 +1495,19 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 			<-tx2Failed
 		})
 
-	// Run the two transactions.
+	// Run the two transactions. require.* is unsafe inside WaitGroup.Go (it runs
+	// on a worker goroutine), so each goroutine records its error and the test
+	// goroutine asserts on them after wg.Wait().
 	wg := sync.WaitGroup{}
+	var tx1Err, tx2Err error
 
 	// tx1.
 	wg.Go(func() {
 		state1, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
+		if err != nil {
+			tx1Err = err
+			return
+		}
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
 			assert.NoError(t, err)
 		}
@@ -1467,13 +1518,14 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 		defer close(tx2Failed)
 
 		<-tx1Started
-		_, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
-		assert.ErrorContains(t, err, "hot row protection: too many queued transactions")
-		assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
-		// No commit necessary because the Begin failed.
+		// No commit necessary because the Begin is expected to fail.
+		_, _, tx2Err = tsv.BeginExecute(ctx, nil, &target, nil, q2, bvTx2, 0, nil)
 	})
 
 	wg.Wait()
+	require.NoError(t, tx1Err)
+	require.ErrorContains(t, tx2Err, "hot row protection: too many queued transactions")
+	assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(tx2Err))
 
 	got := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 0
@@ -1528,13 +1580,19 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 			<-tx2Done
 		})
 
-	// Run the two transactions.
+	// Run the two transactions. require.* is unsafe inside WaitGroup.Go (it runs
+	// on a worker goroutine), so each goroutine records its error and the test
+	// goroutine asserts on them after wg.Wait().
 	wg := sync.WaitGroup{}
+	var tx1Err, tx2Err, tx3Err error
 
 	// tx1.
 	wg.Go(func() {
 		state1, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q1, bvTx1, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q1, err)
+		if err != nil {
+			tx1Err = err
+			return
+		}
 
 		if _, err := tsv.Commit(ctx, &target, state1.TransactionID); err != nil {
 			assert.NoError(t, err)
@@ -1549,19 +1607,23 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 		// Wait until tx1 has started to make the test deterministic.
 		<-tx1Started
 
-		_, _, err := tsv.BeginExecute(ctxTx2, nil, &target, nil, q2, bvTx2, 0, nil)
-		assert.ErrorContains(t, err, "context canceled")
-		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
-		// No commit necessary because the Begin failed.
+		// No commit necessary because the Begin is expected to fail (canceled).
+		_, _, tx2Err = tsv.BeginExecute(ctxTx2, nil, &target, nil, q2, bvTx2, 0, nil)
 	})
 
 	// tx3.
 	wg.Go(func() {
 		// Wait until tx1 and tx2 are pending to make the test deterministic.
-		assert.NoError(t, waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2))
+		if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and `name` = 1", 2); err != nil {
+			tx3Err = err
+			return
+		}
 
 		state3, _, err := tsv.BeginExecute(ctx, nil, &target, nil, q3, bvTx3, 0, nil)
-		assert.NoErrorf(t, err, "failed to execute query: %s: %s", q3, err)
+		if err != nil {
+			tx3Err = err
+			return
+		}
 
 		if _, err := tsv.Commit(ctx, &target, state3.TransactionID); err != nil {
 			assert.NoError(t, err)
@@ -1575,6 +1637,10 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	cancelTx2()
 
 	wg.Wait()
+	require.NoError(t, tx1Err)
+	require.ErrorContains(t, tx2Err, "context canceled")
+	assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(tx2Err))
+	require.NoError(t, tx3Err)
 
 	got, ok := tsv.stats.WaitTimings.Counts()["TabletServerTest.TxSerializer"]
 	want := countStart + 2
@@ -1591,7 +1657,7 @@ func TestMessageStream(t *testing.T) {
 		return nil
 	})
 	wantErr := "table nomsg not found in schema"
-	assert.EqualErrorf(t, err, wantErr, "tsv.MessageStream: %v, want %s", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "tsv.MessageStream: %v, want %s", err, wantErr)
 
 	// Check that the streaming mechanism works.
 	called := false
@@ -1914,7 +1980,7 @@ func TestTerseErrors(t *testing.T) {
 
 	// The client error message should be redacted (made terse)
 	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
-	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// But the log message should NOT be
 	wantLog := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
@@ -1944,7 +2010,7 @@ func TestSanitizeLogMessages(t *testing.T) {
 
 	// Error is not sanitized, nor truncated
 	wantErr := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is pretty rad my doo, getting swole\\\"\"}"
-	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// But the log message is sanitized
 	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
@@ -2017,7 +2083,7 @@ func TestSanitizeMessagesBindVars(t *testing.T) {
 		nil,
 	)
 	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {[REDACTED]}"
-	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	wantLog := wantErr
 	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
@@ -2091,7 +2157,7 @@ func TestTruncateMessages(t *testing.T) {
 
 	// Error not truncated
 	wantErr := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
-	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// but log *is* truncated, and sanitized
 	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {[REDACTED]}"
@@ -2108,7 +2174,7 @@ func TestTruncateMessages(t *testing.T) {
 
 	// Error not truncated
 	wantErr = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
-	assert.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
+	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// Log not truncated, since our limit is large enough now, but it is still sanitized
 	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"

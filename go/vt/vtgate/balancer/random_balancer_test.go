@@ -101,13 +101,13 @@ func TestRandomBalancerFactory(t *testing.T) {
 func TestBalancerFactoryInvalidModes(t *testing.T) {
 	// Test that "cell" mode returns an error (should be handled by gateway)
 	b, err := NewTabletBalancer(ModeCell, "cell1", []string{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, b)
-	assert.ErrorContains(t, err, "cell mode should be handled by the gateway")
+	require.ErrorContains(t, err, "cell mode should be handled by the gateway")
 
 	// Test that an invalid mode returns an error
 	b, err = NewTabletBalancer(ModeInvalid, "cell1", []string{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, b)
 	assert.ErrorContains(t, err, "unsupported balancer mode")
 }

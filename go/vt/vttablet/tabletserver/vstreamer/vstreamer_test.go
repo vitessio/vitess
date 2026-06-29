@@ -2964,6 +2964,6 @@ func TestAddEnumAndSetMappingsActionableError(t *testing.T) {
 	metadata := []uint16{0}
 	err := addEnumAndSetMappingstoPlan(env.SchemaEngine.Environment(), &Plan{}, cols, metadata)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "enum or set column plan does not have valid string values")
+	require.ErrorContains(t, err, "enum or set column plan does not have valid string values")
 	assert.ErrorContains(t, err, "--track-schema-versions")
 }

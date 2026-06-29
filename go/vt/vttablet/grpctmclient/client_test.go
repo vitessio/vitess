@@ -46,11 +46,11 @@ func TestDialDedicatedPool(t *testing.T) {
 		require.True(t, ok)
 
 		cli, invalidator, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, invalidator)
 		assert.NotNil(t, cli)
 		_, invalidatorTwo, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// Ensure that running both the invalidators doesn't cause any issues.
 		invalidator()
 		invalidatorTwo()
@@ -116,7 +116,7 @@ func TestDialPool(t *testing.T) {
 		require.True(t, ok)
 
 		cli, err := poolDialer.dialPool(ctx, tablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, cli)
 	})
 

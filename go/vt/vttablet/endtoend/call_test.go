@@ -19,7 +19,6 @@ package endtoend
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -146,7 +145,7 @@ func TestCallProcedureChangedTx(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			_, err := client.BeginExecute(query, nil, nil)
-			assert.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
+			require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
 			client.Release()
 		})
 	}

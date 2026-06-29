@@ -276,7 +276,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			}
 
 			err := vdiffenv.vde.retryVDiffs(vdiffenv.vde.ctx)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Len(t, vdiffenv.vde.controllers, expectedControllerCnt)
 			vdiffenv.dbClient.Wait()
 		})

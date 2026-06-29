@@ -309,7 +309,7 @@ func TestCachingSha2Password(t *testing.T) {
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(`select true from information_schema.PLUGINS where PLUGIN_NAME='caching_sha2_password' and PLUGIN_STATUS='ACTIVE'`, 1, false)
-	assert.NoError(t, err, "select true from information_schema.PLUGINS failed: %v", err)
+	require.NoError(t, err, "select true from information_schema.PLUGINS failed: %v", err)
 
 	if len(qr.Rows) != 1 {
 		t.Skip("Server does not support caching_sha2_password plugin")

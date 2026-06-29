@@ -76,7 +76,7 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		"to":         "toc",
 		"write_only": "invalid",
 	})
-	assert.EqualError(t, err, "write_only value must be 'true' or 'false': 'invalid'", "Create(bad_scatter)")
+	require.EqualError(t, err, "write_only value must be 'true' or 'false': 'invalid'", "Create(bad_scatter)")
 	if err == nil {
 		unknownParams = vdx.(ParamValidating).UnknownParams()
 		require.Empty(t, unknownParams)
@@ -106,7 +106,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 	vc.numRows = 2
 	_, err = lhu.Map(t.Context(), vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	assert.EqualError(t, err, "LookupHash.Map: unexpected multiple results from vindex t: INT64(1)", "lhu(query fail)")
+	require.EqualError(t, err, "LookupHash.Map: unexpected multiple results from vindex t: INT64(1)", "lhu(query fail)")
 
 	// Test conversion fail.
 	vc.result = sqltypes.MakeTestResult(

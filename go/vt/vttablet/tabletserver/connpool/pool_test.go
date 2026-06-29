@@ -114,7 +114,7 @@ func TestConnPoolSetCapacity(t *testing.T) {
 		_ = connPool.SetCapacity(t.Context(), -10)
 	})
 	err := connPool.SetCapacity(t.Context(), 10)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.EqualValuesf(t, 10, connPool.Capacity(), "capacity should be 10")
 }
 

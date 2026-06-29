@@ -242,12 +242,12 @@ func TestFilterByPlan(t *testing.T) {
 func TestQueryRule(t *testing.T) {
 	qr := NewQueryRule("rule 1", "r1", QRFail)
 	err := qr.SetIPCond("123")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, qr.requestIP.MatchString("123"), "want match")
 	assert.False(t, qr.requestIP.MatchString("1234"), "want no match")
 	assert.False(t, qr.requestIP.MatchString("12"), "want no match")
 	err = qr.SetIPCond("[")
-	assert.Error(t, err, "want error")
+	require.Error(t, err, "want error")
 
 	qr.AddPlanCond(planbuilder.PlanSelect)
 	qr.AddPlanCond(planbuilder.PlanInsert)
@@ -263,9 +263,9 @@ func TestBindVarStruct(t *testing.T) {
 	qr := NewQueryRule("rule 1", "r1", QRFail)
 
 	err := qr.AddBindVarCond("b", false, true, QRNoOp, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = qr.AddBindVarCond("a", true, false, QRNoOp, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "a", qr.bindVarConds[1].name)
 	assert.True(t, qr.bindVarConds[1].onAbsent)
 	assert.False(t, qr.bindVarConds[1].onMismatch)
@@ -650,9 +650,7 @@ func TestInvalidJSON(t *testing.T) {
 	for _, tcase := range invalidjsons {
 		qrs := New()
 		err := qrs.UnmarshalJSON([]byte(tcase.input))
-		if !assert.Errorf(t, err, "want error for case %q", tcase.input) {
-			continue
-		}
+		require.Errorf(t, err, "want error for case %q", tcase.input)
 		recvd := strings.Replace(err.Error(), "fatal: ", "", 1)
 		assert.Equalf(t, tcase.err, recvd, "invalid json: %s", tcase.input)
 	}

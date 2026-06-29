@@ -58,7 +58,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		fields,
@@ -95,7 +95,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -163,7 +163,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResults := sqltypes.MakeTestStreamingResults(
 		fields,
@@ -203,7 +203,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResults := sqltypes.MakeTestStreamingResults(
 		sqltypes.MakeTestFields(
@@ -231,7 +231,7 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 	oa := &OrderedAggregate{Input: fp}
 
 	got, err := oa.GetFields(t.Context(), &noopVCursor{}, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, got, input)
 }
 
@@ -302,7 +302,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -378,7 +378,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResults := sqltypes.MakeTestStreamingResults(
 		sqltypes.MakeTestFields(
@@ -456,7 +456,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -498,7 +498,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -924,7 +924,7 @@ func TestOrderedAggregateCollate(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		fields,
@@ -963,7 +963,7 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		fields,
@@ -1004,7 +1004,7 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 	}
 
 	result, err := oa.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
 		fields,

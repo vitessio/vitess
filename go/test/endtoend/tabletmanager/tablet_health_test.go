@@ -87,7 +87,7 @@ func TestTabletReshuffle(t *testing.T) {
 	assertExcludeFields(t, string(result))
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Backup", rTablet.Alias)
-	assert.Error(t, err, "cannot perform backup without my.cnf")
+	require.Error(t, err, "cannot perform backup without my.cnf")
 
 	killTablets(rTablet)
 }
@@ -428,7 +428,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	require.NoError(t, err)
 	// Trying to drain the same tablet again, should error
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "drained")
-	assert.Error(t, err, "already drained")
+	require.Error(t, err, "already drained")
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("StopReplication", rdonlyTablet.Alias)
 	require.NoError(t, err)

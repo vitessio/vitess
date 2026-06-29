@@ -149,7 +149,7 @@ func TestIntegrityError(t *testing.T) {
 	client := framework.NewClient()
 	_, err := client.Execute("insert into vitess_test values(1, null, null, null)", nil)
 	want := "Duplicate entry '1'"
-	assert.ErrorContains(t, err, want)
+	require.ErrorContains(t, err, want)
 	compareIntDiff(t, framework.DebugVars(), "Errors/ALREADY_EXISTS", vstart, 1)
 }
 
@@ -549,7 +549,7 @@ func TestClientFoundRows(t *testing.T) {
 	defer client.Execute("delete from vitess_test where intval= 124", nil)
 
 	// CLIENT_FOUND_ROWS flag is off.
-	assert.NoError(t, client.Begin(false))
+	require.NoError(t, client.Begin(false))
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
 	require.NoError(t, err)
 	assert.Empty(t, qr.Rows)
@@ -843,7 +843,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
@@ -851,12 +851,12 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, fileSize)
 
 			assert.True(t, row[4].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
@@ -866,7 +866,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
@@ -882,7 +882,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
@@ -890,12 +890,12 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, fileSize)
 
 			assert.True(t, row[5].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)
@@ -905,7 +905,7 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[2].IsIntegral())
 			createTime, err := row[2].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, createTime)
 
 			// TABLE_COMMENT
@@ -913,12 +913,12 @@ func TestShowTablesWithSizes(t *testing.T) {
 
 			assert.True(t, row[4].IsDecimal())
 			fileSize, err := row[4].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, fileSize)
 
 			assert.True(t, row[5].IsDecimal())
 			allocatedSize, err := row[5].ToCastInt64()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Positive(t, allocatedSize)
 
 			actualTables = append(actualTables, tableName)

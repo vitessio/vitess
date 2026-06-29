@@ -4582,7 +4582,7 @@ func TestIntroducers(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := parser.Parse(tcase.input)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
 		})

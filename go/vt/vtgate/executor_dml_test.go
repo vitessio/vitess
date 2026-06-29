@@ -3243,7 +3243,7 @@ func TestConsistentLookupInsert(t *testing.T) {
 		sbc1.EphemeralShardErr = sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '10' for key 't1_lkp_idx.PRIMARY'")
 		sbc2.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
 		_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 10), (4, 10), (50, 4)", nil)
-		assert.ErrorContains(t, err,
+		require.ErrorContains(t, err,
 			"lookup.Create: transaction rolled back to reverse changes of partial DML execution: target: TestExecutor.-80.primary: "+
 				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
 
@@ -3265,7 +3265,7 @@ func TestConsistentLookupInsert(t *testing.T) {
 			{RowsAffected: 1},
 		})
 		_, err := executorExecSession(ctx, executor, session, "insert into t1(id, unq_col) values (1, 10), (4, 10)", nil)
-		assert.ErrorContains(t, err,
+		require.ErrorContains(t, err,
 			"transaction rolled back to reverse changes of partial DML execution: lookup.Create: target: TestExecutor.-80.primary: "+
 				"Duplicate entry '10' for key 't1_lkp_idx.PRIMARY' (errno 1062) (sqlstate 23000)")
 

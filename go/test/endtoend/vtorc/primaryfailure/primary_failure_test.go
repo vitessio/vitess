@@ -148,16 +148,16 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 
 	// disable ERS on the keyspace via SetVtorcEmergencyReparent --disable
 	_, err := clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--disable", keyspace.Name)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, true)
 	utils.CheckVarExists(t, vtOrcProcess, "EmergencyReparentShardDisabled")
 	utils.CheckMetricExists(t, vtOrcProcess, "vtorc_emergency_reparent_shard_disabled")
 
 	// make the current primary vttablet unavailable
 	err = curPrimary.VttabletProcess.TearDown()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = curPrimary.MysqlctlProcess.Stop()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list
 		utils.PermanentlyRemoveVttablet(clusterInfo, curPrimary)
@@ -176,7 +176,7 @@ func TestDownPrimary_KeyspaceEmergencyReparentDisabled(t *testing.T) {
 
 	// enable ERS on the keyspace via SetVtorcEmergencyReparent --enable
 	_, err = clusterInfo.ClusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetVtorcEmergencyReparent", "--enable", keyspace.Name)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.WaitForShardERSDisabledState(t, vtOrcProcess, keyspace.Name, shard0.Name, false)
 
 	// check that the replica gets promoted by vtorc

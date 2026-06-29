@@ -208,7 +208,7 @@ func TestPermutations(t *testing.T) {
 					}
 					return false, -1
 				})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if len(allDiffs) > 0 {
 					assert.Equal(t, 1, numEquals)
 				}
@@ -228,7 +228,7 @@ func TestPermutations(t *testing.T) {
 					// early break; this callback function should not be invoked again
 					return true, -1
 				})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if len(allDiffs) > 0 {
 					assert.True(t, earlyBreak)
 					assert.Len(t, allPerms, 1)
@@ -1570,7 +1570,7 @@ func TestSchemaDiffForeignKeyShadowConflict(t *testing.T) {
 			if tc.expectConflict {
 				require.Error(t, err)
 				var conflictErr *ForeignKeyShadowConflictError
-				assert.ErrorAs(t, err, &conflictErr)
+				require.ErrorAs(t, err, &conflictErr)
 				// The error must name the referenced column; it must never render an empty identifier.
 				assert.NotContains(t, err.Error(), "``")
 			} else {

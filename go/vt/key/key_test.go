@@ -644,7 +644,7 @@ func TestParseShardingSpec(t *testing.T) {
 	}
 	for key, wanted := range goodTable {
 		r, err := ParseShardingSpec(key)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		if !assert.Len(t, r, len(wanted)) {
 			continue
 		}
@@ -1064,15 +1064,15 @@ func TestKeyRangeContains(t *testing.T) {
 
 	for _, el := range table {
 		s, err := hex.DecodeString(el.start)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		e, err := hex.DecodeString(el.end)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		kr := &topodatapb.KeyRange{
 			Start: s,
 			End:   e,
 		}
 		k, err := hex.DecodeString(el.kid)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		c := KeyRangeContains(kr, k)
 		assert.Equal(t, el.contained, c)
 

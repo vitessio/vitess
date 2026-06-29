@@ -460,7 +460,7 @@ func TestGenerateOnlineDDLQuery(t *testing.T) {
 			if tcase.expectError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tcase.expectQuery, query)
 			}
 		})

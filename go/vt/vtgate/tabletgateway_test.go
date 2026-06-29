@@ -276,7 +276,7 @@ func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ct
 	sc1 = hc.AddTestTablet("cell", host, port, keyspace, shard, tabletType, true, 10, nil)
 	sc2 = hc.AddTestTablet("cell2", host, port, keyspace, shard, tabletType, true, 10, nil)
 	err = f(ctx, tg, target)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	verifyExpectedCount(t, sc1, 0)
 	verifyExpectedCount(t, sc2, 1)
 
@@ -286,7 +286,7 @@ func testTabletGatewayGenericHelper(t *testing.T, ctx context.Context, f func(ct
 	sc2 = hc.AddTestTablet("cell2", host, port+1, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	err = f(ctx, tg, target)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	verifyExpectedCount(t, sc1, 1)
 	verifyExpectedCount(t, sc2, 1)
 }

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSplitHostPort(t *testing.T) {
@@ -36,7 +37,7 @@ func TestSplitHostPort(t *testing.T) {
 	}
 	for input, want := range table {
 		gotHost, gotPort, err := SplitHostPort(input)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, want.host, gotHost)
 		assert.Equal(t, want.port, gotPort)
 	}
@@ -86,11 +87,11 @@ func TestNormalizeIP(t *testing.T) {
 func TestDNSTracker(t *testing.T) {
 	refresh := DNSTracker("localhost")
 	_, err := refresh()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	refresh = DNSTracker("")
 	val, err := refresh()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, val, "DNS name resolution should not have changed")
 }
 

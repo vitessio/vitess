@@ -321,7 +321,7 @@ func TestTemplatize(t *testing.T) {
 		sm := &StreamMigrator{ts: ts}
 		out, err := sm.templatize(t.Context(), tt.in)
 		if tt.err != "" {
-			assert.Error(t, err, "templatize(%v) expected to get err=%s, got %+v", stringifyVRS(tt.in), tt.err, err)
+			require.Error(t, err, "templatize(%v) expected to get err=%s, got %+v", stringifyVRS(tt.in), tt.err, err)
 		}
 
 		got := stringifyVRS(out)

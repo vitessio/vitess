@@ -255,7 +255,7 @@ func testUnsafeAllowForeignKeys(t *testing.T) {
 	`
 	{
 		_, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy", "direct --allow-zero-in-date", "--sql", sqls, keyspaceName)
-		assert.Error(t, err)
+		require.Error(t, err)
 		checkTables(t, totalTableCount)
 	}
 	{

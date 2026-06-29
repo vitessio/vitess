@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadOnlyPolicy(t *testing.T) {
@@ -30,7 +31,7 @@ func TestReadOnlyPolicy(t *testing.T) {
 	assert.Equalf(t, want, err, "got %v; want %v", err, want)
 
 	err = testReadOnlyPolicy.CheckAccessHTTP(nil, DEBUGGING)
-	assert.NoErrorf(t, err, "got %v; want no error", err)
+	require.NoErrorf(t, err, "got %v; want no error", err)
 
 	err = testReadOnlyPolicy.CheckAccessHTTP(nil, MONITORING)
 	assert.NoErrorf(t, err, "got %v; want no error", err)

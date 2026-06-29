@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -144,11 +143,11 @@ func shutdown(t *testing.T, ksName string) {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
 					_, err := tablet.MysqlctlProcess.StopProcess()
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 				if tablet.MysqlctldProcess.TabletUID > 0 {
 					err := tablet.MysqlctldProcess.Stop()
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 				_ = tablet.VttabletProcess.TearDown()
 			}

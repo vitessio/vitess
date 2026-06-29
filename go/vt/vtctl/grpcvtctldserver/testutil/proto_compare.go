@@ -60,12 +60,12 @@ func AssertLogutilEventsMatch(t testing.TB, expected []*logutilpb.Event, actual 
 	actual = clearEvents(actual, f)
 
 	expectedBytes, err := json.Marshal(expected)
-	if !assert.NoError(t, err, "could not marshal expected events as json, assertion messages will be impacted") {
+	if err != nil {
 		expectedBytes = nil
 	}
 
 	actualBytes, err := json.Marshal(actual)
-	if !assert.NoError(t, err, "could not marshal actual events as json, assertion messages will be impacted") {
+	if err != nil {
 		actualBytes = nil
 	}
 

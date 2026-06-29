@@ -304,7 +304,7 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			require.NoError(t, err, "could not connect to mysqld: %v", err)
 			defer conn.Close()
 			cols, indexName, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, conn.ExecuteFetch, env.Dbcfgs.DBName, tt.table)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.Equalf(t, tt.wantCols, cols, "Mysqld.GetPrimaryKeyEquivalentColumns() columns = %v, want %v", cols, tt.wantCols)
 			require.Equalf(t, tt.wantIndex, indexName, "Mysqld.GetPrimaryKeyEquivalentColumns() index = %v, want %v", indexName, tt.wantIndex)
 		})
@@ -791,7 +791,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	wg.Wait()
 
 	_, err = dbaconn.ExecuteFetch("unlock tables", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Confirm that the ALTER to re-add the secondary keys
 	// did not succeed.
@@ -802,7 +802,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// Confirm that we successfully attempted to kill it.
 	query = "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
 	res, err := dbaconn.ExecuteFetch(query, 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, res.Rows, 1)
 	// TODO: figure out why the KILL never shows up...
 	// require.Equal(t, "1", res.Rows[0][0].ToString())
@@ -916,7 +916,7 @@ func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val stri
 	defer tmr.Stop()
 	for {
 		res, err := dbc.ExecuteFetch(query, 1)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Len(t, res.Rows, 1)
 		if res.Rows[0][0].ToString() == val {
 			return

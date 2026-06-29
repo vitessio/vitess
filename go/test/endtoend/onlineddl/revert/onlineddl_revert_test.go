@@ -416,11 +416,11 @@ func testRevertible(t *testing.T) {
 				uuid = testOnlineDDLStatement(t, toStatement, ddlStrategy, "vtgate", tableName, "")
 				if !onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete) {
 					resp, err := throttler.CheckThrottler(&clusterInstance.VtctldClientProcess, primaryTablet, throttlerapp.TestingName, nil)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					fmt.Println("Throttler check response: ", resp)
 
 					output, err := throttler.GetThrottlerStatusRaw(&clusterInstance.VtctldClientProcess, primaryTablet)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					fmt.Println("Throttler status response: ", output)
 				}
 
@@ -1045,7 +1045,7 @@ func testRevert(t *testing.T) {
 		specialPlan := row.AsString("special_plan", "")
 		artifacts := row.AsString("artifacts", "")
 		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0
 			assert.Contains(t, specialPlan, "instant-ddl")
@@ -1062,7 +1062,7 @@ func testRevert(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		instantDDLCapable, err := capableOf(capabilities.InstantDDLFlavorCapability)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0, therefore revert is impossible
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
@@ -1197,14 +1197,14 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	} else {
 		var err error
 		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -1379,7 +1379,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 		case 2:
 			err = generateDelete(t, conn)
 		}
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		time.Sleep(10 * time.Millisecond)
 	}
 }

@@ -149,9 +149,7 @@ func TestNewFromFloatRandom(t *testing.T) {
 		}
 		in := (rand.Float64() - 0.5) * math.MaxFloat64 * 2
 		want, err := NewFromString(strconv.FormatFloat(in, 'f', -1, 64))
-		if !assert.NoError(t, err) {
-			continue
-		}
+		require.NoError(t, err)
 		got := NewFromFloat(in)
 		assert.True(t, want.Equal(got))
 	}
@@ -257,7 +255,7 @@ func TestNewFromStringErrs(t *testing.T) {
 
 	for s, o := range tests {
 		out, err := NewFromString(s)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Equal(t, o, out.String())
 	}
 }

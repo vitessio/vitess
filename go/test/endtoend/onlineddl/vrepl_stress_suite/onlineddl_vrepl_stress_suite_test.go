@@ -566,14 +566,14 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	} else {
 		var err error
 		uuid, err = clusterInstance.VtctldClientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.ApplySchemaParams{DDLStrategy: ddlStrategy})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	status := schema.OnlineDDLStatusComplete
 	if !strategySetting.Strategy.IsDirect() {
@@ -712,7 +712,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				}
 			}
 		}
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		time.Sleep(singleConnectionSleepInterval)
 		// Most o fthe time, we want the load to be high, so as to create real stress and potentially
 		// expose bugs in vreplication (the objective of this test!).

@@ -1352,7 +1352,7 @@ func TestUnicode(t *testing.T) {
 
 	for _, tcases := range testcases {
 		_, err := conn.ExecuteFetch(tcases.input, 10000, false)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		expectDBClientQueries(t, tcases.output)
 		if tcases.table != "" {
 			customExpectData(t, tcases.table, tcases.data, func(ctx context.Context, query string) (*sqltypes.Result, error) {
@@ -2330,16 +2330,16 @@ func TestPlayerStopAtOther(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err = vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Insert the same row on the target and lock it.
 	_, err = vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Start a VReplication where the first transaction updates the locked row.
 	// It will cause the apply to wait, which will cause the other two events
@@ -2531,14 +2531,14 @@ func TestPlayerLockErrors(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the second row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=2", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2613,14 +2613,14 @@ func TestPlayerCancelOnLock(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	execStatements(t, []string{
 		"begin",
@@ -2685,14 +2685,14 @@ func TestPlayerTransactions(t *testing.T) {
 
 	vconn := &realDBClient{nolog: true}
 	err := vconn.Connect()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer vconn.Close()
 
 	// Start a transaction and lock the row.
 	_, err = vconn.ExecuteFetch("begin", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// create one transaction
 	execStatements(t, []string{
@@ -2787,14 +2787,14 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 
 			vconn := &realDBClient{nolog: true}
 			err := vconn.Connect()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer vconn.Close()
 
 			// Start a transaction and lock the row.
 			_, err = vconn.ExecuteFetch("begin", 1)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			_, err = vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// create one transaction
 			execStatements(t, []string{

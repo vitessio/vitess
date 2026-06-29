@@ -3701,7 +3701,7 @@ func TestValidateEmptyTables(t *testing.T) {
 
 	err = mz.validateEmptyTables()
 
-	assert.ErrorContains(t, err, "table1")
+	require.ErrorContains(t, err, "table1")
 	assert.NotContains(t, err.Error(), "table2")
 	// Check if the error message doesn't include duplicate tables
 	assert.Equal(t, 1, strings.Count(err.Error(), "table3"))

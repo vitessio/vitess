@@ -660,13 +660,13 @@ func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {
 func TestParseBackupName(t *testing.T) {
 	// backup name doesn't contain 3 parts
 	_, _, err := ParseBackupName("dir", "asd.saddsa")
-	assert.ErrorContains(t, err, "cannot backup name")
+	require.ErrorContains(t, err, "cannot backup name")
 
 	// Invalid time
 	bt, al, err := ParseBackupName("dir", "2024-03-18.123.tablet_id")
 	assert.Nil(t, bt)
 	assert.Nil(t, al)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Valid case
 	bt, al, err = ParseBackupName("dir", "2024-03-18.180911.cell1-42")
@@ -682,13 +682,13 @@ func TestShouldRestore(t *testing.T) {
 	b, err := ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
 		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.False(t, b)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	env.restoreParams.DeleteBeforeRestore = true
 	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
 		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
 	assert.True(t, b)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	env.restoreParams.DeleteBeforeRestore = false
 
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
@@ -696,7 +696,7 @@ func TestShouldRestore(t *testing.T) {
 	}
 	b, err = ShouldRestore(env.ctx, env.restoreParams.Logger, env.restoreParams.Cnf,
 		env.restoreParams.Mysqld, env.restoreParams.DbName, env.restoreParams.DeleteBeforeRestore)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, b)
 
 	env.mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
@@ -1087,14 +1087,14 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				if tc.wantErrString != "" {
-					assert.ErrorContains(t, err, tc.wantErrString)
+					require.ErrorContains(t, err, tc.wantErrString)
 				}
 			} else {
 				require.NoError(t, err)
 			}
 
 			if mysqld != nil && !tc.wantErr {
-				assert.NoError(t, mysqld.CheckSuperQueryList())
+				require.NoError(t, mysqld.CheckSuperQueryList())
 			}
 
 			// Verify logging too.
