@@ -143,6 +143,7 @@ linters:
         - equal-values
         - error-nil
         - len
+        - useless-assert
   exclusions:
     generated: lax
     presets:

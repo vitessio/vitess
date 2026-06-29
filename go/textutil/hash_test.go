@@ -38,7 +38,7 @@ func TestUUIDv5Base36(t *testing.T) {
 	u := UUIDv5Base36("abc", "def")
 	assert.Len(t, u, 25, "u=%v", u)
 
-	assert.Equal(t, UUIDv5Base36("abc", "def"), UUIDv5Base36("abc", "def"))     // verify deterministic
+	assert.Equal(t, u, UUIDv5Base36("abc", "def"))                              // verify deterministic
 	assert.NotEqual(t, UUIDv5Base36("abc", "defg"), UUIDv5Base36("abc", "def")) // verify deterministic
 	assert.Equal(t, "53qgoh2c0taw2uj43j5a0f0ul", UUIDv5Base36("abc", "def"))    // never change! The algorithm is fixed in stone
 }
