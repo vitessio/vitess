@@ -254,7 +254,7 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
 	} else if dbType == "mariadb" && majorVersion == "10.10" {
 		versionFile = "mariadb-10.10.3-linux-systemd-x86_64.tar.gz"
-		url = "https://github.com/vitessio/vitess-resources/releases/download/v4.0/" + versionFile
+		url = "https://github.com/vitessio/vitess-resources/releases/download/v5.0/" + versionFile
 	} else {
 		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
 	}
