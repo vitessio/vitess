@@ -23,6 +23,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[Online DDL](#bug-fixes-online-ddl)**
+        - [Table GC reclaims foreign-key-linked held tables](#online-ddl-tablegc-fk-reclamation)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -151,3 +154,17 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-online-ddl"/>Online DDL</a>
+
+#### <a id="online-ddl-tablegc-fk-reclamation"/>Table GC reclaims foreign-key-linked held tables</a>
+
+Table garbage collection now disables `foreign_key_checks` on its dedicated purge and drop connections so it can reclaim held tables that are still joined by a foreign key.
+
+Online DDL does not alter or drop a table in place. It leaves the original behind as a held table for table GC to reclaim later, and with the PlanetScale MySQL fork's `rename_table_preserve_foreign_key`, that held copy keeps its original foreign key. When two foreign-key-related tables were garbage collected together — for example, a child and its parent both dropped in a single batch — GC could wedge. It reclaims held tables one at a time, oldest first and foreign-key-unaware, so purging a parent failed under `ON DELETE RESTRICT` while the child still had referencing rows, and dropping a still-referenced parent failed outright. Circular foreign keys could never be reclaimed at all.
+
+The rows in these doomed tables no longer matter, so GC now sets `foreign_key_checks = 0` on the connections it uses to purge and drop them. Reclamation succeeds regardless of the order in which the tables are collected or the foreign-key relationships between them. These connections are dedicated and closed after use; the value is restored defensively in case they are ever pooled.
+
+See [#20352](https://github.com/vitessio/vitess/pull/20352) for details.
