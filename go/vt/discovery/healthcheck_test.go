@@ -344,6 +344,76 @@ func TestHealthCheckStreamError(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
+// TestHealthCheckRetryDelayIsBounded verifies that repeated stream failures do
+// not cause the retry delay to grow. After multiple consecutive errors the
+// tablet should still be rediscovered within a short, bounded window once it
+// recovers, rather than the ever-growing window the old exponential backoff
+// produced. Regression test for https://github.com/vitessio/vitess/issues/19894.
+func TestHealthCheckRetryDelayIsBounded(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	// Use a short but measurable retry delay so we can assert timing. With
+	// jitter the actual interval stays within [7.5ms, 12.5ms].
+	hc.retryDelay = 10 * time.Millisecond
+	defer hc.Close()
+
+	tablet := createTestTablet(0, "cell", "a")
+	// input is buffered so the recovery send below does not block until the
+	// healthcheck goroutine has already slept and reconnected. See the timing
+	// comment where the healthy response is sent.
+	input := make(chan *querypb.StreamHealthResponse, 1)
+	resultChan := hc.Subscribe("TestHealthCheckRetryDelayIsBounded")
+	fc := createFakeConn(tablet, input)
+	fc.errCh = make(chan error)
+	hc.AddTablet(tablet)
+
+	// Drain the initial not-serving notification from AddTablet.
+	<-resultChan
+
+	// Send multiple consecutive stream errors to simulate a prolonged outage
+	// where the tablet is unreachable for many retry cycles.
+	const numErrors = 8 // with exponential backoff the post-recovery sleep would reach ~1.28s (10ms*2^7)
+	for range numErrors {
+		fc.errCh <- errors.New("connection refused")
+		<-resultChan // drain the not-serving update
+	}
+
+	// The tablet recovers. Build the healthy response up front so the timing
+	// window below covers only the reconnect delay, not test bookkeeping.
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 0,
+		RealtimeStats:             &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	// Because input is buffered, this send returns immediately instead of
+	// blocking until the healthcheck goroutine has finished its retry sleep and
+	// reconnected. That is what lets us start timing before the sleep and
+	// actually measure it. With an unbuffered channel the send would absorb the
+	// sleep, and the test would pass even if exponential backoff were restored.
+	start := time.Now()
+	input <- shr
+
+	// The fixed retry delay (~10ms +/- jitter) rediscovers the tablet within a
+	// single cycle. The old exponential backoff would sleep ~1.28s after
+	// numErrors failures (10ms * 2^7), so the 400ms bound sits far above the fixed
+	// interval (no CI-timing flakiness) yet well below the backoff value, failing
+	// clearly if the delay regrows. The 5s arm only trips on a true hang.
+	select {
+	case result := <-resultChan:
+		assert.True(t, result.Serving, "tablet should be serving after recovery")
+		assert.Less(t, time.Since(start), 400*time.Millisecond,
+			"rediscovery took too long after recovery; retry delay may be growing exponentially")
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "tablet was not rediscovered after recovery")
+	}
+}
+
 // TestHealthCheckErrorOnPrimary is the same as TestHealthCheckStreamError except for tablet type
 func TestHealthCheckErrorOnPrimary(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
@@ -669,7 +739,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	fc.resetCanceledFlag()
 	input <- shr
 
-	// wait for the exponential backoff to wear off and health monitoring to resume.
+	// wait for the retry delay to pass and health monitoring to resume.
 	result = <-resultChan
 	mustMatch(t, want, result, "Wrong TabletHealth data")
 }
