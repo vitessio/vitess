@@ -670,7 +670,8 @@ func createFkDefinition(childCols []string, parentTableName string, parentCols [
 func (s *planTestSuite) testFile(filename string, vschema *vschemawrapper.VSchemaWrapper, render bool) {
 	opts := jsondiff.DefaultConsoleOptions()
 
-	s.T().Run(filename, func(t *testing.T) {
+	s.Run(filename, func() {
+		t := s.T()
 		failed := false
 		var expected []PlanTest
 		for _, tcase := range readJSONTests(filename) {

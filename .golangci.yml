@@ -144,6 +144,7 @@ linters:
         - error-nil
         - len
         - useless-assert
+        - suite-subtest-run
   exclusions:
     generated: lax
     presets:
