@@ -307,5 +307,8 @@ func compareVitessAndMySQLErrors(t TestingT, vtErr, mysqlErr error) {
 	if vtErr != nil && mysqlErr != nil || vtErr == nil && mysqlErr == nil {
 		return
 	}
+	// TestingT has no ErrorIs method, and this reports an error-vs-error mismatch
+	// (one side errored, the other did not) rather than an errors.Is/As check.
+	//nolint:testifylint
 	t.Errorf("Vitess and MySQL are not erroring the same way.\nVitess error: %v\nMySQL error: %v", vtErr, mysqlErr)
 }

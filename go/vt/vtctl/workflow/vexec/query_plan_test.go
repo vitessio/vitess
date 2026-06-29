@@ -17,7 +17,6 @@ limitations under the License.
 package vexec
 
 import (
-	"errors"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -163,7 +162,7 @@ func TestQueryPlanExecute(t *testing.T) {
 				assert.Error(t, err)
 
 				if tt.errKind != nil {
-					assert.True(t, errors.Is(err, tt.errKind), "expected error kind (= %v), got = %v", tt.errKind, err)
+					require.ErrorIs(t, err, tt.errKind)
 				}
 
 				return
@@ -311,7 +310,7 @@ func TestQueryPlanExecuteScatter(t *testing.T) {
 				assert.Error(t, err)
 
 				if tt.errKind != nil {
-					assert.True(t, errors.Is(err, tt.errKind), "expected error kind (= %v), got = %v", tt.errKind, err)
+					require.ErrorIs(t, err, tt.errKind)
 				}
 
 				return

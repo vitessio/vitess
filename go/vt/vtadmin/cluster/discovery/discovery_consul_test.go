@@ -244,7 +244,7 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 
 			gates, err := tt.disco.DiscoverVTGates(ctx, tt.tags)
 			if tt.shouldErr {
-				assert.Error(t, err, assert.AnError)
+				assert.Error(t, err)
 				return
 			}
 
@@ -353,7 +353,7 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 
 			gate, err := tt.disco.DiscoverVTGate(ctx, tt.tags)
 			if tt.shouldErr {
-				assert.Error(t, err, assert.AnError)
+				assert.Error(t, err)
 				return
 			}
 
@@ -449,7 +449,7 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 
 			addr, err := tt.disco.DiscoverVTGateAddr(ctx, tt.tags)
 			if tt.shouldErr {
-				assert.Error(t, err, assert.AnError)
+				assert.Error(t, err)
 				return
 			}
 

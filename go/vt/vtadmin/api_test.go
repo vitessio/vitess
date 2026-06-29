@@ -19,7 +19,6 @@ package vtadmin
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -5111,7 +5110,7 @@ func TestVTExplain(t *testing.T) {
 				resp, err := api.VTExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
-					assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+					assert.ErrorIs(t, err, tt.expectedError)
 				} else {
 					require.NoError(t, err)
 
@@ -5290,7 +5289,7 @@ func TestVExplain(t *testing.T) {
 				resp, err := api.VExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
-					assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+					assert.ErrorIs(t, err, tt.expectedError)
 				} else {
 					require.NoError(t, err)
 

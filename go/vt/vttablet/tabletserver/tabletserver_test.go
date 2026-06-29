@@ -669,9 +669,9 @@ func TestTabletServerWithNilTarget(t *testing.T) {
 	// using a local context but passing a nil target.
 	nonLocalCtx := t.Context()
 	_, err = tsv.Begin(nonLocalCtx, nil, target, nil)
-	require.True(t, errors.Is(err, ErrNoTarget))
+	require.ErrorIs(t, err, ErrNoTarget)
 	_, err = tsv.resolveTargetType(nonLocalCtx, target)
-	require.True(t, errors.Is(err, ErrNoTarget))
+	require.ErrorIs(t, err, ErrNoTarget)
 }
 
 func TestSmallerTimeout(t *testing.T) {

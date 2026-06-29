@@ -146,6 +146,7 @@ linters:
         - useless-assert
         - suite-subtest-run
         - require-error
+        - error-is-as
   exclusions:
     generated: lax
     presets:

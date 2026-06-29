@@ -606,7 +606,7 @@ func TestFindTablet(t *testing.T) {
 			tablet, err := cluster.FindTablet(ctx, tt.filter)
 
 			if tt.expectedError != nil {
-				assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+				assert.ErrorIs(t, err, tt.expectedError)
 			} else {
 				require.NoError(t, err)
 				utils.MustMatch(t, tt.expected, tablet)
