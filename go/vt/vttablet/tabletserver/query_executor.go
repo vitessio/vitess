@@ -353,7 +353,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	// inside streamDML, so its stats defer is registered before those checks and
 	// records per-table error stats for their rejections too, matching Execute.
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit, p.PlanLoad:
 		return qre.streamDML(callback)
 	}
 
@@ -388,16 +388,31 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return reqThrottledErr
 	}
 
-	// Handle plans that don't use generic SQL execution.
+	// Plans that don't use generic SQL execution run a dedicated executor and
+	// stream its single result, matching Execute(). These carry a nil FullQuery,
+	// so they must not fall through to the generic SQL path below, which would
+	// send the Vitess-internal statement to MySQL.
+	var result *sqltypes.Result
+	handled := true
 	switch qre.plan.PlanID {
 	case p.PlanNextval:
-		result, err := qre.execNextval()
-		if err != nil {
-			return err
-		}
-		return countingCallback(result)
+		result, err = qre.execNextval()
 	case p.PlanShowMigrations:
-		result, err := qre.execShowMigrations(nil)
+		result, err = qre.execShowMigrations(nil)
+	case p.PlanShowMigrationLogs:
+		result, err = qre.execShowMigrationLogs()
+	case p.PlanShowThrottledApps:
+		result, err = qre.execShowThrottledApps()
+	case p.PlanShowThrottlerStatus:
+		result, err = qre.execShowThrottlerStatus()
+	case p.PlanAlterMigration:
+		result, err = qre.execAlterMigration()
+	case p.PlanRevertMigration:
+		result, err = qre.execRevertMigration()
+	default:
+		handled = false
+	}
+	if handled {
 		if err != nil {
 			return err
 		}

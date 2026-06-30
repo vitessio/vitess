@@ -348,6 +348,84 @@ func TestStreamExecuteCompat_NextvalHandling(t *testing.T) {
 		"Stream should handle PlanNextval like Execute does")
 }
 
+// Stream() dispatches the OnlineDDL and throttler admin plans to their
+// executors, matching Execute(). These plans carry a nil FullQuery, so the
+// generic SQL path would send the Vitess-internal statement (e.g. "show
+// vitess_throttled_apps") to MySQL and fail with a syntax error.
+func TestStreamExecuteCompat_AdminPlanDispatch(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	queries := []string{
+		"show vitess_throttled_apps",
+		"show vitess_throttler status",
+		"show vitess_migration '9d80e3da_5e7e_11ed_b526_0a43f95f28a3' logs",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
+			execResult, execErr := qreExec.Execute()
+
+			qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+			var streamResult *sqltypes.Result
+			streamErr := qreStream.Stream(func(qr *sqltypes.Result) error {
+				streamResult = qr
+				return nil
+			})
+
+			if execErr != nil {
+				require.EqualError(t, streamErr, execErr.Error(),
+					"Stream should route %q to the same executor as Execute", query)
+				return
+			}
+
+			require.NoError(t, streamErr, "Stream should handle %q like Execute", query)
+			require.NotNil(t, streamResult)
+			assert.Equal(t, execResult.Fields, streamResult.Fields)
+			assert.Equal(t, execResult.Rows, streamResult.Rows)
+		})
+	}
+}
+
+// Stream() dispatches PlanLoad through streamDML, matching Execute(). The
+// generic streaming path never records RowsAffected in the plan stats, so a
+// LOAD that returns an OK packet would lose that count there.
+func TestStreamExecuteCompat_LoadDataDispatch(t *testing.T) {
+	ctx := t.Context()
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	query := "load data infile 'data.txt' into table test_table"
+	db.AddQuery(query, &sqltypes.Result{RowsAffected: 3})
+
+	qreExec := newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err := qreExec.Execute()
+	require.NoError(t, err, "Execute should handle LOAD DATA")
+	_, _, _, execRowsAffected, _, _ := qreExec.plan.Stats()
+	require.EqualValues(t, 3, execRowsAffected)
+
+	qreStream := newTestQueryExecutorStreaming(ctx, tsv, query, 0)
+	var streamRowsAffected uint64
+	err = qreStream.Stream(func(qr *sqltypes.Result) error {
+		streamRowsAffected += qr.RowsAffected
+		return nil
+	})
+	require.NoError(t, err, "Stream should handle LOAD DATA like Execute")
+	assert.EqualValues(t, 3, streamRowsAffected, "client must see the affected-row count")
+
+	_, _, _, planRowsAffected, _, _ := qreStream.plan.Stats()
+	assert.EqualValues(t, 3, planRowsAffected,
+		"Stream must record RowsAffected in the plan stats like Execute")
+}
+
 // StreamExecute handles DML statements.
 func TestStreamExecuteCompat_ImplicitTransactionForDML(t *testing.T) {
 	ctx := t.Context()
