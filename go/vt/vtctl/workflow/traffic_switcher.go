@@ -75,6 +75,8 @@ const (
 	// operation too.
 	shardTabletRefreshTimeout = time.Duration(30 * time.Second)
 
+	stoppedForComplete = "stopped for complete"
+
 	// Use pt-osc's naming convention, this format also ensures vstreamer ignores such tables.
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
 
@@ -1027,6 +1029,33 @@ func (ts *trafficSwitcher) buildTenantPredicate(ctx context.Context) (*sqlparser
 		return nil, err
 	}
 	return tenantPredicate, nil
+}
+
+func (ts *trafficSwitcher) stopReverseVReplication(ctx context.Context) error {
+	return ts.ForAllSources(func(source *MigrationSource) error {
+		tabletAlias := topoproto.TabletAliasString(source.GetPrimary().GetAlias())
+		res, err := ts.ws.tmc.ReadVReplicationWorkflow(ctx, source.GetPrimary().Tablet, &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{
+			Workflow: ts.ReverseWorkflowName(),
+		})
+		if err != nil {
+			return vterrors.Wrapf(err, "reading reverse workflow %s on %s", ts.ReverseWorkflowName(), tabletAlias)
+		}
+		if res == nil || len(res.Streams) == 0 {
+			return nil
+		}
+		for _, stream := range res.Streams {
+			if stream.State == binlogdatapb.VReplicationWorkflowState_Stopped {
+				continue
+			}
+			ts.Logger().Infof("Stopping reverse stream %d on %s for complete", stream.Id, tabletAlias)
+			if _, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet,
+				binlogplayer.StopVReplication(stream.Id, stoppedForComplete)); err != nil {
+				return vterrors.Wrapf(err, "stopping reverse stream %d in workflow %s on %s",
+					stream.Id, ts.ReverseWorkflowName(), tabletAlias)
+			}
+		}
+		return nil
+	})
 }
 
 func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {

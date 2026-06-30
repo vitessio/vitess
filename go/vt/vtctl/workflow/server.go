@@ -2513,6 +2513,11 @@ func (s *Server) dropSources(ctx context.Context, ts *trafficSwitcher, removalTy
 			return nil, err
 		}
 	}
+	if !wopts.ignoreSourceKeyspace {
+		if err := sw.stopReverseVReplication(ctx); err != nil {
+			return nil, err
+		}
+	}
 	if !keepData {
 		switch ts.MigrationType() {
 		case binlogdatapb.MigrationType_TABLES:

@@ -116,6 +116,10 @@ func (r *switcher) waitForCatchup(ctx context.Context, filteredReplicationWaitTi
 	return r.ts.waitForCatchup(ctx, filteredReplicationWaitTime)
 }
 
+func (r *switcher) stopReverseVReplication(ctx context.Context) error {
+	return r.ts.stopReverseVReplication(ctx)
+}
+
 func (r *switcher) stopSourceWrites(ctx context.Context) error {
 	return r.ts.stopSourceWrites(ctx)
 }

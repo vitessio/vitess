@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -261,6 +262,14 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 			expectedSourceQueries: []*queryResult{
 				{
+					query:  binlogplayer.StopVReplication(1, stoppedForComplete),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  binlogplayer.StopVReplication(2, stoppedForComplete),
+					result: &querypb.QueryResult{},
+				},
+				{
 					query:  fmt.Sprintf("drop table `vt_%s`.`%s`", sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},
 				},
@@ -308,6 +317,14 @@ func TestMoveTablesComplete(t *testing.T) {
 			},
 			expectedSourceQueries: []*queryResult{
 				{
+					query:  binlogplayer.StopVReplication(1, stoppedForComplete),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  binlogplayer.StopVReplication(2, stoppedForComplete),
+					result: &querypb.QueryResult{},
+				},
+				{
 					query: fmt.Sprintf("delete from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'",
 						sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 					result: &querypb.QueryResult{},
@@ -344,6 +361,14 @@ func TestMoveTablesComplete(t *testing.T) {
 				RenameTables:   true,
 			},
 			expectedSourceQueries: []*queryResult{
+				{
+					query:  binlogplayer.StopVReplication(1, stoppedForComplete),
+					result: &querypb.QueryResult{},
+				},
+				{
+					query:  binlogplayer.StopVReplication(2, stoppedForComplete),
+					result: &querypb.QueryResult{},
+				},
 				{
 					query:  fmt.Sprintf("rename table `vt_%s`.`%s` TO `vt_%s`.`_%s_old`", sourceKeyspaceName, table1Name, sourceKeyspaceName, table1Name),
 					result: &querypb.QueryResult{},

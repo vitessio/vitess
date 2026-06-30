@@ -365,7 +365,10 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 		}
 	}
 	blsKs := tmc.env.sourceKeyspace
-	if tmc.reverse.Load() && tablet.Keyspace == tmc.env.sourceKeyspace.KeyspaceName {
+	isReverseWorkflow := strings.HasSuffix(req.Workflow, reverseSuffix)
+	if isReverseWorkflow && tablet.Keyspace == tmc.env.sourceKeyspace.KeyspaceName {
+		blsKs = tmc.env.targetKeyspace
+	} else if tmc.reverse.Load() && tablet.Keyspace == tmc.env.sourceKeyspace.KeyspaceName {
 		blsKs = tmc.env.targetKeyspace
 	}
 	for i, shard := range blsKs.ShardNames {
@@ -380,7 +383,9 @@ func (tmc *testTMClient) ReadVReplicationWorkflow(ctx context.Context, tablet *t
 				},
 			},
 		}
-		if tmc.frozen.Load() {
+		if isReverseWorkflow {
+			stream.State = binlogdatapb.VReplicationWorkflowState_Running
+		} else if tmc.frozen.Load() {
 			stream.Message = Frozen
 		}
 		res.Streams = append(res.Streams, stream)
