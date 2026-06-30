@@ -678,6 +678,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			defer func() {
 				if finalErr != nil && revertPartialFailure && wasPrimary {
 					log.Info("reverting primary-side semi-sync to enabled")
+
+					ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+					defer cancel()
+
 					if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
 						log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
 					}
@@ -727,6 +731,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
 			// setting read_only OFF will also set super_read_only OFF if it was set
 			log.Info("reverting read-only by redoing prepared transactions")
+
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+			defer cancel()
+
 			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
 				log.Warn(fmt.Sprintf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err))
 			}
@@ -744,6 +752,10 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		defer func() {
 			if finalErr != nil && revertPartialFailure && wasPrimary {
 				log.Info("reverting primary-side semi-sync to enabled")
+
+				ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
+				defer cancel()
+
 				if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
 					log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
 				}
