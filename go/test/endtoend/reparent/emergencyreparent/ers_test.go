@@ -245,23 +245,23 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		// Ensure the old primary was demoted correctly
 		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(tablets[0].Alias)
-		require.NoError(c, err)
+		assert.NoError(c, err)
 
 		// The old primary should have noticed there's a new primary tablet now and should
 		// have demoted itself to REPLICA.
-		require.Equal(c, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
+		assert.Equal(c, topodatapb.TabletType_REPLICA, tabletInfo.GetType())
 
 		// The old primary should be in not serving mode because we should be unable to re-attach it
 		// as a replica due to the errant GTID caused by semi-sync writes that were never replicated out.
 		//
 		// Note: The writes that were not replicated were caused by the semi sync unblocker, which
 		//       performed writes after ERS.
-		require.Equal(c, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
-		require.Equal(c, "replica", tablets[0].VttabletProcess.GetTabletType())
+		assert.Equal(c, "NOT_SERVING", tablets[0].VttabletProcess.GetTabletStatus())
+		assert.Equal(c, "replica", tablets[0].VttabletProcess.GetTabletType())
 
 		// Check the 2nd tablet becomes PRIMARY.
-		require.Equal(c, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
-		require.Equal(c, "primary", tablets[1].VttabletProcess.GetTabletType())
+		assert.Equal(c, "SERVING", tablets[1].VttabletProcess.GetTabletStatus())
+		assert.Equal(c, "primary", tablets[1].VttabletProcess.GetTabletType())
 	}, 30*time.Second, time.Second, "could not validate primary was demoted")
 }
 

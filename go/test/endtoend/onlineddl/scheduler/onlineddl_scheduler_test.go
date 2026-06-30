@@ -178,7 +178,8 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			readyToComplete := row.AsInt64("ready_to_complete", 0)
@@ -211,7 +212,8 @@ func waitForMessage(t *testing.T, uuid string, messageSubstring string) {
 
 	var lastMessage string
 	for {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			lastMessage = row.AsString("message", "")
@@ -409,7 +411,8 @@ func testScheduler(t *testing.T) {
 	)
 
 	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			timestamp = row.AsString(timestampColumn, "")
@@ -443,7 +446,8 @@ func testScheduler(t *testing.T) {
 	}
 	testAllowConcurrent := func(t *testing.T, name string, uuid string, expect int64) {
 		t.Run("verify allow_concurrent: "+name, func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				allowConcurrent := row.AsInt64("allow_concurrent", 0)
@@ -483,7 +487,8 @@ func testScheduler(t *testing.T) {
 	t.Run("Postpone launch CREATE", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(createT1IfNotExistsStatement, ddlStrategy+" --postpone-launch --cut-over-threshold=14s", "vtgate", "", "", true)) // skip wait
 		time.Sleep(2 * time.Second)
-		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -493,7 +498,8 @@ func testScheduler(t *testing.T) {
 
 		t.Run("launch all shards", func(t *testing.T) {
 			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "", true)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -511,7 +517,8 @@ func testScheduler(t *testing.T) {
 	t.Run("Postpone launch ALTER", func(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true)) // skip wait
 		time.Sleep(2 * time.Second)
-		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -523,7 +530,8 @@ func testScheduler(t *testing.T) {
 			someOtherUUID := "00000000_1111_2222_3333_444444444444"
 			onlineddl.CheckLaunchMigration(t, &vtParams, shards, someOtherUUID, "", false)
 			time.Sleep(2 * time.Second)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -534,7 +542,8 @@ func testScheduler(t *testing.T) {
 		t.Run("launch irrelevant shards", func(t *testing.T) {
 			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x,y,z", false)
 			time.Sleep(2 * time.Second)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -544,7 +553,8 @@ func testScheduler(t *testing.T) {
 		})
 		t.Run("launch relevant shard", func(t *testing.T) {
 			onlineddl.CheckLaunchMigration(t, &vtParams, shards, t1uuid, "x, y, 1", true)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeLaunch := row.AsInt64("postpone_launch", 0)
@@ -566,7 +576,8 @@ func testScheduler(t *testing.T) {
 
 		t.Run("wait for ready_to_complete", func(t *testing.T) {
 			waitForReadyToComplete(t, t1uuid, true)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
@@ -576,7 +587,8 @@ func testScheduler(t *testing.T) {
 		})
 
 		t.Run("check postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -593,7 +605,8 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("check no postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -618,7 +631,8 @@ func testScheduler(t *testing.T) {
 
 		t.Run("wait for ready_to_complete", func(t *testing.T) {
 			waitForReadyToComplete(t, t1uuid, true)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				assert.True(t, row["shadow_analyzed_timestamp"].IsNull())
@@ -628,7 +642,8 @@ func testScheduler(t *testing.T) {
 		})
 
 		t.Run("check postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -642,7 +657,8 @@ func testScheduler(t *testing.T) {
 			// Migration should still be in running state
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			// postpone_completion should still be set
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -656,7 +672,8 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("check no postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -678,7 +695,8 @@ func testScheduler(t *testing.T) {
 		})
 
 		t.Run("check postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -689,7 +707,8 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckPostponeCompleteMigration(t, &vtParams, shards, t1uuid, true)
 		})
 		t.Run("check postpone_completion set", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -709,7 +728,8 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("check no postpone_completion", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				postponeCompletion := row.AsInt64("postpone_completion", 0)
@@ -742,7 +762,8 @@ func testScheduler(t *testing.T) {
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
-				onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
+				_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, populateT1Statement)
+				require.NoError(t, err)
 			})
 			t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtgate", "", "", true)) // skip wait
 
@@ -778,7 +799,8 @@ func testScheduler(t *testing.T) {
 				}()
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					forceCutOver := row.AsInt64("force_cutover", 0)
@@ -798,7 +820,8 @@ func testScheduler(t *testing.T) {
 				onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
 			})
 			t.Run("check force_cutover", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					forceCutOver := row.AsInt64("force_cutover", 0)
@@ -872,7 +895,8 @@ func testScheduler(t *testing.T) {
 				}()
 			})
 			t.Run("check no force_cutover", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					forceCutOver := row.AsInt64("force_cutover", 0)
@@ -892,7 +916,8 @@ func testScheduler(t *testing.T) {
 				onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, t1uuid, true)
 			})
 			t.Run("check force_cutover", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					forceCutOver := row.AsInt64("force_cutover", 0)
@@ -917,7 +942,8 @@ func testScheduler(t *testing.T) {
 			defer cancel()
 
 			t.Run("populate t1_test", func(t *testing.T) {
-				onlineddl.VtgateExecQuery(t, &vtParams, populateT1Statement, "")
+				_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, populateT1Statement)
+				require.NoError(t, err)
 			})
 
 			commitTransactionChan := make(chan any)
@@ -935,7 +961,8 @@ func testScheduler(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			})
 			t.Run("check special_plan", func(t *testing.T) {
-				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					specialPlan := row.AsString("special_plan", "")
@@ -1185,14 +1212,16 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
 				assert.Equal(t, 1.0, userThrotteRatio)
 			}
 			// t2uuid migration is not in 'running' state, hence 'user_throttle_ratio' is not updated
-			rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
@@ -1214,13 +1243,15 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
 				assert.EqualValues(t, 0, userThrotteRatio)
 			}
-			rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
@@ -1230,7 +1261,8 @@ func testScheduler(t *testing.T) {
 		t.Run("throttle t2", func(t *testing.T) {
 			throttler.ThrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.Name(t2uuid))
 			time.Sleep(ensureStateNotChangedTime)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
@@ -1240,7 +1272,8 @@ func testScheduler(t *testing.T) {
 		t.Run("unthrottle t2", func(t *testing.T) {
 			throttler.UnthrottleAppAndWaitUntilTabletsConfirm(t, clusterInstance, throttlerapp.Name(t2uuid))
 			time.Sleep(ensureStateNotChangedTime)
-			rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				userThrotteRatio := row.AsFloat64("user_throttle_ratio", 0)
@@ -1505,7 +1538,8 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				retries := row.AsInt64("retries", 0)
@@ -1552,7 +1586,8 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				retries := row.AsInt64("retries", 0)
@@ -1566,7 +1601,8 @@ func testScheduler(t *testing.T) {
 	})
 
 	readCleanupsTimetamps := func(t *testing.T, migrationsLike string) (rows int64, cleanedUp int64, needCleanup int64, artifacts []string) {
-		rs := onlineddl.ReadMigrations(t, &vtParams, migrationsLike)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, migrationsLike)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			rows++
@@ -1593,7 +1629,8 @@ func testScheduler(t *testing.T) {
 		})
 		var artifacts []string
 		t.Run("validate artifact exists", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			row := rs.Named().Row()
 			require.NotNil(t, row)
@@ -1686,7 +1723,8 @@ func testScheduler(t *testing.T) {
 		})
 		var artifacts []string
 		t.Run("validate artifact exists", func(t *testing.T) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			row := rs.Named().Row()
 			require.NotNil(t, row)
@@ -1789,7 +1827,8 @@ func testScheduler(t *testing.T) {
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
@@ -1824,7 +1863,8 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 
-			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				artifacts := row.AsString("artifacts", "-")
@@ -1933,7 +1973,8 @@ func testScheduler(t *testing.T) {
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusFailed)
 
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					message := row["message"].ToString()
@@ -1964,8 +2005,10 @@ func testScheduler(t *testing.T) {
 			}
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
 				for i, uuid := range vuuids {
-					rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
-					require.NotNil(t, rs)
+					rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+					if !assert.NoError(c, err) {
+						return
+					}
 					for _, row := range rs.Named().Rows {
 						inOrderCompletionPendingCount := row.AsUint64("in_order_completion_pending_count", 0)
 						assert.EqualValues(c, i, inOrderCompletionPendingCount)
@@ -2184,12 +2227,14 @@ func testScheduler(t *testing.T) {
 		onlineddl.ThrottleContextMigrations(t, &vtParams, "ctx-throttle-by-context")
 		time.Sleep(ensureStateNotChangedTime)
 		// Verify both migrations are throttled.
-		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			assert.Equal(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
 		}
-		rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+		rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			assert.Equal(t, 1.0, row.AsFloat64("user_throttle_ratio", 0))
@@ -2199,12 +2244,14 @@ func testScheduler(t *testing.T) {
 		onlineddl.UnthrottleContextMigrations(t, &vtParams, "ctx-throttle-by-context")
 		time.Sleep(ensureStateNotChangedTime)
 		// Verify both migrations are unthrottled.
-		rs = onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+		rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t1uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			assert.EqualValues(t, 0, row.AsFloat64("user_throttle_ratio", 0))
 		}
-		rs = onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+		rs, err = onlineddl.ReadMigrations(t.Context(), &vtParams, t2uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			assert.EqualValues(t, 0, row.AsFloat64("user_throttle_ratio", 0))
@@ -2591,8 +2638,10 @@ DROP TABLE IF EXISTS stress_test
 		// A2's in_order_completion_pending_count must be 1: A1 precedes it in ctx-a, but
 		// B1 (ctx-b) must not be counted even though B1 precedes A2 in the global queue.
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuidA2)
-			require.NotNil(t, rs)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuidA2)
+			if !assert.NoError(c, err) {
+				return
+			}
 			for _, row := range rs.Named().Rows {
 				assert.EqualValues(c, 1, row.AsUint64("in_order_completion_pending_count", 0))
 			}
@@ -3256,7 +3305,8 @@ func testDeclarative(t *testing.T) {
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkTable(t, tableName, true)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
@@ -3270,7 +3320,8 @@ func testDeclarative(t *testing.T) {
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkTable(t, tableName, true)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
@@ -3483,7 +3534,8 @@ func testForeignKeys(t *testing.T) {
 			t.Run("populate tables", func(t *testing.T) {
 				for _, statement := range insertStatements {
 					t.Run(statement, func(t *testing.T) {
-						onlineddl.VtgateExecQuery(t, &vtParams, statement, "")
+						_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, statement)
+						require.NoError(t, err)
 					})
 				}
 			})
@@ -3491,7 +3543,8 @@ func testForeignKeys(t *testing.T) {
 				// Due to how OnlineDDL works, the name of the foreign key constraint will not be the one we used in the CREATE TABLE statement.
 				// There's a specific test where we drop said constraint. So speficially for that test (or any similar future tests), we need to dynamically
 				// evaluate the constraint name.
-				rs := onlineddl.VtgateExecQuery(t, &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'", "")
+				rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "select CONSTRAINT_NAME from information_schema.REFERENTIAL_CONSTRAINTS where TABLE_NAME='child_table'")
+				require.NoError(t, err)
 				assert.Len(t, rs.Rows, 1)
 				row := rs.Named().Row()
 				assert.NotNil(t, row)
@@ -3518,7 +3571,8 @@ func testForeignKeys(t *testing.T) {
 			t.Run("cleanup", func(t *testing.T) {
 				var artifacts []string
 				if uuid != "" {
-					rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+					rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+					require.NoError(t, err)
 					require.NotNil(t, rs)
 					row := rs.Named().Row()
 					require.NotNil(t, row)

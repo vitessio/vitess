@@ -349,7 +349,7 @@ func TestVStreamLaggingDDLRowEvents(t *testing.T) {
 	// pauses for a few seconds before restarting.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		reader, err = vstreamConn.VStream(streamCtx, topodatapb.TabletType_PRIMARY, resumeVGTID, filter, nil)
-		require.NoError(c, err)
+		assert.NoError(c, err)
 	}, 30*time.Second, 500*time.Millisecond)
 	deadline := time.Now().Add(1 * time.Minute)
 	for rowEvents < 3 {

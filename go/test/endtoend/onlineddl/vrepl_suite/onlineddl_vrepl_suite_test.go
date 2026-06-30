@@ -271,7 +271,8 @@ func testSingle(t *testing.T, testName string, fkOnlineDDLPossible bool) {
 			sqltypes.StringBindVariable(uuid),
 		)
 		require.NoError(t, err)
-		onlineddl.VtgateExecQuery(t, &vtParams, query, "")
+		_, err = onlineddl.VtgateExecQuery(t.Context(), &vtParams, query)
+		require.NoError(t, err)
 	}()
 	row := waitForMigration(t, uuid, waitForMigrationTimeout)
 	// migration is complete
@@ -337,7 +338,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 }
 
 func readMigration(t *testing.T, uuid string) sqltypes.RowNamedValues {
-	rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+	rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+	require.NoError(t, err)
 	require.NotNil(t, rs)
 	row := rs.Named().Row()
 	require.NotNil(t, row)

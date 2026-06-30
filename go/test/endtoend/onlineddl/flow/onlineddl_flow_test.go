@@ -460,7 +460,8 @@ func waitForReadyToComplete(t *testing.T, uuid string, expected bool) bool {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			readyToComplete := row.AsInt64("ready_to_complete", 0)

@@ -383,7 +383,8 @@ func testRevertible(t *testing.T) {
 		createParentTable = "create table parent (id int primary key)"
 	)
 
-	onlineddl.VtgateExecQuery(t, &vtParams, createParentTable, "")
+	_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, createParentTable)
+	require.NoError(t, err)
 
 	removeBackticks := func(s string) string {
 		return strings.ReplaceAll(s, "`", "")
@@ -428,7 +429,8 @@ func testRevertible(t *testing.T) {
 			})
 			t.Run("check migration", func(t *testing.T) {
 				// All right, the actual test
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
 					removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
@@ -479,7 +481,8 @@ func testRevertible(t *testing.T) {
 		})
 		t.Run("check migration", func(t *testing.T) {
 			// All right, the actual test
-			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+			require.NoError(t, err)
 			require.NotNil(t, rs)
 			for _, row := range rs.Named().Rows {
 				removedForeignKeyNames := row.AsString("removed_foreign_key_names", "")
@@ -566,7 +569,8 @@ func testRevert(t *testing.T) {
 	)
 
 	populatePartitionedTable := func(t *testing.T) {
-		onlineddl.VtgateExecQuery(t, &vtParams, populatePartitionedTableStatement, "")
+		_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, populatePartitionedTableStatement)
+		require.NoError(t, err)
 	}
 
 	mysqlVersion = onlineddl.GetMySQLVersion(t, primaryTablet)
@@ -578,7 +582,8 @@ func testRevert(t *testing.T) {
 	ddlStrategy := "online"
 
 	testRevertedUUID := func(t *testing.T, uuid string, expectRevertedUUID string) {
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			revertedUUID := row["reverted_uuid"].ToString()
@@ -1038,7 +1043,8 @@ func testRevert(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
@@ -1126,7 +1132,8 @@ func testRevert(t *testing.T) {
 
 	// PARTITIONS
 	checkPartitionedTableCountRows := func(t *testing.T, expectRows int64) {
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, "select count(*) as c from part_test", "")
+		rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "select count(*) as c from part_test")
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		row := rs.Named().Row()
 		require.NotNil(t, row)

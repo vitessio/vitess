@@ -179,8 +179,11 @@ func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, 
 
 	// wait for signal handler
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-		require.Equal(c, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+		entries := aStatic.getEntries()
+		assert.Nil(c, entries[oldStr], "Should not have old %s after config reload", oldStr)
+		if assert.NotEmpty(c, entries[newStr], "Should have new %s after config reload", newStr) {
+			assert.Equal(c, newStr, entries[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+		}
 	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
 }
 
@@ -191,8 +194,11 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 	}
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		require.Nil(c, aStatic.getEntries()[oldStr], "Should not have old %s after config reload", oldStr)
-		require.Equal(c, newStr, aStatic.getEntries()[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+		entries := aStatic.getEntries()
+		assert.Nil(c, entries[oldStr], "Should not have old %s after config reload", oldStr)
+		if assert.NotEmpty(c, entries[newStr], "Should have new %s after config reload", newStr) {
+			assert.Equal(c, newStr, entries[newStr][0].Password, "%s's Password should be '%s'", newStr, newStr)
+		}
 	}, 30*time.Second, 10*time.Millisecond, "config should be reloaded with new file after rotation")
 }
 

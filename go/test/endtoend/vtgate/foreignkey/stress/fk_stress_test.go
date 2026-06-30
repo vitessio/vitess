@@ -607,7 +607,8 @@ func ExecuteFKTest(t *testing.T, tcase *testCase) {
 						ok := onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 						require.True(t, ok) // or else don't attempt to cleanup artifacts
 						t.Run("cleanup artifacts", func(t *testing.T) {
-							rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+							rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+							require.NoError(t, err)
 							require.NotNil(t, rs)
 							row := rs.Named().Row()
 							require.NotNil(t, row)
@@ -927,7 +928,8 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	if !strategySetting.Strategy.IsDirect() {
 		// let's see what FK tables have been renamed to
-		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+		require.NoError(t, err)
 		require.NotNil(t, rs)
 		row := rs.Named().Row()
 		require.NotNil(t, row)

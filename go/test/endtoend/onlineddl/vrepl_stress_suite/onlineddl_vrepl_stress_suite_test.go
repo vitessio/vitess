@@ -489,7 +489,8 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			t.Run("cancel pending migrations", func(t *testing.T) {
 				cancelQuery := "alter vitess_migration cancel all"
-				r := onlineddl.VtgateExecQuery(t, &vtParams, cancelQuery, "")
+				r, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, cancelQuery)
+				require.NoError(t, err)
 				if r.RowsAffected > 0 {
 					fmt.Printf("# Cancelled migrations (for debug purposes): %d\n", r.RowsAffected)
 				}
@@ -533,7 +534,8 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 					testCompareBeforeAfterTables(t, testcase.autoIncInsert)
 				}
 
-				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				rs, err := onlineddl.ReadMigrations(t.Context(), &vtParams, uuid)
+				require.NoError(t, err)
 				for _, row := range rs.Named().Rows {
 					assert.Equal(t, testcase.expectAddedUniqueKeys, row.AsInt64("added_unique_keys", 0), "expectAddedUniqueKeys")
 					assert.Equal(t, testcase.expectRemovedUniqueKeys, row.AsInt64("removed_unique_keys", 0), "expectRemovedUniqueKeys")
@@ -786,7 +788,8 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 	var countBefore int64
 	{
 		// Validate after table is populated
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectCountFromTableBefore, "")
+		rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, selectCountFromTableBefore)
+		require.NoError(t, err)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
@@ -800,7 +803,8 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 	var countAfter int64
 	{
 		// Validate after table is populated
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectCountFromTableAfter, "")
+		rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, selectCountFromTableAfter)
+		require.NoError(t, err)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
@@ -812,7 +816,8 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 		fmt.Printf("# count rows in table (after): %d\n", countAfter)
 	}
 	{
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableBefore, "")
+		rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, selectMaxOpOrderFromTableBefore)
+		require.NoError(t, err)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 
@@ -820,7 +825,8 @@ func testCompareBeforeAfterTables(t *testing.T, autoIncInsert bool) {
 		fmt.Printf("# max op_order in table (before): %d\n", maxOpOrder)
 	}
 	{
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrderFromTableAfter, "")
+		rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, selectMaxOpOrderFromTableAfter)
+		require.NoError(t, err)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 

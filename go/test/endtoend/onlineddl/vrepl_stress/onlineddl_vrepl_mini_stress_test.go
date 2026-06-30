@@ -546,7 +546,8 @@ func initTable(t *testing.T) {
 
 	t.Run("cancel pending migrations", func(t *testing.T) {
 		cancelQuery := "alter vitess_migration cancel all"
-		r := onlineddl.VtgateExecQuery(t, &vtParams, cancelQuery, "")
+		r, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, cancelQuery)
+		require.NoError(t, err)
 		if r.RowsAffected > 0 {
 			fmt.Printf("# Cancelled migrations (for debug purposes): %d\n", r.RowsAffected)
 		}
@@ -578,7 +579,8 @@ func testSelectTableMetrics(t *testing.T) {
 	defer writeMetrics.mu.Unlock()
 
 	{
-		rs := onlineddl.VtgateExecQuery(t, &vtParams, selectMaxOpOrder, "")
+		rs, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, selectMaxOpOrder)
+		require.NoError(t, err)
 		row := rs.Named().Row()
 		require.NotNil(t, row)
 

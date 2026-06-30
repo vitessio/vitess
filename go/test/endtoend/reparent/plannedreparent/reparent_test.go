@@ -126,12 +126,14 @@ func TestReparentReplicaOffline(t *testing.T) {
 	// Confirm the tablet shutdown via the topo.
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		tabletInfo, err := clusterInstance.VtctldClientProcess.GetTablet(killTablet.Alias)
-		require.NoError(c, err)
+		if !assert.NoError(c, err) {
+			return
+		}
 
-		require.Nil(c, tabletInfo.TabletStartTime)
-		require.NotNil(c, tabletInfo.TabletShutdownTime)
+		assert.Nil(c, tabletInfo.TabletStartTime)
+		assert.NotNil(c, tabletInfo.TabletShutdownTime)
 		shutdownTime := protoutil.TimeFromProto(tabletInfo.TabletShutdownTime)
-		require.WithinRange(c, shutdownTime, startKillTime, time.Now())
+		assert.WithinRange(c, shutdownTime, startKillTime, time.Now())
 	}, time.Second, time.Second*31)
 
 	// Perform a graceful reparent operation.

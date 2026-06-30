@@ -183,9 +183,11 @@ func TestStopReplicationAndGetStatus(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
 		defer cancel()
 		resp, err := tmcFullStatus(ctx, tablet.GrpcPort)
-		require.NoError(c, err)
-		require.True(c, resp.SemiSyncReplicaEnabled)
-		require.True(c, resp.SemiSyncReplicaStatus)
+		if !assert.NoError(c, err) {
+			return
+		}
+		assert.True(c, resp.SemiSyncReplicaEnabled)
+		assert.True(c, resp.SemiSyncReplicaStatus)
 	}, time.Second*45, time.Second)
 
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second*10)
