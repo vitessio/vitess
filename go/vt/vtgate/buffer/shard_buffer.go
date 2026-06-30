@@ -81,6 +81,19 @@ type entry struct {
 	bufferCancel func()
 }
 
+// shardMarker is the part of discovery.KeyspaceEventWatcher needed to start
+// a buffering cycle. It is an interface so that tests can control when the
+// call blocks and what it returns.
+//
+// MarkShardNotServing acquires the keyspace event watcher's locks, and the
+// watcher's event delivery in turn blocks on shardBuffer.mu (via
+// Buffer.HandleKeyspaceEvent). It must therefore NEVER be called while
+// holding shardBuffer.mu: doing so deadlocks vtgate (see
+// TestStartBufferingDeadlockWithKeyspaceEvents).
+type shardMarker interface {
+	MarkShardNotServing(ctx context.Context, keyspace, shard string, isReparentErr bool) bool
+}
+
 // shardBuffer buffers requests during a failover for a particular shard.
 // The object will be reused across failovers. If no failover is currently in
 // progress, the state is "IDLE".
@@ -109,6 +122,12 @@ type shardBuffer struct {
 
 	// mu guards the mutable fields below (queue, timers, timestamps).
 	mu sync.RWMutex
+	// generation is incremented for every buffering cycle that is started.
+	// It lets the goroutine which started a cycle (and released mu while
+	// calling shardMarker.MarkShardNotServing) detect whether the BUFFERING
+	// state it observes after re-locking still belongs to its own cycle or
+	// to a successor cycle.
+	generation uint64
 	// queue is the list of buffered requests (ordered by arrival).
 	queue []*entry
 	// lastStart is the last time we saw the start of a failover.
@@ -153,7 +172,7 @@ func (sb *shardBuffer) disabled() bool {
 	return sb.mode == bufferModeDisabled
 }
 
-func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard string, kev *discovery.KeyspaceEventWatcher, err error) (RetryDoneFunc, error) {
+func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard string, marker shardMarker, err error) (RetryDoneFunc, error) {
 	// We assume if err != nil then it's always caused by a failover.
 	// Other errors must be filtered at higher layers.
 	failoverDetected := err != nil
@@ -229,10 +248,49 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 			return nil, nil
 		}
 
-		// Try to start buffering. If we're unsuccessful, then we exit early.
-		if !sb.startBufferingLocked(ctx, kev, err) {
+		// Reserve the buffering cycle BEFORE telling the keyspace event
+		// watcher: stop events arriving while we mark the shard as not
+		// serving must hit an active state machine instead of being lost
+		// against the IDLE state.
+		sb.startBufferingLocked(err)
+
+		if marker != nil {
+			gen := sb.generation
+			prevLastEnd := sb.lastEnd
+			// Mark the shard as not serving WITHOUT holding sb.mu — see the
+			// shardMarker doc comment for why holding it deadlocks.
 			sb.mu.Unlock()
-			return nil, nil
+			marked := marker.MarkShardNotServing(ctx, keyspace, shard, isErrorDueToReparenting(err))
+			sb.mu.Lock()
+			if !marked {
+				// We failed to mark the shard as not serving. Do not buffer the request.
+				// This can happen if the keyspace has been deleted or if the keyspace event
+				// watcher hasn't yet seen the shard. The keyspace event watcher might not stop
+				// buffering for this request at all until it times out. It's better to not
+				// buffer this request.
+				// Roll back the cycle we started, unless it was already stopped (by a
+				// keyspace event, shutdown, or the max-duration timeout) or superseded
+				// by a newer cycle — those stops are genuine and must stand.
+				if sb.generation == gen && bufferState(sb.state.Load()) == stateBuffering {
+					sb.stopBufferingLocked(stopMarkFailed, "failed to mark the shard as not serving in the keyspace event watcher")
+					// A mark failure is not a failover end: it must not suppress the
+					// next buffering attempt via --buffer-min-time-between-failovers
+					// (e.g. on a cold-start vtgate whose watcher lags behind).
+					sb.lastEnd = prevLastEnd
+				}
+				sb.mu.Unlock()
+				return nil, nil
+			}
+			// The cycle may have been stopped while we were marking. This must be
+			// an exact state check, not shouldBufferLocked: if the cycle stopped
+			// AND fully drained, the state is IDLE again and shouldBufferLocked
+			// would let us enqueue into an empty queue with a nil timeoutThread.
+			// A BUFFERING state is safe to enqueue into even if it belongs to a
+			// successor cycle.
+			if sb.buf.stopped.Load() || bufferState(sb.state.Load()) != stateBuffering {
+				sb.mu.Unlock()
+				return nil, nil
+			}
 		}
 	}
 
@@ -291,21 +349,13 @@ func (sb *shardBuffer) shouldBufferLocked(failoverDetected bool) bool {
 	panic("BUG: All possible states must be covered by the switch expression above.")
 }
 
-func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.KeyspaceEventWatcher, err error) bool {
-	if kev != nil {
-		if !kev.MarkShardNotServing(ctx, sb.keyspace, sb.shard, isErrorDueToReparenting(err)) {
-			// We failed to mark the shard as not serving. Do not buffer the request.
-			// This can happen if the keyspace has been deleted or if the keyspace even watcher
-			// hasn't yet seen the shard. Keyspace event watcher might not stop buffering for this
-			// request at all until it times out. It's better to not buffer this request.
-			return false
-		}
-	}
+func (sb *shardBuffer) startBufferingLocked(err error) {
 	// Reset monitoring data from previous failover.
 	lastRequestsInFlightMax.Set(sb.statsKey, 0)
 	lastRequestsDryRunMax.Set(sb.statsKey, 0)
 	failoverDurationSumMs.Reset(sb.statsKey)
 
+	sb.generation++
 	sb.lastStart = sb.timeNow()
 	sb.logErrorIfStateNotLocked(stateIdle)
 	sb.state.Store(int32(stateBuffering))
@@ -324,7 +374,6 @@ func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.
 		sb.buf.config.Size,
 		sb.buf.config.MaxFailoverDuration,
 		errorsanitizer.NormalizeError(err.Error())))
-	return true
 }
 
 // logErrorIfStateNotLocked logs an error if the current state is not "state".
