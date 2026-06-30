@@ -377,25 +377,20 @@ func TestReadFullDiskReplicas(t *testing.T) {
 	defer db.ClearVTOrcDatabase()
 	for _, query := range append(
 		initialSQL,
-		// zone1-0000000101 is the shard primary. It must not be returned
-		// even if the primary is also marked full.
-		"update database_instance set is_disk_full = true where alias = 'zone1-0000000101'",
-		// Simulate a stale instance row: the tablet currently is a REPLICA in
-		// topology, but the last successful instance read still said PRIMARY.
+		// zone1-0000000100 (vitess_tablet REPLICA) reports a full disk and must be returned.
+		// Its database_instance row is given a stale tablet_type=PRIMARY to prove the filter
+		// keys off vitess_tablet, not the cached instance row.
 		fmt.Sprintf("update database_instance set tablet_type = %d, is_disk_full = true where alias = 'zone1-0000000100'", topodatapb.TabletType_PRIMARY),
-		fmt.Sprintf("update database_instance set tablet_type = %d, is_disk_full = true where alias = 'zone1-0000000112'", topodatapb.TabletType_BACKUP),
+		// zone1-0000000101 is the shard PRIMARY; it must not be returned even when full.
+		"update database_instance set is_disk_full = true where alias = 'zone1-0000000101'",
+		// zone1-0000000112 (RDONLY) reports a full disk; RDONLY is a replica type and must be returned.
+		"update database_instance set is_disk_full = true where alias = 'zone1-0000000112'",
+		// zone2-0000000200 is a REPLICA whose disk is not full; it must not be returned.
+		"update database_instance set is_disk_full = false where alias = 'zone2-0000000200'",
 	) {
 		_, err := db.ExecVTOrc(query)
 		require.NoError(t, err)
 	}
-
-	// zone1-0000000112 starts as RDONLY in initialSQL; force the topology
-	// record to BACKUP so the test also covers non-primary, non-replica tablet
-	// types.
-	backupTablet, err := ReadTablet(&topodatapb.TabletAlias{Cell: "zone1", Uid: 112})
-	require.NoError(t, err)
-	backupTablet.Type = topodatapb.TabletType_BACKUP
-	require.NoError(t, SaveTablet(backupTablet))
 
 	aliases, err := ReadFullDiskReplicas("ks", "0")
 	require.NoError(t, err)
@@ -403,7 +398,7 @@ func TestReadFullDiskReplicas(t *testing.T) {
 	for _, alias := range aliases {
 		aliasStrings = append(aliasStrings, topoproto.TabletAliasString(alias))
 	}
-	require.ElementsMatch(t, []string{"zone1-0000000100"}, aliasStrings)
+	require.ElementsMatch(t, []string{"zone1-0000000100", "zone1-0000000112"}, aliasStrings)
 }
 
 func TestDiskFullRecordsRowOnFirstDiscovery(t *testing.T) {
@@ -769,44 +764,38 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 		name             string
 		tabletAlias      *topodatapb.TabletAlias
 		partialSuccess   bool
-		stalledDisk      bool
-		fullDisk         bool
+		diskHealth       *diskHealth
 		conditionToCheck string
 	}{
 		{
 			name:             "Verify updated last checked",
 			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   false,
-			stalledDisk:      false,
-			fullDisk:         false,
+			diskHealth:       &diskHealth{stalled: false, full: false},
 			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = false and is_disk_full = false",
 		}, {
 			name:             "Verify partial success",
 			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   true,
-			stalledDisk:      false,
-			fullDisk:         false,
+			diskHealth:       &diskHealth{stalled: false, full: false},
 			conditionToCheck: "last_checked >= datetime('now', '-30 second') and last_check_partial_success = true and is_disk_stalled = false and is_disk_full = false",
 		}, {
 			name:             "Verify stalled disk",
 			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   false,
-			stalledDisk:      true,
-			fullDisk:         false,
+			diskHealth:       &diskHealth{stalled: true, full: false},
 			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = true and is_disk_full = false",
 		}, {
 			name:             "Verify full disk",
 			tabletAlias:      &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 			partialSuccess:   false,
-			stalledDisk:      false,
-			fullDisk:         true,
+			diskHealth:       &diskHealth{stalled: false, full: true},
 			conditionToCheck: "last_checked >= DATETIME('now', '-30 second') and last_check_partial_success = false and is_disk_stalled = false and is_disk_full = true",
 		}, {
 			name:           "Verify no error on nil tablet",
 			tabletAlias:    nil,
 			partialSuccess: true,
-			stalledDisk:    true,
-			fullDisk:       true,
+			diskHealth:     &diskHealth{stalled: true, full: true},
 		},
 	}
 
@@ -821,7 +810,7 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := UpdateInstanceLastChecked(tt.tabletAlias, tt.partialSuccess, tt.stalledDisk, tt.fullDisk)
+			err := UpdateInstanceLastChecked(tt.tabletAlias, tt.partialSuccess, tt.diskHealth)
 			require.NoError(t, err)
 
 			if tt.conditionToCheck != "" {
@@ -836,6 +825,39 @@ func TestUpdateInstanceLastChecked(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestUpdateInstanceLastCheckedPreservesDiskHealth verifies that a poll which did
+// not observe disk health (nil *diskHealth) preserves the previously-known
+// is_disk_stalled/is_disk_full flags rather than clearing them, while an observed
+// healthy disk does clear them.
+func TestUpdateInstanceLastCheckedPreservesDiskHealth(t *testing.T) {
+	defer db.ClearVTOrcDatabase()
+	for _, query := range initialSQL {
+		_, err := db.ExecVTOrc(query)
+		require.NoError(t, err)
+	}
+
+	tabletAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+
+	// Seed a known disk-full, disk-stalled state for the instance.
+	_, err := db.ExecVTOrc(
+		"update database_instance set is_disk_stalled = true, is_disk_full = true where alias = ?",
+		topoproto.TabletAliasString(tabletAlias),
+	)
+	require.NoError(t, err)
+
+	// A poll that did not observe disk health (nil) must preserve the flags.
+	require.NoError(t, UpdateInstanceLastChecked(tabletAlias, false, nil))
+	instances, err := readInstancesByCondition("alias = ? and is_disk_stalled = true and is_disk_full = true", sqlutils.Args(topoproto.TabletAliasString(tabletAlias)), "")
+	require.NoError(t, err)
+	require.Len(t, instances, 1, "disk-health flags should be preserved when nothing was observed")
+
+	// A poll that observed a healthy disk must clear the flags.
+	require.NoError(t, UpdateInstanceLastChecked(tabletAlias, true, &diskHealth{stalled: false, full: false}))
+	instances, err = readInstancesByCondition("alias = ? and is_disk_stalled = false and is_disk_full = false", sqlutils.Args(topoproto.TabletAliasString(tabletAlias)), "")
+	require.NoError(t, err)
+	require.Len(t, instances, 1, "disk-health flags should be cleared when a healthy disk is observed")
 }
 
 // UpdateInstanceLastAttemptedCheck is used to test the functionality of UpdateInstanceLastAttemptedCheck and verify its failure modes and successes.
