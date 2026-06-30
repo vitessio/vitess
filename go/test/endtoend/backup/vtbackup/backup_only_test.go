@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats/opentsdb"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -495,6 +496,8 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 // flags and produces a chunked backup. It then restores the chunked backup on
 // replica2 and verifies the data is intact.
 func TestVtBackupWithChunking(t *testing.T) {
+	// Chunked backups are a v25 feature; older vttablets can't restore them.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
 	prepareCluster(t)
 
 	_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)

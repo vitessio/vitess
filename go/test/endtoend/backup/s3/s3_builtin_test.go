@@ -103,7 +103,8 @@ func TestMain(m *testing.M) {
 		minioAddress := net.JoinHostPort("localhost", strconv.Itoa(apiPort))
 		minioConsoleAddress := net.JoinHostPort("localhost", strconv.Itoa(consolePort))
 
-		cmd := exec.Command(minioPath, "server", dataDir,
+		cmd := exec.Command(
+			minioPath, "server", dataDir,
 			"--address", minioAddress,
 			"--console-address", minioConsoleAddress,
 		)
@@ -581,7 +582,7 @@ func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
 		Shard:                "-",
 		StartTime:            time.Now(),
 		RestoreToPos:         replication.Position{},
-		RestoreToTimestamp:    time.Time{},
+		RestoreToTimestamp:   time.Time{},
 		DryRun:               false,
 		Stats:                fakeStats,
 		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,

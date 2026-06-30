@@ -71,12 +71,12 @@ var (
 	currentSetupType int
 	cell             = cluster.DefaultCell
 
-	hostname         = "localhost"
-	keyspaceName     = "ks"
-	dbPassword       = "VtDbaPass"
-	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
-	dbCredentialFile string
-	shardName        = "0"
+	hostname             = "localhost"
+	keyspaceName         = "ks"
+	dbPassword           = "VtDbaPass"
+	shardKsName          = fmt.Sprintf("%s/%s", keyspaceName, shardName)
+	dbCredentialFile     string
+	shardName            = "0"
 	commonTabletArg      = getDefaultCommonArgs()
 	backupChunkSizeBytes int64
 
@@ -194,8 +194,10 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		// since we spin different mysqld processes, we need to pass exactly the socket of the this particular
 		// one when running mysql shell dump/loads
 		if setupType == MySQLShell {
-			commonTabletArg = append(commonTabletArg,
-				"--mysql-shell-flags", fmt.Sprintf("--js -u vt_dba -p%s -S %s", dbPassword,
+			commonTabletArg = append(
+				commonTabletArg,
+				"--mysql-shell-flags", fmt.Sprintf(
+					"--js -u vt_dba -p%s -S %s", dbPassword,
 					path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "mysql.sock"),
 				),
 			)
@@ -511,7 +513,8 @@ func primaryBackup(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	sqlInitTestTable := "init_test"
-	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", "--allow-primary",
+	err = localCluster.VtctldClientProcess.ExecuteCommand(
+		"Backup", "--allow-primary",
 		// Test init SQL.
 		"--init-backup-sql-queries", fmt.Sprintf("create table `%s`.%s (id int),optimize table `%s`.%s,insert into `%s`.%s (id) values (1)",
 			primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable, primary.VttabletProcess.DbName, sqlInitTestTable),
@@ -1772,7 +1775,8 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 		// check the new replica has the data
 		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 		result, err := replica2.VttabletProcess.QueryTablet(
-			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true)
+			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true,
+		)
 		require.NoError(t, err)
 		require.Equal(t, backupMsg, result.Named().Row().AsString("msg", ""))
 	})
@@ -1800,7 +1804,8 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 		result, err := replica2.VttabletProcess.QueryTablet(
-			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true)
+			fmt.Sprintf("select msg from vt_insert_test where msg='%s'", backupMsg), replica2.VttabletProcess.Keyspace, true,
+		)
 		require.NoError(t, err)
 		require.Equal(t, backupMsg, result.Named().Row().AsString("msg", ""))
 	})
