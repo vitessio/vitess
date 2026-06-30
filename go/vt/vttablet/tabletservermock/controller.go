@@ -93,6 +93,9 @@ type Controller struct {
 	// queryRulesMap has the latest query rules.
 	queryRulesMap map[string]*rules.Rules
 
+	DiskStalled bool
+	DiskFull    bool
+
 	MethodCalled map[string]bool
 }
 
@@ -281,8 +284,18 @@ func (tqsc *Controller) SetDemotePrimaryStalled(bool) {
 
 // IsDiskStalled is part of the tabletserver.Controller interface
 func (tqsc *Controller) IsDiskStalled() bool {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
 	tqsc.MethodCalled["IsDiskStalled"] = true
-	return false
+	return tqsc.DiskStalled
+}
+
+// IsDiskFull is part of the tabletserver.Controller interface
+func (tqsc *Controller) IsDiskFull() bool {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.MethodCalled["IsDiskFull"] = true
+	return tqsc.DiskFull
 }
 
 // EnterLameduck implements tabletserver.Controller.

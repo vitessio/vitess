@@ -274,7 +274,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			DISTINCT case when replica_instance.log_bin
 			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
 		) AS count_distinct_logging_major_versions,
-		primary_instance.is_disk_stalled != 0 AS is_disk_stalled
+		primary_instance.is_disk_stalled != 0 AS is_disk_stalled,
+		primary_instance.is_disk_full != 0 AS is_disk_full
 	FROM
 		vitess_tablet
 		JOIN vitess_keyspace ON (
@@ -400,6 +401,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 
 		a.IsReadOnly = m.GetUint("read_only") == 1
 		a.IsDiskStalled = m.GetBool("is_disk_stalled")
+		a.IsDiskFull = m.GetBool("is_disk_full")
 
 		if !a.LastCheckValid {
 			analysisMessage := fmt.Sprintf(
@@ -448,6 +450,20 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 			// Only InvalidPrimary/InvalidReplica should match; postProcessAnalyses
 			// handles upgrading InvalidPrimary to DeadPrimary if needed.
 			if isInvalid && problem.Meta.Analysis != InvalidPrimary && problem.Meta.Analysis != InvalidReplica {
+				continue
+			}
+			if a.IsDiskFull && topo.IsReplicaType(a.TabletType) && problem.Meta.Analysis != ReplicaDiskFull {
+				continue
+			}
+			// A primary with a disk-health issue must not match any other
+			// analysis (e.g. DeadPrimary, InvalidPrimary). The combined
+			// check tolerates both flags being set on the same poll: either
+			// disk analysis can still fire (problem-ordering picks the
+			// winner) instead of silently filtering both out. The recovery
+			// action is gated by the corresponding flag in
+			// getCheckAndRecoverFunctionCode.
+			if a.IsClusterPrimary && (a.IsDiskFull || a.IsDiskStalled) &&
+				problem.Meta.Analysis != PrimaryDiskFull && problem.Meta.Analysis != PrimaryDiskStalled {
 				continue
 			}
 			if problem.HasMatch(a, ca, primaryTablet, tablet, isInvalid, isStaleBinlogCoordinates) {
@@ -507,7 +523,8 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				// it to the chosen problem so the recovery targets it.
 				survives := func(p *DetectionAnalysisProblem) bool {
 					return declaresBefore(p, ca.shardWideAnalysisCode) ||
-						declaresAfter(ca.shardWideProblem, p.Meta.Analysis)
+						declaresAfter(ca.shardWideProblem, p.Meta.Analysis) ||
+						slices.Contains(p.PreserveWithShardWideAnalyses, ca.shardWideAnalysisCode)
 				}
 				if survives(chosenProblem) {
 					key := fmt.Sprintf("%s.%s.%s.%s.%s", tabletAliasString, a.AnalyzedKeyspace, a.AnalyzedShard, chosenProblem.Meta.Analysis, ca.shardWideAnalysisCode)

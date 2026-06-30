@@ -222,6 +222,15 @@ var (
 			Dynamic:  true,
 		},
 	)
+
+	enablePrimaryDiskFullRecovery = viperutil.Configure(
+		"enable-primary-disk-full-recovery",
+		viperutil.Options[bool]{
+			FlagName: "enable-primary-disk-full-recovery",
+			Default:  false,
+			Dynamic:  true,
+		},
+	)
 )
 
 func init() {
@@ -250,6 +259,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.Bool("allow-recovery", allowRecovery.Default(), "Whether VTOrc should be allowed to run recovery actions")
 	fs.Bool("change-tablets-with-errant-gtid-to-drained", convertTabletsWithErrantGTIDs.Default(), "Whether VTOrc should be changing the type of tablets with errant GTIDs to DRAINED")
 	fs.Bool("enable-primary-disk-stalled-recovery", enablePrimaryDiskStalledRecovery.Default(), "Whether VTOrc should detect a stalled disk on the primary and failover")
+	fs.Bool("enable-primary-disk-full-recovery", enablePrimaryDiskFullRecovery.Default(), "Whether VTOrc should detect a full disk on the primary and failover")
 
 	viperutil.BindFlags(
 		fs,
@@ -273,6 +283,7 @@ func registerFlags(fs *pflag.FlagSet) {
 		allowRecovery,
 		convertTabletsWithErrantGTIDs,
 		enablePrimaryDiskStalledRecovery,
+		enablePrimaryDiskFullRecovery,
 	)
 }
 
@@ -414,6 +425,21 @@ func SetConvertTabletWithErrantGTIDs(val bool) {
 // GetStalledDiskPrimaryRecovery reports whether VTOrc is allowed to check for and recovery stalled disk problems.
 func GetStalledDiskPrimaryRecovery() bool {
 	return enablePrimaryDiskStalledRecovery.Get()
+}
+
+// GetFullDiskPrimaryRecovery reports whether VTOrc is allowed to check for and recover full disk problems.
+func GetFullDiskPrimaryRecovery() bool {
+	return enablePrimaryDiskFullRecovery.Get()
+}
+
+// SetFullDiskPrimaryRecovery sets the value for the enablePrimaryDiskFullRecovery variable. This should only be used from tests.
+func SetFullDiskPrimaryRecovery(val bool) {
+	enablePrimaryDiskFullRecovery.Set(val)
+}
+
+// SetStalledDiskPrimaryRecovery sets the value for the enablePrimaryDiskStalledRecovery variable. This should only be used from tests.
+func SetStalledDiskPrimaryRecovery(val bool) {
+	enablePrimaryDiskStalledRecovery.Set(val)
 }
 
 // MarkConfigurationLoaded is called once configuration has first been loaded.

@@ -804,6 +804,11 @@ func (tsv *TabletServer) IsDiskStalled() bool {
 	return tsv.sm.diskHealthMonitor.IsDiskStalled()
 }
 
+// IsDiskFull returns if the disk is full or not.
+func (tsv *TabletServer) IsDiskFull() bool {
+	return tsv.sm.diskHealthMonitor.IsDiskFull()
+}
+
 // CreateTransaction creates the metadata for a 2PC transaction.
 func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.Target, dtid string, participants []*querypb.Target) (err error) {
 	return tsv.execRequest(
@@ -1168,7 +1173,8 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 			}
 
 			return waitErr
-		})
+		},
+	)
 	return txDone, err
 }
 

@@ -125,6 +125,9 @@ type Controller interface {
 
 	// IsDiskStalled returns if the disk is stalled.
 	IsDiskStalled() bool
+
+	// IsDiskFull returns if the disk is full.
+	IsDiskFull() bool
 }
 
 // Ensure TabletServer satisfies Controller interface.
