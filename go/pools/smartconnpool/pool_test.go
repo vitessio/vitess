@@ -745,8 +745,8 @@ func TestCloseWithContextAfterSetCapacityZeroClosesPool(t *testing.T) {
 	}).Open(newConnector(&state), nil)
 
 	t.Cleanup(func() {
-		if closeChan := p.close.Swap(nil); closeChan != nil {
-			close(*closeChan)
+		if lt := p.lifetime.Swap(nil); lt != nil {
+			lt.cancel()
 			p.workers.Wait()
 		}
 	})
@@ -783,8 +783,8 @@ func TestCloseWithContextDrainsAfterTimedOutSetCapacityZero(t *testing.T) {
 	}).Open(newConnector(&state), nil)
 
 	t.Cleanup(func() {
-		if closeChan := p.close.Swap(nil); closeChan != nil {
-			close(*closeChan)
+		if lt := p.lifetime.Swap(nil); lt != nil {
+			lt.cancel()
 			p.workers.Wait()
 		}
 	})
@@ -1904,8 +1904,6 @@ func TestIdleTimeoutStopsReopeningWhenPoolCloses(t *testing.T) {
 		}, nil
 	}
 
-	closeChan := make(chan struct{})
-	p.close.Store(&closeChan)
 	lifetimeCtx, lifetimeCancel := context.WithCancel(context.Background())
 	t.Cleanup(lifetimeCancel)
 	p.lifetime.Store(&lifetime{ctx: lifetimeCtx, cancel: lifetimeCancel})
@@ -1943,9 +1941,9 @@ func TestIdleTimeoutStopsReopeningWhenPoolCloses(t *testing.T) {
 		}
 	}, time.Second, 10*time.Millisecond)
 
-	closePtr := p.close.Swap(nil)
-	require.NotNil(t, closePtr)
-	close(*closePtr)
+	lt := p.lifetime.Swap(nil)
+	require.NotNil(t, lt)
+	lt.cancel()
 	release()
 
 	require.Eventually(t, func() bool {
@@ -1958,7 +1956,10 @@ func TestIdleTimeoutStopsReopeningWhenPoolCloses(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 
 	assert.EqualValues(t, 1, reconnectAttempts.Load())
-	assert.EqualValues(t, 3, state.close.Load())
+	// 2 expired conns were closed by closeIdleResources; the in-flight
+	// reopen sees the cancelled lifetime ctx and returns ctx.Err() without
+	// ever producing a fresh conn, so no third close happens.
+	assert.EqualValues(t, 2, state.close.Load())
 
 	if conn, ok := p.clean.PopAll(); ok {
 		for conn != nil {
@@ -2104,6 +2105,161 @@ func TestCloseDoesNotHandOffToWaiters(t *testing.T) {
 		"waiter must not be handed a connection after Close has set capacity to 0")
 	require.EqualValues(t, 0, state.open.Load(),
 		"recycled conn must be closed when capacity is 0, not pushed back to a stack")
+	require.EqualValues(t, 0, p.Active())
+}
+
+// TestIsOpenIsFalseDuringDrain pins the contract that the pool is reported
+// as closed as soon as CloseWithContext is called, not after the drain
+// completes. A single conn is held by the test so the drain cannot complete
+// until the conn is recycled; IsOpen must already report false while we're
+// still inside the drain.
+func TestIsOpenIsFalseDuringDrain(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	ctx := t.Context()
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.False(c, p.IsOpen(), "IsOpen must report false once Close starts")
+	}, time.Second, time.Millisecond)
+
+	// Sanity: drain is still in flight because we haven't recycled the conn.
+	require.EqualValues(t, 1, p.Active(),
+		"drain should not have completed yet; the held conn is still active")
+
+	c.Recycle()
+
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not complete in time")
+	}
+	require.NoError(t, err)
+}
+
+// TestWaiterUnblocksAtDrainStart pins the contract that a goroutine queued
+// in waitForConn is released with ErrConnPoolClosed as soon as Close starts,
+// without waiting for the drain to finish. A held conn keeps the drain
+// running indefinitely; the waiter must error out before we recycle.
+func TestWaiterUnblocksAtDrainStart(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+	t.Cleanup(p.Close)
+
+	ctx := t.Context()
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+
+	waiterErr := make(chan error, 1)
+	go func() {
+		_, err := p.Get(ctx, nil)
+		waiterErr <- err
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		closeDone <- p.CloseWithContext(closeCtx)
+	}()
+
+	select {
+	case err = <-waiterErr:
+	case <-time.After(time.Second):
+		require.Fail(t, "waiter did not unblock at drain start (still queued during drain)")
+	}
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+
+	// Sanity: drain is still in flight because we haven't recycled the conn.
+	require.EqualValues(t, 1, p.Active(),
+		"drain should not have completed yet; the held conn is still active")
+
+	c.Recycle()
+
+	select {
+	case err = <-closeDone:
+	case <-time.After(30 * time.Second):
+		require.Fail(t, "Close did not complete in time")
+	}
+	require.NoError(t, err)
+}
+
+// TestRecycleAfterLifetimeCancelClosesEagerly pins the contract that
+// tryReturnConn closes a Recycled conn instead of handing it off once the
+// pool's lifetime context has been cancelled — even before setCapacity has
+// driven capacity to 0. Without this gate, a Recycle in the brief window
+// between CloseWithContext cancelling lifetime and setCapacity swapping
+// capacity to 0 could be handed to a queued waiter that had not yet woken
+// from lifetimeCtx.Done(), defeating the "waiters unblock at drain start"
+// guarantee.
+func TestRecycleAfterLifetimeCancelClosesEagerly(t *testing.T) {
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+	}).Open(newConnector(&state), nil)
+
+	ctx := t.Context()
+
+	c, err := p.Get(ctx, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, state.open.Load())
+
+	waiterErr := make(chan error, 1)
+	go func() {
+		_, err := p.Get(ctx, nil)
+		waiterErr <- err
+	}()
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EqualValues(c, 1, p.wait.waiting())
+	}, time.Second, time.Millisecond)
+
+	// Simulate the state CloseWithContext leaves the pool in between
+	// `lt.cancel()` and `setCapacity(ctx, 0)`: lifetime is nil/cancelled,
+	// but capacity has not yet been driven to 0.
+	lt := p.lifetime.Swap(nil)
+	require.NotNil(t, lt)
+	lt.cancel()
+	t.Cleanup(p.workers.Wait)
+
+	// The waiter should unblock with ErrConnPoolClosed because the lifetime
+	// context was cancelled.
+	select {
+	case err = <-waiterErr:
+	case <-time.After(time.Second):
+		require.Fail(t, "waiter did not unblock after lifetime cancel")
+	}
+	require.ErrorIs(t, err, ErrConnPoolClosed)
+
+	// Recycling now must eagerly close the conn rather than push it onto a
+	// stack — capacity is still > 0 and active is not > capacity, so the
+	// active>capacity gate alone would not catch this.
+	require.EqualValues(t, 1, p.Capacity(),
+		"sanity: capacity must still be > 0 to exercise the lifetime gate")
+	c.Recycle()
+
+	require.EqualValues(t, 1, state.close.Load(),
+		"recycled conn must be closed once lifetime is cancelled, not pushed to a stack")
 	require.EqualValues(t, 0, p.Active())
 }
 

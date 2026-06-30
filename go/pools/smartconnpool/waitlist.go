@@ -48,13 +48,15 @@ type waitlist[C Connection] struct {
 }
 
 // waitForConn blocks until a connection with the given Setting is returned by another client,
-// or until the given context expires.
+// or until the given context expires. lifetimeCtx is the pool's lifetime
+// context; it is cancelled when the pool starts closing so queued waiters
+// can fail fast with ErrConnPoolClosed instead of waiting for the drain.
 // If maxWaiters is > 0 and the waitlist already has that many waiters, it returns
 // ErrPoolWaiterCapReached immediately without blocking.
 // The returned connection may _not_ have the requested Setting. This function can
 // also return a `nil` connection even if our context has expired, if the pool has
 // forced an expiration of all waiters in the waitlist.
-func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeChan <-chan struct{}, maxWaiters uint) (*Pooled[C], error) {
+func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, lifetimeCtx context.Context, maxWaiters uint) (*Pooled[C], error) {
 	elem := wl.nodes.Get().(*list.Element[waiter[C]])
 	defer func() {
 		// Drop the references to the request-scoped ctx and setting before
@@ -89,7 +91,7 @@ func (wl *waitlist[C]) waitForConn(ctx context.Context, setting *Setting, closeC
 	wl.mu.Unlock()
 
 	select {
-	case <-closeChan:
+	case <-lifetimeCtx.Done():
 		// Pool was closed while we were waiting.
 		wl.mu.Lock()
 		removed := wl.list.RemoveIfPresent(elem)

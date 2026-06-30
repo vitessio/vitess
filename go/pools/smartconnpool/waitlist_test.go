@@ -36,21 +36,22 @@ func TestWaitlistPoolCloseWithMultipleWaiters(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 
-	poolClose := make(chan struct{})
+	lifetimeCtx, lifetimeCancel := context.WithCancel(t.Context())
+	defer lifetimeCancel()
 
 	waiterCount := 2
 	expireCount := atomic.Int32{}
 
 	for range waiterCount {
 		go func() {
-			_, err := wait.waitForConn(ctx, nil, poolClose, 0)
+			_, err := wait.waitForConn(ctx, nil, lifetimeCtx, 0)
 			if err != nil {
 				expireCount.Add(1)
 			}
 		}()
 	}
 
-	close(poolClose)
+	lifetimeCancel()
 
 	// Wait for the context to expire
 	<-ctx.Done()
@@ -75,14 +76,15 @@ func TestWaitlistWaiterCap(t *testing.T) {
 	wl := waitlist[*TestConn]{}
 	wl.init()
 
-	poolClose := make(chan struct{})
+	lifetimeCtx, lifetimeCancel := context.WithCancel(t.Context())
+	defer lifetimeCancel()
 
 	const maxWaiters = 3
 
 	errs := make(chan error, maxWaiters)
 	for i := 1; i <= maxWaiters; i++ {
 		go func() {
-			_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
+			_, err := wl.waitForConn(t.Context(), nil, lifetimeCtx, maxWaiters)
 			errs <- err
 		}()
 
@@ -91,11 +93,11 @@ func TestWaitlistWaiterCap(t *testing.T) {
 		}, time.Second, 5*time.Millisecond)
 	}
 
-	_, err := wl.waitForConn(t.Context(), nil, poolClose, maxWaiters)
+	_, err := wl.waitForConn(t.Context(), nil, lifetimeCtx, maxWaiters)
 	assert.ErrorIs(t, err, ErrPoolWaiterCapReached)
 	assert.Equal(t, maxWaiters, wl.waiting())
 
-	close(poolClose)
+	lifetimeCancel()
 
 	for range maxWaiters {
 		assert.NotErrorIs(t, <-errs, ErrPoolWaiterCapReached)
