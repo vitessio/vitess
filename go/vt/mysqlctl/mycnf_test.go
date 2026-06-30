@@ -63,14 +63,17 @@ func TestMycnf(t *testing.T) {
 	waitTime := 1 * time.Second
 	wg := sync.WaitGroup{}
 
+	// require.* is unsafe on a worker goroutine, so record the results and assert after wg.Wait().
+	var readErr error
+	var totalTimeSpent time.Duration
 	wg.Go(func() {
 		startTime := time.Now()
-		var readErr error
 		mycnf, readErr = ReadMycnf(mycnf, 1*time.Minute)
-		require.NoError(t, readErr, "failed reading")
+		totalTimeSpent = time.Since(startTime)
+		if readErr != nil {
+			return
+		}
 		t.Logf("socket file %v", mycnf.SocketFile)
-		totalTimeSpent := time.Since(startTime)
-		require.GreaterOrEqual(t, totalTimeSpent, waitTime)
 	})
 
 	time.Sleep(waitTime)
@@ -81,6 +84,8 @@ func TestMycnf(t *testing.T) {
 
 	// Wait for ReadMycnf to finish and then verify that the data read is correct.
 	wg.Wait()
+	require.NoError(t, readErr, "failed reading")
+	require.GreaterOrEqual(t, totalTimeSpent, waitTime)
 	// Tablet UID should be 11111, which determines tablet/data dir.
 	require.Contains(t, mycnf.DataDir, "/vt_0000011111/")
 	// MySQL server-id should be 22222, different from Tablet UID.

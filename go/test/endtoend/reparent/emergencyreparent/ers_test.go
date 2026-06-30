@@ -180,33 +180,20 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	// Try performing a write and ensure that it blocks.
 	writeSQL := `insert into test(id, msg) values (1, 'test 1')`
 	wg := sync.WaitGroup{}
+	// require.* is unsafe on a worker goroutine, so record the write error and
+	// vtgate vars here and assert them on the test goroutine after wg.Wait().
+	var writeErr error
+	var vtgateVars map[string]any
 	wg.Go(func() {
 		// Attempt writing via vtgate against the primary. This should block (because there's no replicas to ack the semi-sync),
 		// and fail on the vtgate query timeout. Async replicas will still receive this write (probably), because it is written
 		// to the PRIMARY binlog even when no ackers exist. This means we need to disable the vtgate buffer (above), because it
 		// will attempt the write on the promoted, unblocked primary - and this will hit a dupe key error.
-		_, err := conn.ExecuteFetch(writeSQL, 0, false)
+		_, writeErr = conn.ExecuteFetch(writeSQL, 0, false)
 
-		// The error here could be one of:
-		// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
-		// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = stream terminated by RST_STREAM with error code: CANCEL (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
-		// * ...
-		//
-		// So we only check for the part of the error message that's consistent.
-		require.ErrorContains(t, err, "(errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')")
-
-		// Verify vtgate really processed the insert in case something unrelated caused the deadline exceeded.
-		vtgateVars := clusterInstance.VtgateProcess.GetVars()
-		require.NotNil(t, vtgateVars)
-		require.NotNil(t, vtgateVars["QueryRoutes"])
-		require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
-		require.EqualValues(t, map[string]any{
-			"DDL.DirectDDL.PRIMARY":      float64(1),
-			"INSERT.Passthrough.PRIMARY": float64(1),
-		}, vtgateVars["QueryRoutes"])
-		require.EqualValues(t, map[string]any{
-			"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
-		}, vtgateVars["VtgateApiErrorCounts"])
+		// Capture vtgate vars to verify (after the wait) that vtgate really
+		// processed the insert in case something unrelated caused the deadline exceeded.
+		vtgateVars = clusterInstance.VtgateProcess.GetVars()
 	})
 
 	wg.Add(1)
@@ -226,6 +213,25 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 	}()
 
 	wg.Wait()
+	// The error here could be one of:
+	// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = context deadline exceeded (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
+	// * target: ks.0.primary: vttablet: rpc error: code = DeadlineExceeded desc = stream terminated by RST_STREAM with error code: CANCEL (errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')
+	// * ...
+	//
+	// So we only check for the part of the error message that's consistent.
+	require.ErrorContains(t, writeErr, "(errno 1317) (sqlstate 70100) during query: insert into test(id, msg) values (1, 'test 1')")
+
+	// Verify vtgate really processed the insert in case something unrelated caused the deadline exceeded.
+	require.NotNil(t, vtgateVars)
+	require.NotNil(t, vtgateVars["QueryRoutes"])
+	require.NotNil(t, vtgateVars["VtgateApiErrorCounts"])
+	require.EqualValues(t, map[string]any{
+		"DDL.DirectDDL.PRIMARY":      float64(1),
+		"INSERT.Passthrough.PRIMARY": float64(1),
+	}, vtgateVars["QueryRoutes"])
+	require.EqualValues(t, map[string]any{
+		"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
+	}, vtgateVars["VtgateApiErrorCounts"])
 
 	// We need to wait at least 10 seconds here to ensure the wait-for-replicas-timeout has passed,
 	// before we resume the old primary - otherwise the old primary will receive a `SetReplicationSource` call.

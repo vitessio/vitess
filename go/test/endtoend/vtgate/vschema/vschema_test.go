@@ -210,26 +210,35 @@ func TestVSchemaSQLAPIConcurrency(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	preventedLostWrites := atomic.Bool{}
+	// require.* is unsafe on a worker goroutine, so record per-goroutine errors
+	// (in a local err to avoid racing on the shared one) and assert after wg.Wait().
+	errs := make([]error, numTables)
 	for i := range numTables {
 		wg.Go(func() {
 			time.Sleep(time.Duration(rand.IntN(100) * int(time.Nanosecond)))
 			tableName := fmt.Sprintf("%s%d", baseTableName, i)
-			_, err = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA ADD TABLE "+tableName, -1, false)
+			_, err := mysqlConns[i].ExecuteFetch("ALTER VSCHEMA ADD TABLE "+tableName, -1, false)
 			if isVersionMismatchErr(err) {
 				preventedLostWrites.Store(true)
-			} else {
-				require.NoError(t, err)
-				time.Sleep(time.Duration(rand.IntN(75) * int(time.Nanosecond)))
-				_, err = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA DROP TABLE "+tableName, -1, false)
-				if isVersionMismatchErr(err) {
-					preventedLostWrites.Store(true)
-				} else {
-					require.NoError(t, err)
-				}
+				return
 			}
+			if err != nil {
+				errs[i] = err
+				return
+			}
+			time.Sleep(time.Duration(rand.IntN(75) * int(time.Nanosecond)))
+			_, err = mysqlConns[i].ExecuteFetch("ALTER VSCHEMA DROP TABLE "+tableName, -1, false)
+			if isVersionMismatchErr(err) {
+				preventedLostWrites.Store(true)
+				return
+			}
+			errs[i] = err
 		})
 	}
 	wg.Wait()
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
 	require.True(t, preventedLostWrites.Load())
 
 	// Cleanup any tables that were not dropped because the DROP query

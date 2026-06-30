@@ -653,7 +653,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		}
 		got, gotWarnings, err := cConn.ExecuteFetchWithWarningCount(query, maxrows, wantfields)
 		if !allRows && len(result.Rows) > 1 {
-			require.ErrorContains(t, err, "Row count exceeded")
+			if err == nil || !strings.Contains(err.Error(), "Row count exceeded") {
+				fatalError = fmt.Sprintf("expected 'Row count exceeded' error, got: %v", err)
+			}
 			return
 		}
 		if err != nil {

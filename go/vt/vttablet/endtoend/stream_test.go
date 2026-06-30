@@ -102,22 +102,24 @@ func TestStreamConsolidation(t *testing.T) {
 
 	start := make(chan struct{})
 	var finish sync.WaitGroup
+	// require.* is unsafe on a worker goroutine, so record per-worker results and assert after finish.Wait().
+	errs := make([]error, Workers)
+	rowCounts := make([]int, Workers)
 
 	// Spawn N workers at the same time to stress test the stream consolidator
-	for range Workers {
+	for i := range Workers {
 		finish.Go(func() {
 			// block all the workers so they all perform their queries at the same time
 			<-start
 
-			var rowCount int
-			err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+			rowCount := 0
+			errs[i] = client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
 				for _, r := range result.Rows {
 					rowCount += len(r)
 				}
 				return nil
 			})
-			require.NoError(t, err)
-			require.Equal(t, 2200, rowCount)
+			rowCounts[i] = rowCount
 		})
 	}
 
@@ -125,6 +127,10 @@ func TestStreamConsolidation(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	close(start)
 	finish.Wait()
+	for i := range Workers {
+		require.NoError(t, errs[i])
+		require.Equal(t, 2200, rowCounts[i])
+	}
 }
 
 func TestStreamBigData(t *testing.T) {

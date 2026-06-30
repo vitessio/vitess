@@ -975,9 +975,10 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	}()
 
 	// Start another go routine, also waiting for semi-sync being unblocked, but not using the cancellable context.
+	// require.* is unsafe on a worker goroutine, so record the error and assert it after wg.Wait().
+	var unblockErr error
 	wg.Go(func() {
-		err := m.WaitUntilSemiSyncUnblocked(t.Context())
-		require.NoError(t, err)
+		unblockErr = m.WaitUntilSemiSyncUnblocked(t.Context())
 	})
 
 	// Now we cancel the context. This should fail the first wait.
@@ -999,6 +1000,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	require.NoError(t, err)
 	// This should unblock the second wait.
 	wg.Wait()
+	require.NoError(t, unblockErr)
 	// Eventually the writes should also stop.
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
