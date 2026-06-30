@@ -397,30 +397,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 	}
 
-	// if we have a transaction id, let's use the txPool for this query
-	var conn *connpool.PooledConn
-	if qre.connID != 0 {
-		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
-		if err != nil {
-			return err
-		}
-		defer txConn.Unlock()
-		if qre.setting != nil {
-			if _, err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
-				return vterrors.Wrap(err, "failed to execute system setting on the connection")
-			}
-		}
-		conn = txConn.UnderlyingDBConn()
-	} else {
-		dbConn, err := qre.getStreamConn()
-		if err != nil {
-			return err
-		}
-		defer dbConn.Recycle()
-		conn = dbConn
-	}
-
-	return qre.execStreamSQL(conn, qre.connID != 0, sql, func(result *sqltypes.Result) error {
+	streamCallback := func(result *sqltypes.Result) error {
 		// this stream result is only used by the calling client, so it can be
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
@@ -429,7 +406,86 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 			result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 		}
 		return callback(result)
-	})
+	}
+
+	// If we have a transaction id, stream on the txPool connection; otherwise
+	// stream on a stream pool connection. Each branch holds the concrete
+	// connection it must clean up. For a stored procedure call, a mid-stream
+	// error closes that connection — it may have left trailing resultsets or the
+	// final OK packet unread, or already be killed, and the client is gone, so we
+	// close rather than attempt a drain-and-recover — while a clean stream runs
+	// the post-stream safety checks.
+	if qre.connID != 0 {
+		txConn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for streaming query")
+		if err != nil {
+			return err
+		}
+		defer txConn.Unlock()
+		if qre.setting != nil {
+			if _, err := txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+		}
+
+		conn := txConn.UnderlyingDBConn()
+		err = qre.execStreamSQL(conn, true, sql, streamCallback)
+		if qre.plan.PlanID == p.PlanCallProc {
+			if err != nil {
+				txConn.Close()
+				return err
+			}
+			trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(conn.Conn)
+			if err != nil {
+				txConn.Close()
+				return err
+			}
+			// The procedure must not change the transaction state.
+			changedTx := txConn.IsInTransaction() != trailing.IsInTransaction()
+			if changedTx {
+				txConn.Close()
+			}
+			if multipleResultsets {
+				return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+			}
+			if changedTx {
+				return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
+			}
+			return nil
+		}
+		return err
+	}
+
+	dbConn, err := qre.getStreamConn()
+	if err != nil {
+		return err
+	}
+	defer dbConn.Recycle()
+
+	err = qre.execStreamSQL(dbConn, false, sql, streamCallback)
+	if qre.plan.PlanID == p.PlanCallProc {
+		if err != nil {
+			dbConn.Close()
+			return err
+		}
+		trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(dbConn.Conn)
+		if err != nil {
+			dbConn.Close()
+			return err
+		}
+		// The procedure must not leak a transaction onto the pooled connection.
+		leakedTx := trailing.IsInTransaction()
+		if leakedTx {
+			dbConn.Close()
+		}
+		if multipleResultsets {
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+		}
+		if leakedTx {
+			return vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
+		}
+		return nil
+	}
+	return err
 }
 
 // MessageStream streams messages from a message table.
@@ -1005,6 +1061,54 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		return nil, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+}
+
+// streamedCallProcTrailingStatus reads what follows a streamed stored procedure
+// call's first resultset to determine the connection's final state. It returns
+// the trailing status — whose flags describe the post-call transaction state —
+// and whether the call produced more than one resultset (already drained). A
+// stored procedure call is always followed by a trailing status packet, so a
+// streamed resultset's EOF always reports more results; reading one more result
+// tells a single-resultset call (only the trailing packet remains) from a
+// multi-resultset one.
+func (qre *QueryExecutor) streamedCallProcTrailingStatus(conn *connpool.Conn) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
+	if okResult := conn.StreamOKResult(); okResult != nil {
+		// No resultset was streamed, so the OK packet's status flags are all there
+		// is to inspect.
+		return &sqltypes.Result{StatusFlags: okResult.StatusFlags}, false, nil
+	}
+
+	trailing, err = conn.FetchNext(qre.ctx, mysql.FETCH_NO_ROWS, false)
+	if err != nil {
+		return nil, false, err
+	}
+	if !trailing.IsMoreResultsExists() {
+		// Only the trailing status packet followed the single resultset.
+		return trailing, false, nil
+	}
+
+	// More than one resultset: drain the rest without buffering so the final
+	// status reflects the connection state and the connection stays clean.
+	trailing, err = qre.drainStreamedResultSets(conn)
+	if err != nil {
+		return nil, true, err
+	}
+	return trailing, true, nil
+}
+
+// drainStreamedResultSets discards any remaining resultsets on a streaming
+// connection without buffering their rows and returns the final result, whose
+// status flags describe the connection state after the stored procedure.
+func (qre *QueryExecutor) drainStreamedResultSets(conn *connpool.Conn) (*sqltypes.Result, error) {
+	for {
+		qr, err := conn.FetchNext(qre.ctx, mysql.FETCH_NO_ROWS, false)
+		if err != nil {
+			return nil, err
+		}
+		if !qr.IsMoreResultsExists() {
+			return qr, nil
+		}
+	}
 }
 
 func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
