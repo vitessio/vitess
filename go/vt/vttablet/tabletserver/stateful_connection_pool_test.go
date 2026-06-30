@@ -156,6 +156,45 @@ func TestStatefulPoolShutdownAll(t *testing.T) {
 	assert.True(t, conn2.IsClosed())
 }
 
+// TestGetTempTableConns verifies that GetTempTableConns selects only not-in-use
+// reserved connections that hold a temporary table and are not in a transaction.
+func TestGetTempTableConns(t *testing.T) {
+	ctx := t.Context()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	params := dbconfigs.New(db.ConnParams())
+	pool.Open(params, params, params)
+	rcStats := servenv.NewExporter("TestGetTempTableConns", "").NewTimings("rconn", "test1", "test2")
+
+	// temp-table, not in a transaction, not in use -> selected.
+	tempConn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	tempConn.Taint(ctx, rcStats)
+	tempConn.MarkAsHavingTempTable()
+	tempID := tempConn.ReservedID()
+	tempConn.Unlock()
+
+	// temp-table but in a transaction -> excluded.
+	txConn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	txConn.Taint(ctx, rcStats)
+	txConn.MarkAsHavingTempTable()
+	txConn.txProps = &tx.Properties{}
+	txConn.Unlock()
+
+	// reserved but no temp table -> excluded.
+	plainConn, err := pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	plainConn.Taint(ctx, rcStats)
+	plainConn.Unlock()
+
+	got := pool.GetTempTableConns()
+	require.Len(t, got, 1)
+	require.Equal(t, tempID, got[0].ReservedID())
+	got[0].Unlock()
+}
+
 func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()

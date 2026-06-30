@@ -594,6 +594,13 @@ func (dbc *Conn) ConnCheck(ctx context.Context) error {
 	return nil
 }
 
+// IsServerClosed reports whether the server has closed the underlying
+// connection. Unlike ConnCheck, it never reconnects; it is a read-only probe
+// used to decide whether to discard the connection.
+func (dbc *Conn) IsServerClosed() bool {
+	return dbc.conn.ConnCheck() != nil
+}
+
 func (dbc *Conn) Reconnect(ctx context.Context) error {
 	err := dbc.conn.Reconnect(ctx)
 	if err != nil {

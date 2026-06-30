@@ -617,6 +617,42 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 	survivor.Unlock()
 }
 
+// TestReapClosedTempTableConns verifies that the killer leaves a live temp-table
+// reserved connection alone but reclaims one whose underlying MySQL connection
+// the server has closed.
+func TestReapClosedTempTableConns(t *testing.T) {
+	ctx := t.Context()
+	db, txPool, _, closer := setup(t)
+	defer closer()
+
+	rcStats := servenv.NewExporter("TestReapClosedTempTableConns", "").NewTimings("reservedConns", "reserved connection timings", "operation")
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	require.NoError(t, conn.Taint(ctx, rcStats))
+	conn.MarkAsHavingTempTable()
+	reservedID := conn.ReservedID()
+	conn.Unlock()
+
+	startKills := txPool.env.Stats().KillCounters.Counts()["ClosedReservedConnection"]
+
+	// While the connection is alive the reaper must leave it in the pool.
+	txPool.reapClosedTempTableConns()
+	require.Equal(t, startKills, txPool.env.Stats().KillCounters.Counts()["ClosedReservedConnection"])
+	c, err := txPool.scp.GetAndLock(reservedID, "verify alive conn kept")
+	require.NoError(t, err)
+	c.Unlock()
+
+	// Once MySQL closes the connection the reaper reclaims it.
+	db.CloseAllConnections()
+	require.Eventually(t, func() bool {
+		txPool.reapClosedTempTableConns()
+		return txPool.env.Stats().KillCounters.Counts()["ClosedReservedConnection"]-startKills == 1
+	}, 30*time.Second, 100*time.Millisecond)
+
+	_, err = txPool.scp.GetAndLock(reservedID, "verify reaped conn gone")
+	require.Error(t, err)
+}
+
 func TestTxTimeoutReusedReservedConn(t *testing.T) {
 	ctx := t.Context()
 

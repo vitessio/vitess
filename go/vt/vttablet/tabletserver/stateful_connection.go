@@ -77,6 +77,12 @@ func (sc *StatefulConnection) IsClosed() bool {
 	return sc.dbConn == nil || sc.dbConn.Conn.IsClosed()
 }
 
+// IsServerClosed reports whether MySQL has closed the underlying connection. It
+// performs a non-blocking peer probe and does not reconnect.
+func (sc *StatefulConnection) IsServerClosed() bool {
+	return sc.dbConn != nil && sc.dbConn.Conn.IsServerClosed()
+}
+
 // IsInTransaction returns true when the connection has tx state
 func (sc *StatefulConnection) IsInTransaction() bool {
 	return sc.txProps != nil
