@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -558,7 +559,7 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 	ctx := t.Context()
 
 	env := newEnv("TabletServerTest")
-	env.Config().TxPool.Size = 1
+	env.Config().TxPool.Size = 2
 	env.Config().Oltp.TxTimeout = time.Second
 	env.Config().Olap.TxTimeout = 2 * time.Second
 	_, txPool, _, closer := setupWithEnv(t, env)
@@ -575,7 +576,8 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 
 	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
 
-	// Start OLAP transaction and return it to pool right away.
+	// conn0 is an OLAP reserved transaction. It is the control: the killer must
+	// still reclaim an ordinary reserved connection at its timeout.
 	conn0, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{
 		Workload: querypb.ExecuteOptions_OLAP,
 	}, false, 0, nil)
@@ -584,15 +586,35 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 	conn0.Taint(ctxWithCallerID, nil)
 	conn0.Unlock()
 
-	// tx should not timeout after OLTP timeout.
+	// connTemp is an OLTP reserved connection holding a temporary table. Even
+	// though its (1s) timeout elapses first, the killer must never reclaim it.
+	// It is released via pool shutdown (closer) rather than the killer, so give
+	// it real reserved-connection stats to exercise the release-logging path.
+	rcStats := servenv.NewExporter("TestTxTimeoutReservedConn", "").NewTimings("reservedConns", "reserved connection timings", "operation")
+	connTemp, err := txPool.scp.NewConn(ctxWithCallerID, &querypb.ExecuteOptions{
+		Workload: querypb.ExecuteOptions_OLTP,
+	}, nil)
+	require.NoError(t, err)
+	require.NoError(t, connTemp.Taint(ctxWithCallerID, rcStats))
+	connTemp.MarkAsHavingTempTable()
+	tempReservedID := connTemp.ReservedID()
+	connTemp.Unlock()
+
+	// After the OLTP timeout (1s) but before the OLAP timeout (2s): nothing is
+	// killed. On main (without the fix) connTemp would already be dead here.
 	time.Sleep(1200 * time.Millisecond)
 	require.Equal(t, int64(0), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
 	require.Equal(t, int64(0), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingTxKills)
 
-	// tx should timeout after OLAP timeout.
+	// After the OLAP timeout (2s): conn0 is killed, connTemp is not.
 	time.Sleep(1000 * time.Millisecond)
 	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
 	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingTxKills)
+
+	// The temp-table connection survived and is still usable.
+	survivor, err := txPool.scp.GetAndLock(tempReservedID, "verify temp-table conn survived")
+	require.NoError(t, err)
+	survivor.Unlock()
 }
 
 func TestTxTimeoutReusedReservedConn(t *testing.T) {

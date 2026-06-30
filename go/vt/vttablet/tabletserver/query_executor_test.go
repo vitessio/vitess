@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
@@ -678,6 +679,37 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExecDDLPinsReservedConnHoldingTempTable(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	// Let the CREATE TEMPORARY TABLE reach "MySQL" and succeed.
+	db.AddQueryPattern("create temporary table.*", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	defer tsv.StopService()
+
+	// Create a reserved (tainted, non-transaction) connection in the pool.
+	rcStats := servenv.NewExporter("TestExecDDLPinsReservedConnHoldingTempTable", "").NewTimings("reservedConns", "reserved connection timings", "operation")
+	conn, err := tsv.te.txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	require.NoError(t, conn.Taint(ctx, rcStats))
+	reservedID := conn.ReservedID()
+	require.False(t, conn.hasTempTable)
+	conn.Unlock()
+
+	// Run CREATE TEMPORARY TABLE on the reserved connection.
+	qre := newTestQueryExecutor(ctx, tsv, "create temporary table t_pin (id int primary key)", reservedID)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+
+	// The reserved connection must now be flagged so the idle killer skips it.
+	conn, err = tsv.te.txPool.GetAndLock(reservedID, "verify temp-table flag")
+	require.NoError(t, err)
+	defer conn.Unlock()
+	require.True(t, conn.hasTempTable)
 }
 
 func TestExecDDLSchemaTableCountLimitIgnoresSyntheticDual(t *testing.T) {

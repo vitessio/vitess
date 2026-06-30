@@ -771,7 +771,15 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
 		isTemporaryTable = ddlStmt.IsTemporary()
 	}
-	if !isTemporaryTable {
+	if isTemporaryTable {
+		// A temporary table is visible only to the connection that created it
+		// and may be kept for a long time. Pin the reserved connection so the
+		// idle reserved-connection timeout does not reclaim it and drop the
+		// table out from under the session.
+		if conn.IsTainted() {
+			conn.MarkAsHavingTempTable()
+		}
+	} else {
 		// Temporary tables are limited to the session creating them. There is no need to Reload()
 		// the table because other connections will not be able to see the table anyway.
 		defer func() {
