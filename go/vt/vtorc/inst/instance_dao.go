@@ -68,6 +68,16 @@ var (
 
 var emptyQuotesRegexp = regexp.MustCompile(`^""$`)
 
+type (
+	// diskHealth holds the disk-health flags observed during a single successful
+	// FullStatus read. A nil *diskHealth means disk health was not observed this
+	// poll, in which case the previously-known flags must be preserved.
+	diskHealth struct {
+		stalled bool
+		full    bool
+	}
+)
+
 func init() {
 	go initializeInstanceDao()
 }
@@ -175,8 +185,7 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	var tablet *topodatapb.Tablet
 	var fs *replicationdatapb.FullStatus
 	readingStartTime := time.Now()
-	stalledDisk := false
-	fullDisk := false
+	var dh *diskHealth
 	instance := NewInstance()
 	instanceFound := false
 	partialSuccess := false
@@ -220,9 +229,8 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
 		RecordPrimaryHealthCheck(tabletAlias, true)
 	}
-	stalledDisk = fs.DiskStalled
-	fullDisk = fs.DiskFull
-	if stalledDisk || fullDisk {
+	dh = &diskHealth{stalled: fs.DiskStalled, full: fs.DiskFull}
+	if dh.stalled || dh.full {
 		// Always short-circuit when the tablet reports any disk-health
 		// issue. FullStatus returns only the disk flags in that case, so
 		// processing the rest of `fs` would clobber known-good instance
@@ -230,12 +238,12 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 		// Persistence is unconditional so the analysis pipeline sees the
 		// state truthfully; the recovery flags gate the recovery action
 		// in getCheckAndRecoverFunctionCode.
-		if writeErr := writeDiskHealthInstance(tablet, stalledDisk, fullDisk); writeErr != nil {
+		if writeErr := writeDiskHealthInstance(tablet, dh.stalled, dh.full); writeErr != nil {
 			log.Error(
 				"failed to persist disk health instance",
 				slog.String("alias", topoproto.TabletAliasString(tablet.Alias)),
-				slog.Bool("stalled_disk", stalledDisk),
-				slog.Bool("full_disk", fullDisk),
+				slog.Bool("stalled_disk", dh.stalled),
+				slog.Bool("full_disk", dh.full),
 				slog.Any("error", writeErr),
 			)
 		}
@@ -265,8 +273,8 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 			RecordShardPeerHealth(tabletAlias, fs.TabletType, tablet.Keyspace, tablet.Shard, fs.ShardPeerHealth, time.Now())
 		}
 		instance.TabletType = fs.TabletType
-		instance.StalledDisk = stalledDisk
-		instance.FullDisk = fullDisk
+		instance.StalledDisk = dh.stalled
+		instance.FullDisk = dh.full
 		instance.Version = fs.Version
 		instance.ReadOnly = fs.ReadOnly
 		instance.LogBinEnabled = fs.LogBinEnabled
@@ -435,10 +443,10 @@ Cleanup:
 
 	// Something is wrong, could be network-wise. Record that we
 	// tried to check the instance. last_attempted_check is also
-	// updated on success by writeInstance. If the reason is a
-	// stalled disk, we can record that as well.
+	// updated on success by writeInstance. If we observed disk health
+	// this poll, record it as well; a nil dh preserves the prior flags.
 	latency.Start("backend")
-	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess, stalledDisk, fullDisk)
+	_ = UpdateInstanceLastChecked(tabletAlias, partialSuccess, dh)
 	latency.Stop("backend")
 	return nil, err
 }
@@ -820,32 +828,35 @@ func ReadInstancesWithErrantGTIds(keyspace, shard string) ([]*Instance, error) {
 	return readInstancesByCondition(condition, args, "")
 }
 
-// readFullDiskInstances reads all instances in the given keyspace/shard whose last poll reported a full disk.
-func readFullDiskInstances(keyspace, shard string) ([]*Instance, error) {
-	condition := `
-		vitess_tablet.keyspace = ?
-		AND vitess_tablet.shard = ?
-		AND database_instance.is_disk_full != 0`
-
-	return readInstancesByCondition(condition, sqlutils.Args(keyspace, shard), "")
-}
-
 // ReadFullDiskReplicas returns the aliases of replica-type tablets in the given keyspace/shard whose last poll reported a full disk.
+// The tablet type is taken from vitess_tablet (the topology watcher's view) and filtered in a single query, so that a transient
+// read failure cannot drop known full-disk replicas from the ERS promotion-exclusion set.
 func ReadFullDiskReplicas(keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
-	instances, err := readFullDiskInstances(keyspace, shard)
+	query := `SELECT
+			vitess_tablet.alias AS alias,
+			vitess_tablet.tablet_type AS tablet_type
+		FROM
+			vitess_tablet
+			LEFT JOIN database_instance USING (alias)
+		WHERE
+			vitess_tablet.keyspace = ?
+			AND vitess_tablet.shard = ?
+			AND database_instance.is_disk_full != 0`
+
+	aliases := make([]*topodatapb.TabletAlias, 0)
+	err := db.QueryVTOrc(query, sqlutils.Args(keyspace, shard), func(m sqlutils.RowMap) error {
+		if !topo.IsReplicaType(topodatapb.TabletType(m.GetInt32("tablet_type"))) {
+			return nil
+		}
+		alias, err := topoproto.ParseTabletAlias(m.GetString("alias"))
+		if err != nil {
+			return err
+		}
+		aliases = append(aliases, alias)
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	aliases := make([]*topodatapb.TabletAlias, 0, len(instances))
-	for _, instance := range instances {
-		tablet, err := ReadTablet(instance.InstanceAlias)
-		if err != nil {
-			return nil, err
-		}
-		if topo.IsReplicaType(tablet.Type) {
-			aliases = append(aliases, tablet.Alias)
-		}
 	}
 	return aliases, nil
 }
@@ -1162,23 +1173,41 @@ func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError 
 
 // UpdateInstanceLastChecked updates the last_check timestamp in the vtorc backed database
 // for a given instance
-func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSuccess, stalledDisk, fullDisk bool) error {
+func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSuccess bool, dh *diskHealth) error {
 	writeFunc := func() error {
-		_, err := db.ExecVTOrc(
-			`UPDATE database_instance
-			SET
-				last_checked = DATETIME('now'),
-				last_check_partial_success = ?,
-				is_disk_stalled = ?,
-				is_disk_full = ?
-			WHERE
-				alias = ?
-			`,
-			partialSuccess,
-			stalledDisk,
-			fullDisk,
-			topoproto.TabletAliasString(tabletAlias),
-		)
+		var err error
+		if dh == nil {
+			// Disk health was not observed this poll (e.g. an RPC/topology/cache
+			// failure before FullStatus succeeded). Preserve the previously-known
+			// disk-health flags rather than clearing them.
+			_, err = db.ExecVTOrc(
+				`UPDATE database_instance
+				SET
+					last_checked = DATETIME('now'),
+					last_check_partial_success = ?
+				WHERE
+					alias = ?
+				`,
+				partialSuccess,
+				topoproto.TabletAliasString(tabletAlias),
+			)
+		} else {
+			_, err = db.ExecVTOrc(
+				`UPDATE database_instance
+				SET
+					last_checked = DATETIME('now'),
+					last_check_partial_success = ?,
+					is_disk_stalled = ?,
+					is_disk_full = ?
+				WHERE
+					alias = ?
+				`,
+				partialSuccess,
+				dh.stalled,
+				dh.full,
+				topoproto.TabletAliasString(tabletAlias),
+			)
+		}
 		if err != nil {
 			log.Error(err.Error())
 		}
