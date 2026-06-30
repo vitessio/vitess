@@ -17,6 +17,7 @@ limitations under the License.
 package vtctlbackup
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -78,8 +79,8 @@ func TestBuiltinBackupChunked(t *testing.T) {
 	defer func() { backupChunkSizeBytes = 0 }()
 	commonTabletArg = append(
 		getDefaultCommonArgs(),
-		"--builtinbackup-file-chunk-threshold", "4194304",
-		"--builtinbackup-file-chunk-size", "4194304",
+		"--builtinbackup-file-chunk-threshold", strconv.FormatInt(backupChunkSizeBytes, 10),
+		"--builtinbackup-file-chunk-size", strconv.FormatInt(backupChunkSizeBytes, 10),
 	)
 
 	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
