@@ -191,7 +191,7 @@ func TestVtctldclientCLI(t *testing.T) {
 		}
 
 		rs.Start()
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 		res, err := targetTab1.QueryTablet("show tables", keyspace, true)
 		require.NoError(t, err)
@@ -268,7 +268,7 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKeyspace, defaultWorkflowName)
 	wf := (*mt).(iWorkflow)
 	(*mt).Start() // Need to start because we set auto-start to false.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	confirmNoRoutingRules(t)
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
@@ -278,11 +278,11 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	}
 	confirmNoRoutingRules(t)
 	(*mt).Start() // Need to start because we set stop-after-copy to true.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	(*mt).Stop() // Test stopping workflow.
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	(*mt).Start()
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	t.Run("Test --shards flag in MoveTables start/stop", func(t *testing.T) {
 		// This subtest expects workflow to be running at the start and restarts it at the end.
@@ -303,7 +303,7 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
 		}
 	})
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	for _, tab := range targetTabs {
 		catchup(t, tab, defaultWorkflowName, "MoveTables")
@@ -406,11 +406,11 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 	switchFlags := []string{"--enable-reverse-replication=false"}
 	mt := createMoveTables(t, sourceKeyspace, targetKeyspace, defaultWorkflowName, tables, createFlags, completeFlags, switchFlags)
 	mt.Start() // Need to start because we set stop-after-copy to true.
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	mt.Stop() // Test stopping workflow.
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	mt.Start()
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	for _, tab := range targetTabs {
 		catchup(t, tab, defaultWorkflowName, "MoveTables")
 	}
@@ -423,7 +423,7 @@ func testMoveTablesFlags3(t *testing.T, sourceKeyspace, targetKeyspace string, t
 	// Confirm that we can cancel a workflow after ONLY switching read traffic.
 	mt = createMoveTables(t, sourceKeyspace, targetKeyspace, defaultWorkflowName, "customer", createFlags, nil, nil)
 	mt.Start() // Need to start because we set stop-after-copy to true.
-	waitForWorkflowState(t, vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, defaultKsWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	for _, tab := range targetTabs {
 		catchup(t, tab, defaultWorkflowName, "MoveTables")
 	}
@@ -604,9 +604,9 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 	reshardShowResponse := getReshardShowResponse(&rs)
 	require.EqualValues(t, reshardShowResponse, workflowResponse)
 	validateReshardWorkflow(t, workflowResponse.Workflows)
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Stopped.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	rs.Start()
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	for _, tab := range targetTabs {
 		alias := fmt.Sprintf("zone1-%d", tab.TabletUID)
 		query := fmt.Sprintf("update _vt.vreplication set source := replace(source, 'stop_after_copy:true', 'stop_after_copy:false') where db_name = 'vt_%s' and workflow = '%s'", keyspace, defaultWorkflowName)
@@ -614,11 +614,11 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 		require.NoError(t, err, output)
 	}
 	rs.Start()
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	rs.Stop()
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String()))
 	rs.Start()
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	t.Run("Test --shards in workflow start/stop", func(t *testing.T) {
 		// This subtest expects workflow to be running at the start and restarts it at the end.
@@ -639,7 +639,7 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
 		}
 	})
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	t.Run("Test --shards flag in Reshard start/stop", func(t *testing.T) {
 		// This subtest expects workflow to be running at the start and restarts it at the end.
@@ -660,7 +660,7 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
 		}
 	})
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, defaultWorkflowName, "Reshard")

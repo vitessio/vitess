@@ -866,18 +866,33 @@ func (tp *TablePlan) applyBulkDeleteChanges(rowDeletes []*binlogdatapb.RowChange
 		return executor(query)
 	}
 
+	// Derive pkIndex once from the plan, not from per-row vals. PKIndices is sized to
+	// the column count and is populated by the plan builder before this runs, so the
+	// index has no dependency on the shape of any individual row's Before image. The
+	// original per-row search ran the inner `range vals` on iteration 0; an empty
+	// first-row vals (see #20360) left pkIndex at -1 and the subsequent vals[-1]
+	// access panicked. Hoisting the search removes that data dependency. Other panic
+	// surfaces in this loop (e.g. vals[pkIndex] on a short later row) are caught by
+	// the defer/recover wrapper on vp.fetchAndApply's applyEvents goroutine.
 	pkIndex := -1
+	for i, isPK := range tp.PKIndices {
+		if isPK {
+			pkIndex = i
+			break
+		}
+	}
+	// Defensive: PKIndices and Fields are populated separately (the former from
+	// the plan builder's colExprs, the latter from the field event), so guard
+	// against any desync that would leave pkIndex out of range for tp.Fields.
+	if pkIndex < 0 || pkIndex >= len(tp.Fields) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+			"vreplication: bulk-delete plan for table %s has no valid primary key index (pkIndex=%d, len(Fields)=%d)",
+			tp.TargetName, pkIndex, len(tp.Fields))
+	}
+
 	pkVals := make([]sqltypes.Value, 0, len(rowDeletes))
 	for _, rowDelete := range rowDeletes {
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowDelete.Before)
-		if pkIndex == -1 {
-			for i := range vals {
-				if tp.PKIndices[i] {
-					pkIndex = i
-					break
-				}
-			}
-		}
 		addedSize := int64(len(vals[pkIndex].Raw()) + 2) // Plus 2 for the comma and space
 		if querySize+addedSize > maxQuerySize {
 			if _, err := execQuery(&pkVals); err != nil {

@@ -18,10 +18,13 @@
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Ingress bytes tracking in LogStats](#vtgate-ingress-bytes-logstats)
+        - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
+    - **[General](#minor-changes-general)**
+        - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -123,6 +126,14 @@ For MySQL-protocol connections, this counts the bytes read from client packets f
 
 See [#20358](https://github.com/vitessio/vitess/pull/20358) for details.
 
+#### <a id="vtgate-streamexecute-real-errors"/>Streaming errors no longer surface as connection loss</a>
+
+Streaming queries (under `SET workload = 'OLAP'`, multi-statement batches, and prepared-statement execution) previously returned `ERROR 2013 (HY000): Lost connection to MySQL server during query` and tore down the underlying TCP connection whenever the streaming handler returned an error *after* the first row or field packet had been emitted. VTGate now writes a proper ERR packet in place of the result-set terminator, so the real error code and message reach the client and the connection remains usable for subsequent queries.
+
+This affects all three streaming code paths in `go/mysql`: `COM_QUERY` (text protocol), multi-statement `COM_QUERY`, and `COM_STMT_EXECUTE` (binary protocol).
+
+**Impact**: Application error-handling and retry logic that branched on `2013 / Lost connection` will now see the real error code — for example, `errno 1317 / context canceled` after a `KILL QUERY` against a streaming session, or planner errors such as `specifying two different database in the query is not supported`.
+
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 
 #### <a id="vttablet-consolidator-reject-on-cap"/>Consolidator Reject on Waiter Cap</a>
@@ -147,3 +158,16 @@ Two changes:
 Tablets that already have more tracked schema objects than the configured limit will reload fine — only new creations are gated. Operators who need to support more tables and views should increase the flag and ensure both vttablet and mysqld have enough memory to comfortably hold the larger schema.
 
 See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
+
+### <a id="minor-changes-general"/>General</a>
+
+#### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
+
+The build timestamp is no longer injected via linker flags. Because it changed on every `make build`, it forced every binary to be re-linked even when nothing else changed. Build metadata is now read from the VCS information the Go toolchain stamps into the binary (`runtime/debug.ReadBuildInfo`), which makes the linker flags stable across rebuilds and lets the build cache hit.
+
+User-visible consequences:
+
+- The `build_time` reported by `--version`, exposed via `/debug/vars` (`BuildTimestamp`), and set as a tablet tag (`build_time`) now defaults to the **commit time** of the built revision rather than the wall-clock time of the build.
+- Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
+
+The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.

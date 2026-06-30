@@ -18,6 +18,7 @@ vtorc \
   --cell $cell \
   --port $port \
   --log-format text \
+  ${VTORC_EXTRA_FLAGS:-} \
   > "${log_dir}/vtorc.out" 2>&1 &
 
 vtorc_pid=$!

@@ -1,4 +1,8 @@
 ## v23.0
+* **[23.0.5](23.0.5)**
+	* [Changelog](23.0.5/changelog.md)
+	* [Release Notes](23.0.5/release_notes.md)
+
 * **[23.0.4](23.0.4)**
 	* [Changelog](23.0.4/changelog.md)
 	* [Release Notes](23.0.4/release_notes.md)
