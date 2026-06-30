@@ -802,12 +802,13 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 	if err != nil {
 		return nil, err
 	}
-	if isTemporaryTable && conn.IsTainted() {
-		// A temporary table is visible only to the connection that created it
-		// and may be kept for a long time. Pin the reserved connection so the
-		// idle reserved-connection timeout does not reclaim it and drop the
-		// table out from under the session. Only pin after the create succeeds
-		// so a failed create does not exempt a connection that holds no table.
+	// Pin a reserved connection only after it successfully creates a temporary
+	// table. DROP TEMPORARY TABLE is also "temporary" DDL but holds nothing, so
+	// it must not pin. The flag stays set for the connection's lifetime: vtgate
+	// keeps the session on a reserved connection once it has created any temp
+	// table, so re-enabling the idle killer would let it reclaim a connection
+	// vtgate still considers reserved.
+	if createTable, ok := qre.plan.FullStmt.(*sqlparser.CreateTable); ok && createTable.Temp && conn.IsTainted() {
 		conn.MarkAsHavingTempTable()
 	}
 	return result, nil
