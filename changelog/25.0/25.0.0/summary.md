@@ -24,6 +24,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTTablet](#bug-fixes-vttablet)**
+        - [Failed dedicated-pool dial no longer marks a tablet down permanently](#grpctmclient-evict-failed-dial-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -160,3 +163,17 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vttablet"/>VTTablet</a>
+
+#### <a id="grpctmclient-evict-failed-dial-fix"/>Failed dedicated-pool dial no longer marks a tablet down permanently</a>
+
+VTTablet no longer treats a reachable tablet as permanently down after a single failed connection attempt. The gRPC tablet manager client caches its dedicated-pool connections — used by the throttler and other dedicated RPCs — behind a `sync.Once` per address. Previously, if the first dial to an address failed, that failure was cached indefinitely, so every later call returned the same error even after the peer recovered. This kept a healthy tablet out of service until the client was recreated.
+
+The client now evicts a failed dedicated-pool entry, so the next call redials and reconnects once the peer is reachable again.
+
+No configuration change is required.
+
+See [#20414](https://github.com/vitessio/vitess/pull/20414) for details.
