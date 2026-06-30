@@ -69,7 +69,7 @@ require (
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.46.0
-	google.golang.org/api v0.284.0
+	google.golang.org/api v0.285.0
 	google.golang.org/genproto v0.0.0-20260615183401-62b3387ff324 // indirect
 	google.golang.org/grpc v1.81.1
 	google.golang.org/grpc/examples v0.0.0-20250407062114-b368379ef8f6
@@ -83,8 +83,8 @@ require (
 	github.com/DataDog/datadog-go/v5 v5.8.3
 	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.25
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.2.10
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.103.3
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.2.11
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.104.0
 	github.com/aws/smithy-go v1.27.2
 	github.com/bndr/gotabulate v1.1.2
 	github.com/brianvoe/gofakeit/v7 v7.15.0
