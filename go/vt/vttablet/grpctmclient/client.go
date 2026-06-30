@@ -232,7 +232,66 @@ func (client *grpcClient) dialDedicatedPool(ctx context.Context, dialPoolGroup D
 		if err != nil {
 			return nil, nil, err
 		}
+<<<<<<< HEAD
 		m[addr] = tm
+||||||| parent of 40cb03dd64 (grpctmclient: evict a failed dedicated-pool dial so the next call redials (#20414))
+		if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
+			client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
+		}
+
+		poolEntries := client.rpcDialPoolMap[dialPoolGroup]
+		entry, ok := poolEntries[addr]
+		if ok {
+			return entry
+		}
+
+		entry = &tmcEntry{}
+		poolEntries[addr] = entry
+		return entry
+	}()
+
+	// Initialize connection exactly once, without holding the mutex
+	entry.once.Do(func() {
+		entry.tmc, entry.err = client.createTmc(ctx, addr, opt)
+	})
+
+	if entry.err != nil {
+		return nil, nil, entry.err
+=======
+		if _, ok := client.rpcDialPoolMap[dialPoolGroup]; !ok {
+			client.rpcDialPoolMap[dialPoolGroup] = make(addrTmcMap)
+		}
+
+		poolEntries := client.rpcDialPoolMap[dialPoolGroup]
+		entry, ok := poolEntries[addr]
+		if ok {
+			return entry
+		}
+
+		entry = &tmcEntry{}
+		poolEntries[addr] = entry
+		return entry
+	}()
+
+	// Initialize connection exactly once, without holding the mutex
+	entry.once.Do(func() {
+		entry.tmc, entry.err = client.createTmc(ctx, addr, opt)
+	})
+
+	if entry.err != nil {
+		// A failed dial must not be cached forever. The entry is guarded by a
+		// sync.Once, so without eviction every future call returns this same
+		// error even after the peer recovers — which would permanently mark a
+		// reachable tablet as down. Evict the entry so the next call redials.
+		// Only evict THIS entry: a concurrent caller may already have installed
+		// a fresh one for the same addr.
+		client.rpcDialPoolMapMu.Lock()
+		if poolEntries, ok := client.rpcDialPoolMap[dialPoolGroup]; ok && poolEntries[addr] == entry {
+			delete(poolEntries, addr)
+		}
+		client.rpcDialPoolMapMu.Unlock()
+		return nil, nil, entry.err
+>>>>>>> 40cb03dd64 (grpctmclient: evict a failed dedicated-pool dial so the next call redials (#20414))
 	}
 	invalidator := func() {
 		client.mu.Lock()
