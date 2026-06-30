@@ -343,6 +343,80 @@ func TestHealthCheckConcurrentReadDuringUpdate(t *testing.T) {
 	wg.Wait()
 }
 
+// TestTabletConnectionConcurrentWithStreamClose exercises TabletConnection,
+// which reads thc.Conn, while the tablet's checkConn goroutine repeatedly
+// closes and re-dials the connection on stream errors. closeConnection and
+// finalizeConn write thc.Conn under connMu, so TabletConnection must read it
+// under connMu too, otherwise this reports a data race under -race.
+func TestTabletConnectionConcurrentWithStreamClose(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	hcErrorCounters.ResetAll()
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_REPLICA
+	input := make(chan *querypb.StreamHealthResponse)
+	fc := createFakeConn(tablet, input)
+	fc.errCh = make(chan error)
+	hc.AddTablet(tablet)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	stop := make(chan struct{})
+
+	// Writer: alternate a health response with a stream error so the checkConn
+	// goroutine repeatedly closes and re-dials the connection.
+	go func() {
+		defer wg.Done()
+		shr := &querypb.StreamHealthResponse{
+			TabletAlias:   tablet.Alias,
+			Target:        &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+			Serving:       true,
+			RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1},
+		}
+		for {
+			select {
+			case input <- shr:
+			case <-stop:
+				return
+			}
+			select {
+			case fc.errCh <- errors.New("some stream error"):
+			case <-stop:
+				return
+			}
+		}
+	}()
+
+	// Reader: read thc.Conn through TabletConnection.
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_, _ = hc.TabletConnection(ctx, tablet.Alias, nil)
+			}
+		}
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	close(stop)
+	// Unblock the writer if it is parked on a send.
+	select {
+	case <-input:
+	default:
+	}
+	select {
+	case <-fc.errCh:
+	default:
+	}
+	wg.Wait()
+}
+
 func TestHealthCheckStreamError(t *testing.T) {
 	ctx := utils.LeakCheckContext(t)
 

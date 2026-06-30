@@ -144,6 +144,16 @@ func (thc *tabletHealthCheck) Connection(ctx context.Context) queryservice.Query
 	return thc.connectionLocked(ctx)
 }
 
+// currentConnection returns the current connection under connMu without
+// attempting to (re)dial. It returns nil when there is no connection. This is
+// used by callers that only need to read thc.Conn, which is written under
+// connMu by closeConnection and finalizeConn.
+func (thc *tabletHealthCheck) currentConnection() queryservice.QueryService {
+	thc.connMu.Lock()
+	defer thc.connMu.Unlock()
+	return thc.Conn
+}
+
 func (thc *tabletHealthCheck) connectionLocked(ctx context.Context) queryservice.QueryService {
 	if thc.Conn == nil {
 		conn, err := tabletconn.GetDialer()(ctx, thc.Tablet, grpcclient.FailFast(true))
