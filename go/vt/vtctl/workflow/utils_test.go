@@ -100,7 +100,7 @@ func TestGetTenantClause(t *testing.T) {
 		expr, err := getTenantClause(&vtctldata.WorkflowOptions{TenantId: "123"}, newSchema("tenant_id", sqltypes.Int64), parser)
 		require.NoError(t, err)
 		require.NotNil(t, expr)
-		assert.Equal(t, "tenant_id = 123", sqlparser.String(*expr))
+		require.Equal(t, "tenant_id = 123", sqlparser.String(*expr))
 	})
 
 	t.Run("varchar tenant id with a quote stays a single literal", func(t *testing.T) {
@@ -112,7 +112,7 @@ func TestGetTenantClause(t *testing.T) {
 		require.True(t, ok, "expected a single comparison, got %T: %s", *expr, sqlparser.String(*expr))
 		lit, ok := cmp.Right.(*sqlparser.Literal)
 		require.True(t, ok, "expected a string literal on the right, got %T", cmp.Right)
-		assert.Equal(t, malicious, lit.Val)
+		require.Equal(t, malicious, lit.Val)
 	})
 
 	t.Run("column name with a backtick is escaped as an identifier", func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestGetTenantClause(t *testing.T) {
 		require.True(t, ok, "expected a single comparison, got %T: %s", *expr, sqlparser.String(*expr))
 		col, ok := cmp.Left.(*sqlparser.ColName)
 		require.True(t, ok, "expected a column on the left, got %T", cmp.Left)
-		assert.Equal(t, "tenant`id", col.Name.String())
+		require.Equal(t, "tenant`id", col.Name.String())
 	})
 }
 
@@ -415,14 +415,18 @@ func TestLegacyBuildTargets(t *testing.T) {
 	defer env.close()
 	env.tmc.schema = schema
 
-	result1 := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
-		"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+	result1 := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64",
+		),
 		"1|keyspace:\"source\" shard:\"-80\" filter:{rules:{match:\"t1\"} rules:{match:\"t2\"}}||||0|0|0",
 	)
-	result2 := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
-		"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+	result2 := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64",
+		),
 		"1|keyspace:\"source\" shard:\"80-\" filter:{rules:{match:\"t1\"} rules:{match:\"t2\"}}||||0|0|0",
 		"2|keyspace:\"source\" shard:\"80-\" filter:{rules:{match:\"t3\"} rules:{match:\"t4\"}}||||0|0|0",
 	)
