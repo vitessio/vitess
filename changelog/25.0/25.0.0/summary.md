@@ -23,6 +23,8 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
+    - **[General](#minor-changes-general)**
+        - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -156,3 +158,16 @@ See [#19978](https://github.com/vitessio/vitess/issues/19978) for details.
 Tablets that do not report a version (e.g. running an older Vitess build) are treated as "unknown version" and sorted last, preserving existing behavior.
 
 See [#20211](https://github.com/vitessio/vitess/pull/20211) for details.
+
+### <a id="minor-changes-general"/>General</a>
+
+#### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
+
+The build timestamp is no longer injected via linker flags. Because it changed on every `make build`, it forced every binary to be re-linked even when nothing else changed. Build metadata is now read from the VCS information the Go toolchain stamps into the binary (`runtime/debug.ReadBuildInfo`), which makes the linker flags stable across rebuilds and lets the build cache hit.
+
+User-visible consequences:
+
+- The `build_time` reported by `--version`, exposed via `/debug/vars` (`BuildTimestamp`), and set as a tablet tag (`build_time`) now defaults to the **commit time** of the built revision rather than the wall-clock time of the build.
+- Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
+
+The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.

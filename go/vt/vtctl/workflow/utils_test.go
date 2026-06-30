@@ -236,15 +236,19 @@ func update(t *testing.T, ctx context.Context, ts *topo.Server, id int) {
 	if ctx.Err() != nil {
 		return
 	}
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	got, err := topotools.GetKeyspaceRoutingRules(ctx, ts)
 	if ctx.Err() != nil {
 		return
 	}
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	for _, tabletType := range tabletTypeSuffixes {
 		from := fmt.Sprintf("from%s%s", s, tabletType)
-		require.Equal(t, s+tabletType, got[from])
+		assert.Equal(t, s+tabletType, got[from])
 	}
 }
 

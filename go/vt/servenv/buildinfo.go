@@ -18,19 +18,22 @@ package servenv
 
 import (
 	"fmt"
+	"log/slog"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
 	buildHost         = ""
 	buildUser         = ""
-	buildTime         = ""
+	buildTimeOverride = ""
 	buildGitRev       = ""
 	buildGitBranch    = ""
 	statsBuildVersion *stats.String
@@ -101,11 +104,69 @@ func (v *versionInfo) MySQLVersion() string {
 	return mySQLServerVersion
 }
 
-func init() {
-	t, err := time.Parse(time.UnixDate, buildTime)
-	if buildTime != "" && err != nil {
-		panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", buildTime, err))
+// readVCSInfo returns the VCS revision, commit time, and dirty state that the Go
+// toolchain stamps into the binary. The values are empty/false when the binary
+// was built without VCS metadata (for example from a release tarball).
+func readVCSInfo() (revision, revisionTime string, modified bool) {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "", "", false
 	}
+	for _, setting := range bi.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.time":
+			revisionTime = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		}
+	}
+	return revision, revisionTime, modified
+}
+
+// resolveGitRev prefers the VCS-stamped revision, falling back to the value
+// injected via ldflags when no VCS metadata is available. A dirty working tree
+// is reflected with a "-dirty" suffix.
+func resolveGitRev(vcsRevision string, modified bool, fallback string) string {
+	if vcsRevision == "" {
+		return fallback
+	}
+	if modified {
+		return vcsRevision + "-dirty"
+	}
+	return vcsRevision
+}
+
+// parseBuildTime resolves the build timestamp into the pretty string and Unix
+// timestamp used by AppVersion. An explicitly injected BUILD_TIME (via ldflags,
+// in time.UnixDate format) takes precedence so that package/tarball builds can set
+// it deliberately; otherwise it uses the VCS-stamped commit time (RFC3339), which
+// the Go toolchain records for normal git builds. An unparseable override is logged
+// and ignored so it falls through to the VCS time. It returns zero values when no
+// usable timestamp is available.
+func parseBuildTime(override, vcsTime string) (pretty string, unix int64) {
+	if override != "" {
+		t, err := time.Parse(time.UnixDate, override)
+		if err == nil {
+			return override, t.Unix()
+		}
+		log.Warn("Ignoring unparseable BUILD_TIME override", slog.String("build_time", override), slog.Any("error", err))
+	}
+	if vcsTime != "" {
+		t, err := time.Parse(time.RFC3339, vcsTime)
+		if err != nil {
+			panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", vcsTime, err))
+		}
+		return vcsTime, t.Unix()
+	}
+	return "", 0
+}
+
+func init() {
+	revision, revisionTime, modified := readVCSInfo()
+	gitRev := resolveGitRev(revision, modified, buildGitRev)
+	buildTimePretty, buildTime := parseBuildTime(buildTimeOverride, revisionTime)
 
 	buildNumber, err := strconv.ParseInt(buildNumberStr, 10, 64)
 	if err != nil {
@@ -115,9 +176,9 @@ func init() {
 	AppVersion = versionInfo{
 		buildHost:       buildHost,
 		buildUser:       buildUser,
-		buildTime:       t.Unix(),
-		buildTimePretty: buildTime,
-		buildGitRev:     buildGitRev,
+		buildTime:       buildTime,
+		buildTimePretty: buildTimePretty,
+		buildGitRev:     gitRev,
 		buildGitBranch:  buildGitBranch,
 		buildNumber:     buildNumber,
 		buildSystem:     buildSystem,

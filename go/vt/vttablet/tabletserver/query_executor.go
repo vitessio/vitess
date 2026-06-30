@@ -349,6 +349,14 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		qre.recordUserQuery("Stream", int64(time.Since(start)))
 	}(time.Now())
 
+	// DML on the streaming path runs checkPermissions and the request throttler
+	// inside streamDML, so its stats defer is registered before those checks and
+	// records per-table error stats for their rejections too, matching Execute.
+	switch qre.plan.PlanID {
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
+		return qre.streamDML(callback)
+	}
+
 	if err := qre.checkPermissions(); err != nil {
 		return err
 	}
@@ -430,6 +438,95 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		}
 		return callback(result)
 	})
+}
+
+// streamDML executes a DML statement on the streaming path. A DML produces a
+// single rows-affected result with no rows to stream, so it runs through the
+// same transactional machinery as Execute (an implicit autocommit transaction
+// when none exists, or the active transaction when one does) and the result is
+// delivered through the streaming callback.
+func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
+	var reply *sqltypes.Result
+
+	// Apply the query timeout to autocommit DML, just like Execute does for a
+	// query without a transaction.
+	if qre.connID == 0 {
+		var cancel context.CancelFunc
+		qre.ctx, cancel = withTimeout(qre.ctx, qre.tsv.loadQueryTimeoutWithTxAndOptions(0, qre.options), qre.options)
+		defer cancel()
+	}
+
+	// Record the per-table and per-plan query stats, just like Execute's deferred
+	// block. Stream's own defer already records QueryTimings, QueryTimingsByTabletType
+	// and the user-query stats, so here we only add the stats the streaming path would
+	// otherwise miss for DML: the QueryEngine/plan counters (including error counts on
+	// the failure path), the query-log fields and the result histogram.
+	defer func(start time.Time) {
+		duration := time.Since(start)
+		mysqlTime := qre.logStats.MysqlResponseTime
+		// Plans without a single table (e.g. multi-table statements) have an
+		// empty TableName; bucket their stats under "Join", like Execute.
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
+		}
+		errCode := vterrors.Code(err).String()
+
+		if reply == nil {
+			qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, 0, 1, errCode)
+			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
+			return
+		}
+
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0, errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, reply.RowsAffected, uint64(len(reply.Rows)), 0)
+		qre.logStats.RowsAffected = int(reply.RowsAffected)
+		qre.logStats.Rows = reply.Rows
+		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
+	}(time.Now())
+
+	if err = qre.checkPermissions(); err != nil {
+		return err
+	}
+
+	if err = qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); err != nil {
+		return err
+	}
+
+	switch {
+	case qre.connID != 0:
+		// Run the DML on the existing transaction or reserved connection, just
+		// like Execute's connID != 0 branch (e.g. a DML following Begin via
+		// BeginStreamExecute).
+		var conn *StatefulConnection
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		if err != nil {
+			return err
+		}
+		defer conn.Unlock()
+		if qre.setting != nil {
+			var applied bool
+			applied, err = conn.ApplySetting(qre.ctx, qre.setting)
+			if err != nil {
+				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+			// If we have applied the settings on the connection, then we should record the query detail.
+			// This is required for redoing the transaction in case of a failure.
+			if applied {
+				conn.TxProperties().RecordQueryDetail(qre.setting.ApplyQuery(), nil)
+			}
+		}
+		reply, err = qre.txConnExec(conn)
+	case qre.plan.PlanID == p.PlanUpdateLimit || qre.plan.PlanID == p.PlanDeleteLimit:
+		reply, err = qre.execAsTransaction(qre.txConnExec)
+	default:
+		reply, err = qre.execAutocommit(qre.txConnExec)
+	}
+	if err != nil {
+		return err
+	}
+	err = callback(reply)
+	return err
 }
 
 // MessageStream streams messages from a message table.

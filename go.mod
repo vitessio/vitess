@@ -3,7 +3,6 @@ module vitess.io/vitess
 go 1.26.4
 
 tool (
-	github.com/antithesishq/antithesis-sdk-go/tools/antithesis-go-instrumentor
 	github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc
 	google.golang.org/protobuf/cmd/protoc-gen-go
@@ -32,7 +31,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/hashicorp/consul/api v1.34.3
+	github.com/hashicorp/consul/api/v2 v2.0.0
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/serf v0.10.2 // indirect
 	github.com/klauspost/compress v1.18.6
@@ -116,7 +115,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
-	github.com/antithesishq/antithesis-sdk-go v0.7.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.2.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cilium/ebpf v0.21.0 // indirect

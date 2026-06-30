@@ -209,7 +209,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		validateKeyspaceRoutingRules(t, vc, initialRules)
 
 		lastIndex = insertRows(lastIndex, sourceKeyspace)
-		waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+		require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	}
 
 	t.Run("cancel", func(t *testing.T) {
@@ -383,7 +383,7 @@ func TestMultiTenantSharded(t *testing.T) {
 	})
 
 	mt.Create()
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	mt.Show()
 	var workflowState vtctldata.GetWorkflowsResponse
 	err = protojson.Unmarshal([]byte(mt.lastOutput), &workflowState)
@@ -395,7 +395,7 @@ func TestMultiTenantSharded(t *testing.T) {
 
 	// Note: we cannot insert into the target keyspace since that is never routed to the source keyspace.
 	lastIndex = insertRows(lastIndex, sourceKeyspace)
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", targetKeyspace, mt.workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
 	vdiff(t, targetKeyspace, defaultWorkflowName, defaultCellName, nil)
 	mt.SwitchReadsAndWrites()
 	// Note: here we have already switched, and we can insert into the target keyspace, and it should get reverse
@@ -595,7 +595,7 @@ func (mtm *multiTenantMigration) switchTraffic(tenantId int64) {
 	sourceKeyspaceName := getSourceKeyspace(tenantId)
 	mt := mtm.getActiveMoveTables(tenantId)
 	ksWorkflow := fmt.Sprintf("%s.%s", mtm.targetKeyspace, mt.workflowName)
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	vdiff(t, mt.targetKeyspace, mt.workflowName, defaultCellName, nil)
 	mtm.insertSomeData(t, tenantId, sourceKeyspaceName, numAdditionalRowsPerTenant)
 	mt.SwitchReadsAndWrites()

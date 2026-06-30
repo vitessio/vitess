@@ -26,7 +26,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -277,7 +277,9 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId 
 	}()
 	// Create a MySQL Compare that connects to both Vitess and MySQL and runs the queries against both.
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	if fz.fkState != nil {
 		mcmp.Exec(fmt.Sprintf("SET FOREIGN_KEY_CHECKS=%v", sqlparser.FkChecksStateString(fz.fkState)))
 	}
@@ -285,11 +287,15 @@ func (fz *fuzzer) runFuzzerThread(t *testing.T, keyspace string, fuzzerThreadId 
 	if fz.queryFormat == PreparedStatementPacket {
 		// Open another connection to Vitess using the go-sql-driver so that we can send prepared statements as COM_STMT_PREPARE packets.
 		vitessDb, err = sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer vitessDb.Close()
 		// Open a similar connection to MySQL
 		mysqlDb, err = sql.Open("mysql", fmt.Sprintf("%v:%v@unix(%s)/%s", mysqlParams.Uname, mysqlParams.Pass, mysqlParams.UnixSocket, mysqlParams.DbName))
-		require.NoError(t, err)
+		if !assert.NoError(t, err) {
+			return
+		}
 		defer mysqlDb.Close()
 	}
 	// Set the correct keyspace to use from VtGates.

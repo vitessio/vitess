@@ -161,9 +161,13 @@ func compareVitessAndMySQLResults(t *testing.T, vtRes sql.Result, mysqlRes sql.R
 		return
 	}
 	vtRa, err := vtRes.RowsAffected()
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	mysqlRa, err := mysqlRes.RowsAffected()
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	assert.Equalf(t, mysqlRa, vtRa, "Vitess and MySQL don't agree on the rows affected. Vitess rows affected - %v, MySQL rows affected - %v", vtRa, mysqlRa)
 }
 

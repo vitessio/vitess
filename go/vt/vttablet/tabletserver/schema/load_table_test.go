@@ -229,7 +229,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment, collations.MySQL8())
+	return LoadTable(conn, "fakesqldb", "test_table", tableType, comment, collations.MySQL8(), false)
 }
 
 func mockLoadTableQueries(db *fakesqldb.DB) {

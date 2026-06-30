@@ -77,7 +77,8 @@ func execMultipleQueries(t *testing.T, conn *mysql.Conn, database string, lines 
 		if strings.HasPrefix(query, "--") {
 			continue
 		}
-		execVtgateQuery(t, conn, database, string(query))
+		_, err := execVtgateQuery(conn, database, string(query))
+		require.NoError(t, err)
 	}
 }
 
@@ -140,17 +141,26 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 	return conn
 }
 
-func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query string) *sqltypes.Result {
+func execVtgateQuery(conn *mysql.Conn, database, query string) (*sqltypes.Result, error) {
 	if strings.TrimSpace(query) == "" {
-		return nil
+		return nil, nil
 	}
 	if database != "" {
-		execQuery(t, conn, "use `"+database+"`;")
+		if _, err := conn.ExecuteFetch("use `"+database+"`;", 1000, false); err != nil {
+			return nil, err
+		}
 	}
-	execQuery(t, conn, "begin")
-	qr := execQuery(t, conn, query)
-	execQuery(t, conn, "commit")
-	return qr
+	if _, err := conn.ExecuteFetch("begin", 1000, false); err != nil {
+		return nil, err
+	}
+	qr, err := conn.ExecuteFetch(query, 1000, false)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := conn.ExecuteFetch("commit", 1000, false); err != nil {
+		return nil, err
+	}
+	return qr, nil
 }
 
 func checkHealth(t *testing.T, url string) bool {
@@ -164,7 +174,8 @@ func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query s
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr := execVtgateQuery(t, conn, database, query)
+		qr, err := execVtgateQuery(conn, database, query)
+		require.NoError(t, err)
 		require.NotNil(t, qr)
 		if want == fmt.Sprintf("%v", qr.Rows) {
 			return
@@ -217,7 +228,8 @@ func waitForNoWorkflowLag(t *testing.T, vc *VitessCluster, keyspace, worfklow st
 // verifyNoInternalTables can e.g. be used to confirm that no internal tables were
 // copied from a source to a target during a MoveTables or Reshard operation.
 func verifyNoInternalTables(t *testing.T, conn *mysql.Conn, keyspaceShard string) {
-	qr := execVtgateQuery(t, conn, keyspaceShard, "show tables")
+	qr, err := execVtgateQuery(conn, keyspaceShard, "show tables")
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	require.NotNil(t, qr.Rows)
 	for _, row := range qr.Rows {
@@ -232,7 +244,8 @@ func waitForRowCount(t *testing.T, conn *mysql.Conn, database string, table stri
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		qr := execVtgateQuery(t, conn, database, query)
+		qr, err := execVtgateQuery(conn, database, query)
+		require.NoError(t, err)
 		require.NotNil(t, qr)
 		if wantRes == fmt.Sprintf("%v", qr.Rows) {
 			return
@@ -318,7 +331,8 @@ func executeOnTablet(t *testing.T, conn *mysql.Conn, tablet *cluster.VttabletPro
 
 	count0, body0 := getQueryCount(t, queryStatsURL, matchQuery)
 
-	qr := execVtgateQuery(t, conn, ksName, query)
+	qr, err := execVtgateQuery(conn, ksName, query)
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 
 	count1, body1 := getQueryCount(t, queryStatsURL, matchQuery)
@@ -353,15 +367,20 @@ func waitForWorkflowToBeCreated(t *testing.T, vc *VitessCluster, ksWorkflow stri
 // key value pairs of the form "key==value" to also wait for
 // additional stream sub-state such as "message==for vdiff".
 // Invalid checks are ignored.
-func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) {
-	keyspace, workflow := parseKeyspaceWorkflow(t, ksWorkflow)
+func waitForWorkflowState(vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) error {
+	keyspace, workflow, ok := strings.Cut(ksWorkflow, ".")
+	if !ok {
+		return fmt.Errorf("invalid keyspace.workflow value: %s", ksWorkflow)
+	}
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	defer timer.Stop()
 	log.Info(fmt.Sprintf("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState))
 	for {
 		output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", keyspace, "show", "--workflow", workflow, "--compact", "--include-logs=false")
-		require.NoError(t, err, output)
+		if err != nil {
+			return fmt.Errorf("failed to get workflow state for %s: %w (output: %s)", ksWorkflow, err, output)
+		}
 		done = true
 		state := ""
 		shardStreams := gjson.Get(output, "workflows.0.shard_streams")
@@ -395,7 +414,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 		})
 		if done {
 			log.Info(fmt.Sprintf("Workflow %q has fully reached the desired state of %q", ksWorkflow, wantState))
-			return
+			return nil
 		}
 		select {
 		case <-timer.C:
@@ -403,8 +422,7 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			if len(fieldEqualityChecks) > 0 {
 				extraRequirements = fmt.Sprintf(" with the additional requirements of \"%v\"", fieldEqualityChecks)
 			}
-			require.FailNowf(t, "workflow state not reached",
-				"Workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
+			return fmt.Errorf("workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
 				ksWorkflow, wantState, extraRequirements, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)
@@ -1001,7 +1019,8 @@ func vexplain(t *testing.T, database, query string) *VExplainPlan {
 	vtgateConn := vc.GetVTGateConn(t)
 	defer vtgateConn.Close()
 
-	qr := execVtgateQuery(t, vtgateConn, database, "vexplain "+query)
+	qr, err := execVtgateQuery(vtgateConn, database, "vexplain "+query)
+	require.NoError(t, err)
 	require.NotNil(t, qr)
 	require.Equal(t, 1, len(qr.Rows))
 	json := qr.Rows[0][0].ToString()

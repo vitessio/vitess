@@ -59,8 +59,6 @@ github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuy
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
 github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
 github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d/go.mod h1:rBZYJk541a8SKzHPHnH3zbiI+7dagKZ0cgpgrD7Fyho=
-github.com/antithesishq/antithesis-sdk-go v0.7.0 h1:uWDG8BqLD1lI2ps38WDz2vXflrTX2+vLX0SvZtztJtE=
-github.com/antithesishq/antithesis-sdk-go v0.7.0/go.mod h1:FQyySiasQQM8735Ddel3MRojmy4dA1IqCeyJ5jmPMbI=
 github.com/aquarapid/vaultlib v0.5.1 h1:vuLWR6bZzLHybjJBSUYPgZlIp6KZ+SXeHLRRYTuk6d4=
 github.com/aquarapid/vaultlib v0.5.1/go.mod h1:yT7AlEXtuabkxylOc/+Ulyp18tff1+QjgNLTnFWTlOs=
 github.com/armon/go-metrics v0.4.1 h1:hR91U9KYmb6bLBYLQjyM+3j+rcd/UhE+G78SFnF8gJA=
@@ -265,10 +263,10 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 h1:5VipnvEpbqr2gA2VbM+nYVbkIF2
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0/go.mod h1:Hyl3n6Twe1hvtd9XUXDec4pTvgMSEixRuQKPTMH2bNs=
 github.com/hanwen/go-fuse/v2 v2.10.1 h1:QAqZuc9+aBtTou+OPruU/hkYQYCkgPtQd2QaepHkTTs=
 github.com/hanwen/go-fuse/v2 v2.10.1/go.mod h1:aU7NkGYZUmuJrZapoI3mEcNve7PZTySUOLBuch/vR6U=
-github.com/hashicorp/consul/api v1.34.3 h1:OiZaQnwkS6uvutie3CF6NFXj8uScNezDlsU9MEqKT0s=
-github.com/hashicorp/consul/api v1.34.3/go.mod h1:A4wKd7yw7Wz4zn07p74+o0bLBi5dXsSDMMcMCEinY40=
-github.com/hashicorp/consul/sdk v0.18.1 h1:RDTeBvAeOveI2xI86sV+8WkaN7OkP4zz+cG3fOobDCM=
-github.com/hashicorp/consul/sdk v0.18.1/go.mod h1:XdP2tEJmAvlK4jgoKTTtohGkRJlS4mU44mv9/sjU21s=
+github.com/hashicorp/consul/api/v2 v2.0.0 h1:FBzxiwnP8kJoHL2ByDUSvaItbc7jF7LxZLTnHtO75wA=
+github.com/hashicorp/consul/api/v2 v2.0.0/go.mod h1:1gEhzpcnl4X4ui7JFpFQvn7QRYQ60IFm6BxBXjrv0dg=
+github.com/hashicorp/consul/sdk/v2 v2.0.0 h1:3KJ7oqP5ZY0OGmUUMTTafPNM1CscXw9NMJ329UMMgcs=
+github.com/hashicorp/consul/sdk/v2 v2.0.0/go.mod h1:Si3zN9Zw40NHtow0yrGpgJ0wMsL9O2RWDevEzmKzbps=
 github.com/hashicorp/errwrap v1.0.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
 github.com/hashicorp/errwrap v1.1.0 h1:OxrOeh75EUXMY8TBjag2fzXGZ40LB6IKw45YeGUDY2I=
 github.com/hashicorp/errwrap v1.1.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=

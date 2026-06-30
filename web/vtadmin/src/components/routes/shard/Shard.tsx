@@ -111,10 +111,22 @@ export const Shard = () => {
 
             <ContentContainer>
                 <TabContainer>
-                    <Tab text="Tablets" to="tablets" />
-                    <Tab text="JSON" to="json" />
-                    <Tab text="JSON Tree" to="json_tree" />
-                    <Tab text="Advanced" to="advanced" />
+                    <Tab
+                        text="Tablets"
+                        to={`/keyspace/${params.clusterID}/${params.keyspace}/shard/${params.shard}/tablets`}
+                    />
+                    <Tab
+                        text="JSON"
+                        to={`/keyspace/${params.clusterID}/${params.keyspace}/shard/${params.shard}/json`}
+                    />
+                    <Tab
+                        text="JSON Tree"
+                        to={`/keyspace/${params.clusterID}/${params.keyspace}/shard/${params.shard}/json_tree`}
+                    />
+                    <Tab
+                        text="Advanced"
+                        to={`/keyspace/${params.clusterID}/${params.keyspace}/shard/${params.shard}/advanced`}
+                    />
                 </TabContainer>
 
                 <Routes>

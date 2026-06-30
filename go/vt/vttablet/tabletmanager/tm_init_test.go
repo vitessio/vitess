@@ -806,7 +806,7 @@ func TestWaitForDBAGrants(t *testing.T) {
 				testUser := "vt_test_dba"
 				cluster, err := startMySQLAndCreateUser(t, testUser)
 				require.NoError(t, err)
-				grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+				require.NoError(t, grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser))
 				tc := &tabletenv.TabletConfig{
 					DB: &dbconfigs.DBConfigs{},
 				}
@@ -831,7 +831,11 @@ func TestWaitForDBAGrants(t *testing.T) {
 
 				go func() {
 					time.Sleep(500 * time.Millisecond)
-					grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+					err := grantAllPrivilegesToUser(t, cluster.MySQLConnParams(), testUser)
+					if t.Context().Err() != nil {
+						return
+					}
+					assert.NoError(t, err)
 				}()
 
 				tc := &tabletenv.TabletConfig{
@@ -976,14 +980,19 @@ func startMySQLAndCreateUser(t *testing.T, testUser string) (vttest.LocalCluster
 }
 
 // grantAllPrivilegesToUser grants all the privileges to the user specified.
-func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) {
+func grantAllPrivilegesToUser(t *testing.T, connParams mysql.ConnParams, testUser string) error {
 	conn, err := mysql.Connect(t.Context(), &connParams)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
-	require.NoError(t, err)
-	_, err = conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false)
-	require.NoError(t, err)
-	conn.Close()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err := conn.ExecuteFetch(fmt.Sprintf(`GRANT ALL ON *.* TO '%v'@'localhost'`, testUser), 1000, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch(fmt.Sprintf(`GRANT GRANT OPTION ON *.* TO '%v'@'localhost'`, testUser), 1000, false); err != nil {
+		return err
+	}
+	return nil
 }
 
 func TestInitTabletTypeLookup_PreservesTabletTypes(t *testing.T) {
