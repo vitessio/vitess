@@ -278,7 +278,26 @@ func BuildStreaming(statement sqlparser.Statement, tables map[string]*schema.Tab
 			plan.NeedsReservedConn = true
 		}
 		plan.Table = lookupTables(stmt.From, tables)
+<<<<<<< HEAD
 	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
+||||||| parent of 5cd9168fd7 (Enforce stored-procedure safety checks on the streaming CALL path (#20372))
+	case *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
+		plan = &Plan{
+			PlanID:    PlanSelectStream,
+			FullQuery: GenerateFullQuery(statement),
+		}
+=======
+	case *sqlparser.Show, *sqlparser.Union, sqlparser.Explain:
+		plan = &Plan{
+			PlanID:    PlanSelectStream,
+			FullQuery: GenerateFullQuery(statement),
+		}
+	case *sqlparser.CallProc:
+		plan = &Plan{
+			PlanID:    PlanCallProc,
+			FullQuery: GenerateFullQuery(statement),
+		}
+>>>>>>> 5cd9168fd7 (Enforce stored-procedure safety checks on the streaming CALL path (#20372))
 	case *sqlparser.Analyze:
 		plan.PlanID = PlanOtherRead
 	default:
