@@ -19,9 +19,11 @@ package endtoend
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 
 	"github.com/stretchr/testify/assert"
@@ -88,7 +90,23 @@ func TestInitShardPrimary(t *testing.T) {
 	}
 	tablet3.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet3.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
-	for _, tablet := range []*testlib.FakeTablet{tablet1, tablet2, tablet3} {
+	// Start the primary-elect first and wait until it has recorded itself as the
+	// shard's primary in the topology. A replica only configures replication
+	// during its own startup if it observes a primary; making that observation
+	// deterministic keeps each replica's startup replication queries (STOP
+	// REPLICA, SET SOURCE, START REPLICA) ordered ahead of the ones
+	// InitShardPrimary issues. Otherwise the two sets race against each other on
+	// the fake mysql daemon's single ordered expected-query list, which flakes.
+	tablet1.StartActionLoop(t, wr)
+	defer tablet1.StopActionLoop(t)
+	tablet1.TM.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+
+	require.Eventually(t, func() bool {
+		si, err := ts.GetShard(ctx, tablet1.Tablet.Keyspace, tablet1.Tablet.Shard)
+		return err == nil && si.PrimaryAlias != nil && topoproto.TabletAliasEqual(si.PrimaryAlias, tablet1.Tablet.Alias)
+	}, 30*time.Second, 10*time.Millisecond, "primary-elect did not claim shard primaryship")
+
+	for _, tablet := range []*testlib.FakeTablet{tablet2, tablet3} {
 		tablet.StartActionLoop(t, wr)
 		defer tablet.StopActionLoop(t)
 

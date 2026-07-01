@@ -18,6 +18,7 @@ package grpctmclient
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -251,4 +252,51 @@ func TestValidateTablet(t *testing.T) {
 		}
 		require.Error(t, validateTablet(tablet), "invalid tablet grpc port")
 	})
+}
+
+// TestDialDedicatedPoolEvictsFailedEntry verifies that a pooled dial that failed
+// to initialize is not cached forever. Each dedicated-pool entry is guarded by a
+// sync.Once, so a first createTmc failure would otherwise make every subsequent
+// dialDedicatedPool for that address return the same error without ever redialing,
+// permanently marking a reachable tablet as down until the client is recreated.
+// The failed entry must be evicted so the next dial reconnects.
+func TestDialDedicatedPoolEvictsFailedEntry(t *testing.T) {
+	ctx := t.Context()
+	client := NewClient()
+	tablet := &topodatapb.Tablet{
+		Hostname: "localhost",
+		PortMap:  map[string]int32{"grpc": 15992},
+	}
+	addr := netutil.JoinHostPort(tablet.Hostname, int32(tablet.PortMap["grpc"]))
+
+	rpcClient, ok := client.dialer.(*grpcClient)
+	require.True(t, ok)
+	poolDialer, ok := client.dialer.(poolDialer)
+	require.True(t, ok)
+
+	// Simulate a first dial that failed: install an entry whose once has already
+	// fired with an error, exactly as a createTmc failure would leave it.
+	failed := &tmcEntry{}
+	failed.once.Do(func() { failed.err = errors.New("simulated dial failure") })
+	rpcClient.rpcDialPoolMapMu.Lock()
+	rpcClient.rpcDialPoolMap = map[DialPoolGroup]addrTmcMap{
+		dialPoolGroupThrottler: {addr: failed},
+	}
+	rpcClient.rpcDialPoolMapMu.Unlock()
+
+	// A dial that finds the failed entry must surface the error AND evict it.
+	_, _, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
+	require.ErrorContains(t, err, "simulated dial failure")
+
+	rpcClient.rpcDialPoolMapMu.Lock()
+	_, stillCached := rpcClient.rpcDialPoolMap[dialPoolGroupThrottler][addr]
+	rpcClient.rpcDialPoolMapMu.Unlock()
+	assert.False(t, stillCached, "a failed pooled-dial entry must be evicted so the next dial redials")
+
+	// The next dial redials and succeeds (grpc dials lazily), proving the cached
+	// failure no longer permanently blocks recovery.
+	cli, invalidator, err := poolDialer.dialDedicatedPool(ctx, dialPoolGroupThrottler, tablet)
+	require.NoError(t, err)
+	assert.NotNil(t, cli)
+	assert.NotNil(t, invalidator)
 }

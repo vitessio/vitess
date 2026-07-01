@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.sonatype.oss</groupId>
     <artifactId>oss-parent</artifactId>
-    <version>7</version>
+    <version>9</version>
   </parent>
 
   <groupId>io.vitess</groupId>
@@ -66,13 +66,13 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Define versions which are also used by grpc-client/pom.xml. -->
-    <grpc.version>1.81.0</grpc.version>
+    <grpc.version>1.82.0</grpc.version>
     <!-- NOTE Netty handler and boring SSL must be kept compatible with grpc
       https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
     <netty.handler.version>4.2.15.Final</netty.handler.version>
     <tcnative.boring.ssl.version>2.0.79.Final</tcnative.boring.ssl.version>
 
-    <protobuf.java.version>4.35.0</protobuf.java.version>
+    <protobuf.java.version>4.35.1</protobuf.java.version>
     <protobuf.protoc.version>${protobuf.java.version}</protobuf.protoc.version>
     <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
     <log4j2.version>2.26.0</log4j2.version>
@@ -293,7 +293,7 @@
           <plugin>
             <groupId>org.sonatype.central</groupId>
             <artifactId>central-publishing-maven-plugin</artifactId>
-            <version>0.10.0</version>
+            <version>0.11.0</version>
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>

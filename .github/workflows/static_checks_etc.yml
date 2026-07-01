@@ -30,13 +30,13 @@ jobs:
           fi
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: 'false'
 
       - name: Run FOSSA scan and upload build data
         timeout-minutes: 5
-        uses: fossa-contrib/fossa-action@3d2ef181b1820d6dcd1972f86a767d18167fa19b # v3.0.1
+        uses: fossa-contrib/fossa-action@d28f0c947e7406706981a62a91ecc009bcc39fd7 # v4.0.0
         with:
           # This is a push-only API token: https://github.com/fossa-contrib/fossa-action#push-only-api-token
           fossa-api-key: f62c11ef0c249fef239947f01279aa0f
