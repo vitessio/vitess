@@ -24,6 +24,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTGate](#bug-fixes-vtgate)**
+        - [Per-statement timeout in multi-statement requests](#vtgate-executemulti-timeout-context)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -160,3 +163,15 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vtgate"/>VTGate</a>
+
+#### <a id="vtgate-executemulti-timeout-context"/>Per-statement timeout in multi-statement requests</a>
+
+Previously, when the MySQL server query timeout was set via `--mysql-server-query-timeout`, VTGate derived each statement's timeout in a multi-statement request from a context that an earlier statement had already canceled. As a result, the second and later statements in a batch could inherit an already-expired deadline and fail spuriously. Each statement now derives its timeout independently from the original request context, so every statement in the batch gets the full configured timeout. This applies to both non-streaming (`ExecuteMulti`) and streaming (`StreamExecuteMulti`) multi-statement execution.
+
+No configuration change is required.
+
+See [#20445](https://github.com/vitessio/vitess/pull/20445) for details.
