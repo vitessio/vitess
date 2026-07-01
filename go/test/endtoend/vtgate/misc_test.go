@@ -1219,11 +1219,16 @@ func getVtgateApiErrorCounts(t *testing.T) float64 {
 		return 0
 	}
 	mapErrors := apiErr.(map[string]any)
-	val, exists := mapErrors["Execute.ks.primary.ALREADY_EXISTS"]
-	if exists {
-		return val.(float64)
+	// The error is counted under the operation of the RPC that carried it, which
+	// is Execute for a buffered query and StreamExecute for a streamed one. Sum
+	// both so the count is independent of the delivery mode.
+	var total float64
+	for _, op := range []string{"Execute", "StreamExecute"} {
+		if val, exists := mapErrors[op+".ks.primary.ALREADY_EXISTS"]; exists {
+			total += val.(float64)
+		}
 	}
-	return 0
+	return total
 }
 
 func getVar(t *testing.T, key string) any {

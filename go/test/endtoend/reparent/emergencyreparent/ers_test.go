@@ -229,9 +229,17 @@ func TestEmergencyReparentWithBlockedPrimary(t *testing.T) {
 		"DDL.DirectDDL.PRIMARY":      float64(1),
 		"INSERT.Passthrough.PRIMARY": float64(1),
 	}, vtgateVars["QueryRoutes"])
-	require.EqualValues(t, map[string]any{
-		"Execute.ks.primary.DEADLINE_EXCEEDED": float64(1),
-	}, vtgateVars["VtgateApiErrorCounts"])
+	// The insert is carried by Execute when buffered and by StreamExecute
+	// when streamed; accept whichever operation recorded the deadline error.
+	apiErrors, ok := vtgateVars["VtgateApiErrorCounts"].(map[string]any)
+	require.True(t, ok)
+	var deadlineErrCount float64
+	for _, op := range []string{"Execute", "StreamExecute"} {
+		if v, exists := apiErrors[op+".ks.primary.DEADLINE_EXCEEDED"]; exists {
+			deadlineErrCount += v.(float64)
+		}
+	}
+	require.EqualValues(t, 1, deadlineErrCount)
 
 	// We need to wait at least 10 seconds here to ensure the wait-for-replicas-timeout has passed,
 	// before we resume the old primary - otherwise the old primary will receive a `SetReplicationSource` call.
