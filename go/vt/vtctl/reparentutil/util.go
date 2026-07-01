@@ -361,6 +361,12 @@ func restrictValidCandidates(validCandidates map[string]*RelayLogPositions, tabl
 	return restrictedValidCandidates, nil
 }
 
+// findCandidate returns the best promotion candidate from possibleCandidates.
+// possibleCandidates MUST already be sorted by replication position (most
+// advanced first): when there is no version data, or when the lowest-release
+// candidate is on the same release as the intermediate source, findCandidate
+// falls back to the position-sorted ordering (the first element, or the
+// intermediate source) rather than re-checking position.
 func findCandidate(
 	intermediateSource *topodatapb.Tablet,
 	possibleCandidates []*topodatapb.Tablet,
