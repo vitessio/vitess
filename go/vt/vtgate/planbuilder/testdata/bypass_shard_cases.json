@@ -94,6 +94,31 @@
     }
   },
   {
+    "comment": "insert bypass rejects internal operation table",
+    "query": "insert into main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ (id) values (1)",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "update bypass rejects internal operation table",
+    "query": "update main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ set id = 2 where id = 1",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "delete bypass rejects internal operation table",
+    "query": "delete from main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ where id = 1",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "load data bypass rejects internal operation table",
+    "query": "load data from s3 'x.txt' into table main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "load data bypass rejects mixed-case internal operation table",
+    "query": "load data from s3 'x.txt' into table main._VT_HLD_6ACE8BCEF73211EA87E9F875A4D24E90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_VT_HLD_6ACE8BCEF73211EA87E9F875A4D24E90_20200915120410_' is not allowed"
+  },
+  {
     "comment": "bypass query for into outfile s3",
     "query": "select count(*), col from unsharded into outfile S3 'x.txt'",
     "plan": {
@@ -186,6 +211,41 @@
         "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
       }
     }
+  },
+  {
+    "comment": "create bypass rejects internal operation table",
+    "query": "create table main._vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ (id bigint, primary key(id))",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "alter bypass rejects internal operation table",
+    "query": "alter table main._vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ add column foo int",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "alter bypass rejects rename to internal operation table",
+    "query": "alter table main.unsharded rename main._vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "drop bypass rejects internal operation table",
+    "query": "drop table main._vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "rename bypass rejects internal operation table source",
+    "query": "rename table main._vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ to main.foo",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "rename bypass rejects internal operation table target",
+    "query": "rename table main.foo to main._vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
+  },
+  {
+    "comment": "truncate bypass rejects internal operation table",
+    "query": "truncate table main._vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_",
+    "plan": "VT09033: modification of internal table '_vt_evc_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed"
   },
   {
     "comment": "select bypass with query timeout hint",

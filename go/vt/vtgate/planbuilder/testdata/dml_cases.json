@@ -4997,6 +4997,54 @@
     "skip_e2e": true
   },
   {
+    "comment": "Unsupported insert into internal operation table",
+    "query": "insert into main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ (id) values (1)",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Unsupported insert into mixed-case internal operation table",
+    "query": "insert into main._VT_HLD_6ACE8BCEF73211EA87E9F875A4D24E90_20200915120410_ (id) values (1)",
+    "plan": "VT09033: modification of internal table '_VT_HLD_6ACE8BCEF73211EA87E9F875A4D24E90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Unsupported replace into internal operation table",
+    "query": "replace into main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ (id) values (1)",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Unsupported delete from internal operation table",
+    "query": "delete from main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ where id = 1",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Unsupported update internal operation table",
+    "query": "update main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ set id = 2 where id = 1",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Unsupported delete join targeting internal operation table",
+    "query": "delete gc from main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Unsupported update join targeting internal operation table",
+    "query": "update main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id set gc.id = 2",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Unsupported delete of regular table joined with internal operation table",
+    "query": "delete u from main.unsharded u join main._vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_ gc on u.id = gc.id",
+    "plan": "VT09033: modification of internal table '_vt_hld_6ace8bcef73211ea87e9f875a4d24e90_20200915120410_' is not allowed",
+    "skip_e2e": true
+  },
+  {
     "comment": "insert row values smaller than number of columns",
     "query": "insert into user(one, two, three, four) values (1, 2, 3)",
     "plan": "VT03006: column count does not match value count with the row",
