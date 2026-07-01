@@ -1202,6 +1202,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 		codeWanted     AnalysisCode
 		shardWanted    string
 		keyspaceWanted string
+		cellWanted     string
 	}{
 		{
 			name:       "No additions",
@@ -1216,6 +1217,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     PrimaryTabletDeleted,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
 		}, {
 			name: "Removing Primary Tablet's MySQL record",
 			sql: []string{
@@ -1228,6 +1230,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     InvalidPrimary,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
 		}, {
 			name: "Removing Replica Tablet's MySQL record",
 			sql: []string{
@@ -1241,6 +1244,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     InvalidReplica,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
 		},
 	}
 
@@ -1266,6 +1270,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			require.Equal(t, tt.codeWanted, got[0].Analysis)
 			require.Equal(t, tt.keyspaceWanted, got[0].AnalyzedKeyspace)
 			require.Equal(t, tt.shardWanted, got[0].AnalyzedShard)
+			require.Equal(t, tt.cellWanted, got[0].AnalyzedCell)
 		})
 	}
 }
