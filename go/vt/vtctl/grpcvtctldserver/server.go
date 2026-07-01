@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -2334,13 +2335,76 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 
 	if tabletMap != nil {
-		var truePrimaryTimestamp time.Time
+		// Seed a per-shard true-primary time from the max PrimaryTermStartTime
+		// among PRIMARY tablets in the result set. The shard-filter path
+		// (--keyspace --shard) includes the real primary in its result, so the
+		// seed reflects it; the alias-filter path (--tablet-alias) may omit it
+		// (issue #19898) and overwrites the seed via GetShard below.
+		//
+		// Only shards with a PRIMARY tablet in the result need tracking:
+		// stale-primary adjustment only demotes PRIMARY tablets, so the GetShard
+		// overlay is pointless for shards without one. Restricting uniqueShards
+		// to PRIMARY-bearing shards avoids those needless topo lookups.
+		type ksShard struct{ keyspace, shard string }
+		uniqueShards := make(map[string]ksShard, len(tabletMap))
+		truePrimaryByShard := make(map[string]time.Time, len(tabletMap))
 		for _, ti := range tabletMap {
-			if ti.Type == topodatapb.TabletType_PRIMARY {
-				primaryTimestamp := ti.GetPrimaryTermStartTime()
-				if primaryTimestamp.After(truePrimaryTimestamp) {
-					truePrimaryTimestamp = primaryTimestamp
+			if ti.Type != topodatapb.TabletType_PRIMARY {
+				continue
+			}
+			key := topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)
+			if _, ok := uniqueShards[key]; !ok {
+				uniqueShards[key] = ksShard{ti.Keyspace, ti.Shard}
+			}
+			if t := ti.GetPrimaryTermStartTime(); t.After(truePrimaryByShard[key]) {
+				truePrimaryByShard[key] = t
+			}
+		}
+
+		// Only the alias-filter path needs the GetShard overlay. A zero shard-record
+		// term (e.g. briefly after a promotion) keeps the seed, so transient cases
+		// stay best-effort. Failure policy: req.Strict returns the error; otherwise
+		// it is logged and stale-primary adjustment is skipped for the affected
+		// shards only, leaving their tablets' on-disk type intact.
+		skipStaleCheck := make(map[string]struct{})
+		if len(req.TabletAliases) > 0 {
+			var (
+				mu  sync.Mutex
+				wg  sync.WaitGroup
+				rec concurrency.AllErrorRecorder
+			)
+			for key, ks := range uniqueShards {
+				wg.Add(1)
+				go func(key string, ks ksShard) {
+					defer wg.Done()
+					si, getErr := s.ts.GetShard(ctx, ks.keyspace, ks.shard)
+					mu.Lock()
+					defer mu.Unlock()
+					if getErr != nil {
+						skipStaleCheck[key] = struct{}{}
+						rec.RecordError(fmt.Errorf("GetShard(%s/%s) failed: %w", ks.keyspace, ks.shard, getErr))
+						return
+					}
+					if t := si.GetPrimaryTermStartTime(); !t.IsZero() {
+						truePrimaryByShard[key] = t
+					}
+				}(key, ks)
+			}
+			wg.Wait()
+			if rec.HasErrors() {
+				// errors.Join preserves Unwrap() []error so in-process callers and
+				// tests can still classify via topo.IsErrType/errors.Is before the
+				// gRPC layer translates this into a status (remote clients see the
+				// status, not the joined error).
+				joinedErr := errors.Join(rec.Errors...)
+				if req.Strict {
+					return nil, joinedErr
 				}
+				log.Warn(
+					"GetTablets could not resolve shard primary terms for some shards; reporting on-disk types for tablets in those shards",
+					slog.Any("error", joinedErr),
+					slog.Int("affected_shards", len(skipStaleCheck)),
+				)
 			}
 		}
 
@@ -2349,7 +2413,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			if req.TabletType != topodatapb.TabletType_UNKNOWN && ti.Type != req.TabletType {
 				continue
 			}
-			adjustTypeForStalePrimary(ti, truePrimaryTimestamp)
+			key := topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)
+			if _, skip := skipStaleCheck[key]; !skip {
+				adjustTypeForStalePrimary(ti, truePrimaryByShard[key])
+			}
 			tablets = append(tablets, ti.Tablet)
 		}
 
