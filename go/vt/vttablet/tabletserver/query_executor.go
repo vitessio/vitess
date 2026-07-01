@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -655,9 +654,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
 				txConn.Close()
-				return err
+				return rewriteOUTParamError(err)
 			}
-			trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(conn.Conn)
+			trailing, multipleResultsets, err := qre.callProcTrailingStatus(conn.Conn)
 			if err != nil {
 				txConn.Close()
 				return err
@@ -688,9 +687,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
 			dbConn.Close()
-			return err
+			return rewriteOUTParamError(err)
 		}
-		trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(dbConn.Conn)
+		trailing, multipleResultsets, err := qre.callProcTrailingStatus(dbConn.Conn)
 		if err != nil {
 			dbConn.Close()
 			return err
@@ -1342,25 +1341,38 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 		return nil, err
 	}
 
-	qr, err := qre.execDBConn(conn.Conn, sql, true)
-	if errors.Is(err, mysql.ErrExecuteFetchMultipleResults) {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
-	}
+	// Read the first resultset without draining the trailing packets, so a
+	// single-resultset procedure (one resultset followed only by the mandatory
+	// trailing OK) can be told apart from a genuine multi-resultset procedure.
+	qr, more, err := conn.Conn.ExecMulti(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), true)
 	if err != nil {
 		return nil, rewriteOUTParamError(err)
 	}
-	if !qr.IsMoreResultsExists() {
+	if err := qre.fetchLastInsertID(qre.ctx, conn.Conn, qr); err != nil {
+		return nil, err
+	}
+	if !more {
+		// The procedure returned no resultset; the OK packet's flags are all
+		// there is to inspect.
 		if qr.IsInTransaction() {
 			conn.Close()
 			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
 		return qr, nil
 	}
-	err = qre.drainResultSetOnConn(conn.Conn)
+	trailing, multipleResultsets, err := qre.callProcTrailingStatus(conn.Conn)
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	if multipleResultsets {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	}
+	if trailing.IsInTransaction() {
+		conn.Close()
+		return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
+	}
+	return qr, nil
 }
 
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {
@@ -1369,11 +1381,13 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	if err != nil {
 		return nil, err
 	}
-	qr, err := qre.execStatefulConn(conn, sql, true)
+	// Read the first resultset without draining the trailing packets, so a
+	// single-resultset procedure is told apart from a genuine multi-resultset one.
+	qr, more, err := conn.ExecMulti(qre.ctx, sql, qre.getMaxResultSize(), true)
 	if err != nil {
 		return nil, rewriteOUTParamError(err)
 	}
-	if !qr.IsMoreResultsExists() {
+	if !more {
 		afterInTx := qr.IsInTransaction()
 		if beforeInTx != afterInTx {
 			conn.Close()
@@ -1381,22 +1395,31 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		}
 		return qr, nil
 	}
-	err = qre.drainResultSetOnConn(conn.UnderlyingDBConn().Conn)
+	trailing, multipleResultsets, err := qre.callProcTrailingStatus(conn.UnderlyingDBConn().Conn)
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	if multipleResultsets {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	}
+	afterInTx := trailing.IsInTransaction()
+	if beforeInTx != afterInTx {
+		conn.Close()
+		return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
+	}
+	return qr, nil
 }
 
-// streamedCallProcTrailingStatus reads what follows a streamed stored procedure
-// call's first resultset to determine the connection's final state. It returns
-// the trailing status — whose flags describe the post-call transaction state —
-// and whether the call produced more than one resultset (already drained). A
-// stored procedure call is always followed by a trailing status packet, so a
-// streamed resultset's EOF always reports more results; reading one more result
-// tells a single-resultset call (only the trailing packet remains) from a
-// multi-resultset one.
-func (qre *QueryExecutor) streamedCallProcTrailingStatus(conn *connpool.Conn) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
+// callProcTrailingStatus reads what follows a stored procedure call's first
+// resultset to determine the connection's final state. It returns the trailing
+// status — whose flags describe the post-call transaction state — and whether
+// the call produced more than one resultset (already drained). A stored
+// procedure call is always followed by a trailing status packet, so the first
+// resultset's EOF always reports more results; reading one more result tells a
+// single-resultset call (only the trailing packet remains) from a multi-resultset
+// one. It serves both the streaming and buffered paths.
+func (qre *QueryExecutor) callProcTrailingStatus(conn *connpool.Conn) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
 	if okResult := conn.StreamOKResult(); okResult != nil {
 		// No resultset was streamed, so the OK packet's status flags are all there
 		// is to inspect.
@@ -1576,18 +1599,6 @@ func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
 		},
 	}
 	return result, nil
-}
-
-func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.Conn) error {
-	more := true
-	for more {
-		qr, err := conn.FetchNext(qre.ctx, int(qre.getSelectLimit()), true)
-		if err != nil {
-			return err
-		}
-		more = qr.IsMoreResultsExists()
-	}
-	return nil
 }
 
 func (qre *QueryExecutor) getSelectLimit() int64 {
