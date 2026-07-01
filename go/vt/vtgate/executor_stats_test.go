@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 )
 
@@ -103,6 +105,67 @@ func TestQueryExecutions_StreamOnError(t *testing.T) {
 		"per-plan QueryExecutions must be recorded even when a streamed row-returning query fails")
 	assert.Equal(t, initialByTable, getTotalQueryExecutionsByTableCount(),
 		"per-table QueryExecutionsByTable must not be incremented on a failed streamed query")
+}
+
+// TestQueryExecutions_StreamOnFatalTxError verifies that a row-returning streamed
+// query failing with a fatal transaction error (VT15001) inside a transaction
+// still records the QueryExecutions counter, matching the buffered Execute path
+// which records stats before its rollback handling.
+func TestQueryExecutions_StreamOnFatalTxError(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+
+	initialExec := getTotalQueryExecutionsCount()
+	initialByTable := getTotalQueryExecutionsByTableCount()
+
+	// Fail the next execution with a fatal transaction error, which makes the
+	// streaming path roll back the transaction before returning. The code must
+	// not be ABORTED or RESOURCE_EXHAUSTED: those make the scatter conn roll
+	// back the transaction itself, taking the session out of the transaction
+	// before the executor's fatal-tx handling can run.
+	sbc1.EphemeralShardErr = vterrors.VT15001(vtrpcpb.Code_INTERNAL, "fatal tx error")
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestSharded, InTransaction: true})
+	err := executor.StreamExecute(ctx, nil, "TestQueryExecutions_StreamOnFatalTxError", session,
+		"select id from user where id = 1", nil, false, func(*sqltypes.Result) error { return nil })
+	require.ErrorContains(t, err, "VT15001")
+	require.True(t, session.IsErrorUntilRollback(),
+		"expected the fatal-tx rollback handling to have run for this error")
+
+	assert.Equal(t, initialExec+1, getTotalQueryExecutionsCount(),
+		"QueryExecutions must be recorded when a streamed row-returning query fails with a fatal tx error")
+	assert.Equal(t, initialByTable, getTotalQueryExecutionsByTableCount(),
+		"per-table QueryExecutionsByTable must not be incremented on a failed streamed query")
+}
+
+// TestQueryExecutions_StreamOnFinalSendError verifies that a streamed query that
+// executes successfully but fails to deliver the final result to the client still
+// records the QueryExecutions counter, as an error, like a mid-stream send failure.
+func TestQueryExecutions_StreamOnFinalSendError(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1")})
+
+	initialExec := getTotalQueryExecutionsCount()
+	initialByTable := getTotalQueryExecutionsByTableCount()
+
+	// The fields-only metadata result is sent mid-stream and succeeds; the rows
+	// only go out with the final send, so failing on them exercises the
+	// final-send error path.
+	sendErr := errors.New("failed to send final result to the client")
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	err := executor.StreamExecute(ctx, nil, "TestQueryExecutions_StreamOnFinalSendError", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			if len(qr.Rows) > 0 {
+				return sendErr
+			}
+			return nil
+		})
+	require.ErrorContains(t, err, "failed to send final result to the client")
+
+	assert.Equal(t, initialExec+1, getTotalQueryExecutionsCount(),
+		"QueryExecutions must be recorded when the final send to the client fails")
+	assert.Equal(t, initialByTable, getTotalQueryExecutionsByTableCount(),
+		"per-table QueryExecutionsByTable must not be incremented when the final send fails")
 }
 
 func TestSlowQueriesCounter(t *testing.T) {

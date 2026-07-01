@@ -52,6 +52,14 @@ func streamingConn(t *testing.T) *mysql.Conn {
 func TestStreamingCallProcedureRowsAffected(t *testing.T) {
 	conn := streamingConn(t)
 
+	// Clean up the inserted row so later tests see the table unchanged. The
+	// delete runs on the buffered (OLTP) path so the cleanup also works on
+	// release branches without streamed DML support.
+	t.Cleanup(func() {
+		utils.Exec(t, conn, `set workload = oltp`)
+		utils.Exec(t, conn, `delete from allDefaults`)
+	})
+
 	// sp_insert performs `insert into allDefaults () values ()`, returning an OK
 	// packet that carries the affected-row count.
 	qr := utils.Exec(t, conn, `CALL sp_insert()`)

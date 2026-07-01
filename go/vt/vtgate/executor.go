@@ -416,15 +416,18 @@ func (e *Executor) StreamExecute(
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
+			// Record query stats for a failed row-returning query before any
+			// rollback handling, matching the buffered Execute path which always
+			// records them ahead of its own rollback handling.
+			if canReturnRows(plan.QueryType) {
+				updateLogStats(err)
+			}
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
 				return err
 			}
 			if !canReturnRows(plan.QueryType) {
 				return e.rollbackExecIfNeeded(ctx, safeSession, bindVars, logStats, err)
 			}
-			// Record query stats for a failed row-returning query, matching the
-			// buffered Execute path which always records them.
-			updateLogStats(err)
 			return err
 		}
 
@@ -436,6 +439,10 @@ func (e *Executor) StreamExecute(
 		// Send left-over rows if there is no error on execution.
 		if len(result.Rows) > 0 || !seenResults.Load() {
 			if err := callback(result); err != nil {
+				// The query executed; only the delivery to the client failed.
+				// Record it as an error, like a mid-stream send failure that
+				// surfaces through the execution error above.
+				updateLogStats(err)
 				return err
 			}
 		}
