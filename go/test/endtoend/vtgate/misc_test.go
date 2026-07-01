@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -800,6 +801,28 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
                     TABLE_SCHEMA = 'ionescu'
                     AND
                     TABLE_NAME = 'user'`)
+}
+
+// TestUnionInfSchemaQueriesOLAP streams a UNION of many information_schema
+// queries (OLAP workload). Each branch routes through routeInfoSchemaQuery,
+// which mutates the bindVars map in place; the parallel streaming Concatenate
+// path must hand each source its own copy, otherwise the sources race on the
+// shared map and crash vtgate with a concurrent map write.
+func TestUnionInfSchemaQueriesOLAP(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "set workload='olap'")
+
+	selects := make([]string, 0, 16)
+	for i := range 16 {
+		selects = append(selects, fmt.Sprintf("select TABLE_SCHEMA, TABLE_NAME from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA = 'ionescu' and TABLE_NAME = 'table_%d'", i))
+	}
+	query := strings.Join(selects, " UNION ")
+
+	for range 100 {
+		utils.Exec(t, conn, query)
+	}
 }
 
 func TestTransactionsInStreamingMode(t *testing.T) {
