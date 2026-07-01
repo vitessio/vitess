@@ -68,8 +68,8 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	})
 
 	wg.Wait()
-	require.Nil(t, clientErr, "Dial failed: %v", clientErr)
-	require.Nil(t, serverErr, "Accept failed: %v", serverErr)
+	require.NoError(t, clientErr, "Dial failed: %v", clientErr)
+	require.NoError(t, serverErr, "Accept failed: %v", serverErr)
 
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn, DefaultFlushDelay, 0)
@@ -275,7 +275,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err := cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.EqualValues(data[0], OKPacket, "OKPacket")
+	assert.EqualValues(OKPacket, data[0], "OKPacket")
 
 	var packetOk PacketOK
 	err = cConn.parseOKPacket(&packetOk, data)
@@ -302,15 +302,15 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.EqualValues(data[0], OKPacket, "OKPacket")
+	assert.EqualValues(OKPacket, data[0], "OKPacket")
 
 	err = cConn.parseOKPacket(&packetOk, data)
 	require.NoError(err)
 	assert.EqualValues(23, packetOk.affectedRows)
 	assert.EqualValues(45, packetOk.lastInsertID)
-	assert.EqualValues(ServerSessionStateChanged, packetOk.statusFlags&ServerSessionStateChanged)
+	assert.Equal(ServerSessionStateChanged, packetOk.statusFlags&ServerSessionStateChanged)
 	assert.EqualValues(89, packetOk.warnings)
-	assert.EqualValues("foo-bar", packetOk.sessionStateData)
+	assert.Equal("foo-bar", packetOk.sessionStateData)
 
 	// Write OK packet with EOF header, read it, compare.
 	ok = PacketOK{
@@ -340,7 +340,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
+	assert.EqualValues(ErrPacket, data[0], "ErrPacket")
 
 	err = ParseErrorPacket(data)
 	utils.MustMatch(t, err, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied: reason"), "")
@@ -352,7 +352,7 @@ func TestBasicPackets(t *testing.T) {
 	data, err = cConn.ReadPacket()
 	require.NoError(err)
 	require.NotEmpty(data)
-	assert.EqualValues(data[0], ErrPacket, "ErrPacket")
+	assert.EqualValues(ErrPacket, data[0], "ErrPacket")
 
 	err = ParseErrorPacket(data)
 	utils.MustMatch(t, err, sqlerror.NewSQLError(sqlerror.ERAccessDeniedError, sqlerror.SSAccessDeniedError, "access denied"), "")
@@ -858,7 +858,7 @@ func TestMultiStatementStopsOnError(t *testing.T) {
 			data, err := cConn.ReadPacket()
 			require.NoError(t, err)
 			require.NotEmpty(t, data)
-			require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+			require.EqualValues(t, ErrPacket, data[0]) // we should see the error here
 		})
 	}
 }
@@ -1014,7 +1014,7 @@ func TestMultiStatementOnSplitError(t *testing.T) {
 			data, err := cConn.ReadPacket()
 			require.NoError(t, err)
 			require.NotEmpty(t, data)
-			require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+			require.EqualValues(t, ErrPacket, data[0]) // we should see the error here
 		})
 	}
 }
@@ -1284,7 +1284,7 @@ func TestHandleComStmtExecuteSurfacesMidStreamError(t *testing.T) {
 			}
 		}
 	}
-	require.EqualValues(t, 2, eofCount, "follow-up binary result must terminate cleanly")
+	require.Equal(t, 2, eofCount, "follow-up binary result must terminate cleanly")
 }
 
 func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
@@ -1308,7 +1308,7 @@ func TestInitDbAgainstWrongDbDoesNotDropConnection(t *testing.T) {
 	data, err := cConn.ReadPacket()
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
-	require.EqualValues(t, data[0], ErrPacket) // we should see the error here
+	require.EqualValues(t, ErrPacket, data[0]) // we should see the error here
 }
 
 func TestConnectionErrorWhileWritingComQuery(t *testing.T) {
@@ -1573,7 +1573,7 @@ func startGoRoutine(ctx context.Context, t *testing.T, s string) {
 			data := sConn.PrepareData[sConn.StatementID]
 			assert.NotNil(t, data)
 			variable := data.BindVars["v1"]
-			assert.NotNil(t, variable, fmt.Sprintf("%#v", data.BindVars))
+			assert.NotNil(t, variable, "%#v", data.BindVars)
 			assert.Equalf(t, []byte(longData), variable.Value[len(longData)*count:], "failed at: %d", count)
 		}
 	}(s)

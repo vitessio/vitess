@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMarshalText(t *testing.T) {
@@ -33,7 +34,7 @@ func TestMarshalText(t *testing.T) {
 	}
 
 	str, err := dp.MarshalText()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "testMetric 0.100000 1.100000 key1=val1\n", str)
 }
 
@@ -49,11 +50,11 @@ func TestUnmarshalTextToData(t *testing.T) {
 
 	for _, text := range invalidMarshalTestCases {
 		err := unmarshalTextToData(&dp, []byte(text))
-		assert.Error(t, err)
+		require.Error(t, err)
 	}
 
 	err := unmarshalTextToData(&dp, []byte("testMetric 0.100000 1.100000 key1=val1 key2=val2"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	expectedDataPoint := DataPoint{
 		Metric:    "testMetric",

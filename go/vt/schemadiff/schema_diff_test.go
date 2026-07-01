@@ -181,7 +181,7 @@ func TestPermutations(t *testing.T) {
 			require.NoError(t, err)
 
 			allDiffs := schemaDiff.UnorderedDiffs()
-			require.Equal(t, tc.expectDiffs, len(allDiffs))
+			require.Len(t, allDiffs, tc.expectDiffs)
 
 			toSingleString := func(diffs []EntityDiff) string {
 				res := ""
@@ -208,13 +208,13 @@ func TestPermutations(t *testing.T) {
 					}
 					return false, -1
 				})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if len(allDiffs) > 0 {
-					assert.Equal(t, numEquals, 1)
+					assert.Equal(t, 1, numEquals)
 				}
 
 				assert.False(t, earlyBreak)
-				assert.Equalf(t, tc.expectPermutations, len(allPerms), "all perms: %v", strings.Join(allPermsStatements, "\n"))
+				assert.Lenf(t, allPerms, tc.expectPermutations, "all perms: %v", strings.Join(allPermsStatements, "\n"))
 			})
 			t.Run("early break", func(t *testing.T) {
 				allPerms := map[string]bool{}
@@ -228,14 +228,14 @@ func TestPermutations(t *testing.T) {
 					// early break; this callback function should not be invoked again
 					return true, -1
 				})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if len(allDiffs) > 0 {
 					assert.True(t, earlyBreak)
-					assert.Equal(t, 1, len(allPerms))
+					assert.Len(t, allPerms, 1)
 				} else {
 					// no diffs means no permutations, and no call to the callback function
 					assert.False(t, earlyBreak)
-					assert.Equal(t, 0, len(allPerms))
+					assert.Empty(t, allPerms)
 				}
 			})
 		})
@@ -1334,14 +1334,14 @@ func TestSchemaDiff(t *testing.T) {
 			for _, diff := range allDiffs {
 				allDiffsStatements = append(allDiffsStatements, diff.CanonicalStatementString())
 			}
-			assert.Equalf(t, tc.expectDiffs, len(allDiffs), "found diffs: %v", allDiffsStatements)
+			assert.Lenf(t, allDiffs, tc.expectDiffs, "found diffs: %v", allDiffsStatements)
 
 			deps := schemaDiff.AllDependencies()
 			depsKeys := []string{}
 			for _, dep := range deps {
 				depsKeys = append(depsKeys, dep.hashKey())
 			}
-			assert.Equalf(t, tc.expectDeps, len(deps), "found %v deps: %v", len(depsKeys), depsKeys)
+			assert.Lenf(t, deps, tc.expectDeps, "found %v deps: %v", len(depsKeys), depsKeys)
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDependencies())
 
 			relatedFKTables := schemaDiff.RelatedForeignKeyTables()
@@ -1364,7 +1364,7 @@ func TestSchemaDiff(t *testing.T) {
 				for _, diff := range impossibleOrderErr.ConflictingDiffs {
 					conflictingDiffsStatements = append(conflictingDiffsStatements, diff.CanonicalStatementString())
 				}
-				assert.Equalf(t, tc.conflictingDiffs, len(impossibleOrderErr.ConflictingDiffs), "found conflicting diffs: %+v\n diff statements=%+v", conflictingDiffsStatements, allDiffsStatements)
+				assert.Lenf(t, impossibleOrderErr.ConflictingDiffs, tc.conflictingDiffs, "found conflicting diffs: %+v\n diff statements=%+v", conflictingDiffsStatements, allDiffsStatements)
 			} else {
 				require.NoErrorf(t, err, "Unordered diffs: %v", allDiffsStatements)
 			}
@@ -1376,7 +1376,7 @@ func TestSchemaDiff(t *testing.T) {
 				// validate that the order of diffs is as expected (we don't check for the full diff statement,
 				// just for the order of affected tables/views)
 				require.NotNil(t, tc.entityOrder) // making sure we explicitly specified expected order
-				assert.Equalf(t, len(tc.entityOrder), len(orderedDiffs), "expected %d diffs/entities per %v", len(tc.entityOrder), tc.entityOrder)
+				assert.Lenf(t, orderedDiffs, len(tc.entityOrder), "expected %d diffs/entities per %v", len(tc.entityOrder), tc.entityOrder)
 				diffEntities := []string{}
 				for _, diff := range orderedDiffs {
 					diffEntities = append(diffEntities, diff.EntityName())
@@ -1570,7 +1570,7 @@ func TestSchemaDiffForeignKeyShadowConflict(t *testing.T) {
 			if tc.expectConflict {
 				require.Error(t, err)
 				var conflictErr *ForeignKeyShadowConflictError
-				assert.ErrorAs(t, err, &conflictErr)
+				require.ErrorAs(t, err, &conflictErr)
 				// The error must name the referenced column; it must never render an empty identifier.
 				assert.NotContains(t, err.Error(), "``")
 			} else {

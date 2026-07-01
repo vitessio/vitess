@@ -96,8 +96,8 @@ func TestExpressionEnvTypeOf(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.env.TypeOf(tt.expr)
 			require.NoError(t, err)
-			require.EqualValues(t, tt.wantedType, got.Type())
-			require.EqualValues(t, tt.wantedScale, got.Scale())
+			require.Equal(t, tt.wantedType, got.Type())
+			require.Equal(t, tt.wantedScale, got.Scale())
 		})
 	}
 }

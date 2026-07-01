@@ -138,7 +138,7 @@ func TestDestinationExactKeyRange(t *testing.T) {
 			keyRange = &topodatapb.KeyRange{}
 		} else {
 			krArray, err := ParseShardingSpec(testCase.keyRange)
-			assert.NoError(t, err, "Got error while parsing sharding spec")
+			require.NoError(t, err, "Got error while parsing sharding spec")
 			keyRange = krArray[0]
 		}
 		dkr := DestinationExactKeyRange{KeyRange: keyRange}
@@ -148,7 +148,7 @@ func TestDestinationExactKeyRange(t *testing.T) {
 			return nil
 		})
 		if testCase.err != "" {
-			assert.ErrorContains(t, err, testCase.err)
+			require.ErrorContains(t, err, testCase.err)
 		}
 		assert.Equal(t, testCase.shards, gotShards)
 	}
@@ -239,7 +239,7 @@ func TestDestinationKeyRange(t *testing.T) {
 			keyRange = &topodatapb.KeyRange{}
 		default:
 			krArray, err := ParseShardingSpec(testCase.keyRange)
-			assert.NoError(t, err, "Got error while parsing sharding spec")
+			require.NoError(t, err, "Got error while parsing sharding spec")
 			keyRange = krArray[0]
 		}
 		dkr := DestinationKeyRange{KeyRange: keyRange}
@@ -248,7 +248,7 @@ func TestDestinationKeyRange(t *testing.T) {
 			gotShards = append(gotShards, shard)
 			return nil
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, testCase.shards, gotShards)
 	}
 }
@@ -287,7 +287,7 @@ func TestDestinationShardResolve(t *testing.T) {
 		calledVar = shard
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "test-destination-shard", calledVar)
 }
 
@@ -301,7 +301,7 @@ func TestDestinationShardsResolve(t *testing.T) {
 		calledVar = append(calledVar, shard)
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []string{"ds1", "ds2"}
 	assert.ElementsMatch(t, want, calledVar)
@@ -328,7 +328,7 @@ func TestDestinationKeyspaceIDResolve(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.keyspaceID, func(t *testing.T) {
 			k, err := hex.DecodeString(tc.keyspaceID)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			ds := DestinationKeyspaceID(k)
 
@@ -360,13 +360,13 @@ func TestDestinationKeyspaceIDsResolve(t *testing.T) {
 	allShards := initShardArray(t, "60-80-90")
 
 	k1, err := hex.DecodeString("82")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k2, err := hex.DecodeString("61")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	k3, err := hex.DecodeString("89")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	ds := DestinationKeyspaceIDs{k1, k2, k3}
 
@@ -377,7 +377,7 @@ func TestDestinationKeyspaceIDsResolve(t *testing.T) {
 	}
 
 	err = ds.Resolve(allShards, addShard)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []string{"80-90", "60-80", "80-90"}
 	assert.Equal(t, want, calledVar)
@@ -395,7 +395,7 @@ func TestDestinationAllShardsResolve(t *testing.T) {
 	}
 
 	err := ds.Resolve(allShards, addShard)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	want := []string{"60-80", "80-90"}
 	assert.ElementsMatch(t, want, calledVar)
@@ -413,7 +413,7 @@ func TestDestinationNoneResolve(t *testing.T) {
 	}
 
 	err := ds.Resolve(allShards, addShard)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, called, "addShard shouldn't be called in the case of DestinationNone")
 }
 
@@ -429,7 +429,7 @@ func TestDestinationAnyShardResolve(t *testing.T) {
 	}
 
 	err := ds.Resolve(allShards, addShard)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	possibleShards := []string{"0", "1"}
 	assert.Contains(t, possibleShards, calledVar)

@@ -30,7 +30,7 @@ func TestRunWithRecover(t *testing.T) {
 			panic("boom")
 		})
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "panic in applyEvents")
+		require.ErrorContains(t, err, "panic in applyEvents")
 		assert.ErrorContains(t, err, "boom")
 	})
 
@@ -44,7 +44,7 @@ func TestRunWithRecover(t *testing.T) {
 			return nil
 		})
 		require.Error(t, err)
-		assert.ErrorContains(t, err, "panic in vstream")
+		require.ErrorContains(t, err, "panic in vstream")
 		assert.ErrorContains(t, err, "index out of range")
 	})
 

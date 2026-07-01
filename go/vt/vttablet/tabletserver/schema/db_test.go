@@ -129,7 +129,7 @@ func TestGetCreateStatement(t *testing.T) {
 	db.AddRejectedQuery("show create table v1", errors.New(errMessage))
 	got, err = getCreateStatement(t.Context(), conn, "v1")
 	require.ErrorContains(t, err, errMessage)
-	require.Equal(t, "", got)
+	require.Empty(t, got)
 }
 
 func TestGetChangedViewNames(t *testing.T) {
@@ -155,7 +155,7 @@ func TestGetChangedViewNames(t *testing.T) {
 	// Not serving primary
 	got, err = getChangedViewNames(t.Context(), conn, false)
 	require.NoError(t, err)
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 	require.NoError(t, db.LastError())
 
 	// Failure
@@ -196,13 +196,13 @@ func TestGetViewDefinition(t *testing.T) {
 	db.AddRejectedQuery(query, errors.New(errMessage))
 	got, err = collectGetViewDefinitions(conn, bv)
 	require.ErrorContains(t, err, errMessage)
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 
 	// Failure empty bv
 	bv = nil
 	got, err = collectGetViewDefinitions(conn, bv)
 	require.EqualError(t, err, "missing bind var viewNames")
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 }
 
 func collectGetViewDefinitions(conn *connpool.Conn, bv map[string]*querypb.BindVariable) (map[string]string, error) {

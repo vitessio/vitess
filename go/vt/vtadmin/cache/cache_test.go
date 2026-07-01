@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 )
@@ -259,11 +260,11 @@ func TestUpsertCacheKey(t *testing.T) {
 	for _, tt := range inserts {
 		err := c.Add(tt.key, tt.val, tt.duration)
 		if !tt.shouldFail {
-			assert.Nil(t, err)
+			require.NoError(t, err)
 		}
 
 		val, exists := c.Get(tt.key)
 		assert.True(t, exists)
-		assert.Equal(t, val, tt.expectedVal)
+		assert.Equal(t, tt.expectedVal, val)
 	}
 }

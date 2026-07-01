@@ -214,7 +214,7 @@ func TestResolveDestinations(t *testing.T) {
 			if testCase.errString == "" {
 				assert.Failf(t, testCase.name, "expected success but got error: %v", err)
 			} else {
-				assert.EqualErrorf(t, err, testCase.errString, "%v: expected error '%v' but got error: %v", testCase.name, testCase.errString, err)
+				require.EqualErrorf(t, err, testCase.errString, "%v: expected error '%v' but got error: %v", testCase.name, testCase.errString, err)
 			}
 			continue
 		}
@@ -244,7 +244,7 @@ func TestResolveDestinations(t *testing.T) {
 		if testCase.ids == nil {
 			continue
 		}
-		assert.Equalf(t, len(rss), len(values), "%v: len(values) != len(rss): %v != %v", testCase.name, len(values), len(rss))
+		assert.Lenf(t, values, len(rss), "%v: len(values) != len(rss): %v != %v", testCase.name, len(values), len(rss))
 		assert.True(t, ValuesEqual(values, testCase.expectedValues), "values != testCase.expectedValues: got values=%v", values)
 	}
 }

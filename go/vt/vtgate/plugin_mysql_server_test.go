@@ -139,7 +139,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	}
 
 	c, err := mysql.Connect(t.Context(), params)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	c.Close()
 }
 
@@ -165,7 +165,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 	}
 
 	c, err := mysql.Connect(t.Context(), params)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	c.Close()
 }
 
@@ -179,7 +179,7 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	os.Remove(unixSocket.Name())
 
 	l, err := newMysqlUnixSocket(unixSocket.Name(), authServer, th)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer l.Close()
 	go l.Accept()
 	_, err = newMysqlUnixSocket(unixSocket.Name(), authServer, th)
@@ -198,7 +198,7 @@ func TestNewConnectionSetsAutocommitStatusFlag(t *testing.T) {
 
 	vh.NewConnection(c)
 
-	assert.True(t, c.StatusFlags&mysql.ServerStatusAutocommit != 0,
+	assert.NotEqual(t, uint16(0), c.StatusFlags&mysql.ServerStatusAutocommit,
 		"NewConnection should set ServerStatusAutocommit flag to match VTGate's default session state")
 }
 
@@ -273,14 +273,14 @@ func TestSpanContextNotParsable(t *testing.T) {
 			return trace.NoopSpan{}, t.Context()
 		},
 		newFromStringError(t))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, hasRun, "Should have continued execution despite failure to parse VT_SPAN_CONTEXT")
 }
 
 func TestStartSpanFromPrepare_NoSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "SELECT 1"}
 	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel", newSpanOK, newFromStringFail(t))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Empty(t, *prepare.SpanContext)
 }
@@ -289,7 +289,7 @@ func TestStartSpanFromPrepare_WithSpanContext(t *testing.T) {
 	prepare := &mysql.PrepareData{PrepareStmt: "/*VT_SPAN_CONTEXT=123*/SELECT 1"}
 	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "123"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Equal(t, "123", *prepare.SpanContext)
 }
@@ -299,7 +299,7 @@ func TestStartSpanFromPrepare_CachesSpanContext(t *testing.T) {
 	// First call extracts and caches the span context.
 	_, _, err := startSpanFromPrepareTestable(t.Context(), prepare, "someLabel",
 		newSpanFail(t), newFromStringExpect(t, "456"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, prepare.SpanContext)
 	assert.Equal(t, "456", *prepare.SpanContext)
 
@@ -323,7 +323,7 @@ func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
 			newFromStringCalls++
 			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
 		})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, newFromStringCalls, "newFromString should be called on first execution")
 	assert.Equal(t, 1, newSpanCalls, "newSpan should be called as fallback")
 	// After the first failure, the cached SpanContext should be cleared so
@@ -343,7 +343,7 @@ func TestStartSpanFromPrepare_SpanContextNotParsable(t *testing.T) {
 			newFromStringCalls++
 			return trace.NoopSpan{}, t.Context(), errors.New("parse error")
 		})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 0, newFromStringCalls, "newFromString should not be called after cached failure")
 	assert.Equal(t, 1, newSpanCalls, "newSpan should be called directly")
 }
@@ -414,10 +414,10 @@ func TestKillMethods(t *testing.T) {
 
 	// connection does not exist
 	err := vh.KillQuery(12345)
-	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
+	require.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
 	err = vh.KillConnection(t.Context(), 12345)
-	assert.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
+	require.ErrorContains(t, err, "Unknown thread id: 12345 (errno 1094) (sqlstate HY000)")
 
 	// add a connection
 	mysqlConn := mysql.GetTestConn()
@@ -432,7 +432,7 @@ func TestKillMethods(t *testing.T) {
 
 	// kill query
 	err = vh.KillQuery(1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 
 	// updating context.
@@ -441,7 +441,7 @@ func TestKillMethods(t *testing.T) {
 
 	// kill connection
 	err = vh.KillConnection(t.Context(), 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.EqualError(t, cancelCtx.Err(), "context canceled")
 	require.True(t, mysqlConn.IsMarkedForClose())
 }
@@ -932,7 +932,7 @@ func TestComQueryMulti(t *testing.T) {
 				if tt.queryResponses[idx].QueryError != nil {
 					assert.Equal(t, tt.queryResponses[idx].QueryError.Error(), qr.QueryError.Error(), "Error Got: %v", qr.QueryError)
 				} else {
-					assert.Nil(t, qr.QueryError, "Error Got: %v", qr.QueryError)
+					require.NoError(t, qr.QueryError, "Error Got: %v", qr.QueryError)
 				}
 				assert.Equal(t, tt.more[idx], more, idx)
 				assert.Equal(t, tt.firstPacket[idx], firstPacket, idx)
@@ -1404,11 +1404,11 @@ func TestGracefulShutdown(t *testing.T) {
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = vh.ComQueryMulti(mysqlConn, "select 1", func(res sqltypes.QueryResponse, more bool, firstPacket bool) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	listener.Shutdown()
 
@@ -1843,24 +1843,24 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	err = vh.ComQuery(mysqlConn, "BEGIN", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	listener.Shutdown()
 
 	err = vh.ComQuery(mysqlConn, "select 1", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = vh.ComQuery(mysqlConn, "COMMIT", func(result *sqltypes.Result) error {
 		return nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	require.False(t, mysqlConn.IsMarkedForClose())
 

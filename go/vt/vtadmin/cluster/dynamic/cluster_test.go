@@ -79,7 +79,7 @@ func TestClusterFromString(t *testing.T) {
 
 			c, id, err := ClusterFromString(t.Context(), enc)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, c, "when err != nil, cluster must be nil")
 				return
 			}

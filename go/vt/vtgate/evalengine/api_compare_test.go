@@ -88,11 +88,11 @@ func (tc testCase) run(t *testing.T) {
 	if tc.err == "" {
 		require.NoError(t, err)
 		if tc.out != nil && *tc.out {
-			require.EqualValues(t, uint64(1), evalToInt64(v).toUint64().u)
+			require.Equal(t, uint64(1), evalToInt64(v).toUint64().u)
 		} else if tc.out != nil && !*tc.out {
-			require.EqualValues(t, uint64(0), evalToInt64(v).toUint64().u)
+			require.Equal(t, uint64(0), evalToInt64(v).toUint64().u)
 		} else {
-			require.EqualValues(t, nil, v)
+			require.Nil(t, v)
 		}
 	} else {
 		require.EqualError(t, err, tc.err)
@@ -1416,7 +1416,7 @@ func TestCompareSorter(t *testing.T) {
 			}
 
 			sorted := sorter.Sorted()
-			assert.Equal(t, len(want), len(sorted))
+			assert.Len(t, sorted, len(want))
 			for i := 0; i < len(want); i++ {
 				require.True(t, sqltypes.RowEqual(want[i], sorted[i]), "row %d is not sorted.\nwant: %v\ngot:  %v", i, want, sorted)
 			}

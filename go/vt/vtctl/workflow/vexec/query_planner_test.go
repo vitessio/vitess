@@ -17,7 +17,6 @@ limitations under the License.
 package vexec
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -72,7 +71,7 @@ func TestVReplicationQueryPlanner_PlanQuery(t *testing.T) {
 
 			_, err := planner.PlanQuery(stmt)
 			if tt.err != nil {
-				assert.True(t, errors.Is(err, tt.err), "expected err of type %v, got %v", tt.err, err)
+				assert.ErrorIs(t, err, tt.err)
 
 				return
 			}
@@ -119,7 +118,7 @@ func TestVReplicationQueryPlanner_planSelect(t *testing.T) {
 			stmt := testutil.StatementFromString(t, tt.query)
 			qp, err := planner.PlanQuery(stmt)
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			fixedqp, ok := qp.(*FixedQueryPlan)
 			require.True(t, ok, "VReplicationQueryPlanner should always return a FixedQueryPlan from PlanQuery, got %T", qp)
 			assert.Equal(t, testutil.ParsedQueryFromString(t, tt.expectedPlannedQuery), fixedqp.ParsedQuery)
@@ -172,7 +171,7 @@ func TestVReplicationQueryPlanner_planUpdate(t *testing.T) {
 
 			qp, err := tt.planner.PlanQuery(stmt)
 			if tt.expectedErr != nil {
-				assert.True(t, errors.Is(err, tt.expectedErr), "expected err of type %q, got %q", tt.expectedErr, err)
+				assert.ErrorIs(t, err, tt.expectedErr)
 
 				return
 			}
@@ -231,7 +230,7 @@ func TestVReplicationQueryPlanner_planDelete(t *testing.T) {
 
 			qp, err := planner.PlanQuery(stmt)
 			if tt.expectedErr != nil {
-				assert.True(t, errors.Is(err, tt.expectedErr), "expected err of type %q, got %q", tt.expectedErr, err)
+				assert.ErrorIs(t, err, tt.expectedErr)
 
 				return
 			}

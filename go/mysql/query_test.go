@@ -222,7 +222,7 @@ func TestComStmtSendLongData(t *testing.T) {
 	require.Equal(t, prepare.StatementID, stmtID, "Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
 	// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
 	// sizeof(uint32) + sizeof(uint16) + 1 = 7
-	require.Equal(t, len(data)-7, len(chunkData), "Received bad chunkData")
+	require.Len(t, chunkData, len(data)-7, "Received bad chunkData")
 }
 
 func TestComStmtExecute(t *testing.T) {
@@ -653,7 +653,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		}
 		got, gotWarnings, err := cConn.ExecuteFetchWithWarningCount(query, maxrows, wantfields)
 		if !allRows && len(result.Rows) > 1 {
-			require.ErrorContains(t, err, "Row count exceeded")
+			if err == nil || !strings.Contains(err.Error(), "Row count exceeded") {
+				fatalError = fmt.Sprintf("expected 'Row count exceeded' error, got: %v", err)
+			}
 			return
 		}
 		if err != nil {
@@ -754,7 +756,7 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 	}
 
 	wg.Wait()
-	require.Equal(t, "", fatalError, fatalError)
+	require.Empty(t, fatalError, fatalError)
 }
 
 func RowString(row []sqltypes.Value) string {

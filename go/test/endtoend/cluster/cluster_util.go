@@ -90,7 +90,7 @@ func (tablet *Vttablet) RestartOnlyTablet() error {
 
 // ValidateTabletRestart restarts the tablet and validate error if there is any.
 func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
-	require.Nilf(t, tablet.Restart(), "tablet restart failed")
+	require.NoErrorf(t, tablet.Restart(), "tablet restart failed")
 }
 
 // GetPrimaryPosition gets the executed replication position of given vttablet
@@ -98,7 +98,7 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	ctx := t.Context()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
 }
@@ -156,15 +156,15 @@ func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, er
 // VerifyBackupCount compares the backup count with expected count.
 func (cluster LocalProcessCluster) VerifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := cluster.ListBackups(shardKsName)
-	require.Nil(t, err)
-	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	require.NoError(t, err)
+	assert.Lenf(t, backups, expected, "invalid number of backups")
 	return backups
 }
 
 // RemoveAllBackups removes all the backup corresponds to list backup.
 func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName string) {
 	backups, err := cluster.ListBackups(shardKsName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	for _, backup := range backups {
 		cluster.VtctldClientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
 	}
@@ -230,7 +230,7 @@ func filterResultWhenRunsForCoverage(input string) string {
 func ValidateReplicationIsHealthy(t *testing.T, tablet *Vttablet) bool {
 	query := "show replica status"
 	rs, err := tablet.VttabletProcess.QueryTablet(query, "", true)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	row := rs.Named().Row()
 	require.NotNil(t, row)
 
@@ -289,7 +289,7 @@ func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
 // ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
 func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
 	_, err := session.Execute(context.Background(), query, nil, false)
-	require.Nil(t, err)
+	require.NoError(t, err)
 }
 
 // NewConnParams creates ConnParams corresponds to given arguments.
@@ -371,7 +371,7 @@ func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, e
 	if expectFail {
 		require.Error(t, err)
 	} else {
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }

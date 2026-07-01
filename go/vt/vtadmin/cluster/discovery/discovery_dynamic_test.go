@@ -104,7 +104,7 @@ func TestDynamicDiscoverVTGate(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, gate)
 		})
 	}
@@ -241,7 +241,7 @@ func TestDynamicDiscoverVTGates(t *testing.T) {
 
 			err := disco.parseConfig(tt.contents)
 			if tt.shouldErrConfig {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -252,7 +252,7 @@ func TestDynamicDiscoverVTGates(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, gates)
 		})
 	}
@@ -338,7 +338,7 @@ func TestDynamicDiscoverVtctld(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, vtctld)
 		})
 	}
@@ -475,7 +475,7 @@ func TestDynamicDiscoverVtctlds(t *testing.T) {
 
 			err := disco.parseConfig(tt.contents)
 			if tt.shouldErrConfig {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -486,7 +486,7 @@ func TestDynamicDiscoverVtctlds(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.expected, vtctlds)
 		})
 	}

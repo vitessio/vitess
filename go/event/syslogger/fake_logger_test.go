@@ -31,7 +31,7 @@ func TestGetLogsForNoLogs(t *testing.T) {
 		level: "ERROR",
 	}
 
-	assert.Equal(t, errLoggerMsg, want)
+	assert.Equal(t, want, errLoggerMsg)
 }
 
 func TestGetAllLogs(t *testing.T) {
@@ -43,5 +43,5 @@ func TestGetAllLogs(t *testing.T) {
 	want := []string{"INFO:Test info log", "ERROR:Test error log", "WARNING:Test warning log"}
 	loggerMsgs := tl.GetAllLogs()
 
-	assert.Equal(t, loggerMsgs, want)
+	assert.Equal(t, want, loggerMsgs)
 }

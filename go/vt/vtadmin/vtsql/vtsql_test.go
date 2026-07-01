@@ -33,7 +33,7 @@ func assertImmediateCaller(t *testing.T, im *querypb.VTGateCallerID, expected st
 	t.Helper()
 
 	require.NotNil(t, im, "immediate caller cannot be nil")
-	assert.Equal(t, im.Username, expected, "immediate caller username mismatch")
+	assert.Equal(t, expected, im.Username, "immediate caller username mismatch")
 }
 
 func assertEffectiveCaller(t *testing.T, ef *vtrpcpb.CallerID, principal string, component string, subcomponent string) {

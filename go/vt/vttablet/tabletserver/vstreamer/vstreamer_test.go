@@ -812,7 +812,7 @@ func TestSidecarDBTables(t *testing.T) {
 		return nil
 	}, options)
 	require.NoError(t, err)
-	require.EqualValues(t, wantRowEvents, gotRowEvents)
+	require.Equal(t, wantRowEvents, gotRowEvents)
 	for k, v := range gotFieldEvents {
 		require.Equal(t, 1, v, "gotFieldEvents[%s] = %d", k, v)
 	}
@@ -2384,7 +2384,7 @@ func TestHeartbeat(t *testing.T) {
 	wg, ch := startStream(ctx, t, nil, "", nil)
 	defer wg.Wait()
 	evs := <-ch
-	require.Equal(t, 1, len(evs))
+	require.Len(t, evs, 1)
 	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
 	cancel()
 }
@@ -2964,6 +2964,6 @@ func TestAddEnumAndSetMappingsActionableError(t *testing.T) {
 	metadata := []uint16{0}
 	err := addEnumAndSetMappingstoPlan(env.SchemaEngine.Environment(), &Plan{}, cols, metadata)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "enum or set column plan does not have valid string values")
+	require.ErrorContains(t, err, "enum or set column plan does not have valid string values")
 	assert.ErrorContains(t, err, "--track-schema-versions")
 }

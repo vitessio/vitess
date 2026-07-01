@@ -558,11 +558,11 @@ func TestLimitInputFail(t *testing.T) {
 	l := &Limit{Count: evalengine.NewLiteralInt(1), Input: fp}
 
 	_, err := l.TryExecute(t.Context(), &noopVCursor{}, bindVars, false)
-	assert.EqualError(t, err, "input fail", "l.Execute()")
+	require.EqualError(t, err, "input fail", "l.Execute()")
 
 	fp.rewind()
 	err = l.TryStreamExecute(t.Context(), &noopVCursor{}, bindVars, false, func(_ *sqltypes.Result) error { return nil })
-	assert.EqualError(t, err, "input fail", "l.StreamExecute()")
+	require.EqualError(t, err, "input fail", "l.StreamExecute()")
 
 	fp.rewind()
 	_, err = l.GetFields(t.Context(), nil, nil)
@@ -574,19 +574,19 @@ func TestLimitInvalidCount(t *testing.T) {
 		Count: evalengine.NewBindVar("l", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)),
 	}
 	_, _, err := l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
-	assert.EqualError(t, err, "query arguments missing for l")
+	require.EqualError(t, err, "query arguments missing for l")
 
 	l.Count = evalengine.NewLiteralFloat(1.2)
 	_, _, err = l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
-	assert.EqualError(t, err, "Cannot convert value to desired type")
+	require.EqualError(t, err, "Cannot convert value to desired type")
 
 	l.Count = evalengine.NewLiteralUint(18446744073709551615)
 	_, _, err = l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
-	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
+	require.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
 
 	// When going through the API, it should return the same error.
 	_, err = l.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
+	require.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
 
 	err = l.TryStreamExecute(t.Context(), &noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil })
 	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
