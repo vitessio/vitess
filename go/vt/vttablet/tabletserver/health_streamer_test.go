@@ -372,6 +372,13 @@ func TestReloadView(t *testing.T) {
 				"varchar|varchar|int64|varchar|int64|int64",
 			),
 		))
+	// The schema engine's user-table free-space surfacing runs on every
+	// reload-with-stats when the feature is enabled (default). Answer with
+	// an empty result so no tables are surfaced.
+	db.AddQueryPattern(`select table_name, ifnull\(data_free, 0\), ifnull\(data_length, 0\) \+ ifnull\(index_length, 0\) \+ ifnull\(data_free, 0\) from information_schema.TABLES.*`,
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("table_name|data_free|allocated", "varchar|uint64|uint64"),
+		))
 	db.AddQuery(mysql.BaseShowTables,
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
