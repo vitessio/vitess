@@ -24,6 +24,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VReplication](#bug-fixes-vreplication)**
+        - [`VReplicationStreamState` metric no longer sticks on `Error`](#vreplication-stream-state-metric-reconcile)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -160,3 +163,17 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-stream-state-metric-reconcile"/>`VReplicationStreamState` metric no longer sticks on `Error`</a>
+
+The exported VReplication stream-state metric (`VReplicationStreamState` / `vttablet_v_replication_stream_state`) could get stuck reporting `Error` for a stream that had actually recovered. When a stream hit a terminal error, `setState()` advanced the in-memory state metric before persisting the new state to `_vt.vreplication`. If that `UPDATE` failed — for example because the target MySQL was read-only during a reparent (errno 1290) — the persisted row, which is the real source of truth, kept its prior state such as `Copying`, while the metric was left reporting `Error`. The stream then resumed copying, but the metric stayed stuck on `Error` until the next successful state change, producing a false, sticky `Error` alert on a healthy stream.
+
+The in-memory state (`vr.state` and `stats.State`) is now reconciled from the freshly-read `_vt.vreplication` row on every successful settings load, so the exported metric tracks the persisted state and recovers as soon as the stream resumes.
+
+**Impact**: The `VReplicationStreamState` metric no longer reports a sticky, false `Error` for a stream that has resumed. It reflects the persisted workflow state and recovers on the next successful settings read.
+
+See [#20442](https://github.com/vitessio/vitess/pull/20442) for details.
