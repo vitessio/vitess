@@ -1289,6 +1289,42 @@ func TestQueryProcessedMetric(t *testing.T) {
 	}
 }
 
+// TestStreamingJoinQueryRoutes verifies that a join executed on the streaming
+// path issues the same number of shard routes as the buffered path. A previous
+// implementation labelled the output with a dedicated right-hand-side GetFields
+// query, which added one extra route per streamed join. The OLAP workload
+// forces streaming so the streaming join path is exercised.
+func TestStreamingJoinQueryRoutes(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "set workload = olap")
+
+	tcases := []struct {
+		sql         string
+		queryMetric string
+		routes      float64
+	}{{
+		sql:         "select 1 from t1 a, t1 b",
+		queryMetric: "SELECT.Join.PRIMARY",
+		routes:      3,
+	}, {
+		sql:         "select count(*) from t1 a, t1 b",
+		queryMetric: "SELECT.Complex.PRIMARY",
+		routes:      6,
+	}}
+
+	initialQR := getQPMetric(t, "QueryRoutes")
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			utils.Exec(t, conn, tc.sql)
+			updatedQR := getQPMetric(t, "QueryRoutes")
+			assert.EqualValuesf(t, tc.routes, getValue(updatedQR, tc.queryMetric)-getValue(initialQR, tc.queryMetric), "queryRoutes metric: %s", tc.queryMetric)
+			initialQR = updatedQR
+		})
+	}
+}
+
 // TestQueryProcessedMetric verifies that query metrics are correctly published.
 func TestMetricForExplain(t *testing.T) {
 	conn, closer := start(t)
