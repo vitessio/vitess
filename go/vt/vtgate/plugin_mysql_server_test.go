@@ -1164,7 +1164,7 @@ func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
 	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
-func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
+func TestDeferOKOnlyResultsForwardsRowChunksAfterFields(t *testing.T) {
 	fields := sqltypes.MakeTestFields("id", "int64")
 	input := []*sqltypes.Result{
 		{Fields: fields},
@@ -1172,7 +1172,7 @@ func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
 		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}},
 	}
 	var results []*sqltypes.Result
-	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+	callback, deferredResult := deferOKOnlyResults(func(result *sqltypes.Result) error {
 		results = append(results, result)
 		return nil
 	})
@@ -1185,16 +1185,28 @@ func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
 	assertOLAPRowChunksAfterFields(t, fields, results)
 }
 
-func TestDeferFirstOKOnlyResultDefersOnlyFirstOKResult(t *testing.T) {
-	okResult := &sqltypes.Result{RowsAffected: 1}
-	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+func TestDeferOKOnlyResultsMergesAllOKResults(t *testing.T) {
+	// A multi-shard OK-only statement streams one OK result per shard. They
+	// must be merged into a single deferred OK packet (matching the buffered
+	// path), never forwarded individually, or the client sees multiple OK
+	// packets and the protocol breaks.
+	input := []*sqltypes.Result{
+		{RowsAffected: 1},
+		{RowsAffected: 2},
+		{RowsAffected: 3},
+	}
+	callback, deferredResult := deferOKOnlyResults(func(result *sqltypes.Result) error {
 		require.Failf(t, "callback called for deferred OK-only result", "%v", result)
 		return nil
 	})
 
-	err := callback(okResult)
-	require.NoError(t, err)
-	assert.Same(t, okResult, deferredResult())
+	for _, result := range input {
+		require.NoError(t, callback(result))
+	}
+
+	merged := deferredResult()
+	require.NotNil(t, merged)
+	assert.EqualValues(t, 6, merged.RowsAffected)
 }
 
 func assertOLAPRowChunksAfterFields(t *testing.T, fields []*querypb.Field, results []*sqltypes.Result) {

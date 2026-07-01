@@ -347,7 +347,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}()
 
 	if mysqlSessionUsesStreaming(session) {
-		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
+		streamCallback, deferredResult := deferOKOnlyResults(callback)
 		session, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, query, make(map[string]*querypb.BindVariable), false, streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
@@ -413,21 +413,18 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 			session, err = vh.streamExecuteMultiQuery(ctx, c, mysqlCtx, session, sql, callback)
 		} else {
 			firstPacket := true
-			var deferredResult *sqltypes.Result
-			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), false, func(result *sqltypes.Result) error {
-				if firstPacket && len(result.Fields) == 0 {
-					deferredResult = result
-					firstPacket = false
-					return nil
-				}
+			streamCallback, deferredResult := deferOKOnlyResults(func(result *sqltypes.Result) error {
 				defer func() {
 					firstPacket = false
 				}()
 				return callback(sqltypes.QueryResponse{QueryResult: result}, false, firstPacket)
 			})
-			if err == nil && deferredResult != nil {
-				fillInTxStatusFlags(c, session)
-				return callback(sqltypes.QueryResponse{QueryResult: deferredResult}, false, true)
+			session, err = vh.vtg.StreamExecute(ctx, mysqlCtx, session, sql, make(map[string]*querypb.BindVariable), false, streamCallback)
+			if err == nil {
+				if result := deferredResult(); result != nil {
+					fillInTxStatusFlags(c, session)
+					return callback(sqltypes.QueryResponse{QueryResult: result}, false, true)
+				}
 			}
 		}
 		if err != nil {
@@ -489,6 +486,12 @@ func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.C
 				if firstPacket && len(result.Fields) == 0 {
 					deferredResult = result
 					firstPacket = false
+					return nil
+				}
+				// Merge further OK-only results (from other shards) into the
+				// single deferred OK packet instead of forwarding duplicates.
+				if deferredResult != nil {
+					deferredResult.AppendResult(result)
 					return nil
 				}
 				if firstPacket {
@@ -641,7 +644,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	}()
 
 	if mysqlSessionUsesStreaming(session) {
-		streamCallback, deferredResult := deferFirstOKOnlyResult(callback)
+		streamCallback, deferredResult := deferOKOnlyResults(callback)
 		_, err := vh.vtg.StreamExecute(ctx, mysqlCtx, session, prepare.PrepareStmt, prepare.BindVars, true, streamCallback)
 		if err != nil {
 			return sqlerror.NewSQLErrorFromError(err)
@@ -661,17 +664,32 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 	return callback(qr)
 }
 
-func deferFirstOKOnlyResult(callback func(*sqltypes.Result) error) (func(*sqltypes.Result) error, func() *sqltypes.Result) {
+// deferOKOnlyResults wraps a streaming callback to defer OK-only responses so
+// they can be delivered to the client as a single OK packet.
+//
+// A response with no fields is an OK-only response (e.g. DML, FLUSH, SET). A
+// multi-shard statement streams one such result per shard; forwarding each of
+// them would send multiple OK packets and corrupt the protocol. Instead we
+// merge them all into a single deferred result, matching the buffered Execute
+// path which aggregates the per-shard results. Result-set responses (whose
+// first result carries fields) are streamed through unchanged.
+func deferOKOnlyResults(callback func(*sqltypes.Result) error) (func(*sqltypes.Result) error, func() *sqltypes.Result) {
 	firstPacket := true
+	okOnly := false
 	var deferredResult *sqltypes.Result
 
 	streamCallback := func(result *sqltypes.Result) error {
 		if firstPacket {
 			firstPacket = false
-			if len(result.Fields) == 0 {
+			okOnly = len(result.Fields) == 0
+		}
+		if okOnly {
+			if deferredResult == nil {
 				deferredResult = result
-				return nil
+			} else {
+				deferredResult.AppendResult(result)
 			}
+			return nil
 		}
 		return callback(result)
 	}
