@@ -228,6 +228,54 @@ func (dbc *Conn) ExecOnce(ctx context.Context, query string, maxrows int, wantfi
 	return dbc.execOnce(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
 }
 
+// ExecMulti executes the query and returns its first result set together with a
+// flag reporting whether more result sets remain on the connection. Unlike Exec,
+// it neither drains nor errors on trailing result sets, leaving the caller to
+// inspect them via FetchNext. It does not retry on connection errors.
+func (dbc *Conn) ExecMulti(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, bool, error) {
+	return dbc.execOnceMulti(ctx, query, maxrows, wantfields, false)
+}
+
+// ExecOnceMulti is ExecMulti for a connection that is inside a transaction.
+func (dbc *Conn) ExecOnceMulti(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, bool, error) {
+	return dbc.execOnceMulti(ctx, query, maxrows, wantfields, true /* Once means we are in a txn*/)
+}
+
+func (dbc *Conn) execOnceMulti(ctx context.Context, query string, maxrows int, wantfields bool, insideTxn bool) (*sqltypes.Result, bool, error) {
+	dbc.current.Store(&query)
+	defer dbc.current.Store(nil)
+
+	// Check if the context is already past its deadline before
+	// trying to execute the query.
+	if err := ctx.Err(); err != nil {
+		return nil, false, vterrors.Errorf(vtrpcpb.Code_CANCELED, "%s before execution started", dbc.getErrorMessageFromContextError(ctx))
+	}
+
+	now := time.Now()
+	defer dbc.stats.MySQLTimings.Record("Exec", now)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	stop := context.AfterFunc(ctx, func() {
+		defer wg.Done()
+		dbc.terminate(ctx, insideTxn, now)
+	})
+	result, more, err := dbc.conn.ExecuteFetchMulti(query, maxrows, wantfields)
+	if !stop() {
+		// The context was cancelled and terminate has started. Wait for
+		// it to finish so that the kill statement completes and the dba
+		// pool connection is released before we return.
+		wg.Wait()
+		return nil, false, dbc.Err()
+	}
+	// Check for errors set by an explicit Kill call from another
+	// goroutine (not triggered by context cancellation).
+	if dbcErr := dbc.Err(); dbcErr != nil {
+		return nil, false, dbcErr
+	}
+	return result, more, err
+}
+
 // FetchNext returns the next result set.
 func (dbc *Conn) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*sqltypes.Result, error) {
 	// Check if the context is already past its deadline before
