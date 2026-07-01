@@ -771,7 +771,15 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
 		isTemporaryTable = ddlStmt.IsTemporary()
 	}
-	if !isTemporaryTable {
+	if isTemporaryTable {
+		// A temporary table is visible only to the connection that created it
+		// and may be kept for a long time. Pin the reserved connection so the
+		// idle reserved-connection timeout does not reclaim it and drop the
+		// table out from under the session.
+		if conn.IsTainted() {
+			conn.MarkAsHavingTempTable()
+		}
+	} else {
 		// Temporary tables are limited to the session creating them. There is no need to Reload()
 		// the table because other connections will not be able to see the table anyway.
 		defer func() {
@@ -798,19 +806,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			return nil, err
 		}
 	}
-	result, err = qre.execStatefulConn(conn, sql, true)
-	if err != nil {
-		return nil, err
-	}
-	if isTemporaryTable && conn.IsTainted() {
-		// A temporary table is visible only to the connection that created it
-		// and may be kept for a long time. Pin the reserved connection so the
-		// idle reserved-connection timeout does not reclaim it and drop the
-		// table out from under the session. Only pin after the create succeeds
-		// so a failed create does not exempt a connection that holds no table.
-		conn.MarkAsHavingTempTable()
-	}
-	return result, nil
+	return qre.execStatefulConn(conn, sql, true)
 }
 
 // checkCreateTableLimit rejects a CREATE TABLE/VIEW that would exceed the

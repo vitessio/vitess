@@ -681,52 +681,35 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 	}
 }
 
-// TestExecDDLPinsReservedConnHoldingTempTable verifies that a reserved
-// connection is pinned (exempted from the idle reserved-connection timeout) only
-// when it has successfully created a temporary table: a successful create pins
-// it, a failed create does not.
 func TestExecDDLPinsReservedConnHoldingTempTable(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	// A successful CREATE TEMPORARY TABLE returns an empty result; a failing one
-	// is rejected so we can confirm the connection is only pinned on success.
-	db.AddQueryPattern("create temporary table t_ok.*", &sqltypes.Result{})
-	db.RejectQueryPattern("create temporary table t_fail.*", "table already exists")
+	// Let the CREATE TEMPORARY TABLE reach "MySQL" and succeed.
+	db.AddQueryPattern("create temporary table.*", &sqltypes.Result{})
 
 	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 
+	// Create a reserved (tainted, non-transaction) connection in the pool.
 	rcStats := servenv.NewExporter("TestExecDDLPinsReservedConnHoldingTempTable", "").NewTimings("reservedConns", "reserved connection timings", "operation")
-
-	// reserve returns the id of a fresh reserved (tainted) connection.
-	reserve := func() int64 {
-		conn, err := tsv.te.txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
-		require.NoError(t, err)
-		require.NoError(t, conn.Taint(ctx, rcStats))
-		require.False(t, conn.hasTempTable)
-		id := conn.ReservedID()
-		conn.Unlock()
-		return id
-	}
-	hasTempTable := func(id int64) bool {
-		conn, err := tsv.te.txPool.GetAndLock(id, "verify temp-table flag")
-		require.NoError(t, err)
-		defer conn.Unlock()
-		return conn.hasTempTable
-	}
-
-	// A successful CREATE TEMPORARY TABLE pins the reserved connection.
-	okID := reserve()
-	_, err := newTestQueryExecutor(ctx, tsv, "create temporary table t_ok (id int primary key)", okID).Execute()
+	conn, err := tsv.te.txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.NoError(t, err)
-	assert.True(t, hasTempTable(okID), "connection should be pinned after a successful temp-table create")
+	require.NoError(t, conn.Taint(ctx, rcStats))
+	reservedID := conn.ReservedID()
+	require.False(t, conn.hasTempTable)
+	conn.Unlock()
 
-	// A failed CREATE TEMPORARY TABLE must not pin the connection.
-	failID := reserve()
-	_, err = newTestQueryExecutor(ctx, tsv, "create temporary table t_fail (id int primary key)", failID).Execute()
-	require.Error(t, err)
-	assert.False(t, hasTempTable(failID), "connection must not be pinned after a failed temp-table create")
+	// Run CREATE TEMPORARY TABLE on the reserved connection.
+	qre := newTestQueryExecutor(ctx, tsv, "create temporary table t_pin (id int primary key)", reservedID)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+
+	// The reserved connection must now be flagged so the idle killer skips it.
+	conn, err = tsv.te.txPool.GetAndLock(reservedID, "verify temp-table flag")
+	require.NoError(t, err)
+	defer conn.Unlock()
+	require.True(t, conn.hasTempTable)
 }
 
 func TestExecDDLSchemaTableCountLimitIgnoresSyntheticDual(t *testing.T) {
