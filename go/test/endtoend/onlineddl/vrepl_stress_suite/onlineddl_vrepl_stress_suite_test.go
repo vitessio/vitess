@@ -29,6 +29,7 @@ package vreplstress
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -517,8 +518,9 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 
 				ctx, cancel := context.WithCancel(t.Context())
 				var wg sync.WaitGroup
+				var workloadErr error
 				wg.Go(func() {
-					runMultipleConnections(ctx, t, testcase.autoIncInsert)
+					workloadErr = runMultipleConnections(ctx, t, testcase.autoIncInsert)
 				})
 				uuid := testOnlineDDLStatement(t, fullStatement, onlineDDLStrategy, "vtgate", hintText)
 				expectStatus := schema.OnlineDDLStatusComplete
@@ -530,6 +532,7 @@ func TestVreplStressSchemaChanges(t *testing.T) {
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, expectStatus)
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
+				require.NoError(t, workloadErr)
 				if !testcase.expectFailure {
 					testCompareBeforeAfterTables(t, testcase.autoIncInsert)
 				}
@@ -591,32 +594,31 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 // checkTable checks the number of tables in the first two shards.
 func checkTable(t *testing.T, showTableName string) {
-	for i := range shards {
-		checkTablesCount(t, shards[i].Vttablets[0], showTableName, 1)
-	}
-}
-
-// checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	rowcount := 0
-	for {
-		queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-		require.NoError(t, err)
-		rowcount = len(queryResult.Rows)
-		if rowcount > 0 {
-			break
-		}
+	for i := range shards {
+		tablet := shards[i].Vttablets[0]
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		rowcount := 0
+		for {
+			queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+			require.NoError(t, err)
+			rowcount = len(queryResult.Rows)
+			if rowcount > 0 {
+				break
+			}
 
-		select {
-		case <-time.After(time.Second):
-		case <-ctx.Done():
+			select {
+			case <-time.After(time.Second):
+				continue // Keep looping
+			case <-ctx.Done():
+				// Break below to the assertion
+			}
+
 			break
 		}
+		assert.Equal(t, 1, rowcount)
 	}
-	assert.Equal(t, expectCount, rowcount)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -672,25 +674,35 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64) {
+// runSingleConnection runs on a worker goroutine, so it returns errors rather
+// than asserting: require would call runtime.Goexit off the test goroutine.
+func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, done *int64) error {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1, false)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1, false)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	_, err = conn.ExecuteFetch("set innodb_lock_wait_timeout=1", 1, false)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	periodicRest := timer.NewRateLimiter(time.Second)
 	defer periodicRest.Stop()
 	for {
 		if atomic.LoadInt64(done) == 1 {
 			log.Info("Terminating single connection")
-			return
+			return nil
 		}
 		switch rand.Int32N(3) {
 		case 0:
@@ -714,7 +726,9 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 				}
 			}
 		}
-		require.NoError(t, err)
+		if err != nil {
+			return err
+		}
 		time.Sleep(singleConnectionSleepInterval)
 		// Most o fthe time, we want the load to be high, so as to create real stress and potentially
 		// expose bugs in vreplication (the objective of this test!).
@@ -729,13 +743,16 @@ func runSingleConnection(ctx context.Context, t *testing.T, autoIncInsert bool, 
 	}
 }
 
-func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert bool) {
+// runMultipleConnections runs on a worker goroutine, so it returns errors
+// rather than asserting; callers check the error after wg.Wait().
+func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert bool) error {
 	log.Info("Running multiple connections")
 	var done int64
 	var wg sync.WaitGroup
-	for range maxConcurrency {
+	errs := make([]error, maxConcurrency)
+	for i := range maxConcurrency {
 		wg.Go(func() {
-			runSingleConnection(ctx, t, autoIncInsert, &done)
+			errs[i] = runSingleConnection(ctx, t, autoIncInsert, &done)
 		})
 	}
 	<-ctx.Done()
@@ -743,6 +760,7 @@ func runMultipleConnections(ctx context.Context, t *testing.T, autoIncInsert boo
 	log.Info("Running multiple connections: done")
 	wg.Wait()
 	log.Info("All connections cancelled")
+	return errors.Join(errs...)
 }
 
 func initTable(t *testing.T) {

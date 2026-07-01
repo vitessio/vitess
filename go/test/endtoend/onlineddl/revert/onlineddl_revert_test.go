@@ -18,6 +18,7 @@ package revert
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
@@ -872,8 +873,9 @@ func testRevert(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			var wg sync.WaitGroup
+			var workloadErr error
 			wg.Go(func() {
-				runMultipleConnections(ctx, t)
+				workloadErr = runMultipleConnections(ctx, t)
 			})
 
 			func() {
@@ -889,6 +891,7 @@ func testRevert(t *testing.T) {
 				uuids = append(uuids, uuid)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			}()
+			require.NoError(t, workloadErr)
 
 			testSelectTableMetrics(t)
 		})
@@ -899,8 +902,9 @@ func testRevert(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
+		var workloadErr error
 		wg.Go(func() {
-			runMultipleConnections(ctx, t)
+			workloadErr = runMultipleConnections(ctx, t)
 		})
 
 		func() {
@@ -916,6 +920,7 @@ func testRevert(t *testing.T) {
 			uuids = append(uuids, uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		}()
+		require.NoError(t, workloadErr)
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
 	})
@@ -925,8 +930,9 @@ func testRevert(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
+		var workloadErr error
 		wg.Go(func() {
-			runMultipleConnections(ctx, t)
+			workloadErr = runMultipleConnections(ctx, t)
 		})
 
 		func() {
@@ -942,6 +948,7 @@ func testRevert(t *testing.T) {
 			uuids = append(uuids, uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		}()
+		require.NoError(t, workloadErr)
 		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
 	})
@@ -951,8 +958,9 @@ func testRevert(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
+		var workloadErr error
 		wg.Go(func() {
-			runMultipleConnections(ctx, t)
+			workloadErr = runMultipleConnections(ctx, t)
 		})
 
 		func() {
@@ -968,6 +976,7 @@ func testRevert(t *testing.T) {
 			uuids = append(uuids, uuid)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		}()
+		require.NoError(t, workloadErr)
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
 	})
@@ -976,8 +985,9 @@ func testRevert(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		var wg sync.WaitGroup
+		var workloadErr error
 		wg.Go(func() {
-			runMultipleConnections(ctx, t)
+			workloadErr = runMultipleConnections(ctx, t)
 		})
 
 		// Ensures runMultipleConnections completes before the overall
@@ -986,6 +996,7 @@ func testRevert(t *testing.T) {
 		defer func() {
 			cancel() // will cause runMultipleConnections() to terminate
 			wg.Wait()
+			require.NoError(t, workloadErr)
 		}()
 
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy+" --postpone-completion")
@@ -1256,19 +1267,39 @@ func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 		expectCount = 1
 	}
 	for i := range clusterInstance.Keyspaces[0].Shards {
-		if !checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount) {
+		count, err := tablesCount(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName)
+		require.NoError(t, err)
+		if !assert.Equal(t, expectCount, count) {
 			return false
 		}
 	}
 	return true
 }
 
-// checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) bool {
+// tablesCount returns the number of tables in the given tablet matching showTableName.
+func tablesCount(tablet *cluster.Vttablet, showTableName string) (int, error) {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
-	require.NoError(t, err)
-	return assert.Len(t, queryResult.Rows, expectCount)
+	if err != nil {
+		return 0, err
+	}
+	return len(queryResult.Rows), nil
+}
+
+// tableExists reports whether the given table exists on the first tablet of
+// each shard. It runs on worker goroutines, so it returns errors rather than
+// asserting.
+func tableExists(showTableName string) (bool, error) {
+	for i := range clusterInstance.Keyspaces[0].Shards {
+		count, err := tablesCount(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName)
+		if err != nil {
+			return false, err
+		}
+		if count != 1 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -1362,21 +1393,29 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
+// runSingleConnection runs on a worker goroutine, so it returns errors rather
+// than asserting: require would call runtime.Goexit off the test goroutine.
+func runSingleConnection(ctx context.Context, t *testing.T, done *int64) error {
 	log.Info("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	for {
 		if atomic.LoadInt64(done) == 1 {
 			log.Info("Terminating single connection")
-			return
+			return nil
 		}
 		switch rand.Int32N(3) {
 		case 0:
@@ -1386,20 +1425,31 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 		case 2:
 			err = generateDelete(t, conn)
 		}
-		require.NoError(t, err)
+		if err != nil {
+			return err
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-func runMultipleConnections(ctx context.Context, t *testing.T) {
+// runMultipleConnections runs on a worker goroutine, so it returns errors
+// rather than asserting; callers check the error after wg.Wait().
+func runMultipleConnections(ctx context.Context, t *testing.T) error {
 	log.Info("Running multiple connections")
 
-	require.True(t, checkTable(t, tableName, true))
+	exists, err := tableExists(tableName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("table %s does not exist", tableName)
+	}
 	var done int64
 	var wg sync.WaitGroup
-	for range maxConcurrency {
+	errs := make([]error, maxConcurrency)
+	for i := range maxConcurrency {
 		wg.Go(func() {
-			runSingleConnection(ctx, t, &done)
+			errs[i] = runSingleConnection(ctx, t, &done)
 		})
 	}
 	<-ctx.Done()
@@ -1407,6 +1457,7 @@ func runMultipleConnections(ctx context.Context, t *testing.T) {
 	log.Info("Running multiple connections: done")
 	wg.Wait()
 	log.Info("All connections cancelled")
+	return errors.Join(errs...)
 }
 
 func initTable(t *testing.T) {
