@@ -48,6 +48,7 @@ type StatSummary struct {
 	DestinationCloseStats int
 	DestinationOpenStats  int
 	DestinationWriteStats int
+	DestinationWriteBytes int
 	SourceCloseStats      int
 	SourceOpenStats       int
 	SourceReadStats       int
@@ -65,6 +66,9 @@ func GetStats(stats *backupstats.FakeStats) StatSummary {
 		case "Destination:Write":
 			if len(sr.TimedIncrementBytesCalls) > 0 {
 				ss.DestinationWriteStats++
+				for _, call := range sr.TimedIncrementBytesCalls {
+					ss.DestinationWriteBytes += call.Bytes
+				}
 			}
 		case "Source:Close":
 			ss.SourceCloseStats += len(sr.TimedIncrementCalls)

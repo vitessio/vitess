@@ -553,7 +553,8 @@ func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
 	assert.Equal(t, totalChunks, ss.SourceReadStats)
 
 	// Restore the chunked backup
-	restoreBh, err := s3backupstorage.NewFakeS3RestoreHandle(ctx, name, logger, fakeStats)
+	restoreStats := backupstats.NewFakeStats()
+	restoreBh, err := s3backupstorage.NewFakeS3RestoreHandle(ctx, name, logger, restoreStats)
 	require.NoError(t, err)
 
 	fakedb = fakesqldb.New(t)
@@ -584,11 +585,20 @@ func TestExecuteBackupRestoreS3WithChunking(t *testing.T) {
 		RestoreToPos:         replication.Position{},
 		RestoreToTimestamp:   time.Time{},
 		DryRun:               false,
-		Stats:                fakeStats,
+		Stats:                restoreStats,
 		MysqlShutdownTimeout: blackbox.MysqlShutdownTimeout,
 	}
 
 	bm, err := be.ExecuteRestore(ctx, restoreParams, restoreBh)
 	assert.NoError(t, err)
 	assert.NotNil(t, bm)
+
+	restoreSS := blackbox.GetStats(restoreStats)
+	assert.Equal(t, totalFiles, restoreSS.DestinationOpenStats)
+	assert.Equal(t, totalFiles, restoreSS.DestinationCloseStats)
+	assert.Equal(t, totalChunks, restoreSS.DestinationWriteStats)
+	assert.Equal(t, totalFiles*fileSize, restoreSS.DestinationWriteBytes)
+	assert.Equal(t, totalChunks, restoreSS.SourceCloseStats)
+	assert.Equal(t, totalChunks, restoreSS.SourceOpenStats)
+	assert.Equal(t, totalChunks, restoreSS.SourceReadStats)
 }

@@ -1434,10 +1434,13 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 	var chunkedDests []chunkedDest
 	defer func() {
 		for _, cd := range chunkedDests {
+			closeDestAt := time.Now()
 			if err := closeWithRetry(cleanupCtx, params.Logger, cd.dest, cd.fe.Name); err != nil {
 				params.Logger.Errorf("Failed to close chunked destination file %s: %v", cd.fe.Name, err)
 				finalErr = errors.Join(finalErr, fmt.Errorf("%w: %w", errRestoreFatal, vterrors.Wrapf(err, "failed to close chunked destination file %s", cd.fe.Name)))
+				continue
 			}
+			params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
 		}
 	}()
 
@@ -1459,11 +1462,13 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 				setupErr = vterrors.Wrapf(pathErr, "can't get path for chunked file %v", fe.Name)
 				break
 			}
+			openDestAt := time.Now()
 			dest, openErr := openFile(fullPath, os.O_WRONLY, 0o644)
 			if openErr != nil {
 				setupErr = vterrors.Wrapf(openErr, "can't open destination for chunked file %v", fe.Name)
 				break
 			}
+			params.Stats.Scope(stats.Operation("Destination:Open")).TimedIncrement(time.Since(openDestAt))
 			chunkedDests = append(chunkedDests, chunkedDest{dest: dest, fe: fe})
 
 			for j := range fe.Chunks {
@@ -1716,7 +1721,9 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 	}
 
 	ow := &offsetWriter{f: dest, offset: chunk.Offset}
-	bufferedDest := bufio.NewWriterSize(ow, int(builtinBackupFileWriteBufferSize))
+	writeStats := params.Stats.Scope(stats.Operation("Destination:Write"))
+	timedDest := ioutil.NewMeteredWriter(ow, writeStats.TimedIncrementBytes)
+	bufferedDest := bufio.NewWriterSize(timedDest, int(builtinBackupFileWriteBufferSize))
 
 	if _, err := io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrapf(err, "failed to copy chunk %v", chunk.StorageName)
