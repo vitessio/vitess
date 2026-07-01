@@ -24,6 +24,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTGate](#bug-fixes-vtgate)**
+        - [Recursion-depth limit now enforced on the streaming recursive CTE path](#recurse-cte-streaming-limit-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -160,3 +163,19 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vtgate"/>VTGate</a>
+
+#### <a id="recurse-cte-streaming-limit-fix"/>Recursion-depth limit now enforced on the streaming recursive CTE path</a>
+
+Recursive CTEs on the streaming path — under `SET workload = 'OLAP'` or via the gRPC `StreamExecute` API — are now bounded by the same 1000-iteration guard as the buffered path. The streaming path previously had no such guard and could hang vtgate: each recursion level opened a new `Term` stream nested inside the previous stream's callback, so a recursive CTE kept a live stream per level and could exhaust the connection pool, never returning a result or an error.
+
+The streaming path now expands each recursion level iteratively, keeping only one `Term` stream active at a time, and aborts with `VT09030` ("Recursive query aborted after 1000 iterations.") once a query exceeds 1000 iterations, matching the buffered path. It also checks for context cancellation on each iteration, so a canceled or timed-out query returns promptly instead of continuing to recurse.
+
+Because it now expands breadth-first (like the buffered path) rather than depth-first, the streaming path may emit rows in a different order for queries without an `ORDER BY`. Row order for recursive CTEs without `ORDER BY` is unspecified, so the result set is unchanged.
+
+**Impact**: Recursive CTEs that previously hung under the OLAP workload now abort with the `VT09030` error once they exceed 1000 iterations.
+
+See [#20432](https://github.com/vitessio/vitess/pull/20432) for details.
