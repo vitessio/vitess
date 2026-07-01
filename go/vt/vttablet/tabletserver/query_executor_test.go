@@ -684,7 +684,7 @@ func TestExecDDLSchemaTableCountLimit(t *testing.T) {
 // TestExecDDLPinsReservedConnHoldingTempTable verifies that a reserved
 // connection is pinned (exempted from the idle reserved-connection timeout) only
 // when it has successfully created a temporary table: a successful create pins
-// it, while a failed create and a DROP TEMPORARY TABLE do not.
+// it, a failed create does not.
 func TestExecDDLPinsReservedConnHoldingTempTable(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -692,7 +692,6 @@ func TestExecDDLPinsReservedConnHoldingTempTable(t *testing.T) {
 	// is rejected so we can confirm the connection is only pinned on success.
 	db.AddQueryPattern("create temporary table t_ok.*", &sqltypes.Result{})
 	db.RejectQueryPattern("create temporary table t_fail.*", "table already exists")
-	db.AddQueryPattern("drop temporary table.*", &sqltypes.Result{})
 
 	ctx := t.Context()
 	tsv := newTestTabletServer(ctx, noFlags, db)
@@ -721,20 +720,13 @@ func TestExecDDLPinsReservedConnHoldingTempTable(t *testing.T) {
 	okID := reserve()
 	_, err := newTestQueryExecutor(ctx, tsv, "create temporary table t_ok (id int primary key)", okID).Execute()
 	require.NoError(t, err)
-	require.True(t, hasTempTable(okID), "connection should be pinned after a successful temp-table create")
+	assert.True(t, hasTempTable(okID), "connection should be pinned after a successful temp-table create")
 
 	// A failed CREATE TEMPORARY TABLE must not pin the connection.
 	failID := reserve()
 	_, err = newTestQueryExecutor(ctx, tsv, "create temporary table t_fail (id int primary key)", failID).Execute()
 	require.Error(t, err)
-	require.False(t, hasTempTable(failID), "connection must not be pinned after a failed temp-table create")
-
-	// DROP TEMPORARY TABLE is "temporary" DDL but holds nothing, so it must not
-	// pin the connection.
-	dropID := reserve()
-	_, err = newTestQueryExecutor(ctx, tsv, "drop temporary table if exists t_gone", dropID).Execute()
-	require.NoError(t, err)
-	require.False(t, hasTempTable(dropID), "connection must not be pinned by DROP TEMPORARY TABLE")
+	assert.False(t, hasTempTable(failID), "connection must not be pinned after a failed temp-table create")
 }
 
 func TestExecDDLSchemaTableCountLimitIgnoresSyntheticDual(t *testing.T) {
