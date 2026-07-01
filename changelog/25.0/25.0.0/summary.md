@@ -24,9 +24,6 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
-- **[Bug Fixes](#bug-fixes)**
-    - **[VTGate](#bug-fixes-vtgate)**
-        - [Streamed stored-procedure `CALL` now reports affected rows](#streaming-call-rowsaffected-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -163,17 +160,3 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
-
-## <a id="bug-fixes"/>Bug Fixes</a>
-
-### <a id="bug-fixes-vtgate"/>VTGate</a>
-
-#### <a id="streaming-call-rowsaffected-fix"/>Streamed stored-procedure `CALL` now reports affected rows</a>
-
-A `CALL` to a stored procedure that performs DML previously reported `0` affected rows when run over the streaming path — under `SET workload = 'OLAP'` or through the gRPC `StreamExecute` API — instead of the real count. The OK packet carrying the count was dropped on the way up the stack, whereas the buffered (`oltp`) path reported it correctly. VTGate now carries the affected-row count through the streaming result aggregator, so the client sees the real value.
-
-The same code path now also records per-plan execution statistics (`plan.AddStats`, surfaced by `/queryz`) and the per-plan `QueryExecutions` counter for streamed queries, including failed row-returning queries that the streaming path previously skipped. These now match what the buffered `Execute` path already records.
-
-**Impact**: A stored-procedure `CALL` that performs DML over an `olap`/streaming connection now returns its real affected-row count instead of `0`. Observability for streamed queries is also more complete, with per-plan `/queryz` stats and `QueryExecutions` counters now recorded on the streaming path.
-
-See [#20402](https://github.com/vitessio/vitess/pull/20402) for details.
