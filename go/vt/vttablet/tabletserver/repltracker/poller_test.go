@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
@@ -63,6 +64,7 @@ func TestPollerReturnsFatalReplicationError(t *testing.T) {
 	poller.InitDBConfig(mysqld)
 
 	mysqld.LastIOError = "Got fatal error 1236 from source when reading data from binary log"
+	mysqld.LastIOErrno = uint32(sqlerror.ERMasterFatalReadingBinlog)
 
 	lag, err := poller.Status()
 	require.ErrorContains(t, err, mysqld.LastIOError)
@@ -75,6 +77,7 @@ func TestPollerReturnsFatalReplicationErrorWithoutCachedLag(t *testing.T) {
 	poller.InitDBConfig(mysqld)
 
 	mysqld.LastIOError = "Got fatal error 1236 from source when reading data from binary log"
+	mysqld.LastIOErrno = uint32(sqlerror.ERMasterFatalReadingBinlog)
 
 	lag, err := poller.Status()
 	require.ErrorContains(t, err, mysqld.LastIOError)
@@ -90,6 +93,7 @@ func TestPollerKeepsEstimatedLagForNonFatalReplicationError(t *testing.T) {
 	poller.InitDBConfig(mysqld)
 
 	mysqld.LastIOError = "error connecting to source"
+	mysqld.LastIOErrno = uint32(sqlerror.ERAccessDeniedError)
 
 	lag, err := poller.Status()
 	require.NoError(t, err)

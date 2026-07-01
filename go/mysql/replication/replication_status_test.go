@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
 )
 
 func TestStatusReplicationRunning(t *testing.T) {
@@ -54,43 +56,37 @@ func TestStatusSQLThreadNotRunning(t *testing.T) {
 	assert.Equalf(t, want, got, "%#v.Running() = %v, want %v", input, got, want)
 }
 
-func TestStatusHasFatalError(t *testing.T) {
+// TestStatusHasFatalReplicationError verifies that a replica is flagged as
+// having a fatal replication error based on the numeric Last_IO_Errno, so the
+// check is independent of the Last_IO_Error message wording (which differs
+// between the "master" and "source" variants and across MySQL versions).
+func TestStatusHasFatalReplicationError(t *testing.T) {
 	tests := []struct {
 		name        string
-		lastIOError string
+		lastIOErrno uint32
 		want        bool
 	}{
 		{
 			name:        "no io error",
-			lastIOError: "",
+			lastIOErrno: 0,
 			want:        false,
 		},
 		{
 			name:        "fatal binlog read error",
-			lastIOError: "Got fatal error 1236 from source when reading data from binary log: 'Could not find first log file name in binary log index file'",
+			lastIOErrno: uint32(sqlerror.ERMasterFatalReadingBinlog),
 			want:        true,
 		},
 		{
 			name:        "non fatal io error",
-			lastIOError: "error connecting to source",
-			want:        false,
-		},
-		{
-			name:        "different fatal error",
-			lastIOError: "Got fatal error 1235 from source when reading data from binary log",
-			want:        false,
-		},
-		{
-			name:        "longer error number",
-			lastIOError: "Got fatal error 12367 from source when reading data from binary log",
+			lastIOErrno: uint32(sqlerror.ERAccessDeniedError),
 			want:        false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status := &ReplicationStatus{LastIOError: tt.lastIOError}
-			assert.Equal(t, tt.want, status.HasFatalError())
+			status := &ReplicationStatus{LastIOErrno: tt.lastIOErrno}
+			assert.Equal(t, tt.want, status.HasFatalReplicationError())
 		})
 	}
 }

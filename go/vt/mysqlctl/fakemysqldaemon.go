@@ -108,6 +108,7 @@ type FakeMysqlDaemon struct {
 	// ReplicationStatusError is used by ReplicationStatus.
 	ReplicationStatusError error
 	LastIOError            string
+	LastIOErrno            uint32
 	LastSQLError           string
 
 	// StartReplicationError is used by StartReplication.
@@ -387,6 +388,7 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.
 		IOState:      replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating && fmd.IOThreadRunning)),
 		SQLState:     replication.ReplicationStatusToState(strconv.FormatBool(fmd.Replicating)),
 		LastIOError:  fmd.LastIOError,
+		LastIOErrno:  fmd.LastIOErrno,
 		LastSQLError: fmd.LastSQLError,
 		SourceHost:   fmd.CurrentSourceHost,
 		SourcePort:   fmd.CurrentSourcePort,
