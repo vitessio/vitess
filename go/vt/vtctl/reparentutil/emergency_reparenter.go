@@ -273,21 +273,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	// Wait for all candidates to apply relay logs
+	// Wait for all candidates to apply relay logs. As each candidate's SQL
+	// thread catches up, waitForAllRelayLogsToApply advances that candidate's
+	// in-memory Executed position to its Combined position so equally-advanced
+	// candidates compare equal during election (see the function for details).
 	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
 		return err
 	}
-
-	// The positions in validCandidates were captured before the relay-log wait
-	// above, so their Executed position may lag their Combined (relay-log)
-	// position for a candidate whose SQL thread was behind. Now that the wait
-	// has succeeded, every waited candidate has applied its relay log up to its
-	// Combined position, so reconcile the in-memory positions to reflect that.
-	// We deliberately do not re-issue ReplicationStatus RPCs here: a successful
-	// WaitForRelayLogsToApply already guarantees the SQL thread reached Combined,
-	// and ERS has stopped the IO thread so no new events can arrive past it.
-	// Avoiding the extra RPCs keeps ERS fast and reduces points of failure.
-	reconcilePositionsAfterRelayLogApply(validCandidates, stoppedReplicationSnapshot.statusMap)
 
 	// For GTID based replication, we will run errant GTID detection.
 	if isGTIDBased {
@@ -443,6 +435,12 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
 
+	// mu guards the per-candidate Executed-position updates made from the waiter
+	// goroutines below. Each goroutine writes a distinct candidate's position
+	// (looked up in validCandidates), so the writes don't actually race today;
+	// the lock documents the intent and keeps access safe under -race and against
+	// future changes.
+	var mu sync.Mutex
 	waiterCount := 0
 
 	for candidate := range validCandidates {
@@ -477,6 +475,29 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 				}
 			}()
 			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
+			if err != nil {
+				return
+			}
+			// This candidate's SQL thread has now applied its relay log up to its
+			// Combined position, and ERS has already stopped the IO thread so no
+			// new events can arrive past it. Advance the in-memory Executed
+			// position to Combined so this candidate compares equal to other
+			// equally-advanced candidates in RelayLogPositions.AtLeast (which uses
+			// Executed as the tiebreaker when Combined positions match), letting
+			// the MySQL version tiebreaker decide the election. The positions were
+			// captured before the wait, so without this a candidate whose SQL
+			// thread was merely behind pre-wait would still look behind.
+			//
+			// This is deliberately tied to this candidate's own apply success — we
+			// only advance the position of a tablet we confirmed caught up — so it
+			// remains correct even if this wait ever tolerates partial success.
+			// We do not re-issue a ReplicationStatus RPC: the successful wait is
+			// sufficient proof, and avoiding the extra call keeps ERS fast.
+			mu.Lock()
+			if pos := validCandidates[alias]; pos != nil {
+				pos.Executed = pos.Combined
+			}
+			mu.Unlock()
 		}(candidate, status)
 
 		waiterCount++
@@ -494,30 +515,6 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	}
 
 	return nil
-}
-
-// reconcilePositionsAfterRelayLogApply updates the in-memory candidate positions
-// to reflect that all relay logs have been applied. After a successful
-// waitForAllRelayLogsToApply, each waited candidate's SQL thread has caught up to
-// its relay-log (Combined) position, so we set Executed to Combined for those
-// candidates. This matters because RelayLogPositions.AtLeast uses Executed as the
-// tiebreaker when Combined positions are equal: without this reconciliation, a
-// candidate whose SQL thread was merely behind pre-wait would still appear behind
-// an equally-advanced candidate, defeating the version-aware election that relies
-// on equal positions to apply the MySQL version tiebreaker.
-//
-// Candidates absent from statusMap (e.g. the former primary) are skipped by the
-// relay-log wait, so we leave their positions untouched.
-func reconcilePositionsAfterRelayLogApply(
-	validCandidates map[string]*RelayLogPositions,
-	statusMap map[string]*replicationdatapb.StopReplicationStatus,
-) {
-	for alias, positions := range validCandidates {
-		if _, ok := statusMap[alias]; !ok {
-			continue
-		}
-		positions.Executed = positions.Combined
-	}
 }
 
 // findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.
