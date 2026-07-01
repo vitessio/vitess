@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -151,26 +150,6 @@ func (tp *TxPool) transactionKiller() {
 			tp.txComplete(conn, tx.TxKill)
 		}
 		conn.Releasef("exceeded timeout: %v", conn.timeout)
-	}
-	tp.reapClosedTempTableConns()
-}
-
-// reapClosedTempTableConns reclaims reserved connections that hold a temporary
-// table but whose underlying MySQL connection the server has already closed
-// (for example after MySQL's wait_timeout). These connections are exempt from
-// the idle timeout, so without this they would stay registered until the client
-// releases them or the tablet restarts. Connections that are still alive are
-// returned to the pool untouched.
-func (tp *TxPool) reapClosedTempTableConns() {
-	for _, conn := range tp.scp.GetTempTableConns() {
-		if !conn.IsServerClosed() {
-			conn.Unlock() // still alive; return it to the pool
-			continue
-		}
-		log.Warn("reclaiming temporary-table reserved connection closed by MySQL", slog.Int64("connection_id", conn.ReservedID()))
-		conn.Close()
-		tp.env.Stats().KillCounters.Add("ClosedReservedConnection", 1)
-		conn.Releasef("temporary-table connection closed by MySQL")
 	}
 }
 

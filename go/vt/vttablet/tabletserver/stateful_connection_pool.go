@@ -146,16 +146,6 @@ func (sf *StatefulConnectionPool) GetElapsedTimeout(purpose string) []*StatefulC
 	}))
 }
 
-// GetTempTableConns returns the not-in-use reserved connections that hold a
-// temporary table and are not in a transaction. Each returned connection is
-// marked in use; the caller must Unlock (to return it) or Release it.
-func (sf *StatefulConnectionPool) GetTempTableConns() []*StatefulConnection {
-	return mapToTxConn(sf.active.GetByFilter("temp table reaper", func(val any) bool {
-		sc := val.(*StatefulConnection)
-		return sc.hasTempTable && !sc.IsInTransaction()
-	}))
-}
-
 func mapToTxConn(vals []any) []*StatefulConnection {
 	result := make([]*StatefulConnection, len(vals))
 	for i, el := range vals {
