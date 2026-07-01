@@ -274,6 +274,9 @@ func createGRPCServer() {
 	// of spawning a new goroutine per RPC. This avoids per-RPC goroutine
 	// creation and cold-start scheduling latency on the hot path.
 	opts = append(opts, grpc.NumStreamWorkers(uint32(runtime.GOMAXPROCS(0))))
+	if gRPCIngressStatsEnabled {
+		opts = append(opts, grpc.StatsHandler(GRPCIngressStatsHandler()))
+	}
 
 	opts = append(opts, interceptors()...)
 
