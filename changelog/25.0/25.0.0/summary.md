@@ -24,6 +24,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VTGate](#bug-fixes-vtgate)**
+        - [Streaming `UNION` of `information_schema` queries no longer crashes vtgate](#concatenate-stream-bindvars-race-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -160,3 +163,17 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vtgate"/>VTGate</a>
+
+#### <a id="concatenate-stream-bindvars-race-fix"/>Streaming `UNION` of `information_schema` queries no longer crashes vtgate</a>
+
+A `UNION` of `information_schema` queries run on the streaming path — that is, under `SET workload = 'OLAP'` — could crash vtgate with `fatal error: concurrent map writes`. The streaming `Concatenate` primitive executes its sources concurrently but handed each one the same shared `bindVars` map. Routing an `information_schema` query mutates that map in place to record the schema-name and table-name bind variables it resolves, so when several such sources raced on the shared map, vtgate panicked and the process went down. No new flags were needed to hit this; streaming such a `UNION` under the OLAP workload was enough.
+
+The streaming paths now copy the `bindVars` map for each source, matching the buffered execution paths, so every source only ever mutates its own copy.
+
+**Impact**: A streamed `UNION` of `information_schema` queries under the OLAP workload no longer races on the shared bind-variable map, and no longer crashes vtgate.
+
+See [#20436](https://github.com/vitessio/vitess/pull/20436) for details.
