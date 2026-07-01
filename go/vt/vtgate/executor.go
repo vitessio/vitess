@@ -340,6 +340,18 @@ func (e *Executor) StreamExecute(
 			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
+				// Carry over the OK-packet fields so statements that return one (e.g. a
+				// CALL of a procedure that performs DML) report them to the client,
+				// matching the buffered Execute path. The InsertID handling mirrors
+				// Result.AppendResult.
+				result.RowsAffected += qr.RowsAffected
+				if qr.InsertIDUpdated() {
+					result.InsertID = qr.InsertID
+					result.InsertIDChanged = true
+				}
+				if qr.Info != "" {
+					result.Info = qr.Info
+				}
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
@@ -378,24 +390,43 @@ func (e *Executor) StreamExecute(
 			return srr.storeResultStats(plan.QueryType, qr)
 		})
 
-		updateLogStats := func() {
+		updateLogStats := func(err error) {
 			logStats.StmtType = plan.QueryType.String()
 			logStats.PlanType = plan.Type.String()
-			logStats.TablesUsed = plan.TablesUsed
-			executedRoot := vc.ExecutedPrimitive()
-			if executedRoot == nil {
-				executedRoot = plan.Instructions
-			}
-			logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
 			logStats.TabletType = vc.TabletType().String()
 			logStats.ExecuteTime = time.Since(execStart)
 			logStats.ActiveKeyspace = vc.GetKeyspace()
 
-			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), plan.TablesUsed)
+			// On error, leave the tables, routing indexes and row counts unset so the
+			// per-table counters are not incremented, matching the buffered Execute path.
+			var tablesUsed []string
+			var errCount uint64
+			if err != nil {
+				logStats.Error = err
+				errCount = 1
+			} else {
+				srr.mu.Lock()
+				logStats.RowsAffected = srr.rowsAffected
+				logStats.RowsReturned = uint64(srr.rowsReturned)
+				srr.mu.Unlock()
+				logStats.TablesUsed = plan.TablesUsed
+				tablesUsed = plan.TablesUsed
+				executedRoot := vc.ExecutedPrimitive()
+				if executedRoot == nil {
+					executedRoot = plan.Instructions
+				}
+				logStats.RoutingIndexesUsed = engine.GetRoutingIndexes(executedRoot)
+			}
+
+			e.updateQueryStats(plan.QueryType.String(), plan.Type.String(), vc.TabletType().String(), int64(logStats.ShardQueries), tablesUsed)
+			plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, logStats.RowsAffected, logStats.RowsReturned, errCount)
 		}
 
 		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
+			// Record query stats on failure before any rollback handling, matching
+			// the buffered Execute path which always records them.
+			updateLogStats(err)
 			if safeSession.InTransaction() && e.rollbackOnFatalTxError(ctx, safeSession, err) {
 				return err
 			}
@@ -406,7 +437,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		if !canReturnRows(plan.QueryType) {
-			updateLogStats()
+			updateLogStats(nil)
 			return nil
 		}
 
@@ -418,7 +449,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 5: Log and add statistics
-		updateLogStats()
+		updateLogStats(nil)
 
 		return err
 	}

@@ -447,6 +447,12 @@ func TestKillMethods(t *testing.T) {
 }
 
 func TestComQueryMulti(t *testing.T) {
+	// This test validates the workload -> delivery-mode mapping: OLTP buffers,
+	// OLAP streams. Pin the flag off so it does not depend on the (mutable) global
+	// default; the streaming delivery of OLTP queries is covered by the olap cases.
+	defer func(orig bool) { mysqlServerUseStreaming = orig }(mysqlServerUseStreaming)
+	mysqlServerUseStreaming = false
+
 	testcases := []struct {
 		name           string
 		sql            string
@@ -1158,7 +1164,7 @@ func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
 	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
-func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
+func TestDeferOKOnlyResultsForwardsRowChunksAfterFields(t *testing.T) {
 	fields := sqltypes.MakeTestFields("id", "int64")
 	input := []*sqltypes.Result{
 		{Fields: fields},
@@ -1166,7 +1172,7 @@ func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
 		{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}},
 	}
 	var results []*sqltypes.Result
-	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+	callback, deferredResult := deferOKOnlyResults(func(result *sqltypes.Result) error {
 		results = append(results, result)
 		return nil
 	})
@@ -1179,16 +1185,28 @@ func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
 	assertOLAPRowChunksAfterFields(t, fields, results)
 }
 
-func TestDeferFirstOKOnlyResultDefersOnlyFirstOKResult(t *testing.T) {
-	okResult := &sqltypes.Result{RowsAffected: 1}
-	callback, deferredResult := deferFirstOKOnlyResult(func(result *sqltypes.Result) error {
+func TestDeferOKOnlyResultsMergesAllOKResults(t *testing.T) {
+	// A multi-shard OK-only statement streams one OK result per shard. They
+	// must be merged into a single deferred OK packet (matching the buffered
+	// path), never forwarded individually, or the client sees multiple OK
+	// packets and the protocol breaks.
+	input := []*sqltypes.Result{
+		{RowsAffected: 1},
+		{RowsAffected: 2},
+		{RowsAffected: 3},
+	}
+	callback, deferredResult := deferOKOnlyResults(func(result *sqltypes.Result) error {
 		require.Failf(t, "callback called for deferred OK-only result", "%v", result)
 		return nil
 	})
 
-	err := callback(okResult)
-	require.NoError(t, err)
-	assert.Same(t, okResult, deferredResult())
+	for _, result := range input {
+		require.NoError(t, callback(result))
+	}
+
+	merged := deferredResult()
+	require.NotNil(t, merged)
+	assert.EqualValues(t, 6, merged.RowsAffected)
 }
 
 func assertOLAPRowChunksAfterFields(t *testing.T, fields []*querypb.Field, results []*sqltypes.Result) {
@@ -1870,4 +1888,35 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
 
 	require.True(t, mysqlConn.IsMarkedForClose())
+}
+
+func TestMysqlSessionUsesStreaming(t *testing.T) {
+	defer func(orig bool) { mysqlServerUseStreaming = orig }(mysqlServerUseStreaming)
+
+	sessionWith := func(w querypb.ExecuteOptions_Workload) *vtgatepb.Session {
+		return &vtgatepb.Session{Options: &querypb.ExecuteOptions{Workload: w}}
+	}
+
+	testCases := []struct {
+		name    string
+		flag    bool
+		session *vtgatepb.Session
+		want    bool
+	}{
+		{"flag off, OLTP buffers", false, sessionWith(querypb.ExecuteOptions_OLTP), false},
+		{"flag off, OLAP streams", false, sessionWith(querypb.ExecuteOptions_OLAP), true},
+		{"flag off, UNSPECIFIED buffers", false, sessionWith(querypb.ExecuteOptions_UNSPECIFIED), false},
+		{"flag off, DBA buffers", false, sessionWith(querypb.ExecuteOptions_DBA), false},
+		{"flag on, OLTP streams", true, sessionWith(querypb.ExecuteOptions_OLTP), true},
+		{"flag on, OLAP streams", true, sessionWith(querypb.ExecuteOptions_OLAP), true},
+		{"flag on, DBA streams", true, sessionWith(querypb.ExecuteOptions_DBA), true},
+		{"flag on, nil options streams", true, &vtgatepb.Session{}, true},
+		{"flag off, nil options buffers", false, &vtgatepb.Session{}, false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mysqlServerUseStreaming = tc.flag
+			assert.Equal(t, tc.want, mysqlSessionUsesStreaming(tc.session))
+		})
+	}
 }

@@ -18,7 +18,6 @@ package tabletserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -340,7 +339,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(callback StreamCallback) error {
+func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
@@ -353,8 +352,31 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	// inside streamDML, so its stats defer is registered before those checks and
 	// records per-table error stats for their rejections too, matching Execute.
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanUpdateLimit, p.PlanDeleteLimit, p.PlanLoad:
 		return qre.streamDML(callback)
+	}
+
+	// Record the per-table and per-plan stats that the DML path records in
+	// streamDML, so reads on the streaming path match Execute. Registered after
+	// the DML dispatch above so DML statements are not double-counted.
+	var totalRows int64
+	defer func(start time.Time) {
+		duration := time.Since(start)
+		mysqlTime := qre.logStats.MysqlResponseTime
+		tableName := qre.plan.TableName().String()
+		if tableName == "" {
+			tableName = "Join"
+		}
+		errCode := vterrors.Code(err).String()
+		qre.tsv.qe.AddStats(qre.plan, tableName, qre.options.GetWorkloadName(), qre.targetTabletType, 1, duration, mysqlTime, 0, totalRows, 0, errCode)
+		qre.plan.AddStats(1, duration, mysqlTime, 0, uint64(totalRows), 0)
+		qre.tsv.Stats().ResultHistogram.Add(totalRows)
+	}(time.Now())
+
+	// Wrap the callback to track total rows for the stats recorded above.
+	countingCallback := func(result *sqltypes.Result) error {
+		totalRows += int64(len(result.Rows))
+		return callback(result)
 	}
 
 	if err := qre.checkPermissions(); err != nil {
@@ -365,16 +387,55 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return reqThrottledErr
 	}
 
+	// Plans that don't use generic SQL execution run a dedicated executor and
+	// stream its single result, matching Execute(). These carry a nil FullQuery,
+	// so they must not fall through to the generic SQL path below, which would
+	// send the Vitess-internal statement to MySQL.
+	var result *sqltypes.Result
+	handled := true
 	switch qre.plan.PlanID {
-	case p.PlanSelectStream:
+	case p.PlanNextval:
+		result, err = qre.execNextval()
+	case p.PlanShowMigrations:
+		result, err = qre.execShowMigrations(nil)
+	case p.PlanShowMigrationLogs:
+		result, err = qre.execShowMigrationLogs()
+	case p.PlanShowThrottledApps:
+		result, err = qre.execShowThrottledApps()
+	case p.PlanShowThrottlerStatus:
+		result, err = qre.execShowThrottlerStatus()
+	case p.PlanAlterMigration:
+		result, err = qre.execAlterMigration()
+	case p.PlanRevertMigration:
+		result, err = qre.execRevertMigration()
+	default:
+		handled = false
+	}
+	if handled {
+		if err != nil {
+			return err
+		}
+		return countingCallback(result)
+	}
+
+	switch qre.plan.PlanID {
+	case p.PlanSelect:
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
 			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
 		}
 	}
 
-	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
+	var sql string
+	var sqlWithoutComments string
+	if qre.plan.FullQuery != nil {
+		var err error
+		sql, sqlWithoutComments, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+		if err != nil {
+			return err
+		}
+	} else {
+		sql = qre.query
+		sqlWithoutComments, _ = sqlparser.SplitMarginComments(qre.query)
 	}
 
 	var replaceKeyspace string
@@ -383,8 +444,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
-		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
-			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, callback,
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelect && qre.shouldConsolidate() {
+			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, countingCallback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()
 					if err != nil {
@@ -410,6 +471,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
 
+		totalRows += int64(len(result.Rows))
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(qre.tsv.config.DB.DBName, replaceKeyspace)
 		}
@@ -440,9 +502,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		if qre.plan.PlanID == p.PlanCallProc {
 			if err != nil {
 				txConn.Close()
-				return err
+				return rewriteOUTParamError(err)
 			}
-			trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(conn.Conn)
+			trailing, multipleResultsets, err := qre.callProcTrailingStatus(conn.Conn)
 			if err != nil {
 				txConn.Close()
 				return err
@@ -473,9 +535,9 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	if qre.plan.PlanID == p.PlanCallProc {
 		if err != nil {
 			dbConn.Close()
-			return err
+			return rewriteOUTParamError(err)
 		}
-		trailing, multipleResultsets, err := qre.streamedCallProcTrailingStatus(dbConn.Conn)
+		trailing, multipleResultsets, err := qre.callProcTrailingStatus(dbConn.Conn)
 		if err != nil {
 			dbConn.Close()
 			return err
@@ -1014,6 +1076,12 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.PooledConn, error) {
 	defer func(start time.Time) {
 		qre.logStats.WaitingForConnection += time.Since(start)
 	}(time.Now())
+	// The connection pool follows the workload, not the delivery mode: an OLTP
+	// query streamed to the client still draws from the regular pool, while
+	// every other workload uses the dedicated stream pool.
+	if qre.options.GetWorkload() == querypb.ExecuteOptions_OLTP {
+		return qre.tsv.qe.conns.Get(ctx, qre.setting)
+	}
 	return qre.tsv.qe.streamConns.Get(ctx, qre.setting)
 }
 
@@ -1129,25 +1197,38 @@ func (qre *QueryExecutor) execCallProc() (*sqltypes.Result, error) {
 		return nil, err
 	}
 
-	qr, err := qre.execDBConn(conn.Conn, sql, true)
-	if errors.Is(err, mysql.ErrExecuteFetchMultipleResults) {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
-	}
+	// Read the first resultset without draining the trailing packets, so a
+	// single-resultset procedure (one resultset followed only by the mandatory
+	// trailing OK) can be told apart from a genuine multi-resultset procedure.
+	qr, more, err := conn.Conn.ExecMulti(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), true)
 	if err != nil {
 		return nil, rewriteOUTParamError(err)
 	}
-	if !qr.IsMoreResultsExists() {
+	if err := qre.fetchLastInsertID(qre.ctx, conn.Conn, qr); err != nil {
+		return nil, err
+	}
+	if !more {
+		// The procedure returned no resultset; the OK packet's flags are all
+		// there is to inspect.
 		if qr.IsInTransaction() {
 			conn.Close()
 			return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
 		}
 		return qr, nil
 	}
-	err = qre.drainResultSetOnConn(conn.Conn)
+	trailing, multipleResultsets, err := qre.callProcTrailingStatus(conn.Conn)
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	if multipleResultsets {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	}
+	if trailing.IsInTransaction() {
+		conn.Close()
+		return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction not concluded inside the stored procedure, leaking transaction from stored procedure is not allowed")
+	}
+	return qr, nil
 }
 
 func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, error) {
@@ -1156,11 +1237,13 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 	if err != nil {
 		return nil, err
 	}
-	qr, err := qre.execStatefulConn(conn, sql, true)
+	// Read the first resultset without draining the trailing packets, so a
+	// single-resultset procedure is told apart from a genuine multi-resultset one.
+	qr, more, err := conn.ExecMulti(qre.ctx, sql, qre.getMaxResultSize(), true)
 	if err != nil {
 		return nil, rewriteOUTParamError(err)
 	}
-	if !qr.IsMoreResultsExists() {
+	if !more {
 		afterInTx := qr.IsInTransaction()
 		if beforeInTx != afterInTx {
 			conn.Close()
@@ -1168,22 +1251,31 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		}
 		return qr, nil
 	}
-	err = qre.drainResultSetOnConn(conn.UnderlyingDBConn().Conn)
+	trailing, multipleResultsets, err := qre.callProcTrailingStatus(conn.UnderlyingDBConn().Conn)
 	if err != nil {
+		conn.Close()
 		return nil, err
 	}
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	if multipleResultsets {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+	}
+	afterInTx := trailing.IsInTransaction()
+	if beforeInTx != afterInTx {
+		conn.Close()
+		return nil, vterrors.New(vtrpcpb.Code_CANCELED, "Transaction state change inside the stored procedure is not allowed")
+	}
+	return qr, nil
 }
 
-// streamedCallProcTrailingStatus reads what follows a streamed stored procedure
-// call's first resultset to determine the connection's final state. It returns
-// the trailing status — whose flags describe the post-call transaction state —
-// and whether the call produced more than one resultset (already drained). A
-// stored procedure call is always followed by a trailing status packet, so a
-// streamed resultset's EOF always reports more results; reading one more result
-// tells a single-resultset call (only the trailing packet remains) from a
-// multi-resultset one.
-func (qre *QueryExecutor) streamedCallProcTrailingStatus(conn *connpool.Conn) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
+// callProcTrailingStatus reads what follows a stored procedure call's first
+// resultset to determine the connection's final state. It returns the trailing
+// status — whose flags describe the post-call transaction state — and whether
+// the call produced more than one resultset (already drained). A stored
+// procedure call is always followed by a trailing status packet, so the first
+// resultset's EOF always reports more results; reading one more result tells a
+// single-resultset call (only the trailing packet remains) from a multi-resultset
+// one. It serves both the streaming and buffered paths.
+func (qre *QueryExecutor) callProcTrailingStatus(conn *connpool.Conn) (trailing *sqltypes.Result, multipleResultsets bool, err error) {
 	if okResult := conn.StreamOKResult(); okResult != nil {
 		// No resultset was streamed, so the OK packet's status flags are all there
 		// is to inspect.
@@ -1365,18 +1457,6 @@ func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
 	return result, nil
 }
 
-func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.Conn) error {
-	more := true
-	for more {
-		qr, err := conn.FetchNext(qre.ctx, int(qre.getSelectLimit()), true)
-		if err != nil {
-			return err
-		}
-		more = qr.IsMoreResultsExists()
-	}
-	return nil
-}
-
 func (qre *QueryExecutor) getSelectLimit() int64 {
 	return qre.tsv.qe.maxResultSize.Load()
 }
@@ -1514,11 +1594,19 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isTransaction
 		defer qre.tsv.statefulql.Remove(qd)
 		err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	} else {
-		err = qre.tsv.olapql.Add(qd)
+		// A streamed query's shutdown semantics follow its workload, not the
+		// delivery mode: an OLTP stream is tracked alongside buffered OLTP queries
+		// so it drains during the grace period, while every other workload is
+		// tracked as OLAP and killed immediately on shutdown.
+		ql := qre.tsv.olapql
+		if qre.options.GetWorkload() == querypb.ExecuteOptions_OLTP {
+			ql = qre.tsv.statelessql
+		}
+		err = ql.Add(qd)
 		if err != nil {
 			return err
 		}
-		defer qre.tsv.olapql.Remove(qd)
+		defer ql.Remove(qd)
 		err = conn.Conn.Stream(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
 

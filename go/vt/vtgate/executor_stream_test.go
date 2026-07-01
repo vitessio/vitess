@@ -32,6 +32,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -89,6 +90,90 @@ func TestStreamSQLSharded(t *testing.T) {
 		},
 	}
 	assert.Truef(t, result.Equal(wantResult), "result: %+v, want %+v", result, wantResult)
+}
+
+// TestStreamExecutePropagatesRowsAffected verifies that the streaming path reports
+// the affected-row count to the client for row-returning statements that carry an
+// OK packet (e.g. a CALL of a procedure that performs DML), matching the buffered
+// Execute path.
+func TestStreamExecutePropagatesRowsAffected(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	// An OK packet with affected rows but no fields or rows, like a CALL that
+	// performs an INSERT.
+	sbclookup.SetResults([]*sqltypes.Result{{RowsAffected: 1}})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	var rowsAffected uint64
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecutePropagatesRowsAffected", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			rowsAffected += qr.RowsAffected
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, rowsAffected, "streamed result must carry RowsAffected to the client")
+}
+
+// TestStreamExecuteRecordsPlanStats verifies that the streaming path records
+// per-plan execution statistics (exec count, rows returned) on the engine.Plan,
+// matching the buffered Execute path.
+func TestStreamExecuteRecordsPlanStats(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	sbclookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1", "2")})
+
+	sql := "select id from main1"
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecuteRecordsPlanStats", session,
+		sql, nil, false, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+
+	var plan *engine.Plan
+	executor.ForEachPlan(func(p *engine.Plan) bool {
+		if p.Original == sql {
+			plan = p
+			return false
+		}
+		return true
+	})
+	require.NotNil(t, plan, "plan not found in cache")
+
+	execCount, _, _, _, rowsReturned, errCount := plan.Stats()
+	assert.EqualValues(t, 1, execCount, "streamed query must record an execution in plan stats")
+	assert.EqualValues(t, 2, rowsReturned, "streamed query must record rows returned in plan stats")
+	assert.EqualValues(t, 0, errCount, "successful streamed query must not record an error in plan stats")
+}
+
+// TestStreamExecutePropagatesInsertIDAndInfo verifies that the streaming path
+// reports the OK-packet InsertID and Info fields to the client for row-returning
+// statements that carry them (e.g. a CALL of a procedure that performs DML),
+// matching the buffered Execute path.
+func TestStreamExecutePropagatesInsertIDAndInfo(t *testing.T) {
+	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
+
+	// An OK packet like a CALL that performs an INSERT with an auto-increment
+	// column and an informational message.
+	sbclookup.SetResults([]*sqltypes.Result{{
+		RowsAffected: 1,
+		InsertID:     42,
+		Info:         "Records: 1  Duplicates: 0  Warnings: 0",
+	}})
+
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	var got sqltypes.Result
+	err := executor.StreamExecute(ctx, nil, "TestStreamExecutePropagatesInsertIDAndInfo", session,
+		"select id from main1", nil, false, func(qr *sqltypes.Result) error {
+			if qr.InsertIDUpdated() {
+				got.InsertID = qr.InsertID
+			}
+			if qr.Info != "" {
+				got.Info = qr.Info
+			}
+			return nil
+		})
+	require.NoError(t, err)
+	assert.EqualValues(t, 42, got.InsertID, "streamed result must carry InsertID to the client")
+	assert.Equal(t, "Records: 1  Duplicates: 0  Warnings: 0", got.Info, "streamed result must carry Info to the client")
 }
 
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
