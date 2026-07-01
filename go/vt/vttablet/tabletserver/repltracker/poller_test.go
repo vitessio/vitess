@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -51,4 +52,46 @@ func TestPoller(t *testing.T) {
 	lag, err = poller.Status()
 	assert.NoError(t, err)
 	assert.Less(t, int64(1*time.Second), int64(lag))
+}
+
+func TestPollerReturnsFatalReplicationError(t *testing.T) {
+	poller := &poller{
+		lag:          time.Second,
+		timeRecorded: time.Now().Add(-10 * time.Millisecond),
+	}
+	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	poller.InitDBConfig(mysqld)
+
+	mysqld.LastIOError = "Got fatal error 1236 from source when reading data from binary log"
+
+	lag, err := poller.Status()
+	require.ErrorContains(t, err, mysqld.LastIOError)
+	assert.GreaterOrEqual(t, lag, time.Second)
+}
+
+func TestPollerReturnsFatalReplicationErrorWithoutCachedLag(t *testing.T) {
+	poller := &poller{}
+	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	poller.InitDBConfig(mysqld)
+
+	mysqld.LastIOError = "Got fatal error 1236 from source when reading data from binary log"
+
+	lag, err := poller.Status()
+	require.ErrorContains(t, err, mysqld.LastIOError)
+	assert.Zero(t, lag)
+}
+
+func TestPollerKeepsEstimatedLagForNonFatalReplicationError(t *testing.T) {
+	poller := &poller{
+		lag:          time.Second,
+		timeRecorded: time.Now().Add(-10 * time.Millisecond),
+	}
+	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
+	poller.InitDBConfig(mysqld)
+
+	mysqld.LastIOError = "error connecting to source"
+
+	lag, err := poller.Status()
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, lag, time.Second)
 }

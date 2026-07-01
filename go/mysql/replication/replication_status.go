@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -73,6 +75,8 @@ type ReplicationStatus struct {
 	SemiSyncReplicaStatus  bool
 }
 
+var fatalReplicationIOError = "Got fatal error " + sqlerror.ERMasterFatalReadingBinlog.ToString() + " from "
+
 // Running returns true if both the IO and SQL threads are running.
 func (s *ReplicationStatus) Running() bool {
 	return s.IOState == ReplicationStateRunning && s.SQLState == ReplicationStateRunning
@@ -95,6 +99,10 @@ func (s *ReplicationStatus) IOHealthy() bool {
 // For consistency and to support altering this calculation in the future.
 func (s *ReplicationStatus) SQLHealthy() bool {
 	return s.SQLState == ReplicationStateRunning
+}
+
+func (s *ReplicationStatus) HasFatalError() bool {
+	return strings.Contains(s.LastIOError, fatalReplicationIOError)
 }
 
 // ReplicationStatusToProto translates a Status to proto3.
