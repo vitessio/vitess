@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -53,6 +54,7 @@ type ReplicationStatus struct {
 	SourceServerID         uint32
 	IOState                ReplicationState
 	LastIOError            string
+	LastIOErrno            uint32
 	SQLState               ReplicationState
 	LastSQLError           string
 	ReplicationLagSeconds  uint32
@@ -71,6 +73,19 @@ type ReplicationStatus struct {
 	SemiSyncReplicaEnabled bool
 	SemiSyncPrimaryStatus  bool
 	SemiSyncReplicaStatus  bool
+}
+
+// fatalReplicationIOErrnos are the IO thread error codes (Last_IO_Errno) that
+// we treat as fatal: the replica has stopped replicating and cannot recover on
+// its own, so it needs operator intervention (e.g. a PRS/ERS) rather than time
+// to catch up. Currently the only such error is 1236,
+// ER_MASTER/SOURCE_FATAL_ERROR_READING_BINLOG, which the source raises when the
+// replica asks for binlog events the source no longer has. Comparing the
+// numeric errno (rather than matching Last_IO_Error text) is cheap and robust
+// across MySQL versions and the "master"/"source" message wording, which share
+// the same code. Additional fatal codes can be added here as they're identified.
+var fatalReplicationIOErrnos = map[sqlerror.ErrorCode]bool{
+	sqlerror.ERMasterFatalReadingBinlog: true,
 }
 
 // Running returns true if both the IO and SQL threads are running.
@@ -95,6 +110,14 @@ func (s *ReplicationStatus) IOHealthy() bool {
 // For consistency and to support altering this calculation in the future.
 func (s *ReplicationStatus) SQLHealthy() bool {
 	return s.SQLState == ReplicationStateRunning
+}
+
+// HasFatalReplicationError returns true when the replica has stopped due to a
+// fatal IO error (see fatalReplicationIOErrnos). Such a replica should be
+// reported unhealthy immediately, regardless of the reported/estimated lag,
+// because it will not recover without operator intervention.
+func (s *ReplicationStatus) HasFatalReplicationError() bool {
+	return fatalReplicationIOErrnos[sqlerror.ErrorCode(s.LastIOErrno)]
 }
 
 // ReplicationStatusToProto translates a Status to proto3.
@@ -357,6 +380,8 @@ func ParseReplicationStatus(fields map[string]string, replica bool) ReplicationS
 	status.SourceServerID = uint32(parseUint)
 	parseUint, _ = strconv.ParseUint(fields["SQL_Delay"], 10, 32)
 	status.SQLDelay = uint32(parseUint)
+	parseUint, _ = strconv.ParseUint(fields["Last_IO_Errno"], 10, 32)
+	status.LastIOErrno = uint32(parseUint)
 
 	executedPosStr := fields[execSourceLogPosField]
 	file := fields[relaySourceLogFileField]

@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
 )
 
 func TestStatusReplicationRunning(t *testing.T) {
@@ -52,6 +54,41 @@ func TestStatusSQLThreadNotRunning(t *testing.T) {
 	want := false
 	got := input.Running()
 	assert.Equalf(t, want, got, "%#v.Running() = %v, want %v", input, got, want)
+}
+
+// TestStatusHasFatalReplicationError verifies that a replica is flagged as
+// having a fatal replication error based on the numeric Last_IO_Errno, so the
+// check is independent of the Last_IO_Error message wording (which differs
+// between the "master" and "source" variants and across MySQL versions).
+func TestStatusHasFatalReplicationError(t *testing.T) {
+	tests := []struct {
+		name        string
+		lastIOErrno uint32
+		want        bool
+	}{
+		{
+			name:        "no io error",
+			lastIOErrno: 0,
+			want:        false,
+		},
+		{
+			name:        "fatal binlog read error",
+			lastIOErrno: uint32(sqlerror.ERMasterFatalReadingBinlog),
+			want:        true,
+		},
+		{
+			name:        "non fatal io error",
+			lastIOErrno: uint32(sqlerror.ERAccessDeniedError),
+			want:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := &ReplicationStatus{LastIOErrno: tt.lastIOErrno}
+			assert.Equal(t, tt.want, status.HasFatalReplicationError())
+		})
+	}
 }
 
 func TestFindErrantGTIDs(t *testing.T) {

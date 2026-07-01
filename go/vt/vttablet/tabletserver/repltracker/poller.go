@@ -59,6 +59,12 @@ func (p *poller) Status() (time.Duration, error) {
 	// value and it's thus NULL -- then we will estimate the lag ourselves using the last seen
 	// value + the time elapsed since.
 	if !status.Healthy() || status.ReplicationLagUnknown {
+		if status.HasFatalReplicationError() {
+			if p.timeRecorded.IsZero() {
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "%s", status.LastIOError)
+			}
+			return time.Since(p.timeRecorded) + p.lag, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "%s", status.LastIOError)
+		}
 		if p.timeRecorded.IsZero() {
 			return 0, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "replication is not running")
 		}
