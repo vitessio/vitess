@@ -18,6 +18,7 @@
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
+        - [Temporary-table connections are kept alive with a heartbeat](#vtgate-temp-table-heartbeat)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
     - **[VTTablet](#minor-changes-vttablet)**
@@ -122,6 +123,14 @@ Streaming queries (under `SET workload = 'OLAP'`, multi-statement batches, and p
 This affects all three streaming code paths in `go/mysql`: `COM_QUERY` (text protocol), multi-statement `COM_QUERY`, and `COM_STMT_EXECUTE` (binary protocol).
 
 **Impact**: Application error-handling and retry logic that branched on `2013 / Lost connection` will now see the real error code — for example, `errno 1317 / context canceled` after a `KILL QUERY` against a streaming session, or planner errors such as `specifying two different database in the query is not supported`.
+
+#### <a id="vtgate-temp-table-heartbeat"/>Temporary-table connections are kept alive with a heartbeat</a>
+
+A session that creates an explicit `CREATE TEMPORARY TABLE` pins a reserved connection on the tablet. Previously that connection was reclaimed by the tablet's idle timeout (`--queryserver-config-transaction-timeout`, default 30s), silently dropping the temporary table out from under an idle session. VTGate now sends a low-frequency background keepalive (`select 1`) on those reserved connections, controlled by the new `--temp-table-heartbeat-time` flag (default 10s), which resets both the tablet's idle timer and mysqld's `wait_timeout`.
+
+`--temp-table-heartbeat-time` **must be set below the tablets' `--queryserver-config-transaction-timeout`**, or the connection can still be reclaimed between heartbeats. If VTGate is lost (crash or restart), the heartbeats stop and the tablet reclaims the connection at its normal timeout, so nothing leaks.
+
+See [#20320](https://github.com/vitessio/vitess/issues/20320) for details.
 
 ### <a id="minor-changes-vttablet"/>VTTablet</a>
 

@@ -118,12 +118,27 @@ func registerPluginFlags(fs *pflag.FlagSet) {
 
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
+// tempTableHeartbeatTarget is an immutable snapshot of a reserved connection
+// that holds temporary tables. It is published by the connection's command
+// goroutine and read by the background heartbeat sweeper, so it must never be
+// mutated after being stored.
+type tempTableHeartbeatTarget struct {
+	target     *querypb.Target
+	alias      *topodatapb.TabletAlias
+	reservedID int64
+}
+
 type vtgateHandler struct {
 	mysql.UnimplementedHandler
 	mu sync.Mutex
 
 	vtg         *VTGate
 	connections map[uint32]*mysql.Conn
+
+	// heartbeatTargets maps a connection id to its []tempTableHeartbeatTarget.
+	// Populated while a session holds temporary tables so the background sweeper
+	// can keep those reserved connections (and their mysqld connections) alive.
+	heartbeatTargets sync.Map
 
 	busyConnections atomic.Int32
 }
@@ -152,6 +167,78 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 		vtg:         vtg,
 		connections: make(map[uint32]*mysql.Conn),
 	}
+}
+
+// updateHeartbeatTargets publishes (or clears) the reserved connections that the
+// background heartbeat sweeper should keep alive for this connection. It is
+// called at the end of each command on the connection's own goroutine, so it
+// reads the session without contending with the sweeper, which only reads the
+// immutable snapshot stored here.
+func (vh *vtgateHandler) updateHeartbeatTargets(c *mysql.Conn, session *vtgatepb.Session) {
+	if !session.GetOptions().GetHasCreatedTempTables() {
+		vh.heartbeatTargets.Delete(c.ConnectionID)
+		return
+	}
+	var targets []tempTableHeartbeatTarget
+	for _, ss := range session.GetShardSessions() {
+		if ss.GetReservedId() != 0 {
+			targets = append(targets, tempTableHeartbeatTarget{
+				target:     ss.GetTarget(),
+				alias:      ss.GetTabletAlias(),
+				reservedID: ss.GetReservedId(),
+			})
+		}
+	}
+	if len(targets) == 0 {
+		vh.heartbeatTargets.Delete(c.ConnectionID)
+		return
+	}
+	vh.heartbeatTargets.Store(c.ConnectionID, targets)
+}
+
+// startTempTableHeartbeat launches the background sweeper that keeps reserved
+// connections holding temporary tables alive. It stops when ctx is cancelled.
+func (vh *vtgateHandler) startTempTableHeartbeat(ctx context.Context) {
+	if tempTableHeartbeatTime <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(tempTableHeartbeatTime)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				vh.sendTempTableHeartbeats(ctx)
+			}
+		}
+	}()
+}
+
+// sendTempTableHeartbeats pings every registered reserved connection once.
+func (vh *vtgateHandler) sendTempTableHeartbeats(ctx context.Context) {
+	vh.heartbeatTargets.Range(func(_, value any) bool {
+		for _, t := range value.([]tempTableHeartbeatTarget) {
+			if err := vh.sendTempTableBeat(ctx, t); err != nil {
+				log.Warn("temp-table connection heartbeat failed", slog.Int64("reserved_id", t.reservedID), slog.Any("error", err))
+			}
+		}
+		return true
+	})
+}
+
+// sendTempTableBeat runs a "select 1" on a single reserved connection, which
+// resets both the tablet's idle timeout and mysqld's wait_timeout.
+func (vh *vtgateHandler) sendTempTableBeat(ctx context.Context, t tempTableHeartbeatTarget) error {
+	ctx, cancel := context.WithTimeout(ctx, tempTableHeartbeatTime)
+	defer cancel()
+	qs, err := vh.vtg.gw.QueryServiceByAlias(ctx, t.alias, t.target)
+	if err != nil {
+		return err
+	}
+	_, err = qs.Execute(ctx, nil, t.target, "select 1", nil, 0 /* transactionID */, t.reservedID, nil)
+	return err
 }
 
 func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
@@ -185,6 +272,7 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	defer func() {
+		vh.heartbeatTargets.Delete(c.ConnectionID)
 		vh.mu.Lock()
 		delete(vh.connections, c.ConnectionID)
 		vh.mu.Unlock()
@@ -305,6 +393,10 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 	}
 	defer span.Finish()
 
+	// After the command settles, keep the heartbeat targets for this connection
+	// in sync with whether the session now holds temporary tables.
+	defer func() { vh.updateHeartbeatTargets(c, vh.session(c)) }()
+
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
 	// Fill in the ImmediateCallerID with the UserData returned by
@@ -366,6 +458,10 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 		return vterrors.Wrap(err, "failed to extract span")
 	}
 	defer span.Finish()
+
+	// After the command settles, keep the heartbeat targets for this connection
+	// in sync with whether the session now holds temporary tables.
+	defer func() { vh.updateHeartbeatTargets(c, vh.session(c)) }()
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
 
@@ -1008,10 +1104,11 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 }
 
 type mysqlServer struct {
-	tcpListener  *mysql.Listener
-	unixListener *mysql.Listener
-	sigChan      chan os.Signal
-	vtgateHandle *vtgateHandler
+	tcpListener     *mysql.Listener
+	unixListener    *mysql.Listener
+	sigChan         chan os.Signal
+	vtgateHandle    *vtgateHandler
+	heartbeatCancel context.CancelFunc
 }
 
 // initTLSConfig inits tls config for the given mysql listener
@@ -1083,6 +1180,13 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	var err error
 	srv := &mysqlServer{}
 	srv.vtgateHandle = newVtgateHandler(vtgate)
+
+	// Keep reserved connections that hold temporary tables alive with a
+	// low-frequency background heartbeat. Cancelled at shutdown.
+	var heartbeatCtx context.Context
+	heartbeatCtx, srv.heartbeatCancel = context.WithCancel(context.Background())
+	srv.vtgateHandle.startTempTableHeartbeat(heartbeatCtx)
+
 	if mysqlServerPort >= 0 {
 		listener, err := servenv.Listen(mysqlTCPVersion, net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)))
 		if err != nil {
@@ -1191,6 +1295,9 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 }
 
 func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
+	if srv.heartbeatCancel != nil {
+		srv.heartbeatCancel()
+	}
 	if srv.sigChan != nil {
 		signal.Stop(srv.sigChan)
 	}

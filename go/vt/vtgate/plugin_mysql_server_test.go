@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -1870,4 +1871,63 @@ func TestGracefulShutdownWithTransaction(t *testing.T) {
 	require.EqualError(t, err, "Server shutdown in progress (errno 1053) (sqlstate 08S01)")
 
 	require.True(t, mysqlConn.IsMarkedForClose())
+}
+
+// TestUpdateHeartbeatTargets verifies that the per-connection heartbeat registry
+// tracks only reserved shard sessions of a session that holds temporary tables.
+func TestUpdateHeartbeatTargets(t *testing.T) {
+	vh := &vtgateHandler{}
+	c := &mysql.Conn{ConnectionID: 7}
+
+	target := &querypb.Target{Keyspace: "ks", Shard: "-", TabletType: topodatapb.TabletType_PRIMARY}
+	alias := &topodatapb.TabletAlias{Cell: "aa", Uid: 1}
+
+	// No temp tables -> no entry.
+	vh.updateHeartbeatTargets(c, &vtgatepb.Session{})
+	_, ok := vh.heartbeatTargets.Load(c.ConnectionID)
+	require.False(t, ok)
+
+	// Temp tables + a reserved shard session -> one target (reserved id 0 excluded).
+	vh.updateHeartbeatTargets(c, &vtgatepb.Session{
+		Options: &querypb.ExecuteOptions{HasCreatedTempTables: true},
+		ShardSessions: []*vtgatepb.Session_ShardSession{
+			{Target: target, TabletAlias: alias, ReservedId: 42},
+			{Target: target, TabletAlias: alias, ReservedId: 0},
+		},
+	})
+	v, ok := vh.heartbeatTargets.Load(c.ConnectionID)
+	require.True(t, ok)
+	targets := v.([]tempTableHeartbeatTarget)
+	require.Len(t, targets, 1)
+	require.Equal(t, int64(42), targets[0].reservedID)
+
+	// The temp-table flag being cleared removes the entry.
+	vh.updateHeartbeatTargets(c, &vtgatepb.Session{Options: &querypb.ExecuteOptions{}})
+	_, ok = vh.heartbeatTargets.Load(c.ConnectionID)
+	require.False(t, ok)
+}
+
+// TestTempTableHeartbeatSweep verifies that a sweep pings the registered
+// reserved connection with a "select 1".
+func TestTempTableHeartbeatSweep(t *testing.T) {
+	vtg, sbc, ctx := createVtgateEnv(t)
+	vh := newVtgateHandler(vtg)
+
+	tablet := sbc.Tablet()
+	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
+	vh.heartbeatTargets.Store(uint32(1), []tempTableHeartbeatTarget{
+		{target: target, alias: tablet.Alias, reservedID: 99},
+	})
+
+	before := sbc.ExecCount.Load()
+	vh.sendTempTableHeartbeats(ctx)
+	require.Greater(t, sbc.ExecCount.Load(), before)
+
+	found := false
+	for _, q := range sbc.Queries {
+		if q.Sql == "select 1" {
+			found = true
+		}
+	}
+	require.True(t, found, "sandbox tablet should have received the heartbeat query")
 }

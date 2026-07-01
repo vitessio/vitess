@@ -99,7 +99,10 @@ var (
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = 5 * time.Second
-	warnShardedOnly   bool
+	// tempTableHeartbeatTime is how often vtgate pings a reserved connection
+	// that holds temporary tables to keep it (and its mysqld connection) alive.
+	tempTableHeartbeatTime = 10 * time.Second
+	warnShardedOnly        bool
 
 	// ddl related flags
 	foreignKeyMode     = "allow"
@@ -207,6 +210,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &setVarEnabled, "enable-set-var", setVarEnabled, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
 	fs.StringSliceVar(&deniedSystemVariables, "denied-system-variables", deniedSystemVariables, "Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.")
 	utils.SetFlagDurationVar(fs, &lockHeartbeatTime, "lock-heartbeat-time", lockHeartbeatTime, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
+	utils.SetFlagDurationVar(fs, &tempTableHeartbeatTime, "temp-table-heartbeat-time", tempTableHeartbeatTime, "How often to send a keepalive on a connection that created temporary tables. Must be below the tablets' --queryserver-config-transaction-timeout so the connection is not reclaimed between heartbeats.")
 	utils.SetFlagBoolVar(fs, &warnShardedOnly, "warn-sharded-only", warnShardedOnly, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 	utils.SetFlagStringVar(fs, &foreignKeyMode, "foreign-key-mode", foreignKeyMode, "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 	fs.Bool("enable-online-ddl", enableOnlineDDL.Default(), "Allow users to submit, review and control Online DDL")
