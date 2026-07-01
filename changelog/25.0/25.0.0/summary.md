@@ -24,6 +24,9 @@
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
+- **[Bug Fixes](#bug-fixes)**
+    - **[VReplication](#bug-fixes-vreplication)**
+        - [64th member of a `SET` column dropped during streaming](#vreplication-set-64th-member-fix)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -160,3 +163,15 @@ User-visible consequences:
 - Binaries built from a dirty working tree report their Git revision with a `-dirty` suffix.
 
 The `BUILD_GIT_REV`, `BUILD_GIT_BRANCH`, and `BUILD_TIME` environment-variable overrides still work for builds without VCS metadata (e.g. from a release tarball). When `BUILD_TIME` is set, it takes precedence over the commit time.
+
+## <a id="bug-fixes"/>Bug Fixes</a>
+
+### <a id="bug-fixes-vreplication"/>VReplication</a>
+
+#### <a id="vreplication-set-64th-member-fix"/>64th member of a `SET` column dropped during streaming</a>
+
+Fixed a bug where the 64th member of a MySQL `SET` column was silently dropped when its value was converted to string form during VStream and VReplication. A `SET` can have up to 64 members, and member *k* is stored as bit *k-1*, so the 64th member lives in bit `1<<63`. The bitmap loop stopped one bit short of that position, so any row whose `SET` value included the 64th member was replicated to the target without it. No error was raised, so the target simply ended up with different data than the source.
+
+This affected VReplication workflows such as MoveTables and Reshard, as well as VStream consumers reading tables with a 64-member `SET` column. `ENUM` columns are unaffected.
+
+See [#20450](https://github.com/vitessio/vitess/pull/20450) for details.
