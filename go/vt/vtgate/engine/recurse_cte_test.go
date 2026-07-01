@@ -166,3 +166,33 @@ func TestRecurseCTERecursionLimit(t *testing.T) {
 	_, err = wrapStreamExecute(cte, &noopVCursor{}, bv, true)
 	require.ErrorContains(t, err, "Recursive query aborted")
 }
+
+// TestRecurseCTEStreamConcurrentDelivery verifies that the streaming path is
+// safe when a source delivers its result chunks concurrently, as a multi-shard
+// scatter does (StreamExecuteMulti fans out one goroutine per shard, each
+// invoking the callback without serialization). Run with -race to catch
+// unsynchronized access to the shared recursion frontier.
+func TestRecurseCTEStreamConcurrentDelivery(t *testing.T) {
+	fields := sqltypes.MakeTestFields("col1", "int64")
+
+	// The seed delivers many chunks concurrently, mimicking a scatter.
+	const seedChunks = 64
+	seedResults := make([]*sqltypes.Result, 0, seedChunks)
+	for i := range seedChunks {
+		seedResults = append(seedResults, sqltypes.MakeTestResult(fields, strconv.Itoa(i)))
+	}
+	seed := &fakePrimitive{results: seedResults, async: true, noLog: true}
+	// The Term returns no rows, so recursion stops after the seed level.
+	term := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields)}, noLog: true}
+
+	cte := &RecurseCTE{
+		Seed: seed,
+		Term: term,
+		Vars: map[string]int{"col1": 0},
+	}
+	bv := map[string]*querypb.BindVariable{}
+
+	res, err := wrapStreamExecute(cte, &noopVCursor{}, bv, true)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, seedChunks)
+}

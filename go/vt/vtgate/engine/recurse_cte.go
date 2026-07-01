@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -87,10 +88,17 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		return callback(res)
 	}
 
+	// A scatter source delivers its result chunks concurrently, one goroutine
+	// per shard, so both the shared frontier and the downstream callback must be
+	// serialized.
+	var mu sync.Mutex
+
 	// Stream the seed, emitting its rows and collecting them to drive the first
 	// recursion level.
 	var recurseRows []sqltypes.Row
 	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
 		recurseRows = append(recurseRows, result.Rows...)
 		return callback(result)
 	})
@@ -116,6 +124,8 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 				return err
 			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
+				mu.Lock()
+				defer mu.Unlock()
 				recurseRows = append(recurseRows, result.Rows...)
 				return callback(result)
 			})
