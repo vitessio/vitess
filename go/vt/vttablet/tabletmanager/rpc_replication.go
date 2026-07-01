@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -40,12 +41,57 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+// mysqlVersionCacheTTL bounds how long a cached MySQL version string is served
+// before it is refetched. The server version only changes across a mysqld
+// restart (e.g. an upgrade), so a short TTL is enough to pick up a change while
+// collapsing the many per-RPC lookups down to roughly one query per TTL.
+const mysqlVersionCacheTTL = 30 * time.Second
+
+// mysqlVersionCache caches the MySQL server version string behind its own lock
+// so lookups never contend with unrelated TabletManager operations.
+type mysqlVersionCache struct {
+	mu        sync.Mutex
+	version   string
+	fetchedAt time.Time
+}
+
+// getMySQLVersionString returns the MySQL server version string, caching it for
+// mysqlVersionCacheTTL. GetVersionString runs a live query against mysqld (and,
+// on failure, dials mysqlctld or shells out to mysqld --version), so it is
+// deliberately not called on every RPC: it feeds ReplicationStatus (polled
+// fleet-wide by vtorc) and StopReplicationAndGetStatus (on the per-tablet ERS
+// critical path). A stale value is harmless — the version only changes across a
+// mysqld restart, and reparent degrades gracefully to position-only ordering
+// until the cache refreshes. Errors are logged and surface as "", and are not
+// cached so the next call retries.
+//
+// The lock is intentionally not held across GetVersionString, so concurrent
+// callers arriving on a cold or expired cache may each fetch once before the
+// first write lands; the result is a small, bounded burst rather than a strict
+// single query. Single-flighting is deliberately omitted: the fetch is cheap
+// and rare, so the extra machinery is not worth it.
 func (tm *TabletManager) getMySQLVersionString(ctx context.Context) string {
+	c := &tm.mysqlVersion
+
+	c.mu.Lock()
+	if c.version != "" && time.Since(c.fetchedAt) < mysqlVersionCacheTTL {
+		version := c.version
+		c.mu.Unlock()
+		return version
+	}
+	c.mu.Unlock()
+
 	version, err := tm.MysqlDaemon.GetVersionString(ctx)
 	if err != nil {
-		log.Warn(fmt.Sprintf("failed to get MySQL version string: %v", err))
+		log.Warn("failed to get MySQL version string", slog.Any("error", err))
 		return ""
 	}
+
+	c.mu.Lock()
+	c.version = version
+	c.fetchedAt = time.Now()
+	c.mu.Unlock()
+
 	return version
 }
 

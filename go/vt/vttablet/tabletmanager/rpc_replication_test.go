@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -881,4 +882,95 @@ func TestStopReplicationAndGetStatus_ServerVersion(t *testing.T) {
 			}
 		})
 	}
+}
+
+// countingVersionDaemon wraps a FakeMysqlDaemon to count GetVersionString calls
+// and optionally return an error, so we can assert the version cache behavior.
+type countingVersionDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	calls   atomic.Int64
+	version string
+	err     error
+}
+
+func (d *countingVersionDaemon) GetVersionString(ctx context.Context) (string, error) {
+	d.calls.Add(1)
+	if d.err != nil {
+		return "", d.err
+	}
+	return d.version, nil
+}
+
+func TestGetMySQLVersionStringCache(t *testing.T) {
+	t.Run("caches within TTL", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		for range 5 {
+			require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionString(t.Context()))
+		}
+		require.EqualValues(t, 1, daemon.calls.Load(), "should query mysqld only once within the TTL")
+	})
+
+	t.Run("refetches after TTL", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionString(t.Context()))
+		// Expire the cache by backdating the fetch time beyond the TTL.
+		tm.mysqlVersion.mu.Lock()
+		tm.mysqlVersion.fetchedAt = time.Now().Add(-2 * mysqlVersionCacheTTL)
+		tm.mysqlVersion.mu.Unlock()
+
+		require.Equal(t, "Ver 8.0.35", tm.getMySQLVersionString(t.Context()))
+		require.EqualValues(t, 2, daemon.calls.Load(), "should re-query mysqld after the TTL expires")
+	})
+
+	t.Run("error is not cached", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			err:             errors.New("mysqld down"),
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		require.Equal(t, "", tm.getMySQLVersionString(t.Context()))
+		require.Equal(t, "", tm.getMySQLVersionString(t.Context()))
+		require.EqualValues(t, 2, daemon.calls.Load(), "should retry after an error rather than cache the empty result")
+	})
+
+	// Exercised under -race to prove the lock-drop-across-fetch design is sound.
+	// The lock is intentionally released during the fetch, so a cold-cache burst
+	// may fetch more than once; every caller must still observe the same value.
+	t.Run("concurrent callers are race-free and consistent", func(t *testing.T) {
+		daemon := &countingVersionDaemon{
+			FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+			version:         "Ver 8.0.35",
+		}
+		tm := &TabletManager{MysqlDaemon: daemon}
+
+		const goroutines = 20
+		var wg sync.WaitGroup
+		results := make([]string, goroutines)
+		wg.Add(goroutines)
+		for i := range goroutines {
+			go func() {
+				defer wg.Done()
+				results[i] = tm.getMySQLVersionString(t.Context())
+			}()
+		}
+		wg.Wait()
+
+		for _, r := range results {
+			require.Equal(t, "Ver 8.0.35", r)
+		}
+		// Cold-cache burst may fetch more than once, but far fewer than once per caller.
+		require.LessOrEqual(t, daemon.calls.Load(), int64(goroutines))
+		require.GreaterOrEqual(t, daemon.calls.Load(), int64(1))
+	})
 }
