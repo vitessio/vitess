@@ -50,11 +50,6 @@ type StatefulConnection struct {
 	enforceTimeout bool
 	timeout        time.Duration
 	expiryTime     time.Time
-	// hasTempTable is set once this reserved connection has created a
-	// temporary table. Such a connection must not be reclaimed by the idle
-	// reserved-connection timeout: the table is visible only to this
-	// connection and the session may keep it for a long time.
-	hasTempTable bool
 }
 
 // Properties contains meta information about the connection
@@ -84,12 +79,6 @@ func (sc *StatefulConnection) IsInTransaction() bool {
 
 func (sc *StatefulConnection) ElapsedTimeout() bool {
 	if !sc.enforceTimeout {
-		return false
-	}
-	// A reserved connection holding a temporary table must not be reclaimed by
-	// the idle timeout. A transaction running on the connection is still bounded
-	// by the timeout check below (IsInTransaction is true in that case).
-	if sc.hasTempTable && !sc.IsInTransaction() {
 		return false
 	}
 	if sc.timeout <= 0 {
@@ -308,13 +297,6 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 func (sc *StatefulConnection) SetTimeout(timeout time.Duration) {
 	sc.timeout = timeout
 	sc.resetExpiryTime()
-}
-
-// MarkAsHavingTempTable records that this reserved connection holds one or more
-// temporary tables, exempting it from the idle reserved-connection timeout
-// enforced by the transaction killer.
-func (sc *StatefulConnection) MarkAsHavingTempTable() {
-	sc.hasTempTable = true
 }
 
 // logReservedConn logs reserved connection related stats.
