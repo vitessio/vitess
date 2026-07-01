@@ -17,6 +17,7 @@
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
     - **[VTGate](#minor-changes-vtgate)**
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
+        - [`QueryRoutes` stat no longer inflated for streaming joins](#vtgate-streaming-join-queryroutes)
         - [Streaming errors no longer surface as connection loss](#vtgate-streamexecute-real-errors)
     - **[VTTablet](#minor-changes-vttablet)**
         - [Consolidator Reject on Waiter Cap](#vttablet-consolidator-reject-on-cap)
@@ -114,6 +115,12 @@ When enabled, the planner will reject queries that require joining or combining 
 ```
 
 The VTGate flag prevents cross-keyspace reads globally, regardless of per-keyspace VSchema settings.
+
+#### <a id="vtgate-streaming-join-queryroutes"/>`QueryRoutes` stat no longer inflated for streaming joins</a>
+
+On the streaming (OLAP) path, a join previously ran an extra right-hand-side `GetFields` query to label its output before streaming rows, which added one redundant shard round-trip per streamed join. VTGate now derives the output fields from the first right-side row stream, so that separate query is gone.
+
+The main user-visible effect is on observability. The per-plan `QueryRoutes` stat for streamed joins is no longer inflated by one and now matches the count reported on the buffered (non-streaming) path. For example, `select count(*) from t1 a, t1 b` under `SET workload = 'OLAP'` no longer reports an extra route. Query results and output fields are unchanged, and the empty-left-side case still performs a single `GetFields` after the left stream completes.
 
 #### <a id="vtgate-streamexecute-real-errors"/>Streaming errors no longer surface as connection loss</a>
 
