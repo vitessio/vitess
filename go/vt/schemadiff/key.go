@@ -108,6 +108,16 @@ func (i *IndexDefinitionEntity) HasColumnPrefix() bool {
 	return false
 }
 
+// TypeCost returns the sum of type costs for all columns in the index,
+// used for ranking PKE indexes.
+func (i *IndexDefinitionEntity) TypeCost() int {
+	cost := 0
+	for _, col := range i.ColumnList.Entities {
+		cost += col.TypeCost()
+	}
+	return cost
+}
+
 // ColumnNames returns the names of the columns in the index.
 func (i *IndexDefinitionEntity) ColumnNames() []string {
 	names := make([]string, 0, len(i.IndexDefinition.Columns))
