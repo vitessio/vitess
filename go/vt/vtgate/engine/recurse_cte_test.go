@@ -160,11 +160,19 @@ func TestRecurseCTERecursionLimit(t *testing.T) {
 	_, err := cte.TryExecute(t.Context(), &noopVCursor{}, bv, true)
 	require.ErrorContains(t, err, "Recursive query aborted")
 
-	// Streaming path must enforce the same guard.
+	// Streaming path must enforce the same guard. Streamed rows cannot be
+	// unsent, so the guard must fire before the over-limit Term stream starts:
+	// the client receives the seed row plus one row per allowed iteration, and
+	// nothing from iteration 1001.
 	seed.rewind()
 	term.rewind()
-	_, err = wrapStreamExecute(cte, &noopVCursor{}, bv, true)
+	var streamed []sqltypes.Row
+	err = cte.TryStreamExecute(t.Context(), &noopVCursor{}, bv, true, func(r *sqltypes.Result) error {
+		streamed = append(streamed, r.Rows...)
+		return nil
+	})
 	require.ErrorContains(t, err, "Recursive query aborted")
+	require.Len(t, streamed, 1001)
 }
 
 // TestRecurseCTEStreamConcurrentDelivery verifies that the streaming path is

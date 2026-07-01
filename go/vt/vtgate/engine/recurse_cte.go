@@ -64,16 +64,16 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
+			loops++
+			if loops > maxRecurseDepth {
+				return nil, vterrors.VT09030("")
+			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
 				return nil, err
 			}
 			recurseRows = append(recurseRows, rresult.Rows...)
 			res.Rows = append(res.Rows, rresult.Rows...)
-			loops++
-			if loops > maxRecurseDepth {
-				return nil, vterrors.VT09030("")
-			}
 		}
 	}
 	return res, nil
@@ -123,6 +123,10 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			if err := ctx.Err(); err != nil {
 				return err
 			}
+			loops++
+			if loops > maxRecurseDepth {
+				return vterrors.VT09030("")
+			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
 				mu.Lock()
 				defer mu.Unlock()
@@ -131,10 +135,6 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			})
 			if err != nil {
 				return err
-			}
-			loops++
-			if loops > maxRecurseDepth {
-				return vterrors.VT09030("")
 			}
 		}
 	}
