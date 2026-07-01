@@ -98,6 +98,10 @@ var (
 	// minimum part size
 	minPartSize int64 = 5 * 1024 * 1024 // 5MiB - AWS requirement
 
+	// download part size and concurrency for parallel downloads via transfer manager
+	downloadPartSize    int64
+	downloadConcurrency int
+
 	ErrPartSize = errors.New("minimum S3 part size must be between 5MiB and 5GiB")
 )
 
@@ -112,6 +116,8 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &requiredLogLevel, "s3-backup-log-level", "LogOff", "determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors.")
 	utils.SetFlagStringVar(fs, &sse, "s3-backup-server-side-encryption", "", "server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).")
 	utils.SetFlagInt64Var(fs, &minPartSize, "s3-backup-aws-min-partsize", minPartSize, "Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size.")
+	utils.SetFlagInt64Var(fs, &downloadPartSize, "s3-backup-download-part-size", 0, "Part size in bytes for parallel S3 downloads via transfer manager. 0 uses the transfer manager default (8MiB).")
+	utils.SetFlagIntVar(fs, &downloadConcurrency, "s3-backup-download-concurrency", 0, "Number of parallel goroutines for S3 downloads via transfer manager. 0 uses the transfer manager default (5).")
 }
 
 func init() {
@@ -329,17 +335,55 @@ func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.Rea
 	}
 	object := objName(bh.dir, bh.name, filename)
 	sendStats := bh.bs.params.Stats.Scope(stats.Operation("AWS:Request:Send"))
-	out, err := (&timedS3Client{client: bh.s3Client, sendStats: sendStats}).GetObject(ctx, &s3.GetObjectInput{
-		Bucket:               &bucket,
-		Key:                  &object,
-		SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
-		SSECustomerKey:       bh.bs.s3SSE.customerKey,
-		SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
+	timedClient := &timedS3Client{client: bh.s3Client, sendStats: sendStats}
+
+	// SSE-C requires encryption params on every request including HeadObject.
+	// The transfer manager's internal HeadObject does not forward SSE-C params,
+	// so we fall back to a single GetObject call for SSE-C encrypted objects.
+	if bh.bs.s3SSE.customerAlg != nil {
+		out, err := timedClient.GetObject(ctx, &s3.GetObjectInput{
+			Bucket:               &bucket,
+			Key:                  &object,
+			SSECustomerAlgorithm: bh.bs.s3SSE.customerAlg,
+			SSECustomerKey:       bh.bs.s3SSE.customerKey,
+			SSECustomerKeyMD5:    bh.bs.s3SSE.customerMd5,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return out.Body, nil
+	}
+
+	if downloadPartSize < 0 {
+		return nil, fmt.Errorf("--s3-backup-download-part-size must be non-negative, got %d", downloadPartSize)
+	}
+	if downloadConcurrency < 0 {
+		return nil, fmt.Errorf("--s3-backup-download-concurrency must be non-negative, got %d", downloadConcurrency)
+	}
+
+	tmClient := transfermanager.New(timedClient, func(o *transfermanager.Options) {
+		// GetObjectRanges uses byte-range GETs sized by PartSizeBytes.
+		// The default (GetObjectParts) reuses original multipart part numbers
+		// and ignores PartSizeBytes entirely.
+		o.GetObjectType = tmtypes.GetObjectRanges
+		if downloadPartSize > 0 {
+			o.PartSizeBytes = downloadPartSize
+		}
+		if downloadConcurrency > 0 {
+			o.Concurrency = downloadConcurrency
+		}
+	})
+
+	out, err := tmClient.GetObject(ctx, &transfermanager.GetObjectInput{
+		Bucket: &bucket,
+		Key:    &object,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return out.Body, nil
+	// Transfer manager's GetObjectOutput.Body is an io.Reader (concurrentReader),
+	// not an io.ReadCloser — wrap so callers can call Close() uniformly.
+	return io.NopCloser(out.Body), nil
 }
 
 var _ backupstorage.BackupHandle = (*S3BackupHandle)(nil)

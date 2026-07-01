@@ -607,6 +607,35 @@ func TestReadFile(t *testing.T) {
 	require.NoError(t, err, "Close() should not error")
 }
 
+func TestReadFileNegativeDownloadFlags(t *testing.T) {
+	bh := &S3BackupHandle{
+		bs: &S3BackupStorage{
+			params: backupstorage.NoParams(),
+			s3SSE:  S3ServerSideEncryption{},
+		},
+		readOnly: true,
+	}
+
+	origPartSize := downloadPartSize
+	origConcurrency := downloadConcurrency
+	defer func() {
+		downloadPartSize = origPartSize
+		downloadConcurrency = origConcurrency
+	}()
+
+	downloadPartSize = -1
+	downloadConcurrency = 0
+	_, err := bh.ReadFile(t.Context(), "testfile")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "non-negative")
+
+	downloadPartSize = 0
+	downloadConcurrency = -1
+	_, err = bh.ReadFile(t.Context(), "testfile")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "non-negative")
+}
+
 func TestReadFileOnWriteHandle(t *testing.T) {
 	bh := &S3BackupHandle{
 		readOnly: false,
