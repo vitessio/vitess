@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -272,7 +273,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
-	// Wait for all candidates to apply relay logs
+	// Wait for all candidates to apply relay logs. As each candidate's SQL
+	// thread catches up, waitForAllRelayLogsToApply advances that candidate's
+	// in-memory Executed position to its Combined position so equally-advanced
+	// candidates compare equal during election (see the function for details).
 	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout); err != nil {
 		return err
 	}
@@ -294,7 +298,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
 	// The validCandidateTablets list is sorted by the replication positions with ties broken by promotion rules.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, stoppedReplicationSnapshot.mysqlVersions, opts)
 	if err != nil {
 		return err
 	}
@@ -312,7 +316,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Check whether the intermediate source candidate selected is ideal or if it can be improved later.
 	// If the intermediateSource is ideal, then we can be certain that it is part of the valid candidates list.
-	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, opts)
+	isIdeal, err = erp.isIntermediateSourceIdeal(intermediateSource, validCandidateTablets, tabletMap, stoppedReplicationSnapshot.mysqlVersions, opts)
 	if err != nil {
 		return err
 	}
@@ -342,7 +346,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// try to find a better candidate using the list we got back
 		// We prefer to choose a candidate which is in the same cell as our previous primary and of the best possible durability rule.
 		// However, if there is an explicit request from the user to promote a specific tablet, then we choose that tablet.
-		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, opts)
+		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, validReplacementCandidates, tabletMap, stoppedReplicationSnapshot.mysqlVersions, opts)
 		if err != nil {
 			return err
 		}
@@ -431,6 +435,12 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
 
+	// mu guards the per-candidate Executed-position updates made from the waiter
+	// goroutines below. Each goroutine writes a distinct candidate's position
+	// (looked up in validCandidates), so the writes don't actually race today;
+	// the lock documents the intent and keeps access safe under -race and against
+	// future changes.
+	var mu sync.Mutex
 	waiterCount := 0
 
 	for candidate := range validCandidates {
@@ -465,6 +475,29 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 				}
 			}()
 			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
+			if err != nil {
+				return
+			}
+			// This candidate's SQL thread has now applied its relay log up to its
+			// Combined position, and ERS has already stopped the IO thread so no
+			// new events can arrive past it. Advance the in-memory Executed
+			// position to Combined so this candidate compares equal to other
+			// equally-advanced candidates in RelayLogPositions.AtLeast (which uses
+			// Executed as the tiebreaker when Combined positions match), letting
+			// the MySQL version tiebreaker decide the election. The positions were
+			// captured before the wait, so without this a candidate whose SQL
+			// thread was merely behind pre-wait would still look behind.
+			//
+			// This is deliberately tied to this candidate's own apply success — we
+			// only advance the position of a tablet we confirmed caught up — so it
+			// remains correct even if this wait ever tolerates partial success.
+			// We do not re-issue a ReplicationStatus RPC: the successful wait is
+			// sufficient proof, and avoiding the extra call keeps ERS fast.
+			mu.Lock()
+			if pos := validCandidates[alias]; pos != nil {
+				pos.Executed = pos.Combined
+			}
+			mu.Unlock()
 		}(candidate, status)
 
 		waiterCount++
@@ -488,6 +521,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 func (erp *EmergencyReparenter) findMostAdvanced(
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
+	versionMap map[string]mysqlctl.ServerVersion,
 	opts EmergencyReparentOptions,
 ) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	erp.logger.Infof("started finding the intermediate source")
@@ -500,8 +534,19 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		return nil, nil, err
 	}
 
-	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForReparent(validTablets, tabletPositions, nil, opts.durability)
+	// build version slice for sorting
+	mysqlVersions := make([]mysqlctl.ServerVersion, len(validTablets))
+
+	for i, tablet := range validTablets {
+		v, ok := versionMap[topoproto.TabletAliasString(tablet.Alias)]
+		if !ok {
+			v = unknownVersion
+		}
+		mysqlVersions[i] = v
+	}
+
+	// sort the tablets for finding the best intermediate source in ERS — position first to minimize data loss
+	err = sortTabletsForReparent(validTablets, tabletPositions, nil, mysqlVersions, opts.durability, SortForERS)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -781,10 +826,10 @@ func (erp *EmergencyReparenter) isIntermediateSourceIdeal(
 	intermediateSource *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	versionMap map[string]mysqlctl.ServerVersion,
 	opts EmergencyReparentOptions,
 ) (bool, error) {
-	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
-	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, opts)
+	candidate, err := erp.identifyPrimaryCandidate(intermediateSource, validCandidates, tabletMap, versionMap, opts)
 	if err != nil {
 		return false, err
 	}
@@ -796,6 +841,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	intermediateSource *topodatapb.Tablet,
 	validCandidates []*topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
+	versionMap map[string]mysqlctl.ServerVersion,
 	opts EmergencyReparentOptions,
 ) (candidate *topodatapb.Tablet, err error) {
 	defer func() {
@@ -828,11 +874,12 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	// find here.
 	// We go over all the promotion rules in descending order of priority and try and find a valid candidate with
 	// that promotion rule.
-	// If the intermediate source has the same promotion rules as some other tablets, then we prioritize using
-	// the intermediate source since we won't have to wait for the new candidate to catch up!
+	// If the intermediate source has the same promotion rules as some other tablets, we prefer a
+	// lower-version candidate to maintain replication compatibility, accepting the catch-up cost.
+	// If versions are equal, we still prefer the intermediate source to avoid catch-up.
 	for _, promotionRule := range promotionrule.AllPromotionRules() {
 		candidates := getTabletsWithPromotionRules(opts.durability, validCandidates, promotionRule)
-		candidate = findCandidate(intermediateSource, candidates)
+		candidate = findCandidate(intermediateSource, candidates, versionMap)
 		if candidate != nil {
 			return candidate, nil
 		}
