@@ -1154,20 +1154,29 @@ query_expression:
   }
 | with_clause query_expression_parens limit_clause
   {
-    $2.SetWith($1)
+    // MySQL: a WITH clause inside the parenthesized query expression takes
+    // precedence and the outer WITH clause is ignored.
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
     $2.SetLimit($3)
     $$ = $2
   }
 | with_clause query_expression_parens order_by_clause limit_opt
   {
-    $2.SetWith($1)
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
     $2.SetOrderBy($3)
     $2.SetLimit($4)
     $$ = $2
   }
 | with_clause query_expression_parens
   {
-    $2.SetWith($1)
+    if $2.GetWith() == nil {
+      $2.SetWith($1)
+    }
+    $$ = $2
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
