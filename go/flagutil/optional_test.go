@@ -25,7 +25,7 @@ import (
 func TestNewOptionalFloat64(t *testing.T) {
 	fl := NewOptionalFloat64(4.187)
 	require.NotEmpty(t, fl)
-	require.Equal(t, false, fl.IsSet())
+	require.False(t, fl.IsSet())
 
 	require.Equal(t, "4.187", fl.String())
 	require.Equal(t, "float64", fl.Type())
@@ -36,7 +36,7 @@ func TestNewOptionalFloat64(t *testing.T) {
 	err = fl.Set("7.77")
 	require.NoError(t, err)
 	require.Equal(t, 7.77, fl.Get())
-	require.Equal(t, true, fl.IsSet())
+	require.True(t, fl.IsSet())
 
 	err = fl.Set("1e1000")
 	require.ErrorContains(t, err, "value out of range")
@@ -45,7 +45,7 @@ func TestNewOptionalFloat64(t *testing.T) {
 func TestNewOptionalString(t *testing.T) {
 	optStr := NewOptionalString("4.187")
 	require.NotEmpty(t, optStr)
-	require.Equal(t, false, optStr.IsSet())
+	require.False(t, optStr.IsSet())
 
 	require.Equal(t, "4.187", optStr.String())
 	require.Equal(t, "string", optStr.Type())
@@ -54,5 +54,5 @@ func TestNewOptionalString(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "value", optStr.Get())
-	require.Equal(t, true, optStr.IsSet())
+	require.True(t, optStr.IsSet())
 }

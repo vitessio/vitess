@@ -545,7 +545,7 @@ func TestConnAttrs(t *testing.T) {
 
 	serverConn = th.LastConn()
 	assert.Equal(t, uint32(0), clientConn.Capabilities&CapabilityClientConnAttr, "ConnAttr flag: %x, bit must not be set", th.LastConn().Capabilities)
-	assert.Equal(t, 0, len(serverConn.Attributes), "attributes should be empty")
+	assert.Empty(t, serverConn.Attributes, "attributes should be empty")
 
 	clientConn.Close()
 	assert.True(t, clientConn.IsClosed(), "IsClosed should be true on Close-d connection.")
@@ -676,14 +676,15 @@ func TestServer(t *testing.T) {
 	assert.Contains(t, output, "13 warnings", "Unexpected output for 'select rows'")
 	th.SetWarnings(0)
 
-	// If there's an error after streaming has started,
-	// we should get a 2013
+	// If there's an error after streaming has started, the server now
+	// sends an ERR packet in place of the result-set terminator instead
+	// of dropping the connection. The client should see the real error.
 	th.SetErr(sqlerror.NewSQLError(sqlerror.ERUnknownComError, sqlerror.SSNetError, "forced error after send"))
 	output, err = runMysqlWithErr(t, params, "error after send")
 	require.Error(t, err)
-	assert.Contains(t, output, "ERROR 2013 (HY000)", "Unexpected output for 'panic'")
-	// MariaDB might not print the MySQL bit here
-	assert.Regexp(t, `Lost connection to( MySQL)? server during query`, output, "Unexpected output for 'panic': %v", output)
+	assert.Contains(t, output, fmt.Sprintf("ERROR %d", sqlerror.ERUnknownComError), "Unexpected output for 'error after send': %v", output)
+	assert.Contains(t, output, "forced error after send", "Unexpected output for 'error after send': %v", output)
+	assert.NotContains(t, output, "ERROR 2013", "mid-stream error must not surface as connection loss: %v", output)
 
 	// Run an 'insert' command, no rows, but rows affected.
 	output, err = runMysqlWithErr(t, params, "insert")
@@ -857,7 +858,7 @@ func TestClearTextServer(t *testing.T) {
 		if isMariaDB {
 			t.Logf("mysql should have failed but returned: %v\nbut letting it go on MariaDB", output)
 		} else {
-			require.Fail(t, "mysql should have failed but returned: %v", output)
+			require.Failf(t, "mysql should have failed but returned", "%v", output)
 		}
 	} else {
 		if strings.Contains(output, "No such file or directory") {
@@ -1002,7 +1003,7 @@ func TestTLSServer(t *testing.T) {
 
 	assert.Equal(t, "nice name", results.Rows[0][1].ToString())
 	assert.Equal(t, "nicer name", results.Rows[1][1].ToString())
-	assert.Equal(t, 2, len(results.Rows))
+	assert.Len(t, results.Rows, 2)
 
 	// make sure this went through SSL
 	results, err = conn.ExecuteFetch("ssl echo", 1000, true)

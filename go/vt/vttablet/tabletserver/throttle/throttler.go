@@ -844,7 +844,8 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 							primaryStimulatorRateLimiter.Do(
 								func() error {
 									return throttler.stimulatePrimaryThrottler(ctx, tmClient)
-								})
+								},
+							)
 						}
 					}
 				}
@@ -923,7 +924,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, err := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if err != nil {
-			err = vterrors.Wrapf(err, "gRPC error accessing tablet %v. Err=%s", probe.Alias, err.Error())
+			err = vterrors.Wrapf(err, "gRPC error accessing tablet %v", probe.Alias)
 			return metricsWithError(err)
 		}
 		throttleMetric.Value = resp.Value

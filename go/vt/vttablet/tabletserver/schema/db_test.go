@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
@@ -127,7 +129,7 @@ func TestGetCreateStatement(t *testing.T) {
 	db.AddRejectedQuery("show create table v1", errors.New(errMessage))
 	got, err = getCreateStatement(t.Context(), conn, "v1")
 	require.ErrorContains(t, err, errMessage)
-	require.Equal(t, "", got)
+	require.Empty(t, got)
 }
 
 func TestGetChangedViewNames(t *testing.T) {
@@ -153,7 +155,7 @@ func TestGetChangedViewNames(t *testing.T) {
 	// Not serving primary
 	got, err = getChangedViewNames(t.Context(), conn, false)
 	require.NoError(t, err)
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 	require.NoError(t, db.LastError())
 
 	// Failure
@@ -194,13 +196,13 @@ func TestGetViewDefinition(t *testing.T) {
 	db.AddRejectedQuery(query, errors.New(errMessage))
 	got, err = collectGetViewDefinitions(conn, bv)
 	require.ErrorContains(t, err, errMessage)
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 
 	// Failure empty bv
 	bv = nil
 	got, err = collectGetViewDefinitions(conn, bv)
 	require.EqualError(t, err, "missing bind var viewNames")
-	require.Len(t, got, 0)
+	require.Empty(t, got)
 }
 
 func collectGetViewDefinitions(conn *connpool.Conn, bv map[string]*querypb.BindVariable) (map[string]string, error) {
@@ -466,6 +468,176 @@ func TestReloadTablesInDB(t *testing.T) {
 			require.NoError(t, db.LastError())
 		})
 	}
+}
+
+// reloadTestQueries are the exact queries a single-table (t1) reload issues.
+const (
+	reloadDeleteQuery = "delete from _vt.`tables` where table_schema = database() and `table_name` in ('t1')"
+	reloadInsertQuery = "insert into _vt.`tables`(table_schema, `table_name`, create_statement, create_time) values (database(), 't1', 'create_table_t1', 1234)"
+)
+
+// getReloadTestConn returns a pooled schema connection backed by db. It uses a
+// real connpool.Pool (not connpool.NewConn) so the connection is wired with a
+// dba pool, which the cancellation KillQuery path needs to issue `kill query`.
+func getReloadTestConn(t *testing.T, db *fakesqldb.DB, name string) *connpool.Conn {
+	t.Helper()
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, name)
+	params := dbconfigs.New(db.ConnParams())
+	cp := connpool.NewPool(env, name, tabletenv.ConnPoolConfig{Size: 1, IdleTimeout: 10 * time.Second})
+	cp.Open(params, params, params)
+	t.Cleanup(cp.Close)
+
+	pooled, err := cp.Get(t.Context(), nil)
+	require.NoError(t, err)
+	t.Cleanup(pooled.Recycle)
+	return pooled.Conn
+}
+
+// TestReloadTablesInDBRollsBackOnCanceledContext guards the schema-reload wedge
+// (vitessio/vitess#20314): when the reload context is canceled mid-transaction,
+// the deferred rollback must still reach MySQL so the pooled connection is not
+// recycled with an open transaction holding locks on _vt.tables.
+func TestReloadTablesInDBRollsBackOnCanceledContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadRollback")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	// killed is closed once the cancellation handler has issued `kill query`,
+	// proving the KillQuery path ran: the query is killed but the session and
+	// its open transaction survive (insideTxn=false).
+	killed := make(chan struct{})
+	db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) {
+		close(killed)
+	})
+
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+	db.AddQuery(reloadInsertQuery, &sqltypes.Result{})
+
+	// Cancel while the DELETE is in flight, then block until the cancellation
+	// handler has actually killed the query. Holding the DELETE open until the
+	// kill is observed deterministically reproduces the poisoning sequence.
+	db.AddQuery(reloadDeleteQuery, &sqltypes.Result{})
+	db.SetBeforeFunc(reloadDeleteQuery, func() {
+		cancel()
+		select {
+		case <-killed:
+		case <-time.After(10 * time.Second):
+			assert.Fail(t, "cancellation handler never issued `kill query`")
+		}
+	})
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	err := reloadTablesDataInDB(ctx, conn, tables, nil, sqlparser.NewTestParser())
+	require.Error(t, err)
+
+	// The transaction must have been rolled back on MySQL despite the canceled
+	// context. Without the fix the deferred rollback short-circuits on the
+	// canceled context and never reaches MySQL.
+	require.Contains(t, db.QueryLog(), "rollback")
+}
+
+// TestReloadTablesInDBClosesConnectionOnRollbackFailure verifies that if the
+// cleanup rollback itself fails, the connection is closed so the pool discards
+// it rather than recycling a session whose transaction state is unknown.
+func TestReloadTablesInDBClosesConnectionOnRollbackFailure(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadRollbackFail")
+
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+	db.AddQuery(reloadInsertQuery, &sqltypes.Result{})
+	// The reload fails on the clear, then the rollback is refused too: the
+	// helper must discard the connection.
+	db.AddRejectedQuery(reloadDeleteQuery, errors.New("clear failed"))
+	db.AddRejectedQuery("rollback", errors.New("rollback failed"))
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	err := reloadTablesDataInDB(t.Context(), conn, tables, nil, sqlparser.NewTestParser())
+	require.Error(t, err)
+
+	require.True(t, conn.IsClosed())
+}
+
+// TestReloadTablesInDBRollsBackWhenBeginIsCanceled guards the same wedge as
+// TestReloadTablesInDBRollsBackOnCanceledContext, but for the narrow window
+// where the context is canceled while the `begin` itself is in flight. The
+// `begin` reaches MySQL and opens the transaction, but the killed query makes
+// Exec report an error — the cleanup rollback must still run so the connection
+// is not recycled holding an open transaction.
+func TestReloadTablesInDBRollsBackWhenBeginIsCanceled(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadRollbackBegin")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	killed := make(chan struct{})
+	db.AddQueryPatternWithCallback(`kill query \d+`, &sqltypes.Result{}, func(string) {
+		close(killed)
+	})
+
+	db.AddQuery("rollback", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+
+	// Cancel while `begin` is in flight, then block until the cancellation
+	// handler has killed the query. The transaction is opened on MySQL but
+	// Exec returns an error, so the reload never reaches the delete/insert.
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.SetBeforeFunc("begin", func() {
+		cancel()
+		select {
+		case <-killed:
+		case <-time.After(10 * time.Second):
+			assert.Fail(t, "cancellation handler never issued `kill query`")
+		}
+	})
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	err := reloadTablesDataInDB(ctx, conn, tables, nil, sqlparser.NewTestParser())
+	require.Error(t, err)
+
+	// The transaction opened by `begin` must have been rolled back on MySQL.
+	// Without the fix the rollback is only deferred after `begin` succeeds, so
+	// a canceled `begin` leaves the transaction open and the connection is
+	// recycled poisoned.
+	require.Contains(t, db.QueryLog(), "rollback")
+}
+
+// TestReloadTablesInDBSkipsRollbackOnSuccess verifies that a reload that
+// commits successfully does not issue the cleanup rollback, so the success
+// path doesn't pay for a redundant round-trip while holding the engine mutex.
+func TestReloadTablesInDBSkipsRollbackOnSuccess(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	showCreateTableFields := sqltypes.MakeTestFields("Table | Create Table", "varchar|varchar")
+	conn := getReloadTestConn(t, db, "ReloadNoRollback")
+
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("show create table t1", sqltypes.MakeTestResult(showCreateTableFields, "t1|create_table_t1"))
+	db.AddQuery(reloadDeleteQuery, &sqltypes.Result{})
+	db.AddQuery(reloadInsertQuery, &sqltypes.Result{})
+
+	tables := []*Table{{Name: sqlparser.NewIdentifierCS("t1"), Type: NoType, CreateTime: 1234}}
+	require.NoError(t, reloadTablesDataInDB(t.Context(), conn, tables, nil, sqlparser.NewTestParser()))
+
+	require.NotContains(t, db.QueryLog(), "rollback")
 }
 
 func TestReloadViewsInDB(t *testing.T) {

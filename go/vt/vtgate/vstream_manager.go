@@ -191,27 +191,33 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 		vstreamsCreated: exporter.NewCountersWithMultiLabels(
 			"VStreamsCreated",
 			"Number of vstreams created",
-			labels),
+			labels,
+		),
 		vstreamsLag: exporter.NewGaugesWithMultiLabels(
 			"VStreamsLag",
 			"Difference between event current time and the binlog event timestamp",
-			labels),
+			labels,
+		),
 		vstreamsCount: exporter.NewCountersWithMultiLabels(
 			"VStreamsCount",
 			"Number of active vstreams",
-			labels),
+			labels,
+		),
 		vstreamsEventsStreamed: exporter.NewCountersWithMultiLabels(
 			"VStreamsEventsStreamed",
 			"Number of events sent across all vstreams",
-			labels),
+			labels,
+		),
 		vstreamsEndedWithErrors: exporter.NewCountersWithMultiLabels(
 			"VStreamsEndedWithErrors",
 			"Number of vstreams that ended with errors",
-			labels),
+			labels,
+		),
 		vstreamsTransactionsChunked: exporter.NewCountersWithMultiLabels(
 			"VStreamsTransactionsChunked",
 			"Number of transactions that exceeded TransactionChunkSize threshold and required locking for contiguous, chunked delivery",
-			labels),
+			labels,
+		),
 	}
 }
 
@@ -222,7 +228,8 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 	if err != nil {
 		return vterrors.Wrap(err, "failed to resolve vstream parameters")
 	}
-	log.Info("VStream flags",
+	log.Info(
+		"VStream flags",
 		slog.Bool("minimize_skew", flags.GetMinimizeSkew()),
 		slog.Uint64("heartbeat_interval", uint64(flags.GetHeartbeatInterval())),
 		slog.Bool("stop_on_reshard", flags.GetStopOnReshard()),
@@ -397,7 +404,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 
 			select {
 			case <-ageTimer.C:
-				log.Info("vstream exceeded maximum age",
+				log.Info(
+					"vstream exceeded maximum age",
 					slog.Duration("max_age", maxAge),
 					slog.Duration("jitter", jitter),
 				)
@@ -411,7 +419,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 		}()
 	}
 
-	vs.wg.Go(func() {
+	var sendWg sync.WaitGroup
+	sendWg.Go(func() {
 		// sendEvents returns either if the given context has been canceled or if
 		// an error is returned from the callback. If the callback returns an error,
 		// we need to cancel the context to stop the other stream goroutines
@@ -427,6 +436,8 @@ func (vs *vstream) stream(ctx context.Context) error {
 		vs.startOneStream(ctx, sgtid)
 	}
 	vs.wg.Wait()
+	close(vs.eventCh)
+	sendWg.Wait()
 
 	return vs.getError()
 }
@@ -466,7 +477,12 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				vs.setError(ctx.Err(), "context ended while sending events")
 			})
 			return
-		case evs := <-vs.eventCh:
+		case evs, ok := <-vs.eventCh:
+			if !ok {
+				// The channel is closed once all shard streams have ended, so
+				// there are no more events to send.
+				return
+			}
 			if err := send(evs); err != nil {
 				log.Info(fmt.Sprintf("Error in vstream send events to client: %v", err))
 				vs.once.Do(func() {
@@ -841,7 +857,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, sendErr))
 						return vterrors.Wrap(sendErr, sendingEventsErr)
 					}
-					eventss = nil
+					eventss = nil //nolint:prealloc
 					sendevents = nil
 				case binlogdatapb.VEventType_COPY_COMPLETED:
 					sendevents = append(sendevents, event)

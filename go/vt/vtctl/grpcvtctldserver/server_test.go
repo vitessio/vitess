@@ -648,12 +648,12 @@ func TestApplyVSchema(t *testing.T) {
 			if tt.shouldErr {
 				assert.Error(t, err)
 				if tt.err != "" {
-					assert.ErrorContains(t, err, tt.err)
+					require.ErrorContains(t, err, tt.err)
 				}
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.exp, res)
 
 			if tt.req.DryRun {
@@ -735,8 +735,8 @@ func TestBackup(t *testing.T) {
 				},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 			},
 		},
 		{
@@ -770,8 +770,8 @@ func TestBackup(t *testing.T) {
 				},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no backupclient messages")
+				require.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 		{
@@ -806,8 +806,8 @@ func TestBackup(t *testing.T) {
 				AllowPrimary: true,
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 			},
 		},
 		{
@@ -841,8 +841,8 @@ func TestBackup(t *testing.T) {
 				},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no backupclient messages")
+				require.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 		{
@@ -878,7 +878,7 @@ func TestBackup(t *testing.T) {
 				},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.NotErrorIs(t, err, io.EOF, "expected Recv loop to end with error other than io.EOF")
+				require.NotErrorIs(t, err, io.EOF, "expected Recv loop to end with error other than io.EOF")
 				assert.Less(t, len(responses), 3, "expected fewer than 3 messages from backupclient stream")
 			},
 		},
@@ -895,7 +895,7 @@ func TestBackup(t *testing.T) {
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.Backup(ctx, tt.req)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -1012,8 +1012,8 @@ func TestBackupShard(t *testing.T) {
 				Shard:    "-",
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 				for _, resp := range responses {
 					assert.Equal(t, 101, int(resp.TabletAlias.Uid))
 				}
@@ -1058,8 +1058,8 @@ func TestBackupShard(t *testing.T) {
 				Shard:    "-",
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no backupclient messages")
+				require.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 		{
@@ -1119,8 +1119,8 @@ func TestBackupShard(t *testing.T) {
 				AllowPrimary: true,
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 			},
 		},
 		{
@@ -1185,8 +1185,8 @@ func TestBackupShard(t *testing.T) {
 				IncrementalFromPos: "auto",
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 			},
 		},
 		{
@@ -1237,8 +1237,8 @@ func TestBackupShard(t *testing.T) {
 			},
 			req: &vtctldatapb.BackupShardRequest{},
 			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
-				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no backupclient messages")
+				require.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
+				assert.Empty(t, responses, "expected no backupclient messages")
 			},
 		},
 	}
@@ -1256,7 +1256,7 @@ func TestBackupShard(t *testing.T) {
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.BackupShard(ctx, tt.req)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -1678,11 +1678,11 @@ func TestChangeTabletTags(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 
 			tablet, err := ts.GetTablet(ctx, tt.req.TabletAlias)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, resp.AfterTags, tablet.Tags)
 		})
 	}
@@ -1949,7 +1949,7 @@ func TestChangeTabletType(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 
 			// If we are testing a dry-run, then the tablet in the actual
@@ -1964,7 +1964,7 @@ func TestChangeTabletType(t *testing.T) {
 			}
 
 			tablet, err := ts.GetTablet(ctx, tt.req.TabletAlias)
-			assert.NoError(t, err,
+			require.NoError(t, err,
 				"could not load tablet %s from topo after type change %v -> %v [dryrun=%t]",
 				topoproto.TabletAliasString(tt.req.TabletAlias),
 				resp.BeforeTablet.Type,
@@ -2904,12 +2904,12 @@ func TestCreateKeyspace(t *testing.T) {
 				assert.Error(t, err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertKeyspacesEqual(t, tt.expected.Keyspace, resp.Keyspace, "%+v\n%+v\n", tt.expected.Keyspace, resp.Keyspace)
 
 			// Fetch the newly-created keyspace out of the topo and assert on it
 			ks, err := ts.GetKeyspace(ctx, tt.req.Name)
-			assert.NoError(t, err, "cannot get keyspace %v after creating", tt.req.Name)
+			require.NoError(t, err, "cannot get keyspace %v after creating", tt.req.Name)
 			require.NotNil(t, ks.Keyspace)
 
 			actualKs := &vtctldatapb.Keyspace{
@@ -2931,7 +2931,7 @@ func TestCreateKeyspace(t *testing.T) {
 				assert.True(t, topo.IsErrType(err, topo.NoNode), "vschema should not exist, but got other error = %v", err)
 				return
 			}
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			require.True(t, proto.Equal(tt.expectedVSchema, vs), "expected vschema for %s: %+v, got: %+v", tt.req.Name, tt.expectedVSchema, vs)
 		})
 	}
@@ -3177,7 +3177,7 @@ func TestCreateShard(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -3557,7 +3557,7 @@ func TestDeleteKeyspace(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -4065,7 +4065,7 @@ func TestDeleteShards(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -4162,7 +4162,7 @@ func TestDeleteSrvKeyspace(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			resp, err := vtctld.GetSrvVSchemas(ctx, &vtctldatapb.GetSrvVSchemasRequest{})
 			require.NoError(t, err, "GetSrvVSchemas error")
@@ -4648,7 +4648,7 @@ func TestDeleteTablets(t *testing.T) {
 				topofactory.SetError(nil)
 
 				resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
-				assert.NoError(t, err, "cannot look up tablets from topo after issuing DeleteTablets request")
+				require.NoError(t, err, "cannot look up tablets from topo after issuing DeleteTablets request")
 				utils.MustMatch(t, tt.expectedRemainingTablets, resp.Tablets)
 			}
 
@@ -4664,7 +4664,7 @@ func TestDeleteTablets(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 			checkRemainingTablets()
 		})
@@ -4863,7 +4863,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
@@ -5702,7 +5702,7 @@ func TestGetTransactionInfo(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.EqualValues(t, tt.respWanted, resp)
+			require.Equal(t, tt.respWanted, resp)
 		})
 	}
 }
@@ -5728,7 +5728,7 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: ks.Name})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, resp)
 
 	expected := map[string]*vtctldatapb.Shard{
@@ -5782,7 +5782,7 @@ func TestGetBackups(t *testing.T) {
 		Keyspace: "testkeyspace",
 		Shard:    "-",
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, expected, resp)
 
 	t.Run("no backupstorage", func(t *testing.T) {
@@ -5849,7 +5849,7 @@ func TestGetBackups(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		assert.Equal(t, len(limited.Backups), 1, "expected limited backups to have length 1")
+		assert.Len(t, limited.Backups, 1, "expected limited backups to have length 1")
 		assert.Less(t, len(limited.Backups), len(unlimited.Backups), "expected limited backups to be less than unlimited")
 		utils.MustMatch(t, limited.Backups[0], unlimited.Backups[len(unlimited.Backups)-1], "expected limiting to keep N most recent")
 	})
@@ -5873,7 +5873,7 @@ func TestGetKeyspace(t *testing.T) {
 	testutil.AddKeyspace(ctx, t, ts, expected.Keyspace)
 
 	ks, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, expected, ks)
 
 	_, err = vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: "notfound"})
@@ -5890,7 +5890,7 @@ func TestGetCellInfoNames(t *testing.T) {
 	})
 
 	resp, err := vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"cell1", "cell2", "cell3"}, resp.Names)
 
 	ts = memorytopo.NewServer(ctx)
@@ -5899,7 +5899,7 @@ func TestGetCellInfoNames(t *testing.T) {
 	})
 
 	resp, err = vtctld.GetCellInfoNames(ctx, &vtctldatapb.GetCellInfoNamesRequest{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, resp.Names)
 
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx, "cell1")
@@ -5929,11 +5929,11 @@ func TestGetCellInfo(t *testing.T) {
 	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", input))
 
 	resp, err := vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "cell1"})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, expected, resp.CellInfo)
 
 	_, err = vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "does_not_exist"})
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{})
 	assert.Error(t, err)
@@ -5967,7 +5967,7 @@ func TestGetCellsAliases(t *testing.T) {
 	}
 
 	resp, err := vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, expected, resp.Aliases)
 
 	ts, topofactory := memorytopo.NewServerAndFactory(ctx)
@@ -6063,7 +6063,7 @@ func TestGetFullStatus(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.serverUUID, resp.Status.ServerUuid)
 		})
 	}
@@ -6079,7 +6079,7 @@ func TestGetKeyspaces(t *testing.T) {
 	})
 
 	resp, err := vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, resp.Keyspaces)
 
 	expected := []*vtctldatapb.Keyspace{
@@ -6101,7 +6101,7 @@ func TestGetKeyspaces(t *testing.T) {
 	}
 
 	resp, err = vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, expected, resp.Keyspaces)
 
 	topofactory.SetError(errors.New("error from toposerver"))
@@ -6249,8 +6249,8 @@ func TestGetPermissions(t *testing.T) {
 				return
 			}
 			// we should expect same user and DB permissions as assigned
-			assert.Equal(t, resp.Permissions.DbPermissions[0].Host, "host2")
-			assert.Equal(t, resp.Permissions.UserPermissions[0].Host, "host1")
+			assert.Equal(t, "host2", resp.Permissions.DbPermissions[0].Host)
+			assert.Equal(t, "host1", resp.Permissions.UserPermissions[0].Host)
 
 			require.NoError(t, err)
 		})
@@ -6516,7 +6516,7 @@ func TestGetSchema(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -7296,7 +7296,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -7355,7 +7355,7 @@ func TestGetSrvVSchema(t *testing.T) {
 		},
 	}
 	resp, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone1) mismatch")
 	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone1) rules mismatch")
 
@@ -7375,12 +7375,12 @@ func TestGetSrvVSchema(t *testing.T) {
 		},
 	}
 	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone2"})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone2) mismatch")
 	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone2) rules mismatch")
 
 	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "dne"})
-	assert.Error(t, err, "GetSrvVSchema(dne)")
+	require.Error(t, err, "GetSrvVSchema(dne)")
 	assert.Nil(t, resp, "GetSrvVSchema(dne)")
 
 	topofactory.SetError(assert.AnError)
@@ -7563,7 +7563,7 @@ func TestGetSrvVSchemas(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -7597,7 +7597,7 @@ func TestGetTablet(t *testing.T) {
 			Uid:  100,
 		},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	utils.MustMatch(t, resp.Tablet, tablet)
 
 	// not found
@@ -8293,7 +8293,7 @@ func TestGetTablets(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp.Tablets)
 		})
 	}
@@ -8431,7 +8431,7 @@ func TestGetTopologyPath(t *testing.T) {
 				resp.Cell.Version = 0
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -8474,7 +8474,7 @@ func TestGetVSchema(t *testing.T) {
 		resp, err := vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
 			Keyspace: "testkeyspace",
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		utils.MustMatch(t, expected, resp)
 	})
 
@@ -8767,7 +8767,7 @@ func TestPingTablet(t *testing.T) {
 
 			resp, err := vtctld.PingTablet(ctx, tt.req)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, resp)
 				return
 			}
@@ -9046,7 +9046,7 @@ func TestPlannedReparentShard(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
@@ -9437,7 +9437,7 @@ func TestRefreshStateByShard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, len(tt.tablets), len(tt.refreshStateErrors), "Invalid test case: must have one refreshStateError for each tablet")
+			require.Len(t, tt.refreshStateErrors, len(tt.tablets), "Invalid test case: must have one refreshStateError for each tablet")
 
 			tmc := &testutil.TabletManagerClient{
 				RefreshStateResults: make(map[string]error, len(tt.tablets)),
@@ -9838,7 +9838,7 @@ func TestRemoveBackup(t *testing.T) {
 			Name:     "backup2",
 		})
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		resp, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
 			Keyspace: "testkeyspace",
@@ -10054,7 +10054,7 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -10355,7 +10355,7 @@ func TestRemoveShardCell(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -10919,7 +10919,7 @@ func TestReparentTablet(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -10982,8 +10982,8 @@ func TestRestoreFromBackup(t *testing.T) {
 				},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.RestoreFromBackupResponse, err error) {
-				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
-				assert.Equal(t, 3, len(responses), "expected 3 messages from restorefrombackupclient stream")
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from restorefrombackupclient stream")
 			},
 		},
 		{
@@ -11019,8 +11019,8 @@ func TestRestoreFromBackup(t *testing.T) {
 				},
 			},
 			assertion: func(t *testing.T, responses []*vtctldatapb.RestoreFromBackupResponse, err error) {
-				assert.NotErrorIs(t, err, io.EOF, "expected restorefrombackupclient stream to close with non-EOF")
-				assert.Zero(t, len(responses), "expected no restorefrombackupclient messages")
+				require.NotErrorIs(t, err, io.EOF, "expected restorefrombackupclient stream to close with non-EOF")
+				assert.Empty(t, responses, "expected no restorefrombackupclient messages")
 			},
 		},
 	}
@@ -11038,7 +11038,7 @@ func TestRestoreFromBackup(t *testing.T) {
 			client := localvtctldclient.New(vtctld)
 			stream, err := client.RestoreFromBackup(ctx, tt.req)
 			if tt.shouldErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
@@ -11504,7 +11504,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 				tt.teardown = func(t *testing.T, tt *testcase) {
 					var err error
 					unlock(&err)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					cancel()
 				}
 				return lctx
@@ -11537,7 +11537,7 @@ func TestSetShardIsPrimaryServing(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -11755,7 +11755,7 @@ func TestSetShardTabletControl(t *testing.T) {
 				tt.teardown = func(t *testing.T, tt *testcase) {
 					var err error
 					unlock(&err)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					cancel()
 				}
 			},
@@ -11786,7 +11786,7 @@ func TestSetShardTabletControl(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -12031,7 +12031,7 @@ func TestShardReplicationAdd(t *testing.T) {
 			Uid:  404,
 		},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	resp, err := vtctld.ShardReplicationFix(ctx, &vtctldatapb.ShardReplicationFixRequest{
 		Keyspace: "ks",
@@ -12311,7 +12311,7 @@ func TestShardReplicationPositions(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -12355,7 +12355,7 @@ func TestShardReplicationRemove(t *testing.T) {
 			Uid:  101,
 		},
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	sri, err := ts.GetShardReplication(ctx, "zone1", "ks", "-")
 	require.NoError(t, err, "GetShardReplication failed")
@@ -13363,7 +13363,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -14004,7 +14004,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -14121,7 +14121,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -14231,7 +14231,7 @@ func TestValidateVersionShard(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}

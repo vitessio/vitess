@@ -65,7 +65,7 @@ func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
 			if tcase.expctError {
 				assert.Error(t, err)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tcase.gtidSet, gtidSet.String())
 			}
 		})

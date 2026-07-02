@@ -20,6 +20,8 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -295,7 +297,7 @@ func TestVindexHints(t *testing.T) {
 	// We make sure the query still works.
 	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
-	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	require.Equal(t, "[[INT64(2) INT64(10) INT64(10)]]", fmt.Sprintf("%v", res.Rows))
 	// Verify that we are using the unq_vdx, that we requested explicitly.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl USE VINDEX (unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
@@ -305,7 +307,7 @@ func TestVindexHints(t *testing.T) {
 	// We make sure the query still works.
 	res, err = mcmp.VtConn.ExecuteFetch("select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
-	require.EqualValues(t, fmt.Sprintf("%v", res.Rows), "[[INT64(2) INT64(10) INT64(10)]]")
+	require.Equal(t, "[[INT64(2) INT64(10) INT64(10)]]", fmt.Sprintf("%v", res.Rows))
 	// Verify that we are using the nonunq_vdx, which is the only one left to be used.
 	res, err = mcmp.VtConn.ExecuteFetch("vexplain plan select id, unq_col, nonunq_col from tbl IGNORE VINDEX (hash, unq_vdx) where unq_col = 10 and id = 2 and nonunq_col in (10, 20)", 100, false)
 	require.NoError(t, err)
@@ -417,6 +419,91 @@ func TestPreparedStatementInOLAP(t *testing.T) {
 	require.Equal(t, int64(1), c7)
 }
 
+func TestSlowQueryStatusFlagsComQueryOKOnlyOLAPEndToEnd(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1, 2)")
+
+	_, err := mcmp.VtConn.ExecuteFetch("set workload = olap", 1000, false)
+	require.NoError(t, err)
+
+	slowQueryMetric := "UPDATE.Passthrough.PRIMARY"
+	initialSlowQueries := vtgateMetricValue(t, "SlowQueries", slowQueryMetric)
+	query := "update /* slow_e2e */ t1 set id2 = id2 + sleep(0.05) where id1 = 1"
+	result, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err)
+	assert.Empty(t, result.Fields)
+	assert.NotZero(t, result.StatusFlags&mysql.ServerQueryWasSlow)
+	assert.Greater(t, vtgateMetricValue(t, "SlowQueries", slowQueryMetric), initialSlowQueries)
+	assertVtgateMetricsLineContains(t, "vtgate_slow_queries", `query="UPDATE"`, `plan="Passthrough"`, `tablet="PRIMARY"`)
+	assertQueryLogLineContains(t, "slow_e2e", "\ttrue\t")
+}
+
+func vtgateMetricValue(t *testing.T, metric, key string) float64 {
+	t.Helper()
+
+	vars := clusterInstance.VtgateProcess.GetVars()
+	require.NotNil(t, vars)
+
+	values, ok := vars[metric].(map[string]any)
+	require.True(t, ok, "%s is not a map", metric)
+
+	if raw, ok := values[key]; ok {
+		value, ok := raw.(float64)
+		require.True(t, ok, "%s value is not a number", metric)
+		return value
+	}
+	return 0
+}
+
+func assertQueryLogLineContains(t *testing.T, queryMarker string, substrings ...string) {
+	t.Helper()
+
+	assert.Eventually(t, func() bool {
+		data, err := os.ReadFile(clusterInstance.VtgateProcess.FileToLogQueries)
+		if err != nil {
+			return false
+		}
+		for line := range strings.SplitSeq(string(data), "\n") {
+			if !strings.Contains(line, queryMarker) {
+				continue
+			}
+			matched := true
+			for _, substring := range substrings {
+				matched = matched && strings.Contains(line, substring)
+			}
+			if matched {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 100*time.Millisecond)
+}
+
+func assertVtgateMetricsLineContains(t *testing.T, metric string, substrings ...string) {
+	t.Helper()
+
+	status, metrics, err := clusterInstance.VtgateProcess.MakeAPICall("metrics")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	assert.Contains(t, metrics, metric)
+
+	for line := range strings.SplitSeq(metrics, "\n") {
+		if !strings.Contains(line, metric) {
+			continue
+		}
+		matched := true
+		for _, substring := range substrings {
+			matched = matched && strings.Contains(line, substring)
+		}
+		if matched {
+			return
+		}
+	}
+	assert.Failf(t, "missing vtgate metric line", "%s did not include labels %v", metric, substrings)
+}
+
 func TestPrepareStatements(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -443,11 +530,11 @@ func TestPrepareStatements(t *testing.T) {
 	// Fail by providing wrong number of arguments
 	_, err := mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1, @id1, @id`, utils.CompareOptions{})
 	incorrectCount := "VT03025: Incorrect arguments to EXECUTE"
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk using @id1`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_in_pk`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, incorrectCount)
+	require.ErrorContains(t, err, incorrectCount)
 
 	mcmp.Exec(`prepare prep_art from 'select 1+?, 10/?'`)
 	mcmp.Exec(`set @x1 = 1, @x2 = 2.0, @x3 = "v", @x4 = 9999999999999999999999999999`)
@@ -467,7 +554,7 @@ func TestPrepareStatements(t *testing.T) {
 
 	mcmp.Exec("deallocate prepare prep_art")
 	_, err = mcmp.ExecAllowAndCompareError(`execute prep_art using @id1, @id1`, utils.CompareOptions{})
-	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
+	require.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to EXECUTE")
 
 	_, err = mcmp.ExecAllowAndCompareError("deallocate prepare prep_art", utils.CompareOptions{})
 	assert.ErrorContains(t, err, "VT09011: Unknown prepared statement handler (prep_art) given to DEALLOCATE PREPARE")
@@ -766,6 +853,17 @@ func TestEnumSetVals(t *testing.T) {
 
 	mcmp.AssertMatches("select id, enum_col, cast(enum_col as signed) from tbl_enum_set order by enum_col, id", `[[INT64(4) ENUM("xsmall") INT64(1)] [INT64(2) ENUM("small") INT64(2)] [INT64(1) ENUM("medium") INT64(3)] [INT64(5) ENUM("medium") INT64(3)] [INT64(3) ENUM("large") INT64(4)]]`)
 	mcmp.AssertMatches("select id, set_col, cast(set_col as unsigned) from tbl_enum_set order by set_col, id", `[[INT64(4) SET("a,b") UINT64(3)] [INT64(3) SET("c") UINT64(4)] [INT64(5) SET("a,d") UINT64(9)] [INT64(1) SET("a,b,e") UINT64(19)] [INT64(2) SET("e,f,g") UINT64(112)]]`)
+
+	// An ENUM used in a numeric context must use MySQL's 1-based ordinal
+	// (xsmall=1 ... xlarge=5), and a SET its bitmap value. These compare Vitess
+	// against MySQL directly so any divergence in the numeric conversion fails.
+	mcmp.Exec("select id, enum_col + 0 from tbl_enum_set order by id")
+	mcmp.Exec("select id, enum_col + 1 from tbl_enum_set order by id")
+	mcmp.Exec("select id, cast(enum_col as unsigned) from tbl_enum_set order by id")
+	mcmp.Exec("select id from tbl_enum_set where enum_col = 3 order by id")
+	mcmp.Exec("select id, enum_col from tbl_enum_set where enum_col > 2 order by enum_col, id")
+	mcmp.Exec("select id, set_col + 0 from tbl_enum_set order by id")
+	mcmp.Exec("select max(cast(enum_col as signed)) from tbl_enum_set")
 }
 
 func TestTimeZones(t *testing.T) {

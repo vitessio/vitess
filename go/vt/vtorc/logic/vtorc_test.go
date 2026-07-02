@@ -1,8 +1,23 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package logic
 
 import (
 	"context"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,10 +44,10 @@ func TestWaitForLocksRelease(t *testing.T) {
 
 	t.Run("Timeout from shutdownWaitTime", func(t *testing.T) {
 		// Increment shardsLockCounter to simulate locking of a shard
-		atomic.AddInt64(&shardsLockCounter, +1)
+		shardsLockCounter.Add(1)
 		defer func() {
 			// Restore the initial value
-			atomic.StoreInt64(&shardsLockCounter, 0)
+			shardsLockCounter.Store(0)
 		}()
 		shutdownWaitTime = 200 * time.Millisecond
 		timeSpent := waitForLocksReleaseAndGetTimeWaitedFor()
@@ -42,12 +57,12 @@ func TestWaitForLocksRelease(t *testing.T) {
 
 	t.Run("Successful wait for locks release", func(t *testing.T) {
 		// Increment shardsLockCounter to simulate locking of a shard
-		atomic.AddInt64(&shardsLockCounter, +1)
+		shardsLockCounter.Add(1)
 		shutdownWaitTime = 500 * time.Millisecond
 		// Release the locks after 200 milliseconds
 		go func() {
 			time.Sleep(200 * time.Millisecond)
-			atomic.StoreInt64(&shardsLockCounter, 0)
+			shardsLockCounter.Store(0)
 		}()
 		timeSpent := waitForLocksReleaseAndGetTimeWaitedFor()
 		assert.Greater(t, timeSpent, 100*time.Millisecond, "waitForLocksRelease should wait for the locks and not return early")

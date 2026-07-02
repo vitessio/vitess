@@ -22,11 +22,11 @@ package txthrottler
 
 import (
 	"context"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -50,7 +50,7 @@ func TestDisabledThrottler(t *testing.T) {
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
-	assert.Nil(t, throttler.Open())
+	require.NoError(t, throttler.Open())
 	assert.False(t, throttler.Throttle(0, "some-workload"))
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
@@ -137,7 +137,7 @@ func TestEnabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 
-	assert.Nil(t, throttlerImpl.Open())
+	require.NoError(t, throttlerImpl.Open())
 	throttlerStateImpl, ok := throttlerImpl.state.(*txThrottlerStateImpl)
 	assert.True(t, ok)
 	assert.Equal(t, map[topodatapb.TabletType]bool{topodatapb.TabletType_REPLICA: true}, throttlerStateImpl.tabletTypes)
@@ -148,7 +148,7 @@ func TestEnabledThrottler(t *testing.T) {
 	throttlerStateImpl.done <- true
 
 	// 1 should not throttle due to return value of underlying Throttle(), despite high lag
-	atomic.StoreInt64(&throttlerStateImpl.maxLag, 20)
+	throttlerStateImpl.maxLag.Store(20)
 	assert.False(t, throttlerImpl.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(1), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Zero(t, throttlerImpl.requestsThrottled.Counts()["some-workload"])
@@ -178,7 +178,7 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])
 
 	// 4 should not throttle despite return value of underlying Throttle() and priority = 100, due to low lag
-	atomic.StoreInt64(&throttlerStateImpl.maxLag, 1)
+	throttlerStateImpl.maxLag.Store(1)
 	assert.False(t, throttler.Throttle(100, "some-workload"))
 	assert.Equal(t, int64(4), throttlerImpl.requestsTotal.Counts()["some-workload"])
 	assert.Equal(t, int64(1), throttlerImpl.requestsThrottled.Counts()["some-workload"])

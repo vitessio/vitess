@@ -35,19 +35,19 @@ func TestExtractCarrierFromString(t *testing.T) {
 		"other data with weird symbols:!#;": ":1!\"",
 	}
 	jsonBytes, err := json.Marshal(expected)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	encodedString := base64.StdEncoding.EncodeToString(jsonBytes)
 
 	result, err := extractCarrierFromString(encodedString)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, propagation.MapCarrier(expected), result)
 }
 
 func TestExtractCarrierFromStringErrorConditions(t *testing.T) {
 	encodedString := base64.StdEncoding.EncodeToString([]byte(`{"key":42}`))
 	_, err := extractCarrierFromString(encodedString) // malformed json: value is not a string
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = extractCarrierFromString("this is not base64") // malformed base64
 	assert.Error(t, err)
@@ -131,13 +131,13 @@ func TestOtelNewFromString(t *testing.T) {
 
 	// Invalid carrier string should return an error.
 	_, _, err = svc.NewFromString(t.Context(), "not-valid-base64!", "bad")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Valid base64 but no traceparent should return an error.
 	emptyCarrier, err := json.Marshal(map[string]string{"foo": "bar"})
 	require.NoError(t, err)
 	_, _, err = svc.NewFromString(t.Context(), base64.StdEncoding.EncodeToString(emptyCarrier), "bad")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "extracted span context is not valid")
 
 	// Regression: an invalid carrier must fail even when the incoming context
@@ -145,7 +145,7 @@ func TestOtelNewFromString(t *testing.T) {
 	// pre-existing span would mask the bad carrier.
 	_, ctxWithSpan := svc.New(t.Context(), "existing-span")
 	_, _, err = svc.NewFromString(ctxWithSpan, base64.StdEncoding.EncodeToString(emptyCarrier), "bad")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "extracted span context is not valid")
 }
 
@@ -156,7 +156,7 @@ func TestKeyValue(t *testing.T) {
 
 	kv = keyValue("bool", true)
 	assert.Equal(t, "bool", string(kv.Key))
-	assert.Equal(t, true, kv.Value.AsBool())
+	assert.True(t, kv.Value.AsBool())
 
 	kv = keyValue("int", 42)
 	assert.Equal(t, "int", string(kv.Key))

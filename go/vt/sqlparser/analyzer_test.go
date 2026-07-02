@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPreview(t *testing.T) {
@@ -148,7 +149,7 @@ func TestSplitAndExpression(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range testcases {
 		stmt, err := parser.Parse(tcase.sql)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		var expr Expr
 		if where := stmt.(*Select).Where; where != nil {
 			expr = where.Expr
@@ -293,9 +294,7 @@ func TestGetTableName(t *testing.T) {
 	parser := NewTestParser()
 	for _, tc := range testcases {
 		tree, err := parser.Parse(tc.in)
-		if !assert.NoError(t, err) {
-			continue
-		}
+		require.NoError(t, err)
 		out := GetTableName(tree.(*Select).From[0].(*AliasedTableExpr).Expr)
 		if out.String() != tc.out {
 			assert.Equalf(t, tc.out, out.String(), "GetTableName('%s'): %s, want %s", tc.in, out, tc.out)

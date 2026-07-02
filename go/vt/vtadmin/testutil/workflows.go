@@ -38,7 +38,7 @@ func AssertClusterWorkflowsEqual(t *testing.T, expected *vtadminpb.ClusterWorkfl
 	require.NotNil(t, actual, msgAndArgs...)
 
 	if expected.Warnings != nil && actual.Warnings != nil {
-		assert.Equal(t, len(expected.Warnings), len(actual.Warnings), msgAndArgs...)
+		assert.Len(t, actual.Warnings, len(expected.Warnings), msgAndArgs...)
 	}
 
 	assert.ElementsMatch(t, expected.Workflows, actual.Workflows, msgAndArgs...)

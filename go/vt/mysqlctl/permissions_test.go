@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -38,7 +39,7 @@ func TestGetPermissions(t *testing.T) {
 	}
 
 	per, err := GetPermissions(testMysqld)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, per.DbPermissions, 2)
 	assert.Len(t, per.UserPermissions, 2)
 }

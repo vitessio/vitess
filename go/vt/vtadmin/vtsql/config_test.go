@@ -41,7 +41,7 @@ func TestConfigParse(t *testing.T) {
 	// This asserts we do not attempt to load a credentialsFlag via its Set func
 	// if it's not specified in the args slice.
 	err := cfg.Parse([]string{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	t.Run("", func(t *testing.T) {
 		t.Parallel()
@@ -92,7 +92,7 @@ func TestConfigParse(t *testing.T) {
 		}
 
 		err = cfg.Parse(args)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, expectedTags, cfg.ResolverOptions.DiscoveryTags)
 		assert.Equal(t, expectedCreds, cfg.Credentials)
 	})
@@ -147,7 +147,7 @@ func TestConfigParse(t *testing.T) {
 		}
 
 		err = cfg.Parse(args)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, expectedTags, cfg.ResolverOptions.DiscoveryTags)
 		assert.Equal(t, expectedCreds, cfg.Credentials)
 	})
@@ -183,7 +183,7 @@ func TestConfigParse(t *testing.T) {
 		}
 
 		err = cfg.Parse(args)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, expectedTags, cfg.ResolverOptions.DiscoveryTags)
 		assert.Equal(t, expectedCreds, cfg.Credentials)
 	})
@@ -246,7 +246,7 @@ func TestConfigParse(t *testing.T) {
 		}
 
 		cfg, err := Parse(&vtadminpb.Cluster{Id: "cid", Name: "testcluster"}, nil, args)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, expected, cfg)
 	})
 }

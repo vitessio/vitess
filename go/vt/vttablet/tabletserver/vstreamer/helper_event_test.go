@@ -299,7 +299,7 @@ func (ts *TestSpec) Init() {
 	ts.metadata = make(map[string][]string)
 	ts.pkColumns = make(map[string][]string)
 	// create tables
-	require.Equal(ts.t, len(ts.ddls), len(ts.schema.Tables()), "number of tables in ddls and schema do not match")
+	require.Len(ts.t, ts.schema.Tables(), len(ts.ddls), "number of tables in ddls and schema do not match")
 	for i, t := range ts.schema.Tables() {
 		execStatement(ts.t, ts.ddls[i])
 		fe := ts.getFieldEvent(t)
@@ -327,6 +327,9 @@ func (ts *TestSpec) Init() {
 
 // Close() should be called (via defer) at the end of the test to clean up the tables created in the test.
 func (ts *TestSpec) Close() {
+	if ts.schema == nil {
+		return
+	}
 	dropStatement := "drop table if exists " + strings.Join(ts.schema.TableNames(), ", ")
 	execStatement(ts.t, dropStatement)
 }

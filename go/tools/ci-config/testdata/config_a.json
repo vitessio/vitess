@@ -1,0 +1,24 @@
+{
+  "Tests": {
+    "dup_entry": {
+      "File": "unused.go",
+      "Packages": ["vitess.io/vitess/go/test/endtoend/pkga"],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "a",
+      "Tags": [],
+      "Needs": []
+    },
+    "only_a": {
+      "File": "unused.go",
+      "Packages": ["vitess.io/vitess/go/test/endtoend/pkgb"],
+      "Args": ["-run", "TestB1"],
+      "Command": [],
+      "Manual": false,
+      "Shard": "a",
+      "Tags": [],
+      "Needs": []
+    }
+  }
+}

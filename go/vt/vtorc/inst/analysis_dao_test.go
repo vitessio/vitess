@@ -1078,7 +1078,7 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			}
 			require.NoError(t, err)
 			if tt.codeWanted == NoProblem {
-				require.Len(t, got, 0)
+				require.Empty(t, got)
 				return
 			}
 			require.Len(t, got, 1)
@@ -1259,7 +1259,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			got, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
 			require.NoError(t, err)
 			if tt.codeWanted == NoProblem {
-				require.Len(t, got, 0)
+				require.Empty(t, got)
 				return
 			}
 			require.Len(t, got, 1)
@@ -1336,7 +1336,7 @@ func TestAuditInstanceAnalysisInChangelog(t *testing.T) {
 					continue
 				}
 				require.NoError(t, err)
-				require.EqualValues(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Get()-before)
+				require.Equal(t, upd.writeCounterExpectation, analysisChangeWriteCounter.Get()-before)
 			}
 		})
 	}

@@ -105,7 +105,7 @@ func TestSaveReadAndDeleteShard(t *testing.T) {
 			}
 			require.NoError(t, err)
 			testRequireTabletAliasEqual(t, tt.primaryAliasWanted, shardPrimaryAlias)
-			require.EqualValues(t, tt.primaryTimestampWanted, primaryTimestamp)
+			require.Equal(t, tt.primaryTimestampWanted, primaryTimestamp)
 
 			// ReadShardNames
 			shardNames, err := ReadShardNames(tt.keyspaceName)
