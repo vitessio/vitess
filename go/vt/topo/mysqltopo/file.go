@@ -140,45 +140,39 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 		tx = nil // Prevent rollback on defer
 		return MySQLVersion(newVersion), nil
 	}
-	// Else, unconditional update (upsert)
-	// First try to update existing record
-	var currentVersion int64
-	err = tx.QueryRowContext(ctx, "SELECT version FROM topo_data WHERE path = ?", fullPath).Scan(&currentVersion)
-
-	if err == sql.ErrNoRows {
-		// Record doesn't exist, insert it with version 1
-		_, err = tx.ExecContext(ctx,
-			"INSERT INTO topo_data (path, data, version) VALUES (?, ?, 1)",
-			fullPath, contents)
-		if err != nil {
-			return nil, convertError(err, fullPath)
-		}
-
-		// Commit the transaction
-		if err := tx.Commit(); err != nil {
-			return nil, convertError(err, fullPath)
-		}
-		tx = nil // Prevent rollback on defer
-		return MySQLVersion(1), nil
-	} else if err != nil {
+	// Else, unconditional update (upsert).
+	//
+	// This must be a single atomic statement, not SELECT-version-then-UPDATE:
+	// a plain SELECT takes no row lock, so two concurrent unconditional
+	// writers would read the same version and both write version+1 — a lost
+	// update, and worse, the notification system deduplicates change events
+	// by version (knownKeys), so the second change would never be delivered
+	// to any watcher. SrvVSchema and RoutingRules are always written through
+	// this unconditional path.
+	//
+	// `version = version + 1` in ON DUPLICATE KEY UPDATE reads the current
+	// row value under the row lock, so every unconditional write is
+	// guaranteed a distinct, monotonically increasing version. The follow-up
+	// SELECT observes our own (still-locked) write within the transaction.
+	_, err = tx.ExecContext(ctx,
+		"INSERT INTO topo_data (path, data, version) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE data = ?, version = version + 1",
+		fullPath, contents, contents)
+	if err != nil {
 		return nil, convertError(err, fullPath)
-	} else {
-		// Record exists, update it with incremented version
-		newVersion := currentVersion + 1
-		_, err = tx.ExecContext(ctx,
-			"UPDATE topo_data SET data = ?, version = ? WHERE path = ?",
-			contents, newVersion, fullPath)
-		if err != nil {
-			return nil, convertError(err, fullPath)
-		}
-
-		// Commit the transaction
-		if err := tx.Commit(); err != nil {
-			return nil, convertError(err, fullPath)
-		}
-		tx = nil // Prevent rollback on defer
-		return MySQLVersion(newVersion), nil
 	}
+
+	var newVersion int64
+	err = tx.QueryRowContext(ctx, "SELECT version FROM topo_data WHERE path = ?", fullPath).Scan(&newVersion)
+	if err != nil {
+		return nil, convertError(err, fullPath)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return nil, convertError(err, fullPath)
+	}
+	tx = nil // Prevent rollback on defer
+	return MySQLVersion(newVersion), nil
 }
 
 // Get is part of the topo.Conn interface.

@@ -85,8 +85,15 @@ type notificationSystem struct {
 	refCount atomic.Int32
 
 	// dead indicates the notification system has exhausted retries and is
-	// no longer processing binlog events. Watches will not receive updates.
+	// no longer processing binlog events. All its watchers were cancelled
+	// when it died (see markDead); getNotificationSystem replaces a dead
+	// system with a fresh one on the next acquisition.
 	dead atomic.Bool
+
+	// closeOnce makes close() idempotent: a dead system is closed when it
+	// is replaced in getNotificationSystem, and possibly again when the
+	// last reference is released.
+	closeOnce sync.Once
 }
 
 // watcher represents a single file watch.
@@ -108,29 +115,71 @@ type recursiveWatcher struct {
 
 // getNotificationSystem gets or creates a notification system for the given schema.
 func getNotificationSystem(schemaName, serverAddr string) (*notificationSystem, error) {
-	key := schemaName // Use schema name as key since notifications should be shared across same schema
-
 	notificationSystemsMu.Lock()
 	defer notificationSystemsMu.Unlock()
+	return getOrReviveNotificationSystemLocked(schemaName, serverAddr, true)
+}
 
-	if ns, exists := notificationSystems[key]; exists {
-		if ns.dead.Load() {
-			log.Warn("MySQL topo notification system is dead, watches will not receive updates", slog.String("schema", schemaName))
+// getOrReviveNotificationSystemLocked returns the live notification system
+// for the schema, replacing a dead one (binlog retries exhausted) with a
+// fresh system so that new and re-established watches actually receive
+// updates again. incRef controls whether the caller is acquiring a new
+// reference (getNotificationSystem) or already holds one
+// (getNotificationSystemForServer's cached path). The caller must hold
+// notificationSystemsMu.
+//
+// When a dead system is replaced, its reference count is transferred to the
+// replacement: releaseNotificationSystem is keyed by schema, so releases
+// from servers that acquired against the dead system must stay balanced
+// against the entry currently in the map. If building the replacement fails
+// (e.g. MySQL still unreachable), the dead entry is kept for the same
+// reason, and the error is returned to the caller.
+func getOrReviveNotificationSystemLocked(schemaName, serverAddr string, incRef bool) (*notificationSystem, error) {
+	key := schemaName // Use schema name as key since notifications should be shared across same schema
+
+	ns, exists := notificationSystems[key]
+	if exists && !ns.dead.Load() {
+		if incRef {
+			ns.refCount.Add(1)
+			log.Info("MySQL topo notification system: refcount incremented", slog.String("schema", schemaName), slog.Int("refcount", int(ns.refCount.Load())))
 		}
-		ns.refCount.Add(1)
-		log.Info("MySQL topo notification system: refcount incremented", slog.String("schema", schemaName), slog.Int("refcount", int(ns.refCount.Load())))
 		return ns, nil
 	}
 
+	if exists {
+		// The cached system is dead: its run() goroutine has exited and its
+		// watchers were cancelled by markDead. Build a replacement.
+		log.Warn("MySQL topo notification system is dead; replacing it with a fresh one", slog.String("schema", schemaName))
+		fresh, err := newNotificationSystem(schemaName, serverAddr)
+		if err != nil {
+			return nil, fmt.Errorf("notification system for schema %s is dead and could not be replaced: %v", schemaName, err)
+		}
+		refs := ns.refCount.Load()
+		if incRef {
+			refs++
+		}
+		fresh.refCount.Store(refs)
+		notificationSystems[key] = fresh
+		ns.close() // safe: run() already exited, close is idempotent
+		return fresh, nil
+	}
+
+	if !incRef {
+		// The caller claims to hold a reference but no system exists — it
+		// was fully released. This mirrors the previous behavior of the
+		// cached-lookup path.
+		return nil, fmt.Errorf("notification system for schema %s not found", schemaName)
+	}
+
 	// Create new notification system
-	ns, err := newNotificationSystem(schemaName, serverAddr)
+	fresh, err := newNotificationSystem(schemaName, serverAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	ns.refCount.Store(1)
-	notificationSystems[key] = ns
-	return ns, nil
+	fresh.refCount.Store(1)
+	notificationSystems[key] = fresh
+	return fresh, nil
 }
 
 // releaseNotificationSystem decrements the reference count and cleans up if needed.
@@ -362,8 +411,8 @@ func (ns *notificationSystem) run() {
 
 			retryCount++
 			if retryCount > maxRetries {
-				log.Error("MySQL topo notification system is now dead. Watches will no longer receive updates.", slog.String("schema", ns.schemaName), slog.Int("retries", maxRetries), slog.Any("error", err))
-				ns.dead.Store(true)
+				log.Error("MySQL topo notification system is now dead; cancelling all watches so consumers re-establish.", slog.String("schema", ns.schemaName), slog.Int("retries", maxRetries), slog.Any("error", err))
+				ns.markDead()
 				return
 			}
 
@@ -411,7 +460,8 @@ func (ns *notificationSystem) run() {
 
 			retryCount++
 			if retryCount > maxRetries {
-				log.Error("Failed to start binlog dump", slog.Int("retries", maxRetries), slog.Any("error", err))
+				log.Error("Failed to start binlog dump; MySQL topo notification system is now dead; cancelling all watches so consumers re-establish.", slog.Int("retries", maxRetries), slog.Any("error", err))
+				ns.markDead()
 				return
 			}
 
@@ -450,6 +500,15 @@ func (ns *notificationSystem) run() {
 
 		// If we reach here, the event stream ended normally
 		// This is triggered by closing the channel eventChan
+		if ns.ctx.Err() == nil {
+			// The stream ended without a shutdown being requested: no more
+			// events will ever be processed, which is just as dead as
+			// exhausting retries. Cancel the watchers so consumers
+			// re-establish rather than silently starving.
+			log.Error("Binlog event stream ended unexpectedly; MySQL topo notification system is now dead; cancelling all watches so consumers re-establish.", slog.String("schema", ns.schemaName))
+			ns.markDead()
+			return
+		}
 		log.Info("Binlog event stream ended normally")
 		return
 	}
@@ -636,15 +695,24 @@ func (ns *notificationSystem) checkForTopoDataChanges() error {
 	return nil
 }
 
-// addWatcher adds a new file watcher.
-func (ns *notificationSystem) addWatcher(w *watcher) {
+// addWatcher adds a new file watcher. It returns false if the notification
+// system is dead or closed: no more events will ever be delivered and the
+// cancellation sweep (markDead/close) has already run, so a watcher added
+// now would silently starve forever. dead is set and checked under
+// watchersMu, so a watcher is either registered before the sweep (and
+// cancelled by it) or refused here — there is no in-between.
+func (ns *notificationSystem) addWatcher(w *watcher) bool {
 	ns.watchersMu.Lock()
 	defer ns.watchersMu.Unlock()
 
+	if ns.dead.Load() {
+		return false
+	}
 	if ns.watchers[w.path] == nil {
 		ns.watchers[w.path] = make(map[*watcher]bool)
 	}
 	ns.watchers[w.path][w] = true
+	return true
 }
 
 // removeWatcher removes a file watcher.
@@ -660,15 +728,21 @@ func (ns *notificationSystem) removeWatcher(w *watcher) {
 	}
 }
 
-// addRecursiveWatcher adds a new recursive watcher.
-func (ns *notificationSystem) addRecursiveWatcher(w *recursiveWatcher) {
+// addRecursiveWatcher adds a new recursive watcher. Like addWatcher, it
+// returns false when the notification system is dead or closed, refusing a
+// registration that could never receive events.
+func (ns *notificationSystem) addRecursiveWatcher(w *recursiveWatcher) bool {
 	ns.watchersMu.Lock()
 	defer ns.watchersMu.Unlock()
 
+	if ns.dead.Load() {
+		return false
+	}
 	if ns.recursiveWatchers[w.pathPrefix] == nil {
 		ns.recursiveWatchers[w.pathPrefix] = make(map[*recursiveWatcher]bool)
 	}
 	ns.recursiveWatchers[w.pathPrefix][w] = true
+	return true
 }
 
 // removeRecursiveWatcher removes a recursive watcher.
@@ -775,39 +849,80 @@ func (ns *notificationSystem) notifyDeletion(path string) {
 	}
 }
 
-// close shuts down the notification system.
-func (ns *notificationSystem) close() {
-	ns.cancel()
-
+// markDead flags the notification system as dead and cancels every
+// registered watcher. Each watcher's cleanup goroutine (see watch.go) then
+// delivers topo.Interrupted on its channel, so consumers — e.g. srvtopo's
+// resilient watcher — learn the watch is broken and re-establish it instead
+// of silently serving stale topology forever. The re-established watch gets
+// a fresh notification system via getNotificationSystem's dead-replacement
+// path. Called from run() itself, so it must not wait on ns.wg.
+//
+// dead is set while holding watchersMu — the same lock addWatcher checks it
+// under — so a concurrent Watch either registered before the sweep (and is
+// cancelled by it) or is refused by addWatcher after it. The maps are reset
+// to fresh empty maps, never nil, so a straggling registration attempt can
+// not panic on a nil map either.
+func (ns *notificationSystem) markDead() {
 	ns.watchersMu.Lock()
-	// Cancel all watchers
+	defer ns.watchersMu.Unlock()
+	ns.dead.Store(true)
 	for _, watchers := range ns.watchers {
 		for w := range watchers {
 			w.cancel()
 		}
 	}
-
 	for _, watchers := range ns.recursiveWatchers {
 		for w := range watchers {
 			w.cancel()
 		}
 	}
+	ns.watchers = make(map[string]map[*watcher]bool)
+	ns.recursiveWatchers = make(map[string]map[*recursiveWatcher]bool)
+}
 
-	ns.watchers = nil
-	ns.recursiveWatchers = nil
-	ns.watchersMu.Unlock()
+// close shuts down the notification system. Idempotent: a dead system is
+// closed when it is replaced in getNotificationSystem, and possibly again
+// when its last reference is released.
+//
+// Like markDead, it flags the system dead under watchersMu and leaves the
+// maps as fresh empty maps: an in-flight Watch that grabbed this pointer
+// just before close is refused by addWatcher (no silent starvation) rather
+// than panicking on a nil map or registering on a corpse.
+func (ns *notificationSystem) close() {
+	ns.closeOnce.Do(func() {
+		ns.cancel()
 
-	ns.wg.Wait()
+		ns.watchersMu.Lock()
+		ns.dead.Store(true)
+		// Cancel all watchers
+		for _, watchers := range ns.watchers {
+			for w := range watchers {
+				w.cancel()
+			}
+		}
 
-	// Close the binlog connection
-	if ns.binlogConn != nil {
-		ns.binlogConn.Close()
-	}
+		for _, watchers := range ns.recursiveWatchers {
+			for w := range watchers {
+				w.cancel()
+			}
+		}
 
-	// Close the database connection
-	if ns.db != nil {
-		_ = ns.db.Close()
-	}
+		ns.watchers = make(map[string]map[*watcher]bool)
+		ns.recursiveWatchers = make(map[string]map[*recursiveWatcher]bool)
+		ns.watchersMu.Unlock()
+
+		ns.wg.Wait()
+
+		// Close the binlog connection
+		if ns.binlogConn != nil {
+			ns.binlogConn.Close()
+		}
+
+		// Close the database connection
+		if ns.db != nil {
+			_ = ns.db.Close()
+		}
+	})
 }
 
 // detectMySQL84 detects if the MySQL server is version 8.4 or higher.

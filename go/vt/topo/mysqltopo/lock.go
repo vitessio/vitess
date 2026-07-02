@@ -22,14 +22,22 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 // MySQLLockDescriptor implements topo.LockDescriptor for MySQL.
 type MySQLLockDescriptor struct {
-	server   *Server
-	path     string
+	server *Server
+	path   string
+	// contents is the exact value stored in the topo_locks row: the
+	// caller-provided contents plus a per-acquisition unique suffix (see
+	// acquireLock). Check/Unlock and the heartbeat match on (path,
+	// contents) so a descriptor can only ever validate, extend, or delete
+	// the row it inserted itself — never a lock the same path acquired
+	// later by another process after ours expired.
 	contents string
 	ttl      time.Duration
 
@@ -44,11 +52,14 @@ func (ld *MySQLLockDescriptor) Check(ctx context.Context) error {
 		return convertError(err, ld.path)
 	}
 
-	// Check if the lock still exists and hasn't expired
+	// Check that OUR lock row (not merely any lock on the path) still
+	// exists and hasn't expired. Matching on path alone would let a
+	// descriptor whose row expired and was re-acquired by another process
+	// report success — both holders would then believe they own the lock.
 	var exists bool
 	err := ld.server.db.QueryRowContext(ctx,
-		"SELECT 1 FROM topo_locks WHERE path = ? AND expires_at > NOW()",
-		ld.path).Scan(&exists)
+		"SELECT 1 FROM topo_locks WHERE path = ? AND contents = ? AND expires_at > NOW()",
+		ld.path, ld.contents).Scan(&exists)
 
 	if err == sql.ErrNoRows {
 		return topo.NewError(topo.NoNode, ld.path)
@@ -72,8 +83,11 @@ func (ld *MySQLLockDescriptor) Unlock(ctx context.Context) error {
 		return convertError(err, ld.path)
 	}
 
-	// Remove the lock
-	result, err := ld.server.db.ExecContext(ctx, "DELETE FROM topo_locks WHERE path = ?", ld.path)
+	// Remove OUR lock row only. If our row expired and another process
+	// has since acquired the same path, deleting by path alone would
+	// release the other process's live lock.
+	result, err := ld.server.db.ExecContext(ctx,
+		"DELETE FROM topo_locks WHERE path = ? AND contents = ?", ld.path, ld.contents)
 	if err != nil {
 		return convertError(err, ld.path)
 	}
@@ -150,9 +164,20 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 
 // acquireLock attempts to acquire a lock with the given parameters.
 func (s *Server) acquireLock(ctx context.Context, path, contents string, ttl time.Duration, tryLock bool) (topo.LockDescriptor, error) {
-	expiresAt := time.Now().Add(ttl)
+	// Suffix the stored contents with a per-acquisition unique token so this
+	// descriptor's Check/Unlock/heartbeat can match its own row exactly.
+	// Caller-provided contents (typically json with hostname/action) are not
+	// guaranteed unique across processes.
+	ownedContents := contents + "\nlock-uid:" + uuid.NewString()
 
 	for {
+		// Compute the expiry inside the loop: a blocking acquisition can wait
+		// on a contended path for longer than the TTL, and an expiry computed
+		// once up front would insert a row that is already (or nearly)
+		// expired — immediately reapable by any other acquirer's cleanup
+		// DELETE below, allowing two processes to hold the same lock.
+		expiresAt := time.Now().Add(ttl)
+
 		// Clean up any expired locks first
 		_, err := s.db.ExecContext(ctx, "DELETE FROM topo_locks WHERE expires_at < NOW()")
 		if err != nil {
@@ -162,7 +187,7 @@ func (s *Server) acquireLock(ctx context.Context, path, contents string, ttl tim
 		// Try to acquire the lock using INSERT IGNORE
 		result, err := s.db.ExecContext(ctx,
 			"INSERT IGNORE INTO topo_locks (path, contents, expires_at) VALUES (?, ?, ?)",
-			path, contents, expiresAt)
+			path, ownedContents, expiresAt)
 		if err != nil {
 			// Unexpected error (not duplicate key related)
 			return nil, convertError(err, path)
@@ -198,7 +223,7 @@ func (s *Server) acquireLock(ctx context.Context, path, contents string, ttl tim
 	ld := &MySQLLockDescriptor{
 		server:   s,
 		path:     path,
-		contents: contents,
+		contents: ownedContents,
 		ttl:      ttl,
 		ctx:      lockCtx,
 		cancel:   cancel,
@@ -220,14 +245,25 @@ func (ld *MySQLLockDescriptor) heartbeat() {
 		case <-ld.ctx.Done():
 			return
 		case <-ticker.C:
-			// Update the lock expiration
+			// Update OUR lock row's expiration. Matching on (path, contents)
+			// means an expired-and-reaped lock is never resurrected, and a
+			// row re-acquired by another process is never extended by us.
 			newExpiresAt := time.Now().Add(ld.ttl)
-			_, err := ld.server.db.ExecContext(ld.ctx,
-				"UPDATE topo_locks SET expires_at = ? WHERE path = ?",
-				newExpiresAt, ld.path)
+			result, err := ld.server.db.ExecContext(ld.ctx,
+				"UPDATE topo_locks SET expires_at = ? WHERE path = ? AND contents = ?",
+				newExpiresAt, ld.path, ld.contents)
 			if err != nil {
 				log.Warn("Failed to refresh lock", slog.String("path", ld.path), slog.Any("error", err))
 				// The lock may have been lost, but we'll let Check() handle detection
+				continue
+			}
+			if n, err := result.RowsAffected(); err == nil && n == 0 {
+				// Our row is gone: it expired and was reaped (and possibly
+				// re-acquired by another process). Do not re-insert it —
+				// mutual exclusion is already lost; surface loudly and let
+				// Check() report NoNode to the holder.
+				log.Error("Lock row disappeared while held; lock was lost",
+					slog.String("path", ld.path))
 			}
 		}
 	}

@@ -459,15 +459,13 @@ func (s *Server) getNotificationSystemForServer() (*notificationSystem, error) {
 	s.mu.Unlock()
 
 	if alreadyAcquired {
-		// We already hold a reference, just look up the existing notification system
-		// without incrementing the refcount again.
+		// We already hold a reference, so don't increment the refcount —
+		// but still go through the dead-replacement path: if the cached
+		// system exhausted its binlog retries, a fresh one is built so new
+		// watches receive updates again (our reference is transferred).
 		notificationSystemsMu.Lock()
 		defer notificationSystemsMu.Unlock()
-		ns, exists := notificationSystems[s.schemaName]
-		if !exists {
-			return nil, fmt.Errorf("notification system for schema %s not found", s.schemaName)
-		}
-		return ns, nil
+		return getOrReviveNotificationSystemLocked(s.schemaName, s.serverAddr, false)
 	}
 
 	return getNotificationSystem(s.schemaName, s.serverAddr)

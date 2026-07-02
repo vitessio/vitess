@@ -853,3 +853,37 @@ func killBinlogConnection(t *testing.T, monitorDB *sql.DB, schemaName string) (b
 	t.Logf("Killed binlog dump connection ID: %d", connectionID)
 	return true, nil
 }
+
+// TestDeadNotificationSystemRefusesWatchers verifies that once a
+// notification system is marked dead, (a) previously registered watchers are
+// cancelled so their cleanup delivers topo.Interrupted, and (b) late
+// registrations are refused rather than silently registered on a corpse
+// (which would starve forever) or panicking on a nil map. The dead flag is
+// set and checked under watchersMu, so there is no in-between state.
+func TestDeadNotificationSystemRefusesWatchers(t *testing.T) {
+	ns := &notificationSystem{
+		watchers:          make(map[string]map[*watcher]bool),
+		recursiveWatchers: make(map[string]map[*recursiveWatcher]bool),
+	}
+
+	preCtx, preCancel := context.WithCancel(context.Background())
+	defer preCancel()
+	pre := &watcher{path: "/a", ctx: preCtx, cancel: preCancel, changes: make(chan *topo.WatchData, 1)}
+	require.True(t, ns.addWatcher(pre), "registration on a live system must succeed")
+
+	ns.markDead()
+
+	// The pre-registered watcher was cancelled by the sweep.
+	require.Error(t, preCtx.Err(), "markDead must cancel already-registered watchers")
+
+	// Late registrations are refused on the dead system.
+	lateCtx, lateCancel := context.WithCancel(context.Background())
+	defer lateCancel()
+	late := &watcher{path: "/b", ctx: lateCtx, cancel: lateCancel, changes: make(chan *topo.WatchData, 1)}
+	require.False(t, ns.addWatcher(late), "registration on a dead system must be refused")
+
+	rlateCtx, rlateCancel := context.WithCancel(context.Background())
+	defer rlateCancel()
+	rlate := &recursiveWatcher{pathPrefix: "/", ctx: rlateCtx, cancel: rlateCancel, changes: make(chan *topo.WatchDataRecursive, 1)}
+	require.False(t, ns.addRecursiveWatcher(rlate), "recursive registration on a dead system must be refused")
+}
