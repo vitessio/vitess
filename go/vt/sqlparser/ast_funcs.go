@@ -1250,6 +1250,11 @@ func (node *Select) SetWith(with *With) {
 	node.With = with
 }
 
+// GetWith returns the with clause of a select statement
+func (node *Select) GetWith() *With {
+	return node.With
+}
+
 // MakeDistinct makes the statement distinct
 func (node *Select) MakeDistinct() {
 	node.Distinct = true
@@ -1396,6 +1401,11 @@ func (node *Union) SetInto(into *SelectInto) {
 // SetWith sets the with clause to a union statement
 func (node *Union) SetWith(with *With) {
 	node.With = with
+}
+
+// GetWith returns the with clause of a union statement
+func (node *Union) GetWith() *With {
+	return node.With
 }
 
 // MakeDistinct implements the SelectStatement interface
@@ -2640,7 +2650,7 @@ func AndExpressions(exprs ...Expr) Expr {
 	case 1:
 		return exprs[0]
 	default:
-		result := (Expr)(nil)
+		result := Expr(nil)
 	outer:
 		// we'll loop and remove any duplicates
 		for i, expr := range exprs {
@@ -3161,6 +3171,10 @@ func (node *ValuesStatement) iTableStatement() {}
 
 func (node *ValuesStatement) SetWith(with *With) {
 	node.With = with
+}
+
+func (node *ValuesStatement) GetWith() *With {
+	return node.With
 }
 
 func (node *ValuesStatement) GetOrderBy() OrderBy {
