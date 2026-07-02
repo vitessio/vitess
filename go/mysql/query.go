@@ -1233,6 +1233,23 @@ func (c *Conn) writeBinaryRows(result *sqltypes.Result) error {
 	return nil
 }
 
+// isZeroDateTime reports whether the raw DATE, DATETIME or TIMESTAMP value is
+// the MySQL zero value (every date and time component is zero, e.g.
+// "0000-00-00 00:00:00"). MySQL encodes this as a zero-length value in the
+// binary protocol, so we must do the same to avoid clients decoding a length-4
+// or length-7 packet with all-zero components into a garbage date.
+func isZeroDateTime(raw []byte) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	for _, b := range raw {
+		if b >= '1' && b <= '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func val2MySQL(v sqltypes.Value) ([]byte, error) {
 	var out []byte
 	pos := 0
@@ -1312,7 +1329,10 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 		out = make([]byte, 8)
 		writeUint64(out, pos, bits)
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Datetime:
-		if len(v.Raw()) > 19 {
+		if isZeroDateTime(v.Raw()) {
+			out = make([]byte, 1)
+			out[pos] = 0x00
+		} else if len(v.Raw()) > 19 {
 			out = make([]byte, 1+11)
 			out[pos] = 0x0b
 			pos++
@@ -1559,7 +1579,9 @@ func val2MySQLLen(v sqltypes.Value) (int, error) {
 	case sqltypes.Uint64, sqltypes.Int64, sqltypes.Float64:
 		length = 8
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Datetime:
-		if len(v.Raw()) > 19 {
+		if isZeroDateTime(v.Raw()) {
+			length = 1
+		} else if len(v.Raw()) > 19 {
 			length = 12
 		} else if len(v.Raw()) > 10 {
 			length = 8
